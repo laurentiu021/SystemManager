@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  discussions: write
 
 jobs:
   build-and-release:
@@ -85,6 +86,7 @@ jobs:
           Add-Content release-notes.md "`n`n---`n`n### Verify the download`n`n``````powershell`nGet-FileHash .\SysManager.exe -Algorithm SHA256`n```````n`nExpected SHA256: ``$hash``"
 
       - name: Create GitHub Release
+        id: release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -95,3 +97,63 @@ jobs:
           files: |
             publish/SysManager.exe
             publish/SysManager.exe.sha256
+
+      - name: Post announcement to Discussions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const version = '${{ steps.version.outputs.version }}';
+            const tag = '${{ steps.version.outputs.tag }}';
+            const notes = fs.readFileSync('release-notes.md', 'utf8');
+            const releaseUrl = '${{ steps.release.outputs.url }}';
+
+            // Find the Announcements category
+            const { data: cats } = await github.rest.repos.getAllTopics({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const query = `
+              query($owner: String!, $repo: String!) {
+                repository(owner: $owner, name: $repo) {
+                  discussionCategories(first: 20) {
+                    nodes { id name }
+                  }
+                }
+              }`;
+            const result = await github.graphql(query, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const categories = result.repository.discussionCategories.nodes;
+            const cat = categories.find(c => c.name === 'Announcements');
+            if (!cat) { console.log('Announcements category not found, skipping.'); return; }
+
+            const repoQuery = `
+              query($owner: String!, $repo: String!) {
+                repository(owner: $owner, name: $repo) { id }
+              }`;
+            const repoResult = await github.graphql(repoQuery, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const mutation = `
+              mutation($repoId: ID!, $catId: ID!, $title: String!, $body: String!) {
+                createDiscussion(input: {
+                  repositoryId: $repoId,
+                  categoryId: $catId,
+                  title: $title,
+                  body: $body
+                }) { discussion { url } }
+              }`;
+            const title = `SysManager ${version} released`;
+            const body = `## SysManager ${version} is out!\n\n[Download from GitHub Releases](${releaseUrl})\n\n${notes}`;
+            await github.graphql(mutation, {
+              repoId: repoResult.repository.id,
+              catId: cat.id,
+              title,
+              body,
+            });
+            console.log(`Discussion posted for ${version}`);

@@ -64,8 +64,8 @@ public sealed class LargeFileScanner
 
             string[] files = Array.Empty<string>();
             string[] dirs = Array.Empty<string>();
-            try { files = Directory.GetFiles(cur); } catch { }
-            try { dirs  = Directory.GetDirectories(cur); } catch { }
+            try { files = Directory.GetFiles(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            try { dirs  = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
 
             foreach (var f in files)
             {
@@ -104,7 +104,8 @@ public sealed class LargeFileScanner
                         }
                     }
                 }
-                catch { }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
             }
 
             // Throttle progress to every ~200 ms so the UI doesn't drown in events.

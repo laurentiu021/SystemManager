@@ -138,7 +138,7 @@ public sealed class SpeedTestService
             // If the exe is broken/corrupt, delete it so next run re-downloads it.
             if (proc.ExitCode == -1073741515) // STATUS_DLL_NOT_FOUND
             {
-                try { File.Delete(exe); } catch { }
+                try { File.Delete(exe); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
             throw new InvalidOperationException($"Ookla failed ({proc.ExitCode}): {stderr}");
         }
@@ -174,7 +174,7 @@ public sealed class SpeedTestService
         // Delete and re-download if the file exists but is suspiciously small (corrupt/partial).
         if (File.Exists(exe) && new FileInfo(exe).Length < 1024)
         {
-            try { File.Delete(exe); } catch { }
+            try { File.Delete(exe); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
         if (File.Exists(exe)) return exe;
 

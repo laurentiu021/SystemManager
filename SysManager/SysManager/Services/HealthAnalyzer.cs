@@ -86,7 +86,7 @@ public static class HealthAnalyzer
             return diag;
         }
 
-        if (gameBad && !dnsBad)
+        if (gameBad)
         {
             diag.Verdict = HealthVerdict.GameServer;
             diag.Headline = "It's the game server, not you";

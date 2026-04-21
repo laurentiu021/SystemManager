@@ -229,7 +229,7 @@ public partial class AboutViewModel : ViewModelBase
     private static bool SafeIsElevated()
     {
         try { return AdminHelper.IsElevated(); }
-        catch { return false; }
+        catch (InvalidOperationException) { return false; }
     }
 
     [RelayCommand]
@@ -264,13 +264,13 @@ public partial class AboutViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
             try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{DownloadedPath}\"") { UseShellExecute = true }); }
-            catch { }
+            catch (Exception) { /* explorer launch is best-effort */ }
         }
     }
 
     private static void OpenUrl(string url)
     {
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { /* best-effort */ }
     }
 
     private static string BuildStamp()
@@ -281,7 +281,8 @@ public partial class AboutViewModel : ViewModelBase
             if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
                 return File.GetLastWriteTime(path).ToString("dd MMM yyyy");
         }
-        catch { }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
         return string.Empty;
     }
 }

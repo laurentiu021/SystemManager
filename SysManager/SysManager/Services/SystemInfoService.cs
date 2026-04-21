@@ -33,7 +33,7 @@ public class SystemInfoService
             var uptime = TimeSpan.Zero;
             if (!string.IsNullOrEmpty(lastBootRaw))
             {
-                try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); } catch { }
+                try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); } catch (FormatException) { } catch (InvalidCastException) { }
             }
             return new OsInfo(caption, version, build, uptime, arch);
         }

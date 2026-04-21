@@ -340,7 +340,7 @@ public sealed class DeepCleanupService
                     }
                     foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct))
                     {
-                        try { Directory.Delete(dir, recursive: false); } catch { }
+                        try { Directory.Delete(dir, recursive: false); } catch (IOException) { } catch (UnauthorizedAccessException) { }
                     }
                 }
                 catch (Exception ex) { errors.Add($"{path}: {ex.Message}"); }
@@ -354,7 +354,7 @@ public sealed class DeepCleanupService
     // ---------- IO helpers ----------
 
     private static long SafeLength(string path)
-    { try { return new FileInfo(path).Length; } catch { return 0; } }
+    { try { return new FileInfo(path).Length; } catch (IOException) { return 0; } catch (UnauthorizedAccessException) { return 0; } }
 
     private static IEnumerable<string> EnumerateFiles(string root, CancellationToken ct)
     {
@@ -365,8 +365,8 @@ public sealed class DeepCleanupService
             var cur = stack.Pop();
             string[] files = Array.Empty<string>();
             string[] dirs = Array.Empty<string>();
-            try { files = Directory.GetFiles(cur); } catch { }
-            try { dirs = Directory.GetDirectories(cur); } catch { }
+            try { files = Directory.GetFiles(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            try { dirs = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             foreach (var f in files) yield return f;
             foreach (var d in dirs) stack.Push(d);
         }
@@ -381,7 +381,7 @@ public sealed class DeepCleanupService
         {
             var cur = stack.Pop();
             string[] dirs = Array.Empty<string>();
-            try { dirs = Directory.GetDirectories(cur); } catch { }
+            try { dirs = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             foreach (var d in dirs) stack.Push(d);
             if (!string.Equals(cur, root, StringComparison.OrdinalIgnoreCase)) all.Add(cur);
         }

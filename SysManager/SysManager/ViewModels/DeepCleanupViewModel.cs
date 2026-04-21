@@ -81,7 +81,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
 
             SelectedLocation = ScanLocations.FirstOrDefault();
         }
-        catch { }
+        catch (Exception) { /* location enumeration is best-effort */ }
     }
 
     private void AddLocation(string label, string path)
@@ -107,7 +107,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
         {
             var progress = new Progress<DeepCleanupService.ScanProgress>(p =>
             {
-                ScanProgress = p.Total > 0 ? (int)(p.Current * 100 / p.Total) : 0;
+                ScanProgress = p.Total > 0 ? p.Current * 100 / p.Total : 0;
                 ScanStatusLine = $"[{p.Current}/{p.Total}]  {p.CategoryName}";
             });
             var cats = await _cleanup.ScanAsync(progress, _scanCts.Token);
@@ -148,7 +148,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
         {
             var progress = new Progress<DeepCleanupService.ScanProgress>(p =>
             {
-                CleanProgress = p.Total > 0 ? (int)(p.Current * 100 / p.Total) : 0;
+                CleanProgress = p.Total > 0 ? p.Current * 100 / p.Total : 0;
                 CleanStatusLine = $"[{p.Current}/{p.Total}]  {p.CategoryName}";
             });
             var result = await _cleanup.CleanAsync(Categories, progress, _cleanCts.Token);
@@ -222,14 +222,14 @@ public partial class DeepCleanupViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
         try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }); }
-        catch { }
+        catch (Exception) { /* best-effort */ }
     }
 
     [RelayCommand]
     private void CopyPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
-        try { System.Windows.Clipboard.SetText(path); } catch { }
+        try { System.Windows.Clipboard.SetText(path); } catch (Exception) { /* clipboard may be locked */ }
     }
 }
 

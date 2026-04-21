@@ -23,7 +23,6 @@ public class WingetService
     /// </summary>
     public async Task<List<AppPackage>> ListUpgradableAsync(CancellationToken ct = default)
     {
-        var results = new List<AppPackage>();
         var captured = new List<string>();
 
         void Collect(PowerShellLine l)

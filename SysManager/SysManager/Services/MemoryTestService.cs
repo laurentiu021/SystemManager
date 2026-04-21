@@ -29,7 +29,7 @@ public sealed class MemoryTestService
 
             try
             {
-                var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(
+                using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(
                     new System.Diagnostics.Eventing.Reader.EventLogQuery("System",
                         System.Diagnostics.Eventing.Reader.PathType.LogName,
                         "*[System[Provider[@Name='Microsoft-Windows-WHEA-Logger' or @Name='Microsoft-Windows-MemoryDiagnostics-Results']]]"));

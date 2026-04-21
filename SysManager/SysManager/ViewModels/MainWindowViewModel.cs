@@ -28,11 +28,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     public MainWindowViewModel()
     {
-        var runner = new PowerShellRunner();
         var sysInfo = new SystemInfoService();
-        var winget = new WingetService(new PowerShellRunner());
-
-        Dashboard = new DashboardViewModel(sysInfo);
+        var winget = new WingetService(new PowerShellRunner());        Dashboard = new DashboardViewModel(sysInfo);
         AppUpdates = new AppUpdatesViewModel(winget);
         WindowsUpdate = new WindowsUpdateViewModel(new PowerShellRunner());
         SystemHealth = new SystemHealthViewModel(sysInfo);

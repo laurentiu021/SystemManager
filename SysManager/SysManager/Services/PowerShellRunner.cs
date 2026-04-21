@@ -71,7 +71,7 @@ public class PowerShellRunner
             LineReceived?.Invoke(new PowerShellLine(OutputKind.Progress, $"{rec.Activity}: {rec.StatusDescription} ({rec.PercentComplete}%)", DateTime.Now));
         };
 
-        var output = new PSDataCollection<PSObject>();
+        using var output = new PSDataCollection<PSObject>();
         output.DataAdded += (s, e) =>
         {
             var obj = ((PSDataCollection<PSObject>)s!)[e.Index];
@@ -79,7 +79,7 @@ public class PowerShellRunner
                 LineReceived?.Invoke(new PowerShellLine(OutputKind.Output, obj.BaseObject.ToString() ?? string.Empty, DateTime.Now));
         };
 
-        using var reg = cancellationToken.Register(() => { try { ps.Stop(); } catch { } });
+        using var reg = cancellationToken.Register(() => { try { ps.Stop(); } catch (InvalidOperationException) { } });
 
         var task = Task.Factory.FromAsync(
             ps.BeginInvoke<PSObject, PSObject>(null, output),
@@ -157,7 +157,7 @@ public class PowerShellRunner
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
 
-        using var reg = cancellationToken.Register(() => { try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { } });
+        using var reg = cancellationToken.Register(() => { try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } });
         await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
         return proc.ExitCode;

@@ -106,7 +106,15 @@ public sealed class SpeedTestService
     public async Task<SpeedTestResult> RunOoklaAsync(
         IProgress<(int Percent, string Message)>? progress, CancellationToken ct)
     {
-        var exe = await EnsureOoklaAsync(progress, ct);
+        string exe;
+        try
+        {
+            exe = await EnsureOoklaAsync(progress, ct);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Could not prepare Ookla CLI: {ex.Message}", ex);
+        }
 
         progress?.Report((20, "Running Ookla speedtest…"));
         var psi = new ProcessStartInfo(exe,
@@ -115,16 +123,25 @@ public sealed class SpeedTestService
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            ErrorDialog = false   // suppress Win32 "DLL not found" system dialogs
         };
 
-        using var proc = Process.Start(psi)!;
+        using var proc = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start speedtest.exe");
         var stdout = await proc.StandardOutput.ReadToEndAsync(ct);
         var stderr = await proc.StandardError.ReadToEndAsync(ct);
         await proc.WaitForExitAsync(ct);
 
         if (proc.ExitCode != 0)
+        {
+            // If the exe is broken/corrupt, delete it so next run re-downloads it.
+            if (proc.ExitCode == -1073741515) // STATUS_DLL_NOT_FOUND
+            {
+                try { File.Delete(exe); } catch { }
+            }
             throw new InvalidOperationException($"Ookla failed ({proc.ExitCode}): {stderr}");
+        }
 
         using var doc = JsonDocument.Parse(stdout);
         var root = doc.RootElement;
@@ -154,6 +171,11 @@ public sealed class SpeedTestService
             "SysManager", "tools");
         Directory.CreateDirectory(toolsDir);
         var exe = Path.Combine(toolsDir, "speedtest.exe");
+        // Delete and re-download if the file exists but is suspiciously small (corrupt/partial).
+        if (File.Exists(exe) && new FileInfo(exe).Length < 1024)
+        {
+            try { File.Delete(exe); } catch { }
+        }
         if (File.Exists(exe)) return exe;
 
         progress?.Report((5, "Downloading Ookla CLI…"));

@@ -10,6 +10,9 @@ namespace SysManager;
 
 public partial class App : Application
 {
+    // Guard against cascading error dialogs — show at most one at a time.
+    private static int _errorDialogActive;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         LogService.Init();
@@ -28,8 +31,21 @@ public partial class App : Application
     private static void OnUi(object s, DispatcherUnhandledExceptionEventArgs e)
     {
         LogService.Logger?.Error(e.Exception, "UI thread exception");
-        MessageBox.Show(e.Exception.Message, "SysManager error", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
+
+        // Prevent cascading dialogs: if one is already showing, swallow silently.
+        if (System.Threading.Interlocked.CompareExchange(ref _errorDialogActive, 1, 0) != 0)
+            return;
+
+        try
+        {
+            MessageBox.Show(e.Exception.Message, "SysManager error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _errorDialogActive, 0);
+        }
     }
 
     private static void OnDomain(object s, UnhandledExceptionEventArgs e)

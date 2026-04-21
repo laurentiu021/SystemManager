@@ -6,6 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-04-21
+
+### Fixed
+- **Cascading error dialogs** — a `DispatcherTimer` ticking at 250 ms could
+  queue multiple UI-thread exceptions while a `MessageBox` was blocking the
+  dispatcher, producing a cascade of identical "SysManager error" dialogs and
+  eventually crashing the app. An interlocked flag now ensures at most one
+  error dialog is shown at a time.
+- **Ookla speed-test DLL dialogs** — `ProcessStartInfo.ErrorDialog` was not
+  set to `false`, so Windows would show a native "DLL was not found" system
+  dialog for every failed launch of `speedtest.exe`. The dialog is now
+  suppressed; the error surfaces cleanly in the Speed Test status bar instead.
+- **Corrupt `speedtest.exe` auto-recovery** — if the downloaded Ookla CLI is
+  smaller than 1 KB (partial/corrupt download), it is deleted automatically
+  so the next run re-downloads a clean copy.
+
+### Changed
+- **Dependencies** — LiveChartsCore 2.0.0-rc5.4 → 2.0.0 (stable release),
+  System.Management 10.0.6 → 10.0.7, all GitHub Actions updated to latest
+  major versions (checkout v6, setup-dotnet v5, cache v5, upload-artifact v7,
+  action-gh-release v3).
+
+### Added
+- **CodeQL security scanning** — weekly scheduled analysis plus scan on every
+  push/PR. Results visible in the Security tab.
+- **Codecov coverage tracking** — unit-test coverage uploaded on every CI run;
+  badge in README reflects latest `main` result.
+- **App screenshots** — all major tabs captured under `docs/screenshots/`.
+
 ### Added
 - **Repository hygiene** — `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
   `SECURITY.md`, `SUPPORT.md`, `.editorconfig`, and a full

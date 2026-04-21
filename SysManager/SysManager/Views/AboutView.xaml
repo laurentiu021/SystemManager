@@ -50,6 +50,10 @@
                             <Button Content="Check for updates" Command="{Binding CheckForUpdatesCommand}"
                                     Style="{StaticResource PrimaryButton}"
                                     IsEnabled="{Binding IsCheckingForUpdates, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                            <Button Content="Copy environment info"
+                                    Command="{Binding CopyEnvironmentInfoCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    ToolTip="Copy your SysManager version, Windows version, architecture and elevation state — ready to paste into a bug report."/>
                             <Button Content="View license" Command="{Binding OpenLicenseCommand}"
                                     Style="{StaticResource GhostButton}" Margin="8,0,0,0"/>
                         </StackPanel>

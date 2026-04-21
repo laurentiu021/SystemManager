@@ -68,8 +68,10 @@ public class DeepCleanupServiceTests
         var s = new DeepCleanupService();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        var r = await s.ScanAsync(cts.Token);
-        Assert.NotNull(r); // should still return (possibly short) list without throwing
+        // Task.Run(..., cancelledToken) throws TaskCanceledException — that's
+        // the "no work happens" contract we want.
+        await Assert.ThrowsAsync<TaskCanceledException>(
+            () => s.ScanAsync(ct: cts.Token));
     }
 
     [Fact]
@@ -269,8 +271,9 @@ public class DeepCleanupServiceTests
         var cats = await s.ScanAsync();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        var r = await s.CleanAsync(cats, cts.Token);
-        Assert.Equal(0, r.FilesDeleted);
+        // Same Task.Run(..., cancelledToken) contract — no work happens.
+        await Assert.ThrowsAsync<TaskCanceledException>(
+            () => s.CleanAsync(cats, ct: cts.Token));
     }
 
     [Fact]

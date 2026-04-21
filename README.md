@@ -5,9 +5,13 @@ gamer-friendly presets, Windows updates, disk and memory health, gaming
 launcher cache cleanup, app updates via winget, and a friendly Event Log
 viewer — all in one WPF desktop app.
 
+[![CI](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/laurentiu021/SysManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SysManager/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/laurentiu021/SysManager/total)](https://github.com/laurentiu021/SysManager/releases)
+[![Issues](https://img.shields.io/github/issues/laurentiu021/SysManager)](https://github.com/laurentiu021/SysManager/issues)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
 
@@ -112,14 +116,60 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 
 ## Screenshots
 
-Add screenshots to `docs/screenshots/` and link them here.
+> Screenshots live under [`docs/screenshots/`](docs/screenshots/). If you
+> want to contribute updated ones, see
+> [`docs/screenshots/README.md`](docs/screenshots/README.md) for the
+> capture and privacy conventions.
+
+### Dashboard
+![Dashboard](docs/screenshots/01-dashboard.png)
+
+### App updates
+![App updates](docs/screenshots/02-app-updates.png)
+
+### Windows Update
+![Windows Update](docs/screenshots/03-windows-update.png)
+
+### System health
+![System health](docs/screenshots/04-system-health.png)
+
+### Cleanup
+![Cleanup](docs/screenshots/05-cleanup.png)
+
+### Deep cleanup
+![Deep cleanup](docs/screenshots/06-deep-cleanup.png)
+
+### Network
+![Network](docs/screenshots/08-network-ping.png)
+
+### Drivers
+![Drivers](docs/screenshots/11-drivers.png)
+
+### Logs
+![Logs](docs/screenshots/12-logs.png)
+
+### About
+![About](docs/screenshots/13-about.png)
 
 
 ## Download
 
-Grab `SysManager.exe` from the [latest release](../../releases/latest) and
-double-click it. The executable is self-contained — no installer, no .NET
+Grab `SysManager.exe` from the [latest release](https://github.com/laurentiu021/SysManager/releases/latest)
+and double-click it. The executable is self-contained — no installer, no .NET
 runtime required.
+
+### Verifying the download
+
+Each release ships a matching `SysManager.exe.sha256`. Verify before running:
+
+```powershell
+Get-FileHash .\SysManager.exe -Algorithm SHA256
+# Compare the output to the contents of SysManager.exe.sha256.
+```
+
+The build is not currently code-signed, so Windows SmartScreen may warn on
+first launch. Verifying the SHA256 matches the one on the release page is the
+recommended mitigation — see [SECURITY.md](SECURITY.md) for details.
 
 ## Build from source
 
@@ -164,6 +214,29 @@ Windows 10 / 11 x64 machine.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — project structure and key design decisions
 - [TESTING.md](TESTING.md) — how the test suite is organised and run
 - [CHANGELOG.md](CHANGELOG.md) — release notes
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build, test, and open a PR
+- [SUPPORT.md](SUPPORT.md) — where to ask questions and get help
+- [SECURITY.md](SECURITY.md) — reporting vulnerabilities, security model
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
+
+## Reporting bugs and requesting features
+
+Found something broken? Missing a feature you'd love to have?
+
+- 🐛 **Bugs** — [open an issue](https://github.com/laurentiu021/SysManager/issues/new?template=bug_report.yml)
+  using the bug report template.
+- 💡 **Features** — [open an issue](https://github.com/laurentiu021/SysManager/issues/new?template=feature_request.yml)
+  using the feature request template.
+- 💬 **Questions and how-to's** — use
+  [Discussions](https://github.com/laurentiu021/SysManager/discussions) instead
+  of issues for anything open-ended.
+- 🔒 **Security vulnerabilities** — please report privately via the
+  [Security tab](https://github.com/laurentiu021/SysManager/security/advisories/new).
+  See [SECURITY.md](SECURITY.md) for the full policy.
+
+The **About** tab inside the app has a "Copy environment info" helper that
+dumps your SysManager version, Windows version, and elevation state in a
+format ready to paste into a bug report.
 
 ## Tech stack
 
@@ -180,6 +253,12 @@ SysManager runs entirely on your machine. It does not phone home, does not
 collect telemetry, and does not require an account. Network features only
 contact the hosts you explicitly configure (ping targets, speed-test servers,
 Windows Update / winget endpoints).
+
+## Contributing
+
+PRs welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the build
+setup, coding conventions, and pull-request workflow. New contributors are
+expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

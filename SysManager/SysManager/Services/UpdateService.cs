@@ -205,8 +205,12 @@ public sealed class UpdateService
     /// </summary>
     public static Version? ParseVersion(string tag)
     {
-        // Accept "v0.4.0", "0.4.0", "v0.4.0-beta" — strip leading v and any suffix.
-        var s = tag.Trim().TrimStart('v', 'V');
+        // Accept "v0.4.0", "0.4.0", "v0.4.0-beta" — strip at most one leading v/V.
+        var s = tag.Trim();
+        if (s.Length > 0 && (s[0] == 'v' || s[0] == 'V'))
+            s = s[1..];
+        // Reject if still starts with a letter (e.g. "vv1.2.3" → "v1.2.3" → still starts with v).
+        if (s.Length == 0 || char.IsLetter(s[0])) return null;
         var cut = s.IndexOfAny(new[] { '-', '+', ' ' });
         if (cut > 0) s = s[..cut];
         return Version.TryParse(s, out var v) ? v : null;

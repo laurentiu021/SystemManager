@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question / general discussion
+    url: https://github.com/laurentiu021/SysManager/discussions
+    about: For how-to questions, help setting things up, or open-ended discussion.
+  - name: Report a security vulnerability
+    url: https://github.com/laurentiu021/SysManager/security/advisories/new
+    about: Please report security issues privately, not as a public issue. See SECURITY.md for details.

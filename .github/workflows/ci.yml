@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & unit tests
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: |
+          dotnet restore SysManager/SysManager/SysManager.csproj
+          dotnet restore SysManager/SysManager.Tests/SysManager.Tests.csproj
+          dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
+
+      - name: Build (Release)
+        run: dotnet build SysManager/SysManager/SysManager.csproj -c Release --no-restore
+
+      - name: Build tests
+        run: dotnet build SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release --no-restore
+
+      - name: Run unit tests
+        run: >
+          dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj
+          -c Release --no-build
+          --logger "trx;LogFileName=unit-results.trx"
+          --collect:"XPlat Code Coverage"
+          --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/**
+          retention-days: 14
+
+  ui-tests:
+    name: UI automation tests
+    runs-on: windows-latest
+    needs: build-and-test
+    timeout-minutes: 30
+    # UI tests need a desktop session; windows-latest provides one.
+    # Skip on PRs from forks, since secrets won't be available anyway.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
+
+      - name: Build UI tests
+        run: dotnet build SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
+
+      - name: Run UI tests
+        run: >
+          dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj
+          -c Release --no-build
+          --logger "trx;LogFileName=ui-results.trx"
+          --results-directory TestResults
+        continue-on-error: true
+
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-results
+          path: TestResults/**
+          retention-days: 14

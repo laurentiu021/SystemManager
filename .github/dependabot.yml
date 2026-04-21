@@ -1,0 +1,50 @@
+version: 2
+updates:
+  # Keep NuGet packages current (main app + test projects).
+  - package-ecosystem: "nuget"
+    directory: "/SysManager/SysManager"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  - package-ecosystem: "nuget"
+    directory: "/SysManager/SysManager.Tests"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "tests"
+    commit-message:
+      prefix: "deps(tests)"
+
+  - package-ecosystem: "nuget"
+    directory: "/SysManager/SysManager.UITests"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "tests"
+    commit-message:
+      prefix: "deps(uitests)"
+
+  # Keep GitHub Actions current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"

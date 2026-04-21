@@ -1,0 +1,25 @@
+# CODEOWNERS for SysManager
+#
+# Each line maps a file pattern to the GitHub user(s) or team(s) that own it.
+# The last matching pattern wins. Review requests are sent automatically to
+# the owners when a PR touches matching files.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+# Default owner for everything not matched below.
+*                                       @laurentiu021
+
+# Documentation
+*.md                                    @laurentiu021
+/docs/                                  @laurentiu021
+
+# Build, CI and release automation
+/.github/                               @laurentiu021
+/publish.ps1                            @laurentiu021
+*.csproj                                @laurentiu021
+*.sln                                   @laurentiu021
+
+# Source code
+/SysManager/SysManager/                 @laurentiu021
+/SysManager/SysManager.Tests/           @laurentiu021
+/SysManager/SysManager.UITests/         @laurentiu021

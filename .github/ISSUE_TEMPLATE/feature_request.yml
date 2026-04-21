@@ -1,0 +1,76 @@
+name: Feature request
+description: Suggest a new feature or an improvement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for thinking about how to improve SysManager!
+
+        Before you open this, please search the
+        [existing issues](https://github.com/laurentiu021/SysManager/issues?q=is%3Aissue)
+        to avoid duplicates. Small, focused suggestions land faster than
+        large open-ended ones.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the problem first, not the solution. What's annoying or missing today?
+      placeholder: "When a long PowerShell command runs in the Windows Update tab, I can't tell if it's still working or hung..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to see?
+      description: Describe your ideal solution. It's fine if it's rough.
+      placeholder: "A spinner or progress bar next to running commands, with an elapsed-time counter..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other tools, workarounds, or different approaches. Optional but helpful.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which tab would this affect?
+      multiple: true
+      options:
+        - Dashboard
+        - App updates
+        - Windows Update
+        - System health
+        - Cleanup
+        - Deep cleanup
+        - Large files finder
+        - Network
+        - Drivers
+        - Logs
+        - About / updates
+        - New tab / cross-cutting
+
+  - type: dropdown
+    id: admin
+    attributes:
+      label: Would this require admin rights?
+      options:
+        - "No"
+        - "Yes"
+        - "Not sure"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I'm describing a focused problem, not a broad rewrite.
+          required: true

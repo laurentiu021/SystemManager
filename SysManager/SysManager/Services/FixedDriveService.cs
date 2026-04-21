@@ -23,7 +23,9 @@ public sealed class FixedDriveService
         string BusType);
 
     public Task<IReadOnlyList<FixedDrive>> EnumerateAsync(CancellationToken ct = default)
-        => Task.Run(() => Enumerate(), ct);
+        // Do not forward ct to Task.Run — Enumerate() is synchronous and fast;
+        // a pre-cancelled token would throw before the delegate even runs.
+        => Task.Run(() => Enumerate());
 
     public static IReadOnlyList<FixedDrive> Enumerate()
     {

@@ -5,8 +5,12 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SysManager.Helpers;
 using SysManager.Services;
 
 namespace SysManager.ViewModels;
@@ -181,6 +185,52 @@ public partial class AboutViewModel : ViewModelBase
 
     [RelayCommand]
     private void OpenLicense() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/blob/main/LICENSE");
+
+    /// <summary>
+    /// Copy a bug-report-ready block with SysManager version, Windows version,
+    /// architecture, .NET runtime, and elevation state to the clipboard.
+    /// Fully defensive — falls back gracefully on any WMI / registry miss.
+    /// </summary>
+    [RelayCommand]
+    private void CopyEnvironmentInfo()
+    {
+        try
+        {
+            var sb = new StringBuilder();
+            sb.Append("SysManager ").Append(UpdateService.CurrentVersion.ToString(3));
+            if (!string.IsNullOrWhiteSpace(BuildDate)) sb.Append(" (build ").Append(BuildDate).Append(')');
+            sb.AppendLine();
+            sb.Append("Windows: ").AppendLine(DescribeWindows());
+            sb.Append("Architecture: ").AppendLine(RuntimeInformation.OSArchitecture.ToString());
+            sb.Append(".NET: ").AppendLine(RuntimeInformation.FrameworkDescription);
+            sb.Append("Elevated: ").AppendLine(SafeIsElevated() ? "yes" : "no");
+
+            var text = sb.ToString();
+            try { Clipboard.SetText(text); } catch { /* clipboard can be locked by another app */ }
+            UpdateStatus = "Environment info copied to clipboard.";
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
+        }
+    }
+
+    private static string DescribeWindows()
+    {
+        try
+        {
+            var os = Environment.OSVersion;
+            // Build number tells the actual Windows version better than Major.Minor on 10/11.
+            return $"{os.VersionString} (build {os.Version.Build})";
+        }
+        catch { return "unknown"; }
+    }
+
+    private static bool SafeIsElevated()
+    {
+        try { return AdminHelper.IsElevated(); }
+        catch { return false; }
+    }
 
     [RelayCommand]
     private void InstallUpdate()

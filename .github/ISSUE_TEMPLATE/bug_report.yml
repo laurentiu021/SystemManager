@@ -1,0 +1,122 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+
+        Before you open this, please search the
+        [existing issues](https://github.com/laurentiu021/SysManager/issues?q=is%3Aissue)
+        to avoid duplicates. If you found a similar one, add details there instead.
+
+        **Never include passwords, tokens, or personal data in screenshots or logs.**
+
+  - type: input
+    id: version
+    attributes:
+      label: SysManager version
+      description: Visible in the **About** tab. Example: `0.5.1`.
+      placeholder: "0.5.1"
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Run `winver` to check. Example `Windows 11 23H2 (build 22631.3527)`.
+      placeholder: "Windows 11 23H2 (build 22631.3527)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: elevation
+    attributes:
+      label: Was the app running as Administrator?
+      options:
+        - "No (standard user)"
+        - "Yes (elevated)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tab
+    attributes:
+      label: Which tab is affected?
+      multiple: true
+      options:
+        - Dashboard
+        - App updates
+        - Windows Update
+        - System health
+        - Cleanup
+        - Deep cleanup
+        - Large files finder
+        - Network
+        - Drivers
+        - Logs
+        - About / updates
+        - Multiple / general UI
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the actual behaviour you observed.
+      placeholder: "I clicked 'Scan for updates' and the app froze for 30 seconds before showing an empty list..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: "The list should populate with available winget upgrades, or show an error message if nothing is upgradeable."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps if you can reproduce it reliably. "Sometimes" and "randomly" are OK too.
+      placeholder: |
+        1. Open the app
+        2. Go to the App updates tab
+        3. Click "Scan for updates"
+        4. Wait 30 seconds
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt (optional)
+      description: |
+        SysManager writes logs to `%LOCALAPPDATA%\SysManager\logs\`.
+        Paste the last 30-50 lines from around the time the bug happened, or attach the file.
+      render: text
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots (optional)
+      description: Drag and drop screenshots directly into this box.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I'm on a recent version (ideally the latest release).
+          required: true
+        - label: I removed any personal or sensitive data from logs and screenshots.
+          required: true

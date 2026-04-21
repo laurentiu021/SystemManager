@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build single-file exe & publish release
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Extract tag version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"       # e.g. "v0.5.2"
+          $version = $tag -replace '^v', ''    # "0.5.2"
+          "tag=$tag"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Building version $version from tag $tag"
+
+      - name: Restore
+        run: dotnet restore SysManager/SysManager/SysManager.csproj
+
+      - name: Run unit tests (must pass)
+        run: >
+          dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj
+          -c Release
+          --logger "trx;LogFileName=unit-results.trx"
+          --results-directory TestResults
+
+      - name: Publish single-file exe
+        shell: pwsh
+        run: |
+          ./publish.ps1 -Configuration Release -Runtime win-x64 -Output publish
+
+      - name: Compute SHA256
+        id: hash
+        shell: pwsh
+        run: |
+          $exe = "publish/SysManager.exe"
+          if (-not (Test-Path $exe)) { throw "Missing $exe" }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          $hashFile = "publish/SysManager.exe.sha256"
+          "$hash *SysManager.exe" | Out-File -FilePath $hashFile -Encoding ascii -NoNewline
+          "hash=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "SHA256: $hash"
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $changelog = Get-Content CHANGELOG.md -Raw
+          # Grab the block for this version (between its header and the next "## [" header or EOF).
+          $pattern = "(?ms)^## \[$([regex]::Escape($version))\].*?(?=^## \[|\z)"
+          $match = [regex]::Match($changelog, $pattern)
+          $notesPath = "release-notes.md"
+          if ($match.Success) {
+              $match.Value.Trim() | Out-File -FilePath $notesPath -Encoding utf8
+          } else {
+              "Release $version. See [CHANGELOG.md](CHANGELOG.md) for details." |
+                  Out-File -FilePath $notesPath -Encoding utf8
+          }
+          "path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Append verification instructions to release notes
+        shell: pwsh
+        run: |
+          $hash = "${{ steps.hash.outputs.hash }}"
+          Add-Content release-notes.md "`n`n---`n`n### Verify the download`n`n``````powershell`nGet-FileHash .\SysManager.exe -Algorithm SHA256`n```````n`nExpected SHA256: ``$hash``"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: SysManager ${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+          files: |
+            publish/SysManager.exe
+            publish/SysManager.exe.sha256

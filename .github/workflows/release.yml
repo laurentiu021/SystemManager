@@ -85,7 +85,7 @@ jobs:
           Add-Content release-notes.md "`n`n---`n`n### Verify the download`n`n``````powershell`nGet-FileHash .\SysManager.exe -Algorithm SHA256`n```````n`nExpected SHA256: ``$hash``"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: SysManager ${{ steps.version.outputs.version }}

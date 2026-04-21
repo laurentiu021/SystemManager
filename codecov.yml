@@ -1,0 +1,24 @@
+coverage:
+  status:
+    project:
+      default:
+        # Warn if overall coverage drops more than 2% from the base commit.
+        target: auto
+        threshold: 2%
+        informational: true   # don't fail CI, just warn — 24% baseline is low
+    patch:
+      default:
+        # New code added in a PR should have at least 50% coverage.
+        target: 50%
+        threshold: 10%
+        informational: true   # warn only for now; tighten once coverage improves
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true   # only comment if coverage changed
+
+ignore:
+  - "SysManager/SysManager.Tests/**"
+  - "SysManager/SysManager.IntegrationTests/**"
+  - "SysManager/SysManager.UITests/**"

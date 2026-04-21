@@ -6,6 +6,7 @@ launcher cache cleanup, app updates via winget, and a friendly Event Log
 viewer — all in one WPF desktop app.
 
 [![CI](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/laurentiu021/SysManager/branch/main/graph/badge.svg)](https://codecov.io/gh/laurentiu021/SysManager)
 [![Release](https://img.shields.io/github/v/release/laurentiu021/SysManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SysManager/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/laurentiu021/SysManager/total)](https://github.com/laurentiu021/SysManager/releases)
 [![Issues](https://img.shields.io/github/issues/laurentiu021/SysManager)](https://github.com/laurentiu021/SysManager/issues)

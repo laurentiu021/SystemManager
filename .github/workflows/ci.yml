@@ -56,6 +56,21 @@ jobs:
           --collect:"XPlat Code Coverage"
           --results-directory TestResults
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: TestResults/**/coverage.cobertura.xml
+          flags: unittests
+          fail_ci_if_error: false
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: TestResults/**/unit-results.trx
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

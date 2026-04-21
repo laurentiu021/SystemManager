@@ -1,78 +1,64 @@
 # Testing
 
-SysManager ships with two test projects and a manual UI smoke script.
+SysManager has three test projects, each with a distinct scope and runner.
 
-## `SysManager.Tests` — unit and integration
+## Projects
 
-xUnit + `CommunityToolkit.Mvvm` helpers. Covers services, view models,
-models, and parsing logic.
+| Project | What it tests | Runs on CI |
+|---|---|---|
+| `SysManager.Tests` | Pure unit tests — no WPF, no WMI, no network, no process spawning | ✅ Every push / PR |
+| `SysManager.IntegrationTests` | Integration tests — real Windows APIs (Event Log, WMI, PowerShell, ICMP, WPF dispatcher) | ❌ Local only |
+| `SysManager.UITests` | End-to-end UI automation via FlaUI | ❌ Local only (needs a desktop session) |
 
-Run everything:
+## Running unit tests (CI-equivalent)
 
 ```powershell
 dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
 ```
 
-Run a single class:
+## Running integration tests locally
+
+Requires a real Windows machine (not a headless CI runner).
 
 ```powershell
-dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj `
-  --filter "FullyQualifiedName~PingMonitorServiceTests"
+dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
 ```
 
-Tests are configured to run **sequentially** (`xunit.runner.json` sets
-`parallelizeTestCollections: false` and `maxParallelThreads: 1`) so that
-file-system fixtures in `DeepCleanupServiceTests` and
-`LargeFileScannerTests` can share temp dirs safely.
+Some integration tests require admin rights (WMI storage queries, ICMP sockets).
+Run from an elevated PowerShell prompt if you see access-denied failures.
 
-## Test layout
+## Running UI automation tests locally
 
-- `*ViewModelTests.cs` — happy-path and guard behaviour for each view model.
-- `*ExtendedTests.cs` — edge cases, long inputs, malformed data.
-- `*ServiceTests.cs` — service logic with fakes / temp dirs.
-- `UpdateServiceTests.cs` — GitHub API client (network calls cancellable).
-- `AboutViewModelTests.cs` — version label, command presence, no-op guards.
-- `DeepCleanupServiceTests.cs` — category discovery, opt-in clean, safe
-  delete. Uses throw-away temp folders, never touches real user data.
-- `LargeFileScannerTests.cs` — read-only sweep, min-size / top-N, cancel.
-- `DeepCleanupViewModelTests.cs` — view model contract, scan flow, paths.
-- `FixedDriveServiceTests.cs` — drive discovery, filesystem filtering.
-- `CleanupCategoryHumanSizeBulkTests.cs` — `HumanSize` matrix coverage
-  across unit boundaries (B → KB → MB → GB → TB).
-- `UpdateServiceParseVersionBulkTests.cs` — parameterised version parsing.
-- `QaAuditTests.cs` / `QaResilienceTests.cs` — cross-cutting smoke sweeps.
-- `*UiTests.cs` (UITests project) — per-tab smoke and interaction tests.
-
-## `SysManager.UITests` — UI automation
-
-FlaUI-driven black-box tests that launch the real `SysManager.exe`, navigate
-each tab, and assert on UI elements. Requires a desktop session.
+The app must not already be running. The test runner launches and closes it automatically.
 
 ```powershell
 dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
-## Manual smoke (UIAutomation PowerShell)
-
-For a quick post-build smoke test from PowerShell:
+## Running everything at once
 
 ```powershell
-$app = Start-Process ".\publish\SysManager.exe" -PassThru
-Start-Sleep 3
-# Use the Windows Accessibility tree to click every nav tab
-# (see docs/manual-smoke.ps1 for the full script)
+dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
+dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
+dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
-
-Every nav item in the left rail has a stable `AutomationId`:
-
-- `nav-dashboard`, `nav-app-updates`, `nav-windows-update`,
-  `nav-system-health`, `nav-cleanup`, `nav-deep-cleanup`,
-  `nav-network`, `nav-drivers`, `nav-logs`, `nav-about`.
 
 ## Coverage
 
-Pass `--collect:"XPlat Code Coverage"` to generate a Cobertura report:
+Coverage is collected automatically on CI via `coverlet` and uploaded to
+[Codecov](https://codecov.io/gh/laurentiu021/SysManager). The badge in
+`README.md` reflects the latest `main` branch result.
+
+To generate a local coverage report:
 
 ```powershell
-dotnet test -c Release --collect:"XPlat Code Coverage"
+dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj `
+  --collect:"XPlat Code Coverage" `
+  --results-directory TestResults
+
+# Install reportgenerator once:
+dotnet tool install -g dotnet-reportgenerator-globaltool
+
+reportgenerator -reports:TestResults/**/coverage.cobertura.xml -targetdir:TestResults/html
+start TestResults/html/index.html
 ```

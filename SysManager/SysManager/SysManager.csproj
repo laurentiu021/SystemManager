@@ -34,7 +34,7 @@
     <PackageReference Include="ModernWpfUI" Version="0.9.6" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageReference Include="System.Management" Version="10.0.6" />
+    <PackageReference Include="System.Management" Version="10.0.7" />
     <PackageReference Include="System.Management.Automation" Version="7.4.6" />
   </ItemGroup>
 

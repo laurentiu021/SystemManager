@@ -65,3 +65,5 @@ _ReSharper*/
 !.vscode/tasks.json
 !.vscode/extensions.json
 .commitmsg
+
+# IDE / editor local config

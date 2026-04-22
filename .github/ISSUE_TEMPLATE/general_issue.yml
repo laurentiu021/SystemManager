@@ -1,0 +1,83 @@
+name: Report a bug or general issue
+description: Report a crash, stability problem, unexpected behaviour, or anything else
+title: "[Issue]: "
+labels: [needs-triage]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for anything that doesn't fit neatly into "bug with repro steps"
+        or "feature request" — crashes, freezes, weird UI glitches, stability
+        problems, or general issues you want to flag.
+
+        **Never include passwords, tokens, or personal data.**
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: What kind of issue is this?
+      options:
+        - Bug / unexpected behaviour
+        - Crash / freeze / hang
+        - Stability / performance
+        - UI glitch
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: SysManager version
+      description: Visible in the **About** tab.
+      placeholder: "0.5.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tab
+    attributes:
+      label: Which tab is affected?
+      multiple: true
+      options:
+        - Dashboard
+        - App updates
+        - Windows Update
+        - System health
+        - Cleanup
+        - Deep cleanup
+        - Large files finder
+        - Network
+        - Drivers
+        - Logs
+        - About / updates
+        - Multiple / general UI
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the issue
+      description: What happened? What did you expect? Any pattern you noticed?
+      placeholder: "The app freezes for ~10 seconds every time I switch to the Network tab..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs-screenshots
+    attributes:
+      label: Logs or screenshots (optional)
+      description: |
+        Logs are in `%LOCALAPPDATA%\SysManager\logs\`. Paste relevant lines or drag screenshots here.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Quick checks
+      options:
+        - label: I searched existing issues first.
+          required: true

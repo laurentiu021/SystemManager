@@ -1,0 +1,85 @@
+name: Auto-release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "SysManager/SysManager/**"
+
+permissions:
+  contents: write
+
+jobs:
+  bump-and-tag:
+    name: Bump version & tag
+    runs-on: ubuntu-latest
+    # Don't run on commits that are already tagged (avoids infinite loop)
+    if: "!startsWith(github.event.head_commit.message, 'chore: release')"
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine bump type from commit message
+        id: bump
+        shell: bash
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          # Extract first line (PR title after squash merge)
+          FIRST_LINE=$(echo "$MSG" | head -n1)
+          echo "commit_msg=$FIRST_LINE"
+
+          if echo "$FIRST_LINE" | grep -qiE '^feat(\(.*\))?!?:'; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          elif echo "$FIRST_LINE" | grep -qiE '^fix(\(.*\))?!?:'; then
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=none" >> "$GITHUB_OUTPUT"
+            echo "Commit does not start with fix: or feat: — skipping release."
+          fi
+
+      - name: Get latest tag
+        if: steps.bump.outputs.type != 'none'
+        id: latest
+        shell: bash
+        run: |
+          TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          if [ -z "$TAG" ]; then TAG="v0.0.0"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: $TAG"
+
+      - name: Compute next version
+        if: steps.bump.outputs.type != 'none'
+        id: next
+        shell: bash
+        run: |
+          TAG="${{ steps.latest.outputs.tag }}"
+          VERSION="${TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          BUMP="${{ steps.bump.outputs.type }}"
+          if [ "$BUMP" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT (bump=$BUMP from $TAG)"
+
+      - name: Create and push tag
+        if: steps.bump.outputs.type != 'none'
+        shell: bash
+        run: |
+          NEXT="${{ steps.next.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEXT" -m "Release $NEXT"
+          git push origin "$NEXT"
+          echo "Pushed tag $NEXT — release.yml will take it from here."

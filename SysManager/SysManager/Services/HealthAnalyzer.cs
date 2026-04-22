@@ -95,7 +95,7 @@ public static class HealthAnalyzer
             return diag;
         }
 
-        if (streamBad && !dnsBad && !gameBad)
+        if (streamBad && !dnsBad)
         {
             diag.Verdict = HealthVerdict.StreamingService;
             diag.Headline = "Streaming service is slow";

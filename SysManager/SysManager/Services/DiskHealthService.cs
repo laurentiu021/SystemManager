@@ -133,7 +133,7 @@ public sealed class DiskHealthService
     private static double? ToDouble(object? o)
     {
         if (o == null) return null;
-        try { var v = Convert.ToDouble(o); return v == 0.0d ? null : v; } catch { return null; }
+        try { var v = Convert.ToDouble(o); return Math.Abs(v) < 1e-9 ? null : v; } catch { return null; }
     }
 
     private static int? ToInt(object? o)

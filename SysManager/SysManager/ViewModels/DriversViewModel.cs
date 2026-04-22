@@ -1,3 +1,7 @@
+// SysManager · DriversViewModel
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using CommunityToolkit.Mvvm.Input;
 using SysManager.Services;
 

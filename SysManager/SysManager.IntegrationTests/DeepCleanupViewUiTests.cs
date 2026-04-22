@@ -1,3 +1,7 @@
+// SysManager · DeepCleanupViewUiTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Windows;
 using SysManager.ViewModels;
 using SysManager.Views;

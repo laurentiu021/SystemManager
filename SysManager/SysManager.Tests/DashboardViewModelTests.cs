@@ -1,3 +1,7 @@
+// SysManager · DashboardViewModelTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using SysManager.Services;
 using SysManager.ViewModels;
 

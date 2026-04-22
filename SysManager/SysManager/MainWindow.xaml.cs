@@ -1,4 +1,6 @@
-﻿// SysManager — MainWindow shell
+// SysManager — MainWindow shell
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
 // Author : laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 

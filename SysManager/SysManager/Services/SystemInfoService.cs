@@ -1,3 +1,7 @@
+// SysManager · SystemInfoService
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Management;
 using SysManager.Models;
 

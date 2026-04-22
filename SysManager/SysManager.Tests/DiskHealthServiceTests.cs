@@ -1,3 +1,7 @@
+// SysManager · DiskHealthServiceTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Reflection;
 using SysManager.Models;
 using SysManager.Services;

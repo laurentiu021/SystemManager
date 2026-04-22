@@ -1,4 +1,5 @@
-﻿<Application x:Class="SysManager.App"
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<Application x:Class="SysManager.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.modernwpf.com/2019"

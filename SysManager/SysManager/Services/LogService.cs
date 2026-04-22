@@ -1,3 +1,7 @@
+// SysManager · LogService
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.IO;
 using Serilog;
 using Serilog.Core;

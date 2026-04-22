@@ -1,3 +1,7 @@
+// SysManager · PingMonitorService
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Collections.Concurrent;
 using System.Net.NetworkInformation;
 using SysManager.Models;

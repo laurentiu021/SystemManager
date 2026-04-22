@@ -1,3 +1,7 @@
+// SysManager · SmokeUiTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using FlaUI.Core.AutomationElements;
 
 namespace SysManager.UITests;

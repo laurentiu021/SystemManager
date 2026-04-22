@@ -1,3 +1,7 @@
+// SysManager · EnumCoverageTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using SysManager.Models;
 
 namespace SysManager.Tests;

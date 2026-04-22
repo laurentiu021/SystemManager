@@ -1,3 +1,7 @@
+// SysManager · AdminHelperTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using SysManager.Helpers;
 
 namespace SysManager.Tests;

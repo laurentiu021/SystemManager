@@ -1,3 +1,7 @@
+// SysManager · GatewayHelper
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 

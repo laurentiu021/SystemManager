@@ -1,3 +1,7 @@
+// SysManager · NetworkViewModel
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Windows;

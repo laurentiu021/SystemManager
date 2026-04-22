@@ -1,3 +1,7 @@
+// SysManager · NetworkViewModelTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Windows;
 using LiveChartsCore;
 using SysManager.Models;

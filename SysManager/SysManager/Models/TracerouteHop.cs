@@ -1,3 +1,7 @@
+// SysManager · TracerouteHop
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;

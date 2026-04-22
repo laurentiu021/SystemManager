@@ -1,3 +1,7 @@
+// SysManager · DashboardTabUiTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 namespace SysManager.UITests;
 
 [Collection("App")]

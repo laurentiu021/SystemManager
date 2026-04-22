@@ -1,3 +1,7 @@
+// SysManager · DriversViewModelTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Reflection;
 using SysManager.Services;
 using SysManager.ViewModels;

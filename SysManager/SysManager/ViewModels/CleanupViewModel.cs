@@ -1,3 +1,7 @@
+// SysManager · CleanupViewModel
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SysManager.Helpers;

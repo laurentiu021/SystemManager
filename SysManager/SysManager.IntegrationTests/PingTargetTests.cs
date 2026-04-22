@@ -1,3 +1,7 @@
+// SysManager · PingTargetTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.ComponentModel;
 using SysManager.Models;
 

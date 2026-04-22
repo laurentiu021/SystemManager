@@ -1,3 +1,7 @@
+// SysManager · TracerouteService
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;

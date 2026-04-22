@@ -1,3 +1,7 @@
+// SysManager · SpeedTestService
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;

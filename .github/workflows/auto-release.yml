@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   bump-and-tag:
@@ -82,4 +83,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$NEXT" -m "Release $NEXT"
           git push origin "$NEXT"
-          echo "Pushed tag $NEXT — release.yml will take it from here."
+          echo "Pushed tag $NEXT"
+
+      - name: Trigger release workflow
+        if: steps.bump.outputs.type != 'none'
+        shell: bash
+        run: |
+          NEXT="${{ steps.next.outputs.version }}"
+          gh workflow run release.yml -f tag="$NEXT"
+          echo "Triggered release.yml for $NEXT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

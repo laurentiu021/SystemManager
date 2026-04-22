@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.5.3)"
+        required: true
 
 permissions:
   contents: write
@@ -18,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup .NET 8 SDK
         uses: actions/setup-dotnet@v5
@@ -28,8 +35,8 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"       # e.g. "v0.5.2"
-          $version = $tag -replace '^v', ''    # "0.5.2"
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $version = $tag -replace '^v', ''
           "tag=$tag"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version=$version"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Building version $version from tag $tag"

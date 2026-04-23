@@ -20,6 +20,7 @@ public partial class MainWindowViewModel : ObservableObject
     public DeepCleanupViewModel DeepCleanup { get; }
     public DuplicateFileViewModel DuplicateFile { get; }
     public DiskAnalyzerViewModel DiskAnalyzer { get; }
+    public ProcessManagerViewModel ProcessManager { get; }
     public StartupViewModel Startup { get; }
     public NetworkViewModel Network { get; }
     public DriversViewModel Drivers { get; }
@@ -44,6 +45,7 @@ public partial class MainWindowViewModel : ObservableObject
         DeepCleanup = new DeepCleanupViewModel();
         DuplicateFile = new DuplicateFileViewModel();
         DiskAnalyzer = new DiskAnalyzerViewModel();
+        ProcessManager = new ProcessManagerViewModel();
         Startup = new StartupViewModel();
         Network = new NetworkViewModel();
         Drivers = new DriversViewModel(new PowerShellRunner());
@@ -64,8 +66,9 @@ public partial class MainWindowViewModel : ObservableObject
         NavItems.Add(new NavItem { Id = "nav-deep-cleanup",    Label = "Deep cleanup",   Glyph = "\uE81E", Content = DeepCleanup,   ViewType = typeof(Views.DeepCleanupView) });
         NavItems.Add(new NavItem { Id = "nav-startup",        Label = "Startup",        Glyph = "\uE7B5", Content = Startup,       ViewType = typeof(Views.StartupView) });
         NavItems.Add(new NavItem { Id = "nav-duplicates",     Label = "Duplicates",     Glyph = "\uE8C8", Content = DuplicateFile, ViewType = typeof(Views.DuplicateFileView) });
-        NavItems.Add(new NavItem { Id = "nav-disk-analyzer",  Label = "Disk Analyzer",  Glyph = "\uE958", Content = DiskAnalyzer, ViewType = typeof(Views.DiskAnalyzerView) });
-        NavItems.Add(new NavItem { Id = "nav-network",        Label = "Network",        Glyph = "\uE839", Content = Network,       ViewType = typeof(Views.NetworkView) });
+        NavItems.Add(new NavItem { Id = "nav-disk-analyzer",  Label = "Disk Analyzer",  Glyph = "\uE958", Content = DiskAnalyzer,    ViewType = typeof(Views.DiskAnalyzerView) });
+        NavItems.Add(new NavItem { Id = "nav-processes",      Label = "Processes",      Glyph = "\uE9D9", Content = ProcessManager, ViewType = typeof(Views.ProcessManagerView) });
+        NavItems.Add(new NavItem { Id = "nav-network",        Label = "Network",        Glyph = "\uE839", Content = Network,         ViewType = typeof(Views.NetworkView) });
         NavItems.Add(new NavItem { Id = "nav-drivers",        Label = "Drivers",        Glyph = "\uE950", Content = Drivers,       ViewType = typeof(Views.DriversView) });
         NavItems.Add(new NavItem { Id = "nav-logs",           Label = "Logs",           Glyph = "\uE9F9", Content = Logs,          ViewType = typeof(Views.LogsView) });
         NavItems.Add(new NavItem { Id = "nav-about",          Label = "About",          Glyph = "\uE946", Content = About,         ViewType = typeof(Views.AboutView) });

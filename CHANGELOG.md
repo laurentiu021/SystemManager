@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-23
+
+### Added
+- **Duplicate File Finder tab** — scans a folder tree for files with
+  identical content and shows them grouped by SHA-256 hash.
+  - Two-pass scan: group by size first, then hash only size-matched files.
+  - SHA-256 content hashing with cancellation support.
+  - Duplicate groups sorted by wasted space (descending).
+  - Preset folders (user profile, documents, downloads, all fixed drives).
+  - Browse button for custom folder selection.
+  - Configurable minimum file size filter (default 1 KB).
+  - "Show in Explorer" and "Copy path" for each file.
+  - Read-only by design — no delete functionality.
+  - Skips system paths ($Recycle.Bin, WinSxS, System Volume Information)
+    and system files (pagefile, hiberfil, swapfile).
+- **41 new unit tests** for `DuplicateFileService` and
+  `DuplicateFileViewModel` — covers empty dirs, single files, duplicate
+  detection, subdirectories, min size filter, wasted bytes calculation,
+  cancellation, progress reporting, hash determinism, and model properties.
+
 ## [0.6.0] - 2026-04-22
 
 ### Added

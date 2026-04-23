@@ -1,0 +1,190 @@
+// SysManager · DuplicateFileService — find duplicate files by content hash
+// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// License: MIT
+
+using System.IO;
+using System.Security.Cryptography;
+using SysManager.Models;
+
+namespace SysManager.Services;
+
+/// <summary>
+/// Scans a folder tree for duplicate files. Two-pass approach:
+/// 1. Group files by size (files with unique sizes can't be duplicates).
+/// 2. For each size group with 2+ files, compute SHA-256 and group by hash.
+///
+/// Read-only — never modifies or deletes anything.
+/// </summary>
+public sealed class DuplicateFileService
+{
+    /// <summary>Progress payload.</summary>
+    public sealed record ScanProgress(
+        long FilesDiscovered,
+        long FilesHashed,
+        long BytesProcessed,
+        string CurrentFile,
+        string Phase);
+
+    // Skip system subtrees that are slow, protected, or pointless.
+    private static readonly string[] SkipSegments =
+    {
+        @"\$recycle.bin", @"\system volume information", @"\windows\winsxs",
+        @"\windows\system32\config", @"\windows\csc"
+    };
+
+    // Skip known system files.
+    private static readonly string[] SkipFiles =
+    {
+        "pagefile.sys", "hiberfil.sys", "swapfile.sys"
+    };
+
+    /// <summary>Minimum file size to consider (skip tiny files that are often config/metadata).</summary>
+    private const long DefaultMinSize = 1024; // 1 KB
+
+    public Task<IReadOnlyList<DuplicateFileGroup>> ScanAsync(
+        string rootPath,
+        long minSizeBytes = DefaultMinSize,
+        IProgress<ScanProgress>? progress = null,
+        CancellationToken ct = default)
+        => Task.Run(() => Scan(rootPath, minSizeBytes, progress, ct), ct);
+
+    private static IReadOnlyList<DuplicateFileGroup> Scan(
+        string rootPath,
+        long minSizeBytes,
+        IProgress<ScanProgress>? progress,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
+            return Array.Empty<DuplicateFileGroup>();
+
+        // ── Pass 1: discover files and group by size ──
+        var sizeGroups = new Dictionary<long, List<FileInfo>>();
+        long discovered = 0;
+        var stack = new Stack<string>();
+        stack.Push(rootPath);
+        var lastReport = Environment.TickCount64;
+
+        while (stack.Count > 0 && !ct.IsCancellationRequested)
+        {
+            var dir = stack.Pop();
+            if (ShouldSkipDir(dir)) continue;
+
+            string[] files = Array.Empty<string>();
+            string[] dirs = Array.Empty<string>();
+            try { files = Directory.GetFiles(dir); } catch { }
+            try { dirs = Directory.GetDirectories(dir); } catch { }
+
+            foreach (var f in files)
+            {
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    var fi = new FileInfo(f);
+                    if (fi.Length < minSizeBytes) continue;
+                    if (ShouldSkipFile(fi.Name)) continue;
+
+                    discovered++;
+                    if (!sizeGroups.TryGetValue(fi.Length, out var list))
+                    {
+                        list = new List<FileInfo>(2);
+                        sizeGroups[fi.Length] = list;
+                    }
+                    list.Add(fi);
+
+                    var now = Environment.TickCount64;
+                    if (now - lastReport >= 200)
+                    {
+                        progress?.Report(new ScanProgress(discovered, 0, 0, fi.Name, "Discovering files…"));
+                        lastReport = now;
+                    }
+                }
+                catch { }
+            }
+
+            foreach (var d in dirs) stack.Push(d);
+        }
+
+        // ── Pass 2: hash files that share a size ──
+        var candidates = sizeGroups.Where(g => g.Value.Count >= 2).ToList();
+        long hashed = 0;
+        long bytesProcessed = 0;
+        var hashGroups = new Dictionary<string, DuplicateFileGroup>();
+
+        foreach (var group in candidates)
+        {
+            if (ct.IsCancellationRequested) break;
+
+            foreach (var fi in group.Value)
+            {
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    var hash = ComputeHash(fi.FullName, ct);
+                    hashed++;
+                    bytesProcessed += fi.Length;
+
+                    if (!hashGroups.TryGetValue(hash, out var dg))
+                    {
+                        dg = new DuplicateFileGroup { Hash = hash, FileSize = fi.Length };
+                        hashGroups[hash] = dg;
+                    }
+                    dg.Files.Add(new DuplicateFileEntry
+                    {
+                        Path = fi.FullName,
+                        Name = fi.Name,
+                        SizeBytes = fi.Length,
+                        LastModified = fi.LastWriteTime
+                    });
+                    dg.Count = dg.Files.Count;
+
+                    var now = Environment.TickCount64;
+                    if (now - lastReport >= 200)
+                    {
+                        progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, fi.Name, "Hashing files…"));
+                        lastReport = now;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, "Done", "Complete"));
+
+        // Only return groups with 2+ files (actual duplicates).
+        return hashGroups.Values
+            .Where(g => g.Files.Count >= 2)
+            .OrderByDescending(g => g.WastedBytes)
+            .ToList();
+    }
+
+    private static string ComputeHash(string filePath, CancellationToken ct)
+    {
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920);
+        using var sha = SHA256.Create();
+
+        var buffer = new byte[81920];
+        int read;
+        while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            sha.TransformBlock(buffer, 0, read, null, 0);
+        }
+        sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+        return Convert.ToHexString(sha.Hash!);
+    }
+
+    private static bool ShouldSkipDir(string path)
+    {
+        var lower = path.ToLowerInvariant();
+        foreach (var seg in SkipSegments)
+            if (lower.Contains(seg)) return true;
+        return false;
+    }
+
+    private static bool ShouldSkipFile(string name)
+    {
+        foreach (var skip in SkipFiles)
+            if (name.Equals(skip, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+}

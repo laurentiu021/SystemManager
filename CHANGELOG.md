@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-04-23
+
+### Added
+- **Disk Analyzer tab** — shows space breakdown by top-level folders with
+  drill-down navigation and drive usage overview.
+  - Scans top-level subfolders and computes total size recursively.
+  - Shows folder name, size, file/folder count, and percentage bar.
+  - Drive usage bar with total/used/free at the top.
+  - Drill-down into any folder to see its subfolders.
+  - Go Up button to navigate back to parent.
+  - Preset paths (fixed drives, user profile, Program Files).
+  - Browse button for custom folder selection.
+  - Show in Explorer for each folder.
+  - Cancellation support.
+  - Read-only by design — nothing is modified.
+  - Skips system paths ($Recycle.Bin, WinSxS, System Volume Information).
+- **30 new unit tests** for `DiskAnalyzerService` and
+  `DiskAnalyzerViewModel` — covers empty dirs, subfolders, nested files,
+  root files, percentages, invalid inputs, cancellation, progress, and
+  model properties.
+
 ## [0.7.0] - 2026-04-23
 
 ### Added

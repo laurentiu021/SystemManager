@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Runtime.InteropServices;
+using System.Security;
 using Microsoft.Win32;
 using SysManager.Models;
 
@@ -257,7 +258,8 @@ public class PerformanceService
             if (val == null) return true;
             return val is int i && i == 1;
         }
-        catch { return true; }
+        catch (SecurityException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 
     /// <summary>
@@ -285,7 +287,8 @@ public class PerformanceService
             if (val == null) return true;
             return val is int i && i == 1;
         }
-        catch { return true; }
+        catch (SecurityException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 
     internal static bool ReadXboxGameDvrEnabled()
@@ -298,7 +301,8 @@ public class PerformanceService
             if (val == null) return true;
             return val is int i && i == 1;
         }
-        catch { return true; }
+        catch (SecurityException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 
     /// <summary>
@@ -349,10 +353,12 @@ public class PerformanceService
                         return subName;
                     }
                 }
-                catch { /* skip inaccessible subkeys */ }
+                catch (SecurityException) { /* skip inaccessible subkeys */ }
+                catch (UnauthorizedAccessException) { /* skip inaccessible subkeys */ }
             }
         }
-        catch { /* registry not accessible */ }
+        catch (SecurityException) { /* registry not accessible */ }
+        catch (UnauthorizedAccessException) { /* registry not accessible */ }
 
         return null;
     }
@@ -365,7 +371,8 @@ public class PerformanceService
             using var key = Registry.LocalMachine.OpenSubKey($@"{GpuClassRoot}\{subKey}");
             return key?.GetValue("DriverDesc")?.ToString() ?? "NVIDIA GPU";
         }
-        catch { return "NVIDIA GPU"; }
+        catch (SecurityException) { return "NVIDIA GPU"; }
+        catch (UnauthorizedAccessException) { return "NVIDIA GPU"; }
     }
 
     /// <summary>Read whether DisableDynamicPstate is set to 1.</summary>
@@ -378,7 +385,8 @@ public class PerformanceService
             var val = key.GetValue("DisableDynamicPstate");
             return val is int i && i == 1;
         }
-        catch { return false; }
+        catch (SecurityException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>
@@ -404,7 +412,8 @@ public class PerformanceService
             }
             return true;
         }
-        catch { return false; }
+        catch (SecurityException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     // ═══════════════════════════════════════════════════════════════

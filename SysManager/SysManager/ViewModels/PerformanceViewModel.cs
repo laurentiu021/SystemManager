@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.Security;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -82,7 +83,17 @@ public partial class PerformanceViewModel : ViewModelBase
             UpdateSummary();
             StatusMessage = "Settings loaded.";
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+            Summary = "Could not read performance settings.";
+        }
+        catch (SecurityException ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+            Summary = "Could not read performance settings.";
+        }
+        catch (UnauthorizedAccessException ex)
         {
             StatusMessage = $"Error: {ex.Message}";
             Summary = "Could not read performance settings.";
@@ -145,7 +156,9 @@ public partial class PerformanceViewModel : ViewModelBase
             await RefreshAsync();
             StatusMessage = $"Power plan set to {planName}.";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -176,7 +189,9 @@ public partial class PerformanceViewModel : ViewModelBase
             await RefreshAsync();
             StatusMessage = $"Visual effects {(WantVisualEffectsReduced ? "reduced" : "restored")}.";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -207,7 +222,9 @@ public partial class PerformanceViewModel : ViewModelBase
             await RefreshAsync();
             StatusMessage = $"Game Mode {(enabling ? "enabled" : "disabled")}.";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -238,7 +255,9 @@ public partial class PerformanceViewModel : ViewModelBase
             await RefreshAsync();
             StatusMessage = $"Xbox Game Bar {(disabling ? "disabled" : "enabled")}.";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -284,7 +303,9 @@ public partial class PerformanceViewModel : ViewModelBase
             }
             await RefreshAsync();
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -317,7 +338,9 @@ public partial class PerformanceViewModel : ViewModelBase
             await RefreshAsync();
             StatusMessage = $"Processor min state set to {target}%.";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -365,7 +388,9 @@ public partial class PerformanceViewModel : ViewModelBase
             HasSnapshot = false;
             await RefreshAsync();
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 

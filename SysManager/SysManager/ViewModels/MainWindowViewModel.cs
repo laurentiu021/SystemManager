@@ -23,6 +23,7 @@ public partial class MainWindowViewModel : ObservableObject
     public ProcessManagerViewModel ProcessManager { get; }
     public BatteryHealthViewModel BatteryHealth { get; }
     public UninstallerViewModel Uninstaller { get; }
+    public PerformanceViewModel Performance { get; }
     public StartupViewModel Startup { get; }
     public NetworkViewModel Network { get; }
     public DriversViewModel Drivers { get; }
@@ -50,6 +51,7 @@ public partial class MainWindowViewModel : ObservableObject
         ProcessManager = new ProcessManagerViewModel();
         BatteryHealth = new BatteryHealthViewModel();
         Uninstaller = new UninstallerViewModel(new PowerShellRunner());
+        Performance = new PerformanceViewModel(new PowerShellRunner());
         Startup = new StartupViewModel();
         Network = new NetworkViewModel();
         Drivers = new DriversViewModel(new PowerShellRunner());
@@ -74,6 +76,7 @@ public partial class MainWindowViewModel : ObservableObject
         NavItems.Add(new NavItem { Id = "nav-processes",      Label = "Processes",      Glyph = "\uE9D9", Content = ProcessManager, ViewType = typeof(Views.ProcessManagerView) });
         NavItems.Add(new NavItem { Id = "nav-battery",        Label = "Battery",        Glyph = "\uEBA6", Content = BatteryHealth,  ViewType = typeof(Views.BatteryHealthView) });
         NavItems.Add(new NavItem { Id = "nav-uninstaller",    Label = "Uninstaller",    Glyph = "\uE74D", Content = Uninstaller,   ViewType = typeof(Views.UninstallerView) });
+        NavItems.Add(new NavItem { Id = "nav-performance",    Label = "Performance",    Glyph = "\uE945", Content = Performance,   ViewType = typeof(Views.PerformanceView) });
         NavItems.Add(new NavItem { Id = "nav-network",        Label = "Network",        Glyph = "\uE839", Content = Network,         ViewType = typeof(Views.NetworkView) });
         NavItems.Add(new NavItem { Id = "nav-drivers",        Label = "Drivers",        Glyph = "\uE950", Content = Drivers,       ViewType = typeof(Views.DriversView) });
         NavItems.Add(new NavItem { Id = "nav-logs",           Label = "Logs",           Glyph = "\uE9F9", Content = Logs,          ViewType = typeof(Views.LogsView) });

@@ -1,0 +1,233 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.PerformanceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             d:DataContext="{d:DesignInstance vm:PerformanceViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource Surface0}">
+
+    <Grid Margin="32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Performance Mode" Style="{StaticResource Display}"/>
+            <TextBlock Text="Each setting has its own Apply button. All changes are reversible — Restore All reverts to your original state."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <WrapPanel>
+                <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                <Button Content="↺ Restore All" Command="{Binding RestoreAllCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                        IsEnabled="{Binding HasSnapshot}"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Summary -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <StackPanel>
+                <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
+                <TextBlock Text="⚠ GPU changes require a reboot to take effect."
+                           Foreground="#EF4444" FontSize="12" Margin="0,4,0,0"
+                           Visibility="{Binding NeedsReboot, Converter={StaticResource BoolToVis}}"/>
+                <TextBlock Text="✓ Original settings snapshot saved — Restore All is available."
+                           Foreground="#22C55E" FontSize="12" Margin="0,4,0,0"
+                           Visibility="{Binding HasSnapshot, Converter={StaticResource BoolToVis}}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Settings -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="20">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <!-- ═══ Power Plan ═══ -->
+                    <TextBlock Text="Power Plan" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <RadioButton x:Name="RbBalanced"
+                                         Content="Balanced (default — recommended for laptops)"
+                                         GroupName="PowerPlan" Margin="0,0,0,8"
+                                         Tag="balanced" Checked="PowerPlan_Checked"/>
+                            <RadioButton x:Name="RbHigh"
+                                         Content="High Performance"
+                                         GroupName="PowerPlan" Margin="0,0,0,8"
+                                         Tag="high" Checked="PowerPlan_Checked"/>
+                            <RadioButton x:Name="RbUltimate"
+                                         Content="Ultimate Performance (max clocks, no throttling)"
+                                         GroupName="PowerPlan" Margin="0,0,0,12"
+                                         Tag="ultimate" Checked="PowerPlan_Checked"/>
+                            <Button Content="Apply Power Plan" Command="{Binding ApplyPowerPlanCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ Visual Effects ═══ -->
+                    <TextBlock Text="Visual Effects" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <CheckBox Content="Reduce visual effects (disable animations, fades, shadows)"
+                                      IsChecked="{Binding WantVisualEffectsReduced}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Uses SystemParametersInfo — takes effect instantly, no logout needed."
+                                       Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,8"/>
+                            <Button Content="Apply Visual Effects" Command="{Binding ApplyVisualEffectsCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ Game Mode ═══ -->
+                    <TextBlock Text="Game Mode" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <CheckBox Content="Disable Game Mode (stop Windows from prioritizing game processes)"
+                                      IsChecked="{Binding WantGameModeOff}" Margin="0,0,0,8"/>
+                            <Button Content="Apply Game Mode" Command="{Binding ApplyGameModeCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ Overlays ═══ -->
+                    <TextBlock Text="Overlays" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <CheckBox Content="Disable Xbox Game Bar / Game DVR overlay"
+                                      IsChecked="{Binding WantXboxGameBarOff}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Disables AppCaptureEnabled and GameDVR_Enabled via registry. Instant, reversible."
+                                       Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,8"/>
+                            <Button Content="Apply Xbox Game Bar" Command="{Binding ApplyXboxGameBarCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"
+                                    Margin="0,0,0,12"/>
+
+                            <TextBlock Text="Other overlays (disable manually in each app):"
+                                       FontWeight="SemiBold" FontSize="12" Margin="0,4,0,6"/>
+                            <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="4,0,0,0"
+                                       TextWrapping="Wrap">
+                                • Discord: Settings → Game Overlay → disable "Enable in-game overlay"
+                                <LineBreak/>
+                                • Steam: Settings → In-Game → uncheck "Enable the Steam Overlay while in-game"
+                                <LineBreak/>
+                                • NVIDIA GeForce Experience: Settings → General → disable "In-Game Overlay"
+                                <LineBreak/>
+                                • EA App: Settings → Application → disable "In-Game Overlay"
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ GPU ═══ -->
+                    <TextBlock Text="GPU" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <CheckBox Content="NVIDIA GPU — Prefer Maximum Performance (requires reboot)"
+                                      IsChecked="{Binding WantGpuMaxPerformance}"
+                                      IsEnabled="{Binding HasNvidiaGpu}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,4"
+                                       Visibility="{Binding HasNvidiaGpu, Converter={StaticResource BoolToVis}}">
+                                <Run Text="Detected:"/>
+                                <Run Text="{Binding NvidiaGpuName, Mode=OneWay}"/>
+                                <Run Text="— Sets DisableDynamicPstate=1 to force P0 (max clocks)."/>
+                            </TextBlock>
+                            <TextBlock Text="No NVIDIA GPU detected on this system."
+                                       Style="{StaticResource Subtle}" FontSize="11" Margin="20,2,0,4"
+                                       Visibility="{Binding HasNvidiaGpu, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                            <Button Content="Apply GPU Setting" Command="{Binding ApplyGpuCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"
+                                    IsEnabled="{Binding HasNvidiaGpu}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ Processor State ═══ -->
+                    <TextBlock Text="Processor State" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <CheckBox Content="Processor min state 100% (force max CPU frequency)"
+                                      IsChecked="{Binding WantProcessorMaxState}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Prevents CPU from downclocking. Increases power consumption."
+                                       Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,8"/>
+                            <Button Content="Apply Processor State" Command="{Binding ApplyProcessorStateCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ Current State ═══ -->
+                    <TextBlock Text="Current State" FontWeight="Bold" FontSize="15" Margin="0,8,0,12"/>
+                    <Border Style="{StaticResource Card}" Padding="16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Active power plan"
+                                       Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1"
+                                       Text="{Binding Profile.ActivePlanName}" Margin="0,0,0,8"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Plan GUID"
+                                       Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1"
+                                       Text="{Binding Profile.ActivePlanGuid}"
+                                       TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Visual effects"
+                                       Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
+                                       Text="{Binding Profile.VisualEffectsReduced, StringFormat='Reduced: {0}'}"/>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Game Mode"
+                                       Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"
+                                       Text="{Binding Profile.GameModeEnabled, StringFormat='Enabled: {0}'}"/>
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Xbox Game Bar"
+                                       Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"
+                                       Text="{Binding Profile.XboxGameBarDisabled, StringFormat='Disabled: {0}'}"/>
+
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="GPU max performance"
+                                       Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,0,0,8"
+                                       Text="{Binding Profile.GpuMaxPerformance, StringFormat='Enabled: {0}'}"/>
+
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Processor min state"
+                                       Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,0,0,8">
+                                <Run Text="{Binding Profile.ProcessorMinPercent, Mode=OneWay}"/><Run Text="%"/>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
+            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

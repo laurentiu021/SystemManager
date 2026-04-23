@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-04-23
+
+### Added
+- **Performance Mode tab** — tune system performance settings with per-tweak
+  Apply buttons. Every change is non-destructive and reversible.
+  - **Power Plan**: switch between Balanced, High Performance, and Ultimate
+    Performance via powercfg.
+  - **Visual Effects**: reduce animations, fades, and shadows via P/Invoke
+    `SystemParametersInfo` (instant, no logout needed).
+  - **Game Mode**: enable or disable Windows Game Mode via registry.
+  - **Xbox Game Bar**: disable Game Bar overlay and Game DVR via registry.
+  - **NVIDIA GPU**: force max performance (DisableDynamicPstate) with
+    auto-detected GPU subkey (not hardcoded). Requires reboot.
+  - **Processor State**: force CPU min state to 100% via powercfg.
+  - **Overlays info**: manual instructions for Discord, Steam, NVIDIA GFE,
+    and EA App overlays (not safe to modify externally).
+  - **OriginalSnapshot**: captures exact system state before first change;
+    Restore All reverts to the snapshot, not hardcoded defaults.
+  - Confirmation dialog before every change.
+  - GPU changes warn about reboot requirement.
+- **38 new unit tests** for `PerformanceService`, `PerformanceViewModel`,
+  and `PerformanceProfile`.
+
 ## [0.11.1] - 2026-04-23
 
 ### Fixed

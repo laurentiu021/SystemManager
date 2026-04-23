@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-04-23
+
+### Fixed
+- **CodeQL** — replaced bare `catch` blocks with specific exception types
+  (`SecurityException`, `UnauthorizedAccessException`) in PerformanceService
+  and PerformanceViewModel. No functional changes.
+
 ## [0.12.0] - 2026-04-23
 
 ### Added

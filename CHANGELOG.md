@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-04-23
+
+### Fixed
+- **Process Manager** — kill process now shows a Yes/No confirmation dialog
+  warning about potential data loss before terminating.
+- **Uninstaller** — uninstall shows a confirmation dialog listing all
+  selected apps before proceeding. Select All warns when selecting more
+  than 20 apps without an active filter.
+
 ## [0.11.0] - 2026-04-23
 
 ### Added

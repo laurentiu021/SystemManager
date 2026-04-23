@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-23
+
+### Added
+- **Process Manager tab** — lists running Windows processes with memory,
+  thread count, and status. Supports kill, filter, sort, and open file
+  location.
+  - Lists all running processes with PID, name, description, memory,
+    threads, and responding status.
+  - Real-time filter by name, description, or PID.
+  - Sort by memory (default), name, or PID.
+  - Kill process button (per-process).
+  - Open file location in Explorer.
+  - Virtualized ListView for smooth scrolling with 200+ processes.
+- **24 new unit tests** for `ProcessManagerService` and
+  `ProcessManagerViewModel` — covers snapshot, entries, cancellation,
+  kill edge cases, model properties, commands, and filter/sort defaults.
+
 ## [0.8.0] - 2026-04-23
 
 ### Added

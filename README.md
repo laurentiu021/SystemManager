@@ -2,8 +2,9 @@
 
 A modern Windows system monitoring toolkit: live network monitoring with
 gamer-friendly presets, Windows updates, disk and memory health, gaming
-launcher cache cleanup, app updates via winget, and a friendly Event Log
-viewer — all in one WPF desktop app.
+launcher cache cleanup, app updates via winget, performance tuning,
+battery health, process management, startup control, and a friendly
+Event Log viewer — all in one WPF desktop app.
 
 [![CI](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/laurentiu021/SysManager/branch/main/graph/badge.svg)](https://codecov.io/gh/laurentiu021/SysManager)
@@ -96,6 +97,58 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 - Configurable min-size (default 500 MB) and top-N (default 100).
 - **Read-only** — only "Show in Explorer" and "Copy path" actions. Deletion
   is disabled by design so a mis-click can never hurt anything.
+
+### Startup Manager
+- Lists every program that runs at Windows boot (Registry Run / RunOnce keys)
+- Toggle on/off without deleting the original entry (same mechanism as Task Manager)
+- Shows name, publisher, command, and enabled/disabled status
+- Open file location in Explorer
+
+### Duplicate File Finder
+- Two-pass scan: group by size, then SHA-256 hash only size-matched files
+- Duplicate groups sorted by wasted space (descending)
+- Preset folders or custom folder selection
+- Configurable minimum file size filter
+- **Read-only** — "Show in Explorer" and "Copy path" only, no delete
+
+### Disk Analyzer
+- Space breakdown by top-level folders with drill-down navigation
+- Drive usage bar with total/used/free
+- Preset paths (fixed drives, user profile, Program Files) or custom browse
+- Show in Explorer for each folder
+- Skips system paths automatically
+
+### Process Manager
+- Lists running Windows processes with PID, memory, threads, and status
+- Real-time filter by name, description, or PID
+- Sort by memory, name, or PID
+- Kill process with confirmation dialog
+- Open file location in Explorer
+
+### Battery Health
+- Charge %, health %, wear level, cycle count, chemistry
+- Design vs full-charge capacity via WMI
+- Estimated runtime display
+- Gracefully shows "No battery detected" on desktops
+
+### Uninstaller
+- Lists all installed applications via winget
+- Filter by name or package ID
+- Select/deselect all, batch uninstall with confirmation dialog
+- Live console output from winget
+
+### Performance Mode
+- **Per-tweak Apply buttons** — each setting is independent
+- **Power Plan**: Balanced / High Performance / Ultimate Performance
+- **Visual Effects**: reduce animations via P/Invoke (instant, no logout)
+- **Game Mode**: enable/disable via registry
+- **Xbox Game Bar**: disable overlay and Game DVR via registry
+- **NVIDIA GPU**: force max performance with auto-detected GPU subkey (reboot required)
+- **Processor State**: force CPU min state to 100%
+- **Overlays info**: manual instructions for Discord, Steam, NVIDIA GFE, EA App
+- **OriginalSnapshot**: captures exact system state before first change;
+  Restore All reverts to the snapshot, not hardcoded defaults
+- Confirmation dialog before every change
 
 ### Drivers
 - List all installed drivers with versions and dates

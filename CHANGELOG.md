@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-04-23
+
+### Added
+- **Battery Health tab** — monitors battery charge, health percentage, wear
+  level, cycle count, chemistry, design vs full-charge capacity, and
+  estimated runtime via WMI.
+  - Charge bar with percentage and status (Charging / Discharging / Full).
+  - Health % (full-charge ÷ design capacity) and wear % display.
+  - Detail grid: battery name, chemistry, design capacity, full-charge
+    capacity, cycle count, estimated runtime, manufacturer/ID.
+  - Gracefully shows "No battery detected" on desktops.
+  - Specific exception handling for CodeQL compliance.
+- **20 new unit tests** for `BatteryService` and `BatteryHealthViewModel` —
+  covers status mapping, chemistry mapping, model calculations, property
+  notifications, runtime display formatting, and ViewModel state.
+
 ## [0.9.0] - 2026-04-23
 
 ### Added

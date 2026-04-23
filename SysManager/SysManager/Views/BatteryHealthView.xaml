@@ -1,0 +1,175 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.BatteryHealthView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             d:DataContext="{d:DesignInstance vm:BatteryHealthViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource Surface0}">
+
+    <Grid Margin="32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Battery Health" Style="{StaticResource Display}"/>
+            <TextBlock Text="Monitor battery charge, health, wear level, cycle count, and estimated runtime."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <WrapPanel>
+                <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Summary -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
+        </Border>
+
+        <!-- Battery details -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="20">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <!-- No battery message -->
+                    <TextBlock Text="No battery detected on this device."
+                               FontSize="14" Foreground="{StaticResource TextMuted}"
+                               Margin="0,0,0,16"
+                               Visibility="{Binding Battery.HasBattery, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+
+                    <!-- Battery cards (visible only when battery exists) -->
+                    <StackPanel Visibility="{Binding Battery.HasBattery, Converter={StaticResource BoolToVis}}">
+
+                        <!-- Charge -->
+                        <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Column="0" Grid.Row="0" Text="Charge"
+                                           Style="{StaticResource Subtle}" FontSize="12"/>
+                                <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal">
+                                    <TextBlock FontSize="28" FontWeight="Bold">
+                                        <Run Text="{Binding Battery.ChargePercent, Mode=OneWay}"/><Run Text="%"/>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Battery.Status}" VerticalAlignment="Center"
+                                               Margin="12,0,0,0" Style="{StaticResource Subtle}"/>
+                                </StackPanel>
+
+                                <ProgressBar Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1"
+                                             Value="{Binding Battery.ChargePercent}" Maximum="100"
+                                             Height="8" Margin="0,8,0,0"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Health & Wear -->
+                        <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Health" Style="{StaticResource Subtle}" FontSize="12"/>
+                                    <TextBlock FontSize="24" FontWeight="Bold" Margin="0,4,0,0">
+                                        <Run Text="{Binding Battery.HealthPercent, Mode=OneWay}"/><Run Text="%"/>
+                                    </TextBlock>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Wear" Style="{StaticResource Subtle}" FontSize="12"/>
+                                    <TextBlock FontSize="24" FontWeight="Bold" Margin="0,4,0,0"
+                                               Foreground="#EF4444">
+                                        <Run Text="{Binding Battery.WearPercent, Mode=OneWay}"/><Run Text="%"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Details grid -->
+                        <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Battery name"
+                                           Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Battery.Name}"
+                                           Margin="0,0,0,8"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Chemistry"
+                                           Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Battery.Chemistry}"
+                                           Margin="0,0,0,8"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Design capacity"
+                                           Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                                    <Run Text="{Binding Battery.DesignCapacityMWh, Mode=OneWay}"/><Run Text=" mWh"/>
+                                </TextBlock>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Full charge capacity"
+                                           Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,8">
+                                    <Run Text="{Binding Battery.FullChargeCapacityMWh, Mode=OneWay}"/><Run Text=" mWh"/>
+                                </TextBlock>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Cycle count"
+                                           Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Battery.CycleCount}"
+                                           Margin="0,0,0,8"/>
+
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Estimated runtime"
+                                           Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Battery.RuntimeDisplay}"
+                                           Margin="0,0,0,8"/>
+
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Manufacturer / ID"
+                                           Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Battery.Manufacturer}"
+                                           TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
+            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

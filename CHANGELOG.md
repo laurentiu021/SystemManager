@@ -6,6 +6,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-22
+
+### Added
+- **Startup Manager tab** — lists every program that runs at Windows boot
+  and lets users toggle them on/off non-destructively.
+  - Scans Registry `Run` / `RunOnce` keys (HKCU + HKLM).
+  - Reads `StartupApproved` state (same mechanism as Task Manager).
+  - Shows name, publisher, command, and enabled/disabled status.
+  - Toggle on/off writes to `StartupApproved` — original `Run` values are
+    never deleted.
+  - "Open file location" button for each entry.
+- **170 new unit tests** for services, models, and helpers — brings the
+  total past 1 300 tests.
+- **Author header** added to all source files (`laurentiu021`).
+
+### Changed
+- **Auto-release workflow** now triggers the release pipeline via
+  `workflow_dispatch` instead of relying on tag-push events, fixing a
+  race condition where the release job could start before the tag was
+  fully pushed.
+
+## [0.5.3] - 2026-04-22
+
+### Fixed
+- **CodeQL warnings resolved** — constant-condition check and
+  floating-point equality comparison cleaned up.
+- **Bug report template visibility** — the issue template was not
+  showing up correctly in the GitHub "New issue" picker.
+
+### Added
+- **Pure unit tests** for `CleanupViewModel`, `DeepCleanupViewModel`,
+  `LargeFileScanner`, and Helpers (converters + `AdminHelper`).
+- **Codecov configuration** (`.codecov.yml`) for coverage gating.
+- **General issue template** (bug / crash / stability) added to
+  `.github/ISSUE_TEMPLATE/`.
+- **Auto-release workflow** (`auto-release.yml`) — automatically bumps
+  the version and creates a GitHub Release when app code changes land
+  on `main`.
+
+### Changed
+- **CI** — Codecov upload upgraded to v5; explicit file glob removed.
+- **Discussions announcement** posted automatically on every release.
+- `.editor/` added to `.gitignore`.
+
 ## [0.5.2] - 2026-04-21
 
 ### Fixed

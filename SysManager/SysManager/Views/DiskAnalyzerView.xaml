@@ -1,0 +1,155 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.DiskAnalyzerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             d:DataContext="{d:DesignInstance vm:DiskAnalyzerViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource Surface0}">
+
+    <Grid Margin="32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Disk Analyzer" Style="{StaticResource Display}"/>
+            <TextBlock Text="See which folders use the most space. Read-only — nothing is modified."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <WrapPanel>
+                <TextBlock Text="Path:" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Style="{StaticResource Subtle}"/>
+                <ComboBox ItemsSource="{Binding PresetPaths}"
+                          SelectedItem="{Binding SelectedPath}"
+                          Width="300" Margin="0,0,8,0" IsEditable="True"/>
+                <Button Content="📁 Browse" Command="{Binding BrowseFolderCommand}"
+                        Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
+                <Button Content="⬆ Up" Command="{Binding GoUpCommand}"
+                        Style="{StaticResource GhostButton}" Margin="0,0,12,0"/>
+                <Button Content="🔍 Analyze" Command="{Binding AnalyzeCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                <Button Content="✕ Cancel" Command="{Binding CancelAnalysisCommand}"
+                        Style="{StaticResource GhostButton}"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Drive info + summary -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <StackPanel>
+                <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                <!-- Drive usage bar (visible only when drive info is available) -->
+                <Grid Visibility="{Binding HasDriveInfo, Converter={StaticResource BoolToVis}}" Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ProgressBar Grid.Column="0" Height="8" Minimum="0" Maximum="100"
+                                 Value="{Binding DriveUsedPercent, Mode=OneWay}"/>
+                    <TextBlock Grid.Column="1" Margin="12,0,0,0" FontSize="12"
+                               Foreground="{StaticResource TextMuted}">
+                        <Run Text="{Binding DriveUsedPercent, Mode=OneWay, StringFormat='{}{0:F1}%'}"/>
+                        <Run Text=" used"/>
+                    </TextBlock>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Folder list -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <ListView ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      HorizontalContentAlignment="Stretch">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="12,8"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListViewItem">
+                                    <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                            BorderBrush="{StaticResource Border1}" BorderThickness="0,0,0,1">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Drill-down button -->
+                            <Button Grid.Column="0" Content="📂" ToolTip="Drill into folder"
+                                    Command="{Binding DataContext.DrillDownCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                    CommandParameter="{Binding}"
+                                    Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
+                                    Margin="0,0,8,0"/>
+
+                            <!-- Name + file count -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                <TextBlock FontSize="11" Foreground="{StaticResource TextMuted}">
+                                    <Run Text="{Binding FileCount, Mode=OneWay, StringFormat='{}{0:N0} files'}"/>
+                                    <Run Text=" · " Foreground="{StaticResource TextDisabled}"/>
+                                    <Run Text="{Binding FolderCount, Mode=OneWay, StringFormat='{}{0:N0} folders'}"/>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <!-- Size bar -->
+                            <Grid Grid.Column="2" VerticalAlignment="Center" Margin="8,0">
+                                <ProgressBar Height="6" Minimum="0" Maximum="100"
+                                             Value="{Binding Percentage, Mode=OneWay}"/>
+                            </Grid>
+
+                            <!-- Size text -->
+                            <TextBlock Grid.Column="3" Text="{Binding SizeDisplay}" FontSize="12"
+                                       FontWeight="Medium" VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"/>
+
+                            <!-- Open in Explorer -->
+                            <Button Grid.Column="4" Content="📁" ToolTip="Open in Explorer"
+                                    Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                    CommandParameter="{Binding}"
+                                    Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
+                                    Margin="8,0,0,0"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Border>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
+            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

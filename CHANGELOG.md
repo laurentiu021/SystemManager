@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-04-23
+
+### Added
+- **Uninstaller tab** — lists all installed applications via winget and
+  allows batch uninstall of selected apps.
+  - Scan installed apps with `winget list`.
+  - Filter by name or package ID.
+  - Select/deselect all, checkbox per app.
+  - Uninstall selected apps silently via `winget uninstall`.
+  - Cancel support during scan and uninstall.
+  - Virtualized ListView for smooth scrolling.
+  - Live console output from winget.
+- **18 new unit tests** for `UninstallerService` (table parser, edge cases,
+  model properties) and `UninstallerViewModel` (commands, state, filter).
+
 ## [0.10.0] - 2026-04-23
 
 ### Added

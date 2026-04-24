@@ -55,10 +55,125 @@ public sealed class StartupService
         foreach (var (keyPath, source) in MachineRunKeys)
             ReadRunKey(Registry.LocalMachine, keyPath, source, results);
 
+        // Shell startup folders (user + common)
+        ReadStartupFolder(
+            Environment.GetFolderPath(Environment.SpecialFolder.Startup),
+            "User Startup Folder", results);
+        ReadStartupFolder(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup),
+            "Common Startup Folder", results);
+
+        // Task Scheduler logon tasks
+        ReadScheduledTasks(results);
+
         // Check StartupApproved to determine enabled/disabled state
         ApplyApprovedState(results);
 
         return results;
+    }
+
+    private static void ReadStartupFolder(string folderPath, string locationLabel, List<StartupEntry> results)
+    {
+        try
+        {
+            if (!System.IO.Directory.Exists(folderPath)) return;
+
+            foreach (var file in System.IO.Directory.GetFiles(folderPath))
+            {
+                var name = System.IO.Path.GetFileNameWithoutExtension(file);
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                // Resolve .lnk shortcuts to their target
+                var command = file;
+                if (string.Equals(System.IO.Path.GetExtension(file), ".lnk", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var shellType = Type.GetTypeFromProgID("WScript.Shell");
+                        if (shellType != null)
+                        {
+                            dynamic shell = Activator.CreateInstance(shellType)!;
+                            dynamic shortcut = shell.CreateShortcut(file);
+                            command = shortcut.TargetPath ?? file;
+                        }
+                    }
+                    catch { /* fall back to the .lnk path itself */ }
+                }
+
+                results.Add(new StartupEntry
+                {
+                    Name = name,
+                    Command = command,
+                    Location = locationLabel,
+                    Source = StartupSource.RegistryCurrentUser, // folder-based, toggle via delete/recreate
+                    RegistryKey = "",
+                    ValueName = name,
+                    IsEnabled = true,
+                    Publisher = ExtractPublisher(command),
+                    StatusText = "Enabled"
+                });
+            }
+        }
+        catch { /* folder may be inaccessible */ }
+    }
+
+    private static void ReadScheduledTasks(List<StartupEntry> results)
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks", writable: false);
+            if (key == null) return;
+
+            foreach (var subKeyName in key.GetSubKeyNames())
+            {
+                try
+                {
+                    using var taskKey = key.OpenSubKey(subKeyName, writable: false);
+                    if (taskKey == null) continue;
+
+                    // Only include tasks with logon triggers (trigger type 9 = TASK_TRIGGER_LOGON)
+                    var triggers = taskKey.GetValue("Triggers") as byte[];
+                    if (triggers == null || triggers.Length < 4) continue;
+
+                    // Check if the task has a logon trigger by looking at the path
+                    var path = taskKey.GetValue("Path")?.ToString() ?? "";
+                    var uri = taskKey.GetValue("URI")?.ToString() ?? path;
+
+                    // Skip system/Microsoft tasks that clutter the list
+                    if (uri.StartsWith(@"\Microsoft\", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (uri.StartsWith(@"\Windows\", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    var description = taskKey.GetValue("Description")?.ToString() ?? "";
+                    var author = taskKey.GetValue("Author")?.ToString() ?? "";
+
+                    // Read the Actions to get the command
+                    var actions = taskKey.GetValue("Actions") as byte[];
+                    var taskName = System.IO.Path.GetFileName(uri.TrimEnd('\\'));
+                    if (string.IsNullOrWhiteSpace(taskName)) continue;
+
+                    // Deduplicate — skip if we already have this name from registry
+                    if (results.Any(e => string.Equals(e.Name, taskName, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+
+                    results.Add(new StartupEntry
+                    {
+                        Name = taskName,
+                        Command = description.Length > 0 ? description : uri,
+                        Location = "Task Scheduler",
+                        Source = StartupSource.TaskScheduler,
+                        RegistryKey = "",
+                        ValueName = taskName,
+                        TaskPath = uri,
+                        IsEnabled = true,
+                        Publisher = author,
+                        StatusText = "Enabled (scheduled)"
+                    });
+                }
+                catch { /* skip individual task errors */ }
+            }
+        }
+        catch { /* Task Scheduler registry may be inaccessible */ }
     }
 
     private static void ReadRunKey(RegistryKey root, string keyPath, StartupSource source, List<StartupEntry> results)

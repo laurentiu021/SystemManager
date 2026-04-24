@@ -32,6 +32,10 @@ public partial class CleanupViewModel : ViewModelBase
     [ObservableProperty] private string _sfcStatus = "Idle";
     [ObservableProperty] private string _dismStatus = "Idle";
 
+    // Pre-scan info so the tab doesn't look empty on first load
+    [ObservableProperty] private string _tempSizeLabel = "Scanning…";
+    [ObservableProperty] private string _recycleBinLabel = "Scanning…";
+
     /// <summary>True whenever any background task is running — for a small badge.</summary>
     public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsSfcRunning || IsDismRunning;
 
@@ -41,6 +45,52 @@ public partial class CleanupViewModel : ViewModelBase
         _runner.LineReceived += l => Console.Append(l);
         _runner.ProgressChanged += p => Progress = p;
         IsElevated = AdminHelper.IsElevated();
+
+        // Auto-scan temp and recycle bin sizes so the tab isn't empty on load
+        _ = PreScanAsync();
+    }
+
+    private async Task PreScanAsync()
+    {
+        try
+        {
+            await Task.Run(() =>
+            {
+                // Measure temp folders
+                long tempBytes = 0;
+                var tempPaths = new[] { Environment.GetEnvironmentVariable("TEMP") ?? "", System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp") };
+                foreach (var p in tempPaths)
+                {
+                    if (string.IsNullOrEmpty(p) || !System.IO.Directory.Exists(p)) continue;
+                    try
+                    {
+                        foreach (var f in System.IO.Directory.EnumerateFiles(p, "*", System.IO.SearchOption.AllDirectories))
+                        {
+                            try { tempBytes += new System.IO.FileInfo(f).Length; } catch { }
+                        }
+                    }
+                    catch { }
+                }
+                TempSizeLabel = tempBytes > 0 ? $"{tempBytes / 1024.0 / 1024.0:F1} MB can be freed" : "Empty";
+
+                // Measure recycle bin (rough estimate via shell folder)
+                try
+                {
+                    long binBytes = 0;
+                    var recyclePath = @"C:\$Recycle.Bin";
+                    if (System.IO.Directory.Exists(recyclePath))
+                    {
+                        foreach (var f in System.IO.Directory.EnumerateFiles(recyclePath, "*", System.IO.SearchOption.AllDirectories))
+                        {
+                            try { binBytes += new System.IO.FileInfo(f).Length; } catch { }
+                        }
+                    }
+                    RecycleBinLabel = binBytes > 0 ? $"{binBytes / 1024.0 / 1024.0:F1} MB in Recycle Bin" : "Empty";
+                }
+                catch { RecycleBinLabel = "Unable to scan"; }
+            });
+        }
+        catch { /* non-fatal */ }
     }
 
     partial void OnIsTempRunningChanged(bool value) => OnPropertyChanged(nameof(IsAnyRunning));

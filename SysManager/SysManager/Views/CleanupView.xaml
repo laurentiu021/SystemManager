@@ -54,6 +54,28 @@
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0">
             <StackPanel>
+                <!-- Pre-scan summary so the tab isn't empty on first load -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0">
+                        <StackPanel>
+                            <TextBlock Text="TEMP FOLDERS" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="{Binding TempSizeLabel}" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="#60A5FA" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="RECYCLE BIN" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="{Binding RecycleBinLabel}" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="#FBBF24" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
                 <TextBlock Text="Actions" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
                 <WrapPanel Orientation="Horizontal">
                     <Button Content="Clean TEMP" Command="{Binding CleanTempCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>

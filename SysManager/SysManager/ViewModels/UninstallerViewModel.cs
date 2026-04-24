@@ -106,11 +106,15 @@ public partial class UninstallerViewModel : ViewModelBase
                 try
                 {
                     var code = await _service.UninstallAsync(app.Id, _cts.Token);
-                    app.Status = code == 0 ? "Removed" : $"Failed (exit {code})";
                     if (code == 0)
                     {
+                        app.Status = "Removed";
                         AllApps.Remove(app);
                         FilteredApps.Remove(app);
+                    }
+                    else
+                    {
+                        app.Status = DescribeUninstallFailure(code, app.Name);
                     }
                 }
                 catch (OperationCanceledException) { app.Status = "Cancelled"; break; }
@@ -172,5 +176,28 @@ public partial class UninstallerViewModel : ViewModelBase
 
         AppCount = FilteredApps.Count;
         Summary = $"{AppCount} apps{(AllApps.Count != AppCount ? $" (of {AllApps.Count} total)" : "")}";
+    }
+
+    /// <summary>
+    /// Translates a winget uninstall exit code into a human-readable message
+    /// so the user knows why the uninstall failed and what to try next.
+    /// </summary>
+    private static string DescribeUninstallFailure(int exitCode, string appName)
+    {
+        var reason = exitCode switch
+        {
+            1  => "The app's uninstaller reported a generic error.",
+            2  => "The uninstall was cancelled by the user or a UAC prompt was declined.",
+            5  => "Access denied — try running SysManager as Administrator.",
+            87 => "Invalid parameter — the app may require a manual uninstall.",
+            1602 => "The uninstall was cancelled by the user.",
+            1603 => "The app's installer encountered a fatal error during removal.",
+            1605 => "The app is not currently installed (already removed?).",
+            1618 => "Another installation is in progress — wait and try again.",
+            3010 => "Uninstall succeeded but a reboot is required to complete removal.",
+            _  => $"The app's uninstaller returned exit code {exitCode}."
+        };
+
+        return $"Failed — {reason}";
     }
 }

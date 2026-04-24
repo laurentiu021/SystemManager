@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.4] - 2026-04-24
+
+### Fixed
+- **Performance Mode** — processor state controls are now disabled when the
+  active power plan is High Performance or Ultimate Performance (Windows
+  forces min state to 100 %). A warning message explains the lock and how
+  to unlock by switching to Balanced. (Closes #103)
+- **Process Manager** — replaced the plain text status badge with a colored
+  dot + text indicator. Green for Running, red for Not responding. New
+  `ProcessStatusToBrushConverter`. (Closes #88)
+- **Sidebar progress** — added progress indicators in the left navigation
+  for Disk Analyzer and Duplicate File scans, matching the existing Deep
+  Cleanup mini-tray pattern. Click to navigate to the tab. (Closes #81, #91)
+
 ## [0.12.3] - 2026-04-24
 
 ### Fixed

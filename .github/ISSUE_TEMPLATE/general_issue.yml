@@ -31,7 +31,7 @@ body:
     attributes:
       label: SysManager version
       description: Visible in the **About** tab.
-      placeholder: "0.5.2"
+      placeholder: "0.12.5"
     validations:
       required: true
 
@@ -47,7 +47,13 @@ body:
         - System health
         - Cleanup
         - Deep cleanup
-        - Large files finder
+        - Startup
+        - Duplicates
+        - Disk Analyzer
+        - Processes
+        - Battery
+        - Uninstaller
+        - Performance
         - Network
         - Drivers
         - Logs

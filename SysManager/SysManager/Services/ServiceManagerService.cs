@@ -60,7 +60,7 @@ public class ServiceManagerService
             {
                 var (rec, reason) = GamingGuide.TryGetValue(sc.ServiceName, out var guide)
                     ? guide
-                    : ("keep-enabled", "");
+                    : ("", "");
 
                 result.Add(new ServiceEntry
                 {

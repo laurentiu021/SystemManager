@@ -6,11 +6,13 @@
 // License: MIT
 
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Windows;
 
 // Attributes the SDK doesn't generate from the csproj metadata.
 // Title / Description / Product / Company / Copyright come from csproj.
 [assembly: AssemblyTrademark("SysManager by laurentiu021")]
+[assembly: InternalsVisibleTo("SysManager.Tests")]
 
 [assembly:ThemeInfo(
     ResourceDictionaryLocation.None,            //where theme specific resource dictionaries are located

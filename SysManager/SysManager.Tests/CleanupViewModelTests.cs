@@ -324,4 +324,49 @@ public class CleanupViewModelTests
         vm.IsProgressIndeterminate = false;
         Assert.False(vm.IsProgressIndeterminate);
     }
+
+    // ---------- pre-scan labels (added in v0.12.2) ----------
+
+    [Fact]
+    public void TempSizeLabel_DefaultIsScanning()
+    {
+        // The constructor fires PreScanAsync which sets "Scanning…" initially.
+        var vm = NewVm();
+        Assert.Equal("Scanning…", vm.TempSizeLabel);
+    }
+
+    [Fact]
+    public void RecycleBinLabel_DefaultIsScanning()
+    {
+        var vm = NewVm();
+        Assert.Equal("Scanning…", vm.RecycleBinLabel);
+    }
+
+    [Fact]
+    public async Task PreScan_EventuallyPopulatesLabels()
+    {
+        var vm = NewVm();
+        // PreScanAsync runs on construction via fire-and-forget.
+        // Give it a moment to complete.
+        await Task.Delay(3000);
+        // After scan, labels should no longer be "Scanning…"
+        Assert.NotEqual("Scanning…", vm.TempSizeLabel);
+        Assert.NotEqual("Scanning…", vm.RecycleBinLabel);
+    }
+
+    [Fact]
+    public void TempSizeLabel_CanBeSetDirectly()
+    {
+        var vm = NewVm();
+        vm.TempSizeLabel = "42.0 MB can be freed";
+        Assert.Equal("42.0 MB can be freed", vm.TempSizeLabel);
+    }
+
+    [Fact]
+    public void RecycleBinLabel_CanBeSetDirectly()
+    {
+        var vm = NewVm();
+        vm.RecycleBinLabel = "Empty";
+        Assert.Equal("Empty", vm.RecycleBinLabel);
+    }
 }

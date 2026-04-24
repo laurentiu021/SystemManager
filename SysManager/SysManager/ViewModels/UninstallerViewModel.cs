@@ -182,7 +182,7 @@ public partial class UninstallerViewModel : ViewModelBase
     /// Translates a winget uninstall exit code into a human-readable message
     /// so the user knows why the uninstall failed and what to try next.
     /// </summary>
-    private static string DescribeUninstallFailure(int exitCode, string appName)
+    internal static string DescribeUninstallFailure(int exitCode, string appName)
     {
         var reason = exitCode switch
         {

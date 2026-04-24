@@ -104,7 +104,11 @@ public sealed class DuplicateFileService
             foreach (var d in dirs) stack.Push(d);
         }
 
-        // ── Pass 2: hash files that share a size ──
+        // ── Pass 2: partial hash pre-filter, then full hash ──
+        // First compare only the first 4 KB of each file. Files that differ
+        // in the first 4 KB cannot be duplicates, so we skip the expensive
+        // full-file hash for them. This dramatically speeds up scans with
+        // many large files that share the same size but differ in content.
         var candidates = sizeGroups.Where(g => g.Value.Count >= 2).ToList();
         long hashed = 0;
         long bytesProcessed = 0;
@@ -114,37 +118,60 @@ public sealed class DuplicateFileService
         {
             if (ct.IsCancellationRequested) break;
 
+            // Sub-group by partial hash (first 4 KB)
+            var partialGroups = new Dictionary<string, List<FileInfo>>();
             foreach (var fi in group.Value)
             {
                 if (ct.IsCancellationRequested) break;
                 try
                 {
-                    var hash = ComputeHash(fi.FullName, ct);
-                    hashed++;
-                    bytesProcessed += fi.Length;
-
-                    if (!hashGroups.TryGetValue(hash, out var dg))
+                    var partialHash = ComputePartialHash(fi.FullName, ct);
+                    if (!partialGroups.TryGetValue(partialHash, out var pList))
                     {
-                        dg = new DuplicateFileGroup { Hash = hash, FileSize = fi.Length };
-                        hashGroups[hash] = dg;
+                        pList = new List<FileInfo>(2);
+                        partialGroups[partialHash] = pList;
                     }
-                    dg.Files.Add(new DuplicateFileEntry
-                    {
-                        Path = fi.FullName,
-                        Name = fi.Name,
-                        SizeBytes = fi.Length,
-                        LastModified = fi.LastWriteTime
-                    });
-                    dg.Count = dg.Files.Count;
-
-                    var now = Environment.TickCount64;
-                    if (now - lastReport >= 200)
-                    {
-                        progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, fi.Name, "Hashing files…"));
-                        lastReport = now;
-                    }
+                    pList.Add(fi);
                 }
                 catch { }
+            }
+
+            // Only full-hash files whose partial hashes matched 2+ files
+            foreach (var pg in partialGroups.Values)
+            {
+                if (pg.Count < 2) continue;
+                foreach (var fi in pg)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    try
+                    {
+                        var hash = ComputeHash(fi.FullName, ct);
+                        hashed++;
+                        bytesProcessed += fi.Length;
+
+                        if (!hashGroups.TryGetValue(hash, out var dg))
+                        {
+                            dg = new DuplicateFileGroup { Hash = hash, FileSize = fi.Length };
+                            hashGroups[hash] = dg;
+                        }
+                        dg.Files.Add(new DuplicateFileEntry
+                        {
+                            Path = fi.FullName,
+                            Name = fi.Name,
+                            SizeBytes = fi.Length,
+                            LastModified = fi.LastWriteTime
+                        });
+                        dg.Count = dg.Files.Count;
+
+                        var now = Environment.TickCount64;
+                        if (now - lastReport >= 200)
+                        {
+                            progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, fi.Name, "Hashing files…"));
+                            lastReport = now;
+                        }
+                    }
+                    catch { }
+                }
             }
         }
 
@@ -171,6 +198,25 @@ public sealed class DuplicateFileService
         }
         sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
         return Convert.ToHexString(sha.Hash!);
+    }
+
+    /// <summary>
+    /// Hash only the first 4 KB of a file. Used as a fast pre-filter:
+    /// files that differ in the first 4 KB cannot be duplicates.
+    /// </summary>
+    private static string ComputePartialHash(string filePath, CancellationToken ct)
+    {
+        const int partialSize = 4096;
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, partialSize);
+        var buffer = new byte[partialSize];
+        int totalRead = 0;
+        int read;
+        while (totalRead < partialSize && (read = stream.Read(buffer, totalRead, partialSize - totalRead)) > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            totalRead += read;
+        }
+        return Convert.ToHexString(SHA256.HashData(buffer.AsSpan(0, totalRead)));
     }
 
     private static bool ShouldSkipDir(string path)

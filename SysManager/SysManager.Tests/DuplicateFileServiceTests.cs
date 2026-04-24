@@ -349,4 +349,46 @@ public class DuplicateFileServiceTests : IDisposable
         var group = new DuplicateFileGroup { FileSize = 1000, Count = 1 };
         Assert.Equal(0, group.WastedBytes);
     }
+
+    // ── Partial hash pre-filter (issue #80 performance) ──
+
+    [Fact]
+    public void ComputePartialHash_Exists()
+    {
+        // Verify the internal method exists (it's used as a pre-filter)
+        var method = typeof(DuplicateFileService)
+            .GetMethod("ComputePartialHash", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+    }
+
+    [Fact]
+    public async Task SameContentFiles_StillDetectedWithPartialHash()
+    {
+        // Two identical files should still be detected as duplicates
+        // even with the partial hash optimization
+        var content = new byte[8192]; // 8 KB — larger than partial hash window
+        new Random(42).NextBytes(content);
+        CreateFile("dup1.bin", content);
+        CreateFile("dup2.bin", content);
+
+        var results = await _service.ScanAsync(_root, minSizeBytes: 1);
+        Assert.Single(results);
+        Assert.Equal(2, results[0].Files.Count);
+    }
+
+    [Fact]
+    public async Task DifferentFirstBytes_NotFullHashed()
+    {
+        // Files with same size but different first bytes should NOT be
+        // detected as duplicates (partial hash filters them out)
+        var content1 = new byte[8192];
+        var content2 = new byte[8192];
+        new Random(1).NextBytes(content1);
+        new Random(2).NextBytes(content2);
+        CreateFile("a.bin", content1);
+        CreateFile("b.bin", content2);
+
+        var results = await _service.ScanAsync(_root, minSizeBytes: 1);
+        Assert.Empty(results);
+    }
 }

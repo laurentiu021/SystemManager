@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-04-24
+
+### Fixed
+- **Cleanup tab** — added explanatory text describing what each operation
+  does (Clean TEMP, SFC /scannow, DISM /RestoreHealth) so users understand
+  the tools before running them. (Closes #92)
+- **System Health** — chkdsk status line now stays visible after the scan
+  finishes instead of disappearing. Shows green while running, muted gray
+  when done, so the user can see the result. (Closes #94)
+
 ## [0.12.2] - 2026-04-24
 
 ### Fixed

@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-04-24
+
+### Fixed
+- **Services tab** — Rec. column now shows empty for services without a gaming
+  recommendation instead of cluttering all 280+ rows with "keep-enabled".
+
 ## [0.13.0] - 2026-04-24
 
 ### Added

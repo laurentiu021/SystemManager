@@ -45,6 +45,7 @@ public partial class NetworkViewModel : ViewModelBase
     private readonly TracerouteService _tracer = new();
     private readonly TracerouteMonitorService _traceMonitor = new();
     private readonly SpeedTestService _speed = new();
+    private readonly NetworkRepairService _repair = new(new PowerShellRunner());
     private readonly Dispatcher? _dispatcher;
     private readonly DispatcherTimer? _flushTimer;
     private readonly ConcurrentQueue<PingSample> _pending = new();
@@ -100,6 +101,11 @@ public partial class NetworkViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isTracing;
     [ObservableProperty] private string _traceStatus = "";
+
+    // ---------- Repair state ----------
+    [ObservableProperty] private bool _isRepairing;
+    [ObservableProperty] private string _repairStatus = "";
+    [ObservableProperty] private bool _repairNeedsReboot;
 
     public NetworkViewModel()
     {
@@ -414,6 +420,78 @@ public partial class NetworkViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelSpeed() => _speedCts?.Cancel();
+
+    // ---------- Network repair ----------
+
+    [RelayCommand]
+    private async Task FlushDnsAsync()
+    {
+        var result = MessageBox.Show(
+            "Flush the DNS resolver cache?\n\nThis clears cached DNS lookups and forces fresh resolution. Safe and instant — no reboot needed.",
+            "DNS Flush — Confirm",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
+        await RunRepairAsync(() => _repair.FlushDnsAsync());
+    }
+
+    [RelayCommand]
+    private async Task ResetWinsockAsync()
+    {
+        if (!AdminHelper.IsElevated())
+        {
+            RepairStatus = "⚠ Winsock reset requires administrator privileges.";
+            return;
+        }
+
+        var result = MessageBox.Show(
+            "Reset the Winsock catalog?\n\nThis repairs corrupted network socket settings. A reboot is required for changes to take effect.",
+            "Winsock Reset — Confirm",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        await RunRepairAsync(() => _repair.ResetWinsockAsync());
+    }
+
+    [RelayCommand]
+    private async Task ResetTcpIpAsync()
+    {
+        if (!AdminHelper.IsElevated())
+        {
+            RepairStatus = "⚠ TCP/IP reset requires administrator privileges.";
+            return;
+        }
+
+        var result = MessageBox.Show(
+            "Reset the TCP/IP stack?\n\nThis restores all TCP/IP settings to their defaults. A reboot is required for changes to take effect.",
+            "TCP/IP Reset — Confirm",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        await RunRepairAsync(() => _repair.ResetTcpIpAsync());
+    }
+
+    private async Task RunRepairAsync(Func<Task<Models.NetworkRepairResult>> operation)
+    {
+        IsRepairing = true;
+        RepairStatus = "Running…";
+        try
+        {
+            var r = await operation();
+            RepairStatus = r.Success
+                ? $"✓ {r.ToolName} completed successfully."
+                : $"✗ {r.ToolName} failed: {r.Output}";
+            if (r.NeedsReboot && r.Success)
+            {
+                RepairNeedsReboot = true;
+                RepairStatus += " Reboot required.";
+            }
+        }
+        catch (OperationCanceledException) { RepairStatus = "Cancelled."; }
+        catch (System.ComponentModel.Win32Exception ex) { RepairStatus = $"✗ Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { RepairStatus = $"✗ Error: {ex.Message}"; }
+        finally { IsRepairing = false; }
+    }
 
     // ---------- Sample handling ----------
 

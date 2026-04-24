@@ -29,6 +29,7 @@ public partial class MainWindowViewModel : ObservableObject
     public DriversViewModel Drivers { get; }
     public LogsViewModel Logs { get; }
     public AboutViewModel About { get; }
+    public ServicesViewModel Services { get; }
 
     public ObservableCollection<NavItem> NavItems { get; } = new();
 
@@ -57,6 +58,7 @@ public partial class MainWindowViewModel : ObservableObject
         Drivers = new DriversViewModel(new PowerShellRunner());
         Logs = new LogsViewModel();
         About = new AboutViewModel();
+        Services = new ServicesViewModel();
 
         IsElevated = AdminHelper.IsElevated();
         ElevationBadge = IsElevated ? "Administrator" : "Standard user";
@@ -78,6 +80,7 @@ public partial class MainWindowViewModel : ObservableObject
         NavItems.Add(new NavItem { Id = "nav-uninstaller",    Label = "Uninstaller",    Glyph = "\uE74D", Content = Uninstaller,   ViewType = typeof(Views.UninstallerView) });
         NavItems.Add(new NavItem { Id = "nav-performance",    Label = "Performance",    Glyph = "\uE945", Content = Performance,   ViewType = typeof(Views.PerformanceView) });
         NavItems.Add(new NavItem { Id = "nav-network",        Label = "Network",        Glyph = "\uE839", Content = Network,         ViewType = typeof(Views.NetworkView) });
+        NavItems.Add(new NavItem { Id = "nav-services",       Label = "Services",       Glyph = "\uE912", Content = Services,        ViewType = typeof(Views.ServicesView) });
         NavItems.Add(new NavItem { Id = "nav-drivers",        Label = "Drivers",        Glyph = "\uE950", Content = Drivers,       ViewType = typeof(Views.DriversView) });
         NavItems.Add(new NavItem { Id = "nav-logs",           Label = "Logs",           Glyph = "\uE9F9", Content = Logs,          ViewType = typeof(Views.LogsView) });
         NavItems.Add(new NavItem { Id = "nav-about",          Label = "About",          Glyph = "\uE946", Content = About,         ViewType = typeof(Views.AboutView) });

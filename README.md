@@ -44,6 +44,8 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 - Auto-traceroute on a configurable interval (30 s – 10 min)
 - Speed tests: HTTP (Cloudflare) and the official Ookla CLI (auto-downloaded)
 - Jitter, loss %, and average ping per target rolled up into health pills
+- **Network repair tools**: DNS flush, Winsock reset, TCP/IP reset with
+  confirmation dialogs and admin checks
 
 ### System logs (Windows Event Log, friendly)
 - Browse System, Application, Security, and Setup logs
@@ -149,6 +151,20 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 - **OriginalSnapshot**: captures exact system state before first change;
   Restore All reverts to the snapshot, not hardcoded defaults
 - Confirmation dialog before every change
+- **Restore point creation**: create a Windows System Restore point before
+  making changes (requires admin)
+- **RAM working set trim**: free physical RAM by trimming all process working
+  sets — same as RAMMap's "Empty Working Set" (useful before launching a game)
+- **Hibernation toggle**: enable/disable hibernation to free disk space
+  (deletes hiberfil.sys when disabled)
+
+### Services
+- Lists all Windows services with current status and startup type
+- **Gaming recommendations**: services tagged as "safe to disable", "advanced",
+  or "keep enabled" with per-service explanations
+- Filter by status (Running/Stopped), recommendation level, or free-text search
+- Start, stop, disable, or enable services with confirmation dialogs
+- Requires admin for all mutations
 
 ### Drivers
 - List all installed drivers with versions and dates

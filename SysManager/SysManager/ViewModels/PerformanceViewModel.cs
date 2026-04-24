@@ -87,6 +87,7 @@ public partial class PerformanceViewModel : ViewModelBase
         {
             Profile = await _service.ReadProfileAsync();
             SyncTogglesFromProfile();
+            IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
             UpdateSummary();
             StatusMessage = "Settings loaded.";
         }
@@ -350,6 +351,110 @@ public partial class PerformanceViewModel : ViewModelBase
             await _service.SetProcessorMinStateAsync(target);
             await RefreshAsync();
             StatusMessage = $"Processor min state set to {target}%.";
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  RESTORE POINT — create a system restore point
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task CreateRestorePointAsync()
+    {
+        if (!Helpers.AdminHelper.IsElevated())
+        {
+            StatusMessage = "⚠ Creating a restore point requires administrator privileges.";
+            return;
+        }
+
+        var result = MessageBox.Show(
+            "Create a System Restore point?\n\nThis saves the current system state so you can roll back later if something goes wrong.",
+            "Restore Point — Confirm",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Creating restore point…";
+        try
+        {
+            var ok = await _service.CreateRestorePointAsync(
+                $"SysManager — {DateTime.Now:yyyy-MM-dd HH:mm}");
+            StatusMessage = ok
+                ? "✓ Restore point created successfully."
+                : "✗ Failed to create restore point. Check Event Viewer for details.";
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  RAM WORKING SET TRIM
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private void TrimRam()
+    {
+        var result = MessageBox.Show(
+            "Trim the working set of all processes?\n\n"
+            + "This frees physical RAM by moving pages to the standby list. "
+            + "No data is lost — pages are soft-faulted back on demand. "
+            + "Apps may feel briefly slower on next access.\n\n"
+            + "This is the same as \"Empty Working Set\" in RAMMap.",
+            "RAM Trim — Confirm",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            var count = PerformanceService.TrimWorkingSets();
+            StatusMessage = $"✓ Trimmed working set of {count} processes.";
+        }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  HIBERNATION TOGGLE
+    // ═══════════════════════════════════════════════════════════════
+
+    [ObservableProperty] private bool _isHibernationEnabled;
+
+    [RelayCommand]
+    private async Task ToggleHibernationAsync()
+    {
+        if (!Helpers.AdminHelper.IsElevated())
+        {
+            StatusMessage = "⚠ Toggling hibernation requires administrator privileges.";
+            return;
+        }
+
+        var enabling = !IsHibernationEnabled;
+        var action = enabling ? "Enable" : "Disable";
+        var detail = enabling
+            ? "This creates hiberfil.sys and allows the PC to hibernate."
+            : "This deletes hiberfil.sys and frees disk space (often several GB).";
+
+        var result = MessageBox.Show(
+            $"{action} hibernation?\n\n{detail}",
+            "Hibernation — Confirm",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = $"{(enabling ? "Enabling" : "Disabling")} hibernation…";
+        try
+        {
+            await _service.SetHibernationAsync(enabling);
+            IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
+            StatusMessage = $"✓ Hibernation {(enabling ? "enabled" : "disabled")}.";
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }

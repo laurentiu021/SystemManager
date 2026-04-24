@@ -356,6 +356,69 @@
                     </Border>
                 </Grid>
             </TabItem>
+
+            <!-- Repair tab -->
+            <TabItem Header="Repair">
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Network Repair Tools" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="Common fixes for DNS, socket, and TCP/IP issues. Winsock and TCP/IP resets require admin and a reboot."
+                                   Style="{StaticResource Subtle}" Margin="0,4,0,16"/>
+
+                        <!-- DNS Flush -->
+                        <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                            <DockPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Flush DNS Cache" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Text="Clears the local DNS resolver cache. Fixes stale DNS entries causing connection failures to specific sites. Safe, instant, no reboot."
+                                               Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600"/>
+                                </StackPanel>
+                                <Button Content="Flush DNS" Command="{Binding FlushDnsCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
+                                        IsEnabled="{Binding IsRepairing, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Winsock Reset -->
+                        <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                            <DockPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Reset Winsock Catalog" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Text="Resets the Windows socket API to its default state. Fixes corrupted network drivers or broken socket connections. Requires admin + reboot."
+                                               Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600"/>
+                                </StackPanel>
+                                <Button Content="Reset Winsock" Command="{Binding ResetWinsockCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
+                                        IsEnabled="{Binding IsRepairing, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- TCP/IP Reset -->
+                        <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                            <DockPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Reset TCP/IP Stack" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Text="Restores all TCP/IP settings to factory defaults. Nuclear option for persistent connectivity issues. Requires admin + reboot."
+                                               Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600"/>
+                                </StackPanel>
+                                <Button Content="Reset TCP/IP" Command="{Binding ResetTcpIpCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
+                                        IsEnabled="{Binding IsRepairing, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Status -->
+                        <TextBlock Text="{Binding RepairStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
+                                   Visibility="{Binding RepairStatus, Converter={StaticResource FlexVis}}"/>
+                        <TextBlock Text="⚠ A reboot is required for changes to take effect."
+                                   Foreground="#EF4444" FontSize="12" Margin="0,8,0,0"
+                                   Visibility="{Binding RepairNeedsReboot, Converter={StaticResource BoolToVis}}"/>
+                    </StackPanel>
+                </Border>
+            </TabItem>
         </TabControl>
     </Grid>
 </UserControl>

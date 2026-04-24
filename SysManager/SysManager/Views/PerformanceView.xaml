@@ -169,6 +169,56 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- ═══ Restore Point ═══ -->
+                    <TextBlock Text="Restore Point" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="Create a Windows System Restore point before making changes. Requires admin."
+                                       Style="{StaticResource Subtle}" FontSize="11" Margin="0,0,0,8"/>
+                            <Button Content="Create Restore Point" Command="{Binding CreateRestorePointCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ RAM Trim ═══ -->
+                    <TextBlock Text="RAM Working Set Trim" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}" FontSize="11" Margin="0,0,0,4">
+                                Frees physical RAM by trimming the working set of all processes.
+                                Pages move to the standby list and are soft-faulted back on demand — no data is lost.
+                                Same as "Empty Working Set" in RAMMap. Useful before launching a game.
+                            </TextBlock>
+                            <TextBlock Text="⚠ Apps may feel briefly slower on next access as pages are faulted back in."
+                                       Foreground="#F59E0B" FontSize="11" Margin="0,0,0,8"/>
+                            <Button Content="Trim RAM Now" Command="{Binding TrimRamCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══ Hibernation ═══ -->
+                    <TextBlock Text="Hibernation" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}" FontSize="11" Margin="0,0,0,4">
+                                Hibernation saves your session to disk (hiberfil.sys) so the PC can power off completely
+                                and resume later. Disabling it deletes hiberfil.sys and frees several GB of disk space.
+                                Requires admin.
+                            </TextBlock>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                                <TextBlock Text="Currently: " Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Text="Enabled" Foreground="#22C55E"
+                                           Visibility="{Binding IsHibernationEnabled, Converter={StaticResource BoolToVis}}"/>
+                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Text="Disabled" Foreground="#EF4444"
+                                           Visibility="{Binding IsHibernationEnabled, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                            </StackPanel>
+                            <Button Content="Toggle Hibernation" Command="{Binding ToggleHibernationCommand}"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- ═══ Current State ═══ -->
                     <TextBlock Text="Current State" FontWeight="Bold" FontSize="15" Margin="0,8,0,12"/>
                     <Border Style="{StaticResource Card}" Padding="16">

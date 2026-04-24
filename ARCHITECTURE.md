@@ -42,7 +42,8 @@ SysManager/
 - `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI.
 - `UninstallerViewModel` — winget-based app uninstaller with batch support.
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.
-- `NetworkViewModel` — ping monitor, traceroute, speed tests, presets.
+- `NetworkViewModel` — ping monitor, traceroute, speed tests, presets, network repair tools.
+- `ServicesViewModel` — Windows services management with gaming recommendations.
 - `DriversViewModel` — driver inventory + Windows Update driver scan.
 - `LogsViewModel` — friendly Event Log viewer.
 - `AboutViewModel` — version info, auto-update, release history.
@@ -86,7 +87,12 @@ Key services:
 - `ProcessManagerService` — enumerate running processes, kill by PID,
   open file location.
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
-  Game Bar, NVIDIA GPU, processor state. Snapshot-based restore.
+  Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
+  working set trim, hibernation toggle. Snapshot-based restore.
+- `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
+  system commands with live output capture.
+- `ServiceManagerService` — enumerate Windows services, gaming
+  recommendations, start/stop/disable with admin checks.
 
 ## Admin elevation
 

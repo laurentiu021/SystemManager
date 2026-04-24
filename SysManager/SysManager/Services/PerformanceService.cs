@@ -466,6 +466,82 @@ public class PerformanceService
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //  RESTORE POINT — via WMI (requires admin)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Create a Windows System Restore point. Requires admin elevation.
+    /// Returns true if the restore point was created successfully.
+    /// </summary>
+    public async Task<bool> CreateRestorePointAsync(string description, CancellationToken ct = default)
+    {
+        var script =
+            "Checkpoint-Computer -Description '" + description.Replace("'", "''") + "' -RestorePointType 'MODIFY_SETTINGS'";
+        var exit = await _ps.RunScriptViaPwshAsync(script, ct).ConfigureAwait(false);
+        return exit == 0;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  RAM WORKING SET TRIM — via EmptyWorkingSet (instant)
+    // ═══════════════════════════════════════════════════════════════
+
+    [DllImport("psapi.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EmptyWorkingSet(IntPtr hProcess);
+
+    /// <summary>
+    /// Trim the working set of all accessible processes, freeing physical
+    /// RAM pages back to the standby list. Pages are soft-faulted back in
+    /// on demand — no data is lost, but apps may feel briefly slower on
+    /// next access. This is the same operation as "Empty Working Set" in
+    /// RAMMap. Does not require a reboot.
+    /// </summary>
+    /// <returns>Number of processes successfully trimmed.</returns>
+    public static int TrimWorkingSets()
+    {
+        int trimmed = 0;
+        foreach (var proc in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                if (EmptyWorkingSet(proc.Handle))
+                    trimmed++;
+            }
+            catch (System.ComponentModel.Win32Exception) { /* access denied — skip */ }
+            catch (InvalidOperationException) { /* process exited — skip */ }
+            finally { proc.Dispose(); }
+        }
+        return trimmed;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  HIBERNATION TOGGLE — powercfg (requires admin)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Read whether hibernation is currently enabled by checking for
+    /// the hiberfil.sys file on the system drive.
+    /// </summary>
+    public static bool ReadHibernationEnabled()
+    {
+        var systemDrive = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var root = System.IO.Path.GetPathRoot(systemDrive) ?? @"C:\";
+        var hiberFile = System.IO.Path.Combine(root, "hiberfil.sys");
+        return System.IO.File.Exists(hiberFile);
+    }
+
+    /// <summary>
+    /// Enable or disable hibernation. Requires admin.
+    /// When disabled, deletes hiberfil.sys and frees disk space.
+    /// Reversible: call with true to re-enable.
+    /// </summary>
+    public async Task SetHibernationAsync(bool enabled, CancellationToken ct = default)
+    {
+        var arg = enabled ? "/hibernate on" : "/hibernate off";
+        await _ps.RunProcessAsync("powercfg.exe", arg, ct).ConfigureAwait(false);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     //  RESTORE — revert to snapshot
     // ═══════════════════════════════════════════════════════════════
 

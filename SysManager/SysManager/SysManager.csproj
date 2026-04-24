@@ -36,6 +36,7 @@
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="System.Management" Version="10.0.7" />
     <PackageReference Include="System.Management.Automation" Version="7.4.6" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.7" />
   </ItemGroup>
 
 </Project>

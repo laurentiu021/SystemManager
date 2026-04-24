@@ -1,0 +1,128 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.ServicesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             d:DataContext="{d:DesignInstance vm:ServicesViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource Surface0}">
+
+    <Grid Margin="32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Services" Style="{StaticResource Display}"/>
+            <TextBlock Text="Manage Windows services. Gaming recommendations highlight services safe to disable for better performance."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                    <ComboBox ItemsSource="{Binding FilterOptions}"
+                              SelectedItem="{Binding SelectedFilter}" Width="150" Margin="0,0,8,0"/>
+                    <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+                             Width="240" VerticalContentAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                    <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center">
+                        <Run Text="{Binding RunningCount, Mode=OneWay}"/>
+                        <Run Text=" running / "/>
+                        <Run Text="{Binding TotalCount, Mode=OneWay}"/>
+                        <Run Text=" total"/>
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Services list -->
+        <DataGrid Grid.Row="2" ItemsSource="{Binding Services}"
+                  SelectedItem="{Binding SelectedService}"
+                  AutoGenerateColumns="False" HeadersVisibility="Column"
+                  Background="Transparent" BorderThickness="0"
+                  GridLinesVisibility="None" IsReadOnly="True"
+                  RowBackground="Transparent" AlternatingRowBackground="#0F141C"
+                  SelectionMode="Single" CanUserSortColumns="True">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200"/>
+                <DataGridTextColumn Header="Service" Binding="{Binding Name}" Width="160"/>
+                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80"/>
+                <DataGridTextColumn Header="Startup" Binding="{Binding StartType}" Width="90"/>
+                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTemplateColumn Header="Rec." Width="100">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Recommendation}" FontSize="11" VerticalAlignment="Center"
+                                       ToolTip="{Binding RecommendationReason}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Recommendation}" Value="safe-to-disable">
+                                                <Setter Property="Foreground" Value="#22C55E"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Recommendation}" Value="advanced">
+                                                <Setter Property="Foreground" Value="#F59E0B"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Recommendation}" Value="keep-enabled">
+                                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Actions" Width="200">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Start" Padding="8,2" Margin="0,0,4,0"
+                                        Style="{StaticResource GhostButton}"
+                                        Command="{Binding DataContext.StartServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"/>
+                                <Button Content="Stop" Padding="8,2" Margin="0,0,4,0"
+                                        Style="{StaticResource GhostButton}"
+                                        Command="{Binding DataContext.StopServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"/>
+                                <Button Content="Disable" Padding="8,2" Margin="0,0,4,0"
+                                        Style="{StaticResource GhostButton}"
+                                        Command="{Binding DataContext.DisableServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"/>
+                                <Button Content="Enable" Padding="8,2"
+                                        Style="{StaticResource GhostButton}"
+                                        Command="{Binding DataContext.EnableServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

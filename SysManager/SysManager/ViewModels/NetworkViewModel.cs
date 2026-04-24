@@ -554,9 +554,9 @@ public partial class NetworkViewModel : ViewModelBase
     private static Axis BuildTimeAxis() => new()
     {
         Labeler = v => new DateTime((long)v).ToString("HH:mm:ss"),
-        TextSize = 11,
+        TextSize = 12,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
-        LabelsPaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
+        LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { FontFamily = "Segoe UI" },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))
     };
 
@@ -564,12 +564,12 @@ public partial class NetworkViewModel : ViewModelBase
     {
         Name = name,
         MinLimit = 0,
-        TextSize = 12,
-        NamePaint = new SolidColorPaint(SKColor.Parse("E6E9EE")),
-        LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")),
+        TextSize = 13,
+        NamePaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { FontFamily = "Segoe UI" },
+        LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { FontFamily = "Segoe UI" },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80)) { StrokeThickness = 1 },
         Labeler = v => $"{v:F0} ms",
-        NameTextSize = 13,
+        NameTextSize = 14,
         ForceStepToMin = false,
         MinStep = 1
     };
@@ -578,9 +578,9 @@ public partial class NetworkViewModel : ViewModelBase
     {
         Name = "Hop",
         MinStep = 1,
-        TextSize = 11,
+        TextSize = 12,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
-        LabelsPaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
+        LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { FontFamily = "Segoe UI" },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))
     };
 }

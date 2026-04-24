@@ -11,9 +11,9 @@
     <AssemblyName>SysManager</AssemblyName>
     <RootNamespace>SysManager</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <Version>0.5.1</Version>
-    <FileVersion>0.5.1.0</FileVersion>
-    <AssemblyVersion>0.5.1.0</AssemblyVersion>
+    <Version>0.12.1</Version>
+    <FileVersion>0.12.1.0</FileVersion>
+    <AssemblyVersion>0.12.1.0</AssemblyVersion>
     <Authors>laurentiu021</Authors>
     <Company>laurentiu021</Company>
     <Product>SysManager</Product>

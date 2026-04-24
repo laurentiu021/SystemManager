@@ -22,7 +22,7 @@
                         <TextBlock Text="OS, CPU, RAM and disk diagnostics with SMART data and memory error detection."
                                    Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                     </StackPanel>
-                    <Button Content="Rescan" Command="{Binding ScanCommand}" Style="{StaticResource PrimaryButton}"
+                    <Button Content="Scan" Command="{Binding ScanCommand}" Style="{StaticResource PrimaryButton}"
                             HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                 </DockPanel>
 

@@ -6,22 +6,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.12.3] - 2026-04-24
-
-### Fixed
-- **Startup tab** — now discovers startup items from shell:startup folders
-  (user + common) and Task Scheduler logon tasks, not just registry Run
-  keys. Resolves `.lnk` shortcuts to their target path. Deduplicates
-  entries already found in the registry. Filters out Microsoft/Windows
-  system tasks to reduce noise. (Closes #76)
-- **Uninstaller** — failed uninstalls now show descriptive error messages
-  instead of cryptic exit codes. Covers common winget/MSI codes: access
-  denied, cancelled, already removed, reboot required, installer busy.
-  (Closes #87)
-- **Cleanup tab** — auto-scans TEMP folders and Recycle Bin sizes on load,
-  showing results in two summary cards so the tab is no longer empty until
-  the user runs an action. (Closes #96)
-
 ## [0.12.2] - 2026-04-24
 
 ### Fixed
@@ -35,17 +19,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (Closes #74)
 - **System Health** — renamed "Rescan" button to "Scan" to match the
   initial prompt text. (Closes #97)
-- **Issue templates** — added all missing tabs (Startup, Duplicates, Disk
-  Analyzer, Processes, Battery, Uninstaller, Performance) to both bug
-  report and feature request templates. Updated version placeholder.
-  (Closes #77)
 - **System Health scroll** — fixed ConsoleView auto-scroll from
   propagating `BringIntoView` to the parent ScrollViewer, which caused
   the entire page to jump to the bottom during file-system scans. Now
   scrolls the internal ListBox directly via `ScrollToEnd()`. (Closes #93)
+- **Startup tab** — now discovers startup items from shell:startup folders
+  (user + common) and Task Scheduler logon tasks, not just registry Run
+  keys. Resolves `.lnk` shortcuts to their target path. Deduplicates
+  entries already found in the registry. Filters out Microsoft/Windows
+  system tasks to reduce noise. (Closes #76)
+- **Cleanup tab** — auto-scans TEMP folders and Recycle Bin sizes on load,
+  showing results in two summary cards so the tab is no longer empty until
+  the user runs an action. (Closes #96)
+- **Uninstaller** — failed uninstalls now show descriptive error messages
+  instead of cryptic exit codes. Covers common winget/MSI codes: access
+  denied, cancelled, already removed, reboot required, installer busy.
+  (Closes #87)
 - **Network chart labels** — increased axis label font sizes and switched
   to Segoe UI with brighter text color (`#E6E9EE`) for better readability
   on the dark background. (Closes #99, #75)
+- **Issue templates** — added all missing tabs (Startup, Duplicates, Disk
+  Analyzer, Processes, Battery, Uninstaller, Performance) to both bug
+  report and feature request templates. Updated version placeholder.
+  (Closes #77)
 
 ## [0.12.1] - 2026-04-23
 

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.5] - 2026-04-24
+
+### Fixed
+- **Duplicate File Scanner** — dramatically faster duplicate detection using
+  a two-phase hashing approach. Files sharing a size are now pre-filtered by
+  a partial hash (first 4 KB) before computing the full SHA-256. Files that
+  differ in the first 4 KB are skipped entirely, avoiding gigabytes of
+  unnecessary I/O. (Closes #80)
+
 ## [0.12.4] - 2026-04-24
 
 ### Fixed

@@ -160,4 +160,33 @@ public class PerformanceViewModelTests
         vm.SelectedPlan = "high";
         Assert.Contains("SelectedPlan", changed);
     }
+
+    // ── Processor state lock (issue #103) ──
+
+    [Fact]
+    public void IsProcessorStateLocked_DefaultFalse()
+    {
+        var vm = CreateVm();
+        Assert.False(vm.IsProcessorStateLocked);
+    }
+
+    [Fact]
+    public void IsProcessorStateEditable_InverseOfLocked()
+    {
+        var vm = CreateVm();
+        Assert.True(vm.IsProcessorStateEditable);
+        vm.IsProcessorStateLocked = true;
+        Assert.False(vm.IsProcessorStateEditable);
+    }
+
+    [Fact]
+    public void IsProcessorStateLocked_NotifiesEditable()
+    {
+        var vm = CreateVm();
+        var changed = new List<string>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        vm.IsProcessorStateLocked = true;
+        Assert.Contains("IsProcessorStateLocked", changed);
+        Assert.Contains("IsProcessorStateEditable", changed);
+    }
 }

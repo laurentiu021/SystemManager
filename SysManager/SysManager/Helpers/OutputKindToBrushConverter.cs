@@ -80,3 +80,28 @@ public class HexToBrushConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+/// <summary>
+/// Maps process status text ("Running" / "Not responding") to a coloured brush.
+/// Green for running, red for not responding, grey for anything else.
+/// </summary>
+public class ProcessStatusToBrushConverter : IValueConverter
+{
+    private static readonly Brush RunningBrush = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
+    private static readonly Brush NotRespondingBrush = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string status)
+        {
+            if (status.Contains("Not responding", StringComparison.OrdinalIgnoreCase))
+                return NotRespondingBrush;
+            if (status.Contains("Running", StringComparison.OrdinalIgnoreCase))
+                return RunningBrush;
+        }
+        return Brushes.Gray;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}

@@ -141,7 +141,7 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Background tasks mini-tray: deep cleanup scan / clean / large files -->
+                    <!-- Background tasks mini-tray: deep cleanup / disk analyzer / duplicates -->
                     <Border Margin="0,10,0,0" Padding="10,8" CornerRadius="8"
                             Background="#0F1A17" BorderBrush="#22C55E" BorderThickness="1"
                             Cursor="Hand">
@@ -156,6 +156,12 @@
                                         <Setter Property="Visibility" Value="Visible"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding DeepCleanup.IsLargeScanning}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding DiskAnalyzer.IsBusy}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding DuplicateFile.IsBusy}" Value="True">
                                         <Setter Property="Visibility" Value="Visible"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -185,6 +191,18 @@
                                     <Run Text=" · "/>
                                     <Run Text="{Binding DeepCleanup.LargeBytesScannedDisplay, Mode=OneWay}"/>
                                 </TextBlock>
+                                <ProgressBar Height="3" IsIndeterminate="True"/>
+                            </StackPanel>
+                            <!-- Disk Analyzer progress -->
+                            <StackPanel Visibility="{Binding DiskAnalyzer.IsBusy, Converter={StaticResource FlexVis}}" Margin="0,4,0,0">
+                                <TextBlock Text="Disk Analyzer · scan" FontSize="11" FontWeight="SemiBold" Foreground="#22C55E"/>
+                                <TextBlock Text="{Binding DiskAnalyzer.CurrentFolder}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,4"/>
+                                <ProgressBar Height="3" IsIndeterminate="True"/>
+                            </StackPanel>
+                            <!-- Duplicate File progress -->
+                            <StackPanel Visibility="{Binding DuplicateFile.IsBusy, Converter={StaticResource FlexVis}}" Margin="0,4,0,0">
+                                <TextBlock Text="Duplicates · scan" FontSize="11" FontWeight="SemiBold" Foreground="#22C55E"/>
+                                <TextBlock Text="{Binding DuplicateFile.StatusMessage}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,4"/>
                                 <ProgressBar Height="3" IsIndeterminate="True"/>
                             </StackPanel>
                         </StackPanel>

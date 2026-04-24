@@ -38,6 +38,13 @@ public partial class PerformanceViewModel : ViewModelBase
     [ObservableProperty] private bool _wantProcessorMaxState;
 
     // ── UI state ──
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsProcessorStateEditable))]
+    private bool _isProcessorStateLocked;
+
+    /// <summary>Inverse of <see cref="IsProcessorStateLocked"/> for XAML IsEnabled bindings.</summary>
+    public bool IsProcessorStateEditable => !IsProcessorStateLocked;
+
     [ObservableProperty] private bool _hasNvidiaGpu;
     [ObservableProperty] private string _nvidiaGpuName = "";
     [ObservableProperty] private bool _needsReboot;
@@ -315,6 +322,12 @@ public partial class PerformanceViewModel : ViewModelBase
     [RelayCommand]
     private async Task ApplyProcessorStateAsync()
     {
+        if (IsProcessorStateLocked)
+        {
+            StatusMessage = "Processor state is locked to 100 % by the current power plan. Switch to Balanced to adjust it.";
+            return;
+        }
+
         if (WantProcessorMaxState == Profile.ProcessorMaxState)
         {
             StatusMessage = "Processor state is already in the selected state.";
@@ -417,5 +430,10 @@ public partial class PerformanceViewModel : ViewModelBase
         WantProcessorMaxState = Profile.ProcessorMaxState;
         HasNvidiaGpu = Profile.HasNvidiaGpu;
         NvidiaGpuName = Profile.NvidiaGpuName;
+
+        // High Performance and Ultimate Performance plans force processor
+        // min state to 100 %. The user cannot override this independently.
+        var planKey = GetCurrentPlanKey();
+        IsProcessorStateLocked = planKey is "high" or "ultimate";
     }
 }

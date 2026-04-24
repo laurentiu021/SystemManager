@@ -98,4 +98,18 @@ public partial class MainWindowViewModel : ObservableObject
         var dc = NavItems.FirstOrDefault(n => n.Id == "nav-deep-cleanup");
         if (dc != null) SelectedNav = dc;
     }
+
+    [RelayCommand]
+    private void OpenDiskAnalyzerTab()
+    {
+        var da = NavItems.FirstOrDefault(n => n.Id == "nav-disk-analyzer");
+        if (da != null) SelectedNav = da;
+    }
+
+    [RelayCommand]
+    private void OpenDuplicatesTab()
+    {
+        var dup = NavItems.FirstOrDefault(n => n.Id == "nav-duplicates");
+        if (dup != null) SelectedNav = dup;
+    }
 }

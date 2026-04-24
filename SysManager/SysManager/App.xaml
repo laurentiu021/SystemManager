@@ -19,6 +19,7 @@
             <h:FlexibleBoolToVisibilityConverter x:Key="FlexVis"/>
             <h:HexToBrushConverter x:Key="HexBrush"/>
             <h:OutputKindToBrushConverter x:Key="KindBrush"/>
+            <h:ProcessStatusToBrushConverter x:Key="StatusBrush"/>
 
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="TrueValue">True</sys:Boolean>
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="FalseValue">False</sys:Boolean>

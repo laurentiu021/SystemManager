@@ -118,10 +118,14 @@
                             </TextBlock>
 
                             <!-- Status -->
-                            <Border Grid.Column="4" Style="{StaticResource Badge}" VerticalAlignment="Center"
-                                    Margin="4,0">
-                                <TextBlock Text="{Binding Status}" FontSize="11"/>
-                            </Border>
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center"
+                                        Margin="4,0">
+                                <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0"
+                                         Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
+                                <TextBlock Text="{Binding Status}" FontSize="11"
+                                           Foreground="{Binding Status, Converter={StaticResource StatusBrush}}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
 
                             <!-- Open location -->
                             <Button Grid.Column="5" Content="📂" ToolTip="Open file location"

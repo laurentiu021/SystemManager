@@ -191,4 +191,50 @@ public class ConverterTests
         Assert.Throws<NotSupportedException>(() =>
             conv.ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
     }
+
+    // ---------- ProcessStatusToBrushConverter ----------
+
+    [Fact]
+    public void StatusBrush_Running_ReturnsGreen()
+    {
+        var conv = new ProcessStatusToBrushConverter();
+        var result = conv.Convert("Running", typeof(Brush), null!, CultureInfo.InvariantCulture);
+        Assert.IsType<SolidColorBrush>(result);
+        var brush = (SolidColorBrush)result;
+        Assert.Equal(Color.FromRgb(0x22, 0xC5, 0x5E), brush.Color);
+    }
+
+    [Fact]
+    public void StatusBrush_NotResponding_ReturnsRed()
+    {
+        var conv = new ProcessStatusToBrushConverter();
+        var result = conv.Convert("Not responding", typeof(Brush), null!, CultureInfo.InvariantCulture);
+        Assert.IsType<SolidColorBrush>(result);
+        var brush = (SolidColorBrush)result;
+        Assert.Equal(Color.FromRgb(0xEF, 0x44, 0x44), brush.Color);
+    }
+
+    [Fact]
+    public void StatusBrush_Unknown_ReturnsGray()
+    {
+        var conv = new ProcessStatusToBrushConverter();
+        var result = conv.Convert("Suspended", typeof(Brush), null!, CultureInfo.InvariantCulture);
+        Assert.Equal(Brushes.Gray, result);
+    }
+
+    [Fact]
+    public void StatusBrush_Null_ReturnsGray()
+    {
+        var conv = new ProcessStatusToBrushConverter();
+        var result = conv.Convert(null!, typeof(Brush), null!, CultureInfo.InvariantCulture);
+        Assert.Equal(Brushes.Gray, result);
+    }
+
+    [Fact]
+    public void StatusBrush_ConvertBack_Throws()
+    {
+        var conv = new ProcessStatusToBrushConverter();
+        Assert.Throws<NotSupportedException>(() =>
+            conv.ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
+    }
 }

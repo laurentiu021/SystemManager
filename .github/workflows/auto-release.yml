@@ -28,10 +28,11 @@ jobs:
       - name: Determine bump type from commit message
         id: bump
         shell: bash
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          MSG="${{ github.event.head_commit.message }}"
           # Extract first line (PR title after squash merge)
-          FIRST_LINE=$(echo "$MSG" | head -n1)
+          FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1)
           echo "commit_msg=$FIRST_LINE"
 
           if echo "$FIRST_LINE" | grep -qiE '^feat(\(.*\))?!?:'; then
@@ -40,7 +41,7 @@ jobs:
             echo "type=patch" >> "$GITHUB_OUTPUT"
           else
             echo "type=none" >> "$GITHUB_OUTPUT"
-            echo "Commit does not start with fix: or feat: — skipping release."
+            echo "Commit does not start with fix: or feat: -- skipping release."
           fi
 
       - name: Get latest tag

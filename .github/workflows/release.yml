@@ -54,7 +54,8 @@ jobs:
       - name: Publish single-file exe
         shell: pwsh
         run: |
-          ./publish.ps1 -Configuration Release -Runtime win-x64 -Output publish
+          $ver = "${{ steps.version.outputs.version }}"
+          ./publish.ps1 -Configuration Release -Runtime win-x64 -Output publish -Version $ver
 
       - name: Compute SHA256
         id: hash

@@ -74,18 +74,6 @@ jobs:
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
           echo "Next version: $NEXT (bump=$BUMP from $TAG)"
 
-      - name: Update .csproj version
-        if: steps.bump.outputs.type != 'none'
-        shell: bash
-        run: |
-          NEXT="${{ steps.next.outputs.version }}"
-          VER="${NEXT#v}"
-          CSPROJ="SysManager/SysManager/SysManager.csproj"
-          sed -i "s|<Version>.*</Version>|<Version>${VER}</Version>|" "$CSPROJ"
-          sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>${VER}.0</FileVersion>|" "$CSPROJ"
-          sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${VER}.0</AssemblyVersion>|" "$CSPROJ"
-          echo "Updated $CSPROJ to $VER"
-
       - name: Create and push tag
         if: steps.bump.outputs.type != 'none'
         shell: bash
@@ -93,10 +81,8 @@ jobs:
           NEXT="${{ steps.next.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add SysManager/SysManager/SysManager.csproj
-          git commit -m "chore: release ${NEXT} — bump .csproj version" || true
           git tag -a "$NEXT" -m "Release $NEXT"
-          git push origin main --follow-tags
+          git push origin "$NEXT"
           echo "Pushed tag $NEXT"
 
       - name: Trigger release workflow

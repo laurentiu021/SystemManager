@@ -10,6 +10,7 @@ param(
     [string]$Configuration = 'Release',
     [string]$Runtime       = 'win-x64',
     [string]$Output        = 'publish',
+    [string]$Version       = '',
     [switch]$NoTrim
 )
 
@@ -25,7 +26,7 @@ Write-Host "  Config : $Configuration"
 Write-Host "  Runtime: $Runtime"
 Write-Host "  Output : $Output"
 
-$args = @(
+$publishArgs = @(
     'publish', $project,
     '-c', $Configuration,
     '-r', $Runtime,
@@ -37,12 +38,20 @@ $args = @(
     '-o', $Output
 )
 
-# WPF doesn't support IL trimming reliably, so it's off by default.
-if ($NoTrim) {
-    $args += '-p:PublishTrimmed=false'
+# Inject version from tag so the assembly reports the correct release number.
+if ($Version -ne '') {
+    Write-Host "  Version: $Version"
+    $publishArgs += "-p:Version=$Version"
+    $publishArgs += "-p:FileVersion=$Version.0"
+    $publishArgs += "-p:AssemblyVersion=$Version.0"
 }
 
-& dotnet @args
+# WPF doesn't support IL trimming reliably, so it's off by default.
+if ($NoTrim) {
+    $publishArgs += '-p:PublishTrimmed=false'
+}
+
+& dotnet @publishArgs
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }

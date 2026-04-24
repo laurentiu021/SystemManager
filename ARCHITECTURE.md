@@ -22,19 +22,27 @@ SysManager/
 │   ├── App.xaml(.cs)
 │   ├── MainWindow.xaml(.cs)
 │   └── SysManager.csproj
-├── SysManager.Tests/           # xUnit unit + integration tests
+├── SysManager.Tests/           # xUnit unit tests (CI-safe, no system deps)
+├── SysManager.IntegrationTests/# xUnit integration tests (local only)
 └── SysManager.UITests/         # FlaUI UI-automation tests
 ```
 
 ## Tabs (view models)
 
 - `DashboardViewModel` — OS / CPU / RAM / disk snapshot + live uptime.
-- `NetworkViewModel` — ping monitor, traceroute, speed tests, presets.
+- `AppUpdatesViewModel` — winget scan and bulk upgrade.
 - `WindowsUpdateViewModel` — PSWindowsUpdate wrapper with auto-check.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk.
 - `CleanupViewModel` — TEMP, Recycle Bin, SFC, DISM (background-aware).
 - `DeepCleanupViewModel` — scan-first deep cleanup + large-files finder.
-- `AppUpdatesViewModel` — winget scan and bulk upgrade.
+- `StartupViewModel` — startup program management (enable/disable via registry).
+- `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
+- `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down.
+- `ProcessManagerViewModel` — running processes with kill, filter, sort.
+- `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI.
+- `UninstallerViewModel` — winget-based app uninstaller with batch support.
+- `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.
+- `NetworkViewModel` — ping monitor, traceroute, speed tests, presets.
 - `DriversViewModel` — driver inventory + Windows Update driver scan.
 - `LogsViewModel` — friendly Event Log viewer.
 - `AboutViewModel` — version info, auto-update, release history.
@@ -69,6 +77,16 @@ Key services:
   pagefile, hiberfil, System Volume Information.
 - `UpdateService` — GitHub Releases API client with explicit
   `SocketsHttpHandler`, retry, and surfaced error messages.
+- `StartupService` — enumerate and toggle startup programs via registry
+  Run / RunOnce keys.
+- `DuplicateFileService` — two-pass duplicate finder (size grouping →
+  partial hash pre-filter → full SHA-256). Read-only, never deletes.
+- `DiskAnalyzerService` — folder-level space breakdown with progress
+  reporting and system-path skipping.
+- `ProcessManagerService` — enumerate running processes, kill by PID,
+  open file location.
+- `PerformanceService` — power plan, visual effects, Game Mode, Xbox
+  Game Bar, NVIDIA GPU, processor state. Snapshot-based restore.
 
 ## Admin elevation
 

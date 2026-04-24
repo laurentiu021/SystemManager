@@ -190,9 +190,31 @@
                                    Style="{StaticResource Subtle}" Margin="0,4,0,10" TextWrapping="Wrap"/>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
-                                    Visibility="{Binding IsChkdskRunning, Converter={StaticResource FlexVis}}">
-                            <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="#22C55E"/>
-                            <TextBlock Text="{Binding ChkdskStatus}" Foreground="#22C55E" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    Visibility="{Binding ChkdskStatus, Converter={StaticResource FlexVis}}">
+                            <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{StaticResource TextSecondary}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsChkdskRunning}" Value="True">
+                                                <Setter Property="Fill" Value="#22C55E"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding ChkdskStatus}" FontWeight="SemiBold" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsChkdskRunning}" Value="True">
+                                                <Setter Property="Foreground" Value="#22C55E"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </StackPanel>
 
                         <ItemsControl ItemsSource="{Binding ChkdskDrives}">

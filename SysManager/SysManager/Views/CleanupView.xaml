@@ -76,7 +76,9 @@
                     </Border>
                 </Grid>
 
-                <TextBlock Text="Actions" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                <TextBlock Text="Actions" Style="{StaticResource SectionTitle}" Margin="0,0,0,4"/>
+                <TextBlock Text="Clean TEMP removes temporary files from %TEMP% and Windows\Temp. SFC /scannow checks Windows system files for corruption and repairs them. DISM /RestoreHealth repairs the Windows component store using Windows Update as a source."
+                           Style="{StaticResource Subtle}" Margin="0,0,0,10" TextWrapping="Wrap"/>
                 <WrapPanel Orientation="Horizontal">
                     <Button Content="Clean TEMP" Command="{Binding CleanTempCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>

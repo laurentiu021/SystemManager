@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-04-24
+
+### Added
+- **Network Repair Tools** — DNS flush, Winsock reset, TCP/IP reset in a new
+  Repair sub-tab on the Network tab. Confirmation dialogs and admin checks.
+- **Restore Point Creation** — create a Windows System Restore point from the
+  Performance tab (requires admin).
+- **RAM Working Set Trim** — free physical RAM by trimming all process working
+  sets, same as RAMMap's "Empty Working Set" (Performance tab).
+- **Hibernation Toggle** — enable/disable hibernation from the Performance tab.
+  Disabling deletes hiberfil.sys and frees disk space.
+- **Services Management** — new Services tab listing all Windows services with
+  gaming recommendations (safe-to-disable / advanced / keep-enabled), filtering,
+  and start/stop/disable/enable controls.
+
 ## [0.12.5] - 2026-04-24
 
 ### Fixed

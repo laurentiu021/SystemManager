@@ -4,6 +4,7 @@
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using System.Management;
 using SysManager.Models;
 using SysManager.Services;
@@ -43,6 +44,7 @@ public partial class BatteryHealthViewModel : ViewModelBase
             StatusMessage = Battery.HasBattery
                 ? "Battery data loaded."
                 : "No battery found.";
+            Log.Information("Battery scan completed: {HasBattery}", Battery.HasBattery);
         }
         catch (System.Management.ManagementException ex)
         {

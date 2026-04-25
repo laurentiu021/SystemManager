@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -31,6 +32,7 @@ public partial class AppUpdatesViewModel : ViewModelBase
     [RelayCommand]
     private void RelaunchAsAdmin()
     {
+        Log.Information("Admin elevation requested from App Updates tab");
         if (SysManager.Helpers.AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current.Shutdown();
     }
@@ -85,6 +87,7 @@ public partial class AppUpdatesViewModel : ViewModelBase
             }
             Progress = 100;
             StatusMessage = $"Completed {done}/{toUpgrade.Count}";
+            Log.Information("App upgrade batch completed: {Done}/{Total}", done, toUpgrade.Count);
         }
         finally { IsBusy = false; }
     }

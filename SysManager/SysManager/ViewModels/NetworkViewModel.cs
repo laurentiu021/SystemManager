@@ -13,6 +13,7 @@ using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -422,7 +423,7 @@ public partial class NetworkViewModel : ViewModelBase
         SpeedStatus = "Starting HTTP speed test…";
         _speedCts = new CancellationTokenSource();
         var progress = new Progress<(int p, string m)>(t => { SpeedProgress = t.p; SpeedStatus = t.m; });
-        try { HttpResult = await _speed.RunHttpAsync(progress, _speedCts.Token); SpeedStatus = "HTTP done"; }
+        try { HttpResult = await _speed.RunHttpAsync(progress, _speedCts.Token); SpeedStatus = "HTTP done"; Log.Information("HTTP speed test completed: {Down:F1} Mbps down, {Up:F1} Mbps up", HttpResult.DownloadMbps, HttpResult.UploadMbps); }
         catch (OperationCanceledException) { SpeedStatus = "Cancelled"; }
         catch (Exception ex) { SpeedStatus = "Error: " + ex.Message; }
         finally { IsSpeedTesting = false; IsHttpTesting = false; }
@@ -438,7 +439,7 @@ public partial class NetworkViewModel : ViewModelBase
         SpeedStatus = "Starting Ookla speed test…";
         _speedCts = new CancellationTokenSource();
         var progress = new Progress<(int p, string m)>(t => { SpeedProgress = t.p; SpeedStatus = t.m; });
-        try { OoklaResult = await _speed.RunOoklaAsync(progress, _speedCts.Token); SpeedStatus = "Ookla done"; }
+        try { OoklaResult = await _speed.RunOoklaAsync(progress, _speedCts.Token); SpeedStatus = "Ookla done"; Log.Information("Ookla speed test completed: {Down:F1} Mbps down, {Up:F1} Mbps up", OoklaResult.DownloadMbps, OoklaResult.UploadMbps); }
         catch (OperationCanceledException) { SpeedStatus = "Cancelled"; }
         catch (Exception ex) { SpeedStatus = "Error: " + ex.Message; }
         finally { IsSpeedTesting = false; IsOoklaTesting = false; }
@@ -507,6 +508,10 @@ public partial class NetworkViewModel : ViewModelBase
             RepairStatus = r.Success
                 ? $"✓ {r.ToolName} completed successfully."
                 : $"✗ {r.ToolName} failed: {r.Output}";
+            if (r.Success)
+                Log.Information("Network repair completed: {Tool}", r.ToolName);
+            else
+                Log.Warning("Network repair failed: {Tool}", r.ToolName);
             if (r.NeedsReboot && r.Success)
             {
                 RepairNeedsReboot = true;

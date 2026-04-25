@@ -6,6 +6,7 @@ using System.Security;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -163,6 +164,7 @@ public partial class PerformanceViewModel : ViewModelBase
 
             await RefreshAsync();
             StatusMessage = $"Power plan set to {planName}.";
+            Log.Information("Power plan changed to {PlanName}", planName);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -196,6 +198,7 @@ public partial class PerformanceViewModel : ViewModelBase
             PerformanceService.SetUiEffects(!WantVisualEffectsReduced);
             await RefreshAsync();
             StatusMessage = $"Visual effects {(WantVisualEffectsReduced ? "reduced" : "restored")}.";
+            Log.Information("Visual effects {Action}", WantVisualEffectsReduced ? "reduced" : "restored");
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -229,6 +232,7 @@ public partial class PerformanceViewModel : ViewModelBase
             PerformanceService.SetGameMode(enabling);
             await RefreshAsync();
             StatusMessage = $"Game Mode {(enabling ? "enabled" : "disabled")}.";
+            Log.Information("Game Mode {Action}", enabling ? "enabled" : "disabled");
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -262,6 +266,7 @@ public partial class PerformanceViewModel : ViewModelBase
             PerformanceService.SetXboxGameBar(!disabling);
             await RefreshAsync();
             StatusMessage = $"Xbox Game Bar {(disabling ? "disabled" : "enabled")}.";
+            Log.Information("Xbox Game Bar {Action}", disabling ? "disabled" : "enabled");
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -305,6 +310,7 @@ public partial class PerformanceViewModel : ViewModelBase
                 {
                     NeedsReboot = true;
                     StatusMessage = $"GPU max performance {(WantGpuMaxPerformance ? "enabled" : "disabled")}. Reboot required.";
+                    Log.Information("GPU max performance {Action}. Reboot required", WantGpuMaxPerformance ? "enabled" : "disabled");
                 }
                 else
                     StatusMessage = "Failed to write GPU registry key (admin required).";
@@ -351,6 +357,7 @@ public partial class PerformanceViewModel : ViewModelBase
             await _service.SetProcessorMinStateAsync(target);
             await RefreshAsync();
             StatusMessage = $"Processor min state set to {target}%.";
+            Log.Information("Processor min state set to {Percent}%", target);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -387,6 +394,8 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = ok
                 ? "✓ Restore point created successfully."
                 : "✗ Failed to create restore point. Check Event Viewer for details.";
+            if (ok) Log.Information("System restore point created");
+            else Log.Warning("System restore point creation failed");
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -415,6 +424,7 @@ public partial class PerformanceViewModel : ViewModelBase
         {
             var count = PerformanceService.TrimWorkingSets();
             StatusMessage = $"✓ Trimmed working set of {count} processes.";
+            Log.Information("RAM trim completed: {Count} processes trimmed", count);
         }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -455,6 +465,7 @@ public partial class PerformanceViewModel : ViewModelBase
             await _service.SetHibernationAsync(enabling);
             IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
             StatusMessage = $"✓ Hibernation {(enabling ? "enabled" : "disabled")}.";
+            Log.Information("Hibernation {Action}", enabling ? "enabled" : "disabled");
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -502,6 +513,7 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = NeedsReboot
                 ? "Original settings restored. Reboot required for GPU changes."
                 : "Original settings restored.";
+            Log.Information("Performance settings restored to original snapshot");
             _snapshot = null;
             HasSnapshot = false;
             await RefreshAsync();

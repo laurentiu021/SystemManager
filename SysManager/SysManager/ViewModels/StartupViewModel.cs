@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -63,6 +64,7 @@ public partial class StartupViewModel : ViewModelBase
         {
             UpdateCounts();
             StatusMessage = $"{entry.Name} {(newState ? "enabled" : "disabled")}.";
+            Log.Information("Startup entry toggled: {Action}", newState ? "enabled" : "disabled");
         }
         else
         {

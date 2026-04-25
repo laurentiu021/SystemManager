@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -89,6 +90,7 @@ public partial class ServicesViewModel : ViewModelBase
             ServiceManagerService.StartService(entry.Name);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} started.";
+            Log.Information("Service started: {ServiceName}", entry.Name);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (System.ServiceProcess.TimeoutException) { StatusMessage = $"Timeout starting {entry.DisplayName}."; }
@@ -111,6 +113,7 @@ public partial class ServicesViewModel : ViewModelBase
             ServiceManagerService.StopService(entry.Name);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} stopped.";
+            Log.Information("Service stopped: {ServiceName}", entry.Name);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (System.ServiceProcess.TimeoutException) { StatusMessage = $"Timeout stopping {entry.DisplayName}."; }
@@ -133,6 +136,7 @@ public partial class ServicesViewModel : ViewModelBase
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, "disabled", _ps);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} set to Disabled.";
+            Log.Information("Service disabled: {ServiceName}", entry.Name);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
     }
@@ -148,6 +152,7 @@ public partial class ServicesViewModel : ViewModelBase
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, "demand", _ps);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} set to Manual.";
+            Log.Information("Service enabled (manual): {ServiceName}", entry.Name);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
     }

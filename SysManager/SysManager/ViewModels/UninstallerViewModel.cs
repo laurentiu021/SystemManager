@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -125,6 +126,7 @@ public partial class UninstallerViewModel : ViewModelBase
 
             Progress = 100;
             StatusMessage = $"Completed {done}/{toRemove.Count} uninstalls.";
+            Log.Information("Uninstall batch completed: {Done}/{Total}", done, toRemove.Count);
         }
         finally
         {

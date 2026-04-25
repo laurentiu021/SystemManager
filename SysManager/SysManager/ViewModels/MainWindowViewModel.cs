@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Services;
 
@@ -63,6 +64,7 @@ public partial class MainWindowViewModel : ObservableObject
         IsElevated = AdminHelper.IsElevated();
         ElevationBadge = IsElevated ? "Administrator" : "Standard user";
         Title = IsElevated ? "SysManager — Administrator" : "SysManager";
+        Log.Information("MainWindow initialized. Elevated: {IsElevated}", IsElevated);
 
         // Views are instantiated lazily on first access — lets unit tests
         // construct the VM on an MTA thread without pulling WPF resources in.
@@ -86,6 +88,12 @@ public partial class MainWindowViewModel : ObservableObject
         NavItems.Add(new NavItem { Id = "nav-about",          Label = "About",          Glyph = "\uE946", Content = About,         ViewType = typeof(Views.AboutView) });
 
         SelectedNav = NavItems[0];
+    }
+
+    partial void OnSelectedNavChanged(NavItem? value)
+    {
+        if (value != null)
+            Log.Information("Tab navigated: {TabLabel}", value.Label);
     }
 
     [RelayCommand]

@@ -4,6 +4,7 @@
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -43,6 +44,7 @@ public partial class DashboardViewModel : ViewModelBase
             DiskLine = string.Join(" | ", Snapshot.Disks.Select(d => $"{d.FriendlyName} {d.SizeGB:0}GB {d.MediaType} {d.HealthStatus}"));
             UptimeLine = $"Uptime: {Snapshot.Os.Uptime.Days}d {Snapshot.Os.Uptime.Hours}h {Snapshot.Os.Uptime.Minutes}m";
             StatusMessage = $"Last scan: {Snapshot.CapturedAt:HH:mm:ss}";
+            Log.Information("Dashboard scan completed");
         }
         catch (Exception ex)
         {
@@ -58,6 +60,7 @@ public partial class DashboardViewModel : ViewModelBase
     [RelayCommand]
     private void RequestElevation()
     {
+        Log.Information("Admin elevation requested from Dashboard");
         if (AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current.Shutdown();
     }

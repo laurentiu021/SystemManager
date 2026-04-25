@@ -4,6 +4,7 @@
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -137,6 +138,7 @@ public partial class CleanupViewModel : ViewModelBase
                 ""Freed approximately $([Math]::Round($totalBytes/1MB,1)) MB""
             ", cancellationToken: _tempCts.Token);
             StatusMessage = "Temp cleanup done";
+            Log.Information("Temp cleanup completed");
             await PreScanAsync();
         }
         catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }

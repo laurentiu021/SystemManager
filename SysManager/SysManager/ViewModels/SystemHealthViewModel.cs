@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -71,6 +72,7 @@ public partial class SystemHealthViewModel : ViewModelBase
             foreach (var d in snap.Disks) Disks.Add(d);
             Summary = $"OS {snap.Os.Caption}  —  CPU {snap.Cpu.Name} ({snap.Cpu.Cores}c/{snap.Cpu.LogicalProcessors}t)  —  RAM {snap.Memory.UsedGB:0.0}/{snap.Memory.TotalGB:0.0} GB  —  Disks {snap.Disks.Count}";
             StatusMessage = $"Scan at {snap.CapturedAt:HH:mm:ss}";
+            Log.Information("System health scan completed");
             await RefreshDrivesAsync();
         }
         catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -234,6 +236,7 @@ public partial class SystemHealthViewModel : ViewModelBase
             if (target != null)
                 target.Status = exit == 0 ? "OK" : $"Exit {exit}";
             StatusMessage = $"chkdsk {driveLetter} done (exit {exit}).";
+            Log.Information("chkdsk completed on {Drive}: exit {ExitCode}", driveLetter, exit);
         }
         catch (OperationCanceledException)
         {

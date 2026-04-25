@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -82,10 +83,12 @@ public partial class ProcessManagerViewModel : ViewModelBase
             FilteredProcesses.Remove(entry);
             ApplyFilter();
             StatusMessage = $"Killed {entry.Name} (PID {entry.Pid}).";
+            Log.Information("Process killed: PID {Pid}", entry.Pid);
         }
         else
         {
             StatusMessage = $"Could not kill {entry.Name} — may need admin rights.";
+            Log.Warning("Failed to kill process PID {Pid}", entry.Pid);
         }
     }
 

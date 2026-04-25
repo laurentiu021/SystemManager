@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -105,6 +106,8 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
                 ? "No subfolders found."
                 : $"{EntryCount} folders · {FormatSize(TotalSize)} total · {TotalFiles:N0} files";
             StatusMessage = "Analysis complete.";
+            Log.Information("Disk analysis completed: {Folders} folders, {Size} total",
+                EntryCount, FormatSize(TotalSize));
         }
         catch (OperationCanceledException)
         {

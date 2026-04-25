@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -127,6 +128,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
             var total = cats.Sum(c => c.TotalSizeBytes);
             ScanSummary = $"Found {CleanupCategory.HumanSize(total)} across {cats.Count} categories. Untick anything you want to keep.";
             ScanStatusLine = "Scan complete.";
+            Log.Information("Deep cleanup scan completed: {Size} across {Count} categories",
+                CleanupCategory.HumanSize(total), cats.Count);
             OnPropertyChanged(nameof(TotalSelectedBytes));
             OnPropertyChanged(nameof(TotalSelectedDisplay));
         }
@@ -154,6 +157,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
             var result = await _cleanup.CleanAsync(Categories, progress, _cleanCts.Token);
             CleanSummary = result.Summary;
             CleanStatusLine = "Clean complete.";
+            Log.Information("Deep cleanup completed");
             await ScanAsync();
         }
         catch (OperationCanceledException) { CleanSummary = "Clean cancelled."; CleanStatusLine = "Cancelled."; }
@@ -211,6 +215,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
                 ct: _largeCts.Token);
             foreach (var f in list) LargeFiles.Add(f);
             LargeScanStatus = $"Found {list.Count} files ≥ {MinSizeMB} MB in {SelectedLocation.Label.Trim()}.";
+            Log.Information("Large file scan completed: {Count} files ≥ {MinSize} MB",
+                list.Count, MinSizeMB);
         }
         catch (OperationCanceledException) { LargeScanStatus = "Scan cancelled."; }
         catch (Exception ex) { LargeScanStatus = $"Error: {ex.Message}"; }

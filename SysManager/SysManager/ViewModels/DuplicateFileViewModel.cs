@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -102,6 +103,8 @@ public partial class DuplicateFileViewModel : ViewModelBase
                 ? "No duplicates found."
                 : $"{GroupCount} groups · {DuplicateFileCount} files · {FormatSize(TotalWasted)} wasted";
             StatusMessage = "Scan complete.";
+            Log.Information("Duplicate scan completed: {Groups} groups, {Files} files, {Wasted} wasted",
+                GroupCount, DuplicateFileCount, FormatSize(TotalWasted));
         }
         catch (OperationCanceledException)
         {

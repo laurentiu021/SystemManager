@@ -61,16 +61,22 @@ public partial class StartupViewModel : ViewModelBase
     private void ToggleEntry(StartupEntry? entry)
     {
         if (entry == null) return;
-        var newState = !entry.IsEnabled;
-        var success = StartupService.SetEnabled(entry, newState);
+
+        // The CheckBox two-way binding has already flipped IsEnabled before
+        // this command runs. We use the current (already-flipped) value as
+        // the desired new state.
+        var desiredState = entry.IsEnabled;
+        var success = StartupService.SetEnabled(entry, desiredState);
         if (success)
         {
             UpdateCounts();
-            StatusMessage = $"{entry.Name} {(newState ? "enabled" : "disabled")}.";
-            Log.Information("Startup entry toggled: {Action}", newState ? "enabled" : "disabled");
+            StatusMessage = $"{entry.Name} {(desiredState ? "enabled" : "disabled")}.";
+            Log.Information("Startup entry toggled: {Action}", desiredState ? "enabled" : "disabled");
         }
         else
         {
+            // Revert the CheckBox state since the operation failed
+            entry.IsEnabled = !desiredState;
             StatusMessage = $"Could not toggle {entry.Name} — {entry.StatusText}";
         }
     }

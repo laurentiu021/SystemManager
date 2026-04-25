@@ -50,6 +50,9 @@ public partial class CleanupViewModel : ViewModelBase
         _ = PreScanAsync();
     }
 
+    [RelayCommand]
+    private async Task RescanAsync() => await PreScanAsync();
+
     private async Task PreScanAsync()
     {
         try
@@ -129,6 +132,7 @@ public partial class CleanupViewModel : ViewModelBase
                 ""Freed approximately $([Math]::Round($totalBytes/1MB,1)) MB""
             ", cancellationToken: _tempCts.Token);
             StatusMessage = "Temp cleanup done";
+            await PreScanAsync();
         }
         catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsTempRunning = false; }
@@ -148,6 +152,7 @@ public partial class CleanupViewModel : ViewModelBase
                 'Recycle Bin cleared'
             ", cancellationToken: _binCts.Token);
             StatusMessage = "Done";
+            await PreScanAsync();
         }
         catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBinRunning = false; }

@@ -82,6 +82,7 @@
                 <WrapPanel Orientation="Horizontal">
                     <Button Content="Clean TEMP" Command="{Binding CleanTempCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                    <Button Content="⟳ Rescan" Command="{Binding RescanCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="SFC /scannow" Command="{Binding RunSfcCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                             IsEnabled="{Binding IsSfcRunning, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     <Button Content="DISM RestoreHealth" Command="{Binding RunDismCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"

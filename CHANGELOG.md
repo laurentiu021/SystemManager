@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-04-25
+
+### Added
+- **Application icons** — Startup Manager, Uninstaller, and Process Manager now
+  show the real application icon (extracted from the exe) next to each app name.
+  Uses Shell32 `SHGetFileInfo` with a concurrent cache for performance. Falls back
+  to a generic icon when the exe is missing, inaccessible, or a UWP/system process
+  (#229).
+
 ## [0.20.0] - 2026-04-25
 
 ### Added

@@ -115,4 +115,18 @@ public partial class MainWindowViewModel : ObservableObject
         var dup = NavItems.FirstOrDefault(n => n.Id == "nav-duplicates");
         if (dup != null) SelectedNav = dup;
     }
+
+    [RelayCommand]
+    private void OpenCleanupTab()
+    {
+        var c = NavItems.FirstOrDefault(n => n.Id == "nav-cleanup");
+        if (c != null) SelectedNav = c;
+    }
+
+    [RelayCommand]
+    private void OpenSystemHealthTab()
+    {
+        var sh = NavItems.FirstOrDefault(n => n.Id == "nav-system-health");
+        if (sh != null) SelectedNav = sh;
+    }
 }

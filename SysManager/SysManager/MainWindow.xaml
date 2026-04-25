@@ -164,6 +164,15 @@
                                     <DataTrigger Binding="{Binding DuplicateFile.IsBusy}" Value="True">
                                         <Setter Property="Visibility" Value="Visible"/>
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding Cleanup.IsSfcRunning}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Cleanup.IsDismRunning}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SystemHealth.IsChkdskRunning}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
@@ -203,6 +212,24 @@
                             <StackPanel Visibility="{Binding DuplicateFile.IsBusy, Converter={StaticResource FlexVis}}" Margin="0,4,0,0">
                                 <TextBlock Text="Duplicates · scan" FontSize="11" FontWeight="SemiBold" Foreground="#22C55E"/>
                                 <TextBlock Text="{Binding DuplicateFile.StatusMessage}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,4"/>
+                                <ProgressBar Height="3" IsIndeterminate="True"/>
+                            </StackPanel>
+                            <!-- SFC /scannow progress -->
+                            <StackPanel Visibility="{Binding Cleanup.IsSfcRunning, Converter={StaticResource FlexVis}}" Margin="0,4,0,0">
+                                <TextBlock Text="SFC /scannow" FontSize="11" FontWeight="SemiBold" Foreground="#22C55E"/>
+                                <TextBlock Text="{Binding Cleanup.SfcStatus}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,4"/>
+                                <ProgressBar Height="3" IsIndeterminate="True"/>
+                            </StackPanel>
+                            <!-- DISM RestoreHealth progress -->
+                            <StackPanel Visibility="{Binding Cleanup.IsDismRunning, Converter={StaticResource FlexVis}}" Margin="0,4,0,0">
+                                <TextBlock Text="DISM RestoreHealth" FontSize="11" FontWeight="SemiBold" Foreground="#60A5FA"/>
+                                <TextBlock Text="{Binding Cleanup.DismStatus}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,4"/>
+                                <ProgressBar Height="3" IsIndeterminate="True"/>
+                            </StackPanel>
+                            <!-- chkdsk progress -->
+                            <StackPanel Visibility="{Binding SystemHealth.IsChkdskRunning, Converter={StaticResource FlexVis}}" Margin="0,4,0,0">
+                                <TextBlock Text="chkdsk · file system scan" FontSize="11" FontWeight="SemiBold" Foreground="#FBBF24"/>
+                                <TextBlock Text="{Binding SystemHealth.ChkdskStatus}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,4"/>
                                 <ProgressBar Height="3" IsIndeterminate="True"/>
                             </StackPanel>
                         </StackPanel>

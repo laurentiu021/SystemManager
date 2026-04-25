@@ -26,7 +26,7 @@ single tabbed WPF app.
 
 Everything runs on the machine itself. No cloud, no telemetry, no account.
 
-Built with gamers in mind — live ping overlays for CS2, PUBG and streaming
+Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and streaming
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
 
@@ -57,6 +57,7 @@ list. Dashboard renders as a flat top-level entry without an expander arrow.
 - **Presets for gamers & streamers**:
   - Global (Google, Cloudflare, your router)
   - **CS2 Europe** — Valve Frankfurt, Vienna, Stockholm relays
+  - **FACEIT Europe** — competitive CS2 servers in DE, UK, FR, NL, SE
   - **PUBG Europe** — Krafton EU matchmaking endpoints
   - **Streaming** — YouTube and Twitch ingest
 - Auto-traceroute on a configurable interval (30 s – 10 min)

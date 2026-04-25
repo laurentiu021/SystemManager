@@ -90,17 +90,42 @@
                                           BorderThickness="0"
                                           Foreground="{StaticResource TextSecondary}">
                                     <Expander.Header>
-                                        <StackPanel Orientation="Horizontal" Margin="4,4,0,4">
-                                            <TextBlock Text="{Binding Glyph}"
-                                                       FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                                       FontSize="13" Margin="0,0,10,0"
-                                                       VerticalAlignment="Center"
-                                                       Foreground="{StaticResource TextMuted}"/>
-                                            <TextBlock Text="{Binding Label}"
-                                                       VerticalAlignment="Center"
+                                        <StackPanel Margin="4,4,0,4"
+                                                    ToolTip="{Binding Tooltip}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Glyph}"
+                                                           FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                           FontSize="13" Margin="0,0,10,0"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{StaticResource TextMuted}"/>
+                                                <TextBlock Text="{Binding Label}"
+                                                           VerticalAlignment="Center"
+                                                           FontFamily="{StaticResource UiFont}"
+                                                           FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextMuted}"/>
+                                                <TextBlock Text="{Binding ChildCount, StringFormat=' ({0})'}"
+                                                           VerticalAlignment="Center"
+                                                           FontFamily="{StaticResource UiFont}"
+                                                           FontSize="10" Foreground="{StaticResource TextMuted}"
+                                                           Opacity="0.6" Margin="2,0,0,0"/>
+                                            </StackPanel>
+                                            <!-- Subtitle: visible only when collapsed -->
+                                            <TextBlock Text="{Binding Subtitle}"
                                                        FontFamily="{StaticResource UiFont}"
-                                                       FontSize="11" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextMuted}"/>
+                                                       FontSize="10" Foreground="{StaticResource TextMuted}"
+                                                       Opacity="0.5" Margin="23,2,0,0"
+                                                       TextTrimming="CharacterEllipsis">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </StackPanel>
                                     </Expander.Header>
                                     <ItemsControl ItemsSource="{Binding Children}" Focusable="False">

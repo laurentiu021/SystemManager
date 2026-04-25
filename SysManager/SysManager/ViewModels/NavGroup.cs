@@ -27,4 +27,18 @@ public sealed partial class NavGroup : ObservableObject
     /// flat top-level nav item (no expander arrow).
     /// </summary>
     public bool IsSingleItem => Children.Count == 1;
+
+    /// <summary>Child count for the collapsed badge, e.g. "(6)".</summary>
+    public int ChildCount => Children.Count;
+
+    /// <summary>
+    /// Short subtitle shown under the group label when collapsed.
+    /// Abbreviated child labels joined with " · ".
+    /// </summary>
+    public string Subtitle { get; init; } = "";
+
+    /// <summary>
+    /// Full tooltip listing all child labels, shown on hover.
+    /// </summary>
+    public string Tooltip { get; init; } = "";
 }

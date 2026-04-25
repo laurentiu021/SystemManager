@@ -19,7 +19,11 @@ public class MainWindowViewModelTests
         Assert.NotNull(vm.SystemHealth);
         Assert.NotNull(vm.Cleanup);
         Assert.NotNull(vm.DeepCleanup);
-        Assert.NotNull(vm.Network);
+        Assert.NotNull(vm.NetworkShared);
+        Assert.NotNull(vm.Ping);
+        Assert.NotNull(vm.Traceroute);
+        Assert.NotNull(vm.SpeedTest);
+        Assert.NotNull(vm.NetworkRepair);
         Assert.NotNull(vm.Drivers);
         Assert.NotNull(vm.Logs);
         Assert.NotNull(vm.About);
@@ -60,20 +64,25 @@ public class MainWindowViewModelTests
         Assert.IsType<SystemHealthViewModel>(vm.SystemHealth);
         Assert.IsType<CleanupViewModel>(vm.Cleanup);
         Assert.IsType<DeepCleanupViewModel>(vm.DeepCleanup);
-        Assert.IsType<NetworkViewModel>(vm.Network);
+        Assert.IsType<NetworkSharedState>(vm.NetworkShared);
+        Assert.IsType<PingViewModel>(vm.Ping);
+        Assert.IsType<TracerouteViewModel>(vm.Traceroute);
+        Assert.IsType<SpeedTestViewModel>(vm.SpeedTest);
+        Assert.IsType<NetworkRepairViewModel>(vm.NetworkRepair);
         Assert.IsType<DriversViewModel>(vm.Drivers);
         Assert.IsType<LogsViewModel>(vm.Logs);
         Assert.IsType<AboutViewModel>(vm.About);
     }
 
     [Fact]
-    public void NavItems_ContainAll18()
+    public void NavItems_ContainAll21()
     {
         var vm = new MainWindowViewModel();
-        Assert.Equal(18, vm.NavItems.Count);
+        Assert.Equal(21, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
         Assert.Contains("nav-dashboard", ids);
         Assert.Contains("nav-system-health", ids);
+        Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-performance", ids);
         Assert.Contains("nav-services", ids);
         Assert.Contains("nav-startup", ids);
@@ -82,9 +91,11 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-deep-cleanup", ids);
         Assert.Contains("nav-disk-analyzer", ids);
         Assert.Contains("nav-duplicates", ids);
-        Assert.Contains("nav-network", ids);
+        Assert.Contains("nav-ping", ids);
+        Assert.Contains("nav-traceroute", ids);
+        Assert.Contains("nav-speed-test", ids);
+        Assert.Contains("nav-network-repair", ids);
         Assert.Contains("nav-app-updates", ids);
-        Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-uninstaller", ids);
         Assert.Contains("nav-drivers", ids);
         Assert.Contains("nav-battery", ids);
@@ -160,23 +171,23 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_SingleItemGroups_AreDashboardAndNetwork()
+    public void NavGroups_SingleItemGroups_AreDashboardOnly()
     {
         var vm = new MainWindowViewModel();
         var singles = vm.NavGroups.Where(g => g.IsSingleItem).Select(g => g.Id).ToList();
         Assert.Contains("grp-dashboard", singles);
-        Assert.Contains("grp-network", singles);
-        Assert.Equal(2, singles.Count);
+        Assert.Single(singles);
     }
 
     [Fact]
-    public void NavGroups_SystemGroup_Contains5Items()
+    public void NavGroups_SystemGroup_Contains6Items()
     {
         var vm = new MainWindowViewModel();
         var sys = vm.NavGroups.First(g => g.Id == "grp-system");
-        Assert.Equal(5, sys.Children.Count);
+        Assert.Equal(6, sys.Children.Count);
         var ids = sys.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-system-health", ids);
+        Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-performance", ids);
         Assert.Contains("nav-services", ids);
         Assert.Contains("nav-startup", ids);

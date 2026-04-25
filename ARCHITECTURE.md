@@ -30,17 +30,17 @@ SysManager/
 ## Tabs (view models)
 
 The sidebar organises tabs into 7 collapsible groups via `NavGroup` →
-`NavItem` hierarchy. Single-item groups (Dashboard, Network) render as flat
-top-level entries.
+`NavItem` hierarchy. Dashboard renders as a flat top-level entry.
+Collapsed groups show a child count badge, subtitle, and tooltip.
 
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `ProcessManagerViewModel` |
+| System (6) | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `ProcessManagerViewModel` |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
-| Network | `NetworkViewModel` |
-| Apps | `AppUpdatesViewModel` · `WindowsUpdateViewModel` · `UninstallerViewModel` |
+| Network (4) | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) |
+| Apps | `AppUpdatesViewModel` · `UninstallerViewModel` |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `AboutViewModel` |
 
 - `DashboardViewModel` — OS / CPU / RAM / disk snapshot + live uptime.
@@ -56,7 +56,11 @@ top-level entries.
 - `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI.
 - `UninstallerViewModel` — winget-based app uninstaller with batch support.
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.
-- `NetworkViewModel` — ping monitor, traceroute, speed tests, presets, network repair tools.
+- `PingViewModel` — live ping monitoring with latency chart and health verdict.
+- `TracerouteViewModel` — auto-traceroute + manual trace with own Start/Stop.
+- `SpeedTestViewModel` — HTTP (Cloudflare) and Ookla speed tests.
+- `NetworkRepairViewModel` — DNS flush, Winsock reset, TCP/IP reset.
+- `NetworkSharedState` — shared targets, buffers, pinger, tracer, health for all network VMs.
 - `ServicesViewModel` — Windows services management with gaming recommendations.
 - `DriversViewModel` — driver inventory + Windows Update driver scan.
 - `LogsViewModel` — friendly Event Log viewer.

@@ -1,0 +1,104 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.TracerouteView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF">
+    <UserControl.Resources>
+        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#070A0F" Offset="0"/>
+            <GradientStop Color="#0B1220" Offset="0.5"/>
+            <GradientStop Color="#090D16" Offset="1"/>
+        </LinearGradientBrush>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource PageBg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header with own Start/Stop -->
+        <DockPanel Grid.Row="0" Margin="28,24,28,0">
+            <StackPanel>
+                <TextBlock Text="Traceroute" Style="{StaticResource Display}"/>
+                <TextBlock Text="Auto-traceroute for all targets + manual trace to any host."
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        DockPanel.Dock="Right" VerticalAlignment="Center">
+                <Button Content="Start auto-trace" Command="{Binding StartAutoTraceCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        Visibility="{Binding IsAutoTraceRunning, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                <Button Content="Stop auto-trace" Command="{Binding StopAutoTraceCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Visibility="{Binding IsAutoTraceRunning, Converter={StaticResource FlexVis}}"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Content: chart + hops table + manual trace -->
+        <Grid Grid.Row="1" Margin="28,16,28,28">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*"/>
+                <ColumnDefinition Width="2*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                        <TextBlock Text="Latency per hop" Style="{StaticResource SectionTitle}"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
+                            <TextBlock Text="Every" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                            <ComboBox ItemsSource="{Binding Shared.TraceIntervalOptions}"
+                                      SelectedValue="{Binding Shared.TraceIntervalSeconds}" Width="72" Margin="8,0,4,0"/>
+                            <TextBlock Text="s" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <lvc:CartesianChart Grid.Row="1" Background="Transparent"
+                                        Series="{Binding Shared.TraceSeries}"
+                                        XAxes="{Binding Shared.TraceXAxes}" YAxes="{Binding Shared.TraceYAxes}"
+                                        LegendPosition="Bottom"
+                                        LegendTextPaint="{Binding Shared.LegendTextPaint}"
+                                        LegendBackgroundPaint="{Binding Shared.LegendBackgroundPaint}"
+                                        TooltipTextPaint="{Binding Shared.TooltipTextPaint}"
+                                        TooltipBackgroundPaint="{Binding Shared.TooltipBackgroundPaint}"/>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Style="{StaticResource Card}" Margin="16,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Hops" Style="{StaticResource SectionTitle}"/>
+                    <StackPanel Grid.Row="1" Margin="0,12,0,12">
+                        <TextBlock Text="Run a one-off trace to any host:" Style="{StaticResource Subtle}" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Text="{Binding TraceHost, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
+                            <Button Content="Trace now" Command="{Binding TraceCommand}" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
+                                    IsEnabled="{Binding IsTracing, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                            <Button Content="Cancel" Command="{Binding CancelTraceCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding TraceStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
+                    </StackPanel>
+                    <DataGrid Grid.Row="2" ItemsSource="{Binding Shared.TracerouteHops}"
+                              AutoGenerateColumns="False" HeadersVisibility="Column"
+                              Background="Transparent" BorderThickness="0"
+                              GridLinesVisibility="None" IsReadOnly="True"
+                              RowBackground="Transparent" AlternatingRowBackground="#0F141C">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding HopNumber}" Width="36"/>
+                            <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*"/>
+                            <DataGridTextColumn Header="ms" Binding="{Binding LatencyMs, StringFormat={}{0:F0}}" Width="60"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

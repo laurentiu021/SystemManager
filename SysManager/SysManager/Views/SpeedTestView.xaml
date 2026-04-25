@@ -1,0 +1,79 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.SpeedTestView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#070A0F" Offset="0"/>
+            <GradientStop Color="#0B1220" Offset="0.5"/>
+            <GradientStop Color="#090D16" Offset="1"/>
+        </LinearGradientBrush>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource PageBg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="28,24,28,0">
+            <TextBlock Text="Speed Test" Style="{StaticResource Display}"/>
+            <TextBlock Text="HTTP and Ookla speed tests."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="28,16,28,28">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- HTTP card -->
+            <Border Grid.Column="0" Style="{StaticResource Card}">
+                <StackPanel>
+                    <DockPanel>
+                        <StackPanel>
+                            <TextBlock Text="HTTP speed test" Style="{StaticResource SectionTitle}"/>
+                            <TextBlock Text="Measured against speed.cloudflare.com" Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <Button Content="Run" Command="{Binding RunHttpSpeedCommand}" Style="{StaticResource PrimaryButton}"
+                                HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
+                                IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                    </DockPanel>
+                    <Grid Margin="0,16,0,0" Visibility="{Binding HttpResult, Converter={StaticResource FlexVis}}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0"><StackPanel><TextBlock Text="DOWNLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.DownloadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="#60A5FA"/></StackPanel></Border>
+                        <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="#4ADE80"/></StackPanel></Border>
+                        <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="#FBBF24"/></StackPanel></Border>
+                    </Grid>
+                    <ProgressBar Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Ookla card -->
+            <Border Grid.Column="1" Style="{StaticResource Card}" Margin="16,0,0,0">
+                <StackPanel>
+                    <DockPanel>
+                        <StackPanel>
+                            <TextBlock Text="Ookla speed test" Style="{StaticResource SectionTitle}"/>
+                            <TextBlock Text="Official CLI, downloaded on first run" Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <Button Content="Run" Command="{Binding RunOoklaSpeedCommand}" Style="{StaticResource PrimaryButton}"
+                                HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
+                                IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                    </DockPanel>
+                    <Grid Margin="0,16,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0"><StackPanel><TextBlock Text="DOWNLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.DownloadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="#60A5FA"/></StackPanel></Border>
+                        <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="#4ADE80"/></StackPanel></Border>
+                        <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="#FBBF24"/></StackPanel></Border>
+                    </Grid>
+                    <TextBlock Text="{Binding OoklaResult.Server}" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}"/>
+                    <ProgressBar Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
+                    <TextBlock Text="{Binding SpeedStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
+                    <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

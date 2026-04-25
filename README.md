@@ -33,21 +33,22 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 18 feature tabs into 7 collapsible groups so you can
+The sidebar organises 21 feature tabs into 7 collapsible groups so you can
 find what you need without scrolling through a flat list:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System health · Performance · Services · Startup · Processes |
+| 🔧 System (6) | System health · Windows Update · Performance · Services · Startup · Processes |
 | 🧹 Cleanup | Quick cleanup (TEMP / Bin / SFC / DISM) · Deep cleanup |
 | 💾 Storage | Disk Analyzer · Duplicates |
-| 🌐 Network | Ping · Traceroute · Speed Test · Repair |
-| 📦 Apps | App updates · Windows Update · Uninstaller |
+| 🌐 Network (4) | Ping · Traceroute · Speed Test · Repair |
+| 📦 Apps | App updates · Uninstaller |
 | ℹ️ Info | Drivers · Battery · Logs · About |
 
-Groups expand and collapse with a click. Single-item groups (Dashboard,
-Network) render as flat top-level entries without an expander arrow.
+Groups expand and collapse with a click. Collapsed groups show a child count
+badge, a subtitle with abbreviated child labels, and a tooltip with the full
+list. Dashboard renders as a flat top-level entry without an expander arrow.
 
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart

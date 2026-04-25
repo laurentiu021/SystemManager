@@ -304,7 +304,7 @@
                                 </Border>
                             </Grid>
                             <ProgressBar Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0"
-                                         Visibility="{Binding IsSpeedTesting, Converter={StaticResource FlexVis}}"/>
+                                         Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                         </StackPanel>
                     </Border>
 
@@ -349,11 +349,11 @@
                             <TextBlock Text="{Binding OoklaResult.Server}" Style="{StaticResource Caption}" Margin="0,10,0,0"
                                        Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}"/>
                             <ProgressBar Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0"
-                                         Visibility="{Binding IsSpeedTesting, Converter={StaticResource FlexVis}}"/>
+                                         Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                             <TextBlock Text="{Binding SpeedStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
                             <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" Margin="0,6,0,0"
                                     HorizontalAlignment="Left"
-                                    Visibility="{Binding IsSpeedTesting, Converter={StaticResource FlexVis}}"/>
+                                    Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                         </StackPanel>
                     </Border>
                 </Grid>

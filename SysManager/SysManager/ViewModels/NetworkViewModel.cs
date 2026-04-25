@@ -98,6 +98,8 @@ public partial class NetworkViewModel : ViewModelBase
     [ObservableProperty] private int _speedProgress;
     [ObservableProperty] private string _speedStatus = "";
     [ObservableProperty] private bool _isSpeedTesting;
+    [ObservableProperty] private bool _isHttpTesting;
+    [ObservableProperty] private bool _isOoklaTesting;
 
     [ObservableProperty] private bool _isTracing;
     [ObservableProperty] private string _traceStatus = "";
@@ -393,6 +395,7 @@ public partial class NetworkViewModel : ViewModelBase
     {
         if (IsSpeedTesting) return;
         IsSpeedTesting = true;
+        IsHttpTesting = true;
         SpeedProgress = 0;
         SpeedStatus = "Starting HTTP speed test…";
         _speedCts = new CancellationTokenSource();
@@ -400,7 +403,7 @@ public partial class NetworkViewModel : ViewModelBase
         try { HttpResult = await _speed.RunHttpAsync(progress, _speedCts.Token); SpeedStatus = "HTTP done"; }
         catch (OperationCanceledException) { SpeedStatus = "Cancelled"; }
         catch (Exception ex) { SpeedStatus = "Error: " + ex.Message; }
-        finally { IsSpeedTesting = false; }
+        finally { IsSpeedTesting = false; IsHttpTesting = false; }
     }
 
     [RelayCommand]
@@ -408,6 +411,7 @@ public partial class NetworkViewModel : ViewModelBase
     {
         if (IsSpeedTesting) return;
         IsSpeedTesting = true;
+        IsOoklaTesting = true;
         SpeedProgress = 0;
         SpeedStatus = "Starting Ookla speed test…";
         _speedCts = new CancellationTokenSource();
@@ -415,7 +419,7 @@ public partial class NetworkViewModel : ViewModelBase
         try { OoklaResult = await _speed.RunOoklaAsync(progress, _speedCts.Token); SpeedStatus = "Ookla done"; }
         catch (OperationCanceledException) { SpeedStatus = "Cancelled"; }
         catch (Exception ex) { SpeedStatus = "Error: " + ex.Message; }
-        finally { IsSpeedTesting = false; }
+        finally { IsSpeedTesting = false; IsOoklaTesting = false; }
     }
 
     [RelayCommand]

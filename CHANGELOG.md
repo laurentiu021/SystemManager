@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-04-25
+
+### Added
+- **Logs tab** — relative timestamps ("2h ago", "3d ago") in the event list with
+  full timestamp on hover; quick time-range pill buttons (1h / 24h / 7d / 30d / All)
+  replacing the dropdown; search placeholder watermark; no-results empty state with
+  helpful message when filters match nothing (#83).
+- **System Health** — disk health cards now show a computed health percentage
+  (0–100%) with colored gauge bar, temperature gauge with color thresholds,
+  life-remaining gauge (inverted wear), and friendly power-on time formatting
+  (days/years instead of raw hours) (#143).
+
 ## [0.15.1] - 2026-04-25
 
 ### Fixed

@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.10] - 2026-04-25
+
+### Fixed
+- **DataGrid styling** — added global dark-friendly styles for DataGrid, column
+  headers, rows, and cells. Rows now use transparent default with Surface1
+  alternating, Surface2 hover, Surface3 selected. Text stays readable in all
+  states (#136).
+- **Deep Cleanup** — clicking the "Show" button in the large files DataGrid no
+  longer highlights the entire cell. Custom DataGridCell template removes the
+  default focus/selection highlight (#158).
+
+## [0.13.9] - 2026-04-25
+
+### Fixed
+- **Buttons** — buttons across the application no longer become invisible when
+  hovered, focused, or navigated via keyboard. Added explicit Foreground binding
+  on ContentPresenter and keyboard focus trigger with accent border (#145).
+- **About tab** — "View license" button text no longer clips or disappears on
+  hover/focus (#162).
+
+## [0.13.8] - 2026-04-25
+
+### Fixed
+- **Startup Manager** — toggle now works for Task Scheduler entries via
+  `schtasks.exe /Change`. Previously threw `NotSupportedException` silently
+  (#160).
+- **Startup Manager** — replaced generic "Error — may need admin" message with
+  specific error descriptions (`SecurityException`, `UnauthorizedAccessException`,
+  `IOException`). Error messages now describe the actual failure (#159).
+- **Tests** — fixed flaky `PreScan_EventuallyPopulatesLabels` test by replacing
+  fixed 3s delay with polling loop (up to 15s).
+
+## [0.13.7] - 2026-04-25
+
+### Fixed
+- **Uninstaller** — error messages are no longer truncated. Added ToolTip on
+  status badge for full text on hover, TextTrimming for graceful truncation, and
+  widened status column from 90px to 160px (#163).
+
 ## [0.13.6] - 2026-04-25
 
 ### Fixed

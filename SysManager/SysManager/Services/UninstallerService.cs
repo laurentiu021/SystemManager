@@ -105,6 +105,70 @@ public sealed class UninstallerService
             });
         }
 
+        EnrichFromRegistry(apps);
         return apps;
+    }
+
+    /// <summary>
+    /// Reads EstimatedSize and Publisher from the Uninstall registry keys
+    /// and enriches the app list. EstimatedSize is in KB.
+    /// </summary>
+    internal static void EnrichFromRegistry(List<InstalledApp> apps)
+    {
+        if (apps.Count == 0) return;
+
+        var lookup = new Dictionary<string, InstalledApp>(StringComparer.OrdinalIgnoreCase);
+        foreach (var app in apps)
+        {
+            if (!string.IsNullOrWhiteSpace(app.Name) && !lookup.ContainsKey(app.Name))
+                lookup[app.Name] = app;
+        }
+
+        var regPaths = new[]
+        {
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+        };
+
+        foreach (var regPath in regPaths)
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(regPath);
+                if (key == null) continue;
+
+                foreach (var subName in key.GetSubKeyNames())
+                {
+                    try
+                    {
+                        using var sub = key.OpenSubKey(subName);
+                        if (sub == null) continue;
+
+                        var displayName = sub.GetValue("DisplayName") as string;
+                        if (string.IsNullOrWhiteSpace(displayName)) continue;
+
+                        if (!lookup.TryGetValue(displayName, out var app)) continue;
+
+                        if (app.SizeBytes == 0)
+                        {
+                            var sizeKb = sub.GetValue("EstimatedSize");
+                            if (sizeKb is int kb && kb > 0)
+                                app.SizeBytes = kb * 1024L;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(app.Publisher))
+                        {
+                            var pub = sub.GetValue("Publisher") as string;
+                            if (!string.IsNullOrWhiteSpace(pub))
+                                app.Publisher = pub;
+                        }
+                    }
+                    catch (System.Security.SecurityException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+            }
+            catch (System.Security.SecurityException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 }

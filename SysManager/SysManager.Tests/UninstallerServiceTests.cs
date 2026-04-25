@@ -152,4 +152,61 @@ public class UninstallerServiceTests
         Assert.Contains("Version", changed);
         Assert.Contains("Status", changed);
     }
+
+    // ── InstalledApp size display ──
+
+    [Fact]
+    public void InstalledApp_SizeDisplay_ZeroBytes_ReturnsDash()
+    {
+        var app = new InstalledApp { SizeBytes = 0 };
+        Assert.Equal("—", app.SizeDisplay);
+    }
+
+    [Fact]
+    public void InstalledApp_SizeDisplay_MB()
+    {
+        var app = new InstalledApp { SizeBytes = 150 * 1024 * 1024L };
+        Assert.Contains("MB", app.SizeDisplay);
+    }
+
+    [Fact]
+    public void InstalledApp_SizeDisplay_GB()
+    {
+        var app = new InstalledApp { SizeBytes = 2L * 1024 * 1024 * 1024 };
+        Assert.Contains("GB", app.SizeDisplay);
+    }
+
+    [Fact]
+    public void InstalledApp_Publisher_DefaultEmpty()
+    {
+        var app = new InstalledApp();
+        Assert.Equal("", app.Publisher);
+    }
+
+    [Fact]
+    public void InstalledApp_SizeBytes_DefaultZero()
+    {
+        var app = new InstalledApp();
+        Assert.Equal(0, app.SizeBytes);
+    }
+
+    // ── EnrichFromRegistry ──
+
+    [Fact]
+    public void EnrichFromRegistry_EmptyList_DoesNotThrow()
+    {
+        var ex = Record.Exception(() => UninstallerService.EnrichFromRegistry(new List<InstalledApp>()));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void EnrichFromRegistry_WithApps_DoesNotThrow()
+    {
+        var apps = new List<InstalledApp>
+        {
+            new() { Name = "NonExistentApp12345", Id = "test.id" }
+        };
+        var ex = Record.Exception(() => UninstallerService.EnrichFromRegistry(apps));
+        Assert.Null(ex);
+    }
 }

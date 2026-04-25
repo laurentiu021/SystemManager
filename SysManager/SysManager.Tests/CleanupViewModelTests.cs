@@ -375,3 +375,120 @@ public class CleanupViewModelTests
         Assert.Equal("Empty", vm.RecycleBinLabel);
     }
 }
+
+// ---------- SFC result parsing ----------
+
+public class SfcResultParsingTests
+{
+    [Fact]
+    public void ParseSfcResult_NoViolations_ReturnsGreen()
+    {
+        var lines = new[] { "Windows Resource Protection did not find any integrity violations." };
+        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
+        Assert.Contains("No integrity violations", verdict);
+        Assert.Equal("#22C55E", color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_SuccessfullyRepaired_ReturnsYellow()
+    {
+        var lines = new[] { "Windows Resource Protection found corrupt files and successfully repaired them." };
+        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
+        Assert.Contains("successfully repaired", verdict);
+        Assert.Equal("#F59E0B", color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_UnableToFix_ReturnsRed()
+    {
+        var lines = new[] { "Windows Resource Protection found corrupt files but was unable to fix some of them." };
+        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
+        Assert.Contains("could not repair", verdict);
+        Assert.Equal("#EF4444", color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_CouldNotPerform_ReturnsRed()
+    {
+        var lines = new[] { "Windows Resource Protection could not perform the requested operation." };
+        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
+        Assert.Contains("could not run", verdict);
+        Assert.Equal("#EF4444", color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_ExitZeroNoMatch_ReturnsGreenFallback()
+    {
+        var lines = new[] { "Some unrecognized output" };
+        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
+        Assert.Contains("successfully", verdict);
+        Assert.Equal("#22C55E", color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_NonZeroExit_ReturnsYellowFallback()
+    {
+        var lines = new[] { "Some unrecognized output" };
+        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 1);
+        Assert.Contains("exit code 1", verdict);
+        Assert.Equal("#F59E0B", color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_EmptyLines_FallsBackToExitCode()
+    {
+        var (verdict, color) = CleanupViewModel.ParseSfcResult(Array.Empty<string>(), 0);
+        Assert.Contains("successfully", verdict);
+        Assert.Equal("#22C55E", color);
+    }
+}
+
+// ---------- DISM result parsing ----------
+
+public class DismResultParsingTests
+{
+    [Fact]
+    public void ParseDismResult_RestoreSuccessful_ReturnsGreen()
+    {
+        var lines = new[] { "The restore operation completed successfully." };
+        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
+        Assert.Contains("healthy", verdict);
+        Assert.Equal("#22C55E", color);
+    }
+
+    [Fact]
+    public void ParseDismResult_CorruptionRepaired_ReturnsYellow()
+    {
+        var lines = new[] { "The component store corruption was repaired." };
+        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
+        Assert.Contains("repaired", verdict);
+        Assert.Equal("#F59E0B", color);
+    }
+
+    [Fact]
+    public void ParseDismResult_SourceNotFound_ReturnsRed()
+    {
+        var lines = new[] { "The source files could not be found." };
+        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
+        Assert.Contains("source files", verdict);
+        Assert.Equal("#EF4444", color);
+    }
+
+    [Fact]
+    public void ParseDismResult_ExitZeroNoMatch_ReturnsGreenFallback()
+    {
+        var lines = new[] { "Some unrecognized output" };
+        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
+        Assert.Contains("successfully", verdict);
+        Assert.Equal("#22C55E", color);
+    }
+
+    [Fact]
+    public void ParseDismResult_NonZeroExit_ReturnsYellowFallback()
+    {
+        var lines = new[] { "Some unrecognized output" };
+        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 87);
+        Assert.Contains("exit code 87", verdict);
+        Assert.Equal("#F59E0B", color);
+    }
+}

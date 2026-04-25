@@ -5,6 +5,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.ViewModels;
@@ -30,7 +31,11 @@ public partial class CleanupViewModel : ViewModelBase
     [ObservableProperty] private bool _isDismRunning;
 
     [ObservableProperty] private string _sfcStatus = "Idle";
+    [ObservableProperty] private string _sfcVerdict = "";
+    [ObservableProperty] private string _sfcVerdictColorHex = "#9AA0A6";
     [ObservableProperty] private string _dismStatus = "Idle";
+    [ObservableProperty] private string _dismVerdict = "";
+    [ObservableProperty] private string _dismVerdictColorHex = "#9AA0A6";
 
     // Pre-scan info so the tab doesn't look empty on first load
     [ObservableProperty] private string _tempSizeLabel = "Scanning…";
@@ -171,18 +176,57 @@ public partial class CleanupViewModel : ViewModelBase
 
         IsSfcRunning = true;
         SfcStatus = "Running — can take 5–15 minutes";
+        SfcVerdict = "";
+        SfcVerdictColorHex = "#9AA0A6";
         StatusMessage = "SFC running in background. You can keep using the app.";
         _sfcCts = new CancellationTokenSource();
+        var captured = new System.Collections.Generic.List<string>();
+        void Collect(PowerShellLine l) { if (l.Kind == OutputKind.Output) captured.Add(l.Text); }
+        _runner.LineReceived += Collect;
         try
         {
             var exit = await _runner.RunProcessAsync("sfc.exe", "/scannow", _sfcCts.Token,
                 System.Text.Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage));
-            SfcStatus = exit == 0 ? "Completed — no integrity issues found (or all fixed)." : $"Finished with exit {exit}.";
-            StatusMessage = SfcStatus;
+            var (verdict, color) = ParseSfcResult(captured, exit);
+            SfcVerdict = verdict;
+            SfcVerdictColorHex = color;
+            SfcStatus = exit == 0 ? "Completed" : $"Finished (exit {exit})";
+            StatusMessage = verdict;
         }
-        catch (OperationCanceledException) { SfcStatus = "Cancelled."; StatusMessage = SfcStatus; }
-        catch (Exception ex) { SfcStatus = $"Error: {ex.Message}"; StatusMessage = SfcStatus; }
-        finally { IsSfcRunning = false; }
+        catch (OperationCanceledException) { SfcStatus = "Cancelled."; SfcVerdict = "Scan was cancelled."; SfcVerdictColorHex = "#9AA0A6"; StatusMessage = SfcStatus; }
+        catch (Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
+        finally { _runner.LineReceived -= Collect; IsSfcRunning = false; }
+    }
+
+    /// <summary>
+    /// Parses the captured SFC output lines to produce a human-readable verdict
+    /// with an appropriate color. SFC writes its results in the OEM code page,
+    /// so we match on key phrases that appear in all locales.
+    /// </summary>
+    internal static (string Verdict, string ColorHex) ParseSfcResult(IReadOnlyList<string> lines, int exitCode)
+    {
+        var all = string.Join(" ", lines);
+
+        // "did not find any integrity violations"
+        if (all.Contains("did not find any integrity violations", StringComparison.OrdinalIgnoreCase))
+            return ("No integrity violations found — your system files are healthy.", "#22C55E");
+
+        // "found corrupt files and successfully repaired them"
+        if (all.Contains("successfully repaired", StringComparison.OrdinalIgnoreCase))
+            return ("Corrupted files were found and successfully repaired.", "#F59E0B");
+
+        // "found corrupt files but was unable to fix some of them"
+        if (all.Contains("unable to fix", StringComparison.OrdinalIgnoreCase))
+            return ("Corrupted files found but SFC could not repair them. Try running DISM /RestoreHealth first, then SFC again.", "#EF4444");
+
+        // "could not perform the requested operation"
+        if (all.Contains("could not perform", StringComparison.OrdinalIgnoreCase))
+            return ("SFC could not run. Try rebooting into Safe Mode or running DISM first.", "#EF4444");
+
+        // Fallback based on exit code
+        return exitCode == 0
+            ? ("Scan completed successfully.", "#22C55E")
+            : ($"Scan finished with exit code {exitCode}. Check the console output for details.", "#F59E0B");
     }
 
     [RelayCommand]
@@ -198,18 +242,47 @@ public partial class CleanupViewModel : ViewModelBase
 
         IsDismRunning = true;
         DismStatus = "Running — can take 10–30 minutes";
+        DismVerdict = "";
+        DismVerdictColorHex = "#9AA0A6";
         StatusMessage = "DISM running in background. You can keep using the app.";
         _dismCts = new CancellationTokenSource();
+        var captured = new System.Collections.Generic.List<string>();
+        void Collect(PowerShellLine l) { if (l.Kind == OutputKind.Output) captured.Add(l.Text); }
+        _runner.LineReceived += Collect;
         try
         {
             var exit = await _runner.RunProcessAsync("DISM.exe", "/Online /Cleanup-Image /RestoreHealth", _dismCts.Token,
                 System.Text.Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage));
-            DismStatus = exit == 0 ? "Completed." : $"Finished with exit {exit}.";
-            StatusMessage = DismStatus;
+            var (verdict, color) = ParseDismResult(captured, exit);
+            DismVerdict = verdict;
+            DismVerdictColorHex = color;
+            DismStatus = exit == 0 ? "Completed" : $"Finished (exit {exit})";
+            StatusMessage = verdict;
         }
-        catch (OperationCanceledException) { DismStatus = "Cancelled."; StatusMessage = DismStatus; }
-        catch (Exception ex) { DismStatus = $"Error: {ex.Message}"; StatusMessage = DismStatus; }
-        finally { IsDismRunning = false; }
+        catch (OperationCanceledException) { DismStatus = "Cancelled."; DismVerdict = "Repair was cancelled."; DismVerdictColorHex = "#9AA0A6"; StatusMessage = DismStatus; }
+        catch (Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
+        finally { _runner.LineReceived -= Collect; IsDismRunning = false; }
+    }
+
+    /// <summary>
+    /// Parses DISM RestoreHealth output into a verdict with color.
+    /// </summary>
+    internal static (string Verdict, string ColorHex) ParseDismResult(IReadOnlyList<string> lines, int exitCode)
+    {
+        var all = string.Join(" ", lines);
+
+        if (all.Contains("The restore operation completed successfully", StringComparison.OrdinalIgnoreCase))
+            return ("Component store is healthy — no repairs needed.", "#22C55E");
+
+        if (all.Contains("The component store corruption was repaired", StringComparison.OrdinalIgnoreCase))
+            return ("Component store was corrupted and has been repaired. Run SFC /scannow next.", "#F59E0B");
+
+        if (all.Contains("source files could not be found", StringComparison.OrdinalIgnoreCase))
+            return ("DISM could not find source files for repair. Try connecting to the internet or using a Windows ISO.", "#EF4444");
+
+        return exitCode == 0
+            ? ("Repair completed successfully.", "#22C55E")
+            : ($"DISM finished with exit code {exitCode}. Check the console output for details.", "#F59E0B");
     }
 
     [RelayCommand]

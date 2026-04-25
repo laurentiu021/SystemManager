@@ -103,6 +103,9 @@ public partial class ProcessManagerViewModel : ViewModelBase
     private void SortByMemory() { SortBy = "Memory"; ApplyFilter(); }
 
     [RelayCommand]
+    private void SortByCpu() { SortBy = "CPU"; ApplyFilter(); }
+
+    [RelayCommand]
     private void SortByPid() { SortBy = "PID"; ApplyFilter(); }
 
     private void ApplyFilter()
@@ -124,6 +127,7 @@ public partial class ProcessManagerViewModel : ViewModelBase
         {
             "Name" => source.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase),
             "PID" => source.OrderBy(p => p.Pid),
+            "CPU" => source.OrderByDescending(p => p.CpuPercent),
             _ => source.OrderByDescending(p => p.MemoryBytes)
         };
 

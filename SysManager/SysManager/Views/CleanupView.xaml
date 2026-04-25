@@ -98,12 +98,38 @@
                     <TextBlock Text="SFC /scannow is running in background — " Foreground="#22C55E" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding SfcStatus}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
                 </StackPanel>
+                <!-- SFC verdict (shown after completion) -->
+                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
+                        Visibility="{Binding SfcVerdict, Converter={StaticResource FlexVis}}">
+                    <Border.Background>
+                        <SolidColorBrush Color="#0D1117" Opacity="0.8"/>
+                    </Border.Background>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="SFC result:" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding SfcVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   Foreground="{Binding SfcVerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                    </StackPanel>
+                </Border>
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
                             Visibility="{Binding IsDismRunning, Converter={StaticResource FlexVis}}">
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="#60A5FA"/>
                     <TextBlock Text="DISM is running in background — " Foreground="#60A5FA" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding DismStatus}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
                 </StackPanel>
+                <!-- DISM verdict (shown after completion) -->
+                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
+                        Visibility="{Binding DismVerdict, Converter={StaticResource FlexVis}}">
+                    <Border.Background>
+                        <SolidColorBrush Color="#0D1117" Opacity="0.8"/>
+                    </Border.Background>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="DISM result:" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding DismVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
 

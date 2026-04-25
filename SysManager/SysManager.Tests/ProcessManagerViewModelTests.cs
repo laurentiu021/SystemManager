@@ -61,4 +61,43 @@ public class ProcessManagerViewModelTests
         vm.SortBy = "Name";
         Assert.Equal("Name", vm.SortBy);
     }
+
+    [Fact]
+    public void SortByCpuCommand_Exists()
+    {
+        var vm = new ProcessManagerViewModel();
+        Assert.NotNull(vm.SortByCpuCommand);
+    }
+
+    [Fact]
+    public void SortByCpu_SetsSortByToCPU()
+    {
+        var vm = new ProcessManagerViewModel();
+        vm.SortByCpuCommand.Execute(null);
+        Assert.Equal("CPU", vm.SortBy);
+    }
+
+    [Fact]
+    public void SortByName_SetsSortByToName()
+    {
+        var vm = new ProcessManagerViewModel();
+        vm.SortByNameCommand.Execute(null);
+        Assert.Equal("Name", vm.SortBy);
+    }
+
+    [Fact]
+    public void SortByMemory_SetsSortByToMemory()
+    {
+        var vm = new ProcessManagerViewModel();
+        vm.SortByMemoryCommand.Execute(null);
+        Assert.Equal("Memory", vm.SortBy);
+    }
+
+    [Fact]
+    public void SortByPid_SetsSortByToPID()
+    {
+        var vm = new ProcessManagerViewModel();
+        vm.SortByPidCommand.Execute(null);
+        Assert.Equal("PID", vm.SortBy);
+    }
 }

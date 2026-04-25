@@ -75,9 +75,9 @@ public partial class MainWindowViewModel : ObservableObject
         NavItems.Add(new NavItem { Id = "nav-startup",        Label = "Startup",        Glyph = "\uE7B5", Content = Startup,       ViewType = typeof(Views.StartupView) });
         NavItems.Add(new NavItem { Id = "nav-duplicates",     Label = "Duplicates",     Glyph = "\uE8C8", Content = DuplicateFile, ViewType = typeof(Views.DuplicateFileView) });
         NavItems.Add(new NavItem { Id = "nav-disk-analyzer",  Label = "Disk Analyzer",  Glyph = "\uE958", Content = DiskAnalyzer,    ViewType = typeof(Views.DiskAnalyzerView) });
-        NavItems.Add(new NavItem { Id = "nav-processes",      Label = "Processes",      Glyph = "\uE9D9", Content = ProcessManager, ViewType = typeof(Views.ProcessManagerView) });
+        NavItems.Add(new NavItem { Id = "nav-processes",      Label = "Processes",      Glyph = "\uEBC4", Content = ProcessManager, ViewType = typeof(Views.ProcessManagerView) });
         NavItems.Add(new NavItem { Id = "nav-battery",        Label = "Battery",        Glyph = "\uEBA6", Content = BatteryHealth,  ViewType = typeof(Views.BatteryHealthView) });
-        NavItems.Add(new NavItem { Id = "nav-uninstaller",    Label = "Uninstaller",    Glyph = "\uE74D", Content = Uninstaller,   ViewType = typeof(Views.UninstallerView) });
+        NavItems.Add(new NavItem { Id = "nav-uninstaller",    Label = "Uninstaller",    Glyph = "\uE738", Content = Uninstaller,   ViewType = typeof(Views.UninstallerView) });
         NavItems.Add(new NavItem { Id = "nav-performance",    Label = "Performance",    Glyph = "\uE945", Content = Performance,   ViewType = typeof(Views.PerformanceView) });
         NavItems.Add(new NavItem { Id = "nav-network",        Label = "Network",        Glyph = "\uE839", Content = Network,         ViewType = typeof(Views.NetworkView) });
         NavItems.Add(new NavItem { Id = "nav-services",       Label = "Services",       Glyph = "\uE912", Content = Services,        ViewType = typeof(Views.ServicesView) });

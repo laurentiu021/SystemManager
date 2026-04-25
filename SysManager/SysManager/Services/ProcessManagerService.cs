@@ -23,6 +23,20 @@ public sealed class ProcessManagerService
         try { procs = Process.GetProcesses(); }
         catch { return results; }
 
+        // First pass: capture CPU times
+        var cpuStart = new Dictionary<int, (TimeSpan Cpu, DateTime Time)>();
+        foreach (var p in procs)
+        {
+            if (ct.IsCancellationRequested) break;
+            try { cpuStart[p.Id] = (p.TotalProcessorTime, DateTime.UtcNow); }
+            catch { /* access denied — skip CPU for this process */ }
+        }
+
+        // Brief pause to measure CPU delta
+        Thread.Sleep(250);
+
+        int logicalCores = Environment.ProcessorCount;
+
         foreach (var p in procs)
         {
             if (ct.IsCancellationRequested) break;
@@ -36,6 +50,19 @@ public sealed class ProcessManagerService
                     ThreadCount = p.Threads.Count,
                     Status = p.Responding ? "Running" : "Not responding"
                 };
+
+                // Calculate CPU %
+                if (cpuStart.TryGetValue(p.Id, out var start))
+                {
+                    try
+                    {
+                        var cpuEnd = p.TotalProcessorTime;
+                        var elapsed = (DateTime.UtcNow - start.Time).TotalMilliseconds;
+                        if (elapsed > 0)
+                            entry.CpuPercent = Math.Round((cpuEnd - start.Cpu).TotalMilliseconds / elapsed / logicalCores * 100, 1);
+                    }
+                    catch { /* process may have exited */ }
+                }
 
                 try { entry.Description = p.MainModule?.FileVersionInfo.FileDescription ?? ""; } catch { }
                 try { entry.FilePath = p.MainModule?.FileName ?? ""; } catch { }

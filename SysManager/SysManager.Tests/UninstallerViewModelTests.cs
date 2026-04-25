@@ -63,4 +63,56 @@ public class UninstallerViewModelTests
         var vm = CreateVm();
         Assert.Equal(0, vm.AppCount);
     }
+
+    [Fact]
+    public void SortByNameCommand_Exists()
+    {
+        var vm = CreateVm();
+        Assert.NotNull(vm.SortByNameCommand);
+    }
+
+    [Fact]
+    public void SortBySizeCommand_Exists()
+    {
+        var vm = CreateVm();
+        Assert.NotNull(vm.SortBySizeCommand);
+    }
+
+    [Fact]
+    public void SortByPublisherCommand_Exists()
+    {
+        var vm = CreateVm();
+        Assert.NotNull(vm.SortByPublisherCommand);
+    }
+
+    [Fact]
+    public void SortByName_SetsSortBy()
+    {
+        var vm = CreateVm();
+        vm.SortByNameCommand.Execute(null);
+        Assert.Equal("Name", vm.SortBy);
+    }
+
+    [Fact]
+    public void SortBySize_SetsSortBy()
+    {
+        var vm = CreateVm();
+        vm.SortBySizeCommand.Execute(null);
+        Assert.Equal("Size", vm.SortBy);
+    }
+
+    [Fact]
+    public void SortByPublisher_SetsSortBy()
+    {
+        var vm = CreateVm();
+        vm.SortByPublisherCommand.Execute(null);
+        Assert.Equal("Publisher", vm.SortBy);
+    }
+
+    [Fact]
+    public void SortBy_DefaultName()
+    {
+        var vm = CreateVm();
+        Assert.Equal("Name", vm.SortBy);
+    }
 }

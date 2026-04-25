@@ -188,7 +188,8 @@ public partial class AboutViewModel : ViewModelBase
 
     /// <summary>
     /// Copy a bug-report-ready block with SysManager version, Windows version,
-    /// architecture, .NET runtime, and elevation state to the clipboard.
+    /// architecture, .NET runtime, elevation state, and hardware diagnostics
+    /// (CPU, RAM, GPU, storage, display) to the clipboard.
     /// Fully defensive — falls back gracefully on any WMI / registry miss.
     /// </summary>
     [RelayCommand]
@@ -204,6 +205,93 @@ public partial class AboutViewModel : ViewModelBase
             sb.Append("Architecture: ").AppendLine(RuntimeInformation.OSArchitecture.ToString());
             sb.Append(".NET: ").AppendLine(RuntimeInformation.FrameworkDescription);
             sb.Append("Elevated: ").AppendLine(SafeIsElevated() ? "yes" : "no");
+
+            // CPU
+            try
+            {
+                using var cpuSearch = new System.Management.ManagementObjectSearcher(
+                    "SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
+                foreach (System.Management.ManagementObject mo in cpuSearch.Get())
+                {
+                    var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
+                    var cores = mo["NumberOfCores"];
+                    var threads = mo["NumberOfLogicalProcessors"];
+                    var mhz = mo["MaxClockSpeed"];
+                    sb.Append("CPU: ").Append(name);
+                    if (cores != null) sb.Append($" ({cores}c/{threads}t)");
+                    if (mhz is uint speed) sb.Append($" @ {speed / 1000.0:F1} GHz");
+                    sb.AppendLine();
+                    break;
+                }
+            }
+            catch (System.Management.ManagementException) { }
+
+            // RAM
+            try
+            {
+                using var memSearch = new System.Management.ManagementObjectSearcher(
+                    "SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem");
+                foreach (System.Management.ManagementObject mo in memSearch.Get())
+                {
+                    var totalKb = mo["TotalVisibleMemorySize"] as ulong? ?? 0;
+                    var freeKb = mo["FreePhysicalMemory"] as ulong? ?? 0;
+                    if (totalKb > 0)
+                        sb.AppendLine($"RAM: {totalKb / 1024.0 / 1024.0:F1} GB total, {freeKb / 1024.0 / 1024.0:F1} GB free");
+                    break;
+                }
+            }
+            catch (System.Management.ManagementException) { }
+
+            // GPU
+            try
+            {
+                using var gpuSearch = new System.Management.ManagementObjectSearcher(
+                    "SELECT Name,DriverVersion,AdapterRAM FROM Win32_VideoController");
+                foreach (System.Management.ManagementObject mo in gpuSearch.Get())
+                {
+                    var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
+                    var driver = mo["DriverVersion"]?.ToString() ?? "";
+                    var vram = mo["AdapterRAM"] as uint? ?? 0;
+                    sb.Append("GPU: ").Append(name);
+                    if (vram > 0) sb.Append($" ({vram / 1024.0 / 1024.0 / 1024.0:F1} GB VRAM)");
+                    if (!string.IsNullOrEmpty(driver)) sb.Append($" driver {driver}");
+                    sb.AppendLine();
+                }
+            }
+            catch (System.Management.ManagementException) { }
+
+            // Storage
+            try
+            {
+                foreach (var drive in DriveInfo.GetDrives())
+                {
+                    if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
+                    sb.AppendLine($"Disk {drive.Name.TrimEnd('\\')} {drive.TotalSize / 1024.0 / 1024.0 / 1024.0:F0} GB total, {drive.AvailableFreeSpace / 1024.0 / 1024.0 / 1024.0:F0} GB free ({drive.DriveFormat})");
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+
+            // Display
+            try
+            {
+                using var dispSearch = new System.Management.ManagementObjectSearcher(
+                    "SELECT CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate FROM Win32_VideoController");
+                foreach (System.Management.ManagementObject mo in dispSearch.Get())
+                {
+                    var w = mo["CurrentHorizontalResolution"];
+                    var h = mo["CurrentVerticalResolution"];
+                    var hz = mo["CurrentRefreshRate"];
+                    if (w != null && h != null)
+                    {
+                        sb.Append($"Display: {w}×{h}");
+                        if (hz != null) sb.Append($" @ {hz} Hz");
+                        sb.AppendLine();
+                        break;
+                    }
+                }
+            }
+            catch (System.Management.ManagementException) { }
 
             var text = sb.ToString();
             try { Clipboard.SetText(text); } catch { /* clipboard can be locked by another app */ }

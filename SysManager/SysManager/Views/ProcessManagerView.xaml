@@ -38,6 +38,8 @@
                            Style="{StaticResource Subtle}"/>
                 <Button Content="Memory" Command="{Binding SortByMemoryCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
+                <Button Content="CPU" Command="{Binding SortByCpuCommand}"
+                        Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
                 <Button Content="Name" Command="{Binding SortByNameCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
                 <Button Content="PID" Command="{Binding SortByPidCommand}"
@@ -87,6 +89,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="60"/>
                                 <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -110,15 +113,21 @@
                                        VerticalAlignment="Center" HorizontalAlignment="Right"
                                        FontWeight="Medium"/>
 
+                            <!-- CPU % -->
+                            <TextBlock Grid.Column="3" FontSize="12"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right"
+                                       Foreground="{StaticResource TextSecondary}" FontFamily="Consolas"
+                                       Text="{Binding CpuPercent, StringFormat={}{0:F1}%}"/>
+
                             <!-- Threads -->
-                            <TextBlock Grid.Column="3" FontSize="11" VerticalAlignment="Center"
+                            <TextBlock Grid.Column="4" FontSize="11" VerticalAlignment="Center"
                                        HorizontalAlignment="Center" Foreground="{StaticResource TextMuted}">
                                 <Run Text="{Binding ThreadCount, Mode=OneWay}"/>
                                 <Run Text="thr"/>
                             </TextBlock>
 
                             <!-- Status -->
-                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center"
+                            <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center"
                                         Margin="4,0">
                                 <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0"
                                          Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
@@ -128,14 +137,14 @@
                             </StackPanel>
 
                             <!-- Open location -->
-                            <Button Grid.Column="5" Content="📂" ToolTip="Open file location"
+                            <Button Grid.Column="6" Content="📂" ToolTip="Open file location"
                                     Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"
                                     Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
                                     Margin="4,0"/>
 
                             <!-- Kill -->
-                            <Button Grid.Column="6" Content="✕" ToolTip="Kill process"
+                            <Button Grid.Column="7" Content="✕" ToolTip="Kill process"
                                     Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"
                                     Style="{StaticResource GhostButton}" Padding="6,2" FontSize="12"

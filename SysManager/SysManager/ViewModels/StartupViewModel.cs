@@ -66,7 +66,7 @@ public partial class StartupViewModel : ViewModelBase
         }
         else
         {
-            StatusMessage = $"Could not toggle {entry.Name} — try running as Administrator.";
+            StatusMessage = $"Could not toggle {entry.Name} — {entry.StatusText}";
         }
     }
 

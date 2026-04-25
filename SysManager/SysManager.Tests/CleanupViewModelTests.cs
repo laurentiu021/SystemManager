@@ -347,8 +347,13 @@ public class CleanupViewModelTests
     {
         var vm = NewVm();
         // PreScanAsync runs on construction via fire-and-forget.
-        // Give it a moment to complete.
-        await Task.Delay(3000);
+        // Poll until labels change or timeout (up to 15s for slow CI).
+        for (int i = 0; i < 30; i++)
+        {
+            await Task.Delay(500);
+            if (vm.TempSizeLabel != "Scanning…" && vm.RecycleBinLabel != "Scanning…")
+                break;
+        }
         // After scan, labels should no longer be "Scanning…"
         Assert.NotEqual("Scanning…", vm.TempSizeLabel);
         Assert.NotEqual("Scanning…", vm.RecycleBinLabel);

@@ -263,15 +263,24 @@ public sealed class StartupService
     {
         try
         {
+            if (entry.Source == StartupSource.TaskScheduler)
+            {
+                return SetTaskSchedulerEnabled(entry, enabled);
+            }
+
             var (root, approvedPath) = entry.Source switch
             {
                 StartupSource.RegistryCurrentUser => (Registry.CurrentUser, ApprovedRunHKCU),
                 StartupSource.RegistryLocalMachine => (Registry.LocalMachine, ApprovedRunHKLM),
-                _ => throw new NotSupportedException("Cannot toggle this entry type")
+                _ => (Registry.CurrentUser, ApprovedRunHKCU)
             };
 
             using var key = root.OpenSubKey(approvedPath, writable: true);
-            if (key == null) return false;
+            if (key == null)
+            {
+                entry.StatusText = "Error — StartupApproved key not found";
+                return false;
+            }
 
             // Build the 12-byte blob: byte[0] = 02 (enabled) or 03 (disabled)
             var existing = key.GetValue(entry.ValueName) as byte[];
@@ -299,9 +308,78 @@ public sealed class StartupService
             entry.StatusText = enabled ? "Enabled" : "Disabled";
             return true;
         }
-        catch
+        catch (System.Security.SecurityException)
         {
-            entry.StatusText = "Error — may need admin";
+            entry.StatusText = "Error — access denied (registry protected)";
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            entry.StatusText = "Error — access denied (requires elevation)";
+            return false;
+        }
+        catch (System.IO.IOException ex)
+        {
+            entry.StatusText = $"Error — {ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Enable or disable a Task Scheduler logon task via schtasks.exe.
+    /// </summary>
+    private static bool SetTaskSchedulerEnabled(StartupEntry entry, bool enabled)
+    {
+        try
+        {
+            var taskPath = entry.TaskPath;
+            if (string.IsNullOrWhiteSpace(taskPath))
+            {
+                entry.StatusText = "Error — task path unknown";
+                return false;
+            }
+
+            var args = enabled
+                ? $"/Change /TN \"{taskPath}\" /Enable"
+                : $"/Change /TN \"{taskPath}\" /Disable";
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "schtasks.exe",
+                Arguments = args,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc == null)
+            {
+                entry.StatusText = "Error — could not start schtasks";
+                return false;
+            }
+
+            proc.WaitForExit(5000);
+            if (proc.ExitCode == 0)
+            {
+                entry.IsEnabled = enabled;
+                entry.StatusText = enabled ? "Enabled (scheduled)" : "Disabled (scheduled)";
+                return true;
+            }
+
+            var stderr = proc.StandardError.ReadToEnd().Trim();
+            entry.StatusText = $"Error — {(stderr.Length > 0 ? stderr : "schtasks failed")}";
+            return false;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            entry.StatusText = "Error — schtasks not available";
+            return false;
+        }
+        catch (InvalidOperationException ex)
+        {
+            entry.StatusText = $"Error — {ex.Message}";
             return false;
         }
     }

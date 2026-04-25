@@ -123,7 +123,7 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, and status
 - Real-time filter by name, description, or PID
-- Sort by memory, name, or PID
+- Sort by memory, CPU usage, name, or PID
 - Kill process with confirmation dialog
 - Open file location in Explorer
 
@@ -134,8 +134,9 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 - Gracefully shows "No battery detected" on desktops
 
 ### Uninstaller
-- Lists all installed applications via winget
+- Lists all installed applications via winget with size from registry
 - Filter by name or package ID
+- Sort by name, size, or publisher
 - Select/deselect all, batch uninstall with confirmation dialog
 - Live console output from winget
 
@@ -305,8 +306,8 @@ Found something broken? Missing a feature you'd love to have?
   See [SECURITY.md](SECURITY.md) for the full policy.
 
 The **About** tab inside the app has a "Copy environment info" helper that
-dumps your SysManager version, Windows version, and elevation state in a
-format ready to paste into a bug report.
+dumps your SysManager version, Windows build, CPU, RAM, GPU, storage, display,
+and elevation state in a format ready to paste into a bug report.
 
 ## Tech stack
 

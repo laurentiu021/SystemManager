@@ -219,8 +219,23 @@ public partial class AboutViewModel : ViewModelBase
     {
         try
         {
+            // WMI Caption gives a friendly name like "Microsoft Windows 11 Pro"
+            using var searcher = new System.Management.ManagementObjectSearcher(
+                "SELECT Caption,BuildNumber FROM Win32_OperatingSystem");
+            foreach (System.Management.ManagementObject mo in searcher.Get())
+            {
+                var caption = mo["Caption"]?.ToString()?.Trim() ?? "";
+                var build = mo["BuildNumber"]?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(caption))
+                    return $"{caption} (build {build})";
+            }
+        }
+        catch (System.Management.ManagementException) { }
+
+        // Fallback to Environment.OSVersion
+        try
+        {
             var os = Environment.OSVersion;
-            // Build number tells the actual Windows version better than Major.Minor on 10/11.
             return $"{os.VersionString} (build {os.Version.Build})";
         }
         catch { return "unknown"; }

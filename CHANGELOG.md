@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-04-26
+
+### Fixed
+- **Startup toggle not working** — clicking the checkbox to disable a startup app
+  (e.g. MEGAsync) appeared to do nothing. Root cause: WPF CheckBox two-way binding
+  flipped `IsEnabled` before the command ran, then the command inverted it back.
+  Now uses the already-flipped value as the desired state and reverts on failure.
+
 ## [0.21.1] - 2026-04-26
 
 ### Fixed

@@ -45,6 +45,7 @@ public class FlexibleBoolToVisibilityConverter : IValueConverter
         {
             bool b => b,
             null => false,
+            string s => !string.IsNullOrWhiteSpace(s),
             _ => true
         };
         var invert = parameter as string == "Inverse";

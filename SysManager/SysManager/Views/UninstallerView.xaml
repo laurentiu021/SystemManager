@@ -35,10 +35,15 @@
                 <Button Content="✕ Cancel" Command="{Binding CancelCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                <TextBlock Text="Filter:" VerticalAlignment="Center" Margin="8,0,8,0"
+                <TextBlock Text="Search:" VerticalAlignment="Center" Margin="8,0,8,0"
                            Style="{StaticResource Subtle}"/>
-                <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                         Width="220" Margin="0,0,12,0"/>
+                <Grid Width="220" Margin="0,0,12,0">
+                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="Search apps…" IsHitTestVisible="False"
+                               Foreground="{StaticResource TextMuted}" Margin="6,0,0,0"
+                               VerticalAlignment="Center" FontSize="12"
+                               Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
                 <Button Content="Select all" Command="{Binding SelectAllCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
                 <Button Content="Deselect" Command="{Binding DeselectAllCommand}"
@@ -99,7 +104,7 @@
                                 <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="120"/>
                                 <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="220"/>
                             </Grid.ColumnDefinitions>
 
                             <!-- Checkbox -->
@@ -124,10 +129,23 @@
                                        VerticalAlignment="Center" HorizontalAlignment="Right"
                                        Foreground="{StaticResource TextMuted}" FontFamily="Consolas"/>
 
-                            <!-- Source -->
-                            <TextBlock Grid.Column="4" Text="{Binding Source}" FontSize="11"
-                                       VerticalAlignment="Center" HorizontalAlignment="Center"
-                                       Foreground="{StaticResource TextMuted}"/>
+                            <!-- Source (show 'Local' for ARP-only apps without winget source) -->
+                            <TextBlock Grid.Column="4" FontSize="11"
+                                       VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{Binding Source}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Source}" Value="">
+                                                <Setter Property="Text" Value="Local"/>
+                                                <Setter Property="Foreground" Value="#F59E0B"/>
+                                                <Setter Property="ToolTip" Value="Not from winget — uninstall may require the app's own installer"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
 
                             <!-- Status -->
                             <Border Grid.Column="5" Style="{StaticResource Badge}"
@@ -135,7 +153,7 @@
                                     Visibility="{Binding Status, Converter={StaticResource FlexVis}}"
                                     ToolTip="{Binding Status}">
                                 <TextBlock Text="{Binding Status}" FontSize="11"
-                                           TextTrimming="CharacterEllipsis" MaxWidth="120"/>
+                                           TextTrimming="CharacterEllipsis" MaxWidth="200"/>
                             </Border>
                         </Grid>
                     </DataTemplate>

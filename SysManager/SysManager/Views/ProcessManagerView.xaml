@@ -30,10 +30,15 @@
             <WrapPanel>
                 <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                <TextBlock Text="Filter:" VerticalAlignment="Center" Margin="8,0,8,0"
+                <TextBlock Text="Search:" VerticalAlignment="Center" Margin="8,0,8,0"
                            Style="{StaticResource Subtle}"/>
-                <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                         Width="200" Margin="0,0,12,0"/>
+                <Grid Width="200" Margin="0,0,12,0">
+                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="Search processes…" IsHitTestVisible="False"
+                               Foreground="{StaticResource TextMuted}" Margin="6,0,0,0"
+                               VerticalAlignment="Center" FontSize="12"
+                               Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
                 <TextBlock Text="Sort:" VerticalAlignment="Center" Margin="0,0,8,0"
                            Style="{StaticResource Subtle}"/>
                 <Button Content="Memory" Command="{Binding SortByMemoryCommand}"

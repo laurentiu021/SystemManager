@@ -108,6 +108,38 @@ public class ConverterTests
             conv.ConvertBack(Visibility.Visible, typeof(bool), null!, CultureInfo.InvariantCulture));
     }
 
+    [Fact]
+    public void FlexibleBool_EmptyString_ReturnsCollapsed()
+    {
+        var conv = new FlexibleBoolToVisibilityConverter();
+        var result = conv.Convert("", typeof(Visibility), null!, CultureInfo.InvariantCulture);
+        Assert.Equal(Visibility.Collapsed, result);
+    }
+
+    [Fact]
+    public void FlexibleBool_WhitespaceString_ReturnsCollapsed()
+    {
+        var conv = new FlexibleBoolToVisibilityConverter();
+        var result = conv.Convert("   ", typeof(Visibility), null!, CultureInfo.InvariantCulture);
+        Assert.Equal(Visibility.Collapsed, result);
+    }
+
+    [Fact]
+    public void FlexibleBool_NonEmptyString_ReturnsVisible()
+    {
+        var conv = new FlexibleBoolToVisibilityConverter();
+        var result = conv.Convert("hello", typeof(Visibility), null!, CultureInfo.InvariantCulture);
+        Assert.Equal(Visibility.Visible, result);
+    }
+
+    [Fact]
+    public void FlexibleBool_EmptyString_Inverse_ReturnsVisible()
+    {
+        var conv = new FlexibleBoolToVisibilityConverter();
+        var result = conv.Convert("", typeof(Visibility), "Inverse", CultureInfo.InvariantCulture);
+        Assert.Equal(Visibility.Visible, result);
+    }
+
     // ---------- BoolToElevationBadgeBrushConverter ----------
 
     [Fact]

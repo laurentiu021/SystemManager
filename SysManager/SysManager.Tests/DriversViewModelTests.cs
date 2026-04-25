@@ -104,3 +104,49 @@ public class DriversViewModelTests
         Assert.Equal("driver test line", vm.Console.Lines[0].Text);
     }
 }
+
+// ---------- sorting ----------
+
+public class DriversViewModelSortTests
+{
+    private static DriversViewModel NewVm() => new(new PowerShellRunner());
+
+    [Fact]
+    public void SortOptions_ContainsFourEntries()
+    {
+        Assert.Equal(4, DriversViewModel.SortOptions.Length);
+        Assert.Contains("Name", DriversViewModel.SortOptions);
+        Assert.Contains("Manufacturer", DriversViewModel.SortOptions);
+        Assert.Contains("Version", DriversViewModel.SortOptions);
+        Assert.Contains("Date", DriversViewModel.SortOptions);
+    }
+
+    [Fact]
+    public void SortBy_DefaultIsName()
+    {
+        var vm = NewVm();
+        Assert.Equal("Name", vm.SortBy);
+    }
+
+    [Theory]
+    [InlineData("Name")]
+    [InlineData("Manufacturer")]
+    [InlineData("Version")]
+    [InlineData("Date")]
+    public void SortBy_CanBeSet(string value)
+    {
+        var vm = NewVm();
+        vm.SortBy = value;
+        Assert.Equal(value, vm.SortBy);
+    }
+
+    [Fact]
+    public void SortBy_RaisesPropertyChanged()
+    {
+        var vm = NewVm();
+        bool raised = false;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == "SortBy") raised = true; };
+        vm.SortBy = "Date";
+        Assert.True(raised);
+    }
+}

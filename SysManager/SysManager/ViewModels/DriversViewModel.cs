@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SysManager.Services;
 
@@ -14,6 +15,10 @@ public partial class DriversViewModel : ViewModelBase
 
     public ConsoleViewModel Console { get; } = new();
 
+    public static string[] SortOptions => new[] { "Name", "Manufacturer", "Version", "Date" };
+
+    [ObservableProperty] private string _sortBy = "Name";
+
     public DriversViewModel(PowerShellRunner runner)
     {
         _runner = runner;
@@ -25,19 +30,29 @@ public partial class DriversViewModel : ViewModelBase
     {
         IsBusy = true; IsProgressIndeterminate = true;
         StatusMessage = "Listing drivers...";
+        Console.ClearCommand.Execute(null);
         _cts = new CancellationTokenSource();
         try
         {
-            await _runner.RunScriptViaPwshAsync(@"
+            var sortProp = SortBy switch
+            {
+                "Manufacturer" => "Manufacturer",
+                "Version" => "DriverVersion",
+                "Date" => "DriverDate",
+                _ => "DeviceName"
+            };
+
+            await _runner.RunScriptViaPwshAsync($@"
                 Get-CimInstance Win32_PnPSignedDriver |
-                  Where-Object { $_.DeviceName -and $_.DriverVersion } |
+                  Where-Object {{ $_.DeviceName -and $_.DriverVersion }} |
                   Select-Object DeviceName, DriverVersion, Manufacturer, DriverDate |
-                  Sort-Object DeviceName |
+                  Sort-Object {sortProp} |
                   Format-Table -AutoSize | Out-String -Width 200
             ", cancellationToken: _cts.Token);
             StatusMessage = "Done";
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -46,6 +61,7 @@ public partial class DriversViewModel : ViewModelBase
     {
         IsBusy = true; IsProgressIndeterminate = true;
         StatusMessage = "Checking driver updates via Windows Update...";
+        Console.ClearCommand.Execute(null);
         _cts = new CancellationTokenSource();
         try
         {
@@ -60,7 +76,8 @@ public partial class DriversViewModel : ViewModelBase
             ", cancellationToken: _cts.Token);
             StatusMessage = "Done";
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 

@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-04-25
+
+### Added
+- **FACEIT Europe ping preset** — 5 EU server locations (Germany, UK, France,
+  Netherlands, Sweden) for checking latency to FACEIT CS2 competitive servers.
+  Appears in the preset dropdown between CS2 Europe and PUBG Europe (#228).
+
 ## [0.19.0] - 2026-04-25
 
 ### Added

@@ -175,7 +175,8 @@ public partial class CleanupViewModel : ViewModelBase
         _sfcCts = new CancellationTokenSource();
         try
         {
-            var exit = await _runner.RunProcessAsync("sfc.exe", "/scannow", _sfcCts.Token);
+            var exit = await _runner.RunProcessAsync("sfc.exe", "/scannow", _sfcCts.Token,
+                System.Text.Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage));
             SfcStatus = exit == 0 ? "Completed — no integrity issues found (or all fixed)." : $"Finished with exit {exit}.";
             StatusMessage = SfcStatus;
         }
@@ -201,7 +202,8 @@ public partial class CleanupViewModel : ViewModelBase
         _dismCts = new CancellationTokenSource();
         try
         {
-            var exit = await _runner.RunProcessAsync("DISM.exe", "/Online /Cleanup-Image /RestoreHealth", _dismCts.Token);
+            var exit = await _runner.RunProcessAsync("DISM.exe", "/Online /Cleanup-Image /RestoreHealth", _dismCts.Token,
+                System.Text.Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage));
             DismStatus = exit == 0 ? "Completed." : $"Finished with exit {exit}.";
             StatusMessage = DismStatus;
         }

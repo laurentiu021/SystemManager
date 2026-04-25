@@ -122,7 +122,8 @@ public class PowerShellRunner
     public async Task<int> RunProcessAsync(
         string fileName,
         string arguments,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        System.Text.Encoding? outputEncoding = null)
     {
         // Always launch from a neutral system directory so the spawned
         // process never inherits a "locked" CWD (e.g. a user's Downloads
@@ -131,6 +132,11 @@ public class PowerShellRunner
         var workingDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
         if (string.IsNullOrWhiteSpace(workingDir) || !System.IO.Directory.Exists(workingDir))
             workingDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+
+        // Default to UTF-8 for most tools. System tools like sfc.exe, DISM.exe,
+        // and chkdsk.exe write in the OEM code page — callers should pass
+        // Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage).
+        var enc = outputEncoding ?? System.Text.Encoding.UTF8;
 
         var psi = new System.Diagnostics.ProcessStartInfo
         {
@@ -141,8 +147,8 @@ public class PowerShellRunner
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = workingDir,
-            StandardOutputEncoding = System.Text.Encoding.UTF8,
-            StandardErrorEncoding = System.Text.Encoding.UTF8,
+            StandardOutputEncoding = enc,
+            StandardErrorEncoding = enc,
         };
 
         using var proc = new System.Diagnostics.Process { StartInfo = psi, EnableRaisingEvents = true };

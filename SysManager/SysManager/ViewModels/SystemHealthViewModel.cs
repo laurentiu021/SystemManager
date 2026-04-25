@@ -228,7 +228,9 @@ public partial class SystemHealthViewModel : ViewModelBase
         try
         {
             // /scan = online read-only scan; non-destructive, reports only.
-            var exit = await _runner.RunProcessAsync("chkdsk.exe", $"{driveLetter} /scan", ct);
+            var oemEncoding = System.Text.Encoding.GetEncoding(
+                System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+            var exit = await _runner.RunProcessAsync("chkdsk.exe", $"{driveLetter} /scan", ct, oemEncoding);
             if (target != null)
                 target.Status = exit == 0 ? "OK" : $"Exit {exit}";
             StatusMessage = $"chkdsk {driveLetter} done (exit {exit}).";

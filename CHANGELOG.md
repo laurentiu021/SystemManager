@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-04-26
+
+### Fixed
+- **Icon extraction quality** — drastically improved icon resolution for all three
+  tabs (Startup, Uninstaller, Process Manager):
+  - Contextual fallback icons: Windows shield for system processes, gear for services,
+    generic app icon for unknown apps (no more blank squares)
+  - Deeper path resolution: handles rundll32 (extracts DLL target), msiexec, searches
+    PATH, Program Files, and App Paths registry
+  - Process Manager: finds exe by process name when FilePath is empty (access denied)
+  - Uninstaller: scans HKCU registry for per-user installs (Discord, VS Code, Spotify)
+    and searches InstallLocation for exe when DisplayIcon is missing
+
 ## [0.21.0] - 2026-04-25
 
 ### Added

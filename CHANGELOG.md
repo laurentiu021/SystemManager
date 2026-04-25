@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-04-25
+
+### Added
+- **Sidebar** — SFC /scannow, DISM RestoreHealth, and chkdsk now show progress
+  indicators in the left sidebar mini-tray alongside existing background task
+  indicators (#146, #149, #156).
+
 ## [0.14.0] - 2026-04-25
 
 ### Added

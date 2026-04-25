@@ -57,8 +57,20 @@ public static class TargetPresets
             ("Cloudflare", "cloudflare.com"),
         });
 
+    public static readonly TargetPreset FaceitEurope = new(
+        "FACEIT Europe",
+        "FACEIT CS2 competitive servers across EU — Germany, UK, France, Netherlands, Sweden.",
+        new (string, string)[]
+        {
+            ("FACEIT DE",  "88.198.52.17"),
+            ("FACEIT UK",  "82.145.38.1"),
+            ("FACEIT FR",  "62.210.84.97"),
+            ("FACEIT NL",  "46.166.189.17"),
+            ("FACEIT SE",  "31.3.153.1"),
+        });
+
     public static readonly IReadOnlyList<TargetPreset> All = new[]
     {
-        Global, CS2Europe, PubgEurope, Streaming
+        Global, CS2Europe, FaceitEurope, PubgEurope, Streaming
     };
 }

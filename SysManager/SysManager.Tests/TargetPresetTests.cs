@@ -13,14 +13,15 @@ public class TargetPresetTests
     {
         Assert.Contains(TargetPresets.Global, TargetPresets.All);
         Assert.Contains(TargetPresets.CS2Europe, TargetPresets.All);
+        Assert.Contains(TargetPresets.FaceitEurope, TargetPresets.All);
         Assert.Contains(TargetPresets.PubgEurope, TargetPresets.All);
         Assert.Contains(TargetPresets.Streaming, TargetPresets.All);
     }
 
     [Fact]
-    public void All_HasAtLeastFourPresets()
+    public void All_HasAtLeastFivePresets()
     {
-        Assert.True(TargetPresets.All.Count >= 4);
+        Assert.True(TargetPresets.All.Count >= 5);
     }
 
     [Fact]
@@ -126,5 +127,29 @@ public class TargetPresetTests
 
         var c = new TargetPreset("x", "d", new (string, string)[] { ("n", "h") });
         Assert.NotEqual(a, c);
+    }
+
+    [Fact]
+    public void FaceitEurope_Covers5Countries()
+    {
+        var targets = TargetPresets.FaceitEurope.Targets;
+        Assert.Equal(5, targets.Count);
+        var names = targets.Select(t => t.Name).ToList();
+        Assert.Contains("FACEIT DE", names);
+        Assert.Contains("FACEIT UK", names);
+        Assert.Contains("FACEIT FR", names);
+        Assert.Contains("FACEIT NL", names);
+        Assert.Contains("FACEIT SE", names);
+    }
+
+    [Fact]
+    public void FaceitEuropeIPs_AreValidIPv4()
+    {
+        foreach (var (_, host) in TargetPresets.FaceitEurope.Targets)
+        {
+            Assert.True(System.Net.IPAddress.TryParse(host, out var ip),
+                $"FACEIT Europe target {host} is not a valid IP");
+            Assert.Equal(System.Net.Sockets.AddressFamily.InterNetwork, ip.AddressFamily);
+        }
     }
 }

@@ -121,6 +121,7 @@ public sealed partial class NetworkSharedState : ObservableObject
                 "Global" when host.EndsWith(".8") || host.EndsWith(".1") || host.EndsWith(".9") => TargetRole.PublicDns,
                 "Global" => TargetRole.Generic,
                 "CS2 Europe" => TargetRole.GameServer,
+                "FACEIT Europe" => TargetRole.GameServer,
                 "PUBG Europe" => TargetRole.GameServer,
                 "Streaming" => TargetRole.Streaming,
                 _ => TargetRole.Generic

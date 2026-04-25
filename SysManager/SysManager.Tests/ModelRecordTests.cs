@@ -76,9 +76,9 @@ public class ModelRecordTests
     }
 
     [Fact]
-    public void TargetPreset_All_ContainsFourPresets()
+    public void TargetPreset_All_ContainsFivePresets()
     {
-        Assert.Equal(4, TargetPresets.All.Count);
+        Assert.Equal(5, TargetPresets.All.Count);
     }
 
     [Fact]

@@ -52,14 +52,24 @@ public partial class ServicesViewModel : ViewModelBase
         try
         {
             _allServices = await Task.Run(ServiceManagerService.GetAllServices);
-            TotalCount = _allServices.Count;
-            RunningCount = _allServices.Count(s => s.Status == "Running");
-            ApplyFilter();
-            StatusMessage = $"Loaded {TotalCount} services ({RunningCount} running).";
+            // Ensure collection updates happen on the UI thread to prevent
+            // cross-thread exceptions when navigating during concurrent scans (#154).
+            if (Application.Current?.Dispatcher is { } d && !d.CheckAccess())
+                d.Invoke(ApplyFilterCore);
+            else
+                ApplyFilterCore();
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (Win32Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    private void ApplyFilterCore()
+    {
+        TotalCount = _allServices.Count;
+        RunningCount = _allServices.Count(s => s.Status == "Running");
+        ApplyFilter();
+        StatusMessage = $"Loaded {TotalCount} services ({RunningCount} running).";
     }
 
     [RelayCommand]

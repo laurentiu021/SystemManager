@@ -93,6 +93,28 @@ public partial class NetworkViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isMonitoring;
 
+    /// <summary>
+    /// Index of the selected sub-tab (0=Ping, 1=Traceroute, 2=Speed).
+    /// When the user returns to the Ping tab, we nudge the chart series
+    /// so LiveCharts2 re-renders the latest data (#153).
+    /// </summary>
+    [ObservableProperty] private int _selectedSubTab;
+
+    partial void OnSelectedSubTabChanged(int value)
+    {
+        if (value == 0 && IsMonitoring)
+        {
+            // Force LiveCharts2 to re-evaluate the series by flushing any
+            // pending samples and triggering a collection change notification.
+            FlushPending();
+            foreach (var series in LatencySeries)
+            {
+                if (series is LineSeries<DateTimePoint> line)
+                    line.Values = line.Values; // identity assignment triggers change
+            }
+        }
+    }
+
     [ObservableProperty] private SpeedTestResult? _httpResult;
     [ObservableProperty] private SpeedTestResult? _ooklaResult;
     [ObservableProperty] private int _speedProgress;

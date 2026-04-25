@@ -146,7 +146,8 @@
         </Border>
 
         <!-- ===== Sub-tabs: Ping / Traceroute / Speed ===== -->
-        <TabControl Grid.Row="3" Margin="28,20,28,28" BorderThickness="0" Background="Transparent" Padding="0">
+        <TabControl Grid.Row="3" Margin="28,20,28,28" BorderThickness="0" Background="Transparent" Padding="0"
+                    SelectedIndex="{Binding SelectedSubTab}">
             <TabControl.Resources>
                 <Style TargetType="TabItem" BasedOn="{StaticResource PillTabItem}"/>
             </TabControl.Resources>

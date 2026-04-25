@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Text.Json;
@@ -31,6 +32,7 @@ public sealed class SpeedTestService
 
     // 25 MB is a good compromise between accuracy and test duration on slow links.
     private const long PayloadBytes = 25L * 1024 * 1024;
+    private const int DownloadConnections = 4; // parallel streams for accurate throughput
 
     public async Task<SpeedTestResult> RunHttpAsync(
         IProgress<(int Percent, string Message)>? progress, CancellationToken ct)
@@ -67,25 +69,33 @@ public sealed class SpeedTestService
     private static async Task<double> MeasureDownloadAsync(
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
-        var url = string.Format(CfDownloadUrl, PayloadBytes);
+        // Use multiple parallel connections to saturate the link, similar to
+        // how Ookla and fast.com measure throughput (#152).
+        var perStream = PayloadBytes / DownloadConnections;
+        long totalBytes = 0;
         var sw = Stopwatch.StartNew();
-        using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-        resp.EnsureSuccessStatusCode();
 
-        long total = 0;
-        var buffer = new byte[81920];
-        using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        int read;
-        while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+        var tasks = Enumerable.Range(0, DownloadConnections).Select(async _ =>
         {
-            total += read;
-            var pct = 5 + (int)(total * 45 / PayloadBytes);
-            progress?.Report((Math.Min(pct, 50), $"Download: {total / 1024 / 1024} MB"));
-        }
+            var url = string.Format(CfDownloadUrl, perStream);
+            using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            resp.EnsureSuccessStatusCode();
+            var buffer = new byte[81920];
+            using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            int read;
+            while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+            {
+                Interlocked.Add(ref totalBytes, read);
+            }
+        });
+
+        await Task.WhenAll(tasks);
         sw.Stop();
 
+        var downloaded = Interlocked.Read(ref totalBytes);
+        progress?.Report((50, $"Download: {downloaded / 1024 / 1024} MB"));
         var seconds = Math.Max(sw.Elapsed.TotalSeconds, 0.001);
-        return total * 8.0 / 1_000_000.0 / seconds;
+        return downloaded * 8.0 / 1_000_000.0 / seconds;
     }
 
     private static async Task<double> MeasureUploadAsync(

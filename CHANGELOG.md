@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.14] - 2026-04-25
+
+### Fixed
+- **SFC / DISM / chkdsk** — live output no longer appears corrupted. Added
+  optional encoding parameter to `PowerShellRunner.RunProcessAsync`; system
+  tools now use the OEM code page instead of UTF-8 (#147, #150, #157).
+
 ## [0.13.13] - 2026-04-25
 
 ### Fixed

@@ -90,7 +90,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="120"/>
                                 <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="160"/>
                             </Grid.ColumnDefinitions>
 
                             <!-- Checkbox -->
@@ -118,8 +118,10 @@
                             <!-- Status -->
                             <Border Grid.Column="4" Style="{StaticResource Badge}"
                                     VerticalAlignment="Center" Margin="4,0"
-                                    Visibility="{Binding Status, Converter={StaticResource FlexVis}}">
-                                <TextBlock Text="{Binding Status}" FontSize="11"/>
+                                    Visibility="{Binding Status, Converter={StaticResource FlexVis}}"
+                                    ToolTip="{Binding Status}">
+                                <TextBlock Text="{Binding Status}" FontSize="11"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="120"/>
                             </Border>
                         </Grid>
                     </DataTemplate>

@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-04-25
+
+### Added
+- **Network split** — the monolithic `NetworkViewModel` (~700 lines) is now split
+  into 4 focused ViewModels with separate Views:
+  - `PingViewModel` + `PingView` — live ping, targets, presets, latency chart,
+    health verdict
+  - `TracerouteViewModel` + `TracerouteView` — auto-traceroute + manual trace
+    with dedicated Start/Stop buttons (previously only available on Ping)
+  - `SpeedTestViewModel` + `SpeedTestView` — HTTP + Ookla speed tests
+  - `NetworkRepairViewModel` + `NetworkRepairView` — DNS flush, Winsock reset,
+    TCP/IP reset
+- **NetworkSharedState** — shared state class for targets, buffers, pinger,
+  tracer, and health diagnostic, consumed by all 4 network ViewModels.
+- **Sidebar visual hints** on collapsed groups:
+  - Child count badge next to label (e.g. "System (6)")
+  - Subtitle with abbreviated child labels (auto-hides when expanded)
+  - Tooltip with full child labels on hover
+- 30+ new unit tests for NetworkSharedState, PingViewModel,
+  TracerouteViewModel, SpeedTestViewModel, NetworkRepairViewModel, NavGroup.
+
+### Changed
+- **Windows Update** moved from Apps → System group (System now has 6 children).
+- **Apps group** reduced to 2 children (App updates + Uninstaller).
+- **Network group** expanded from 1 to 4 sidebar children (no longer a
+  single-item flat entry).
+- Sidebar now shows 21 leaf items across 7 groups (was 18).
+
 ## [0.18.0] - 2026-04-25
 
 ### Added

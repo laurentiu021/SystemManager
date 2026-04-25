@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-04-25
+
+### Added
+- **Sidebar tab reorganization** — the 18 flat sidebar tabs are now grouped into
+  7 collapsible categories: Dashboard, System, Cleanup, Storage, Network, Apps,
+  and Info. Groups expand/collapse with a click. Single-item groups (Dashboard,
+  Network) render as flat top-level entries without expander chrome (#82).
+- **NavGroup model** — new `NavGroup` class for collapsible sidebar categories
+  containing child `NavItem` entries.
+
+### Changed
+- **Large File Finder** — conceptually moved from the Deep Cleanup group to the
+  Storage group, alongside Disk Analyzer and Duplicates. This resolves the
+  confusion about where to find storage analysis tools (#98).
+- **Cleanup tab** renamed to "Quick cleanup" in the sidebar to distinguish it
+  from the Cleanup group header.
+- **Sidebar rendering** — replaced the flat `ListBox` with a grouped
+  `ItemsControl` + `Expander` tree layout. Active-mark accent bar and hover
+  states preserved.
+- **UI test infrastructure** — `AppFixture.GoToTab` updated to find nav items
+  by `AutomationProperties.AutomationId` anywhere in the visual tree instead
+  of requiring a `NavList` ListBox.
+
 ## [0.17.0] - 2026-04-25
 
 ### Added

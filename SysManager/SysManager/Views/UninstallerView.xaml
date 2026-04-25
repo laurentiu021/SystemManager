@@ -100,6 +100,7 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="32"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="120"/>
@@ -111,8 +112,13 @@
                             <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
                                       VerticalAlignment="Center"/>
 
+                            <!-- App icon -->
+                            <Image Grid.Column="1" Source="{Binding Icon}" Width="20" Height="20"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+
                             <!-- Name + Id -->
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
                                 <TextBlock Text="{Binding Id}" FontSize="11"
                                            Foreground="{StaticResource TextMuted}"
@@ -120,17 +126,17 @@
                             </StackPanel>
 
                             <!-- Size -->
-                            <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}" FontSize="12"
+                            <TextBlock Grid.Column="3" Text="{Binding SizeDisplay}" FontSize="12"
                                        VerticalAlignment="Center" HorizontalAlignment="Right"
                                        Foreground="{StaticResource TextSecondary}" FontFamily="Consolas"/>
 
                             <!-- Version -->
-                            <TextBlock Grid.Column="3" Text="{Binding Version}" FontSize="12"
+                            <TextBlock Grid.Column="4" Text="{Binding Version}" FontSize="12"
                                        VerticalAlignment="Center" HorizontalAlignment="Right"
                                        Foreground="{StaticResource TextMuted}" FontFamily="Consolas"/>
 
                             <!-- Source (show 'Local' for ARP-only apps without winget source) -->
-                            <TextBlock Grid.Column="4" FontSize="11"
+                            <TextBlock Grid.Column="5" FontSize="11"
                                        VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -148,7 +154,7 @@
                             </TextBlock>
 
                             <!-- Status -->
-                            <Border Grid.Column="5" Style="{StaticResource Badge}"
+                            <Border Grid.Column="6" Style="{StaticResource Badge}"
                                     VerticalAlignment="Center" Margin="4,0"
                                     Visibility="{Binding Status, Converter={StaticResource FlexVis}}"
                                     ToolTip="{Binding Status}">

@@ -42,7 +42,10 @@ public partial class StartupViewModel : ViewModelBase
             var items = await _service.ScanAsync();
             Entries.Clear();
             foreach (var item in items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                item.Icon = IconExtractorService.GetIcon(item.Command);
                 Entries.Add(item);
+            }
 
             UpdateCounts();
             StatusMessage = $"Found {TotalCount} startup items.";

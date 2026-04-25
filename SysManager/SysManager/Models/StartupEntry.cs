@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
@@ -20,6 +21,7 @@ public partial class StartupEntry : ObservableObject
     [ObservableProperty] private string _publisher = "";
     [ObservableProperty] private StartupSource _source;
     [ObservableProperty] private string _statusText = "";
+    [ObservableProperty] private ImageSource? _icon;
 
     /// <summary>Registry key path (for registry-based entries).</summary>
     public string RegistryKey { get; init; } = "";

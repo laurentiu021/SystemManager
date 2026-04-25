@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
@@ -19,6 +20,7 @@ public partial class InstalledApp : ObservableObject
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private long _sizeBytes;
     [ObservableProperty] private string _publisher = "";
+    [ObservableProperty] private ImageSource? _icon;
 
     /// <summary>Formatted size for display.</summary>
     public string SizeDisplay => SizeBytes > 0 ? FormatSize(SizeBytes) : "—";

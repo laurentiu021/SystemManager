@@ -50,7 +50,10 @@ public partial class UninstallerViewModel : ViewModelBase
         {
             var list = await _service.ListInstalledAsync(_cts.Token);
             foreach (var app in list)
+            {
+                app.Icon ??= IconExtractorService.FallbackIcon;
                 AllApps.Add(app);
+            }
 
             ApplyFilter();
             StatusMessage = $"Found {AllApps.Count} installed applications.";

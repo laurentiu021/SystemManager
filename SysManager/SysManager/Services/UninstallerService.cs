@@ -162,6 +162,19 @@ public sealed class UninstallerService
                             if (!string.IsNullOrWhiteSpace(pub))
                                 app.Publisher = pub;
                         }
+
+                        if (app.Icon == null)
+                        {
+                            var iconPath = sub.GetValue("DisplayIcon") as string;
+                            if (!string.IsNullOrWhiteSpace(iconPath))
+                            {
+                                // DisplayIcon can be "path.exe,0" — strip the index
+                                var commaIdx = iconPath.LastIndexOf(',');
+                                if (commaIdx > 0)
+                                    iconPath = iconPath[..commaIdx].Trim('"', ' ');
+                                app.Icon = IconExtractorService.GetIcon(iconPath);
+                            }
+                        }
                     }
                     catch (System.Security.SecurityException) { }
                     catch (UnauthorizedAccessException) { }

@@ -47,7 +47,10 @@ public partial class ProcessManagerViewModel : ViewModelBase
             var snapshot = await _service.SnapshotAsync();
             Processes.Clear();
             foreach (var p in snapshot)
+            {
+                p.Icon = IconExtractorService.GetIcon(p.FilePath);
                 Processes.Add(p);
+            }
 
             ApplyFilter();
             StatusMessage = $"Loaded {ProcessCount} processes.";

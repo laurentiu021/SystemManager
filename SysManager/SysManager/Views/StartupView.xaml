@@ -70,6 +70,7 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -79,10 +80,15 @@
                             <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}"
                                       Command="{Binding DataContext.ToggleEntryCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                       CommandParameter="{Binding}"
-                                      VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                      VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                            <!-- App icon -->
+                            <Image Grid.Column="1" Source="{Binding Icon}" Width="20" Height="20"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
 
                             <!-- Name + command -->
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
                                 <TextBlock FontSize="11" Foreground="{StaticResource TextMuted}"
                                            TextTrimming="CharacterEllipsis" MaxWidth="500">
@@ -93,12 +99,12 @@
                             </StackPanel>
 
                             <!-- Status badge -->
-                            <Border Grid.Column="2" Style="{StaticResource Badge}" VerticalAlignment="Center" Margin="8,0">
+                            <Border Grid.Column="3" Style="{StaticResource Badge}" VerticalAlignment="Center" Margin="8,0">
                                 <TextBlock Text="{Binding StatusText}" FontSize="11"/>
                             </Border>
 
                             <!-- Open location button -->
-                            <Button Grid.Column="3" Content="📂" ToolTip="Open file location"
+                            <Button Grid.Column="4" Content="📂" ToolTip="Open file location"
                                     Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"
                                     Style="{StaticResource GhostButton}" Padding="8,4" FontSize="14"/>

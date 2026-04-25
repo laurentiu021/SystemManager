@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
@@ -21,6 +22,7 @@ public partial class ProcessEntry : ObservableObject
     [ObservableProperty] private DateTime _startTime;
     [ObservableProperty] private int _threadCount;
     [ObservableProperty] private string _filePath = "";
+    [ObservableProperty] private ImageSource? _icon;
 
     /// <summary>Formatted memory for display.</summary>
     public string MemoryDisplay => FormatSize(MemoryBytes);

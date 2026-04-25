@@ -170,6 +170,7 @@
                             </StackPanel>
                         </DockPanel>
                         <lvc:CartesianChart Grid.Row="1"
+                                            Background="Transparent"
                                             Series="{Binding LatencySeries}"
                                             XAxes="{Binding LatencyXAxes}"
                                             YAxes="{Binding LatencyYAxes}"
@@ -207,6 +208,7 @@
                                 </StackPanel>
                             </DockPanel>
                             <lvc:CartesianChart Grid.Row="1"
+                                                Background="Transparent"
                                                 Series="{Binding TraceSeries}"
                                                 XAxes="{Binding TraceXAxes}"
                                                 YAxes="{Binding TraceYAxes}"

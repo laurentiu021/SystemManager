@@ -510,6 +510,15 @@
                 </Style.Triggers>
             </Style>
 
+            <!-- ============================================================ -->
+            <!-- TabControl — transparent content area for dark theme          -->
+            <!-- ============================================================ -->
+            <Style TargetType="TabControl">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+            </Style>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>

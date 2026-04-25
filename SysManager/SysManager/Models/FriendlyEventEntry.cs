@@ -47,6 +47,28 @@ public partial class FriendlyEventEntry : ObservableObject
         EventSeverity.Verbose  => "#9AA0A6",
         _ => "#9AA0A6"
     };
+
+    /// <summary>
+    /// Human-friendly relative timestamp, e.g. "2 min ago", "3 hours ago".
+    /// </summary>
+    public string RelativeTime => FormatRelative(Timestamp);
+
+    /// <summary>
+    /// Full timestamp for tooltip display.
+    /// </summary>
+    public string FullTimestamp => Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
+
+    private static string FormatRelative(DateTime ts)
+    {
+        if (ts == DateTime.MinValue) return "—";
+        var span = DateTime.Now - ts;
+        if (span.TotalSeconds < 60) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} min ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
+        if (span.TotalDays < 30) return $"{(int)(span.TotalDays / 7)}w ago";
+        return ts.ToString("yyyy-MM-dd");
+    }
 }
 
 public enum EventSeverity

@@ -142,25 +142,53 @@
                                                        Foreground="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"
                                                        FontWeight="SemiBold" Margin="22,8,0,0" TextWrapping="Wrap"/>
                                             <WrapPanel Orientation="Horizontal" Margin="22,10,0,0">
-                                                <StackPanel Margin="0,0,24,0">
+                                                <!-- Health score gauge -->
+                                                <StackPanel Margin="0,0,24,6" Width="120">
+                                                    <TextBlock Text="HEALTH" Style="{StaticResource Caption}"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                        <TextBlock Text="{Binding HealthPercent, StringFormat={}{0}%, FallbackValue=—}" FontSize="18" FontWeight="Bold"
+                                                                   Foreground="{Binding HealthPercentColorHex, Converter={StaticResource HexBrush}}"/>
+                                                    </StackPanel>
+                                                    <Border Height="4" CornerRadius="2" Background="#1A1F2E" Margin="0,4,0,0">
+                                                        <Border HorizontalAlignment="Left" CornerRadius="2"
+                                                                Width="{Binding HealthPercent, FallbackValue=0}"
+                                                                MaxWidth="120" Height="4"
+                                                                Background="{Binding HealthPercentColorHex, Converter={StaticResource HexBrush}}"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <!-- Temperature gauge -->
+                                                <StackPanel Margin="0,0,24,6" Width="100">
                                                     <TextBlock Text="TEMPERATURE" Style="{StaticResource Caption}"/>
-                                                    <TextBlock Text="{Binding TemperatureC, StringFormat={}{0:F0} °C, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}"/>
+                                                    <TextBlock Text="{Binding TemperatureC, StringFormat={}{0:F0} °C, FallbackValue=—}" FontSize="14"
+                                                               Foreground="{Binding TemperatureColorHex, Converter={StaticResource HexBrush}}" Margin="0,4,0,0"/>
+                                                    <Border Height="4" CornerRadius="2" Background="#1A1F2E" Margin="0,4,0,0">
+                                                        <Border HorizontalAlignment="Left" CornerRadius="2"
+                                                                Width="{Binding TemperatureGauge}" MaxWidth="100" Height="4"
+                                                                Background="{Binding TemperatureColorHex, Converter={StaticResource HexBrush}}"/>
+                                                    </Border>
                                                 </StackPanel>
-                                                <StackPanel Margin="0,0,24,0">
-                                                    <TextBlock Text="WEAR" Style="{StaticResource Caption}"/>
-                                                    <TextBlock Text="{Binding WearPercent, StringFormat={}{0}%, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}"/>
+                                                <!-- Wear / life remaining gauge -->
+                                                <StackPanel Margin="0,0,24,6" Width="100">
+                                                    <TextBlock Text="LIFE REMAINING" Style="{StaticResource Caption}"/>
+                                                    <TextBlock Text="{Binding WearGauge, StringFormat={}{0}%}" FontSize="14"
+                                                               Foreground="{Binding WearColorHex, Converter={StaticResource HexBrush}}" Margin="0,4,0,0"/>
+                                                    <Border Height="4" CornerRadius="2" Background="#1A1F2E" Margin="0,4,0,0">
+                                                        <Border HorizontalAlignment="Left" CornerRadius="2"
+                                                                Width="{Binding WearGauge}" MaxWidth="100" Height="4"
+                                                                Background="{Binding WearColorHex, Converter={StaticResource HexBrush}}"/>
+                                                    </Border>
                                                 </StackPanel>
-                                                <StackPanel Margin="0,0,24,0">
+                                                <StackPanel Margin="0,0,24,6">
                                                     <TextBlock Text="POWER-ON" Style="{StaticResource Caption}"/>
-                                                    <TextBlock Text="{Binding PowerOnHours, StringFormat={}{0} h, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}"/>
+                                                    <TextBlock Text="{Binding PowerOnDisplay}" FontSize="14" Foreground="{StaticResource TextPrimary}" Margin="0,4,0,0"/>
                                                 </StackPanel>
-                                                <StackPanel Margin="0,0,24,0">
+                                                <StackPanel Margin="0,0,24,6">
                                                     <TextBlock Text="READ ERRORS" Style="{StaticResource Caption}"/>
-                                                    <TextBlock Text="{Binding ReadErrors, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}"/>
+                                                    <TextBlock Text="{Binding ReadErrors, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}" Margin="0,4,0,0"/>
                                                 </StackPanel>
-                                                <StackPanel>
+                                                <StackPanel Margin="0,0,0,6">
                                                     <TextBlock Text="WRITE ERRORS" Style="{StaticResource Caption}"/>
-                                                    <TextBlock Text="{Binding WriteErrors, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}"/>
+                                                    <TextBlock Text="{Binding WriteErrors, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}" Margin="0,4,0,0"/>
                                                 </StackPanel>
                                             </WrapPanel>
                                         </StackPanel>

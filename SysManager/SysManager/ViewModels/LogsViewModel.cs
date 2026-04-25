@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Data;
@@ -54,6 +55,8 @@ public partial class LogsViewModel : ViewModelBase
     [ObservableProperty] private int _infoCount;
 
     [ObservableProperty] private string _logFolder = LogService.LogDir;
+    [ObservableProperty] private int _visibleCount;
+    [ObservableProperty] private bool _hasNoResults;
 
     public LogsViewModel()
     {
@@ -62,14 +65,20 @@ public partial class LogsViewModel : ViewModelBase
         EntriesView.Filter = EntryFilter;
     }
 
+    private void UpdateVisibleCount()
+    {
+        VisibleCount = EntriesView.Cast<object>().Count();
+        HasNoResults = Entries.Count > 0 && VisibleCount == 0;
+    }
+
     // ---------- Filter changes refresh the view ----------
 
-    partial void OnShowCriticalChanged(bool value) => EntriesView.Refresh();
-    partial void OnShowErrorChanged(bool value) => EntriesView.Refresh();
-    partial void OnShowWarningChanged(bool value) => EntriesView.Refresh();
-    partial void OnShowInfoChanged(bool value) => EntriesView.Refresh();
-    partial void OnShowVerboseChanged(bool value) => EntriesView.Refresh();
-    partial void OnSearchTextChanged(string value) => EntriesView.Refresh();
+    partial void OnShowCriticalChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
+    partial void OnShowErrorChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
+    partial void OnShowWarningChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
+    partial void OnShowInfoChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
+    partial void OnShowVerboseChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
+    partial void OnSearchTextChanged(string value) { EntriesView.Refresh(); UpdateVisibleCount(); }
 
     private bool EntryFilter(object o)
     {
@@ -129,6 +138,7 @@ public partial class LogsViewModel : ViewModelBase
                 });
             }
             StatusMessage = $"Loaded {Entries.Count} events from {SelectedLog}";
+            UpdateVisibleCount();
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled"; }
         catch (Exception ex) { StatusMessage = "Error: " + ex.Message; }
@@ -141,6 +151,13 @@ public partial class LogsViewModel : ViewModelBase
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
+
+    [RelayCommand]
+    private void SetTimeRange(string? range)
+    {
+        if (!string.IsNullOrEmpty(range))
+            SelectedTimeRange = range;
+    }
 
     [RelayCommand]
     private void OpenLogFolder()

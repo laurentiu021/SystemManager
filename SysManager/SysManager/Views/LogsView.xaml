@@ -82,7 +82,18 @@
                     <ComboBox ItemsSource="{Binding AvailableLogs}" SelectedItem="{Binding SelectedLog}" Width="130" Margin="8,0,18,0"/>
 
                     <TextBlock Text="Time" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                    <ComboBox ItemsSource="{Binding TimeRanges}" SelectedItem="{Binding SelectedTimeRange}" Width="140" Margin="8,0,18,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="8,0,18,0">
+                        <Button Content="1h" Command="{Binding SetTimeRangeCommand}" CommandParameter="Last hour"
+                                Style="{StaticResource GhostButton}" Padding="10,5" FontSize="12" Margin="0,0,4,0"/>
+                        <Button Content="24h" Command="{Binding SetTimeRangeCommand}" CommandParameter="Last 24 hours"
+                                Style="{StaticResource GhostButton}" Padding="10,5" FontSize="12" Margin="0,0,4,0"/>
+                        <Button Content="7d" Command="{Binding SetTimeRangeCommand}" CommandParameter="Last 7 days"
+                                Style="{StaticResource GhostButton}" Padding="10,5" FontSize="12" Margin="0,0,4,0"/>
+                        <Button Content="30d" Command="{Binding SetTimeRangeCommand}" CommandParameter="Last 30 days"
+                                Style="{StaticResource GhostButton}" Padding="10,5" FontSize="12" Margin="0,0,4,0"/>
+                        <Button Content="All" Command="{Binding SetTimeRangeCommand}" CommandParameter="All"
+                                Style="{StaticResource GhostButton}" Padding="10,5" FontSize="12"/>
+                    </StackPanel>
 
                     <TextBlock Text="Max results" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                     <ComboBox ItemsSource="{Binding MaxResultOptions}" SelectedItem="{Binding SelectedMaxResults}" Width="88" Margin="8,0,18,0"/>
@@ -122,8 +133,25 @@
                     </StackPanel>
 
                     <TextBlock Text="Search" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="280"
-                             ToolTip="Filters by message, provider, or event ID"/>
+                    <Grid Width="280">
+                        <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Filters by message, provider, or event ID"/>
+                        <TextBlock Text="Filter by message, source, or event ID…"
+                                   Foreground="{StaticResource TextMuted}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"
+                                   IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
                 </StackPanel>
             </StackPanel>
         </Border>
@@ -138,17 +166,18 @@
 
             <!-- List -->
             <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0">
-                <DataGrid ItemsSource="{Binding EntriesView}"
-                          SelectedItem="{Binding SelectedEntry}"
-                          AutoGenerateColumns="False"
-                          HeadersVisibility="Column"
-                          GridLinesVisibility="None"
-                          IsReadOnly="True"
-                          Background="Transparent"
-                          RowBackground="Transparent"
-                          AlternatingRowBackground="#0F141C"
-                          BorderThickness="0"
-                          SelectionMode="Single">
+                <Grid>
+                    <DataGrid ItemsSource="{Binding EntriesView}"
+                              SelectedItem="{Binding SelectedEntry}"
+                              AutoGenerateColumns="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              IsReadOnly="True"
+                              Background="Transparent"
+                              RowBackground="Transparent"
+                              AlternatingRowBackground="#0F141C"
+                              BorderThickness="0"
+                              SelectionMode="Single">
                     <DataGrid.Columns>
                         <!-- Severity column: colored dot instead of emoji -->
                         <DataGridTemplateColumn Header="" Width="40">
@@ -159,12 +188,29 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, StringFormat=yyyy-MM-dd HH:mm:ss}" Width="150"/>
+                        <DataGridTemplateColumn Header="Time" Width="150" SortMemberPath="Timestamp">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding RelativeTime}" ToolTip="{Binding FullTimestamp}" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Source" Binding="{Binding ProviderName}" Width="170"/>
                         <DataGridTextColumn Header="ID" Binding="{Binding EventId}" Width="60"/>
                         <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
                     </DataGrid.Columns>
                 </DataGrid>
+
+                    <!-- No-results overlay -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}">
+                        <TextBlock Text="🔍" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="No events match your filters" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Try adjusting severity checkboxes or clearing the search"
+                                   Style="{StaticResource Subtle}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Grid>
             </Border>
 
             <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="{StaticResource Border1}"/>
@@ -210,7 +256,11 @@
                                         <RowDefinition/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="When" Style="{StaticResource Subtle}"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedEntry.Timestamp, StringFormat=yyyy-MM-dd HH:mm:ss}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1">
+                                        <Run Text="{Binding SelectedEntry.RelativeTime, Mode=OneWay}"/>
+                                        <Run Text=" · " Foreground="{StaticResource TextMuted}"/>
+                                        <Run Text="{Binding SelectedEntry.FullTimestamp, Mode=OneWay}" Foreground="{StaticResource TextSecondary}"/>
+                                    </TextBlock>
                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Log" Style="{StaticResource Subtle}"/>
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.LogName}"/>
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Machine" Style="{StaticResource Subtle}"/>

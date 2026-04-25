@@ -62,4 +62,64 @@ public class FriendlyEventEntryDisplayTests
         Assert.Contains("Explanation", changed);
         Assert.Contains("Recommendation", changed);
     }
+
+    // ---------- RelativeTime ----------
+
+    [Fact]
+    public void RelativeTime_JustNow()
+    {
+        var entry = new FriendlyEventEntry { Timestamp = DateTime.Now.AddSeconds(-30) };
+        Assert.Equal("just now", entry.RelativeTime);
+    }
+
+    [Fact]
+    public void RelativeTime_MinutesAgo()
+    {
+        var entry = new FriendlyEventEntry { Timestamp = DateTime.Now.AddMinutes(-15) };
+        Assert.Equal("15 min ago", entry.RelativeTime);
+    }
+
+    [Fact]
+    public void RelativeTime_HoursAgo()
+    {
+        var entry = new FriendlyEventEntry { Timestamp = DateTime.Now.AddHours(-3) };
+        Assert.Equal("3h ago", entry.RelativeTime);
+    }
+
+    [Fact]
+    public void RelativeTime_DaysAgo()
+    {
+        var entry = new FriendlyEventEntry { Timestamp = DateTime.Now.AddDays(-2) };
+        Assert.Equal("2d ago", entry.RelativeTime);
+    }
+
+    [Fact]
+    public void RelativeTime_WeeksAgo()
+    {
+        var entry = new FriendlyEventEntry { Timestamp = DateTime.Now.AddDays(-14) };
+        Assert.Equal("2w ago", entry.RelativeTime);
+    }
+
+    [Fact]
+    public void RelativeTime_OldDate_ShowsDate()
+    {
+        var entry = new FriendlyEventEntry { Timestamp = new DateTime(2025, 1, 15) };
+        Assert.Equal("2025-01-15", entry.RelativeTime);
+    }
+
+    [Fact]
+    public void RelativeTime_MinValue_ShowsDash()
+    {
+        var entry = new FriendlyEventEntry { Timestamp = DateTime.MinValue };
+        Assert.Equal("—", entry.RelativeTime);
+    }
+
+    // ---------- FullTimestamp ----------
+
+    [Fact]
+    public void FullTimestamp_FormatsCorrectly()
+    {
+        var entry = new FriendlyEventEntry { Timestamp = new DateTime(2026, 4, 25, 14, 30, 45) };
+        Assert.Equal("2026-04-25 14:30:45", entry.FullTimestamp);
+    }
 }

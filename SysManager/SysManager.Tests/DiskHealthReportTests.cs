@@ -76,4 +76,97 @@ public class DiskHealthReportTests
         Assert.Equal(5, r.WearPercent);
         Assert.Equal(12000L, r.PowerOnHours);
     }
+
+    // ---------- HealthPercent ----------
+
+    [Fact]
+    public void HealthPercent_PerfectDisk_Returns100()
+    {
+        var r = new DiskHealthReport { WearPercent = 0, TemperatureC = 35, ReadErrors = 0, WriteErrors = 0 };
+        Assert.Equal(100, r.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_WornDisk_DeductsWear()
+    {
+        var r = new DiskHealthReport { WearPercent = 40, TemperatureC = 35, ReadErrors = 0, WriteErrors = 0 };
+        Assert.Equal(60, r.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_HotDisk_DeductsTemperature()
+    {
+        var r = new DiskHealthReport { WearPercent = 0, TemperatureC = 75, ReadErrors = 0, WriteErrors = 0 };
+        Assert.Equal(70, r.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_WithErrors_DeductsErrors()
+    {
+        var r = new DiskHealthReport { WearPercent = 0, TemperatureC = 35, ReadErrors = 2, WriteErrors = 1 };
+        Assert.Equal(85, r.HealthPercent); // 100 - 10 (2*5) - 5 (1*5)
+    }
+
+    [Fact]
+    public void HealthPercent_NoSmartData_FallsBackToHealthStatus()
+    {
+        Assert.Equal(100, new DiskHealthReport { HealthStatus = "Healthy" }.HealthPercent);
+        Assert.Equal(60, new DiskHealthReport { HealthStatus = "Warning" }.HealthPercent);
+        Assert.Equal(20, new DiskHealthReport { HealthStatus = "Unhealthy" }.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_NoData_ReturnsNull()
+    {
+        Assert.Null(new DiskHealthReport { HealthStatus = "" }.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_ClampsToZero()
+    {
+        var r = new DiskHealthReport { WearPercent = 100, TemperatureC = 80, ReadErrors = 10, WriteErrors = 10 };
+        Assert.Equal(0, r.HealthPercent);
+    }
+
+    // ---------- Temperature color ----------
+
+    [Theory]
+    [InlineData(30, "#22C55E")]
+    [InlineData(45, "#F59E0B")]
+    [InlineData(55, "#F87171")]
+    [InlineData(65, "#EF4444")]
+    public void TemperatureColorHex_ReturnsCorrectColor(double temp, string expected)
+    {
+        var r = new DiskHealthReport { TemperatureC = temp };
+        Assert.Equal(expected, r.TemperatureColorHex);
+    }
+
+    // ---------- Gauge properties ----------
+
+    [Fact]
+    public void TemperatureGauge_MapsCorrectly()
+    {
+        Assert.Equal(50, new DiskHealthReport { TemperatureC = 40 }.TemperatureGauge);
+        Assert.Equal(0, new DiskHealthReport().TemperatureGauge);
+    }
+
+    [Fact]
+    public void WearGauge_InvertsWear()
+    {
+        Assert.Equal(80, new DiskHealthReport { WearPercent = 20 }.WearGauge);
+        Assert.Equal(100, new DiskHealthReport().WearGauge);
+    }
+
+    // ---------- PowerOnDisplay ----------
+
+    [Theory]
+    [InlineData(null, "—")]
+    [InlineData(12L, "12h")]
+    [InlineData(100L, "4d 4h")]
+    [InlineData(10000L, "1.1y")]
+    public void PowerOnDisplay_FormatsCorrectly(long? hours, string expected)
+    {
+        var r = new DiskHealthReport { PowerOnHours = hours };
+        Assert.Equal(expected, r.PowerOnDisplay);
+    }
 }

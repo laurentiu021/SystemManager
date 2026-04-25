@@ -32,6 +32,8 @@
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                     <ComboBox ItemsSource="{Binding FilterOptions}"
                               SelectedItem="{Binding SelectedFilter}" Width="150" Margin="0,0,8,0"/>
+                    <ComboBox ItemsSource="{Binding SortOptions}"
+                              SelectedItem="{Binding SortBy}" Width="140" Margin="0,0,8,0"/>
                     <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
                              Width="240" VerticalContentAlignment="Center"/>
                 </StackPanel>

@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.13] - 2026-04-25
+
+### Fixed
+- **Network** — speed test loading indicator now only appears on the panel that
+  is actually running (HTTP or Ookla), not both simultaneously (#151).
+
+## [0.13.12] - 2026-04-25
+
+### Fixed
+- **Network** — tab content now follows the dark theme. Set transparent
+  background on CartesianChart controls and added global TabControl style to
+  prevent light-mode bleed-through (#140).
+
+## [0.13.11] - 2026-04-25
+
+### Fixed
+- **Drivers** — added sorting options (Name, Manufacturer, Version, Date) via
+  ComboBox in the toolbar. Modernized view layout with Card borders and
+  consistent typography. Replaced generic catch with specific exceptions (#155).
+
 ## [0.13.10] - 2026-04-25
 
 ### Fixed

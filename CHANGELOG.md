@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-04-25
+
+### Added
+- **Application logging** — structured Serilog logging across all 16 ViewModels.
+  Logs now capture tab navigation, operation completion (cleanup, scan, upgrade,
+  speed test, disk analysis, etc.), system state changes (power plan, Game Mode,
+  services, startup entries), admin elevation events, and error context. Privacy-safe:
+  no PII, IPs, file paths, or hostnames are logged — only operation names, counts,
+  and metrics (#95).
+- **LogService.SanitizePath** — helper method that strips Windows usernames from
+  file paths as a safety net for any future path logging.
+
 ## [0.16.1] - 2026-04-25
 
 ### Fixed

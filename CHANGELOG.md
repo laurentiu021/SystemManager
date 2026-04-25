@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-04-25
+
+### Added
+- **Cleanup** — SFC /scannow and DISM /RestoreHealth now parse output into
+  color-coded verdicts: green (healthy), yellow (repaired), red (failed) (#148).
+- **Uninstaller** — application size displayed from registry EstimatedSize;
+  sort by Name, Size, or Publisher (#139).
+- **Process Manager** — CPU usage percentage measured and displayed; sort by
+  CPU added alongside Memory, Name, PID (#78).
+- **About** — "Copy environment info" now includes CPU, RAM, GPU, storage,
+  and display diagnostics similar to DxDiag (#84).
+
+### Changed
+- **Sidebar** — fixed duplicate icons: Processes and Uninstaller now have
+  unique Segoe Fluent Icons (#138).
+
 ## [0.13.14] - 2026-04-25
 
 ### Fixed

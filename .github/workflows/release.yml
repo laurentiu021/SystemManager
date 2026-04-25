@@ -57,15 +57,26 @@ jobs:
           $ver = "${{ steps.version.outputs.version }}"
           ./publish.ps1 -Configuration Release -Runtime win-x64 -Output publish -Version $ver
 
+      - name: Rename exe with version
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          $src = "publish/SysManager.exe"
+          $dst = "publish/SysManager-v${ver}.exe"
+          if (-not (Test-Path $src)) { throw "Missing $src" }
+          Rename-Item $src $dst
+          Write-Host "Renamed to $dst"
+
       - name: Compute SHA256
         id: hash
         shell: pwsh
         run: |
-          $exe = "publish/SysManager.exe"
+          $ver = "${{ steps.version.outputs.version }}"
+          $exe = "publish/SysManager-v${ver}.exe"
           if (-not (Test-Path $exe)) { throw "Missing $exe" }
           $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
-          $hashFile = "publish/SysManager.exe.sha256"
-          "$hash *SysManager.exe" | Out-File -FilePath $hashFile -Encoding ascii -NoNewline
+          $hashFile = "publish/SysManager-v${ver}.exe.sha256"
+          "$hash *SysManager-v${ver}.exe" | Out-File -FilePath $hashFile -Encoding ascii -NoNewline
           "hash=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "SHA256: $hash"
 
@@ -90,8 +101,9 @@ jobs:
       - name: Append verification instructions to release notes
         shell: pwsh
         run: |
+          $ver = "${{ steps.version.outputs.version }}"
           $hash = "${{ steps.hash.outputs.hash }}"
-          Add-Content release-notes.md "`n`n---`n`n### Verify the download`n`n``````powershell`nGet-FileHash .\SysManager.exe -Algorithm SHA256`n```````n`nExpected SHA256: ``$hash``"
+          Add-Content release-notes.md "`n`n---`n`n### Verify the download`n`n``````powershell`nGet-FileHash .\SysManager-v${ver}.exe -Algorithm SHA256`n```````n`nExpected SHA256: ``$hash``"
 
       - name: Create GitHub Release
         id: release
@@ -103,8 +115,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            publish/SysManager.exe
-            publish/SysManager.exe.sha256
+            publish/SysManager-v${{ steps.version.outputs.version }}.exe
+            publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256
 
       - name: Post announcement to Discussions
         uses: actions/github-script@v7

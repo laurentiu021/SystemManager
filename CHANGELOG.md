@@ -6,6 +6,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.6] - 2026-04-25
+
+### Fixed
+- **Release workflow** — fixed `Rename-Item` in release.yml that was passing a
+  full path instead of just the new filename, causing v0.13.3–v0.13.5 releases
+  to fail.
+
+## [0.13.5] - 2026-04-25
+
+### Fixed
+- **App Updates** — checkbox column alignment corrected; increased width and
+  centered the checkbox to prevent clipping on the right side.
+
+## [0.13.4] - 2026-04-25
+
+### Fixed
+- **Services tab** — sorting buttons now actually sort the service list. Added
+  SortBy property with options (Name, Status, Startup, Recommendation) and a
+  sort ComboBox in the toolbar.
+- **Cleanup tab** — added auto-rescan after cleaning temp files or emptying the
+  Recycle Bin so size labels refresh immediately. Added an explicit Rescan button.
+
+## [0.13.3] - 2026-04-25
+
+### Fixed
+- **About tab** — "Copy environment info" now shows a friendly Windows name
+  (e.g. "Microsoft Windows 11 Pro (build 26200)") instead of the raw NT version
+  string. Uses WMI `Win32_OperatingSystem.Caption` with fallback.
+
+## [0.13.2] - 2026-04-25
+
+### Fixed
+- **Single instance** — the application now prevents multiple instances from
+  running simultaneously. A named Mutex detects an existing instance; the second
+  launch activates the existing window and exits.
+
+### Changed
+- **Release assets** — executables are now named `SysManager-vX.Y.Z.exe` instead
+  of `SysManager.exe` to avoid filename conflicts when downloading multiple
+  releases.
+
 ## [0.13.1] - 2026-04-24
 
 ### Fixed

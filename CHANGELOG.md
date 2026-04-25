@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-04-25
+
+### Fixed
+- **Network / Ping** — latency chart no longer freezes when switching away from the
+  Ping sub-tab and returning; LiveCharts2 series are nudged on tab re-entry (#153).
+- **Network / Navigation** — switching between Network and Services tabs during
+  concurrent background scans no longer throws a cross-thread exception; collection
+  updates are now dispatched to the UI thread (#154).
+- **Network / Speed test** — HTTP download test now uses 4 parallel connections to
+  saturate the link, producing results closer to Ookla/fast.com benchmarks (#152).
+
 ## [0.16.0] - 2026-04-25
 
 ### Added

@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-04-25
+
+### Fixed
+- **Uninstaller** — empty status badges no longer render for apps without a
+  status; FlexVis converter now treats empty/whitespace strings as Collapsed (#130).
+- **Uninstaller** — ARP-only apps show yellow "Local" tag with tooltip; status
+  badge column widened for less truncation (#131).
+
+### Changed
+- **Uninstaller / Process Manager** — "Filter:" label renamed to "Search:" with
+  placeholder hint text (#130).
+
 ## [0.15.0] - 2026-04-25
 
 ### Added

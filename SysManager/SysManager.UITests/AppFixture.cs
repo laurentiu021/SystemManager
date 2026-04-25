@@ -40,18 +40,17 @@ public sealed class AppFixture : IDisposable
 
     /// <summary>
     /// Selects a nav entry by its AutomationId (e.g. "nav-network", "nav-logs").
+    /// Works with both the old ListBox layout and the new grouped tree layout.
     /// </summary>
     public void GoToTab(string navId)
     {
-        var navList = MainWindow.FindFirstDescendant(
-            cf => cf.ByAutomationId("NavList"))?.AsListBox()
-            ?? throw new InvalidOperationException("NavList not found");
-
-        var item = navList.FindFirstDescendant(cf => cf.ByAutomationId(navId))?.AsListBoxItem()
+        // Find any descendant with the matching AutomationId and click it.
+        var item = Retry.WhileNull(() =>
+            MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId)),
+            TimeSpan.FromSeconds(5)).Result
             ?? throw new InvalidOperationException($"Nav item '{navId}' not found");
 
-        item.Select();
-        // Small pause for content to render; real UIA waits happen per-test.
+        item.Click();
         Thread.Sleep(250);
     }
 

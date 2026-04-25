@@ -41,78 +41,117 @@
                     <TextBlock Text="System toolkit" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                 </StackPanel>
 
-                <!-- Nav list -->
-                <ListBox Grid.Row="1"
-                         x:Name="NavList"
-                         AutomationProperties.AutomationId="NavList"
-                         ItemsSource="{Binding NavItems}"
-                         SelectedItem="{Binding SelectedNav, Mode=TwoWay}"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         Foreground="{StaticResource TextPrimary}"
-                         Padding="10,0"
-                         HorizontalContentAlignment="Stretch">
-                    <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
-                            <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-                            <Setter Property="FontSize" Value="13"/>
-                            <Setter Property="FontWeight" Value="Medium"/>
-                            <Setter Property="Cursor" Value="Hand"/>
-                            <Setter Property="Margin" Value="0,2"/>
-                            <Setter Property="Padding" Value="0"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                            <Setter Property="AutomationProperties.AutomationId" Value="{Binding Id}"/>
-                            <Setter Property="AutomationProperties.Name" Value="{Binding Label}"/>
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="ListBoxItem">
-                                        <Border x:Name="Bd"
-                                                Background="Transparent"
-                                                CornerRadius="8"
-                                                Padding="14,10">
-                                            <Grid>
-                                                <Rectangle x:Name="ActiveMark"
-                                                           HorizontalAlignment="Left"
-                                                           Width="3" Height="20"
-                                                           Fill="{StaticResource Accent}"
-                                                           RadiusX="2" RadiusY="2"
-                                                           Margin="-14,0,0,0"
-                                                           Visibility="Collapsed"/>
-                                                <ContentPresenter VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
-                                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-                                            </Trigger>
-                                            <Trigger Property="IsSelected" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface3}"/>
-                                                <Setter TargetName="ActiveMark" Property="Visibility" Value="Visible"/>
-                                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-                                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </ListBox.ItemContainerStyle>
-                    <ListBox.ItemTemplate>
+                <!-- Nav tree -->
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding NavGroups}"
+                              Padding="10,0"
+                              Focusable="False">
+                    <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Glyph}"
-                                           FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                           FontSize="14"
-                                           Margin="0,0,12,0"
-                                           VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding Label}"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
+                            <Grid Margin="0,2">
+                                <!-- Single-item group: render as a flat clickable row -->
+                                <Border x:Name="SingleBd"
+                                        Visibility="{Binding IsSingleItem, Converter={StaticResource FlexVis}}"
+                                        CornerRadius="8" Padding="14,10" Cursor="Hand"
+                                        Background="Transparent"
+                                        MouseLeftButtonUp="SingleGroup_Click"
+                                        Tag="{Binding Children[0]}"
+                                        AutomationProperties.AutomationId="{Binding Children[0].Id}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Glyph}"
+                                                   FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                   FontSize="14" Margin="0,0,12,0"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextSecondary}"/>
+                                        <TextBlock Text="{Binding Label}"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="{StaticResource UiFont}"
+                                                   FontSize="13" FontWeight="Medium"
+                                                   Foreground="{StaticResource TextSecondary}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Multi-item group: expander with children -->
+                                <Expander Visibility="{Binding IsSingleItem, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"
+                                          IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                          Padding="0" Margin="0"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          Foreground="{StaticResource TextSecondary}">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal" Margin="4,4,0,4">
+                                            <TextBlock Text="{Binding Glyph}"
+                                                       FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                       FontSize="13" Margin="0,0,10,0"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{StaticResource TextMuted}"/>
+                                            <TextBlock Text="{Binding Label}"
+                                                       VerticalAlignment="Center"
+                                                       FontFamily="{StaticResource UiFont}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextMuted}"/>
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <ItemsControl ItemsSource="{Binding Children}" Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border x:Name="ChildBd"
+                                                        CornerRadius="8" Padding="28,9,14,9"
+                                                        Cursor="Hand" Background="Transparent"
+                                                        MouseLeftButtonUp="NavChild_Click"
+                                                        Tag="{Binding}"
+                                                        AutomationProperties.AutomationId="{Binding Id}">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Style.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <Grid>
+                                                        <Rectangle x:Name="ActiveMark"
+                                                                   HorizontalAlignment="Left"
+                                                                   Width="3" Height="18"
+                                                                   Fill="{StaticResource Accent}"
+                                                                   RadiusX="2" RadiusY="2"
+                                                                   Margin="-28,0,0,0"
+                                                                   Visibility="Collapsed"/>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding Glyph}"
+                                                                       FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                                       FontSize="13" Margin="0,0,10,0"
+                                                                       VerticalAlignment="Center"
+                                                                       Foreground="{StaticResource TextSecondary}"/>
+                                                            <TextBlock Text="{Binding Label}"
+                                                                       VerticalAlignment="Center"
+                                                                       FontFamily="{StaticResource UiFont}"
+                                                                       FontSize="13" FontWeight="Medium"
+                                                                       Foreground="{StaticResource TextSecondary}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                            </Grid>
                         </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </ScrollViewer>
 
                 <!-- Footer -->
                 <StackPanel Grid.Row="2" Margin="20,10,20,16">

@@ -29,6 +29,20 @@ SysManager/
 
 ## Tabs (view models)
 
+The sidebar organises tabs into 7 collapsible groups via `NavGroup` →
+`NavItem` hierarchy. Single-item groups (Dashboard, Network) render as flat
+top-level entries.
+
+| Group | View Models |
+|-------|-------------|
+| Dashboard | `DashboardViewModel` |
+| System | `SystemHealthViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `ProcessManagerViewModel` |
+| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` |
+| Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
+| Network | `NetworkViewModel` |
+| Apps | `AppUpdatesViewModel` · `WindowsUpdateViewModel` · `UninstallerViewModel` |
+| Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `AboutViewModel` |
+
 - `DashboardViewModel` — OS / CPU / RAM / disk snapshot + live uptime.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
 - `WindowsUpdateViewModel` — PSWindowsUpdate wrapper with auto-check.
@@ -122,7 +136,7 @@ which restarts the process with `runas` and the current command-line args.
 ## Logging
 
 Serilog writes to a rolling file sink at
-`%LOCALAPPDATA%\SysManager\logs\sysmanager-.log` (one file per day, 7 days
+`%LOCALAPPDATA%\SysManager\logs\sysmanager-.log` (one file per day, 14 days
 retained). The in-app Console mirrors the same stream per tab.
 
 ## Updates

@@ -32,6 +32,23 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 
 ## Features
 
+### Sidebar navigation
+The sidebar organises 18 feature tabs into 7 collapsible groups so you can
+find what you need without scrolling through a flat list:
+
+| Group | Tabs |
+|-------|------|
+| 🏠 Dashboard | Dashboard |
+| 🔧 System | System health · Performance · Services · Startup · Processes |
+| 🧹 Cleanup | Quick cleanup (TEMP / Bin / SFC / DISM) · Deep cleanup |
+| 💾 Storage | Disk Analyzer · Duplicates |
+| 🌐 Network | Ping · Traceroute · Speed Test · Repair |
+| 📦 Apps | App updates · Windows Update · Uninstaller |
+| ℹ️ Info | Drivers · Battery · Logs · About |
+
+Groups expand and collapse with a click. Single-item groups (Dashboard,
+Network) render as flat top-level entries without an expander arrow.
+
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart
 - Auto-verdict that tells you in plain English whether packet loss is local,

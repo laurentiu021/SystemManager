@@ -69,7 +69,20 @@
                       Background="Transparent" RowBackground="Transparent"
                       AlternatingRowBackground="#0F141C" BorderThickness="0">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="" Width="40" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"/>
+                    <DataGridCheckBoxColumn Header="" Width="50" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}">
+                        <DataGridCheckBoxColumn.ElementStyle>
+                            <Style TargetType="CheckBox">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="Margin" Value="4,0"/>
+                            </Style>
+                        </DataGridCheckBoxColumn.ElementStyle>
+                        <DataGridCheckBoxColumn.EditingElementStyle>
+                            <Style TargetType="CheckBox">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="Margin" Value="4,0"/>
+                            </Style>
+                        </DataGridCheckBoxColumn.EditingElementStyle>
+                    </DataGridCheckBoxColumn>
                     <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*"/>
                     <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="2*"/>
                     <DataGridTextColumn Header="Current" Binding="{Binding CurrentVersion}" Width="*"/>

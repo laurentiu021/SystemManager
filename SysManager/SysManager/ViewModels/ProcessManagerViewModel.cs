@@ -48,7 +48,7 @@ public partial class ProcessManagerViewModel : ViewModelBase
             Processes.Clear();
             foreach (var p in snapshot)
             {
-                p.Icon = IconExtractorService.GetIcon(p.FilePath);
+                p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
                 Processes.Add(p);
             }
 

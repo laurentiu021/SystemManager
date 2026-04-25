@@ -143,4 +143,92 @@ public class IconExtractorServiceTests
         var app = new Models.InstalledApp();
         Assert.Null(app.Icon);
     }
+
+    // ── NormalizePath: rundll32 / msiexec ──
+
+    [Fact]
+    public void NormalizePath_Rundll32_ExtractsDll()
+    {
+        var result = IconExtractorService.NormalizePath(
+            @"C:\Windows\System32\rundll32.exe shell32.dll,Control_RunDLL");
+        Assert.Contains("shell32.dll", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void NormalizePath_Msiexec_ReturnsMsiexec()
+    {
+        var result = IconExtractorService.NormalizePath(@"MsiExec.exe /X{12345-ABCDE}");
+        Assert.Contains("msiexec.exe", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── System process detection ──
+
+    [Fact]
+    public void IsWindowsSystemProcess_Csrss_True()
+        => Assert.True(IconExtractorService.IsWindowsSystemProcess("csrss"));
+
+    [Fact]
+    public void IsWindowsSystemProcess_Explorer_True()
+        => Assert.True(IconExtractorService.IsWindowsSystemProcess("explorer"));
+
+    [Fact]
+    public void IsWindowsSystemProcess_Discord_False()
+        => Assert.False(IconExtractorService.IsWindowsSystemProcess("Discord"));
+
+    [Fact]
+    public void IsServiceProcess_Svchost_True()
+        => Assert.True(IconExtractorService.IsServiceProcess("svchost"));
+
+    [Fact]
+    public void IsServiceProcess_Chrome_False()
+        => Assert.False(IconExtractorService.IsServiceProcess("chrome"));
+
+    // ── GetProcessIcon ──
+
+    [Fact]
+    public void GetProcessIcon_NullBoth_DoesNotThrow()
+    {
+        var ex = Record.Exception(() => IconExtractorService.GetProcessIcon(null, null));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GetProcessIcon_EmptyPathSystemName_DoesNotThrow()
+    {
+        var ex = Record.Exception(() => IconExtractorService.GetProcessIcon("", "svchost"));
+        Assert.Null(ex);
+    }
+
+    // ── GetInstalledAppIcon ──
+
+    [Fact]
+    public void GetInstalledAppIcon_AllNull_DoesNotThrow()
+    {
+        var ex = Record.Exception(() => IconExtractorService.GetInstalledAppIcon(null, null, null));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GetInstalledAppIcon_BogusPath_DoesNotThrow()
+    {
+        var ex = Record.Exception(() =>
+            IconExtractorService.GetInstalledAppIcon(@"C:\Fake\app.exe", @"C:\Fake", "FakeApp"));
+        Assert.Null(ex);
+    }
+
+    // ── Contextual fallback icons ──
+
+    [Fact]
+    public void WindowsIcon_DoesNotThrow()
+    {
+        var ex = Record.Exception(() => { _ = IconExtractorService.WindowsIcon; });
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void GearIcon_DoesNotThrow()
+    {
+        var ex = Record.Exception(() => { _ = IconExtractorService.GearIcon; });
+        Assert.Null(ex);
+    }
 }

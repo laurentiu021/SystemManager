@@ -137,47 +137,68 @@ public sealed class UninstallerService
                 using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(regPath);
                 if (key == null) continue;
 
-                foreach (var subName in key.GetSubKeyNames())
+                EnrichFromRegistryKey(key, lookup);
+            }
+            catch (System.Security.SecurityException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        // Also scan HKCU (per-user installs like Discord, VS Code, etc.)
+        try
+        {
+            using var hkcuKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
+            if (hkcuKey != null)
+                EnrichFromRegistryKey(hkcuKey, lookup);
+        }
+        catch (System.Security.SecurityException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    private static void EnrichFromRegistryKey(
+        Microsoft.Win32.RegistryKey key,
+        Dictionary<string, InstalledApp> lookup)
+    {
+        foreach (var subName in key.GetSubKeyNames())
+        {
+            try
+            {
+                using var sub = key.OpenSubKey(subName);
+                if (sub == null) continue;
+
+                var displayName = sub.GetValue("DisplayName") as string;
+                if (string.IsNullOrWhiteSpace(displayName)) continue;
+
+                if (!lookup.TryGetValue(displayName, out var app)) continue;
+
+                if (app.SizeBytes == 0)
                 {
-                    try
+                    var sizeKb = sub.GetValue("EstimatedSize");
+                    if (sizeKb is int kb && kb > 0)
+                        app.SizeBytes = kb * 1024L;
+                }
+
+                if (string.IsNullOrWhiteSpace(app.Publisher))
+                {
+                    var pub = sub.GetValue("Publisher") as string;
+                    if (!string.IsNullOrWhiteSpace(pub))
+                        app.Publisher = pub;
+                }
+
+                if (app.Icon == null)
+                {
+                    var iconPath = sub.GetValue("DisplayIcon") as string;
+                    var installLoc = sub.GetValue("InstallLocation") as string;
+
+                    if (!string.IsNullOrWhiteSpace(iconPath))
                     {
-                        using var sub = key.OpenSubKey(subName);
-                        if (sub == null) continue;
-
-                        var displayName = sub.GetValue("DisplayName") as string;
-                        if (string.IsNullOrWhiteSpace(displayName)) continue;
-
-                        if (!lookup.TryGetValue(displayName, out var app)) continue;
-
-                        if (app.SizeBytes == 0)
-                        {
-                            var sizeKb = sub.GetValue("EstimatedSize");
-                            if (sizeKb is int kb && kb > 0)
-                                app.SizeBytes = kb * 1024L;
-                        }
-
-                        if (string.IsNullOrWhiteSpace(app.Publisher))
-                        {
-                            var pub = sub.GetValue("Publisher") as string;
-                            if (!string.IsNullOrWhiteSpace(pub))
-                                app.Publisher = pub;
-                        }
-
-                        if (app.Icon == null)
-                        {
-                            var iconPath = sub.GetValue("DisplayIcon") as string;
-                            if (!string.IsNullOrWhiteSpace(iconPath))
-                            {
-                                // DisplayIcon can be "path.exe,0" — strip the index
-                                var commaIdx = iconPath.LastIndexOf(',');
-                                if (commaIdx > 0)
-                                    iconPath = iconPath[..commaIdx].Trim('"', ' ');
-                                app.Icon = IconExtractorService.GetIcon(iconPath);
-                            }
-                        }
+                        var commaIdx = iconPath.LastIndexOf(',');
+                        if (commaIdx > 0)
+                            iconPath = iconPath[..commaIdx].Trim('"', ' ');
                     }
-                    catch (System.Security.SecurityException) { }
-                    catch (UnauthorizedAccessException) { }
+
+                    app.Icon = IconExtractorService.GetInstalledAppIcon(
+                        iconPath, installLoc, app.Name);
                 }
             }
             catch (System.Security.SecurityException) { }

@@ -21,7 +21,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
-            <TextBlock Text="Cleanup" Style="{StaticResource Display}"/>
+            <TextBlock Text="Quick Cleanup" Style="{StaticResource Display}"/>
             <TextBlock Text="Clear temp files, empty Recycle Bin, or run SFC and DISM to repair Windows."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>

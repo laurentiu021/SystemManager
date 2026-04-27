@@ -90,14 +90,14 @@ public partial class MainWindowViewModel : ObservableObject
         // 🔧 System (6) — Windows Update moved here from Apps
         var grpSystem = new NavGroup { Id = "grp-system", Label = "System", Glyph = "\uE912",
             Subtitle = "Health · WinUpdate · Perf · Services · Startup · Proc",
-            Tooltip = "System health\nWindows Update\nPerformance\nServices\nStartup\nProcesses",
+            Tooltip = "System Health\nWindows Update\nPerformance Mode\nServices\nStartup Manager\nProcess Manager",
             Children = {
             new NavItem { Id = "nav-system-health",  Label = "System health",  Glyph = "\uE9D9", Content = SystemHealth,    ViewType = typeof(Views.SystemHealthView) },
             new NavItem { Id = "nav-windows-update", Label = "Windows Update", Glyph = "\uE895", Content = WindowsUpdate,   ViewType = typeof(Views.WindowsUpdateView) },
-            new NavItem { Id = "nav-performance",    Label = "Performance",    Glyph = "\uE945", Content = Performance,     ViewType = typeof(Views.PerformanceView) },
+            new NavItem { Id = "nav-performance",    Label = "Performance Mode",    Glyph = "\uE945", Content = Performance,     ViewType = typeof(Views.PerformanceView) },
             new NavItem { Id = "nav-services",       Label = "Services",       Glyph = "\uE912", Content = Services,        ViewType = typeof(Views.ServicesView) },
-            new NavItem { Id = "nav-startup",        Label = "Startup",        Glyph = "\uE7B5", Content = Startup,         ViewType = typeof(Views.StartupView) },
-            new NavItem { Id = "nav-processes",      Label = "Processes",      Glyph = "\uEBC4", Content = ProcessManager,  ViewType = typeof(Views.ProcessManagerView) },
+            new NavItem { Id = "nav-startup",        Label = "Startup Manager",  Glyph = "\uE7B5", Content = Startup,         ViewType = typeof(Views.StartupView) },
+            new NavItem { Id = "nav-processes",      Label = "Process Manager", Glyph = "\uEBC4", Content = ProcessManager,  ViewType = typeof(Views.ProcessManagerView) },
         }};
 
         // 🧹 Cleanup (2)
@@ -105,28 +105,28 @@ public partial class MainWindowViewModel : ObservableObject
             Subtitle = "Quick · Deep",
             Tooltip = "Quick cleanup\nDeep cleanup",
             Children = {
-            new NavItem { Id = "nav-cleanup",       Label = "Quick cleanup",  Glyph = "\uE74D", Content = Cleanup,     ViewType = typeof(Views.CleanupView) },
-            new NavItem { Id = "nav-deep-cleanup",  Label = "Deep cleanup",   Glyph = "\uE81E", Content = DeepCleanup, ViewType = typeof(Views.DeepCleanupView) },
+            new NavItem { Id = "nav-cleanup",       Label = "Quick Cleanup",  Glyph = "\uE74D", Content = Cleanup,     ViewType = typeof(Views.CleanupView) },
+            new NavItem { Id = "nav-deep-cleanup",  Label = "Deep Cleanup",   Glyph = "\uE81E", Content = DeepCleanup, ViewType = typeof(Views.DeepCleanupView) },
         }};
 
         // 💾 Storage (2)
         var grpStorage = new NavGroup { Id = "grp-storage", Label = "Storage", Glyph = "\uE958",
-            Subtitle = "Disk Analyzer · Duplicates",
-            Tooltip = "Disk Analyzer\nDuplicates",
+            Subtitle = "Disk Analyzer · Duplicate Finder",
+            Tooltip = "Disk Analyzer\nDuplicate Finder",
             Children = {
             new NavItem { Id = "nav-disk-analyzer", Label = "Disk Analyzer",  Glyph = "\uE958", Content = DiskAnalyzer,   ViewType = typeof(Views.DiskAnalyzerView) },
-            new NavItem { Id = "nav-duplicates",    Label = "Duplicates",     Glyph = "\uE8C8", Content = DuplicateFile,  ViewType = typeof(Views.DuplicateFileView) },
+            new NavItem { Id = "nav-duplicates",    Label = "Duplicate Finder",     Glyph = "\uE8C8", Content = DuplicateFile,  ViewType = typeof(Views.DuplicateFileView) },
         }};
 
         // 🌐 Network (4) — split from monolithic NetworkViewModel
         var grpNetwork = new NavGroup { Id = "grp-network", Label = "Network", Glyph = "\uE839",
-            Subtitle = "Ping · Traceroute · Speed · Repair",
-            Tooltip = "Ping\nTraceroute\nSpeed Test\nRepair",
+            Subtitle = "Ping · Traceroute · Speed · Network Repair",
+            Tooltip = "Ping\nTraceroute\nSpeed Test\nNetwork Repair",
             Children = {
             new NavItem { Id = "nav-ping",           Label = "Ping",       Glyph = "\uE839", Content = Ping,          ViewType = typeof(Views.PingView) },
             new NavItem { Id = "nav-traceroute",     Label = "Traceroute", Glyph = "\uE8B0", Content = Traceroute,    ViewType = typeof(Views.TracerouteView) },
             new NavItem { Id = "nav-speed-test",     Label = "Speed Test", Glyph = "\uE916", Content = SpeedTest,     ViewType = typeof(Views.SpeedTestView) },
-            new NavItem { Id = "nav-network-repair", Label = "Repair",     Glyph = "\uE90F", Content = NetworkRepair, ViewType = typeof(Views.NetworkRepairView) },
+            new NavItem { Id = "nav-network-repair", Label = "Network Repair",     Glyph = "\uE90F", Content = NetworkRepair, ViewType = typeof(Views.NetworkRepairView) },
         }};
 
         // 📦 Apps (2) — Windows Update moved to System
@@ -140,12 +140,12 @@ public partial class MainWindowViewModel : ObservableObject
 
         // ℹ️ Info (4)
         var grpInfo = new NavGroup { Id = "grp-info", Label = "Info", Glyph = "\uE946",
-            Subtitle = "Drivers · Battery · Logs · About",
-            Tooltip = "Drivers\nBattery\nLogs\nAbout",
+            Subtitle = "Drivers · Battery Health · System Logs · About",
+            Tooltip = "Drivers\nBattery Health\nSystem Logs\nAbout",
             Children = {
             new NavItem { Id = "nav-drivers", Label = "Drivers", Glyph = "\uE950", Content = Drivers,       ViewType = typeof(Views.DriversView) },
-            new NavItem { Id = "nav-battery", Label = "Battery", Glyph = "\uEBA6", Content = BatteryHealth, ViewType = typeof(Views.BatteryHealthView) },
-            new NavItem { Id = "nav-logs",    Label = "Logs",    Glyph = "\uE9F9", Content = Logs,          ViewType = typeof(Views.LogsView) },
+            new NavItem { Id = "nav-battery", Label = "Battery Health", Glyph = "\uEBA6", Content = BatteryHealth, ViewType = typeof(Views.BatteryHealthView) },
+            new NavItem { Id = "nav-logs",    Label = "System Logs",    Glyph = "\uE9F9", Content = Logs,          ViewType = typeof(Views.LogsView) },
             new NavItem { Id = "nav-about",   Label = "About",   Glyph = "\uE946", Content = About,         ViewType = typeof(Views.AboutView) },
         }};
 

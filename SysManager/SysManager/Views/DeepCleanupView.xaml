@@ -17,7 +17,7 @@
                 <!-- Header -->
                 <DockPanel>
                     <StackPanel>
-                        <TextBlock Text="Deep cleanup" Style="{StaticResource Display}"/>
+                        <TextBlock Text="Deep Cleanup" Style="{StaticResource Display}"/>
                         <TextBlock Text="Find safe-to-remove installer leftovers, caches and large files. Everything is scan-first — you pick what goes."
                                    Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
                     </StackPanel>

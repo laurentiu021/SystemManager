@@ -18,7 +18,7 @@
                 <!-- Header -->
                 <DockPanel>
                     <StackPanel>
-                        <TextBlock Text="System health" Style="{StaticResource Display}"/>
+                        <TextBlock Text="System Health" Style="{StaticResource Display}"/>
                         <TextBlock Text="OS, CPU, RAM and disk diagnostics with SMART data and memory error detection."
                                    Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                     </StackPanel>

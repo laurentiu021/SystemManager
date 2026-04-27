@@ -20,7 +20,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Duplicate File Finder" Style="{StaticResource Display}"/>
+            <TextBlock Text="Duplicate Finder" Style="{StaticResource Display}"/>
             <TextBlock Text="Find files with identical content. Read-only — nothing is deleted."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>

@@ -38,6 +38,17 @@ public sealed class TracerouteMonitorService : IDisposable
     public void AddOrUpdate(PingTarget target) => Targets[target.Host] = target;
     public void Remove(string host) => Targets.TryRemove(host, out _);
 
+    /// <summary>
+    /// Convenience method: ensures a host is tracked without requiring a
+    /// full <see cref="PingTarget"/> instance. If the host is already
+    /// tracked, this is a no-op.
+    /// </summary>
+    public void AddHost(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host)) return;
+        Targets.GetOrAdd(host, h => new PingTarget { Host = h, Name = h, IsEnabled = true });
+    }
+
     public void Start()
     {
         if (IsRunning) return;

@@ -29,14 +29,21 @@ public partial class TracerouteViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void StartAutoTrace()
+    private async Task StartAutoTraceAsync()
     {
+        if (string.IsNullOrWhiteSpace(TraceHost)) return;
+
+        // Ensure the current TraceHost is tracked by the monitor
+        Shared.TraceMonitor.AddHost(TraceHost);
         Shared.TraceMonitor.Interval = TimeSpan.FromSeconds(
             Math.Max(10, Shared.TraceIntervalSeconds));
         Shared.TraceMonitor.Start();
         IsAutoTraceRunning = true;
-        StatusMessage = "Auto-trace running";
-        Log.Information("Auto-traceroute started");
+        StatusMessage = $"Auto-trace running ({TraceHost})";
+        Log.Information("Auto-traceroute started for {Host}", TraceHost);
+
+        // Run an initial trace immediately so the user sees results right away
+        await TraceAsync();
     }
 
     [RelayCommand]

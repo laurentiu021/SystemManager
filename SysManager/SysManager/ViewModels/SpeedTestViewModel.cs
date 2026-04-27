@@ -19,6 +19,8 @@ public partial class SpeedTestViewModel : ViewModelBase
     [ObservableProperty] private SpeedTestResult? _ooklaResult;
     [ObservableProperty] private int _speedProgress;
     [ObservableProperty] private string _speedStatus = "";
+    [ObservableProperty] private string _httpStatus = "";
+    [ObservableProperty] private string _ooklaStatus = "";
     [ObservableProperty] private bool _isSpeedTesting;
     [ObservableProperty] private bool _isHttpTesting;
     [ObservableProperty] private bool _isOoklaTesting;
@@ -35,22 +37,22 @@ public partial class SpeedTestViewModel : ViewModelBase
         IsSpeedTesting = true;
         IsHttpTesting = true;
         SpeedProgress = 0;
-        SpeedStatus = "Starting HTTP speed test…";
+        HttpStatus = "Starting HTTP speed test…";
         _speedCts = new CancellationTokenSource();
         var progress = new Progress<(int p, string m)>(t =>
-        { SpeedProgress = t.p; SpeedStatus = t.m; });
+        { SpeedProgress = t.p; HttpStatus = t.m; });
         try
         {
             HttpResult = await Shared.Speed.RunHttpAsync(progress, _speedCts.Token);
-            SpeedStatus = "HTTP done";
+            HttpStatus = "HTTP done";
             Log.Information("HTTP speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 HttpResult.DownloadMbps, HttpResult.UploadMbps);
         }
-        catch (OperationCanceledException) { SpeedStatus = "Cancelled"; }
+        catch (OperationCanceledException) { HttpStatus = "Cancelled"; }
         catch (System.Net.Http.HttpRequestException ex)
-        { SpeedStatus = "Error: " + ex.Message; }
+        { HttpStatus = "Error: " + ex.Message; }
         catch (InvalidOperationException ex)
-        { SpeedStatus = "Error: " + ex.Message; }
+        { HttpStatus = "Error: " + ex.Message; }
         finally { IsSpeedTesting = false; IsHttpTesting = false; }
     }
 
@@ -61,22 +63,22 @@ public partial class SpeedTestViewModel : ViewModelBase
         IsSpeedTesting = true;
         IsOoklaTesting = true;
         SpeedProgress = 0;
-        SpeedStatus = "Starting Ookla speed test…";
+        OoklaStatus = "Starting Ookla speed test…";
         _speedCts = new CancellationTokenSource();
         var progress = new Progress<(int p, string m)>(t =>
-        { SpeedProgress = t.p; SpeedStatus = t.m; });
+        { SpeedProgress = t.p; OoklaStatus = t.m; });
         try
         {
             OoklaResult = await Shared.Speed.RunOoklaAsync(progress, _speedCts.Token);
-            SpeedStatus = "Ookla done";
+            OoklaStatus = "Ookla done";
             Log.Information("Ookla speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 OoklaResult.DownloadMbps, OoklaResult.UploadMbps);
         }
-        catch (OperationCanceledException) { SpeedStatus = "Cancelled"; }
+        catch (OperationCanceledException) { OoklaStatus = "Cancelled"; }
         catch (System.ComponentModel.Win32Exception ex)
-        { SpeedStatus = "Error: " + ex.Message; }
+        { OoklaStatus = "Error: " + ex.Message; }
         catch (InvalidOperationException ex)
-        { SpeedStatus = "Error: " + ex.Message; }
+        { OoklaStatus = "Error: " + ex.Message; }
         finally { IsSpeedTesting = false; IsOoklaTesting = false; }
     }
 

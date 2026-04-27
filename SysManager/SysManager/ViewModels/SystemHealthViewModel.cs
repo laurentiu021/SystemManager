@@ -206,6 +206,13 @@ public partial class SystemHealthViewModel : ViewModelBase
             return;
         }
 
+        if (!AdminHelper.IsElevated())
+        {
+            StatusMessage = "chkdsk requires admin privileges. Click 'Grant admin privileges' to elevate.";
+            foreach (var d in selected) d.Status = "Needs admin";
+            return;
+        }
+
         IsChkdskRunning = true;
         ChkdskStatus = $"Scanning {selected.Count} drive(s)...";
         _cts = new CancellationTokenSource();
@@ -225,6 +232,16 @@ public partial class SystemHealthViewModel : ViewModelBase
 
     private async Task RunChkdskCoreAsync(string driveLetter, DriveTarget? target, CancellationToken ct)
     {
+        // chkdsk /scan requires admin privileges — fail fast with a clear
+        // message instead of running and reporting a cryptic exit code.
+        if (!AdminHelper.IsElevated())
+        {
+            var msg = $"chkdsk {driveLetter} requires admin privileges. Click 'Grant admin privileges' to elevate.";
+            StatusMessage = msg;
+            if (target != null) target.Status = "Needs admin";
+            return;
+        }
+
         StatusMessage = $"Running chkdsk {driveLetter} (read-only)...";
         if (target != null) target.Status = "Running...";
         try

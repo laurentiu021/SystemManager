@@ -1,37 +1,29 @@
-<!--
-Thanks for contributing to SysManager!
-
-Please make sure you've read CONTRIBUTING.md before opening this PR.
-Keep the description short but specific. Link any related issues.
--->
-
 ## What does this PR do?
 
-<!-- One or two sentences describing the change. -->
+<!-- Brief description of the change. What problem does it solve? -->
 
-## Why?
+## Related issues
 
-<!-- The motivation. Link the issue if there is one: "Fixes #123". -->
+<!-- Link issues this PR addresses. Use "Closes #NNN" to auto-close. -->
 
-## How was this tested?
+Closes #
 
-<!-- Delete the lines that don't apply. -->
+## Type of change
 
-- [ ] Added / updated unit tests in `SysManager.Tests`
-- [ ] Added / updated UI tests in `SysManager.UITests`
-- [ ] Ran `dotnet test -c Release` locally and all tests pass
-- [ ] Manually verified the change in the running app
-- [ ] No tests needed (docs-only / trivial)
-
-## Screenshots (UI changes only)
-
-<!-- Before / after screenshots for any visual change. Drag and drop here. -->
+- [ ] Bug fix (`fix:`)
+- [ ] New feature (`feat:`)
+- [ ] Documentation (`docs:`)
+- [ ] Code quality / CodeQL (`fix:`)
+- [ ] CI / build (`ci:`)
+- [ ] Dependency update (`chore:`)
 
 ## Checklist
 
-- [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md)
-- [ ] My branch is based on the latest `main`
-- [ ] The code follows the existing MVVM and style conventions
-- [ ] I updated docs (README / ARCHITECTURE / CHANGELOG) where relevant
-- [ ] The title of this PR is clear and starts with a sensible prefix
-      (`fix:`, `feat:`, `docs:`, `test:`, `refactor:`, `ci:`)
+- [ ] Branch created from `main` (not working on main directly)
+- [ ] Code compiles with 0 errors
+- [ ] Tests added/updated and passing locally
+- [ ] Author headers on all new/modified files
+- [ ] Self-review completed (no debug code, no hardcoded values, no generic catch)
+- [ ] CHANGELOG updated
+- [ ] README updated (if features changed)
+- [ ] No AI/IDE tool references in code or comments

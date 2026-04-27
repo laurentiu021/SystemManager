@@ -6,6 +6,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.6] - 2026-04-27
+
+### Fixed
+- **Speed Test panels independent** — each panel (HTTP / Ookla) now shows its own
+  status text, progress bar, and cancel button only while that specific test runs.
+  Previously starting one test would display status on both panels (#257).
+- **Traceroute auto-trace** — Start Auto-Trace now adds the current host to the
+  monitor and runs an initial trace immediately. Previously the monitor had no
+  targets when started from the Traceroute tab (#239).
+
+## [0.21.5] - 2026-04-27
+
+### Fixed
+- **Startup Manager disable** — entries from the shell Startup folder can now be
+  properly disabled. Previously they were incorrectly routed to
+  `StartupApproved\Run` instead of `StartupApproved\StartupFolder`, so Windows
+  never saw the change (#268).
+
+## [0.21.4] - 2026-04-27
+
+### Fixed
+- **Tab name consistency** — all sidebar labels now match their tab headers exactly.
+  Adopted descriptive naming throughout: Process Manager, Startup Manager, System
+  Logs, Performance Mode, Battery Health, Network Repair, Duplicate Finder, Quick
+  Cleanup, Deep Cleanup (#267).
+- **System Logs hover highlight** — log entry rows now show a subtle background
+  change on mouse hover, consistent with other tabs (#247).
+
+## [0.21.3] - 2026-04-27
+
+### Fixed
+- **Buttons grayed out on focus loss** — intercepted `WM_NCACTIVATE` to keep the
+  window chrome rendering as active at all times. ModernWPF was dimming controls
+  when the window lost focus, making buttons appear disabled across the entire
+  application (#252, #251, #248, #245).
+
 ## [0.21.2] - 2026-04-26
 
 ### Fixed

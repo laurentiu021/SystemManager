@@ -39,6 +39,8 @@ public sealed class StartupService
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
     private const string ApprovedRun32HKLM =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32";
+    private const string ApprovedStartupFolder =
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder";
 
     public Task<IReadOnlyList<StartupEntry>> ScanAsync(CancellationToken ct = default)
         => Task.Run(() => Scan(), ct);
@@ -105,7 +107,7 @@ public sealed class StartupService
                     Name = name,
                     Command = command,
                     Location = locationLabel,
-                    Source = StartupSource.RegistryCurrentUser, // folder-based, toggle via delete/recreate
+                    Source = StartupSource.StartupFolder,
                     RegistryKey = "",
                     ValueName = name,
                     IsEnabled = true,
@@ -218,6 +220,7 @@ public sealed class StartupService
         var hkcuApproved = ReadApprovedKey(Registry.CurrentUser, ApprovedRunHKCU);
         var hklmApproved = ReadApprovedKey(Registry.LocalMachine, ApprovedRunHKLM);
         var hklm32Approved = ReadApprovedKey(Registry.LocalMachine, ApprovedRun32HKLM);
+        var folderApproved = ReadApprovedKey(Registry.CurrentUser, ApprovedStartupFolder);
 
         foreach (var entry in entries)
         {
@@ -225,6 +228,7 @@ public sealed class StartupService
             {
                 StartupSource.RegistryCurrentUser => hkcuApproved,
                 StartupSource.RegistryLocalMachine => hklmApproved ?? hklm32Approved,
+                StartupSource.StartupFolder => folderApproved,
                 _ => null
             };
 
@@ -272,6 +276,7 @@ public sealed class StartupService
             {
                 StartupSource.RegistryCurrentUser => (Registry.CurrentUser, ApprovedRunHKCU),
                 StartupSource.RegistryLocalMachine => (Registry.LocalMachine, ApprovedRunHKLM),
+                StartupSource.StartupFolder => (Registry.CurrentUser, ApprovedStartupFolder),
                 _ => (Registry.CurrentUser, ApprovedRunHKCU)
             };
 

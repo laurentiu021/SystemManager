@@ -37,5 +37,6 @@ public enum StartupSource
 {
     RegistryCurrentUser,
     RegistryLocalMachine,
+    StartupFolder,
     TaskScheduler
 }

@@ -222,4 +222,5 @@ Do not open a public issue for a security vulnerability. See
 
 ---
 
-Thanks again — and welcome aboard.
+Thanks again — and welcome aboard!
+

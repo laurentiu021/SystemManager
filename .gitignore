@@ -67,3 +67,4 @@ _ReSharper*/
 .commitmsg
 
 # IDE / editor local config
+.editor/

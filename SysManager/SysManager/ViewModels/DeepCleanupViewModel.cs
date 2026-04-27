@@ -112,8 +112,12 @@ public partial class DeepCleanupViewModel : ViewModelBase
                 ScanStatusLine = $"[{p.Current}/{p.Total}]  {p.CategoryName}";
             });
             var cats = await _cleanup.ScanAsync(progress, _scanCts.Token);
+
+            // Batch-update the observable collection to avoid per-item UI
+            // re-renders that can stall the dispatcher on large lists.
             Categories.Clear();
-            foreach (var c in cats)
+            var catList = cats.ToList();
+            foreach (var c in catList)
             {
                 c.PropertyChanged += (_, e) =>
                 {
@@ -123,8 +127,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
                         OnPropertyChanged(nameof(TotalSelectedDisplay));
                     }
                 };
-                Categories.Add(c);
             }
+            foreach (var c in catList) Categories.Add(c);
             var total = cats.Sum(c => c.TotalSizeBytes);
             ScanSummary = $"Found {CleanupCategory.HumanSize(total)} across {cats.Count} categories. Untick anything you want to keep.";
             ScanStatusLine = "Scan complete.";

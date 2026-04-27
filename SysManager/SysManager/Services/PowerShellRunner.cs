@@ -31,7 +31,9 @@ public class PowerShellRunner
         iss.ExecutionPolicy = Microsoft.PowerShell.ExecutionPolicy.Bypass;
 
         using var runspace = RunspaceFactory.CreateRunspace(iss);
-        runspace.Open();
+        // Open the runspace on a thread-pool thread — this can take
+        // several hundred milliseconds and must not block the UI.
+        await Task.Run(() => runspace.Open()).ConfigureAwait(false);
 
         using var ps = PowerShell.Create();
         ps.Runspace = runspace;
@@ -163,9 +165,14 @@ public class PowerShellRunner
                 LineReceived?.Invoke(PowerShellLine.Err(e.Data));
         };
 
-        proc.Start();
-        proc.BeginOutputReadLine();
-        proc.BeginErrorReadLine();
+        // Start the process on a thread-pool thread so the potentially slow
+        // Process.Start() (especially powershell.exe) never blocks the UI.
+        await Task.Run(() =>
+        {
+            proc.Start();
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+        }).ConfigureAwait(false);
 
         using var reg = cancellationToken.Register(() => { try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } });
         await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);

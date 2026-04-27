@@ -141,8 +141,11 @@ public sealed class SpeedTestService
             ErrorDialog = false   // suppress Win32 "DLL not found" system dialogs
         };
 
-        using var proc = Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start speedtest.exe");
+        // Start the process on a thread-pool thread so Process.Start()
+        // never blocks the UI thread.
+        using var proc = new Process();
+        proc.StartInfo = psi;
+        await Task.Run(() => proc.Start(), ct).ConfigureAwait(false);
         var stdout = await proc.StandardOutput.ReadToEndAsync(ct);
         var stderr = await proc.StandardError.ReadToEndAsync(ct);
         await proc.WaitForExitAsync(ct);
@@ -183,14 +186,22 @@ public sealed class SpeedTestService
         var toolsDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysManager", "tools");
-        Directory.CreateDirectory(toolsDir);
-        var exe = Path.Combine(toolsDir, "speedtest.exe");
-        // Delete and re-download if the file exists but is suspiciously small (corrupt/partial).
-        if (File.Exists(exe) && new FileInfo(exe).Length < 1024)
+
+        // Run all synchronous file-system checks on a thread-pool thread
+        // so the UI thread is never blocked by disk I/O.
+        var needsDownload = await Task.Run(() =>
         {
-            try { File.Delete(exe); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-        }
-        if (File.Exists(exe)) return exe;
+            Directory.CreateDirectory(toolsDir);
+            var path = Path.Combine(toolsDir, "speedtest.exe");
+            if (File.Exists(path) && new FileInfo(path).Length < 1024)
+            {
+                try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+            return !File.Exists(path);
+        }, ct).ConfigureAwait(false);
+
+        var exe = Path.Combine(toolsDir, "speedtest.exe");
+        if (!needsDownload) return exe;
 
         progress?.Report((5, "Downloading Ookla CLI…"));
         var arch = Environment.Is64BitOperatingSystem ? "win64" : "win32";
@@ -205,8 +216,11 @@ public sealed class SpeedTestService
         }
 
         progress?.Report((15, "Extracting…"));
-        ZipFile.ExtractToDirectory(zipPath, toolsDir, overwriteFiles: true);
-        File.Delete(zipPath);
+        await Task.Run(() =>
+        {
+            ZipFile.ExtractToDirectory(zipPath, toolsDir, overwriteFiles: true);
+            File.Delete(zipPath);
+        }, ct).ConfigureAwait(false);
 
         if (!File.Exists(exe))
             throw new FileNotFoundException("speedtest.exe not found after extraction");

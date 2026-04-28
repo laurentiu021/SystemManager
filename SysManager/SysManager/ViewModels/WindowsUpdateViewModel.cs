@@ -2,10 +2,14 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
 using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.ViewModels;
@@ -15,11 +19,15 @@ public partial class WindowsUpdateViewModel : ViewModelBase
     private readonly PowerShellRunner _runner;
     private CancellationTokenSource? _cts;
 
+    public ObservableCollection<UpdateEntry> Updates { get; } = new();
     public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private bool _moduleAvailable;
     [ObservableProperty] private string _moduleStatus = "Checking PSWindowsUpdate module...";
     [ObservableProperty] private bool _isElevated;
+    [ObservableProperty] private int _updateCount;
+    [ObservableProperty] private string _tableSummary = "";
+    [ObservableProperty] private bool _showConsole;
 
     public WindowsUpdateViewModel(PowerShellRunner runner)
     {
@@ -27,28 +35,17 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         _runner.LineReceived += l => Console.Append(l);
         _runner.ProgressChanged += p => Progress = p;
         IsElevated = AdminHelper.IsElevated();
-
-        // Auto-check the module the first time the tab is shown.
         _ = AutoCheckOnStartAsync();
     }
 
-    /// <summary>
-    /// Fires once on construction so the user sees the module status (and
-    /// the "Install PSWindowsUpdate" banner if it's missing) without having
-    /// to click anything.
-    /// </summary>
     private async Task AutoCheckOnStartAsync()
     {
         try
         {
-            // Give the UI a beat to bind before we start writing to it.
             await Task.Delay(250);
             await CheckModuleAsync();
         }
-        catch
-        {
-            // Swallow — manual "Check module" still works.
-        }
+        catch { /* Swallow — manual check still works */ }
     }
 
     [RelayCommand]
@@ -65,9 +62,9 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         try
         {
             var found = false;
-            void Listen(Models.PowerShellLine l)
+            void Listen(PowerShellLine l)
             {
-                if (l.Kind == Models.OutputKind.Output && l.Text.Contains("AVAILABLE")) found = true;
+                if (l.Kind == OutputKind.Output && l.Text.Contains("AVAILABLE")) found = true;
             }
             _runner.LineReceived += Listen;
             try
@@ -77,7 +74,9 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             }
             finally { _runner.LineReceived -= Listen; }
             ModuleAvailable = found;
-            ModuleStatus = ModuleAvailable ? "PSWindowsUpdate is available." : "PSWindowsUpdate not installed — click Install Module.";
+            ModuleStatus = ModuleAvailable
+                ? "PSWindowsUpdate is available."
+                : "PSWindowsUpdate not installed — click Install Module.";
         }
         catch (Exception ex) { ModuleStatus = $"Check failed: {ex.Message}"; }
         finally { IsBusy = false; }
@@ -95,6 +94,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Installing PSWindowsUpdate...";
+        ShowConsole = true;
         try
         {
             await _runner.RunScriptViaPwshAsync(@"
@@ -115,48 +115,64 @@ public partial class WindowsUpdateViewModel : ViewModelBase
     [RelayCommand]
     private async Task ListUpdatesAsync()
     {
-        IsBusy = true; IsProgressIndeterminate = true;
-        StatusMessage = "Listing available Windows Updates...";
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Listing available Windows Updates…";
+        Updates.Clear();
+        ShowConsole = false;
         _cts = new CancellationTokenSource();
+
         try
         {
-            await _runner.RunScriptViaPwshAsync(@"
-                Import-Module PSWindowsUpdate -ErrorAction Stop
-                Write-Host '=== Standard updates (security, cumulative, drivers, defender) ==='
-                Get-WindowsUpdate -MicrosoftUpdate |
-                    Select-Object KB, Size, Title |
-                    Format-Table -AutoSize -Wrap | Out-String -Width 250
-                Write-Host ''
-                Write-Host '=== Hidden updates (previously hidden by user) ==='
-                try {
-                    Get-WindowsUpdate -MicrosoftUpdate -IsHidden |
-                        Select-Object KB, Size, Title |
-                        Format-Table -AutoSize -Wrap | Out-String -Width 250
-                } catch { 'None or not accessible' }
-            ", cancellationToken: _cts.Token);
+            var json = new System.Text.StringBuilder();
+            void Capture(PowerShellLine l)
+            {
+                if (l.Kind == OutputKind.Output)
+                    json.AppendLine(l.Text);
+            }
+
+            _runner.LineReceived += Capture;
+            try
+            {
+                await _runner.RunScriptViaPwshAsync(@"
+                    Import-Module PSWindowsUpdate -ErrorAction Stop
+                    $updates = @()
+                    $std = Get-WindowsUpdate -MicrosoftUpdate -ErrorAction SilentlyContinue
+                    if ($std) {
+                        $updates += $std | Select-Object @{N='Title';E={$_.Title}},
+                            @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
+                            @{N='Size';E={$_.Size}},
+                            @{N='Status';E={'Available'}},
+                            @{N='Date';E={$null}},
+                            @{N='IsHidden';E={$false}},
+                            @{N='Category';E={'Standard'}}
+                    }
+                    try {
+                        $hidden = Get-WindowsUpdate -MicrosoftUpdate -IsHidden -ErrorAction SilentlyContinue
+                        if ($hidden) {
+                            $updates += $hidden | Select-Object @{N='Title';E={$_.Title}},
+                                @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
+                                @{N='Size';E={$_.Size}},
+                                @{N='Status';E={'Hidden'}},
+                                @{N='Date';E={$null}},
+                                @{N='IsHidden';E={$true}},
+                                @{N='Category';E={'Hidden'}}
+                        }
+                    } catch {}
+                    if ($updates.Count -eq 0) { '[]' }
+                    else { $updates | ConvertTo-Json -Compress }
+                ", cancellationToken: _cts.Token);
+            }
+            finally { _runner.LineReceived -= Capture; }
+
+            ParseUpdateJson(json.ToString());
+            UpdateCount = Updates.Count;
+            TableSummary = UpdateCount > 0
+                ? $"{UpdateCount} updates found."
+                : "No updates available.";
             StatusMessage = "Scan complete";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
-    }
-
-    [RelayCommand]
-    private async Task ListFeatureUpdatesAsync()
-    {
-        IsBusy = true; IsProgressIndeterminate = true;
-        StatusMessage = "Checking for feature / version upgrades...";
-        _cts = new CancellationTokenSource();
-        try
-        {
-            await _runner.RunScriptViaPwshAsync(@"
-                Import-Module PSWindowsUpdate -ErrorAction Stop
-                Write-Host '=== Feature / version upgrades (e.g. Windows 11 24H2 -> 25H1) ==='
-                $f = Get-WindowsUpdate -MicrosoftUpdate -UpdateType Software -Category 'Upgrades' -ErrorAction SilentlyContinue
-                if (-not $f -or $f.Count -eq 0) { 'No feature upgrades available at this time.' }
-                else { $f | Select-Object KB, Size, Title | Format-Table -AutoSize -Wrap | Out-String -Width 250 }
-            ", cancellationToken: _cts.Token);
-            StatusMessage = "Done";
-        }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
@@ -164,20 +180,101 @@ public partial class WindowsUpdateViewModel : ViewModelBase
     [RelayCommand]
     private async Task ShowHistoryAsync()
     {
-        IsBusy = true; IsProgressIndeterminate = true;
-        StatusMessage = "Loading update history...";
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Loading update history…";
+        Updates.Clear();
+        ShowConsole = false;
         _cts = new CancellationTokenSource();
+
         try
         {
-            await _runner.RunScriptViaPwshAsync(@"
-                Import-Module PSWindowsUpdate -ErrorAction Stop
-                Write-Host '=== Last 20 installed updates ==='
-                Get-WUHistory -Last 20 |
-                    Select-Object Date, Result, KB, Title |
-                    Format-Table -AutoSize -Wrap | Out-String -Width 250
-            ", cancellationToken: _cts.Token);
+            var json = new System.Text.StringBuilder();
+            void Capture(PowerShellLine l)
+            {
+                if (l.Kind == OutputKind.Output)
+                    json.AppendLine(l.Text);
+            }
+
+            _runner.LineReceived += Capture;
+            try
+            {
+                await _runner.RunScriptViaPwshAsync(@"
+                    Import-Module PSWindowsUpdate -ErrorAction Stop
+                    $hist = Get-WUHistory -Last 30 -ErrorAction SilentlyContinue
+                    if (-not $hist -or $hist.Count -eq 0) { '[]' }
+                    else {
+                        $hist | Select-Object @{N='Title';E={$_.Title}},
+                            @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
+                            @{N='Size';E={''}},
+                            @{N='Status';E={$_.Result}},
+                            @{N='Date';E={if($_.Date){$_.Date.ToString('yyyy-MM-dd')}else{''}}},
+                            @{N='IsHidden';E={$false}},
+                            @{N='Category';E={'History'}} |
+                        ConvertTo-Json -Compress
+                    }
+                ", cancellationToken: _cts.Token);
+            }
+            finally { _runner.LineReceived -= Capture; }
+
+            ParseUpdateJson(json.ToString());
+            UpdateCount = Updates.Count;
+            TableSummary = $"{UpdateCount} history entries.";
             StatusMessage = "Done";
         }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    [RelayCommand]
+    private async Task ListFeatureUpdatesAsync()
+    {
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Checking for feature upgrades…";
+        Updates.Clear();
+        ShowConsole = false;
+        _cts = new CancellationTokenSource();
+
+        try
+        {
+            var json = new System.Text.StringBuilder();
+            void Capture(PowerShellLine l)
+            {
+                if (l.Kind == OutputKind.Output)
+                    json.AppendLine(l.Text);
+            }
+
+            _runner.LineReceived += Capture;
+            try
+            {
+                await _runner.RunScriptViaPwshAsync(@"
+                    Import-Module PSWindowsUpdate -ErrorAction Stop
+                    $f = Get-WindowsUpdate -MicrosoftUpdate -UpdateType Software -Category 'Upgrades' -ErrorAction SilentlyContinue
+                    if (-not $f -or $f.Count -eq 0) { '[]' }
+                    else {
+                        $f | Select-Object @{N='Title';E={$_.Title}},
+                            @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
+                            @{N='Size';E={$_.Size}},
+                            @{N='Status';E={'Available'}},
+                            @{N='Date';E={$null}},
+                            @{N='IsHidden';E={$false}},
+                            @{N='Category';E={'Feature upgrade'}} |
+                        ConvertTo-Json -Compress
+                    }
+                ", cancellationToken: _cts.Token);
+            }
+            finally { _runner.LineReceived -= Capture; }
+
+            ParseUpdateJson(json.ToString());
+            UpdateCount = Updates.Count;
+            TableSummary = UpdateCount > 0
+                ? $"{UpdateCount} feature upgrades available."
+                : "No feature upgrades available.";
+            StatusMessage = "Done";
+        }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
@@ -185,8 +282,11 @@ public partial class WindowsUpdateViewModel : ViewModelBase
     [RelayCommand]
     private async Task CheckPendingRebootAsync()
     {
-        IsBusy = true; IsProgressIndeterminate = true;
-        StatusMessage = "Checking pending reboot...";
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Checking pending reboot…";
+        ShowConsole = true;
+        Console.ClearCommand.Execute(null);
         _cts = new CancellationTokenSource();
         try
         {
@@ -222,7 +322,10 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             return;
         }
         IsBusy = true;
-        StatusMessage = "Installing updates (do not reboot)...";
+        IsProgressIndeterminate = true;
+        StatusMessage = "Installing updates (do not reboot)…";
+        ShowConsole = true;
+        Console.ClearCommand.Execute(null);
         _cts = new CancellationTokenSource();
         try
         {
@@ -233,9 +336,74 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             StatusMessage = "Installation finished";
         }
         catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
+
+    private void ParseUpdateJson(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            var root = doc.RootElement;
+
+            var items = root.ValueKind == JsonValueKind.Array
+                ? root.EnumerateArray()
+                : new[] { root }.AsEnumerable();
+
+            foreach (var el in items)
+            {
+                var entry = new UpdateEntry
+                {
+                    Title = el.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "",
+                    KB = el.TryGetProperty("KB", out var kb) ? kb.GetString() ?? "" : "",
+                    Size = el.TryGetProperty("Size", out var sz) ? FormatSize(sz) : "",
+                    Status = el.TryGetProperty("Status", out var st) ? st.GetString() ?? "" : "",
+                    Date = ParseDate(el.TryGetProperty("Date", out var dt) ? dt : default),
+                    IsHidden = el.TryGetProperty("IsHidden", out var ih) && ih.ValueKind == JsonValueKind.True,
+                    Category = el.TryGetProperty("Category", out var cat) ? cat.GetString() ?? "" : "",
+                };
+                Updates.Add(entry);
+            }
+        }
+        catch (JsonException ex)
+        {
+            Log.Warning("Failed to parse update JSON: {Error}", ex.Message);
+            StatusMessage = "Parse error — some updates may not be shown.";
+        }
+    }
+
+    private static string FormatSize(JsonElement el)
+    {
+        if (el.ValueKind == JsonValueKind.Number)
+        {
+            var bytes = el.GetInt64();
+            return bytes switch
+            {
+                >= 1L << 30 => $"{bytes / (double)(1L << 30):F1} GB",
+                >= 1L << 20 => $"{bytes / (double)(1L << 20):F1} MB",
+                >= 1L << 10 => $"{bytes / (double)(1L << 10):F1} KB",
+                _ => $"{bytes} B"
+            };
+        }
+        return el.GetString() ?? "";
+    }
+
+    private static DateTime? ParseDate(JsonElement el)
+    {
+        if (el.ValueKind == JsonValueKind.Null || el.ValueKind == JsonValueKind.Undefined)
+            return null;
+
+        var text = el.GetString();
+        if (string.IsNullOrWhiteSpace(text)) return null;
+
+        if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            return dt;
+
+        return null;
+    }
 }

@@ -2,7 +2,12 @@
 <UserControl x:Class="SysManager.Views.WindowsUpdateView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:v="clr-namespace:SysManager.Views">
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             d:DataContext="{d:DesignInstance vm:WindowsUpdateViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
     <UserControl.Resources>
         <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#070A0F" Offset="0"/>
@@ -17,18 +22,20 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Windows Update" Style="{StaticResource Display}"/>
-            <TextBlock Text="Check, list and install Windows updates — powered by PSWindowsUpdate."
+            <TextBlock Text="Check, list and install Windows updates — click column headers to sort."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
-        <!-- Admin banner — visible only when NOT elevated -->
+        <!-- Admin banner -->
         <Border Grid.Row="1" Margin="28,16,28,0" Padding="16,14" CornerRadius="10"
                 Background="#2A1E14" BorderBrush="#F59E0B" BorderThickness="1"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
@@ -44,7 +51,7 @@
                         <TextBlock Text="These actions need administrator rights"
                                    FontSize="15" FontWeight="SemiBold" Foreground="#F59E0B" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock Text="Windows Update COM APIs can't list or install updates without elevation. Click the button to restart the app as admin — you'll see the same tabs but everything will work."
+                    <TextBlock Text="Windows Update COM APIs can't list or install updates without elevation. Click the button to restart the app as admin."
                                Foreground="{StaticResource TextSecondary}" Margin="28,6,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
                 <Button Grid.Column="1" Content="Run as Administrator"
@@ -54,7 +61,7 @@
             </Grid>
         </Border>
 
-        <!-- Module status -->
+        <!-- Module status: missing -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
                 BorderBrush="#F59E0B" BorderThickness="1"
                 Visibility="{Binding ModuleAvailable, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
@@ -71,8 +78,6 @@
                                    Foreground="#F59E0B" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="{Binding ModuleStatus}" Style="{StaticResource Subtle}" Margin="28,6,0,0" TextWrapping="Wrap"/>
-                    <TextBlock Text="Click Install to add it from the PowerShell Gallery. Needs administrator rights."
-                               Style="{StaticResource Subtle}" Margin="28,2,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
                 <Button Grid.Column="1" Content="Install PSWindowsUpdate"
                         Command="{Binding InstallModuleCommand}"
@@ -81,14 +86,12 @@
             </Grid>
         </Border>
 
-        <!-- Module available — quiet green pill -->
+        <!-- Module status: available (green pill) -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
                 Visibility="{Binding ModuleAvailable, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal">
                 <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="#22C55E"/>
                 <TextBlock Text="PSWindowsUpdate is available" FontWeight="SemiBold" Foreground="#22C55E" VerticalAlignment="Center"/>
-                <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding ModuleStatus}" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
@@ -97,8 +100,6 @@
             <StackPanel>
                 <TextBlock Text="Actions" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
                 <WrapPanel Orientation="Horizontal">
-                    <Button Content="Check module" Command="{Binding CheckModuleCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="Install PSWindowsUpdate" Command="{Binding InstallModuleCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="List updates" Command="{Binding ListUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Feature upgrades" Command="{Binding ListFeatureUpdatesCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="History" Command="{Binding ShowHistoryCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
@@ -109,13 +110,101 @@
             </StackPanel>
         </Border>
 
-        <!-- Live output -->
-        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
-            <v:ConsoleView DataContext="{Binding Console}"/>
+        <!-- Summary -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12"
+                Visibility="{Binding TableSummary, Converter={StaticResource FlexVis}}">
+            <TextBlock Text="{Binding TableSummary}" FontWeight="SemiBold" FontSize="13"/>
         </Border>
 
-        <!-- Footer -->
-        <Grid Grid.Row="5" Margin="28,12,28,24">
+        <!-- Update table (DataGrid) -->
+        <Border Grid.Row="5" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
+            <DataGrid ItemsSource="{Binding Updates}"
+                      AutoGenerateColumns="False" HeadersVisibility="Column"
+                      Background="Transparent" BorderThickness="0"
+                      GridLinesVisibility="None" IsReadOnly="True"
+                      RowBackground="Transparent" AlternatingRowBackground="#0F141C"
+                      SelectionMode="Single" CanUserSortColumns="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"
+                                        SortMemberPath="Title">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontWeight" Value="Medium"/>
+                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="KB" Binding="{Binding KB}" Width="100"
+                                        SortMemberPath="KB">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontFamily" Value="Consolas"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="80"
+                                        SortMemberPath="Size">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Right"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90"
+                                        SortMemberPath="Status">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontWeight" Value="Medium"/>
+                                <Setter Property="FontSize" Value="12"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Date" Binding="{Binding DateDisplay}" Width="100"
+                                        SortMemberPath="Date">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontFamily" Value="Consolas"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="110"
+                                        SortMemberPath="Category">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- Console output (collapsible — shown only during install/reboot check) -->
+        <Border Grid.Row="6" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0"
+                Visibility="{Binding ShowConsole, Converter={StaticResource BoolToVis}}"
+                MaxHeight="200">
+            <Expander Header="Live output" IsExpanded="True" Padding="8">
+                <v:ConsoleView DataContext="{Binding Console}"/>
+            </Expander>
+        </Border>
+
+        <!-- Footer: progress + status -->
+        <Grid Grid.Row="7" Margin="28,12,28,24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>

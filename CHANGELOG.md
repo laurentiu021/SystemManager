@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-04-28
+
+### Changed
+- **Clickable column headers** — all table tabs now use DataGrid with native
+  click-to-sort column headers (ascending/descending toggle), replacing
+  standalone sort buttons and dropdowns. Consistent with Windows Task Manager
+  behavior.
+  - **Process Manager**: sortable PID, Name, Memory, CPU%, Threads, Status (#266)
+  - **Uninstaller**: sortable Name, Size, Version, Publisher, Source, Status (#254)
+  - **Services**: removed redundant Sort ComboBox, column headers handle sorting
+  - **Startup Manager**: sortable Name, Publisher, Status (previously had no sort)
+  - **App Updates**: sortable Name, Id, Current, Available, Source, Status
+    (previously had no sort)
+
 ## [0.23.0] - 2026-04-28
 
 ### Changed

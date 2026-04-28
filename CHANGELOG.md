@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-04-28
+
+### Changed
+- **Windows Update: structured DataGrid** — the Windows Update tab now displays
+  updates in a sortable DataGrid table (Title, KB, Size, Status, Date, Category)
+  instead of raw console text. Console output is hidden behind a collapsible
+  panel, shown only during Install/Pending Reboot operations (#305, #240).
+
+## [0.27.0] - 2026-04-28
+
+### Changed
+- **Drivers: structured DataGrid** — the Drivers tab now displays installed
+  drivers in a sortable DataGrid table (Device Name, Manufacturer, Version,
+  Date) instead of raw console text. Click column headers to sort (#304).
+
 ## [0.26.0] - 2026-04-28
 
 ### Added

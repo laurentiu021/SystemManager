@@ -142,7 +142,7 @@ list. Dashboard renders as a flat top-level entry without an expander arrow.
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, and status
 - Real-time filter by name, description, or PID
-- Sort by memory, CPU usage, name, or PID
+- Sort by memory, CPU usage, name, or PID via clickable column headers
 - Kill process with confirmation dialog
 - Open file location in Explorer
 
@@ -155,7 +155,7 @@ list. Dashboard renders as a flat top-level entry without an expander arrow.
 ### Uninstaller
 - Lists all installed applications via winget with size from registry
 - Filter by name or package ID
-- Sort by name, size, or publisher
+- Sort by name, size, or publisher via clickable column headers
 - Select/deselect all, batch uninstall with confirmation dialog
 - Live console output from winget
 

@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-04-28
+
+### Added
+- **Ping: more targets per region** — CS2 Europe expanded from 4 to 10 targets
+  (2 IPs per region + Frankfurt, Spain subnets). FACEIT Europe expanded from 5
+  to 8 targets (3× Germany, 2× Netherlands, Sweden, UK, France). A single
+  server going down no longer shows the entire region as failed (#285, #259).
+
 ## [0.24.0] - 2026-04-28
 
 ### Changed

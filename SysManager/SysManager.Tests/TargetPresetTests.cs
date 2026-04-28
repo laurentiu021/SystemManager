@@ -130,16 +130,20 @@ public class TargetPresetTests
     }
 
     [Fact]
-    public void FaceitEurope_Covers5Countries()
+    public void FaceitEurope_CoversMainCountries()
     {
         var targets = TargetPresets.FaceitEurope.Targets;
-        Assert.Equal(5, targets.Count);
+        Assert.True(targets.Count >= 8, $"Expected at least 8 FACEIT targets, got {targets.Count}");
         var names = targets.Select(t => t.Name).ToList();
-        Assert.Contains("FACEIT DE", names);
-        Assert.Contains("FACEIT UK", names);
-        Assert.Contains("FACEIT FR", names);
-        Assert.Contains("FACEIT NL", names);
-        Assert.Contains("FACEIT SE", names);
+        // Multiple IPs per country — verify each country has at least one target
+        Assert.Contains(names, n => n.StartsWith("FACEIT DE"));
+        Assert.Contains(names, n => n.StartsWith("FACEIT UK"));
+        Assert.Contains(names, n => n.StartsWith("FACEIT FR"));
+        Assert.Contains(names, n => n.StartsWith("FACEIT NL"));
+        Assert.Contains(names, n => n.StartsWith("FACEIT SE"));
+        // Germany has multiple IPs
+        Assert.True(names.Count(n => n.StartsWith("FACEIT DE")) >= 2,
+            "Expected at least 2 FACEIT DE targets");
     }
 
     [Fact]

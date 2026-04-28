@@ -28,13 +28,19 @@ public static class TargetPresets
 
     public static readonly TargetPreset CS2Europe = new(
         "CS2 Europe",
-        "Representative IPs from Valve's EU matchmaking subnets.",
+        "Valve matchmaking servers across EU — multiple IPs per region for redundancy.",
         new (string, string)[]
         {
-            ("CS2 Vienna",     "146.66.155.1"),
-            ("CS2 Stockholm",  "146.66.156.1"),
-            ("CS2 Luxembourg", "146.66.152.1"),
-            ("CS2 Warsaw",     "155.133.240.1"),
+            ("CS2 Vienna 1",      "146.66.155.1"),
+            ("CS2 Vienna 2",      "185.25.182.1"),
+            ("CS2 Stockholm 1",   "146.66.156.1"),
+            ("CS2 Stockholm 2",   "185.25.180.1"),
+            ("CS2 Luxembourg 1",  "146.66.152.1"),
+            ("CS2 Luxembourg 2",  "146.66.158.1"),
+            ("CS2 Warsaw 1",      "155.133.240.1"),
+            ("CS2 Warsaw 2",      "155.133.241.1"),
+            ("CS2 Frankfurt",     "185.25.181.1"),
+            ("CS2 Spain",         "155.133.242.1"),
         });
 
     public static readonly TargetPreset PubgEurope = new(
@@ -59,14 +65,17 @@ public static class TargetPresets
 
     public static readonly TargetPreset FaceitEurope = new(
         "FACEIT Europe",
-        "FACEIT CS2 competitive servers across EU — Germany, UK, France, Netherlands, Sweden.",
+        "FACEIT CS2 competitive servers — multiple IPs per country for accurate latency testing.",
         new (string, string)[]
         {
-            ("FACEIT DE",  "88.198.52.17"),
-            ("FACEIT UK",  "82.145.38.1"),
-            ("FACEIT FR",  "62.210.84.97"),
-            ("FACEIT NL",  "46.166.189.17"),
-            ("FACEIT SE",  "31.3.153.1"),
+            ("FACEIT DE 1",  "159.69.60.58"),
+            ("FACEIT DE 2",  "94.130.216.114"),
+            ("FACEIT DE 3",  "188.40.82.51"),
+            ("FACEIT NL 1",  "185.165.240.191"),
+            ("FACEIT NL 2",  "190.2.142.225"),
+            ("FACEIT SE",    "146.70.237.86"),
+            ("FACEIT UK",    "82.145.38.1"),
+            ("FACEIT FR",    "62.210.84.97"),
         });
 
     public static readonly IReadOnlyList<TargetPreset> All = new[]

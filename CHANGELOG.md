@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-04-28
+
+### Changed
+- **Removed MemTest86 external reference** — the MemTest86 button, command, and all
+  references have been removed from System Health. SysManager no longer references
+  external third-party tools. The built-in Windows Memory Diagnostic remains (#271).
+
 ## [0.21.9] - 2026-04-27
 
 ### Fixed

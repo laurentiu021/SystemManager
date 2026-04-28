@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-04-28
+
+### Changed
+- **Sidebar readability** — improved font contrast and size for group headers,
+  subtitles, and child count badges. TextMuted → TextSecondary, larger font
+  sizes, higher opacity (#265).
+
 ## [0.22.0] - 2026-04-28
 
 ### Changed

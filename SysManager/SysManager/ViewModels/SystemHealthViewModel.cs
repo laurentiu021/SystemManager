@@ -165,19 +165,6 @@ public partial class SystemHealthViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void OpenMemTest86()
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo("https://www.memtest86.com/download.htm")
-            {
-                UseShellExecute = true
-            });
-        }
-        catch (Exception ex) { StatusMessage = ex.Message; }
-    }
-
-    [RelayCommand]
     private async Task RunChkdskAsync(string? driveLetter)
     {
         if (string.IsNullOrWhiteSpace(driveLetter))

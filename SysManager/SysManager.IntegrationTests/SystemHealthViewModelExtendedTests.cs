@@ -18,7 +18,6 @@ public class SystemHealthViewModelExtendedTests
         Assert.NotNull(vm.CheckDiskHealthCommand);
         Assert.NotNull(vm.CheckMemoryErrorsCommand);
         Assert.NotNull(vm.ScheduleMemoryTestCommand);
-        Assert.NotNull(vm.OpenMemTest86Command);
         Assert.NotNull(vm.RunChkdskCommand);
         Assert.NotNull(vm.CancelScanCommand);
         Assert.NotNull(vm.RelaunchAsAdminCommand);

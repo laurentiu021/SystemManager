@@ -11,7 +11,6 @@ namespace SysManager.Services;
 /// RAM health diagnostics:
 ///  - Scans the System event log for hardware-error events (WHEA) in the last 30 days.
 ///  - Schedules Windows Memory Diagnostic (mdsched.exe) for the next boot.
-///  - Points the user at MemTest86 for the really paranoid offline test.
 /// </summary>
 public sealed class MemoryTestService
 {

@@ -77,7 +77,7 @@ list. Dashboard renders as a flat top-level entry without an expander arrow.
 - SMART data per disk: temperature, wear %, power-on hours, read/write errors
 - Colour-coded verdict per drive
 - Memory diagnostic that scans the last 30 days of WHEA events for RAM errors
-- Schedule the Windows Memory Diagnostic at next boot, or jump to MemTest86
+- Schedule the Windows Memory Diagnostic at next boot
 - Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select
 
 ### Windows Update (via PSWindowsUpdate)

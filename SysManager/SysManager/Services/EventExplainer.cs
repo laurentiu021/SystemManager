@@ -122,7 +122,7 @@ public static class EventExplainer
         // ---------- Memory ----------
         [new("Microsoft-Windows-MemoryDiagnostics-Results", 1201)] = (
             "Windows Memory Diagnostic detected memory errors.",
-            "Your RAM is likely faulty. Test each stick individually with MemTest86 to find the culprit."),
+            "Your RAM is likely faulty. Test each stick individually to find the culprit."),
 
         // ---------- Power / battery ----------
         [new("Microsoft-Windows-Kernel-Power", 42)] = (

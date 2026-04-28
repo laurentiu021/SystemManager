@@ -104,7 +104,6 @@ public class SystemHealthViewModelTests
     [InlineData("CheckDiskHealthCommand")]
     [InlineData("CheckMemoryErrorsCommand")]
     [InlineData("ScheduleMemoryTestCommand")]
-    [InlineData("OpenMemTest86Command")]
     [InlineData("RunChkdskCommand")]
     [InlineData("RunChkdskOnSelectedCommand")]
     [InlineData("CancelScanCommand")]

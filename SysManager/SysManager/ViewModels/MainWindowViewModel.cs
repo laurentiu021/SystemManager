@@ -160,7 +160,10 @@ public partial class MainWindowViewModel : ObservableObject
         // Flat index for backward compat (Open*Tab commands, tests, automation).
         foreach (var g in NavGroups)
             foreach (var item in g.Children)
+            {
+                item.WireBusy();
                 NavItems.Add(item);
+            }
 
         SelectedNav = NavItems[0];
     }

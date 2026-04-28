@@ -119,7 +119,7 @@ jobs:
             publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256
 
       - name: Post announcement to Discussions
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');

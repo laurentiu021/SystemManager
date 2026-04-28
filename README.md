@@ -89,6 +89,7 @@ list. Dashboard renders as a flat top-level entry without an expander arrow.
 
 ### App updates (winget)
 - Scan for upgradable packages
+- Sort by name, ID, version, or source via clickable column headers
 - Select all or individual packages, bulk upgrade with per-package status
 
 ### Cleanup (fast)
@@ -122,6 +123,7 @@ list. Dashboard renders as a flat top-level entry without an expander arrow.
 ### Startup Manager
 - Lists every program that runs at Windows boot (Registry Run / RunOnce keys)
 - Toggle on/off without deleting the original entry (same mechanism as Task Manager)
+- Sort by name, publisher, or status via clickable column headers
 - Shows name, publisher, command, and enabled/disabled status
 - Open file location in Explorer
 

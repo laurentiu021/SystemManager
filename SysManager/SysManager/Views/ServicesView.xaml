@@ -32,8 +32,6 @@
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                     <ComboBox ItemsSource="{Binding FilterOptions}"
                               SelectedItem="{Binding SelectedFilter}" Width="150" Margin="0,0,8,0"/>
-                    <ComboBox ItemsSource="{Binding SortOptions}"
-                              SelectedItem="{Binding SortBy}" Width="140" Margin="0,0,8,0"/>
                     <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
                              Width="240" VerticalContentAlignment="Center"/>
                 </StackPanel>
@@ -57,18 +55,18 @@
                   RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                   SelectionMode="Single" CanUserSortColumns="True">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200"/>
-                <DataGridTextColumn Header="Service" Binding="{Binding Name}" Width="160"/>
-                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80"/>
-                <DataGridTextColumn Header="Startup" Binding="{Binding StartType}" Width="90"/>
-                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*">
+                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200" SortMemberPath="DisplayName"/>
+                <DataGridTextColumn Header="Service" Binding="{Binding Name}" Width="160" SortMemberPath="Name"/>
+                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80" SortMemberPath="Status"/>
+                <DataGridTextColumn Header="Startup" Binding="{Binding StartType}" Width="90" SortMemberPath="StartType"/>
+                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" SortMemberPath="Description">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-                <DataGridTemplateColumn Header="Rec." Width="100">
+                <DataGridTemplateColumn Header="Rec." Width="100" SortMemberPath="Recommendation">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Recommendation}" FontSize="11" VerticalAlignment="Center"

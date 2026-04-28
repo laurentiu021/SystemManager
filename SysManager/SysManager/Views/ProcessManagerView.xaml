@@ -21,7 +21,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Process Manager" Style="{StaticResource Display}"/>
-            <TextBlock Text="View running processes, sort by memory or name, and kill unresponsive apps."
+            <TextBlock Text="View running processes, sort by clicking column headers, and kill unresponsive apps."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
@@ -39,16 +39,6 @@
                                VerticalAlignment="Center" FontSize="12"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
-                <TextBlock Text="Sort:" VerticalAlignment="Center" Margin="0,0,8,0"
-                           Style="{StaticResource Subtle}"/>
-                <Button Content="Memory" Command="{Binding SortByMemoryCommand}"
-                        Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
-                <Button Content="CPU" Command="{Binding SortByCpuCommand}"
-                        Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
-                <Button Content="Name" Command="{Binding SortByNameCommand}"
-                        Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
-                <Button Content="PID" Command="{Binding SortByPidCommand}"
-                        Style="{StaticResource GhostButton}"/>
             </WrapPanel>
         </Border>
 
@@ -59,111 +49,112 @@
 
         <!-- Process list -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
-            <ListView ItemsSource="{Binding FilteredProcesses}" Background="Transparent" BorderThickness="0"
-                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                      HorizontalContentAlignment="Stretch"
+            <DataGrid ItemsSource="{Binding FilteredProcesses}"
+                      AutoGenerateColumns="False" HeadersVisibility="Column"
+                      Background="Transparent" BorderThickness="0"
+                      GridLinesVisibility="None" IsReadOnly="True"
+                      RowBackground="Transparent" AlternatingRowBackground="#0F141C"
+                      SelectionMode="Single" CanUserSortColumns="True"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
-                <ListView.ItemContainerStyle>
-                    <Style TargetType="ListViewItem">
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                        <Setter Property="Padding" Value="12,6"/>
-                        <Setter Property="Margin" Value="0"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ListViewItem">
-                                    <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}"
-                                            BorderBrush="{StaticResource Border1}" BorderThickness="0,0,0,1">
-                                        <ContentPresenter/>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </ListView.ItemContainerStyle>
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="60"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="60"/>
-                                <ColumnDefinition Width="60"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="60"
+                                        SortMemberPath="Pid">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontFamily" Value="Consolas"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
-                            <!-- PID -->
-                            <TextBlock Grid.Column="0" Text="{Binding Pid}" FontSize="12"
-                                       Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"
-                                       FontFamily="Consolas"/>
+                    <DataGridTemplateColumn Header="Name" Width="*" SortMemberPath="Name">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Image Source="{Binding Icon}" Width="20" Height="20"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding Description}" FontSize="11"
+                                                   Foreground="{StaticResource TextMuted}"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="400"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                            <!-- App icon -->
-                            <Image Grid.Column="1" Source="{Binding Icon}" Width="20" Height="20"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"
-                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <DataGridTextColumn Header="Memory" Binding="{Binding MemoryDisplay}" Width="80"
+                                        SortMemberPath="MemoryBytes">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Right"/>
+                                <Setter Property="FontWeight" Value="Medium"/>
+                                <Setter Property="FontSize" Value="12"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
-                            <!-- Name + description -->
-                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                                <TextBlock Text="{Binding Description}" FontSize="11"
-                                           Foreground="{StaticResource TextMuted}"
-                                           TextTrimming="CharacterEllipsis" MaxWidth="400"/>
-                            </StackPanel>
+                    <DataGridTextColumn Header="CPU %" Binding="{Binding CpuPercent, StringFormat={}{0:F1}%}" Width="60"
+                                        SortMemberPath="CpuPercent">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Right"/>
+                                <Setter Property="FontFamily" Value="Consolas"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
-                            <!-- Memory -->
-                            <TextBlock Grid.Column="3" Text="{Binding MemoryDisplay}" FontSize="12"
-                                       VerticalAlignment="Center" HorizontalAlignment="Right"
-                                       FontWeight="Medium"/>
+                    <DataGridTextColumn Header="Threads" Binding="{Binding ThreadCount}" Width="60"
+                                        SortMemberPath="ThreadCount">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
-                            <!-- CPU % -->
-                            <TextBlock Grid.Column="4" FontSize="12"
-                                       VerticalAlignment="Center" HorizontalAlignment="Right"
-                                       Foreground="{StaticResource TextSecondary}" FontFamily="Consolas"
-                                       Text="{Binding CpuPercent, StringFormat={}{0:F1}%}"/>
+                    <DataGridTemplateColumn Header="Status" Width="80" SortMemberPath="Status">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0"
+                                             Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
+                                    <TextBlock Text="{Binding Status}" FontSize="11"
+                                               Foreground="{Binding Status, Converter={StaticResource StatusBrush}}"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                            <!-- Threads -->
-                            <TextBlock Grid.Column="5" FontSize="11" VerticalAlignment="Center"
-                                       HorizontalAlignment="Center" Foreground="{StaticResource TextMuted}">
-                                <Run Text="{Binding ThreadCount, Mode=OneWay}"/>
-                                <Run Text="thr"/>
-                            </TextBlock>
-
-                            <!-- Status -->
-                            <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center"
-                                        Margin="4,0">
-                                <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0"
-                                         Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
-                                <TextBlock Text="{Binding Status}" FontSize="11"
-                                           Foreground="{Binding Status, Converter={StaticResource StatusBrush}}"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-
-                            <!-- Open location -->
-                            <Button Grid.Column="7" Content="📂" ToolTip="Open file location"
-                                    Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                    CommandParameter="{Binding}"
-                                    Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
-                                    Margin="4,0"/>
-
-                            <!-- Kill -->
-                            <Button Grid.Column="8" Content="✕" ToolTip="Kill process"
-                                    Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                    CommandParameter="{Binding}"
-                                    Style="{StaticResource GhostButton}" Padding="6,2" FontSize="12"
-                                    Foreground="#EF4444"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
+                    <DataGridTemplateColumn Header="Actions" Width="70" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="📂" ToolTip="Open file location"
+                                            Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
+                                            Margin="0,0,4,0"/>
+                                    <Button Content="✕" ToolTip="Kill process"
+                                            Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Style="{StaticResource GhostButton}" Padding="6,2" FontSize="12"
+                                            Foreground="#EF4444"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
         </Border>
 
         <!-- Status bar -->

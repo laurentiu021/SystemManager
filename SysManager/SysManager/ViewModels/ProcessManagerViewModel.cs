@@ -26,7 +26,6 @@ public partial class ProcessManagerViewModel : ViewModelBase
     [ObservableProperty] private int _processCount;
     [ObservableProperty] private long _totalMemory;
     [ObservableProperty] private string _summary = "Click Refresh to list running processes.";
-    [ObservableProperty] private string _sortBy = "Memory";
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
@@ -102,18 +101,6 @@ public partial class ProcessManagerViewModel : ViewModelBase
         ProcessManagerService.OpenFileLocation(entry.FilePath);
     }
 
-    [RelayCommand]
-    private void SortByName() { SortBy = "Name"; ApplyFilter(); }
-
-    [RelayCommand]
-    private void SortByMemory() { SortBy = "Memory"; ApplyFilter(); }
-
-    [RelayCommand]
-    private void SortByCpu() { SortBy = "CPU"; ApplyFilter(); }
-
-    [RelayCommand]
-    private void SortByPid() { SortBy = "PID"; ApplyFilter(); }
-
     private void ApplyFilter()
     {
         FilteredProcesses.Clear();
@@ -129,13 +116,8 @@ public partial class ProcessManagerViewModel : ViewModelBase
                 p.Pid.ToString().Contains(filter));
         }
 
-        source = SortBy switch
-        {
-            "Name" => source.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase),
-            "PID" => source.OrderBy(p => p.Pid),
-            "CPU" => source.OrderByDescending(p => p.CpuPercent),
-            _ => source.OrderByDescending(p => p.MemoryBytes)
-        };
+        // Default order by memory descending; DataGrid column headers handle user sorting.
+        source = source.OrderByDescending(p => p.MemoryBytes);
 
         foreach (var p in source)
             FilteredProcesses.Add(p);

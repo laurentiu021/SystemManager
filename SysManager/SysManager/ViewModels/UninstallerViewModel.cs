@@ -26,7 +26,6 @@ public partial class UninstallerViewModel : ViewModelBase
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private int _appCount;
     [ObservableProperty] private string _summary = "Click Scan to list installed applications.";
-    [ObservableProperty] private string _sortBy = "Name";
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
@@ -177,12 +176,8 @@ public partial class UninstallerViewModel : ViewModelBase
                 a.Id.Contains(f, StringComparison.OrdinalIgnoreCase));
         }
 
-        source = SortBy switch
-        {
-            "Size" => source.OrderByDescending(a => a.SizeBytes),
-            "Publisher" => source.OrderBy(a => a.Publisher, StringComparer.OrdinalIgnoreCase),
-            _ => source.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
-        };
+        // Default order by name; DataGrid column headers handle user sorting.
+        source = source.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase);
 
         foreach (var app in source)
             FilteredApps.Add(app);
@@ -190,15 +185,6 @@ public partial class UninstallerViewModel : ViewModelBase
         AppCount = FilteredApps.Count;
         Summary = $"{AppCount} apps{(AllApps.Count != AppCount ? $" (of {AllApps.Count} total)" : "")}";
     }
-
-    [RelayCommand]
-    private void SortByName() { SortBy = "Name"; ApplyFilter(); }
-
-    [RelayCommand]
-    private void SortBySize() { SortBy = "Size"; ApplyFilter(); }
-
-    [RelayCommand]
-    private void SortByPublisher() { SortBy = "Publisher"; ApplyFilter(); }
 
     /// <summary>
     /// Translates a winget uninstall exit code into a human-readable message

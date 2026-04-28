@@ -40,78 +40,74 @@
 
         <!-- Startup items list -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
-            <ListView ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0"
-                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                      HorizontalContentAlignment="Stretch">
-                <ListView.ItemContainerStyle>
-                    <Style TargetType="ListViewItem">
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                        <Setter Property="Padding" Value="12,10"/>
-                        <Setter Property="Margin" Value="0"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ListViewItem">
-                                    <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}"
-                                            BorderBrush="{StaticResource Border1}" BorderThickness="0,0,0,1">
-                                        <ContentPresenter/>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </ListView.ItemContainerStyle>
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+            <DataGrid ItemsSource="{Binding Entries}"
+                      AutoGenerateColumns="False" HeadersVisibility="Column"
+                      Background="Transparent" BorderThickness="0"
+                      GridLinesVisibility="None" IsReadOnly="False"
+                      RowBackground="Transparent" AlternatingRowBackground="#0F141C"
+                      SelectionMode="Single" CanUserSortColumns="True">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="" Width="40" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
+                                          Command="{Binding DataContext.ToggleEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          CommandParameter="{Binding}"
+                                          VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                            <!-- Toggle -->
-                            <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}"
-                                      Command="{Binding DataContext.ToggleEntryCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                      CommandParameter="{Binding}"
-                                      VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <DataGridTemplateColumn Header="Name" Width="*" SortMemberPath="Name">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Image Source="{Binding Icon}" Width="20" Height="20"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding Command}" FontSize="11"
+                                                   Foreground="{StaticResource TextMuted}"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="500"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                            <!-- App icon -->
-                            <Image Grid.Column="1" Source="{Binding Icon}" Width="20" Height="20"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"
-                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="180"
+                                        SortMemberPath="Publisher" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
-                            <!-- Name + command -->
-                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                                <TextBlock FontSize="11" Foreground="{StaticResource TextMuted}"
-                                           TextTrimming="CharacterEllipsis" MaxWidth="500">
-                                    <Run Text="{Binding Publisher, Mode=OneWay}"/>
-                                    <Run Text=" · " Foreground="{StaticResource TextDisabled}"/>
-                                    <Run Text="{Binding Command, Mode=OneWay}"/>
-                                </TextBlock>
-                            </StackPanel>
+                    <DataGridTemplateColumn Header="Status" Width="100" SortMemberPath="StatusText">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Badge}" VerticalAlignment="Center" Margin="4,0">
+                                    <TextBlock Text="{Binding StatusText}" FontSize="11"/>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                            <!-- Status badge -->
-                            <Border Grid.Column="3" Style="{StaticResource Badge}" VerticalAlignment="Center" Margin="8,0">
-                                <TextBlock Text="{Binding StatusText}" FontSize="11"/>
-                            </Border>
-
-                            <!-- Open location button -->
-                            <Button Grid.Column="4" Content="📂" ToolTip="Open file location"
-                                    Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                    CommandParameter="{Binding}"
-                                    Style="{StaticResource GhostButton}" Padding="8,4" FontSize="14"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
+                    <DataGridTemplateColumn Header="" Width="40" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="📂" ToolTip="Open file location"
+                                        Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"
+                                        Style="{StaticResource GhostButton}" Padding="8,4" FontSize="14"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
         </Border>
 
         <!-- Status bar -->

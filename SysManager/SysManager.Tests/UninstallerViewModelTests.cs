@@ -9,7 +9,7 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="UninstallerViewModel"/>. Verifies initial state,
-/// commands, and filter logic.
+/// commands, and filter logic. Sorting is handled by DataGrid column headers.
 /// </summary>
 public class UninstallerViewModelTests
 {
@@ -65,54 +65,17 @@ public class UninstallerViewModelTests
     }
 
     [Fact]
-    public void SortByNameCommand_Exists()
+    public void DescribeUninstallFailure_KnownCodes()
     {
-        var vm = CreateVm();
-        Assert.NotNull(vm.SortByNameCommand);
+        Assert.Contains("Access denied", UninstallerViewModel.DescribeUninstallFailure(5, "Test"));
+        Assert.Contains("cancelled", UninstallerViewModel.DescribeUninstallFailure(1602, "Test"));
+        Assert.Contains("reboot", UninstallerViewModel.DescribeUninstallFailure(3010, "Test"));
     }
 
     [Fact]
-    public void SortBySizeCommand_Exists()
+    public void DescribeUninstallFailure_UnknownCode()
     {
-        var vm = CreateVm();
-        Assert.NotNull(vm.SortBySizeCommand);
-    }
-
-    [Fact]
-    public void SortByPublisherCommand_Exists()
-    {
-        var vm = CreateVm();
-        Assert.NotNull(vm.SortByPublisherCommand);
-    }
-
-    [Fact]
-    public void SortByName_SetsSortBy()
-    {
-        var vm = CreateVm();
-        vm.SortByNameCommand.Execute(null);
-        Assert.Equal("Name", vm.SortBy);
-    }
-
-    [Fact]
-    public void SortBySize_SetsSortBy()
-    {
-        var vm = CreateVm();
-        vm.SortBySizeCommand.Execute(null);
-        Assert.Equal("Size", vm.SortBy);
-    }
-
-    [Fact]
-    public void SortByPublisher_SetsSortBy()
-    {
-        var vm = CreateVm();
-        vm.SortByPublisherCommand.Execute(null);
-        Assert.Equal("Publisher", vm.SortBy);
-    }
-
-    [Fact]
-    public void SortBy_DefaultName()
-    {
-        var vm = CreateVm();
-        Assert.Equal("Name", vm.SortBy);
+        var result = UninstallerViewModel.DescribeUninstallFailure(9999, "Test");
+        Assert.Contains("exit code 9999", result);
     }
 }

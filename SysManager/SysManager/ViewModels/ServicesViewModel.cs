@@ -27,7 +27,6 @@ public partial class ServicesViewModel : ViewModelBase
 
     [ObservableProperty] private string _filter = "";
     [ObservableProperty] private string _selectedFilter = "All";
-    [ObservableProperty] private string _sortBy = "Name";
     [ObservableProperty] private ServiceEntry? _selectedService;
     [ObservableProperty] private int _totalCount;
     [ObservableProperty] private int _runningCount;
@@ -35,14 +34,10 @@ public partial class ServicesViewModel : ViewModelBase
     public string[] FilterOptions { get; } =
         { "All", "Running", "Stopped", "Safe to disable", "Advanced" };
 
-    public string[] SortOptions { get; } =
-        { "Name", "Status", "Startup", "Recommendation" };
-
     public ServicesViewModel() => _ = RefreshAsync();
 
     partial void OnFilterChanged(string value) => ApplyFilter();
     partial void OnSelectedFilterChanged(string value) => ApplyFilter();
-    partial void OnSortByChanged(string value) => ApplyFilter();
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -177,13 +172,8 @@ public partial class ServicesViewModel : ViewModelBase
             _ => filtered
         };
 
-        filtered = SortBy switch
-        {
-            "Status" => filtered.OrderBy(s => s.Status, StringComparer.OrdinalIgnoreCase),
-            "Startup" => filtered.OrderBy(s => s.StartType, StringComparer.OrdinalIgnoreCase),
-            "Recommendation" => filtered.OrderByDescending(s => s.Recommendation, StringComparer.OrdinalIgnoreCase),
-            _ => filtered.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase)
-        };
+        // Default order by name; DataGrid column headers handle user sorting.
+        filtered = filtered.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase);
 
         foreach (var s in filtered) Services.Add(s);
     }

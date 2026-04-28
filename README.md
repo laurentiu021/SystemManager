@@ -49,6 +49,8 @@ find what you need without scrolling through a flat list:
 Groups expand and collapse with a click. Collapsed groups show a child count
 badge, a subtitle with abbreviated child labels, and a tooltip with the full
 list. Dashboard renders as a flat top-level entry without an expander arrow.
+Each tab shows a slim progress bar under its name when performing a
+long-running operation, so you always know which tab is working.
 
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart

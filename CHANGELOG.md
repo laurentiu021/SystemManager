@@ -6,6 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.9] - 2026-04-27
+
+### Fixed
+- **SFC/DISM elevation consent** — SFC and DISM no longer auto-relaunch the
+  application with admin privileges. A Yes/No confirmation dialog is now shown
+  before any elevation. If the user declines, the operation is cancelled with a
+  clear status message (#264).
+
+## [0.21.8] - 2026-04-27
+
+### Fixed
+- **chkdsk admin check** — chkdsk /scan now checks for admin privileges before
+  running. Without elevation, drives show "Needs admin" status with a clear
+  message instead of failing with cryptic exit codes (#270).
+
+## [0.21.7] - 2026-04-27
+
+### Fixed
+- **UI freeze on Cleanup scan** — separated PropertyChanged event wiring from
+  collection population to reduce per-item UI re-renders (#261).
+- **UI freeze on Speed Test** — offloaded synchronous file-system I/O and
+  process creation in the Ookla speed test to the thread pool (#258).
+- **UI freeze on Drivers** — offloaded Process.Start() and PowerShell runspace
+  initialization to the thread pool so the dispatcher is never blocked (#249).
+
 ## [0.21.6] - 2026-04-27
 
 ### Fixed

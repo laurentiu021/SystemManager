@@ -49,7 +49,7 @@ public class LightTouchViewModelTests
     public void DriversVm_Ctor_IsSafe()
     {
         var vm = new DriversViewModel(new PowerShellRunner());
-        Assert.NotNull(vm.Console);
+        Assert.NotNull(vm.Drivers);
     }
 
     [Fact]
@@ -57,7 +57,6 @@ public class LightTouchViewModelTests
     {
         var vm = new DriversViewModel(new PowerShellRunner());
         Assert.NotNull(vm.ListDriversCommand);
-        Assert.NotNull(vm.CheckWindowsUpdateDriversCommand);
         Assert.NotNull(vm.CancelCommand);
     }
 

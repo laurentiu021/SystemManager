@@ -52,10 +52,10 @@ public class AllViewModelsSweepTests
         Assert.NotNull(vm.Entries);
     }
 
-    [Fact] public void Drivers_HasConsole()
+    [Fact] public void Drivers_HasDriversCollection()
     {
         var vm = new DriversViewModel(new PowerShellRunner());
-        Assert.NotNull(vm.Console);
+        Assert.NotNull(vm.Drivers);
     }
 
     [Fact] public void DeepCleanup_HasCollections()

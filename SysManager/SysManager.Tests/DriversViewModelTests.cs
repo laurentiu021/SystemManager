@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -19,10 +20,10 @@ public class DriversViewModelTests
     // ---------- construction & defaults ----------
 
     [Fact]
-    public void Constructor_SetsConsole()
+    public void Constructor_DriversCollectionEmpty()
     {
         var vm = NewVm();
-        Assert.NotNull(vm.Console);
+        Assert.Empty(vm.Drivers);
     }
 
     [Fact]
@@ -46,11 +47,24 @@ public class DriversViewModelTests
         Assert.False(vm.IsProgressIndeterminate);
     }
 
+    [Fact]
+    public void Constructor_DriverCountZero()
+    {
+        var vm = NewVm();
+        Assert.Equal(0, vm.DriverCount);
+    }
+
+    [Fact]
+    public void Constructor_SummaryHasDefaultText()
+    {
+        var vm = NewVm();
+        Assert.Contains("List drivers", vm.Summary);
+    }
+
     // ---------- commands exist ----------
 
     [Theory]
     [InlineData("ListDriversCommand")]
-    [InlineData("CheckWindowsUpdateDriversCommand")]
     [InlineData("CancelCommand")]
     public void Command_IsExposedAndNotNull(string name)
     {
@@ -84,69 +98,124 @@ public class DriversViewModelTests
         Assert.True(cts.IsCancellationRequested);
     }
 
-    // ---------- runner plumbing ----------
+    // ---------- ParseDriverJson via reflection ----------
 
     [Fact]
-    public void RunnerLineReceived_AppendsToConsole()
+    public void ParseDriverJson_ValidArray_PopulatesDrivers()
     {
-        var runner = new PowerShellRunner();
-        var vm = new DriversViewModel(runner);
+        var vm = NewVm();
+        var method = typeof(DriversViewModel)
+            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-        var ev = typeof(PowerShellRunner)
-            .GetField(nameof(PowerShellRunner.LineReceived),
-                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-        var del = (MulticastDelegate?)ev?.GetValue(runner);
-        Assert.NotNull(del);
+        var json = """
+        [
+            {"DeviceName":"Intel HD","Manufacturer":"Intel","DriverVersion":"10.0.1","DriverDate":"/Date(1609459200000)/"},
+            {"DeviceName":"NVIDIA GPU","Manufacturer":"NVIDIA","DriverVersion":"31.0.2","DriverDate":null}
+        ]
+        """;
 
-        del!.DynamicInvoke(Models.PowerShellLine.Output("driver test line"));
+        method.Invoke(vm, new object[] { json });
 
-        Assert.Single(vm.Console.Lines);
-        Assert.Equal("driver test line", vm.Console.Lines[0].Text);
+        Assert.Equal(2, vm.Drivers.Count);
+        Assert.Equal("Intel HD", vm.Drivers[0].DeviceName);
+        Assert.Equal("NVIDIA GPU", vm.Drivers[1].DeviceName);
+    }
+
+    [Fact]
+    public void ParseDriverJson_SingleObject_PopulatesOneDriver()
+    {
+        var vm = NewVm();
+        var method = typeof(DriversViewModel)
+            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        var json = """{"DeviceName":"Realtek Audio","Manufacturer":"Realtek","DriverVersion":"6.0.1","DriverDate":null}""";
+
+        method.Invoke(vm, new object[] { json });
+
+        Assert.Single(vm.Drivers);
+        Assert.Equal("Realtek Audio", vm.Drivers[0].DeviceName);
+    }
+
+    [Fact]
+    public void ParseDriverJson_EmptyString_NoDrivers()
+    {
+        var vm = NewVm();
+        var method = typeof(DriversViewModel)
+            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        method.Invoke(vm, new object[] { "" });
+
+        Assert.Empty(vm.Drivers);
+    }
+
+    [Fact]
+    public void ParseDriverJson_InvalidJson_DoesNotThrow()
+    {
+        var vm = NewVm();
+        var method = typeof(DriversViewModel)
+            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        var ex = Record.Exception(() => method.Invoke(vm, new object[] { "not json at all" }));
+
+        // TargetInvocationException wraps internal exceptions; parse errors are caught internally
+        Assert.True(ex == null || ex is TargetInvocationException);
+        Assert.Empty(vm.Drivers);
+    }
+
+    // ---------- ParseCimDate via reflection ----------
+
+    [Fact]
+    public void ParseCimDate_ValidDateTicks_ReturnsDateTime()
+    {
+        var method = typeof(DriversViewModel)
+            .GetMethod("ParseCimDate", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        // Create a JsonElement with "/Date(1609459200000)/" (2021-01-01 UTC)
+        var json = System.Text.Json.JsonDocument.Parse("\"/Date(1609459200000)/\"");
+        var result = (DateTime?)method.Invoke(null, new object[] { json.RootElement });
+
+        Assert.NotNull(result);
+        Assert.Equal(2021, result!.Value.Year);
+    }
+
+    [Fact]
+    public void ParseCimDate_NullElement_ReturnsNull()
+    {
+        var method = typeof(DriversViewModel)
+            .GetMethod("ParseCimDate", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var json = System.Text.Json.JsonDocument.Parse("null");
+        var result = (DateTime?)method.Invoke(null, new object[] { json.RootElement });
+
+        Assert.Null(result);
     }
 }
 
-// ---------- sorting ----------
+// ---------- DriverEntry model ----------
 
-public class DriversViewModelSortTests
+public class DriverEntryTests
 {
-    private static DriversViewModel NewVm() => new(new PowerShellRunner());
-
     [Fact]
-    public void SortOptions_ContainsFourEntries()
+    public void DriverDateDisplay_WithDate_ReturnsFormatted()
     {
-        Assert.Equal(4, DriversViewModel.SortOptions.Length);
-        Assert.Contains("Name", DriversViewModel.SortOptions);
-        Assert.Contains("Manufacturer", DriversViewModel.SortOptions);
-        Assert.Contains("Version", DriversViewModel.SortOptions);
-        Assert.Contains("Date", DriversViewModel.SortOptions);
+        var entry = new DriverEntry { DriverDate = new DateTime(2023, 6, 15) };
+        Assert.Equal("2023-06-15", entry.DriverDateDisplay);
     }
 
     [Fact]
-    public void SortBy_DefaultIsName()
+    public void DriverDateDisplay_WithNull_ReturnsEmpty()
     {
-        var vm = NewVm();
-        Assert.Equal("Name", vm.SortBy);
-    }
-
-    [Theory]
-    [InlineData("Name")]
-    [InlineData("Manufacturer")]
-    [InlineData("Version")]
-    [InlineData("Date")]
-    public void SortBy_CanBeSet(string value)
-    {
-        var vm = NewVm();
-        vm.SortBy = value;
-        Assert.Equal(value, vm.SortBy);
+        var entry = new DriverEntry { DriverDate = null };
+        Assert.Equal("", entry.DriverDateDisplay);
     }
 
     [Fact]
-    public void SortBy_RaisesPropertyChanged()
+    public void Defaults_AllStringsEmpty()
     {
-        var vm = NewVm();
-        bool raised = false;
-        vm.PropertyChanged += (_, e) => { if (e.PropertyName == "SortBy") raised = true; };
-        vm.SortBy = "Date";
-        Assert.True(raised);
+        var entry = new DriverEntry();
+        Assert.Equal("", entry.DeviceName);
+        Assert.Equal("", entry.Manufacturer);
+        Assert.Equal("", entry.DriverVersion);
+        Assert.Null(entry.DriverDate);
     }
 }

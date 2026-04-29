@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.7] - 2026-04-29
+
+### Fixed
+- **Memory leak: CancellationTokenSource disposal** — previous CTS instances
+  were not disposed before creating new ones across 8 ViewModels (15 locations),
+  causing WaitHandle accumulation during extended use. Affected: Windows Update,
+  Uninstaller, System Health, Drivers, App Updates, Logs, Duplicate Finder,
+  Disk Analyzer (#161).
+- **Memory leak: Process object disposal** — `Process.GetProcessesByName()` and
+  `GetCurrentProcess()` results in `App.ActivateExistingInstance` were not
+  disposed, leaking OS handles (#161).
+- **Memory leak: PropertyChanged event handlers** — anonymous lambdas subscribed
+  to `target.PropertyChanged` in the Network tab were never unsubscribed when
+  targets were removed, preventing garbage collection of removed targets (#161).
+
 ## [0.28.6] - 2026-04-29
 
 ### Fixed

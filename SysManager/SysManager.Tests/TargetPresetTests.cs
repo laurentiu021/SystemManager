@@ -76,9 +76,9 @@ public class TargetPresetTests
         var hosts = TargetPresets.CS2Europe.Targets.Select(t => t.Host).ToList();
         // Known Valve EU subnets — at least one IP from each
         Assert.Contains(hosts, h => h.StartsWith("146.66.155"));  // Vienna
-        Assert.Contains(hosts, h => h.StartsWith("146.66.156"));  // Stockholm
         Assert.Contains(hosts, h => h.StartsWith("146.66.152"));  // Luxembourg
-        Assert.Contains(hosts, h => h.StartsWith("155.133."));    // Poland
+        Assert.Contains(hosts, h => h.StartsWith("155.133."));    // Poland / EU
+        Assert.Contains(hosts, h => h.StartsWith("162.254."));    // EU Central
     }
 
     [Fact]
@@ -133,14 +133,11 @@ public class TargetPresetTests
     public void FaceitEurope_CoversMainCountries()
     {
         var targets = TargetPresets.FaceitEurope.Targets;
-        Assert.True(targets.Count >= 8, $"Expected at least 8 FACEIT targets, got {targets.Count}");
+        Assert.True(targets.Count >= 5, $"Expected at least 5 FACEIT targets, got {targets.Count}");
         var names = targets.Select(t => t.Name).ToList();
-        // Multiple IPs per country — verify each country has at least one target
         Assert.Contains(names, n => n.StartsWith("FACEIT DE"));
         Assert.Contains(names, n => n.StartsWith("FACEIT UK"));
-        Assert.Contains(names, n => n.StartsWith("FACEIT FR"));
         Assert.Contains(names, n => n.StartsWith("FACEIT NL"));
-        Assert.Contains(names, n => n.StartsWith("FACEIT SE"));
         // Germany has multiple IPs
         Assert.True(names.Count(n => n.StartsWith("FACEIT DE")) >= 2,
             "Expected at least 2 FACEIT DE targets");

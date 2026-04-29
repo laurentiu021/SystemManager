@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.5] - 2026-04-29
+
+### Fixed
+- **Startup Manager: crash when scrolling** — WPF DataGrid virtualization
+  passed internal placeholder objects to command handlers, crashing the app.
+  Commands now accept `object?` with pattern matching (#326).
+- **About: What's New raw markdown** — release notes were displayed as plain
+  text. Added a lightweight markdown-to-Inlines renderer that formats headings,
+  bold, bullets, and inline code (#335).
+- **System Health: chkdsk false errors** — verdict relied solely on exit code,
+  which is non-zero even on healthy volumes. Now parses chkdsk output text for
+  known healthy/error patterns (#323).
+- **Quick Cleanup: Rescan not updating** — property changes fired from a
+  background thread inside Task.Run. Refactored to set ObservableProperties on
+  the UI thread after await (#327).
+- **Deep Cleanup: sidebar progress missing** — IsBusy was never set. Added
+  forwarding from IsScanning/IsCleaning/IsLargeScanning to IsBusy (#328).
+- **Disk Analyzer: duplicate progress indicator** — removed the redundant
+  background task tray entry; the NavItem slim bar is sufficient (#329).
+- **Ping: unreachable targets** — replaced 5 unreachable CS2 Europe IPs and
+  removed 3 unreachable FACEIT IPs. All new IPs verified with ICMP ping
+  (#330, #331, #332).
+- **Traceroute: chart not rendering** — LiveChartsCore CartesianChart collapsed
+  to zero height. Added MinHeight=250 (#333).
+- **Speed Test: HTTP values too low** — increased parallel streams from 4 to 8
+  and payload from 25 MB to 50 MB to saturate 1 Gbps+ links (#334).
+
 ## [0.28.0] - 2026-04-28
 
 ### Changed

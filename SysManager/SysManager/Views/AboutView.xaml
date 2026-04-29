@@ -1,7 +1,8 @@
 <!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
 <UserControl x:Class="SysManager.Views.AboutView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:helpers="clr-namespace:SysManager.Helpers">
     <UserControl.Resources>
         <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#070A0F" Offset="0"/>
@@ -160,7 +161,7 @@
                                                 <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="{Binding PublishedAt}" Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Body}" Foreground="{StaticResource TextSecondary}"
+                                            <TextBlock helpers:MarkdownTextBlock.Markdown="{Binding Body}" Foreground="{StaticResource TextSecondary}"
                                                        TextWrapping="Wrap" Margin="0,8,0,0" FontFamily="{StaticResource UiFont}"/>
                                         </StackPanel>
                                     </Border>

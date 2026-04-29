@@ -270,12 +270,6 @@
                                 </TextBlock>
                                 <ProgressBar Height="3" IsIndeterminate="True"/>
                             </StackPanel>
-                            <!-- Disk Analyzer progress -->
-                            <StackPanel Visibility="{Binding DiskAnalyzer.IsBusy, Converter={StaticResource FlexVis}}" Margin="0,4,0,0">
-                                <TextBlock Text="Disk Analyzer · scan" FontSize="11" FontWeight="SemiBold" Foreground="#22C55E"/>
-                                <TextBlock Text="{Binding DiskAnalyzer.CurrentFolder}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,4"/>
-                                <ProgressBar Height="3" IsIndeterminate="True"/>
-                            </StackPanel>
                             <!-- Duplicate File progress -->
                             <StackPanel Visibility="{Binding DuplicateFile.IsBusy, Converter={StaticResource FlexVis}}" Margin="0,4,0,0">
                                 <TextBlock Text="Duplicates · scan" FontSize="11" FontWeight="SemiBold" Foreground="#22C55E"/>

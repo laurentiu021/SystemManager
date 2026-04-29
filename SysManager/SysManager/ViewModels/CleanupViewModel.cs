@@ -63,7 +63,7 @@ public partial class CleanupViewModel : ViewModelBase
     {
         try
         {
-            await Task.Run(() =>
+            var (tempLabel, binLabel) = await Task.Run(() =>
             {
                 // Measure temp folders
                 long tempBytes = 0;
@@ -80,9 +80,10 @@ public partial class CleanupViewModel : ViewModelBase
                     }
                     catch { }
                 }
-                TempSizeLabel = tempBytes > 0 ? $"{tempBytes / 1024.0 / 1024.0:F1} MB can be freed" : "Empty";
+                var tLabel = tempBytes > 0 ? $"{tempBytes / 1024.0 / 1024.0:F1} MB can be freed" : "Empty";
 
                 // Measure recycle bin (rough estimate via shell folder)
+                string bLabel;
                 try
                 {
                     long binBytes = 0;
@@ -94,10 +95,16 @@ public partial class CleanupViewModel : ViewModelBase
                             try { binBytes += new System.IO.FileInfo(f).Length; } catch { }
                         }
                     }
-                    RecycleBinLabel = binBytes > 0 ? $"{binBytes / 1024.0 / 1024.0:F1} MB in Recycle Bin" : "Empty";
+                    bLabel = binBytes > 0 ? $"{binBytes / 1024.0 / 1024.0:F1} MB in Recycle Bin" : "Empty";
                 }
-                catch { RecycleBinLabel = "Unable to scan"; }
+                catch { bLabel = "Unable to scan"; }
+
+                return (tLabel, bLabel);
             });
+
+            // Update on the calling (UI) thread so PropertyChanged fires correctly
+            TempSizeLabel = tempLabel;
+            RecycleBinLabel = binLabel;
         }
         catch { /* non-fatal */ }
     }

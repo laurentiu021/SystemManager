@@ -471,4 +471,49 @@ public class DeepCleanupViewModelTests
         var b = new ScanLocation("A", "p2");
         Assert.NotEqual(a, b);
     }
+
+    // ---------- IsBusy forwarding ----------
+
+    [Fact]
+    public void IsScanning_True_SetsIsBusy()
+    {
+        var vm = NewVm();
+        vm.IsScanning = true;
+        Assert.True(vm.IsBusy);
+    }
+
+    [Fact]
+    public void IsScanning_False_ClearsIsBusy()
+    {
+        var vm = NewVm();
+        vm.IsScanning = true;
+        vm.IsScanning = false;
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public void IsCleaning_True_SetsIsBusy()
+    {
+        var vm = NewVm();
+        vm.IsCleaning = true;
+        Assert.True(vm.IsBusy);
+    }
+
+    [Fact]
+    public void IsLargeScanning_True_SetsIsBusy()
+    {
+        var vm = NewVm();
+        vm.IsLargeScanning = true;
+        Assert.True(vm.IsBusy);
+    }
+
+    [Fact]
+    public void IsBusy_StaysTrueWhileAnyFlagSet()
+    {
+        var vm = NewVm();
+        vm.IsScanning = true;
+        vm.IsCleaning = true;
+        vm.IsScanning = false;
+        Assert.True(vm.IsBusy); // IsCleaning still true
+    }
 }

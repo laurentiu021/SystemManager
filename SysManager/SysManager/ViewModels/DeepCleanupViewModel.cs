@@ -93,6 +93,11 @@ public partial class DeepCleanupViewModel : ViewModelBase
 
     partial void OnLargeBytesScannedChanged(long value) => OnPropertyChanged(nameof(LargeBytesScannedDisplay));
 
+    // Forward any running state to IsBusy so the sidebar progress indicator works
+    partial void OnIsScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
+    partial void OnIsCleaningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
+    partial void OnIsLargeScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
+
     // ---------- deep cleanup scan ----------
 
     [RelayCommand]

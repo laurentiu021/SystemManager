@@ -30,9 +30,9 @@ public sealed class SpeedTestService
     private const string CfUploadUrl = "https://speed.cloudflare.com/__up";
     private const string CfPingHost = "speed.cloudflare.com";
 
-    // 25 MB is a good compromise between accuracy and test duration on slow links.
-    private const long PayloadBytes = 25L * 1024 * 1024;
-    private const int DownloadConnections = 4; // parallel streams for accurate throughput
+    // 50 MB with 8 parallel streams saturates high-speed links (1 Gbps+).
+    private const long PayloadBytes = 50L * 1024 * 1024;
+    private const int DownloadConnections = 8; // parallel streams for accurate throughput
 
     public async Task<SpeedTestResult> RunHttpAsync(
         IProgress<(int Percent, string Message)>? progress, CancellationToken ct)

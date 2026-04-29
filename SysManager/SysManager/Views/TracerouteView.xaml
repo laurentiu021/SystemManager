@@ -57,7 +57,7 @@
                             <TextBlock Text="s" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </DockPanel>
-                    <lvc:CartesianChart Grid.Row="1" Background="Transparent"
+                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="250"
                                         Series="{Binding Shared.TraceSeries}"
                                         XAxes="{Binding Shared.TraceXAxes}" YAxes="{Binding Shared.TraceYAxes}"
                                         LegendPosition="Bottom"

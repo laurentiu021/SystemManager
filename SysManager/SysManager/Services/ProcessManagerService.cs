@@ -67,6 +67,7 @@ public sealed class ProcessManagerService
                 try { entry.Description = p.MainModule?.FileVersionInfo.FileDescription ?? ""; } catch { }
                 try { entry.FilePath = p.MainModule?.FileName ?? ""; } catch { }
                 try { entry.StartTime = p.StartTime; } catch { }
+                try { entry.HasMainWindow = p.MainWindowHandle != IntPtr.Zero; } catch { }
 
                 results.Add(entry);
             }

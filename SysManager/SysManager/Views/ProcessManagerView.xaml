@@ -39,6 +39,9 @@
                                VerticalAlignment="Center" FontSize="12"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
+                <CheckBox Content="Show only apps" IsChecked="{Binding ShowOnlyApps}"
+                          VerticalAlignment="Center" Margin="4,0,0,0"
+                          ToolTip="Hide system processes and show only applications with a visible window"/>
             </WrapPanel>
         </Border>
 
@@ -142,6 +145,7 @@
                                     <Button Content="📂" ToolTip="Open file location"
                                             Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
+                                            IsEnabled="{Binding CanOpenFileLocation}"
                                             Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
                                             Margin="0,0,4,0"/>
                                     <Button Content="✕" ToolTip="Kill process"

@@ -23,11 +23,13 @@ public partial class ProcessManagerViewModel : ViewModelBase
     public ObservableCollection<ProcessEntry> FilteredProcesses { get; } = new();
 
     [ObservableProperty] private string _filterText = "";
+    [ObservableProperty] private bool _showOnlyApps;
     [ObservableProperty] private int _processCount;
     [ObservableProperty] private long _totalMemory;
     [ObservableProperty] private string _summary = "Click Refresh to list running processes.";
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
+    partial void OnShowOnlyAppsChanged(bool value) => ApplyFilter();
 
     public ProcessManagerViewModel()
     {
@@ -97,7 +99,7 @@ public partial class ProcessManagerViewModel : ViewModelBase
     [RelayCommand]
     private static void OpenFileLocation(ProcessEntry? entry)
     {
-        if (entry == null) return;
+        if (entry == null || !entry.CanOpenFileLocation) return;
         ProcessManagerService.OpenFileLocation(entry.FilePath);
     }
 
@@ -106,6 +108,9 @@ public partial class ProcessManagerViewModel : ViewModelBase
         FilteredProcesses.Clear();
 
         IEnumerable<ProcessEntry> source = Processes;
+
+        if (ShowOnlyApps)
+            source = source.Where(p => p.HasMainWindow);
 
         if (!string.IsNullOrWhiteSpace(FilterText))
         {

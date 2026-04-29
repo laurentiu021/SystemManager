@@ -23,6 +23,11 @@ public partial class ProcessEntry : ObservableObject
     [ObservableProperty] private int _threadCount;
     [ObservableProperty] private string _filePath = "";
     [ObservableProperty] private ImageSource? _icon;
+    [ObservableProperty] private bool _hasMainWindow;
+
+    /// <summary>True when the process has a valid, accessible file path.</summary>
+    public bool CanOpenFileLocation => !string.IsNullOrWhiteSpace(FilePath)
+                                       && System.IO.File.Exists(FilePath);
 
     /// <summary>Formatted memory for display.</summary>
     public string MemoryDisplay => FormatSize(MemoryBytes);

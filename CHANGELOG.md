@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.8] - 2026-04-29
+
+### Fixed
+- **Process Manager: Open file location disabled for system processes** — button
+  was active but non-functional for processes without an accessible file path.
+  Now disabled with a tooltip when the path doesn't exist (#100).
+
+### Added
+- **Process Manager: Show only apps toggle** — checkbox in the toolbar filters
+  out system processes and shows only applications with a visible window,
+  reducing the list from 200+ entries to just user-facing apps (#100).
+
 ## [0.28.7] - 2026-04-29
 
 ### Fixed

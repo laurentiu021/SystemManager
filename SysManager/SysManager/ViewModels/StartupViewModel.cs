@@ -58,9 +58,9 @@ public partial class StartupViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ToggleEntry(StartupEntry? entry)
+    private void ToggleEntry(object? parameter)
     {
-        if (entry == null) return;
+        if (parameter is not StartupEntry entry) return;
 
         // The CheckBox two-way binding has already flipped IsEnabled before
         // this command runs. We use the current (already-flipped) value as
@@ -91,9 +91,9 @@ public partial class StartupViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void OpenFileLocation(StartupEntry? entry)
+    private void OpenFileLocation(object? parameter)
     {
-        if (entry == null) return;
+        if (parameter is not StartupEntry entry) return;
         try
         {
             var path = entry.Command.Trim('"', ' ');

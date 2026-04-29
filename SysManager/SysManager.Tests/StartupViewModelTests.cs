@@ -98,10 +98,28 @@ public class StartupViewModelTests
     }
 
     [Fact]
+    public void ToggleEntry_WrongTypeDoesNotThrow()
+    {
+        var vm = new StartupViewModel();
+        // Simulates WPF DataGrid virtualization passing a non-StartupEntry object
+        var ex = Record.Exception(() => vm.ToggleEntryCommand.Execute("not a StartupEntry"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
     public void OpenFileLocation_NullDoesNotThrow()
     {
         var vm = new StartupViewModel();
         var ex = Record.Exception(() => vm.OpenFileLocationCommand.Execute(null));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void OpenFileLocation_WrongTypeDoesNotThrow()
+    {
+        var vm = new StartupViewModel();
+        // Simulates WPF DataGrid virtualization passing a non-StartupEntry object
+        var ex = Record.Exception(() => vm.OpenFileLocationCommand.Execute(42));
         Assert.Null(ex);
     }
 }

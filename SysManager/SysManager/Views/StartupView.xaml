@@ -45,7 +45,9 @@
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="False"
                       RowBackground="Transparent" AlternatingRowBackground="#0F141C"
-                      SelectionMode="Single" CanUserSortColumns="True">
+                      SelectionMode="Single" CanUserSortColumns="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
                     <DataGridTemplateColumn Header="" Width="40" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>

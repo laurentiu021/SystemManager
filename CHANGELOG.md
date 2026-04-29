@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.28.5] - 2026-04-29
+## [0.28.6] - 2026-04-29
 
 ### Fixed
 - **Startup Manager: crash when scrolling** — WPF DataGrid virtualization

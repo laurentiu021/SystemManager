@@ -85,8 +85,11 @@ long-running operation, so you always know which tab is working.
 ### Windows Update (via PSWindowsUpdate)
 - Auto-check for the PSWindowsUpdate module on tab open, with a one-click
   install card if it's missing
+- Sortable DataGrid table for available updates, hidden updates, and history
+- Columns: Title, KB, Size, Status, Date, Category — click headers to sort
 - Check for standard and feature updates
 - Install selected updates, list history, check pending-reboot state
+- Live console output in a collapsible panel during install operations
 - Admin banner with a one-click "Run as Administrator" relaunch
 
 ### App updates (winget)
@@ -191,8 +194,9 @@ long-running operation, so you always know which tab is working.
 - Requires admin for all mutations
 
 ### Drivers
-- List all installed drivers with versions and dates
-- Check Windows Update for driver updates
+- Sortable DataGrid table of all installed system drivers
+- Columns: Device Name, Manufacturer, Version, Date — click headers to sort
+- Data parsed from `Get-CimInstance Win32_PnPSignedDriver`
 
 ### Dashboard
 - One-line OS / CPU / RAM / disk summary

@@ -59,16 +59,20 @@ public partial class App : Application
 
     private static void ActivateExistingInstance()
     {
-        var current = Process.GetCurrentProcess();
+        using var current = Process.GetCurrentProcess();
         foreach (var proc in Process.GetProcessesByName(current.ProcessName))
         {
-            if (proc.Id != current.Id && proc.MainWindowHandle != IntPtr.Zero)
+            try
             {
-                if (IsIconic(proc.MainWindowHandle))
-                    ShowWindow(proc.MainWindowHandle, SW_RESTORE);
-                SetForegroundWindow(proc.MainWindowHandle);
-                break;
+                if (proc.Id != current.Id && proc.MainWindowHandle != IntPtr.Zero)
+                {
+                    if (IsIconic(proc.MainWindowHandle))
+                        ShowWindow(proc.MainWindowHandle, SW_RESTORE);
+                    SetForegroundWindow(proc.MainWindowHandle);
+                    break;
+                }
             }
+            finally { proc.Dispose(); }
         }
     }
 

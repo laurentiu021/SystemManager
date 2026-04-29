@@ -43,6 +43,7 @@ public partial class UninstallerViewModel : ViewModelBase
         StatusMessage = "Querying winget list…";
         AllApps.Clear();
         FilteredApps.Clear();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
         try
@@ -95,6 +96,7 @@ public partial class UninstallerViewModel : ViewModelBase
         if (result != System.Windows.MessageBoxResult.Yes) return;
 
         IsBusy = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         int done = 0;
 

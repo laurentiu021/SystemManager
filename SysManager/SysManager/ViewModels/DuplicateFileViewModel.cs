@@ -70,6 +70,7 @@ public partial class DuplicateFileViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(SelectedFolder)) return;
 
         _cts?.Cancel();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
 

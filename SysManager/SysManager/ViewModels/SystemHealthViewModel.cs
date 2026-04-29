@@ -175,6 +175,7 @@ public partial class SystemHealthViewModel : ViewModelBase
 
         var target = ChkdskDrives.FirstOrDefault(d => string.Equals(d.Letter, driveLetter, StringComparison.OrdinalIgnoreCase));
         IsChkdskRunning = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {
@@ -202,6 +203,7 @@ public partial class SystemHealthViewModel : ViewModelBase
 
         IsChkdskRunning = true;
         ChkdskStatus = $"Scanning {selected.Count} drive(s)...";
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {

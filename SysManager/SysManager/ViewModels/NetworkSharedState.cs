@@ -4,6 +4,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -46,6 +47,7 @@ public sealed partial class NetworkSharedState : ObservableObject
     internal readonly Dictionary<string, ObservableCollection<DateTimePoint>> Buffers = new();
     internal readonly Dictionary<string, ObservableCollection<ObservablePoint>> TraceBuffers = new();
     internal readonly Dictionary<string, IReadOnlyList<TracerouteHop>> LatestRoutes = new();
+    private readonly Dictionary<string, PropertyChangedEventHandler> _targetHandlers = new();
 
     public ObservableCollection<PingTarget> Targets { get; } = new();
     public ObservableCollection<TracerouteHop> TracerouteHops { get; } = new();
@@ -181,7 +183,7 @@ public sealed partial class NetworkSharedState : ObservableObject
 
         Pinger.AddOrUpdate(target);
         TraceMonitor.AddOrUpdate(target);
-        target.PropertyChanged += (_, e) =>
+        PropertyChangedEventHandler handler = (_, e) =>
         {
             if (e.PropertyName == nameof(PingTarget.IsEnabled))
             {
@@ -200,6 +202,8 @@ public sealed partial class NetworkSharedState : ObservableObject
                 }
             }
         };
+        target.PropertyChanged += handler;
+        _targetHandlers[host] = handler;
     }
 
     public void AddCustomTarget()
@@ -218,6 +222,11 @@ public sealed partial class NetworkSharedState : ObservableObject
 
     internal void RemoveTargetInternal(PingTarget target)
     {
+        if (_targetHandlers.TryGetValue(target.Host, out var handler))
+        {
+            target.PropertyChanged -= handler;
+            _targetHandlers.Remove(target.Host);
+        }
         Targets.Remove(target);
         var idx = LatencySeries.ToList().FindIndex(s => s.Name?.Contains($"({target.Host})") == true);
         if (idx >= 0) LatencySeries.RemoveAt(idx);

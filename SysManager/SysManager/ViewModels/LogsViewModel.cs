@@ -112,6 +112,7 @@ public partial class LogsViewModel : ViewModelBase
     private async Task RefreshAsync()
     {
         _cts?.Cancel();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         IsBusy = true;
         IsProgressIndeterminate = true;

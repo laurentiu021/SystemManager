@@ -120,6 +120,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         StatusMessage = "Listing available Windows Updates…";
         Updates.Clear();
         ShowConsole = false;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
         try
@@ -185,6 +186,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         StatusMessage = "Loading update history…";
         Updates.Clear();
         ShowConsole = false;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
         try
@@ -235,6 +237,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         StatusMessage = "Checking for feature upgrades…";
         Updates.Clear();
         ShowConsole = false;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
         try
@@ -287,6 +290,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         StatusMessage = "Checking pending reboot…";
         ShowConsole = true;
         Console.ClearCommand.Execute(null);
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {
@@ -326,6 +330,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         StatusMessage = "Installing updates (do not reboot)…";
         ShowConsole = true;
         Console.ClearCommand.Execute(null);
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {

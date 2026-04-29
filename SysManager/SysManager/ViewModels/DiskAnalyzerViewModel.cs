@@ -70,6 +70,7 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(SelectedPath)) return;
 
         _cts?.Cancel();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
 

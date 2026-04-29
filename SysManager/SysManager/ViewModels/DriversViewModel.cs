@@ -35,6 +35,7 @@ public partial class DriversViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         StatusMessage = "Scanning installed drivers…";
         Drivers.Clear();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
         try

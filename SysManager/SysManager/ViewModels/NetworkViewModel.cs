@@ -4,6 +4,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -58,6 +59,7 @@ public partial class NetworkViewModel : ViewModelBase
     private readonly Dictionary<string, ObservableCollection<DateTimePoint>> _buffers = new();
     private readonly Dictionary<string, ObservableCollection<ObservablePoint>> _traceBuffers = new();
     private readonly Dictionary<string, IReadOnlyList<TracerouteHop>> _latestRoutes = new();
+    private readonly Dictionary<string, PropertyChangedEventHandler> _targetHandlers = new();
 
     // ---------- Bindable state ----------
 
@@ -245,7 +247,7 @@ public partial class NetworkViewModel : ViewModelBase
 
         _pinger.AddOrUpdate(target);
         _traceMonitor.AddOrUpdate(target);
-        target.PropertyChanged += (_, e) =>
+        PropertyChangedEventHandler handler = (_, e) =>
         {
             if (e.PropertyName == nameof(PingTarget.IsEnabled))
             {
@@ -264,6 +266,8 @@ public partial class NetworkViewModel : ViewModelBase
                 }
             }
         };
+        target.PropertyChanged += handler;
+        _targetHandlers[host] = handler;
     }
 
     // ---------- Commands ----------
@@ -309,6 +313,11 @@ public partial class NetworkViewModel : ViewModelBase
 
     private void RemoveTargetInternal(PingTarget target)
     {
+        if (_targetHandlers.TryGetValue(target.Host, out var handler))
+        {
+            target.PropertyChanged -= handler;
+            _targetHandlers.Remove(target.Host);
+        }
         Targets.Remove(target);
         var idx = LatencySeries.ToList().FindIndex(s => s.Name?.Contains($"({target.Host})") == true);
         if (idx >= 0) LatencySeries.RemoveAt(idx);

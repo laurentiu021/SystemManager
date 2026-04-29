@@ -49,6 +49,7 @@ public partial class AppUpdatesViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         StatusMessage = "Querying winget...";
         Packages.Clear();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {
@@ -67,6 +68,7 @@ public partial class AppUpdatesViewModel : ViewModelBase
         if (toUpgrade.Count == 0) { StatusMessage = "No packages selected"; return; }
 
         IsBusy = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         int done = 0;
         try

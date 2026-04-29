@@ -221,4 +221,55 @@ public class SystemHealthViewModelTests
         dt.IsSelected = true;
         Assert.True(fired);
     }
+
+    // ---------- ParseChkdskVerdict ----------
+
+    [Fact]
+    public void ParseChkdskVerdict_FoundNoProblems_ReturnsHealthy()
+    {
+        var lines = new[] { "Windows has scanned the file system and found no problems." };
+        Assert.Equal("Healthy", SystemHealthViewModel.ParseChkdskVerdict(lines, 0));
+    }
+
+    [Fact]
+    public void ParseChkdskVerdict_FoundNoProblems_NonZeroExit_StillHealthy()
+    {
+        var lines = new[] { "Windows has scanned the file system and found no problems.", "No further action is required." };
+        Assert.Equal("Healthy", SystemHealthViewModel.ParseChkdskVerdict(lines, 1));
+    }
+
+    [Fact]
+    public void ParseChkdskVerdict_NoErrors_ReturnsHealthy()
+    {
+        var lines = new[] { "Scan complete. No errors found." };
+        Assert.Equal("Healthy", SystemHealthViewModel.ParseChkdskVerdict(lines, 0));
+    }
+
+    [Fact]
+    public void ParseChkdskVerdict_MadeCorrections_ReturnsRepaired()
+    {
+        var lines = new[] { "Windows has made corrections to the file system." };
+        Assert.Equal("Repaired", SystemHealthViewModel.ParseChkdskVerdict(lines, 1));
+    }
+
+    [Fact]
+    public void ParseChkdskVerdict_NotSupported_ReturnsNotSupported()
+    {
+        var lines = new[] { "The /scan option is not supported for FAT32 volumes." };
+        Assert.Equal("Not supported", SystemHealthViewModel.ParseChkdskVerdict(lines, 1));
+    }
+
+    [Fact]
+    public void ParseChkdskVerdict_EmptyOutput_ExitZero_ReturnsHealthy()
+    {
+        var lines = Array.Empty<string>();
+        Assert.Equal("Healthy", SystemHealthViewModel.ParseChkdskVerdict(lines, 0));
+    }
+
+    [Fact]
+    public void ParseChkdskVerdict_EmptyOutput_NonZeroExit_ReturnsExitCode()
+    {
+        var lines = Array.Empty<string>();
+        Assert.Equal("Exit 3", SystemHealthViewModel.ParseChkdskVerdict(lines, 3));
+    }
 }

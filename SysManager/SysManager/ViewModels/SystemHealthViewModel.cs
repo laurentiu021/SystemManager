@@ -233,14 +233,27 @@ public partial class SystemHealthViewModel : ViewModelBase
         if (target != null) target.Status = "Running...";
         try
         {
-            // /scan = online read-only scan; non-destructive, reports only.
+            // Capture chkdsk output lines so we can parse the verdict from
+            // the text rather than relying solely on the exit code. chkdsk
+            // may return non-zero even on healthy disks (e.g. when the
+            // volume is in use or /scan is not supported on the filesystem).
+            var captured = new System.Collections.Generic.List<string>();
+            void OnLine(PowerShellLine l) => captured.Add(l.Text);
+            _runner.LineReceived += OnLine;
+
             var oemEncoding = System.Text.Encoding.GetEncoding(
                 System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
-            var exit = await _runner.RunProcessAsync("chkdsk.exe", $"{driveLetter} /scan", ct, oemEncoding);
-            if (target != null)
-                target.Status = exit == 0 ? "OK" : $"Exit {exit}";
-            StatusMessage = $"chkdsk {driveLetter} done (exit {exit}).";
-            Log.Information("chkdsk completed on {Drive}: exit {ExitCode}", driveLetter, exit);
+            int exit;
+            try
+            {
+                exit = await _runner.RunProcessAsync("chkdsk.exe", $"{driveLetter} /scan", ct, oemEncoding);
+            }
+            finally { _runner.LineReceived -= OnLine; }
+
+            var verdict = ParseChkdskVerdict(captured, exit);
+            if (target != null) target.Status = verdict;
+            StatusMessage = $"chkdsk {driveLetter} done — {verdict}.";
+            Log.Information("chkdsk completed on {Drive}: exit {ExitCode}, verdict {Verdict}", driveLetter, exit, verdict);
         }
         catch (OperationCanceledException)
         {
@@ -252,6 +265,43 @@ public partial class SystemHealthViewModel : ViewModelBase
             if (target != null) target.Status = "Error";
             StatusMessage = $"Error on {driveLetter}: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Parses chkdsk output to determine the health verdict. The exit code
+    /// alone is unreliable — chkdsk may return non-zero on healthy volumes
+    /// when the volume is in use or /scan is not supported.
+    /// </summary>
+    internal static string ParseChkdskVerdict(IReadOnlyList<string> outputLines, int exitCode)
+    {
+        var combined = string.Join('\n', outputLines);
+
+        // Healthy patterns (English + common localized variants)
+        if (combined.Contains("found no problems", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("no further action is required", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("no errors", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("appears to be healthy", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("no problems were found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Healthy";
+        }
+
+        // Errors found but corrected
+        if (combined.Contains("made corrections", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("corrected errors", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Repaired";
+        }
+
+        // /scan not supported (FAT32, exFAT)
+        if (combined.Contains("not supported", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("cannot run", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Not supported";
+        }
+
+        // Fall back to exit code
+        return exitCode == 0 ? "Healthy" : $"Exit {exitCode}";
     }
 
     [RelayCommand]

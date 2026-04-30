@@ -28,8 +28,13 @@ public partial class StartupViewModel : ViewModelBase
 
     public StartupViewModel()
     {
-        // Auto-scan on construction
-        _ = ScanAsync();
+        _ = InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        try { await ScanAsync(); }
+        catch (Exception ex) { Log.Warning("Startup auto-scan failed: {Error}", ex.Message); }
     }
 
     [RelayCommand]

@@ -47,11 +47,27 @@ public partial class SystemHealthViewModel : ViewModelBase
     {
         _sys = sys;
         IsElevated = AdminHelper.IsElevated();
-        _runner.LineReceived += l => Console.Append(l);
+        _runner.LineReceived += OnRunnerLineReceived;
 
-        // Kick off drive discovery in the background so the list is ready
-        // when the user opens the tab.
-        _ = RefreshDrivesAsync();
+        _ = InitAsync();
+    }
+
+    private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);
+
+    private async Task InitAsync()
+    {
+        try { await RefreshDrivesAsync(); }
+        catch (Exception ex) { Log.Warning("System health drive discovery failed: {Error}", ex.Message); }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _runner.LineReceived -= OnRunnerLineReceived;
+            _cts?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 
     [RelayCommand]

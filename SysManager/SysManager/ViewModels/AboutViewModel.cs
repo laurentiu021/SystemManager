@@ -10,6 +10,7 @@ using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Services;
 
@@ -45,8 +46,13 @@ public partial class AboutViewModel : ViewModelBase
     public AboutViewModel(UpdateService updates)
     {
         _updates = updates;
-        // Fire-and-forget auto check on app start.
-        _ = CheckAtStartupAsync();
+        _ = InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        try { await CheckAtStartupAsync(); }
+        catch (Exception ex) { Log.Warning("About auto-check failed: {Error}", ex.Message); }
     }
 
     /// <summary>Exposes the last network error for binding ("Retry" button).</summary>

@@ -48,12 +48,34 @@ public partial class CleanupViewModel : ViewModelBase
     public CleanupViewModel(PowerShellRunner runner)
     {
         _runner = runner;
-        _runner.LineReceived += l => Console.Append(l);
-        _runner.ProgressChanged += p => Progress = p;
+        _runner.LineReceived += OnRunnerLineReceived;
+        _runner.ProgressChanged += OnRunnerProgressChanged;
         IsElevated = AdminHelper.IsElevated();
 
-        // Auto-scan temp and recycle bin sizes so the tab isn't empty on load
-        _ = PreScanAsync();
+        _ = InitAsync();
+    }
+
+    private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);
+    private void OnRunnerProgressChanged(int p) => Progress = p;
+
+    private async Task InitAsync()
+    {
+        try { await PreScanAsync(); }
+        catch (Exception ex) { Log.Warning("Cleanup pre-scan failed: {Error}", ex.Message); }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _runner.LineReceived -= OnRunnerLineReceived;
+            _runner.ProgressChanged -= OnRunnerProgressChanged;
+            _tempCts?.Dispose();
+            _binCts?.Dispose();
+            _sfcCts?.Dispose();
+            _dismCts?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 
     [RelayCommand]

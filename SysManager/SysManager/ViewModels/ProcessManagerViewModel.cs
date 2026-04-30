@@ -33,7 +33,13 @@ public partial class ProcessManagerViewModel : ViewModelBase
 
     public ProcessManagerViewModel()
     {
-        _ = RefreshAsync();
+        _ = InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        try { await RefreshAsync(); }
+        catch (Exception ex) { Log.Warning("Process list auto-refresh failed: {Error}", ex.Message); }
     }
 
     [RelayCommand]

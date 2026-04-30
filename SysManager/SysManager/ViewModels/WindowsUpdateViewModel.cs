@@ -32,10 +32,30 @@ public partial class WindowsUpdateViewModel : ViewModelBase
     public WindowsUpdateViewModel(PowerShellRunner runner)
     {
         _runner = runner;
-        _runner.LineReceived += l => Console.Append(l);
-        _runner.ProgressChanged += p => Progress = p;
+        _runner.LineReceived += OnRunnerLineReceived;
+        _runner.ProgressChanged += OnRunnerProgressChanged;
         IsElevated = AdminHelper.IsElevated();
-        _ = AutoCheckOnStartAsync();
+        _ = InitAsync();
+    }
+
+    private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);
+    private void OnRunnerProgressChanged(int p) => Progress = p;
+
+    private async Task InitAsync()
+    {
+        try { await AutoCheckOnStartAsync(); }
+        catch (Exception ex) { Log.Warning("Windows Update auto-check failed: {Error}", ex.Message); }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _runner.LineReceived -= OnRunnerLineReceived;
+            _runner.ProgressChanged -= OnRunnerProgressChanged;
+            _cts?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 
     private async Task AutoCheckOnStartAsync()
@@ -45,7 +65,8 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             await Task.Delay(250);
             await CheckModuleAsync();
         }
-        catch { /* Swallow — manual check still works */ }
+        catch (OperationCanceledException) { }
+        catch (InvalidOperationException ex) { Log.Warning("Module check failed: {Error}", ex.Message); }
     }
 
     [RelayCommand]

@@ -54,7 +54,13 @@ public partial class PerformanceViewModel : ViewModelBase
     public PerformanceViewModel(PowerShellRunner ps)
     {
         _service = new PerformanceService(ps);
-        _ = RefreshAsync();
+        _ = InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        try { await RefreshAsync(); }
+        catch (Exception ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
     }
 
     /// <summary>Ensure snapshot exists before any change.</summary>

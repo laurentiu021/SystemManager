@@ -55,7 +55,13 @@ public partial class DeepCleanupViewModel : ViewModelBase
 
     public DeepCleanupViewModel()
     {
-        _ = LoadLocationsAsync();
+        _ = InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        try { await LoadLocationsAsync(); }
+        catch (Exception ex) { Log.Warning("Deep cleanup location load failed: {Error}", ex.Message); }
     }
 
     private async Task LoadLocationsAsync()
@@ -97,6 +103,17 @@ public partial class DeepCleanupViewModel : ViewModelBase
     partial void OnIsScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
     partial void OnIsCleaningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
     partial void OnIsLargeScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _scanCts?.Dispose();
+            _cleanCts?.Dispose();
+            _largeCts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 
     // ---------- deep cleanup scan ----------
 

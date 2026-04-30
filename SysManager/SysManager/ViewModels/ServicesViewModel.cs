@@ -34,7 +34,16 @@ public partial class ServicesViewModel : ViewModelBase
     public string[] FilterOptions { get; } =
         { "All", "Running", "Stopped", "Safe to disable", "Advanced" };
 
-    public ServicesViewModel() => _ = RefreshAsync();
+    public ServicesViewModel()
+    {
+        _ = InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        try { await RefreshAsync(); }
+        catch (Exception ex) { Log.Warning("Services auto-refresh failed: {Error}", ex.Message); }
+    }
 
     partial void OnFilterChanged(string value) => ApplyFilter();
     partial void OnSelectedFilterChanged(string value) => ApplyFilter();

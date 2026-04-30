@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.15] - 2026-04-30
+
+### Fixed
+- **CodeQL: empty-catch-block** — added Serilog logging or descriptive comments
+  to ~50 empty catch blocks across 10 files: `IconExtractorService`,
+  `DiskAnalyzerService`, `DuplicateFileService`, `ProcessManagerService`,
+  `SpeedTestService`, `StartupService`, `UninstallerService`,
+  `CleanupViewModel`, `DiskAnalyzerViewModel`, `DuplicateFileViewModel`.
+- **CodeQL: catch-of-all-exceptions** — replaced bare `catch { }` in
+  `DiskAnalyzerService` (7 blocks) with specific `UnauthorizedAccessException`
+  and `IOException`; replaced `catch (Exception)` in `DiskAnalyzerViewModel`
+  and `DuplicateFileViewModel` with specific types.
+- **CodeQL: missed-where** — converted `ShouldSkip`/`ShouldSkipDir`/
+  `ShouldSkipFile` foreach loops to LINQ `Any()` in `DiskAnalyzerService`
+  and `DuplicateFileService`.
+
 ## [0.28.14] - 2026-04-30
 
 ### Fixed

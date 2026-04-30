@@ -114,7 +114,11 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
         {
             StatusMessage = "Analysis cancelled.";
         }
-        catch (Exception ex)
+        catch (IOException ex)
+        {
+            StatusMessage = $"Analysis failed: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
         {
             StatusMessage = $"Analysis failed: {ex.Message}";
         }
@@ -142,7 +146,8 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
                 UseShellExecute = true
             });
         }
-        catch { }
+        catch (InvalidOperationException ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.FullPath); }
+        catch (System.ComponentModel.Win32Exception ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.FullPath); }
     }
 
     [RelayCommand]
@@ -203,7 +208,8 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
                 }
             }
         }
-        catch { }
+        catch (IOException ex) { Log.Debug(ex, "Failed to read drive info for {Path}", SelectedPath); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied reading drive info for {Path}", SelectedPath); }
         HasDriveInfo = false;
     }
 

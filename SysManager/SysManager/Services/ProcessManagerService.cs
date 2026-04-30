@@ -70,17 +70,17 @@ public sealed class ProcessManagerService
                 }
 
                 try { entry.Description = p.MainModule?.FileVersionInfo.FileDescription ?? ""; }
-                catch (InvalidOperationException) { }
-                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { /* access denied or process exited */ }
+                catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
                 try { entry.FilePath = p.MainModule?.FileName ?? ""; }
-                catch (InvalidOperationException) { }
-                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { /* access denied or process exited */ }
+                catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
                 try { entry.StartTime = p.StartTime; }
-                catch (InvalidOperationException) { }
-                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { /* access denied or process exited */ }
+                catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
                 try { entry.HasMainWindow = p.MainWindowHandle != IntPtr.Zero; }
-                catch (InvalidOperationException) { }
-                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { /* access denied or process exited */ }
+                catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
 
                 results.Add(entry);
             }
@@ -123,7 +123,7 @@ public sealed class ProcessManagerService
                 UseShellExecute = true
             });
         }
-        catch (InvalidOperationException) { }
-        catch (System.ComponentModel.Win32Exception) { }
+        catch (InvalidOperationException ex) { Log.Warning(ex, "Failed to open file location: {Path}", filePath); }
+        catch (System.ComponentModel.Win32Exception ex) { Log.Warning(ex, "Failed to open file location: {Path}", filePath); }
     }
 }

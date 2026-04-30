@@ -10,6 +10,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
+using Serilog;
 
 namespace SysManager.Services;
 
@@ -117,8 +118,8 @@ public sealed class IconExtractorService
                 if (exes.Length > 0)
                     return GetIcon(exes[0]);
             }
-            catch (UnauthorizedAccessException) { }
-            catch (IOException) { }
+            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied scanning install location for app icon"); }
+            catch (IOException ex) { Log.Debug(ex, "I/O error scanning install location for app icon"); }
         }
 
         return _appFallback.Value;
@@ -316,7 +317,7 @@ public sealed class IconExtractorService
                 var candidate = Path.Combine(dir.Trim(), exeName);
                 if (File.Exists(candidate)) return candidate;
             }
-            catch (ArgumentException) { }
+            catch (ArgumentException ex) { Log.Debug(ex, "Invalid PATH directory entry: {Dir}", dir); }
         }
 
         var commonDirs = new[]
@@ -336,7 +337,7 @@ public sealed class IconExtractorService
                 var candidate = Path.Combine(dir, exeName);
                 if (File.Exists(candidate)) return candidate;
             }
-            catch (ArgumentException) { }
+            catch (ArgumentException ex) { Log.Debug(ex, "Invalid common directory entry: {Dir}", dir); }
         }
 
         return null;
@@ -369,8 +370,8 @@ public sealed class IconExtractorService
                     if (File.Exists(candidate)) return candidate;
                 }
             }
-            catch (UnauthorizedAccessException) { }
-            catch (IOException) { }
+            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied scanning {Dir} for {Exe}", baseDir, exeName); }
+            catch (IOException ex) { Log.Debug(ex, "I/O error scanning {Dir} for {Exe}", baseDir, exeName); }
         }
 
         // Check App Paths registry
@@ -385,8 +386,8 @@ public sealed class IconExtractorService
                 if (File.Exists(expanded)) return expanded;
             }
         }
-        catch (System.Security.SecurityException) { }
-        catch (UnauthorizedAccessException) { }
+        catch (System.Security.SecurityException ex) { Log.Debug(ex, "Security error reading App Paths registry for {Exe}", exeName); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied reading App Paths registry for {Exe}", exeName); }
 
         return null;
     }

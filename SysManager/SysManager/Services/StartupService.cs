@@ -297,9 +297,9 @@ public sealed class StartupService
             }
             return dict;
         }
-        catch (System.Security.SecurityException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
-        catch (System.IO.IOException) { return null; }
+        catch (System.Security.SecurityException) { return null; /* protected key */ }
+        catch (UnauthorizedAccessException) { return null; /* protected key */ }
+        catch (System.IO.IOException) { return null; /* I/O error reading key */ }
     }
 
     /// <summary>
@@ -471,10 +471,10 @@ public sealed class StartupService
                 return vi.CompanyName ?? "";
             }
         }
-        catch (System.IO.FileNotFoundException) { }
-        catch (System.IO.IOException) { }
-        catch (UnauthorizedAccessException) { }
-        catch (System.Security.SecurityException) { }
+        catch (System.IO.FileNotFoundException) { /* file not found */ }
+        catch (System.IO.IOException) { /* I/O error */ }
+        catch (UnauthorizedAccessException) { /* access denied */ }
+        catch (System.Security.SecurityException) { /* security error */ }
         return "";
     }
 }

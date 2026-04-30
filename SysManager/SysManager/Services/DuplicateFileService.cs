@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Security.Cryptography;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -72,11 +73,11 @@ public sealed class DuplicateFileService
             string[] files = Array.Empty<string>();
             string[] dirs = Array.Empty<string>();
             try { files = Directory.GetFiles(dir); }
-            catch (UnauthorizedAccessException) { }
-            catch (IOException) { }
+            catch (UnauthorizedAccessException) { /* skip protected directory */ }
+            catch (IOException) { /* skip inaccessible directory */ }
             try { dirs = Directory.GetDirectories(dir); }
-            catch (UnauthorizedAccessException) { }
-            catch (IOException) { }
+            catch (UnauthorizedAccessException) { /* skip protected directory */ }
+            catch (IOException) { /* skip inaccessible directory */ }
 
             foreach (var f in files)
             {
@@ -102,8 +103,8 @@ public sealed class DuplicateFileService
                         lastReport = now;
                     }
                 }
-                catch (UnauthorizedAccessException) { }
-                catch (IOException) { }
+                catch (UnauthorizedAccessException) { /* skip inaccessible file */ }
+                catch (IOException) { /* skip inaccessible file */ }
             }
 
             foreach (var d in dirs) stack.Push(d);
@@ -138,8 +139,8 @@ public sealed class DuplicateFileService
                     }
                     pList.Add(fi);
                 }
-                catch (UnauthorizedAccessException) { }
-                catch (IOException) { }
+                catch (UnauthorizedAccessException) { /* skip inaccessible file during partial hash */ }
+                catch (IOException) { /* skip inaccessible file during partial hash */ }
             }
 
             // Only full-hash files whose partial hashes matched 2+ files
@@ -176,8 +177,8 @@ public sealed class DuplicateFileService
                             lastReport = now;
                         }
                     }
-                    catch (UnauthorizedAccessException) { }
-                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { /* skip inaccessible file during full hash */ }
+                    catch (IOException) { /* skip inaccessible file during full hash */ }
                 }
             }
         }
@@ -229,15 +230,9 @@ public sealed class DuplicateFileService
     private static bool ShouldSkipDir(string path)
     {
         var lower = path.ToLowerInvariant();
-        foreach (var seg in SkipSegments)
-            if (lower.Contains(seg)) return true;
-        return false;
+        return SkipSegments.Any(seg => lower.Contains(seg));
     }
 
     private static bool ShouldSkipFile(string name)
-    {
-        foreach (var skip in SkipFiles)
-            if (name.Equals(skip, StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
-    }
+        => SkipFiles.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase));
 }

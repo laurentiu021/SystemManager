@@ -207,7 +207,9 @@ public sealed class SpeedTestService
             // If the exe is broken/corrupt, delete it so next run re-downloads it.
             if (proc.ExitCode == -1073741515) // STATUS_DLL_NOT_FOUND
             {
-                try { File.Delete(exe); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                try { File.Delete(exe); }
+                catch (IOException) { /* cleanup failed — will retry next run */ }
+                catch (UnauthorizedAccessException) { /* cleanup failed — will retry next run */ }
             }
             throw new InvalidOperationException($"Ookla failed ({proc.ExitCode}): {stderr}");
         }
@@ -247,7 +249,9 @@ public sealed class SpeedTestService
             var path = Path.Combine(toolsDir, "speedtest.exe");
             if (File.Exists(path) && new FileInfo(path).Length < 1024)
             {
-                try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                try { File.Delete(path); }
+                catch (IOException) { /* cleanup failed — will retry next run */ }
+                catch (UnauthorizedAccessException) { /* cleanup failed — will retry next run */ }
             }
             return !File.Exists(path);
         }, ct).ConfigureAwait(false);

@@ -111,7 +111,11 @@ public partial class DuplicateFileViewModel : ViewModelBase
         {
             StatusMessage = "Scan cancelled.";
         }
-        catch (Exception ex)
+        catch (IOException ex)
+        {
+            StatusMessage = $"Scan failed: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
         {
             StatusMessage = $"Scan failed: {ex.Message}";
         }
@@ -142,14 +146,16 @@ public partial class DuplicateFileViewModel : ViewModelBase
                 UseShellExecute = true
             });
         }
-        catch { }
+        catch (InvalidOperationException ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.Path); }
+        catch (System.ComponentModel.Win32Exception ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.Path); }
     }
 
     [RelayCommand]
     private static void CopyPath(DuplicateFileEntry? entry)
     {
         if (entry == null) return;
-        try { System.Windows.Clipboard.SetText(entry.Path); } catch { }
+        try { System.Windows.Clipboard.SetText(entry.Path); }
+        catch (System.Runtime.InteropServices.ExternalException ex) { Log.Debug(ex, "Failed to copy path to clipboard"); }
     }
 
     [RelayCommand]

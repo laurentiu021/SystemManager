@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Text.RegularExpressions;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -143,8 +144,8 @@ public sealed class UninstallerService
 
                 EnrichFromRegistryKey(key, lookup);
             }
-            catch (System.Security.SecurityException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (System.Security.SecurityException) { /* skip protected registry key */ }
+            catch (UnauthorizedAccessException) { /* skip protected registry key */ }
         }
 
         // Also scan HKCU (per-user installs like Discord, VS Code, etc.)
@@ -155,8 +156,8 @@ public sealed class UninstallerService
             if (hkcuKey != null)
                 EnrichFromRegistryKey(hkcuKey, lookup);
         }
-        catch (System.Security.SecurityException) { }
-        catch (UnauthorizedAccessException) { }
+        catch (System.Security.SecurityException) { /* skip protected HKCU key */ }
+        catch (UnauthorizedAccessException) { /* skip protected HKCU key */ }
     }
 
     private static void EnrichFromRegistryKey(
@@ -205,8 +206,8 @@ public sealed class UninstallerService
                         iconPath, installLoc, app.Name);
                 }
             }
-            catch (System.Security.SecurityException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (System.Security.SecurityException) { /* skip protected subkey */ }
+            catch (UnauthorizedAccessException) { /* skip protected subkey */ }
         }
     }
 }

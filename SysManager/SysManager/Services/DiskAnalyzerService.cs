@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -38,7 +39,8 @@ public sealed class DiskAnalyzerService
 
         string[] topDirs;
         try { topDirs = Directory.GetDirectories(rootPath); }
-        catch { return Array.Empty<DiskUsageEntry>(); }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied listing directories in {Root}", rootPath); return Array.Empty<DiskUsageEntry>(); }
+        catch (IOException ex) { Log.Warning(ex, "I/O error listing directories in {Root}", rootPath); return Array.Empty<DiskUsageEntry>(); }
 
         var results = new List<DiskUsageEntry>();
         int scanned = 0;
@@ -56,10 +58,12 @@ public sealed class DiskAnalyzerService
                     rootFilesSize += new FileInfo(f).Length;
                     rootFileCount++;
                 }
-                catch { }
+                catch (UnauthorizedAccessException) { /* skip inaccessible file */ }
+                catch (IOException) { /* skip inaccessible file */ }
             }
         }
-        catch { }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied listing root files in {Root}", rootPath); }
+        catch (IOException ex) { Log.Debug(ex, "I/O error listing root files in {Root}", rootPath); }
 
         foreach (var dir in topDirs)
         {
@@ -126,8 +130,12 @@ public sealed class DiskAnalyzerService
 
             string[] files = Array.Empty<string>();
             string[] dirs = Array.Empty<string>();
-            try { files = Directory.GetFiles(current); } catch { }
-            try { dirs = Directory.GetDirectories(current); } catch { }
+            try { files = Directory.GetFiles(current); }
+            catch (UnauthorizedAccessException) { /* skip protected folder */ }
+            catch (IOException) { /* skip inaccessible folder */ }
+            try { dirs = Directory.GetDirectories(current); }
+            catch (UnauthorizedAccessException) { /* skip protected folder */ }
+            catch (IOException) { /* skip inaccessible folder */ }
 
             foreach (var f in files)
             {
@@ -137,7 +145,8 @@ public sealed class DiskAnalyzerService
                     totalSize += new FileInfo(f).Length;
                     fileCount++;
                 }
-                catch { }
+                catch (UnauthorizedAccessException) { /* skip inaccessible file */ }
+                catch (IOException) { /* skip inaccessible file */ }
             }
 
             foreach (var d in dirs)
@@ -153,8 +162,6 @@ public sealed class DiskAnalyzerService
     private static bool ShouldSkip(string path)
     {
         var lower = path.ToLowerInvariant();
-        foreach (var seg in SkipSegments)
-            if (lower.Contains(seg)) return true;
-        return false;
+        return SkipSegments.Any(seg => lower.Contains(seg));
     }
 }

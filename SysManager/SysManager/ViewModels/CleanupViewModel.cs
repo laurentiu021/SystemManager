@@ -101,12 +101,12 @@ public partial class CleanupViewModel : ViewModelBase
                         foreach (var f in System.IO.Directory.EnumerateFiles(p, "*", System.IO.SearchOption.AllDirectories))
                         {
                             try { tempBytes += new System.IO.FileInfo(f).Length; }
-                            catch (IOException) { }
-                            catch (UnauthorizedAccessException) { }
+                            catch (IOException) { /* skip inaccessible file */ }
+                            catch (UnauthorizedAccessException) { /* skip protected file */ }
                         }
                     }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
+                    catch (IOException) { /* skip inaccessible directory */ }
+                    catch (UnauthorizedAccessException) { /* skip protected directory */ }
                 }
                 var tLabel = tempBytes > 0 ? $"{tempBytes / 1024.0 / 1024.0:F1} MB can be freed" : "Empty";
 
@@ -121,8 +121,8 @@ public partial class CleanupViewModel : ViewModelBase
                         foreach (var f in System.IO.Directory.EnumerateFiles(recyclePath, "*", System.IO.SearchOption.AllDirectories))
                         {
                             try { binBytes += new System.IO.FileInfo(f).Length; }
-                            catch (IOException) { }
-                            catch (UnauthorizedAccessException) { }
+                            catch (IOException) { /* skip inaccessible file */ }
+                            catch (UnauthorizedAccessException) { /* skip protected file */ }
                         }
                     }
                     bLabel = binBytes > 0 ? $"{binBytes / 1024.0 / 1024.0:F1} MB in Recycle Bin" : "Empty";

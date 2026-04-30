@@ -214,41 +214,79 @@ long-running operation, so you always know which tab is working.
 
 ## Screenshots
 
-> Screenshots live under [`docs/screenshots/`](docs/screenshots/). If you
-> want to contribute updated ones, see
-> [`docs/screenshots/README.md`](docs/screenshots/README.md) for the
-> capture and privacy conventions.
+> Click any thumbnail to view full size. Screenshots live under
+> [`docs/screenshots/`](docs/screenshots/) — see
+> [`docs/screenshots/README.md`](docs/screenshots/README.md) for capture
+> conventions.
 
-### Dashboard
-![Dashboard](docs/screenshots/01-dashboard.png)
+<details open>
+<summary><strong>🏠 Dashboard</strong></summary>
+<br>
+<a href="docs/screenshots/01-dashboard.png"><img src="docs/screenshots/01-dashboard.png" width="600" alt="Dashboard"></a>
+</details>
 
-### App updates
-![App updates](docs/screenshots/02-app-updates.png)
+<details>
+<summary><strong>🔧 System</strong> — Health · Windows Update · Performance</summary>
+<br>
+<p>
+<a href="docs/screenshots/02-system-health.png"><img src="docs/screenshots/02-system-health.png" width="280" alt="System Health"></a>&nbsp;
+<a href="docs/screenshots/03-windows-update.png"><img src="docs/screenshots/03-windows-update.png" width="280" alt="Windows Update"></a>&nbsp;
+<a href="docs/screenshots/04-performance.png"><img src="docs/screenshots/04-performance.png" width="280" alt="Performance Mode"></a>
+</p>
+</details>
 
-### Windows Update
-![Windows Update](docs/screenshots/03-windows-update.png)
+<details>
+<summary><strong>🧹 Cleanup</strong> — Quick Cleanup · Deep Cleanup</summary>
+<br>
+<p>
+<a href="docs/screenshots/05-quick-cleanup.png"><img src="docs/screenshots/05-quick-cleanup.png" width="420" alt="Quick Cleanup"></a>&nbsp;
+<a href="docs/screenshots/06-deep-cleanup.png"><img src="docs/screenshots/06-deep-cleanup.png" width="420" alt="Deep Cleanup"></a>
+</p>
+</details>
 
-### System health
-![System health](docs/screenshots/04-system-health.png)
+<details>
+<summary><strong>💾 Storage</strong> — Disk Analyzer · Duplicates</summary>
+<br>
+<p>
+<a href="docs/screenshots/07-disk-analyzer.png"><img src="docs/screenshots/07-disk-analyzer.png" width="420" alt="Disk Analyzer"></a>&nbsp;
+<a href="docs/screenshots/08-duplicates.png"><img src="docs/screenshots/08-duplicates.png" width="420" alt="Duplicate Finder"></a>
+</p>
+</details>
 
-### Cleanup
-![Cleanup](docs/screenshots/05-cleanup.png)
+<details>
+<summary><strong>🌐 Network</strong> — Ping · Traceroute · Speed Test · Repair</summary>
+<br>
+<p>
+<a href="docs/screenshots/09-ping.png"><img src="docs/screenshots/09-ping.png" width="420" alt="Ping"></a>&nbsp;
+<a href="docs/screenshots/10-traceroute.png"><img src="docs/screenshots/10-traceroute.png" width="420" alt="Traceroute"></a>
+</p>
+<p>
+<a href="docs/screenshots/11-speed-test.png"><img src="docs/screenshots/11-speed-test.png" width="420" alt="Speed Test"></a>&nbsp;
+<a href="docs/screenshots/12-network-repair.png"><img src="docs/screenshots/12-network-repair.png" width="420" alt="Network Repair"></a>
+</p>
+</details>
 
-### Deep cleanup
-![Deep cleanup](docs/screenshots/06-deep-cleanup.png)
+<details>
+<summary><strong>📦 Apps</strong> — App Updates · Uninstaller</summary>
+<br>
+<p>
+<a href="docs/screenshots/13-app-updates.png"><img src="docs/screenshots/13-app-updates.png" width="420" alt="App Updates"></a>&nbsp;
+<a href="docs/screenshots/14-uninstaller.png"><img src="docs/screenshots/14-uninstaller.png" width="420" alt="Uninstaller"></a>
+</p>
+</details>
 
-### Network
-![Network](docs/screenshots/08-network-ping.png)
-
-### Drivers
-![Drivers](docs/screenshots/11-drivers.png)
-
-### Logs
-![Logs](docs/screenshots/12-logs.png)
-
-### About
-![About](docs/screenshots/13-about.png)
-
+<details>
+<summary><strong>ℹ️ Info</strong> — Drivers · Battery · Logs · About</summary>
+<br>
+<p>
+<a href="docs/screenshots/15-drivers.png"><img src="docs/screenshots/15-drivers.png" width="420" alt="Drivers"></a>&nbsp;
+<a href="docs/screenshots/16-battery.png"><img src="docs/screenshots/16-battery.png" width="420" alt="Battery Health"></a>
+</p>
+<p>
+<a href="docs/screenshots/17-logs.png"><img src="docs/screenshots/17-logs.png" width="420" alt="Logs"></a>&nbsp;
+<a href="docs/screenshots/18-about.png"><img src="docs/screenshots/18-about.png" width="420" alt="About"></a>
+</p>
+</details>
 
 ## Download
 

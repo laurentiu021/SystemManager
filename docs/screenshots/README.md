@@ -11,22 +11,29 @@ nav on the left rail:
 
 ```
 01-dashboard.png
-02-app-updates.png
+02-system-health.png
 03-windows-update.png
-04-system-health.png
-05-cleanup.png
+04-performance.png
+05-quick-cleanup.png
 06-deep-cleanup.png
-07-large-files.png          (optional — sub-view of Deep cleanup)
-08-network-ping.png
-09-network-traceroute.png   (optional — sub-tab)
-10-network-speed.png        (optional — sub-tab)
-11-drivers.png
-12-logs.png
-13-about.png
+07-disk-analyzer.png
+08-duplicates.png
+09-ping.png
+10-traceroute.png
+11-speed-test.png
+12-network-repair.png
+13-app-updates.png
+14-uninstaller.png
+15-drivers.png
+16-battery.png
+17-logs.png
+18-about.png
 ```
 
-Only the numbered, non-optional ones are strictly required. Optional views
-are nice-to-have.
+Tabs not yet captured (contain sensitive data):
+- Startup Manager
+- Process Manager
+- Services
 
 ## Format and size
 

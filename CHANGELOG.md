@@ -6,6 +6,65 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.13] - 2026-04-30
+
+### Fixed
+- **CodeQL: DuplicateFileService catch blocks** — bare `catch { }` in file
+  discovery, partial hash, and full hash loops replaced with specific
+  `IOException` + `UnauthorizedAccessException`.
+- **CodeQL: App.xaml.cs using statement** — `Process` objects in single-instance
+  activation now use `using` block instead of manual try/finally dispose.
+- **CodeQL: App.xaml.cs static field** — `_instanceMutex` changed from static
+  to instance field (only one App instance exists per process).
+- **CodeQL: StartupService unused variables** — removed unused `actions`
+  variable; stdout drain changed to discard pattern.
+
+## [0.28.12] - 2026-04-30
+
+### Fixed
+- **CodeQL: catch-of-all-exceptions** — replaced all `catch (Exception)` and
+  bare `catch { }` with specific exception types across 12 files: AboutVM,
+  BatteryHealthVM, CleanupVM, DeepCleanupVM, NetworkVM, PerformanceVM,
+  ProcessManagerVM, ServicesVM, StartupVM, SystemHealthVM, WindowsUpdateVM,
+  ProcessManagerService. Exception types include `InvalidOperationException`,
+  `IOException`, `HttpRequestException`, `ManagementException`,
+  `Win32Exception`, `TaskCanceledException`, and others.
+- **CodeQL: empty catch blocks** — added Serilog logging to previously silent
+  catch blocks so failures are traceable in diagnostics.
+
+## [0.28.11] - 2026-04-30
+
+### Fixed
+- **ViewModel lifecycle: IDisposable** — `ViewModelBase` now implements
+  `IDisposable` with virtual `Dispose(bool)` pattern. All ViewModels with
+  event subscriptions or CancellationTokenSources override Dispose to clean up.
+- **Event handler leaks** — lambda event handlers in CleanupVM, SystemHealthVM,
+  and WindowsUpdateVM replaced with named methods and unsubscribed in Dispose.
+- **Fire-and-forget error handling** — 11 ViewModels with `_ = InitAsync()`
+  wrapped in try/catch with `Log.Warning` to prevent unobserved task exceptions.
+- **CTS disposal in Dispose** — CleanupVM (4×), DeepCleanupVM (3×),
+  SystemHealthVM, WindowsUpdateVM now dispose CancellationTokenSources on
+  ViewModel teardown.
+
+## [0.28.10] - 2026-04-30
+
+### Fixed
+- **Critical: deadlock in StartupService** — `Process.WaitForExit()` called
+  before reading stderr/stdout caused pipe buffer deadlock on schtasks.exe.
+  Now reads streams asynchronously before waiting.
+- **Critical: COM object leak in StartupService** — `WScript.Shell` and
+  shortcut COM objects were not released, leaking COM references. Added
+  `Marshal.ReleaseComObject` in finally block.
+- **Critical: 50 MB allocation in SpeedTestService** — upload test allocated
+  a single 50 MB byte array on the Large Object Heap. Replaced with streaming
+  `RandomChunkStream` using 256 KB chunks.
+- **Input validation** — schtasks, sc.exe, and winget arguments now validated
+  against injection characters (`"`, `\0`) in StartupService,
+  ServiceManagerService, UninstallerService, and WingetService.
+- **Bare catch blocks** — 7 bare catches in StartupService, SpeedTestService,
+  ServiceManagerService, UninstallerService, and WingetService replaced with
+  specific exception types and Serilog logging.
+
 ## [0.28.9] - 2026-04-30
 
 ### Fixed

@@ -71,8 +71,12 @@ public sealed class DuplicateFileService
 
             string[] files = Array.Empty<string>();
             string[] dirs = Array.Empty<string>();
-            try { files = Directory.GetFiles(dir); } catch { }
-            try { dirs = Directory.GetDirectories(dir); } catch { }
+            try { files = Directory.GetFiles(dir); }
+            catch (UnauthorizedAccessException) { }
+            catch (IOException) { }
+            try { dirs = Directory.GetDirectories(dir); }
+            catch (UnauthorizedAccessException) { }
+            catch (IOException) { }
 
             foreach (var f in files)
             {
@@ -98,7 +102,8 @@ public sealed class DuplicateFileService
                         lastReport = now;
                     }
                 }
-                catch { }
+                catch (UnauthorizedAccessException) { }
+                catch (IOException) { }
             }
 
             foreach (var d in dirs) stack.Push(d);
@@ -133,7 +138,8 @@ public sealed class DuplicateFileService
                     }
                     pList.Add(fi);
                 }
-                catch { }
+                catch (UnauthorizedAccessException) { }
+                catch (IOException) { }
             }
 
             // Only full-hash files whose partial hashes matched 2+ files
@@ -170,7 +176,8 @@ public sealed class DuplicateFileService
                             lastReport = now;
                         }
                     }
-                    catch { }
+                    catch (UnauthorizedAccessException) { }
+                    catch (IOException) { }
                 }
             }
         }

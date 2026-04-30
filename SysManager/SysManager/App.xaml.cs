@@ -1,8 +1,6 @@
 // SysManager — Windows system monitoring toolkit
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
-// Author : laurentiu021 · https://github.com/laurentiu021/SysManager
-// License: MIT
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -15,7 +13,7 @@ namespace SysManager;
 public partial class App : Application
 {
     private const string MutexName = "Global\\SysManager_SingleInstance_laurentiu021";
-    private static Mutex? _instanceMutex;
+    private Mutex? _instanceMutex;
 
     // Guard against cascading error dialogs — show at most one at a time.
     private static int _errorDialogActive;
@@ -62,7 +60,7 @@ public partial class App : Application
         using var current = Process.GetCurrentProcess();
         foreach (var proc in Process.GetProcessesByName(current.ProcessName))
         {
-            try
+            using (proc)
             {
                 if (proc.Id != current.Id && proc.MainWindowHandle != IntPtr.Zero)
                 {
@@ -72,7 +70,6 @@ public partial class App : Application
                     break;
                 }
             }
-            finally { proc.Dispose(); }
         }
     }
 

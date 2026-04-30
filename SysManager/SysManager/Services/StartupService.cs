@@ -169,7 +169,6 @@ public sealed class StartupService
                     var description = taskKey.GetValue("Description")?.ToString() ?? "";
                     var author = taskKey.GetValue("Author")?.ToString() ?? "";
 
-                    var actions = taskKey.GetValue("Actions") as byte[];
                     var taskName = System.IO.Path.GetFileName(uri.TrimEnd('\\'));
                     if (string.IsNullOrWhiteSpace(taskName)) continue;
 
@@ -420,7 +419,7 @@ public sealed class StartupService
             // Read streams BEFORE WaitForExit to avoid deadlock when the
             // pipe buffer fills up and the child process blocks on write.
             var stderrTask = proc.StandardError.ReadToEndAsync();
-            var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+            _ = proc.StandardOutput.ReadToEndAsync(); // drain stdout to prevent deadlock
 
             if (!proc.WaitForExit(10_000))
             {

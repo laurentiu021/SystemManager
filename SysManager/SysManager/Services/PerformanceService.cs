@@ -502,14 +502,16 @@ public class PerformanceService
         int trimmed = 0;
         foreach (var proc in System.Diagnostics.Process.GetProcesses())
         {
-            try
+            using (proc)
             {
-                if (EmptyWorkingSet(proc.Handle))
-                    trimmed++;
+                try
+                {
+                    if (EmptyWorkingSet(proc.Handle))
+                        trimmed++;
+                }
+                catch (System.ComponentModel.Win32Exception) { /* access denied — skip */ }
+                catch (InvalidOperationException) { /* process exited — skip */ }
             }
-            catch (System.ComponentModel.Win32Exception) { /* access denied — skip */ }
-            catch (InvalidOperationException) { /* process exited — skip */ }
-            finally { proc.Dispose(); }
         }
         return trimmed;
     }

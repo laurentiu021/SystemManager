@@ -56,25 +56,27 @@ public class ServiceManagerService
 
         foreach (var sc in services)
         {
-            try
+            using (sc)
             {
-                var (rec, reason) = GamingGuide.TryGetValue(sc.ServiceName, out var guide)
-                    ? guide
-                    : ("", "");
-
-                result.Add(new ServiceEntry
+                try
                 {
-                    Name = sc.ServiceName,
-                    DisplayName = sc.DisplayName,
-                    Description = GetServiceDescription(sc),
-                    Status = sc.Status.ToString(),
-                    StartType = sc.StartType.ToString(),
-                    Recommendation = rec,
-                    RecommendationReason = reason,
-                });
+                    var (rec, reason) = GamingGuide.TryGetValue(sc.ServiceName, out var guide)
+                        ? guide
+                        : ("", "");
+
+                    result.Add(new ServiceEntry
+                    {
+                        Name = sc.ServiceName,
+                        DisplayName = sc.DisplayName,
+                        Description = GetServiceDescription(sc),
+                        Status = sc.Status.ToString(),
+                        StartType = sc.StartType.ToString(),
+                        Recommendation = rec,
+                        RecommendationReason = reason,
+                    });
+                }
+                catch (InvalidOperationException) { /* service disappeared — skip */ }
             }
-            catch (InvalidOperationException) { /* service disappeared — skip */ }
-            finally { sc.Dispose(); }
         }
 
         return result.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();

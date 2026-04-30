@@ -127,6 +127,7 @@ public partial class CleanupViewModel : ViewModelBase
         if (IsTempRunning) return;
         IsTempRunning = true;
         StatusMessage = "Cleaning temp folders...";
+        _tempCts?.Dispose();
         _tempCts = new CancellationTokenSource();
         try
         {
@@ -158,6 +159,7 @@ public partial class CleanupViewModel : ViewModelBase
         if (IsBinRunning) return;
         IsBinRunning = true;
         StatusMessage = "Emptying Recycle Bin...";
+        _binCts?.Dispose();
         _binCts = new CancellationTokenSource();
         try
         {
@@ -197,6 +199,7 @@ public partial class CleanupViewModel : ViewModelBase
         SfcVerdict = "";
         SfcVerdictColorHex = "#9AA0A6";
         StatusMessage = "SFC running in background. You can keep using the app.";
+        _sfcCts?.Dispose();
         _sfcCts = new CancellationTokenSource();
         var captured = new System.Collections.Generic.List<string>();
         void Collect(PowerShellLine l) { if (l.Kind == OutputKind.Output) captured.Add(l.Text); }
@@ -272,6 +275,7 @@ public partial class CleanupViewModel : ViewModelBase
         DismVerdict = "";
         DismVerdictColorHex = "#9AA0A6";
         StatusMessage = "DISM running in background. You can keep using the app.";
+        _dismCts?.Dispose();
         _dismCts = new CancellationTokenSource();
         var captured = new System.Collections.Generic.List<string>();
         void Collect(PowerShellLine l) { if (l.Kind == OutputKind.Output) captured.Add(l.Text); }

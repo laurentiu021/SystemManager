@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.14] - 2026-04-30
+
+### Fixed
+- **CodeQL: missed-using-statement** — `ServiceController` objects in
+  `ServiceManagerService.GetAllServices()` and `Process` objects in
+  `PerformanceService.TrimWorkingSets()` now use `using` blocks instead of
+  manual `try/finally Dispose()`.
+
 ## [0.28.13] - 2026-04-30
 
 ### Fixed

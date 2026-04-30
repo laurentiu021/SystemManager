@@ -44,7 +44,8 @@ public partial class WindowsUpdateViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await AutoCheckOnStartAsync(); }
-        catch (Exception ex) { Log.Warning("Windows Update auto-check failed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("Windows Update auto-check failed: {Error}", ex.Message); }
+        catch (OperationCanceledException) { /* expected on shutdown */ }
     }
 
     protected override void Dispose(bool disposing)
@@ -99,7 +100,8 @@ public partial class WindowsUpdateViewModel : ViewModelBase
                 ? "PSWindowsUpdate is available."
                 : "PSWindowsUpdate not installed — click Install Module.";
         }
-        catch (Exception ex) { ModuleStatus = $"Check failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { ModuleStatus = $"Check failed: {ex.Message}"; }
+        catch (OperationCanceledException) { ModuleStatus = "Module check cancelled."; }
         finally { IsBusy = false; }
     }
 
@@ -129,7 +131,8 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             ");
             await CheckModuleAsync();
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (OperationCanceledException) { StatusMessage = "Module install cancelled."; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -195,7 +198,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             StatusMessage = "Scan complete";
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -246,7 +249,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             StatusMessage = "Done";
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -299,7 +302,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             StatusMessage = "Done";
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -333,7 +336,8 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             ", cancellationToken: _cts.Token);
             StatusMessage = "Done";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -361,7 +365,8 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             ", cancellationToken: _cts.Token);
             StatusMessage = "Installation finished";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 

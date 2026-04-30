@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -61,7 +62,9 @@ public partial class CleanupViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await PreScanAsync(); }
-        catch (Exception ex) { Log.Warning("Cleanup pre-scan failed: {Error}", ex.Message); }
+        catch (IOException ex) { Log.Warning("Cleanup pre-scan failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Warning("Cleanup pre-scan failed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("Cleanup pre-scan failed: {Error}", ex.Message); }
     }
 
     protected override void Dispose(bool disposing)
@@ -97,10 +100,13 @@ public partial class CleanupViewModel : ViewModelBase
                     {
                         foreach (var f in System.IO.Directory.EnumerateFiles(p, "*", System.IO.SearchOption.AllDirectories))
                         {
-                            try { tempBytes += new System.IO.FileInfo(f).Length; } catch { }
+                            try { tempBytes += new System.IO.FileInfo(f).Length; }
+                            catch (IOException) { }
+                            catch (UnauthorizedAccessException) { }
                         }
                     }
-                    catch { }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
                 }
                 var tLabel = tempBytes > 0 ? $"{tempBytes / 1024.0 / 1024.0:F1} MB can be freed" : "Empty";
 
@@ -114,12 +120,15 @@ public partial class CleanupViewModel : ViewModelBase
                     {
                         foreach (var f in System.IO.Directory.EnumerateFiles(recyclePath, "*", System.IO.SearchOption.AllDirectories))
                         {
-                            try { binBytes += new System.IO.FileInfo(f).Length; } catch { }
+                            try { binBytes += new System.IO.FileInfo(f).Length; }
+                            catch (IOException) { }
+                            catch (UnauthorizedAccessException) { }
                         }
                     }
                     bLabel = binBytes > 0 ? $"{binBytes / 1024.0 / 1024.0:F1} MB in Recycle Bin" : "Empty";
                 }
-                catch { bLabel = "Unable to scan"; }
+                catch (IOException) { bLabel = "Unable to scan"; }
+                catch (UnauthorizedAccessException) { bLabel = "Unable to scan"; }
 
                 return (tLabel, bLabel);
             });
@@ -128,7 +137,8 @@ public partial class CleanupViewModel : ViewModelBase
             TempSizeLabel = tempLabel;
             RecycleBinLabel = binLabel;
         }
-        catch { /* non-fatal */ }
+        catch (IOException ex) { Log.Debug("Pre-scan failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Pre-scan access denied: {Error}", ex.Message); }
     }
 
     partial void OnIsTempRunningChanged(bool value) => OnPropertyChanged(nameof(IsAnyRunning));
@@ -171,7 +181,8 @@ public partial class CleanupViewModel : ViewModelBase
             Log.Information("Temp cleanup completed");
             await PreScanAsync();
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (OperationCanceledException) { StatusMessage = "Temp cleanup cancelled."; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsTempRunning = false; }
     }
 
@@ -192,7 +203,8 @@ public partial class CleanupViewModel : ViewModelBase
             StatusMessage = "Done";
             await PreScanAsync();
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (OperationCanceledException) { StatusMessage = "Recycle Bin cleanup cancelled."; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBinRunning = false; }
     }
 
@@ -237,7 +249,8 @@ public partial class CleanupViewModel : ViewModelBase
             StatusMessage = verdict;
         }
         catch (OperationCanceledException) { SfcStatus = "Cancelled."; SfcVerdict = "Scan was cancelled."; SfcVerdictColorHex = "#9AA0A6"; StatusMessage = SfcStatus; }
-        catch (Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
+        catch (InvalidOperationException ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
+        catch (System.ComponentModel.Win32Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
         finally { _runner.LineReceived -= Collect; IsSfcRunning = false; }
     }
 
@@ -313,7 +326,8 @@ public partial class CleanupViewModel : ViewModelBase
             StatusMessage = verdict;
         }
         catch (OperationCanceledException) { DismStatus = "Cancelled."; DismVerdict = "Repair was cancelled."; DismVerdictColorHex = "#9AA0A6"; StatusMessage = DismStatus; }
-        catch (Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
+        catch (InvalidOperationException ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
+        catch (System.ComponentModel.Win32Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
         finally { _runner.LineReceived -= Collect; IsDismRunning = false; }
     }
 

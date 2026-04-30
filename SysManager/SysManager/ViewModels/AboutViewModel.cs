@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
@@ -52,7 +53,9 @@ public partial class AboutViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await CheckAtStartupAsync(); }
-        catch (Exception ex) { Log.Warning("About auto-check failed: {Error}", ex.Message); }
+        catch (HttpRequestException ex) { Log.Warning("About auto-check failed (network): {Error}", ex.Message); }
+        catch (TaskCanceledException ex) { Log.Warning("About auto-check timed out: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("About auto-check failed: {Error}", ex.Message); }
     }
 
     /// <summary>Exposes the last network error for binding ("Retry" button).</summary>
@@ -66,7 +69,8 @@ public partial class AboutViewModel : ViewModelBase
             await CheckForUpdatesAsync();
             await LoadHistoryAsync();
         }
-        catch { /* silent — manual check still works */ }
+        catch (HttpRequestException ex) { Log.Debug("About startup check skipped (network): {Error}", ex.Message); }
+        catch (TaskCanceledException ex) { Log.Debug("About startup check timed out: {Error}", ex.Message); }
     }
 
     [RelayCommand]
@@ -132,7 +136,8 @@ public partial class AboutViewModel : ViewModelBase
                 });
             }
         }
-        catch { /* non-fatal */ }
+        catch (HttpRequestException ex) { Log.Debug("Release history load skipped (network): {Error}", ex.Message); }
+        catch (TaskCanceledException ex) { Log.Debug("Release history load timed out: {Error}", ex.Message); }
     }
 
     [RelayCommand]
@@ -171,10 +176,20 @@ public partial class AboutViewModel : ViewModelBase
                 DownloadStatus = "Automatic download failed — use Manual download to get it from GitHub.";
             }
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
             AutoDownloadFailed = true;
             DownloadStatus = $"Automatic download failed: {ex.Message}";
+        }
+        catch (IOException ex)
+        {
+            AutoDownloadFailed = true;
+            DownloadStatus = $"Automatic download failed: {ex.Message}";
+        }
+        catch (TaskCanceledException ex)
+        {
+            AutoDownloadFailed = true;
+            DownloadStatus = $"Download timed out: {ex.Message}";
         }
         finally { IsDownloading = false; }
     }
@@ -230,7 +245,7 @@ public partial class AboutViewModel : ViewModelBase
                     break;
                 }
             }
-            catch (System.Management.ManagementException) { }
+            catch (System.Management.ManagementException ex) { Log.Debug("CPU info unavailable: {Error}", ex.Message); }
 
             // RAM
             try
@@ -246,7 +261,7 @@ public partial class AboutViewModel : ViewModelBase
                     break;
                 }
             }
-            catch (System.Management.ManagementException) { }
+            catch (System.Management.ManagementException ex) { Log.Debug("RAM info unavailable: {Error}", ex.Message); }
 
             // GPU
             try
@@ -264,7 +279,7 @@ public partial class AboutViewModel : ViewModelBase
                     sb.AppendLine();
                 }
             }
-            catch (System.Management.ManagementException) { }
+            catch (System.Management.ManagementException ex) { Log.Debug("GPU info unavailable: {Error}", ex.Message); }
 
             // Storage
             try
@@ -275,8 +290,8 @@ public partial class AboutViewModel : ViewModelBase
                     sb.AppendLine($"Disk {drive.Name.TrimEnd('\\')} {drive.TotalSize / 1024.0 / 1024.0 / 1024.0:F0} GB total, {drive.AvailableFreeSpace / 1024.0 / 1024.0 / 1024.0:F0} GB free ({drive.DriveFormat})");
                 }
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (IOException ex) { Log.Debug("Storage info unavailable: {Error}", ex.Message); }
+            catch (UnauthorizedAccessException ex) { Log.Debug("Storage info access denied: {Error}", ex.Message); }
 
             // Display
             try
@@ -297,13 +312,18 @@ public partial class AboutViewModel : ViewModelBase
                     }
                 }
             }
-            catch (System.Management.ManagementException) { }
+            catch (System.Management.ManagementException ex) { Log.Debug("Display info unavailable: {Error}", ex.Message); }
 
             var text = sb.ToString();
-            try { Clipboard.SetText(text); } catch { /* clipboard can be locked by another app */ }
+            try { Clipboard.SetText(text); }
+            catch (System.Runtime.InteropServices.ExternalException ex) { Log.Debug("Clipboard locked: {Error}", ex.Message); }
             UpdateStatus = "Environment info copied to clipboard.";
         }
-        catch (Exception ex)
+        catch (System.Management.ManagementException ex)
+        {
+            UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
+        }
+        catch (InvalidOperationException ex)
         {
             UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
         }
@@ -324,7 +344,7 @@ public partial class AboutViewModel : ViewModelBase
                     return $"{caption} (build {build})";
             }
         }
-        catch (System.Management.ManagementException) { }
+        catch (System.Management.ManagementException ex) { Log.Debug("WMI OS info unavailable: {Error}", ex.Message); }
 
         // Fallback to Environment.OSVersion
         try
@@ -332,7 +352,7 @@ public partial class AboutViewModel : ViewModelBase
             var os = Environment.OSVersion;
             return $"{os.VersionString} (build {os.Version.Build})";
         }
-        catch { return "unknown"; }
+        catch (InvalidOperationException) { return "unknown"; }
     }
 
     private static bool SafeIsElevated()
@@ -359,7 +379,11 @@ public partial class AboutViewModel : ViewModelBase
             // Close the current instance so the new one takes over.
             System.Windows.Application.Current?.Shutdown();
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
+        {
+            DownloadStatus = $"Couldn't launch installer: {ex.Message}";
+        }
+        catch (System.ComponentModel.Win32Exception ex)
         {
             DownloadStatus = $"Couldn't launch installer: {ex.Message}";
         }
@@ -373,13 +397,16 @@ public partial class AboutViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
             try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{DownloadedPath}\"") { UseShellExecute = true }); }
-            catch (Exception) { /* explorer launch is best-effort */ }
+            catch (InvalidOperationException) { /* explorer launch is best-effort */ }
+            catch (System.ComponentModel.Win32Exception) { /* explorer launch is best-effort */ }
         }
     }
 
     private static void OpenUrl(string url)
     {
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { /* best-effort */ }
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (InvalidOperationException) { /* best-effort */ }
+        catch (System.ComponentModel.Win32Exception) { /* best-effort */ }
     }
 
     private static string BuildStamp()

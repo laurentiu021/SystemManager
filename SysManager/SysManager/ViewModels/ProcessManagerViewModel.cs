@@ -39,7 +39,8 @@ public partial class ProcessManagerViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await RefreshAsync(); }
-        catch (Exception ex) { Log.Warning("Process list auto-refresh failed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("Process list auto-refresh failed: {Error}", ex.Message); }
+        catch (System.ComponentModel.Win32Exception ex) { Log.Warning("Process list auto-refresh failed: {Error}", ex.Message); }
     }
 
     [RelayCommand]
@@ -62,7 +63,11 @@ public partial class ProcessManagerViewModel : ViewModelBase
             ApplyFilter();
             StatusMessage = $"Loaded {ProcessCount} processes.";
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
+        {
+            StatusMessage = $"Failed: {ex.Message}";
+        }
+        catch (System.ComponentModel.Win32Exception ex)
         {
             StatusMessage = $"Failed: {ex.Message}";
         }

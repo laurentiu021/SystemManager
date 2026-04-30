@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.Diagnostics;
+using System.IO;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -21,7 +23,8 @@ public sealed class ProcessManagerService
         var results = new List<ProcessEntry>();
         Process[] procs;
         try { procs = Process.GetProcesses(); }
-        catch { return results; }
+        catch (InvalidOperationException) { return results; }
+        catch (System.ComponentModel.Win32Exception) { return results; }
 
         // First pass: capture CPU times
         var cpuStart = new Dictionary<int, (TimeSpan Cpu, DateTime Time)>();
@@ -29,7 +32,8 @@ public sealed class ProcessManagerService
         {
             if (ct.IsCancellationRequested) break;
             try { cpuStart[p.Id] = (p.TotalProcessorTime, DateTime.UtcNow); }
-            catch { /* access denied — skip CPU for this process */ }
+            catch (InvalidOperationException) { /* access denied — skip CPU for this process */ }
+            catch (System.ComponentModel.Win32Exception) { /* access denied — skip CPU for this process */ }
         }
 
         // Brief pause to measure CPU delta
@@ -61,17 +65,27 @@ public sealed class ProcessManagerService
                         if (elapsed > 0)
                             entry.CpuPercent = Math.Round((cpuEnd - start.Cpu).TotalMilliseconds / elapsed / logicalCores * 100, 1);
                     }
-                    catch { /* process may have exited */ }
+                    catch (InvalidOperationException) { /* process may have exited */ }
+                    catch (System.ComponentModel.Win32Exception) { /* process may have exited */ }
                 }
 
-                try { entry.Description = p.MainModule?.FileVersionInfo.FileDescription ?? ""; } catch { }
-                try { entry.FilePath = p.MainModule?.FileName ?? ""; } catch { }
-                try { entry.StartTime = p.StartTime; } catch { }
-                try { entry.HasMainWindow = p.MainWindowHandle != IntPtr.Zero; } catch { }
+                try { entry.Description = p.MainModule?.FileVersionInfo.FileDescription ?? ""; }
+                catch (InvalidOperationException) { }
+                catch (System.ComponentModel.Win32Exception) { }
+                try { entry.FilePath = p.MainModule?.FileName ?? ""; }
+                catch (InvalidOperationException) { }
+                catch (System.ComponentModel.Win32Exception) { }
+                try { entry.StartTime = p.StartTime; }
+                catch (InvalidOperationException) { }
+                catch (System.ComponentModel.Win32Exception) { }
+                try { entry.HasMainWindow = p.MainWindowHandle != IntPtr.Zero; }
+                catch (InvalidOperationException) { }
+                catch (System.ComponentModel.Win32Exception) { }
 
                 results.Add(entry);
             }
-            catch { /* access denied for system processes — skip */ }
+            catch (InvalidOperationException) { /* access denied for system processes — skip */ }
+            catch (System.ComponentModel.Win32Exception) { /* access denied for system processes — skip */ }
             finally { p.Dispose(); }
         }
 
@@ -89,7 +103,9 @@ public sealed class ProcessManagerService
             p.Kill(entireProcessTree: true);
             return true;
         }
-        catch { return false; }
+        catch (ArgumentException) { return false; }
+        catch (InvalidOperationException) { return false; }
+        catch (System.ComponentModel.Win32Exception) { return false; }
     }
 
     /// <summary>
@@ -107,6 +123,7 @@ public sealed class ProcessManagerService
                 UseShellExecute = true
             });
         }
-        catch { }
+        catch (InvalidOperationException) { }
+        catch (System.ComponentModel.Win32Exception) { }
     }
 }

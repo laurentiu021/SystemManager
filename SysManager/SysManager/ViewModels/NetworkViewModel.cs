@@ -5,6 +5,7 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -385,7 +386,8 @@ public partial class NetworkViewModel : ViewModelBase
             });
         }
         catch (OperationCanceledException) { TraceStatus = "Cancelled"; }
-        catch (Exception ex) { TraceStatus = "Error: " + ex.Message; }
+        catch (InvalidOperationException ex) { TraceStatus = "Error: " + ex.Message; }
+        catch (System.Net.Sockets.SocketException ex) { TraceStatus = "Error: " + ex.Message; }
         finally
         {
             _tracer.HopCompleted -= OnHop;
@@ -435,7 +437,8 @@ public partial class NetworkViewModel : ViewModelBase
         var progress = new Progress<(int p, string m)>(t => { SpeedProgress = t.p; SpeedStatus = t.m; });
         try { HttpResult = await _speed.RunHttpAsync(progress, _speedCts.Token); SpeedStatus = "HTTP done"; Log.Information("HTTP speed test completed: {Down:F1} Mbps down, {Up:F1} Mbps up", HttpResult.DownloadMbps, HttpResult.UploadMbps); }
         catch (OperationCanceledException) { SpeedStatus = "Cancelled"; }
-        catch (Exception ex) { SpeedStatus = "Error: " + ex.Message; }
+        catch (HttpRequestException ex) { SpeedStatus = "Error: " + ex.Message; }
+        catch (InvalidOperationException ex) { SpeedStatus = "Error: " + ex.Message; }
         finally { IsSpeedTesting = false; IsHttpTesting = false; }
     }
 
@@ -451,7 +454,8 @@ public partial class NetworkViewModel : ViewModelBase
         var progress = new Progress<(int p, string m)>(t => { SpeedProgress = t.p; SpeedStatus = t.m; });
         try { OoklaResult = await _speed.RunOoklaAsync(progress, _speedCts.Token); SpeedStatus = "Ookla done"; Log.Information("Ookla speed test completed: {Down:F1} Mbps down, {Up:F1} Mbps up", OoklaResult.DownloadMbps, OoklaResult.UploadMbps); }
         catch (OperationCanceledException) { SpeedStatus = "Cancelled"; }
-        catch (Exception ex) { SpeedStatus = "Error: " + ex.Message; }
+        catch (HttpRequestException ex) { SpeedStatus = "Error: " + ex.Message; }
+        catch (InvalidOperationException ex) { SpeedStatus = "Error: " + ex.Message; }
         finally { IsSpeedTesting = false; IsOoklaTesting = false; }
     }
 

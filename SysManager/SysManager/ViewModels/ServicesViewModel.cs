@@ -42,7 +42,8 @@ public partial class ServicesViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await RefreshAsync(); }
-        catch (Exception ex) { Log.Warning("Services auto-refresh failed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("Services auto-refresh failed: {Error}", ex.Message); }
+        catch (System.ComponentModel.Win32Exception ex) { Log.Warning("Services auto-refresh failed: {Error}", ex.Message); }
     }
 
     partial void OnFilterChanged(string value) => ApplyFilter();

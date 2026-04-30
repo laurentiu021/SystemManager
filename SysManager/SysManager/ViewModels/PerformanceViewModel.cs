@@ -60,7 +60,9 @@ public partial class PerformanceViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await RefreshAsync(); }
-        catch (Exception ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
+        catch (System.Security.SecurityException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
     }
 
     /// <summary>Ensure snapshot exists before any change.</summary>

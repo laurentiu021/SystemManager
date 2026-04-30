@@ -34,7 +34,8 @@ public partial class StartupViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await ScanAsync(); }
-        catch (Exception ex) { Log.Warning("Startup auto-scan failed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("Startup auto-scan failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Warning("Startup auto-scan failed: {Error}", ex.Message); }
     }
 
     [RelayCommand]
@@ -55,7 +56,11 @@ public partial class StartupViewModel : ViewModelBase
             UpdateCounts();
             StatusMessage = $"Found {TotalCount} startup items.";
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
+        {
+            StatusMessage = $"Scan failed: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
         {
             StatusMessage = $"Scan failed: {ex.Message}";
         }
@@ -116,7 +121,8 @@ public partial class StartupViewModel : ViewModelBase
                 });
             }
         }
-        catch { StatusMessage = "Could not open file location."; }
+        catch (InvalidOperationException) { StatusMessage = "Could not open file location."; }
+        catch (System.ComponentModel.Win32Exception) { StatusMessage = "Could not open file location."; }
     }
 
     private void UpdateCounts()

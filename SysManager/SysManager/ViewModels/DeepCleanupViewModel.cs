@@ -61,7 +61,9 @@ public partial class DeepCleanupViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await LoadLocationsAsync(); }
-        catch (Exception ex) { Log.Warning("Deep cleanup location load failed: {Error}", ex.Message); }
+        catch (IOException ex) { Log.Warning("Deep cleanup location load failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Warning("Deep cleanup location load failed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("Deep cleanup location load failed: {Error}", ex.Message); }
     }
 
     private async Task LoadLocationsAsync()
@@ -88,7 +90,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
 
             SelectedLocation = ScanLocations.FirstOrDefault();
         }
-        catch (Exception) { /* location enumeration is best-effort */ }
+        catch (IOException) { /* location enumeration is best-effort */ }
+        catch (UnauthorizedAccessException) { /* location enumeration is best-effort */ }
     }
 
     private void AddLocation(string label, string path)
@@ -160,7 +163,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
             OnPropertyChanged(nameof(TotalSelectedDisplay));
         }
         catch (OperationCanceledException) { ScanSummary = "Scan cancelled."; ScanStatusLine = "Cancelled."; }
-        catch (Exception ex) { ScanSummary = $"Scan failed: {ex.Message}"; }
+        catch (IOException ex) { ScanSummary = $"Scan failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { ScanSummary = $"Scan failed: {ex.Message}"; }
         finally { IsScanning = false; }
     }
 
@@ -187,7 +191,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
             await ScanAsync();
         }
         catch (OperationCanceledException) { CleanSummary = "Clean cancelled."; CleanStatusLine = "Cancelled."; }
-        catch (Exception ex) { CleanSummary = $"Clean failed: {ex.Message}"; }
+        catch (IOException ex) { CleanSummary = $"Clean failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { CleanSummary = $"Clean failed: {ex.Message}"; }
         finally { IsCleaning = false; }
     }
 
@@ -245,7 +250,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
                 list.Count, MinSizeMB);
         }
         catch (OperationCanceledException) { LargeScanStatus = "Scan cancelled."; }
-        catch (Exception ex) { LargeScanStatus = $"Error: {ex.Message}"; }
+        catch (IOException ex) { LargeScanStatus = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { LargeScanStatus = $"Error: {ex.Message}"; }
         finally { IsLargeScanning = false; LargeCurrentFolder = string.Empty; }
     }
 
@@ -254,14 +260,16 @@ public partial class DeepCleanupViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
         try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }); }
-        catch (Exception) { /* best-effort */ }
+        catch (InvalidOperationException) { /* best-effort */ }
+        catch (System.ComponentModel.Win32Exception) { /* best-effort */ }
     }
 
     [RelayCommand]
     private void CopyPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
-        try { System.Windows.Clipboard.SetText(path); } catch (Exception) { /* clipboard may be locked */ }
+        try { System.Windows.Clipboard.SetText(path); }
+        catch (System.Runtime.InteropServices.ExternalException) { /* clipboard may be locked */ }
     }
 }
 

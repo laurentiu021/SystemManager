@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.IO;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -57,7 +58,9 @@ public partial class SystemHealthViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await RefreshDrivesAsync(); }
-        catch (Exception ex) { Log.Warning("System health drive discovery failed: {Error}", ex.Message); }
+        catch (IOException ex) { Log.Warning("System health drive discovery failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Warning("System health drive discovery failed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Warning("System health drive discovery failed: {Error}", ex.Message); }
     }
 
     protected override void Dispose(bool disposing)
@@ -91,7 +94,8 @@ public partial class SystemHealthViewModel : ViewModelBase
             Log.Information("System health scan completed");
             await RefreshDrivesAsync();
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (System.Management.ManagementException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -118,7 +122,9 @@ public partial class SystemHealthViewModel : ViewModelBase
                 });
             }
         }
-        catch (Exception ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
+        catch (IOException ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
     }
 
     [RelayCommand]
@@ -134,7 +140,8 @@ public partial class SystemHealthViewModel : ViewModelBase
             foreach (var r in reports) DiskHealth.Add(r);
             StatusMessage = $"Collected {reports.Count} disk report(s).";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (System.Management.ManagementException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -167,7 +174,8 @@ public partial class SystemHealthViewModel : ViewModelBase
             }
             StatusMessage = "Memory scan done.";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (System.Diagnostics.Eventing.Reader.EventLogException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -278,7 +286,12 @@ public partial class SystemHealthViewModel : ViewModelBase
             if (target != null) target.Status = "Cancelled";
             StatusMessage = $"chkdsk {driveLetter} cancelled.";
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
+        {
+            if (target != null) target.Status = "Error";
+            StatusMessage = $"Error on {driveLetter}: {ex.Message}";
+        }
+        catch (System.ComponentModel.Win32Exception ex)
         {
             if (target != null) target.Status = "Error";
             StatusMessage = $"Error on {driveLetter}: {ex.Message}";

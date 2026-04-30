@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.9] - 2026-04-30
+
+### Fixed
+- **Cleanup: CancellationTokenSource disposal** — `_tempCts`, `_binCts`,
+  `_sfcCts`, and `_dismCts` were not disposed before recreation, leaking
+  handles on repeated Clean TEMP / Empty Recycle Bin / SFC / DISM operations.
+  Now follows the same `_cts?.Dispose()` pattern applied in other ViewModels
+  during the #161 memory leak fix.
+
 ## [0.28.8] - 2026-04-29
 
 ### Fixed

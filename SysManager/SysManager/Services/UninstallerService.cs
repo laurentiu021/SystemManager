@@ -49,6 +49,10 @@ public sealed class UninstallerService
     /// </summary>
     public async Task<int> UninstallAsync(string packageId, CancellationToken ct = default)
     {
+        // Validate packageId to prevent command injection via winget arguments
+        if (string.IsNullOrWhiteSpace(packageId) || packageId.Contains('"') || packageId.Contains('\0'))
+            throw new ArgumentException("Invalid package ID.", nameof(packageId));
+
         var args = $"uninstall --id \"{packageId}\" -e --silent --accept-source-agreements --disable-interactivity";
         return await _runner.RunProcessAsync("winget", args, ct);
     }

@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -89,17 +91,31 @@ public sealed class StartupService
                 var command = file;
                 if (string.Equals(System.IO.Path.GetExtension(file), ".lnk", StringComparison.OrdinalIgnoreCase))
                 {
+                    object? shell = null;
+                    object? shortcut = null;
                     try
                     {
                         var shellType = Type.GetTypeFromProgID("WScript.Shell");
                         if (shellType != null)
                         {
-                            dynamic shell = Activator.CreateInstance(shellType)!;
-                            dynamic shortcut = shell.CreateShortcut(file);
-                            command = shortcut.TargetPath ?? file;
+                            shell = Activator.CreateInstance(shellType)!;
+                            shortcut = ((dynamic)shell).CreateShortcut(file);
+                            command = ((dynamic)shortcut).TargetPath ?? file;
                         }
                     }
-                    catch { /* fall back to the .lnk path itself */ }
+                    catch (COMException ex)
+                    {
+                        Log.Debug("Failed to resolve shortcut {File}: {Error}", file, ex.Message);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        Log.Debug("Failed to resolve shortcut {File}: {Error}", file, ex.Message);
+                    }
+                    finally
+                    {
+                        if (shortcut != null) Marshal.ReleaseComObject(shortcut);
+                        if (shell != null) Marshal.ReleaseComObject(shell);
+                    }
                 }
 
                 results.Add(new StartupEntry
@@ -116,7 +132,14 @@ public sealed class StartupService
                 });
             }
         }
-        catch { /* folder may be inaccessible */ }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Startup folder inaccessible {Folder}: {Error}", folderPath, ex.Message);
+        }
+        catch (System.IO.IOException ex)
+        {
+            Log.Debug("Startup folder I/O error {Folder}: {Error}", folderPath, ex.Message);
+        }
     }
 
     private static void ReadScheduledTasks(List<StartupEntry> results)
@@ -134,27 +157,22 @@ public sealed class StartupService
                     using var taskKey = key.OpenSubKey(subKeyName, writable: false);
                     if (taskKey == null) continue;
 
-                    // Only include tasks with logon triggers (trigger type 9 = TASK_TRIGGER_LOGON)
                     var triggers = taskKey.GetValue("Triggers") as byte[];
                     if (triggers == null || triggers.Length < 4) continue;
 
-                    // Check if the task has a logon trigger by looking at the path
                     var path = taskKey.GetValue("Path")?.ToString() ?? "";
                     var uri = taskKey.GetValue("URI")?.ToString() ?? path;
 
-                    // Skip system/Microsoft tasks that clutter the list
                     if (uri.StartsWith(@"\Microsoft\", StringComparison.OrdinalIgnoreCase)) continue;
                     if (uri.StartsWith(@"\Windows\", StringComparison.OrdinalIgnoreCase)) continue;
 
                     var description = taskKey.GetValue("Description")?.ToString() ?? "";
                     var author = taskKey.GetValue("Author")?.ToString() ?? "";
 
-                    // Read the Actions to get the command
                     var actions = taskKey.GetValue("Actions") as byte[];
                     var taskName = System.IO.Path.GetFileName(uri.TrimEnd('\\'));
                     if (string.IsNullOrWhiteSpace(taskName)) continue;
 
-                    // Deduplicate — skip if we already have this name from registry
                     if (results.Any(e => string.Equals(e.Name, taskName, StringComparison.OrdinalIgnoreCase)))
                         continue;
 
@@ -172,10 +190,28 @@ public sealed class StartupService
                         StatusText = "Enabled (scheduled)"
                     });
                 }
-                catch { /* skip individual task errors */ }
+                catch (System.Security.SecurityException ex)
+                {
+                    Log.Debug("Scheduled task inaccessible {Key}: {Error}", subKeyName, ex.Message);
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    Log.Debug("Scheduled task access denied {Key}: {Error}", subKeyName, ex.Message);
+                }
+                catch (System.IO.IOException ex)
+                {
+                    Log.Debug("Scheduled task I/O error {Key}: {Error}", subKeyName, ex.Message);
+                }
             }
         }
-        catch { /* Task Scheduler registry may be inaccessible */ }
+        catch (System.Security.SecurityException ex)
+        {
+            Log.Debug("Task Scheduler registry inaccessible: {Error}", ex.Message);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Task Scheduler registry access denied: {Error}", ex.Message);
+        }
     }
 
     private static void ReadRunKey(RegistryKey root, string keyPath, StartupSource source, List<StartupEntry> results)
@@ -207,7 +243,14 @@ public sealed class StartupService
                 });
             }
         }
-        catch { /* key may not exist or be inaccessible */ }
+        catch (System.Security.SecurityException ex)
+        {
+            Log.Debug("Run key inaccessible {Key}: {Error}", keyPath, ex.Message);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Run key access denied {Key}: {Error}", keyPath, ex.Message);
+        }
     }
 
     /// <summary>
@@ -255,7 +298,9 @@ public sealed class StartupService
             }
             return dict;
         }
-        catch { return null; }
+        catch (System.Security.SecurityException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+        catch (System.IO.IOException) { return null; }
     }
 
     /// <summary>
@@ -344,6 +389,13 @@ public sealed class StartupService
                 return false;
             }
 
+            // Reject task paths containing characters that could break argument parsing
+            if (taskPath.Contains('"') || taskPath.Contains('\0'))
+            {
+                entry.StatusText = "Error — invalid task path";
+                return false;
+            }
+
             var args = enabled
                 ? $"/Change /TN \"{taskPath}\" /Enable"
                 : $"/Change /TN \"{taskPath}\" /Disable";
@@ -365,7 +417,20 @@ public sealed class StartupService
                 return false;
             }
 
-            proc.WaitForExit(5000);
+            // Read streams BEFORE WaitForExit to avoid deadlock when the
+            // pipe buffer fills up and the child process blocks on write.
+            var stderrTask = proc.StandardError.ReadToEndAsync();
+            var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+
+            if (!proc.WaitForExit(10_000))
+            {
+                try { proc.Kill(); } catch (InvalidOperationException) { }
+                entry.StatusText = "Error — schtasks timed out";
+                return false;
+            }
+
+            var stderr = stderrTask.GetAwaiter().GetResult().Trim();
+
             if (proc.ExitCode == 0)
             {
                 entry.IsEnabled = enabled;
@@ -373,7 +438,6 @@ public sealed class StartupService
                 return true;
             }
 
-            var stderr = proc.StandardError.ReadToEnd().Trim();
             entry.StatusText = $"Error — {(stderr.Length > 0 ? stderr : "schtasks failed")}";
             return false;
         }
@@ -408,7 +472,10 @@ public sealed class StartupService
                 return vi.CompanyName ?? "";
             }
         }
-        catch { }
+        catch (System.IO.FileNotFoundException) { }
+        catch (System.IO.IOException) { }
+        catch (UnauthorizedAccessException) { }
+        catch (System.Security.SecurityException) { }
         return "";
     }
 }

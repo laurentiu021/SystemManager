@@ -63,7 +63,9 @@ public sealed class SpeedTestService
             }
             return samples.Count > 0 ? samples.Average() : 0;
         }
-        catch { return 0; }
+        catch (System.Net.NetworkInformation.PingException) { return 0; }
+        catch (System.Net.Sockets.SocketException) { return 0; }
+        catch (InvalidOperationException) { return 0; }
     }
 
     private static async Task<double> MeasureDownloadAsync(
@@ -101,18 +103,68 @@ public sealed class SpeedTestService
     private static async Task<double> MeasureUploadAsync(
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
-        var payload = new byte[PayloadBytes];
-        new Random().NextBytes(payload);
+        // Stream random data in chunks instead of allocating a single 50 MB
+        // array on the Large Object Heap. Each chunk is small enough to stay
+        // in Gen0 and be collected quickly.
+        const int ChunkSize = 256 * 1024; // 256 KB per chunk
+
+        var stream = new RandomChunkStream(PayloadBytes, ChunkSize);
+        using var content = new StreamContent(stream, ChunkSize);
+        content.Headers.ContentLength = PayloadBytes;
 
         var sw = Stopwatch.StartNew();
-        using var content = new ByteArrayContent(payload);
         using var resp = await _http.PostAsync(CfUploadUrl, content, ct);
         sw.Stop();
 
         // Some responses are rejected with 4xx on POST size — treat as best-effort.
         var seconds = Math.Max(sw.Elapsed.TotalSeconds, 0.001);
-        progress?.Report((95, $"Upload complete: {payload.Length / 1024 / 1024} MB"));
-        return payload.Length * 8.0 / 1_000_000.0 / seconds;
+        progress?.Report((95, $"Upload complete: {PayloadBytes / 1024 / 1024} MB"));
+        return PayloadBytes * 8.0 / 1_000_000.0 / seconds;
+    }
+
+    /// <summary>
+    /// A read-only stream that produces random bytes in fixed-size chunks
+    /// without allocating the entire payload up front.
+    /// </summary>
+    private sealed class RandomChunkStream : Stream
+    {
+        private readonly long _length;
+        private readonly byte[] _chunk;
+        private long _position;
+
+        public RandomChunkStream(long length, int chunkSize)
+        {
+            _length = length;
+            _chunk = new byte[chunkSize];
+            Random.Shared.NextBytes(_chunk);
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => _length;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var toRead = (int)Math.Min(count, _length - _position);
+            if (toRead <= 0) return 0;
+
+            var written = 0;
+            while (written < toRead)
+            {
+                var batch = Math.Min(toRead - written, _chunk.Length);
+                Buffer.BlockCopy(_chunk, 0, buffer, offset + written, batch);
+                written += batch;
+            }
+            _position += written;
+            return written;
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     // ---------------- Ookla ----------------

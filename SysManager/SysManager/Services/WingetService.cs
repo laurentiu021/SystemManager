@@ -95,6 +95,10 @@ public class WingetService
 
     public async Task<int> UpgradeAsync(string packageId, CancellationToken ct = default)
     {
+        // Validate packageId to prevent command injection via winget arguments
+        if (string.IsNullOrWhiteSpace(packageId) || packageId.Contains('"') || packageId.Contains('\0'))
+            throw new ArgumentException("Invalid package ID.", nameof(packageId));
+
         var args = $"upgrade --id \"{packageId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity";
         return await _runner.RunProcessAsync("winget", args, ct);
     }

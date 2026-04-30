@@ -105,6 +105,14 @@ public class ServiceManagerService
     /// <summary>Change the startup type of a service via sc.exe. Requires admin.</summary>
     public static async Task SetStartupTypeAsync(string serviceName, string startType, PowerShellRunner ps, CancellationToken ct = default)
     {
+        // Validate inputs to prevent command injection via sc.exe arguments
+        if (serviceName.Contains('"') || serviceName.Contains('\0'))
+            throw new ArgumentException("Invalid service name.", nameof(serviceName));
+
+        var allowedTypes = new[] { "auto", "delayed-auto", "demand", "disabled" };
+        if (!allowedTypes.Contains(startType, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException($"Invalid start type: {startType}", nameof(startType));
+
         await ps.RunProcessAsync("sc.exe", $"config \"{serviceName}\" start= {startType}", ct)
             .ConfigureAwait(false);
     }

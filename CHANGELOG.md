@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.26] - 2026-05-04
+
+### Fixed
+- **CodeQL regressions** — resolved 2 alerts introduced during the bug fix
+  session: converted `foreach`+`if` to LINQ `Where()` in
+  `DeepCleanupService.RiotLogDirs` (missed-where), wrapped `JsonDocument` in
+  `using` block in `SpeedTestService.RunOoklaAsync` (missed-using).
+
 ## [0.28.25] - 2026-05-04
 
 ### Fixed

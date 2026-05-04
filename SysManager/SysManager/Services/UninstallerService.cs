@@ -11,7 +11,7 @@ namespace SysManager.Services;
 /// <summary>
 /// Wraps winget.exe to list installed packages and uninstall them.
 /// </summary>
-public sealed class UninstallerService
+public sealed partial class UninstallerService
 {
     private readonly PowerShellRunner _runner;
 
@@ -50,13 +50,23 @@ public sealed class UninstallerService
     /// </summary>
     public async Task<int> UninstallAsync(string packageId, CancellationToken ct = default)
     {
-        // Validate packageId to prevent command injection via winget arguments
-        if (string.IsNullOrWhiteSpace(packageId) || packageId.Contains('"') || packageId.Contains('\0'))
+        // Validate packageId: whitelist alphanumeric, dots, hyphens, underscores,
+        // forward slashes (scoped IDs like "Microsoft.VisualStudio.2022.Community"),
+        // and plus signs (e.g. "Notepad++.Notepad++").
+        if (string.IsNullOrWhiteSpace(packageId)
+            || !PackageIdPattern().IsMatch(packageId))
             throw new ArgumentException("Invalid package ID.", nameof(packageId));
 
         var args = $"uninstall --id \"{packageId}\" -e --silent --accept-source-agreements --disable-interactivity";
         return await _runner.RunProcessAsync("winget", args, ct);
     }
+
+    /// <summary>
+    /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
+    /// underscores, forward slashes, and plus signs. Max 256 chars.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[\w.\-/+]{1,256}$")]
+    private static partial System.Text.RegularExpressions.Regex PackageIdPattern();
 
     internal static List<InstalledApp> ParseListTable(List<string> lines)
     {

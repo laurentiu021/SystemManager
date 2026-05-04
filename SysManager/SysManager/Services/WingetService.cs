@@ -10,7 +10,7 @@ namespace SysManager.Services;
 /// <summary>
 /// Wraps winget.exe to list upgradable packages and install updates with live streaming.
 /// </summary>
-public class WingetService
+public partial class WingetService
 {
     private readonly PowerShellRunner _runner;
 
@@ -95,13 +95,22 @@ public class WingetService
 
     public async Task<int> UpgradeAsync(string packageId, CancellationToken ct = default)
     {
-        // Validate packageId to prevent command injection via winget arguments
-        if (string.IsNullOrWhiteSpace(packageId) || packageId.Contains('"') || packageId.Contains('\0'))
+        // Validate packageId: whitelist alphanumeric, dots, hyphens, underscores,
+        // forward slashes (scoped IDs), and plus signs (e.g. "Notepad++.Notepad++").
+        if (string.IsNullOrWhiteSpace(packageId)
+            || !PackageIdPattern().IsMatch(packageId))
             throw new ArgumentException("Invalid package ID.", nameof(packageId));
 
         var args = $"upgrade --id \"{packageId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity";
         return await _runner.RunProcessAsync("winget", args, ct);
     }
+
+    /// <summary>
+    /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
+    /// underscores, forward slashes, and plus signs. Max 256 chars.
+    /// </summary>
+    [GeneratedRegex(@"^[\w.\-/+]{1,256}$")]
+    private static partial Regex PackageIdPattern();
 
     public async Task<int> UpgradeAllAsync(CancellationToken ct = default)
     {

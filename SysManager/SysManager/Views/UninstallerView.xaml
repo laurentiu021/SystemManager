@@ -28,11 +28,11 @@
         <!-- Toolbar -->
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
-                <Button Content="⟳ Scan" Command="{Binding ScanCommand}"
+                <Button Content="Scan" Command="{Binding ScanCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                <Button Content="🗑 Uninstall selected" Command="{Binding UninstallSelectedCommand}"
+                <Button Content="Uninstall selected" Command="{Binding UninstallSelectedCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                <Button Content="✕ Cancel" Command="{Binding CancelCommand}"
+                <Button Content="Cancel" Command="{Binding CancelCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="Search:" VerticalAlignment="Center" Margin="8,0,8,0"
@@ -58,7 +58,7 @@
 
         <!-- App list -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
-            <DataGrid ItemsSource="{Binding FilteredApps}"
+            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding FilteredApps}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="False"
@@ -168,7 +168,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Value="{Binding Progress}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>

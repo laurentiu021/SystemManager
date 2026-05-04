@@ -33,13 +33,13 @@
                 <ComboBox ItemsSource="{Binding PresetPaths}"
                           SelectedItem="{Binding SelectedPath}"
                           Width="300" Margin="0,0,8,0" IsEditable="True"/>
-                <Button Content="📁 Browse" Command="{Binding BrowseFolderCommand}"
+                <Button Content="Browse" Command="{Binding BrowseFolderCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
-                <Button Content="⬆ Up" Command="{Binding GoUpCommand}"
+                <Button Content="Up" Command="{Binding GoUpCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0"/>
-                <Button Content="🔍 Analyze" Command="{Binding AnalyzeCommand}"
+                <Button Content="Analyze" Command="{Binding AnalyzeCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                <Button Content="✕ Cancel" Command="{Binding CancelAnalysisCommand}"
+                <Button Content="Cancel" Command="{Binding CancelAnalysisCommand}"
                         Style="{StaticResource GhostButton}"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             </WrapPanel>
@@ -55,7 +55,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <ProgressBar Grid.Column="0" Height="8" Minimum="0" Maximum="100"
+                    <ProgressBar AutomationProperties.Name="Progress" Grid.Column="0" Height="8" Minimum="0" Maximum="100"
                                  Value="{Binding DriveUsedPercent, Mode=OneWay}"/>
                     <TextBlock Grid.Column="1" Margin="12,0,0,0" FontSize="12"
                                Foreground="{StaticResource TextMuted}">
@@ -105,7 +105,7 @@
                             </Grid.ColumnDefinitions>
 
                             <!-- Drill-down button -->
-                            <Button Grid.Column="0" Content="📂" ToolTip="Drill into folder"
+                            <Button Grid.Column="0" Content="Open" ToolTip="Drill into folder"
                                     Command="{Binding DataContext.DrillDownCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"
                                     Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
@@ -123,7 +123,7 @@
 
                             <!-- Size bar -->
                             <Grid Grid.Column="2" VerticalAlignment="Center" Margin="8,0">
-                                <ProgressBar Height="6" Minimum="0" Maximum="100"
+                                <ProgressBar AutomationProperties.Name="Progress" Height="6" Minimum="0" Maximum="100"
                                              Value="{Binding Percentage, Mode=OneWay}"/>
                             </Grid>
 
@@ -133,7 +133,7 @@
                                        HorizontalAlignment="Right"/>
 
                             <!-- Open in Explorer -->
-                            <Button Grid.Column="4" Content="📁" ToolTip="Open in Explorer"
+                            <Button Grid.Column="4" Content="Open" ToolTip="Open in Explorer"
                                     Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"
                                     Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
@@ -146,7 +146,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>

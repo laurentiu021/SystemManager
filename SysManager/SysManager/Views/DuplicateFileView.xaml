@@ -34,15 +34,15 @@
                           SelectedItem="{Binding SelectedFolder}"
                           Width="320" Margin="0,0,8,0"
                           IsEditable="True"/>
-                <Button Content="📁 Browse" Command="{Binding BrowseFolderCommand}"
+                <Button Content="Browse" Command="{Binding BrowseFolderCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0"/>
                 <TextBlock Text="Min size (KB):" VerticalAlignment="Center" Margin="0,0,8,0"
                            Style="{StaticResource Subtle}"/>
                 <TextBox Text="{Binding MinSizeKb, UpdateSourceTrigger=PropertyChanged}"
                          Width="70" Margin="0,0,12,0"/>
-                <Button Content="🔍 Scan" Command="{Binding ScanCommand}"
+                <Button Content="Scan" Command="{Binding ScanCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                <Button Content="✕ Cancel" Command="{Binding CancelScanCommand}"
+                <Button Content="Cancel" Command="{Binding CancelScanCommand}"
                         Style="{StaticResource GhostButton}"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             </WrapPanel>
@@ -82,12 +82,12 @@
                                             <DataTemplate>
                                                 <DockPanel Margin="16,3,0,3">
                                                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                                                        <Button Content="📂" ToolTip="Show in Explorer"
+                                                        <Button Content="Open" ToolTip="Show in Explorer"
                                                                 Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}"
                                                                 Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
                                                                 Margin="0,0,4,0"/>
-                                                        <Button Content="📋" ToolTip="Copy path"
+                                                        <Button Content="Copy" ToolTip="Copy path"
                                                                 Command="{Binding DataContext.CopyPathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}"
                                                                 Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
@@ -114,7 +114,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>

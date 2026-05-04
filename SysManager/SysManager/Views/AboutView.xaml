@@ -98,7 +98,7 @@
                         <!-- Download progress -->
                         <StackPanel Margin="0,14,0,0"
                                     Visibility="{Binding IsDownloading, Converter={StaticResource FlexVis}}">
-                            <ProgressBar Height="6" Minimum="0" Maximum="100" Value="{Binding DownloadPercent}"/>
+                            <ProgressBar AutomationProperties.Name="Progress" Height="6" Minimum="0" Maximum="100" Value="{Binding DownloadPercent}"/>
                             <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                         </StackPanel>
 

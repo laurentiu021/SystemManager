@@ -130,7 +130,7 @@
                                     <TextBlock Text="loss " Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding LossPercent, StringFormat={}{0:F0}%}"
                                                VerticalAlignment="Center" Foreground="#FBBF24"/>
-                                    <Button Content="✕" Margin="10,0,0,0" Padding="6,0" FontSize="10"
+                                    <Button Content="X" Margin="10,0,0,0" Padding="6,0" FontSize="10"
                                             Style="{StaticResource GhostButton}"
                                             Command="{Binding DataContext.RemoveTargetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"

@@ -63,7 +63,7 @@
         </Border>
 
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
-            <DataGrid ItemsSource="{Binding Packages}"
+            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Packages}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       GridLinesVisibility="None" CanUserAddRows="False"
                       CanUserSortColumns="True"
@@ -103,7 +103,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <ProgressBar Grid.Column="0" Height="6" Minimum="0" Maximum="100"
+            <ProgressBar AutomationProperties.Name="Progress" Grid.Column="0" Height="6" Minimum="0" Maximum="100"
                          Value="{Binding Progress}"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"/>
             <TextBlock Grid.Column="1" Margin="12,0,0,0" Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"/>

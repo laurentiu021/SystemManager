@@ -167,7 +167,7 @@
             <!-- List -->
             <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0">
                 <Grid>
-                    <DataGrid ItemsSource="{Binding EntriesView}"
+                    <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding EntriesView}"
                               SelectedItem="{Binding SelectedEntry}"
                               AutoGenerateColumns="False"
                               HeadersVisibility="Column"
@@ -340,7 +340,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"/>
-            <ProgressBar Grid.Column="1" Width="180" Height="4"
+            <ProgressBar AutomationProperties.Name="Progress" Grid.Column="1" Width="180" Height="4"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource FlexVis}}"/>
         </Grid>

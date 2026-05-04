@@ -28,7 +28,7 @@
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <DockPanel>
                 <StackPanel Orientation="Horizontal">
-                    <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}"
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                     <ComboBox ItemsSource="{Binding FilterOptions}"
                               SelectedItem="{Binding SelectedFilter}" Width="150" Margin="0,0,8,0"/>
@@ -47,7 +47,7 @@
         </Border>
 
         <!-- Services list -->
-        <DataGrid Grid.Row="2" ItemsSource="{Binding Services}"
+        <DataGrid AutomationProperties.Name="Data table" Grid.Row="2" ItemsSource="{Binding Services}"
                   SelectedItem="{Binding SelectedService}"
                   AutoGenerateColumns="False" HeadersVisibility="Column"
                   Background="Transparent" BorderThickness="0"
@@ -119,7 +119,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="3" Margin="0,8,0,0">
-            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>

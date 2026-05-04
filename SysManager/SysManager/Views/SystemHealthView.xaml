@@ -38,7 +38,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                     <StackPanel>
                         <TextBlock Text="Memory modules" Style="{StaticResource SectionTitle}"/>
-                        <DataGrid ItemsSource="{Binding Modules}"
+                        <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Modules}"
                                   AutoGenerateColumns="False" HeadersVisibility="Column"
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   Background="Transparent" RowBackground="Transparent"
@@ -89,7 +89,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                     <StackPanel>
                         <TextBlock Text="Storage devices" Style="{StaticResource SectionTitle}"/>
-                        <DataGrid ItemsSource="{Binding Disks}"
+                        <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Disks}"
                                   AutoGenerateColumns="False" HeadersVisibility="Column"
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   Background="Transparent" RowBackground="Transparent"
@@ -296,7 +296,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"/>
-                    <ProgressBar Grid.Column="1" Width="180" Height="4"
+                    <ProgressBar AutomationProperties.Name="Progress" Grid.Column="1" Width="180" Height="4"
                                  IsIndeterminate="{Binding IsProgressIndeterminate}"
                                  Visibility="{Binding IsBusy, Converter={StaticResource FlexVis}}"/>
                 </Grid>

@@ -57,7 +57,7 @@
                     <StackPanel>
                         <TextBlock Text="Memory" Foreground="#9AA0A6" FontSize="12"/>
                         <TextBlock Text="{Binding MemLine}" FontSize="15" Margin="0,4,0,6"/>
-                        <ProgressBar Height="8" Minimum="0" Maximum="100"
+                        <ProgressBar AutomationProperties.Name="Progress" Height="8" Minimum="0" Maximum="100"
                                      Value="{Binding Snapshot.Memory.UsedPercent}"/>
                     </StackPanel>
                 </Border>
@@ -76,7 +76,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <ProgressBar Grid.Column="0" Height="4"
+            <ProgressBar AutomationProperties.Name="Progress" Grid.Column="0" Height="4"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Grid.Column="1" Margin="12,0,0,0" Text="{Binding StatusMessage}" Foreground="#9AA0A6"/>

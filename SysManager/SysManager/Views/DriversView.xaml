@@ -42,7 +42,7 @@
 
         <!-- Driver table -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
-            <DataGrid ItemsSource="{Binding Drivers}"
+            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Drivers}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="True"
@@ -100,7 +100,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>

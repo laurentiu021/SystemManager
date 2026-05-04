@@ -28,7 +28,7 @@
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <DockPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                    <Button Content="⟳ Refresh" Command="{Binding ScanCommand}"
+                    <Button Content="Refresh" Command="{Binding ScanCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                     <Button Content="Enable All" Command="{Binding EnableAllCommand}"
                             Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
@@ -40,7 +40,7 @@
 
         <!-- Startup items list -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
-            <DataGrid ItemsSource="{Binding Entries}"
+            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Entries}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="False"
@@ -101,7 +101,7 @@
                     <DataGridTemplateColumn Header="" Width="40" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Button Content="📂" ToolTip="Open file location"
+                                <Button Content="Open" ToolTip="Open file location"
                                         Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}"
                                         Style="{StaticResource GhostButton}" Padding="8,4" FontSize="14"/>

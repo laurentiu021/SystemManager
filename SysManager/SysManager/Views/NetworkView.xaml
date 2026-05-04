@@ -127,7 +127,7 @@
                                     <TextBlock Text="loss " Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding LossPercent, StringFormat={}{0:F0}%}"
                                                VerticalAlignment="Center" Foreground="#FBBF24"/>
-                                    <Button Content="✕" Margin="10,0,0,0" Padding="6,0" FontSize="10"
+                                    <Button Content="X" Margin="10,0,0,0" Padding="6,0" FontSize="10"
                                             Style="{StaticResource GhostButton}"
                                             Command="{Binding DataContext.RemoveTargetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
@@ -242,7 +242,7 @@
                                 <TextBlock Text="{Binding TraceStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
                             </StackPanel>
 
-                            <DataGrid Grid.Row="2" ItemsSource="{Binding TracerouteHops}"
+                            <DataGrid AutomationProperties.Name="Data table" Grid.Row="2" ItemsSource="{Binding TracerouteHops}"
                                       AutoGenerateColumns="False" HeadersVisibility="Column"
                                       Background="Transparent" BorderThickness="0"
                                       GridLinesVisibility="None" IsReadOnly="True"
@@ -304,7 +304,7 @@
                                     </StackPanel>
                                 </Border>
                             </Grid>
-                            <ProgressBar Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0"
+                            <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0"
                                          Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                         </StackPanel>
                     </Border>
@@ -349,7 +349,7 @@
                             </Grid>
                             <TextBlock Text="{Binding OoklaResult.Server}" Style="{StaticResource Caption}" Margin="0,10,0,0"
                                        Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}"/>
-                            <ProgressBar Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0"
+                            <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0"
                                          Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                             <TextBlock Text="{Binding SpeedStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
                             <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" Margin="0,6,0,0"

@@ -28,9 +28,9 @@
         <!-- Toolbar -->
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
-                <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}"
+                <Button Content="Refresh" Command="{Binding RefreshCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                <Button Content="↺ Restore All" Command="{Binding RestoreAllCommand}"
+                <Button Content="Restore All" Command="{Binding RestoreAllCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
                         IsEnabled="{Binding HasSnapshot}"/>
             </WrapPanel>
@@ -282,7 +282,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>

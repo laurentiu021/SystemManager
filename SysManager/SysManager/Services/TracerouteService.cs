@@ -65,20 +65,20 @@ public sealed class TracerouteService
                 Status = latencies.Count > 0 ? lastStatus.ToString() : "Timeout"
             };
 
-            // Best-effort reverse DNS, non-blocking and respecting cancellation.
+            // Await reverse DNS with a short timeout before emitting the hop.
+            // This ensures hop.HostName is populated when the UI receives it.
             if (replyAddress != null)
             {
                 var addr = replyAddress;
-                _ = Task.Run(async () =>
+                try
                 {
-                    try
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        var entry = await Dns.GetHostEntryAsync(addr);
-                        hop.HostName = entry.HostName;
-                    }
-                    catch { /* ignore: reverse DNS is advisory */ }
-                }, ct);
+                    using var dnsCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    dnsCts.CancelAfter(1500); // 1.5s max for reverse DNS
+                    var entry = await Dns.GetHostEntryAsync(addr.ToString()).WaitAsync(dnsCts.Token).ConfigureAwait(false);
+                    hop.HostName = entry.HostName;
+                }
+                catch (OperationCanceledException) { /* DNS too slow — leave as null */ }
+                catch (System.Net.Sockets.SocketException) { /* no reverse DNS record */ }
             }
 
             results.Add(hop);

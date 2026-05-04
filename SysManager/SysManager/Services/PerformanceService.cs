@@ -2,8 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SysManager
 // License: MIT
 
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Security;
+using System.Text.Json;
 using Microsoft.Win32;
 using Serilog;
 using SysManager.Models;
@@ -89,6 +91,38 @@ public class PerformanceService
             GpuDynamicPstate: nvidiaKey != null && !ReadGpuMaxPerformance(nvidiaKey),
             ProcessorMinPercentAc: await ReadProcessorMinPercentAsync(ct).ConfigureAwait(false),
             NvidiaSubKey: nvidiaKey);
+    }
+
+    private static readonly string SnapshotPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SysManager", "performance-snapshot.json");
+
+    /// <summary>Persist a snapshot to disk so it survives app restarts.</summary>
+    public static void SaveSnapshot(OriginalSnapshot snapshot)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(SnapshotPath)!;
+            Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(SnapshotPath, json);
+            Log.Information("Performance snapshot saved to {Path}", SnapshotPath);
+        }
+        catch (IOException ex) { Log.Warning(ex, "Failed to save performance snapshot"); }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to save performance snapshot"); }
+    }
+
+    /// <summary>Load a previously saved snapshot from disk. Returns null if none exists.</summary>
+    public static OriginalSnapshot? LoadSnapshot()
+    {
+        try
+        {
+            if (!File.Exists(SnapshotPath)) return null;
+            var json = File.ReadAllText(SnapshotPath);
+            return JsonSerializer.Deserialize<OriginalSnapshot>(json);
+        }
+        catch (IOException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
+        catch (JsonException ex) { Log.Warning(ex, "Failed to parse performance snapshot"); return null; }
     }
 
     // ═══════════════════════════════════════════════════════════════

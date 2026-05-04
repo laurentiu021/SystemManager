@@ -89,7 +89,15 @@ public class ServiceManagerService
         if (sc.Status != ServiceControllerStatus.Running)
         {
             sc.Start();
-            sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+            try
+            {
+                sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+            }
+            catch (System.ServiceProcess.TimeoutException)
+            {
+                throw new InvalidOperationException(
+                    $"Service '{serviceName}' did not start within 30 seconds. It may still be starting — check Services again in a moment.");
+            }
         }
     }
 
@@ -100,7 +108,15 @@ public class ServiceManagerService
         if (sc.CanStop && sc.Status != ServiceControllerStatus.Stopped)
         {
             sc.Stop();
-            sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+            try
+            {
+                sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+            }
+            catch (System.ServiceProcess.TimeoutException)
+            {
+                throw new InvalidOperationException(
+                    $"Service '{serviceName}' did not stop within 30 seconds. It may still be stopping — check Services again in a moment.");
+            }
         }
     }
 

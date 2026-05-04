@@ -68,7 +68,9 @@ public partial class PerformanceViewModel : ViewModelBase
     /// <summary>Ensure snapshot exists before any change.</summary>
     private async Task EnsureSnapshotAsync()
     {
-        _snapshot ??= await _service.TakeSnapshotAsync();
+        _snapshot ??= PerformanceService.LoadSnapshot()
+                   ?? await _service.TakeSnapshotAsync();
+        PerformanceService.SaveSnapshot(_snapshot);
         HasSnapshot = true;
     }
 

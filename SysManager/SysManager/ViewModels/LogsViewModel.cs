@@ -153,6 +153,15 @@ public partial class LogsViewModel : ViewModelBase
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _cts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
     [RelayCommand]
     private void SetTimeRange(string? range)
     {

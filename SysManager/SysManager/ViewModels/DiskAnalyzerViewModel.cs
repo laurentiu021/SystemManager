@@ -133,6 +133,15 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
     [RelayCommand]
     private void CancelAnalysis() => _cts?.Cancel();
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _cts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
     [RelayCommand]
     private static void ShowInExplorer(DiskUsageEntry? entry)
     {

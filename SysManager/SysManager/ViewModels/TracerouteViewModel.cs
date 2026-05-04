@@ -95,4 +95,13 @@ public partial class TracerouteViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelTrace() => _traceCts?.Cancel();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _traceCts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 }

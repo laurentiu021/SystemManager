@@ -103,8 +103,18 @@ public sealed class UpdateService
             if (dto == null) return Array.Empty<ReleaseInfo>();
             return dto.Select(Map).OfType<ReleaseInfo>().ToList();
         }
-        catch
+        catch (OperationCanceledException)
         {
+            return Array.Empty<ReleaseInfo>();
+        }
+        catch (HttpRequestException ex)
+        {
+            Serilog.Log.Warning(ex, "Failed to fetch recent releases (network)");
+            return Array.Empty<ReleaseInfo>();
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Serilog.Log.Warning(ex, "Failed to parse recent releases JSON");
             return Array.Empty<ReleaseInfo>();
         }
     }
@@ -157,9 +167,27 @@ public sealed class UpdateService
 
             return target;
         }
-        catch
+        catch (OperationCanceledException)
         {
-            try { if (File.Exists(target)) File.Delete(target); } catch { }
+            try { if (File.Exists(target)) File.Delete(target); }
+            catch (IOException) { /* best-effort cleanup */ }
+            catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
+            return null;
+        }
+        catch (HttpRequestException ex)
+        {
+            Serilog.Log.Warning(ex, "Failed to download release asset (network)");
+            try { if (File.Exists(target)) File.Delete(target); }
+            catch (IOException) { /* best-effort cleanup */ }
+            catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
+            return null;
+        }
+        catch (IOException ex)
+        {
+            Serilog.Log.Warning(ex, "Failed to write release asset to disk");
+            try { if (File.Exists(target)) File.Delete(target); }
+            catch (IOException) { /* best-effort cleanup */ }
+            catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
             return null;
         }
     }

@@ -84,4 +84,13 @@ public partial class SpeedTestViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelSpeed() => _speedCts?.Cancel();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _speedCts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 }

@@ -102,17 +102,17 @@ public partial class PerformanceViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            StatusMessage = $"Read settings failed: {ex.Message}";
             Summary = "Could not read performance settings.";
         }
         catch (SecurityException ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            StatusMessage = $"Read settings failed: {ex.Message}";
             Summary = "Could not read performance settings.";
         }
         catch (UnauthorizedAccessException ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            StatusMessage = $"Read settings failed: {ex.Message}";
             Summary = "Could not read performance settings.";
         }
         finally
@@ -174,9 +174,9 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = $"Power plan set to {planName}.";
             Log.Information("Power plan changed to {PlanName}", planName);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Power plan change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Power plan change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Power plan change failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -208,9 +208,9 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = $"Visual effects {(WantVisualEffectsReduced ? "reduced" : "restored")}.";
             Log.Information("Visual effects {Action}", WantVisualEffectsReduced ? "reduced" : "restored");
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -242,9 +242,9 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = $"Game Mode {(enabling ? "enabled" : "disabled")}.";
             Log.Information("Game Mode {Action}", enabling ? "enabled" : "disabled");
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -276,9 +276,9 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = $"Xbox Game Bar {(disabling ? "disabled" : "enabled")}.";
             Log.Information("Xbox Game Bar {Action}", disabling ? "disabled" : "enabled");
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -325,9 +325,9 @@ public partial class PerformanceViewModel : ViewModelBase
             }
             await RefreshAsync();
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -367,9 +367,9 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = $"Processor min state set to {target}%.";
             Log.Information("Processor min state set to {Percent}%", target);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Processor state change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Processor state change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Processor state change failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -405,9 +405,9 @@ public partial class PerformanceViewModel : ViewModelBase
             if (ok) Log.Information("System restore point created");
             else Log.Warning("System restore point creation failed");
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Restore point creation failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Restore point creation failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Restore point creation failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -434,8 +434,8 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = $"✓ Trimmed working set of {count} processes.";
             Log.Information("RAM trim completed: {Count} processes trimmed", count);
         }
-        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"RAM trim failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"RAM trim failed: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -475,9 +475,9 @@ public partial class PerformanceViewModel : ViewModelBase
             StatusMessage = $"✓ Hibernation {(enabling ? "enabled" : "disabled")}.";
             Log.Information("Hibernation {Action}", enabling ? "enabled" : "disabled");
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Hibernation toggle failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Hibernation toggle failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Hibernation toggle failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -526,9 +526,9 @@ public partial class PerformanceViewModel : ViewModelBase
             HasSnapshot = false;
             await RefreshAsync();
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (SecurityException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 

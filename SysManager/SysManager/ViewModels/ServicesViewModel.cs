@@ -65,8 +65,8 @@ public partial class ServicesViewModel : ViewModelBase
             else
                 ApplyFilterCore();
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (Win32Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
+        catch (Win32Exception ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -97,7 +97,7 @@ public partial class ServicesViewModel : ViewModelBase
             StatusMessage = $"✓ {entry.DisplayName} started.";
             Log.Information("Service started: {ServiceName}", entry.Name);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
         catch (System.ServiceProcess.TimeoutException) { StatusMessage = $"Timeout starting {entry.DisplayName}."; }
     }
 
@@ -120,7 +120,7 @@ public partial class ServicesViewModel : ViewModelBase
             StatusMessage = $"✓ {entry.DisplayName} stopped.";
             Log.Information("Service stopped: {ServiceName}", entry.Name);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
         catch (System.ServiceProcess.TimeoutException) { StatusMessage = $"Timeout stopping {entry.DisplayName}."; }
     }
 
@@ -143,7 +143,7 @@ public partial class ServicesViewModel : ViewModelBase
             StatusMessage = $"✓ {entry.DisplayName} set to Disabled.";
             Log.Information("Service disabled: {ServiceName}", entry.Name);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Disable service failed: {ex.Message}"; }
     }
 
     [RelayCommand]
@@ -159,7 +159,7 @@ public partial class ServicesViewModel : ViewModelBase
             StatusMessage = $"✓ {entry.DisplayName} set to Manual.";
             Log.Information("Service enabled (manual): {ServiceName}", entry.Name);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Enable service failed: {ex.Message}"; }
     }
 
     private void ApplyFilter()

@@ -94,8 +94,8 @@ public partial class SystemHealthViewModel : ViewModelBase
             Log.Information("System health scan completed");
             await RefreshDrivesAsync();
         }
-        catch (System.Management.ManagementException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (System.Management.ManagementException ex) { StatusMessage = $"Scan failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Scan failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -140,8 +140,8 @@ public partial class SystemHealthViewModel : ViewModelBase
             foreach (var r in reports) DiskHealth.Add(r);
             StatusMessage = $"Collected {reports.Count} disk report(s).";
         }
-        catch (System.Management.ManagementException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (System.Management.ManagementException ex) { StatusMessage = $"CheckDiskHealth failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"CheckDiskHealth failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -174,8 +174,8 @@ public partial class SystemHealthViewModel : ViewModelBase
             }
             StatusMessage = "Memory scan done.";
         }
-        catch (System.Diagnostics.Eventing.Reader.EventLogException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (System.Diagnostics.Eventing.Reader.EventLogException ex) { StatusMessage = $"CheckMemoryErrors failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"CheckMemoryErrors failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 

@@ -5,6 +5,7 @@
 using System.Runtime.InteropServices;
 using System.Security;
 using Microsoft.Win32;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -241,6 +242,7 @@ public class PerformanceService
     public static void SetUiEffects(bool enabled)
     {
         SystemParametersInfo(SPI_SETUIEFFECTS, 0, enabled, SPIF_SENDCHANGE);
+        Log.Information("System: Visual effects {Action}", enabled ? "enabled" : "reduced");
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -271,6 +273,8 @@ public class PerformanceService
         using var key = Registry.CurrentUser.CreateSubKey(GameBarKey);
         key.SetValue("AllowAutoGameMode", enabled ? 1 : 0, RegistryValueKind.DWord);
         key.SetValue("AutoGameModeEnabled", enabled ? 1 : 0, RegistryValueKind.DWord);
+        Log.Information("Registry: Game Mode {Action} (AllowAutoGameMode={Value})",
+            enabled ? "enabled" : "disabled", enabled ? 1 : 0);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -316,6 +320,8 @@ public class PerformanceService
 
         using var configKey = Registry.CurrentUser.CreateSubKey(GameConfigStoreKey);
         configKey.SetValue("GameDVR_Enabled", enabled ? 1 : 0, RegistryValueKind.DWord);
+        Log.Information("Registry: Xbox Game Bar {Action} (AppCaptureEnabled={Value}, GameDVR_Enabled={Value})",
+            enabled ? "enabled" : "disabled", enabled ? 1 : 0, enabled ? 1 : 0);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -410,6 +416,8 @@ public class PerformanceService
                 // Restore: set to 0 (don't delete — safer)
                 key.SetValue("DisableDynamicPstate", 0, RegistryValueKind.DWord);
             }
+            Log.Information("Registry: GPU DisableDynamicPstate set to {Value} on subkey {SubKey}",
+                maxPerformance ? 1 : 0, subKey);
             return true;
         }
         catch (SecurityException) { return false; }

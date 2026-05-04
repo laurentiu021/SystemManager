@@ -6,6 +6,95 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.24] - 2026-05-04
+
+### Fixed
+- **Accessibility** — replaced emoji characters (📁🔍✕📂📋🗑⟳↺⬆) with text
+  equivalents across all 21 XAML views; added `AutomationProperties.Name` to
+  all DataGrid and ProgressBar elements for screen reader support (#411).
+
+## [0.28.23] - 2026-05-04
+
+### Fixed
+- **Services: timeout handling** — `WaitForStatus` in `ServiceManagerService`
+  now catches `TimeoutException` and converts to a descriptive error instead
+  of crashing when a service takes longer than 30 seconds (#414).
+- **Performance: snapshot persistence** — `OriginalSnapshot` is now saved to
+  JSON in `%LOCALAPPDATA%\SysManager` and loaded on startup, so Restore All
+  works after app restart (#415).
+- **Traceroute: DNS race condition** — reverse DNS lookup is now awaited with
+  a 1.5 s timeout before emitting the hop, so hostnames appear immediately
+  in the UI instead of showing `*` (#416).
+
+## [0.28.22] - 2026-05-04
+
+### Fixed
+- **Update download: SHA256 verification** — added `VerifyHashAsync` to
+  `UpdateService` that downloads the `.sha256` file from the GitHub release
+  and compares against the local file hash (#408).
+- **Speed Test: Ookla integrity check** — Ookla CLI download now computes
+  SHA256 (logged for audit), validates the zip is not corrupt, and verifies
+  it contains `speedtest.exe` before extraction (#409).
+
+## [0.28.21] - 2026-05-04
+
+### Fixed
+- **Performance: audit logging** — all registry modifications in
+  `PerformanceService` (Game Mode, Xbox Game Bar, GPU, visual effects) now
+  log key path, action, and new value via Serilog (#405).
+- **Error messages: operation context** — replaced 38+ generic `Error: …`
+  messages in `PerformanceViewModel`, `ServicesViewModel`, and
+  `SystemHealthViewModel` with operation-specific context like
+  "Power plan change failed:" and "Start service failed:" (#407).
+
+## [0.28.20] - 2026-05-04
+
+### Fixed
+- **Deep Cleanup: drive scanning** — Riot Games / League of Legends log
+  paths now scan all fixed drives instead of only Program Files (#401).
+- **Icon cache: eviction** — `IconExtractorService` cache now has a
+  configurable `MaxCacheSize` (default 500) with automatic eviction to
+  prevent unbounded memory growth (#402).
+- **ConfigureAwait(false)** — added to all async calls in
+  `PerformanceService`, `UninstallerService`, and `WingetService` to
+  prevent potential UI deadlocks (#403).
+
+## [0.28.19] - 2026-05-04
+
+### Fixed
+- **Speed Test: JSON error handling** — `SpeedTestService.RunOoklaAsync`
+  now catches `JsonException` and `KeyNotFoundException` when Ookla CLI
+  returns malformed output (#400).
+
+## [0.28.18] - 2026-05-04
+
+### Fixed
+- **Input validation: whitelist regex** — `UninstallerService` and
+  `WingetService` now validate package IDs with a whitelist regex
+  (`[a-zA-Z0-9._-/+]`, max 256 chars) instead of a blacklist (#397).
+- **Null checks: verified safe** — confirmed all `OpenSubKey` calls and
+  Process API access already have proper null checks (#398).
+
+## [0.28.17] - 2026-05-04
+
+### Fixed
+- **CTS disposal** — added `Dispose(bool)` override to 8 ViewModels that
+  had `CancellationTokenSource` fields but no cleanup: `AppUpdatesVM`,
+  `DiskAnalyzerVM`, `DriversVM`, `DuplicateFileVM`, `LogsVM`,
+  `SpeedTestVM`, `TracerouteVM`, `UninstallerVM` (#396).
+- **UpdateService: bare catch** — replaced bare `catch` blocks in
+  `GetRecentAsync` and `DownloadAsync` with specific exception types
+  (`HttpRequestException`, `JsonException`, `IOException`) plus Serilog
+  logging (#413).
+
+## [0.28.16] - 2026-05-04
+
+### Fixed
+- **Dispose lifecycle** — `MainWindow.OnClosed` now disposes
+  `MainWindowViewModel`, which chains to all child ViewModels and
+  `NetworkSharedState`. `NetworkViewModel` disposes its CTS, unsubscribes
+  events, and stops the pinger (#395, #410).
+
 ## [0.28.15] - 2026-04-30
 
 ### Fixed

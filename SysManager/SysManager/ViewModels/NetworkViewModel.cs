@@ -706,4 +706,22 @@ public partial class NetworkViewModel : ViewModelBase
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { FontFamily = "Segoe UI" },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))
     };
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _pinger.Stop();
+            _pinger.SampleReceived -= OnSample;
+            _pinger.Dispose();
+            _traceMonitor.RouteCompleted -= OnRouteCompleted;
+            _traceMonitor.Stop();
+            _flushTimer?.Stop();
+            _traceCts?.Cancel();
+            _traceCts?.Dispose();
+            _speedCts?.Cancel();
+            _speedCts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 }

@@ -11,7 +11,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class MainWindowViewModel : ObservableObject
+public partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     public DashboardViewModel Dashboard { get; }
     public AppUpdatesViewModel AppUpdates { get; }
@@ -203,4 +203,31 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void OpenSystemHealthTab() => SelectNavById("nav-system-health");
+
+    public void Dispose()
+    {
+        Dashboard?.Dispose();
+        AppUpdates?.Dispose();
+        WindowsUpdate?.Dispose();
+        SystemHealth?.Dispose();
+        Cleanup?.Dispose();
+        DeepCleanup?.Dispose();
+        DuplicateFile?.Dispose();
+        DiskAnalyzer?.Dispose();
+        ProcessManager?.Dispose();
+        BatteryHealth?.Dispose();
+        Uninstaller?.Dispose();
+        Performance?.Dispose();
+        Startup?.Dispose();
+        Ping?.Dispose();
+        Traceroute?.Dispose();
+        SpeedTest?.Dispose();
+        NetworkRepair?.Dispose();
+        Drivers?.Dispose();
+        Logs?.Dispose();
+        About?.Dispose();
+        Services?.Dispose();
+        NetworkShared?.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

@@ -62,4 +62,10 @@ public partial class MainWindow : Window
             && DataContext is MainWindowViewModel vm)
             vm.SelectedNav = item;
     }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        (DataContext as MainWindowViewModel)?.Dispose();
+        base.OnClosed(e);
+    }
 }

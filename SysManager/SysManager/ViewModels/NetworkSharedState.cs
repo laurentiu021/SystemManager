@@ -23,7 +23,7 @@ namespace SysManager.ViewModels;
 /// Shared state for the four Network sub-ViewModels. Owns the pinger,
 /// tracer, targets, chart buffers, health diagnostic and the UI flush pump.
 /// </summary>
-public sealed partial class NetworkSharedState : ObservableObject
+public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 {
     private const int UiFlushIntervalMs = 250;
     private const int JitterSampleWindow = 20;
@@ -467,4 +467,12 @@ public sealed partial class NetworkSharedState : ObservableObject
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { FontFamily = "Segoe UI" },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))
     };
+
+    public void Dispose()
+    {
+        Pinger.Stop();
+        Pinger.Dispose();
+        TraceMonitor.Stop();
+        FlushTimer?.Stop();
+    }
 }

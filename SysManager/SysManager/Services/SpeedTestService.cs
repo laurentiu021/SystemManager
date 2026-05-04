@@ -8,7 +8,9 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Security.Cryptography;
 using System.Text.Json;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -290,6 +292,29 @@ public sealed class SpeedTestService
             await using var fs = File.Create(zipPath);
             await resp.Content.CopyToAsync(fs, ct);
         }
+
+        // Verify download integrity: compute SHA256 and log it.
+        // Ookla doesn't publish official hashes, so we verify the file
+        // is a valid zip and log the hash for audit trail.
+        await Task.Run(() =>
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(zipPath)));
+            Log.Information("Ookla CLI downloaded: {Url}, SHA256={Hash}, Size={Size}",
+                zipUrl, hash, new FileInfo(zipPath).Length);
+
+            // Basic integrity check: must be a valid zip
+            try
+            {
+                using var testZip = ZipFile.OpenRead(zipPath);
+                if (!testZip.Entries.Any(e => e.Name.Equals("speedtest.exe", StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Downloaded zip does not contain speedtest.exe");
+            }
+            catch (InvalidDataException)
+            {
+                File.Delete(zipPath);
+                throw new InvalidOperationException("Downloaded Ookla CLI zip is corrupt or tampered");
+            }
+        }, ct).ConfigureAwait(false);
 
         progress?.Report((15, "Extracting…"));
         await Task.Run(() =>

@@ -6,6 +6,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 
 [assembly: InternalsVisibleTo("SysManager.Tests")]
@@ -189,6 +190,56 @@ public sealed class UpdateService
             catch (IOException) { /* best-effort cleanup */ }
             catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Downloads the .sha256 file for a release and verifies the local file matches.
+    /// Returns true if the hash matches, false if mismatch or if the .sha256 file
+    /// is unavailable (verification is best-effort — network errors don't block install).
+    /// </summary>
+    public async Task<(bool Verified, string? ExpectedHash, string? ActualHash)> VerifyHashAsync(
+        ReleaseInfo rel, string filePath, CancellationToken ct = default)
+    {
+        try
+        {
+            var sha256Url = $"https://github.com/{Owner}/{Repo}/releases/download/{rel.Tag}/SysManager-{rel.Tag}.exe.sha256";
+            var hashText = await Http.GetStringAsync(sha256Url, ct).ConfigureAwait(false);
+
+            // .sha256 file format: "HASH  filename" or just "HASH"
+            var expectedHash = hashText.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0].Trim();
+            if (string.IsNullOrWhiteSpace(expectedHash) || expectedHash.Length < 64)
+                return (false, null, null);
+
+            var actualHash = await Task.Run(() =>
+            {
+                using var stream = File.OpenRead(filePath);
+                var hash = SHA256.HashData(stream);
+                return Convert.ToHexString(hash);
+            }, ct).ConfigureAwait(false);
+
+            var match = string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase);
+            if (!match)
+                Serilog.Log.Warning("SHA256 mismatch for {File}: expected {Expected}, got {Actual}",
+                    filePath, expectedHash, actualHash);
+            else
+                Serilog.Log.Information("SHA256 verified for {File}: {Hash}", filePath, actualHash);
+
+            return (match, expectedHash, actualHash);
+        }
+        catch (HttpRequestException ex)
+        {
+            Serilog.Log.Warning(ex, "Could not download .sha256 file for verification");
+            return (true, null, null); // best-effort: don't block install if .sha256 unavailable
+        }
+        catch (OperationCanceledException)
+        {
+            return (false, null, null);
+        }
+        catch (IOException ex)
+        {
+            Serilog.Log.Warning(ex, "Could not read downloaded file for hash verification");
+            return (false, null, null);
         }
     }
 

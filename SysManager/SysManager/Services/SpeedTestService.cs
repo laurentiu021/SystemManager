@@ -226,33 +226,32 @@ public sealed class SpeedTestService
             throw new InvalidOperationException($"Ookla returned invalid JSON: {ex.Message}", ex);
         }
 
-        try
+        using (doc)
         {
-            var root = doc.RootElement;
+            try
+            {
+                var root = doc.RootElement;
 
-            var downBps = root.GetProperty("download").GetProperty("bandwidth").GetDouble();
-            var upBps = root.GetProperty("upload").GetProperty("bandwidth").GetDouble();
-            var pingMs = root.GetProperty("ping").GetProperty("latency").GetDouble();
-            var server = root.TryGetProperty("server", out var sv)
-                ? $"{sv.GetProperty("name").GetString()} ({sv.GetProperty("location").GetString()})"
-                : "unknown";
+                var downBps = root.GetProperty("download").GetProperty("bandwidth").GetDouble();
+                var upBps = root.GetProperty("upload").GetProperty("bandwidth").GetDouble();
+                var pingMs = root.GetProperty("ping").GetProperty("latency").GetDouble();
+                var server = root.TryGetProperty("server", out var sv)
+                    ? $"{sv.GetProperty("name").GetString()} ({sv.GetProperty("location").GetString()})"
+                    : "unknown";
 
-            // Ookla reports bandwidth in bytes/sec.
-            progress?.Report((100, "Done"));
-            return new SpeedTestResult("Ookla",
-                downBps * 8.0 / 1_000_000.0,
-                upBps * 8.0 / 1_000_000.0,
-                pingMs,
-                server,
-                DateTime.Now);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            throw new InvalidOperationException($"Ookla JSON missing expected fields: {ex.Message}", ex);
-        }
-        finally
-        {
-            doc.Dispose();
+                // Ookla reports bandwidth in bytes/sec.
+                progress?.Report((100, "Done"));
+                return new SpeedTestResult("Ookla",
+                    downBps * 8.0 / 1_000_000.0,
+                    upBps * 8.0 / 1_000_000.0,
+                    pingMs,
+                    server,
+                    DateTime.Now);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                throw new InvalidOperationException($"Ookla JSON missing expected fields: {ex.Message}", ex);
+            }
         }
     }
 

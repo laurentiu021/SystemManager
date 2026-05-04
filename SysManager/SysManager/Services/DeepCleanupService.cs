@@ -303,9 +303,8 @@ public sealed class DeepCleanupService
             Path.Combine(pfx86, "Riot Games", "League of Legends", "Logs"),
             Path.Combine(pf, "Riot Games", "League of Legends", "Logs"),
         };
-        foreach (var drive in DriveInfo.GetDrives())
+        foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
         {
-            if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
             var candidate = Path.Combine(drive.RootDirectory.FullName, "Riot Games", "League of Legends", "Logs");
             result.Add(candidate);
         }

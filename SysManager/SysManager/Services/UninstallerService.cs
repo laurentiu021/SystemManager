@@ -58,7 +58,7 @@ public sealed partial class UninstallerService
             throw new ArgumentException("Invalid package ID.", nameof(packageId));
 
         var args = $"uninstall --id \"{packageId}\" -e --silent --accept-source-agreements --disable-interactivity";
-        return await _runner.RunProcessAsync("winget", args, ct);
+        return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
     }
 
     /// <summary>

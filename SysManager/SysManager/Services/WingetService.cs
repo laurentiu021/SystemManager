@@ -102,7 +102,7 @@ public partial class WingetService
             throw new ArgumentException("Invalid package ID.", nameof(packageId));
 
         var args = $"upgrade --id \"{packageId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity";
-        return await _runner.RunProcessAsync("winget", args, ct);
+        return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -115,6 +115,6 @@ public partial class WingetService
     public async Task<int> UpgradeAllAsync(CancellationToken ct = default)
     {
         var args = "upgrade --all --silent --accept-source-agreements --accept-package-agreements --disable-interactivity --include-unknown";
-        return await _runner.RunProcessAsync("winget", args, ct);
+        return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
     }
 }

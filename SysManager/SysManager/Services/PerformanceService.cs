@@ -75,7 +75,7 @@ public class PerformanceService
     /// <summary>Take a snapshot of the current system state.</summary>
     public async Task<OriginalSnapshot> TakeSnapshotAsync(CancellationToken ct = default)
     {
-        var (name, guid) = await GetActivePlanAsync(ct);
+        var (name, guid) = await GetActivePlanAsync(ct).ConfigureAwait(false);
         var nvidiaKey = FindNvidiaSubKey();
 
         return new OriginalSnapshot(
@@ -86,7 +86,7 @@ public class PerformanceService
             XboxGameBarEnabled: ReadXboxGameBarEnabled(),
             XboxGameDvrEnabled: ReadXboxGameDvrEnabled(),
             GpuDynamicPstate: nvidiaKey != null && !ReadGpuMaxPerformance(nvidiaKey),
-            ProcessorMinPercentAc: await ReadProcessorMinPercentAsync(ct),
+            ProcessorMinPercentAc: await ReadProcessorMinPercentAsync(ct).ConfigureAwait(false),
             NvidiaSubKey: nvidiaKey);
     }
 
@@ -98,7 +98,7 @@ public class PerformanceService
     {
         var profile = new PerformanceProfile();
 
-        var (name, guid) = await GetActivePlanAsync(ct);
+        var (name, guid) = await GetActivePlanAsync(ct).ConfigureAwait(false);
         profile.ActivePlanName = name;
         profile.ActivePlanGuid = guid;
 
@@ -114,7 +114,7 @@ public class PerformanceService
             profile.GpuMaxPerformance = ReadGpuMaxPerformance(nvidiaKey);
         }
 
-        var minPct = await ReadProcessorMinPercentAsync(ct);
+        var minPct = await ReadProcessorMinPercentAsync(ct).ConfigureAwait(false);
         profile.ProcessorMinPercent = minPct;
         profile.ProcessorMaxState = minPct >= 100;
 
@@ -164,7 +164,7 @@ public class PerformanceService
     /// <summary>Activate a power plan by GUID.</summary>
     public async Task SetActivePlanAsync(string guid, CancellationToken ct = default)
     {
-        await _ps.RunProcessAsync("powercfg.exe", $"/setactive {guid}", ct);
+        await _ps.RunProcessAsync("powercfg.exe", $"/setactive {guid}", ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ public class PerformanceService
     /// </summary>
     public async Task<string> EnsureUltimatePerformancePlanAsync(CancellationToken ct = default)
     {
-        var existingGuid = await FindPlanGuidByNameAsync("Ultimate Performance", ct);
+        var existingGuid = await FindPlanGuidByNameAsync("Ultimate Performance", ct).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(existingGuid)) return existingGuid;
 
         var lines = new List<string>();
@@ -191,7 +191,7 @@ public class PerformanceService
             return sp > 0 ? after[..sp].Trim() : after.Trim();
         }
 
-        return await FindPlanGuidByNameAsync("Ultimate Performance", ct) ?? "";
+        return await FindPlanGuidByNameAsync("Ultimate Performance", ct).ConfigureAwait(false) ?? "";
     }
 
     /// <summary>Find a plan GUID by name substring.</summary>
@@ -429,7 +429,7 @@ public class PerformanceService
         try
         {
             await _ps.RunProcessAsync("powercfg.exe",
-                "/query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN", ct);
+                "/query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN", ct).ConfigureAwait(false);
         }
         finally { _ps.LineReceived -= OnLine; }
 
@@ -459,10 +459,10 @@ public class PerformanceService
     public async Task SetProcessorMinStateAsync(int percent, CancellationToken ct = default)
     {
         await _ps.RunProcessAsync("powercfg.exe",
-            $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct);
+            $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct).ConfigureAwait(false);
         await _ps.RunProcessAsync("powercfg.exe",
-            $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct);
-        await _ps.RunProcessAsync("powercfg.exe", "/setactive SCHEME_CURRENT", ct);
+            $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct).ConfigureAwait(false);
+        await _ps.RunProcessAsync("powercfg.exe", "/setactive SCHEME_CURRENT", ct).ConfigureAwait(false);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -555,7 +555,7 @@ public class PerformanceService
     {
         // Power plan — restore the exact original plan
         if (!string.IsNullOrEmpty(snapshot.PowerPlanGuid))
-            await SetActivePlanAsync(snapshot.PowerPlanGuid, ct);
+            await SetActivePlanAsync(snapshot.PowerPlanGuid, ct).ConfigureAwait(false);
 
         // Visual effects
         SetUiEffects(snapshot.UiEffectsEnabled);
@@ -571,6 +571,6 @@ public class PerformanceService
             SetGpuMaxPerformance(snapshot.NvidiaSubKey, !snapshot.GpuDynamicPstate);
 
         // Processor state
-        await SetProcessorMinStateAsync(snapshot.ProcessorMinPercentAc, ct);
+        await SetProcessorMinStateAsync(snapshot.ProcessorMinPercentAc, ct).ConfigureAwait(false);
     }
 }

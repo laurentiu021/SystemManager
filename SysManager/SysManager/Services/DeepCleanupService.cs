@@ -149,12 +149,7 @@ public sealed class DeepCleanupService
 
             new("Riot Client / League of Legends — logs",
                 "Riot Client and League client logs only. No game files or credentials.",
-                new[]
-                {
-                    Path.Combine(localAppData, "Riot Games", "Riot Client", "Logs"),
-                    Path.Combine(pfx86, "Riot Games", "League of Legends", "Logs"),
-                    Path.Combine(pf,    "Riot Games", "League of Legends", "Logs"),
-                }),
+                RiotLogDirs(localAppData, pfx86, pf)),
 
             new("GOG Galaxy — cache",
                 "GOG Galaxy launcher webcache and redists installer cache.",
@@ -292,6 +287,27 @@ public sealed class DeepCleanupService
             if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
             var candidate = Path.Combine(drive.RootDirectory.FullName, "SteamLibrary", "steamapps", "shadercache");
             if (Directory.Exists(candidate)) result.Add(candidate);
+        }
+        return result.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    /// <summary>
+    /// Riot Client logs are in %LOCALAPPDATA%, but League of Legends can be
+    /// installed on any drive. Scan all fixed drives for Riot Games folders.
+    /// </summary>
+    private static string[] RiotLogDirs(string localAppData, string pfx86, string pf)
+    {
+        var result = new List<string>
+        {
+            Path.Combine(localAppData, "Riot Games", "Riot Client", "Logs"),
+            Path.Combine(pfx86, "Riot Games", "League of Legends", "Logs"),
+            Path.Combine(pf, "Riot Games", "League of Legends", "Logs"),
+        };
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
+            var candidate = Path.Combine(drive.RootDirectory.FullName, "Riot Games", "League of Legends", "Logs");
+            result.Add(candidate);
         }
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }

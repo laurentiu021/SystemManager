@@ -24,6 +24,9 @@ public sealed class IconExtractorService
 {
     private static readonly ConcurrentDictionary<string, ImageSource?> _cache = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Maximum number of cached icons before eviction kicks in.</summary>
+    public static int MaxCacheSize { get; set; } = 500;
+
     // Lazy-initialized contextual fallback icons (shell32.dll icon indices)
     private static readonly Lazy<ImageSource?> _appFallback = new(() => ExtractShell32Icon(2));
     private static readonly Lazy<ImageSource?> _windowsIcon = new(() => ExtractShell32Icon(44));
@@ -41,6 +44,15 @@ public sealed class IconExtractorService
         var normalized = NormalizePath(filePath);
         if (string.IsNullOrEmpty(normalized))
             return _appFallback.Value;
+
+        // Evict oldest entries when cache exceeds the limit.
+        // ConcurrentDictionary has no insertion order, so we clear half
+        // the cache to amortize the cost of eviction.
+        if (_cache.Count >= MaxCacheSize)
+        {
+            var keys = _cache.Keys.Take(_cache.Count / 2).ToList();
+            foreach (var k in keys) _cache.TryRemove(k, out _);
+        }
 
         return _cache.GetOrAdd(normalized, static path => ExtractIcon(path));
     }

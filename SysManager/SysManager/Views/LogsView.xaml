@@ -220,7 +220,7 @@
                     <!-- No-results overlay -->
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                                 Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}">
-                        <TextBlock Text="🔍" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,8"/>
                         <TextBlock Text="No events match your filters" FontSize="14" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"/>
                         <TextBlock Text="Try adjusting severity checkboxes or clearing the search"

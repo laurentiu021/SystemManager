@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.25] - 2026-05-04
+
+### Fixed
+- **Accessibility: LogsView** — replaced remaining search emoji (🔍) in the
+  no-results overlay with Segoe MDL2 Assets glyph (E721). Missed in the
+  initial accessibility pass (#411).
+
 ## [0.28.24] - 2026-05-04
 
 ### Fixed

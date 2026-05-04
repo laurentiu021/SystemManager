@@ -214,24 +214,44 @@ public sealed class SpeedTestService
             throw new InvalidOperationException($"Ookla failed ({proc.ExitCode}): {stderr}");
         }
 
-        using var doc = JsonDocument.Parse(stdout);
-        var root = doc.RootElement;
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(stdout);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            throw new InvalidOperationException($"Ookla returned invalid JSON: {ex.Message}", ex);
+        }
 
-        var downBps = root.GetProperty("download").GetProperty("bandwidth").GetDouble();
-        var upBps = root.GetProperty("upload").GetProperty("bandwidth").GetDouble();
-        var pingMs = root.GetProperty("ping").GetProperty("latency").GetDouble();
-        var server = root.TryGetProperty("server", out var sv)
-            ? $"{sv.GetProperty("name").GetString()} ({sv.GetProperty("location").GetString()})"
-            : "unknown";
+        try
+        {
+            var root = doc.RootElement;
 
-        // Ookla reports bandwidth in bytes/sec.
-        progress?.Report((100, "Done"));
-        return new SpeedTestResult("Ookla",
-            downBps * 8.0 / 1_000_000.0,
-            upBps * 8.0 / 1_000_000.0,
-            pingMs,
-            server,
-            DateTime.Now);
+            var downBps = root.GetProperty("download").GetProperty("bandwidth").GetDouble();
+            var upBps = root.GetProperty("upload").GetProperty("bandwidth").GetDouble();
+            var pingMs = root.GetProperty("ping").GetProperty("latency").GetDouble();
+            var server = root.TryGetProperty("server", out var sv)
+                ? $"{sv.GetProperty("name").GetString()} ({sv.GetProperty("location").GetString()})"
+                : "unknown";
+
+            // Ookla reports bandwidth in bytes/sec.
+            progress?.Report((100, "Done"));
+            return new SpeedTestResult("Ookla",
+                downBps * 8.0 / 1_000_000.0,
+                upBps * 8.0 / 1_000_000.0,
+                pingMs,
+                server,
+                DateTime.Now);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            throw new InvalidOperationException($"Ookla JSON missing expected fields: {ex.Message}", ex);
+        }
+        finally
+        {
+            doc.Dispose();
+        }
     }
 
     private static async Task<string> EnsureOoklaAsync(

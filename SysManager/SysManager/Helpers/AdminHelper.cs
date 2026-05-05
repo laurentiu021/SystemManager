@@ -40,9 +40,14 @@ public static class AdminHelper
             Process.Start(psi);
             return true;
         }
-        catch
+        catch (InvalidOperationException)
         {
-            // User declined UAC or another error
+            // User declined UAC or process path unavailable
+            return false;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // UAC declined or another Win32 error
             return false;
         }
     }

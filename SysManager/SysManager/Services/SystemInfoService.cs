@@ -131,7 +131,7 @@ public class SystemInfoService
                     mediaType, busType, size, health, opStatus, null, null));
             }
         }
-        catch
+        catch (ManagementException)
         {
             // Fallback to Win32_DiskDrive if MSFT_PhysicalDisk isn't available
             using var s = new ManagementObjectSearcher("SELECT Model,Size,Status FROM Win32_DiskDrive");

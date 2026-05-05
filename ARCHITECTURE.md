@@ -36,10 +36,10 @@ Collapsed groups show a child count badge, subtitle, and tooltip.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System (6) | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `ProcessManagerViewModel` |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `ProcessManagerViewModel` |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
-| Network (4) | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) |
+| Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) |
 | Apps | `AppUpdatesViewModel` · `UninstallerViewModel` |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `AboutViewModel` |
 

@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.28] - 2026-05-05
+
+### Fixed
+- **Cleanup** — SFC and DISM scans no longer crash with "No data is available
+  for encoding 437" on systems where the OEM code page is not registered;
+  falls back to UTF-8 (same fix as #443 applied to remaining callers).
+- **App Updates** — winget upgrade now accepts package IDs with spaces (same
+  fix as #444 applied to WingetService).
+- **Code quality** — replaced bare `catch { }` with specific exception types
+  in DiskHealthService, FixedDriveService, MemoryTestService, SystemInfoService,
+  and AdminHelper (resolves multiple CodeQL alerts).
+- **SECURITY.md** — updated supported version table from 0.5.x to 0.28.x.
+- **ARCHITECTURE.md** — removed stale tab counts from group headers.
+
 ## [0.28.27] - 2026-05-05
 
 ### Fixed

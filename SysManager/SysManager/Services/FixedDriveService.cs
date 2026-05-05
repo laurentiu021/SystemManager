@@ -76,7 +76,7 @@ public sealed class FixedDriveService
                     drives[i] = drives[i] with { MediaType = m, BusType = b };
             }
         }
-        catch
+        catch (ManagementException)
         {
             // Non-fatal — leave media/bus empty.
         }

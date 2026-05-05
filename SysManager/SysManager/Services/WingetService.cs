@@ -107,9 +107,9 @@ public partial class WingetService
 
     /// <summary>
     /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
-    /// underscores, forward slashes, and plus signs. Max 256 chars.
+    /// underscores, forward slashes, plus signs, and spaces. Max 256 chars.
     /// </summary>
-    [GeneratedRegex(@"^[\w.\-/+]{1,256}$")]
+    [GeneratedRegex(@"^[\w.\-/+\s]{1,256}$")]
     private static partial Regex PackageIdPattern();
 
     public async Task<int> UpgradeAllAsync(CancellationToken ct = default)

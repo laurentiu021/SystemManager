@@ -61,7 +61,8 @@ public sealed class MemoryTestService
                     }
                 }
             }
-            catch { /* silent — the EventLog API can throw on restricted hosts */ }
+            catch (System.Diagnostics.Eventing.Reader.EventLogException) { /* EventLog API can throw on restricted hosts */ }
+            catch (UnauthorizedAccessException) { /* EventLog access denied */ }
 
             return new MemoryErrorSummary(wheaCount, diagCount, lastError);
         }, ct);
@@ -85,7 +86,8 @@ public sealed class MemoryTestService
             });
             return true;
         }
-        catch { return false; }
+        catch (InvalidOperationException) { return false; }
+        catch (System.ComponentModel.Win32Exception) { return false; }
     }
 
     /// <summary>Read installed memory modules — fast WMI query.</summary>
@@ -112,7 +114,8 @@ public sealed class MemoryTestService
                     });
                 }
             }
-            catch { /* ignore */ }
+            catch (ManagementException) { /* WMI class not available */ }
+            catch (UnauthorizedAccessException) { /* WMI access denied */ }
             return list;
         });
     }

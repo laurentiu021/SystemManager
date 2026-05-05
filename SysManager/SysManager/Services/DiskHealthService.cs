@@ -49,9 +49,13 @@ public sealed class DiskHealthService
                 results.Add(report);
             }
         }
-        catch
+        catch (ManagementException)
         {
-            // Scope might not exist on some SKUs; return empty rather than crash.
+            // Storage scope might not exist on some Windows SKUs.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // WMI access denied without elevation.
         }
         return results;
     }
@@ -78,7 +82,8 @@ public sealed class DiskHealthService
                 return; // one counter per disk
             }
         }
-        catch { /* driver may not expose counters */ }
+        catch (ManagementException) { /* driver may not expose counters */ }
+        catch (UnauthorizedAccessException) { /* WMI access denied */ }
     }
 
     /// <summary>

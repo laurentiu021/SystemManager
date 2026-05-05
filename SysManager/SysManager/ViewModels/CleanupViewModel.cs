@@ -240,8 +240,18 @@ public partial class CleanupViewModel : ViewModelBase
         _runner.LineReceived += Collect;
         try
         {
-            var exit = await _runner.RunProcessAsync("sfc.exe", "/scannow", _sfcCts.Token,
-                System.Text.Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage));
+            System.Text.Encoding oemEncoding;
+            try
+            {
+                oemEncoding = System.Text.Encoding.GetEncoding(
+                    System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+            }
+            catch (NotSupportedException)
+            {
+                oemEncoding = System.Text.Encoding.UTF8;
+            }
+
+            var exit = await _runner.RunProcessAsync("sfc.exe", "/scannow", _sfcCts.Token, oemEncoding);
             var (verdict, color) = ParseSfcResult(captured, exit);
             SfcVerdict = verdict;
             SfcVerdictColorHex = color;
@@ -317,8 +327,18 @@ public partial class CleanupViewModel : ViewModelBase
         _runner.LineReceived += Collect;
         try
         {
-            var exit = await _runner.RunProcessAsync("DISM.exe", "/Online /Cleanup-Image /RestoreHealth", _dismCts.Token,
-                System.Text.Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage));
+            System.Text.Encoding oemEncoding;
+            try
+            {
+                oemEncoding = System.Text.Encoding.GetEncoding(
+                    System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+            }
+            catch (NotSupportedException)
+            {
+                oemEncoding = System.Text.Encoding.UTF8;
+            }
+
+            var exit = await _runner.RunProcessAsync("DISM.exe", "/Online /Cleanup-Image /RestoreHealth", _dismCts.Token, oemEncoding);
             var (verdict, color) = ParseDismResult(captured, exit);
             DismVerdict = verdict;
             DismVerdictColorHex = color;

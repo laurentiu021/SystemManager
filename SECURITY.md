@@ -12,10 +12,9 @@ older build, the first step is usually to update.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.5.x   | :white_check_mark: |
-| 0.4.x   | :x:                |
-| 0.3.x   | :x:                |
-| < 0.3   | :x:                |
+| 0.28.x  | :white_check_mark: |
+| 0.27.x  | :x:                |
+| < 0.27  | :x:                |
 
 ## Reporting a vulnerability
 

@@ -142,7 +142,9 @@ public partial class LogsViewModel : ViewModelBase
             UpdateVisibleCount();
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled"; }
-        catch (Exception ex) { StatusMessage = "Error: " + ex.Message; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = "Access denied: " + ex.Message; }
+        catch (System.Diagnostics.Eventing.Reader.EventLogException ex) { StatusMessage = "Event log error: " + ex.Message; }
+        catch (InvalidOperationException ex) { StatusMessage = "Error: " + ex.Message; }
         finally
         {
             IsBusy = false;

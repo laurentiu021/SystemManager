@@ -56,6 +56,8 @@ public partial class ConsoleViewModel : ObservableObject
             var text = string.Join(Environment.NewLine, snapshot.Select(l => $"[{l.Timestamp:HH:mm:ss}] {l.Kind}: {l.Text}"));
             Clipboard.SetText(text);
         }
-        catch { /* ignore */ }
+        catch (System.Runtime.InteropServices.ExternalException) { /* clipboard locked or unavailable */ }
+        catch (System.Threading.ThreadStateException) { /* no STA thread (headless/CI) */ }
+        catch (InvalidOperationException) { /* clipboard not available in this context */ }
     }
 }

@@ -39,10 +39,10 @@ find what you need without scrolling through a flat list:
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System (6) | System health · Windows Update · Performance · Services · Startup · Processes |
+| 🔧 System | System health · Windows Update · Performance · Services · Startup · Processes |
 | 🧹 Cleanup | Quick cleanup (TEMP / Bin / SFC / DISM) · Deep cleanup |
 | 💾 Storage | Disk Analyzer · Duplicates |
-| 🌐 Network (4) | Ping · Traceroute · Speed Test · Repair |
+| 🌐 Network | Ping · Traceroute · Speed Test · Repair |
 | 📦 Apps | App updates · Uninstaller |
 | ℹ️ Info | Drivers · Battery · Logs · About |
 

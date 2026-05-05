@@ -267,8 +267,19 @@ public partial class SystemHealthViewModel : ViewModelBase
             void OnLine(PowerShellLine l) => captured.Add(l.Text);
             _runner.LineReceived += OnLine;
 
-            var oemEncoding = System.Text.Encoding.GetEncoding(
-                System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+            System.Text.Encoding oemEncoding;
+            try
+            {
+                oemEncoding = System.Text.Encoding.GetEncoding(
+                    System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+            }
+            catch (NotSupportedException)
+            {
+                // Code page (e.g. 437) may not be registered on some systems;
+                // fall back to UTF-8 which handles chkdsk output safely.
+                oemEncoding = System.Text.Encoding.UTF8;
+            }
+
             int exit;
             try
             {

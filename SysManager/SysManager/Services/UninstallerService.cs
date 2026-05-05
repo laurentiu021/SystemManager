@@ -63,9 +63,9 @@ public sealed partial class UninstallerService
 
     /// <summary>
     /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
-    /// underscores, forward slashes, and plus signs. Max 256 chars.
+    /// underscores, forward slashes, plus signs, and spaces. Max 256 chars.
     /// </summary>
-    [System.Text.RegularExpressions.GeneratedRegex(@"^[\w.\-/+]{1,256}$")]
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[\w.\-/+\s]{1,256}$")]
     private static partial System.Text.RegularExpressions.Regex PackageIdPattern();
 
     internal static List<InstalledApp> ParseListTable(List<string> lines)

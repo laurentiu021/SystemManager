@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.27] - 2026-05-05
+
+### Fixed
+- **System Health** — chkdsk scan no longer crashes with "No data is available
+  for encoding 437" on systems where the OEM code page is not registered;
+  falls back to UTF-8 gracefully (#443).
+- **Uninstaller** — packages with spaces in their winget ID (e.g. "Riot
+  Games.League of Legends") can now be uninstalled without "Invalid package
+  ID" error (#444).
+
 ## [0.28.26] - 2026-05-04
 
 ### Fixed

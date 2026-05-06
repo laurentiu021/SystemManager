@@ -46,7 +46,11 @@ public partial class DashboardViewModel : ViewModelBase
             StatusMessage = $"Last scan: {Snapshot.CapturedAt:HH:mm:ss}";
             Log.Information("Dashboard scan completed");
         }
-        catch (Exception ex)
+        catch (System.Management.ManagementException ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+        }
+        catch (InvalidOperationException ex)
         {
             StatusMessage = $"Error: {ex.Message}";
         }

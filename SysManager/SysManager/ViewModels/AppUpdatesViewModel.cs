@@ -57,7 +57,8 @@ public partial class AppUpdatesViewModel : ViewModelBase
             foreach (var p in list) Packages.Add(p);
             StatusMessage = $"{Packages.Count} upgradable package(s) found";
         }
-        catch (Exception ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (OperationCanceledException) { StatusMessage = "Scan cancelled."; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -84,7 +85,8 @@ public partial class AppUpdatesViewModel : ViewModelBase
                     var code = await _winget.UpgradeAsync(pkg.Id, _cts.Token);
                     pkg.Status = code == 0 ? "Done" : $"Failed (exit {code})";
                 }
-                catch (Exception ex) { pkg.Status = $"Error: {ex.Message}"; }
+                catch (OperationCanceledException) { pkg.Status = "Cancelled"; break; }
+                catch (InvalidOperationException ex) { pkg.Status = $"Error: {ex.Message}"; }
                 done++;
             }
             Progress = 100;

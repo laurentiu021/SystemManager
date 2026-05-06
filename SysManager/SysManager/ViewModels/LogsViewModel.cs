@@ -179,7 +179,10 @@ public partial class LogsViewModel : ViewModelBase
             Directory.CreateDirectory(LogFolder);
             Process.Start(new ProcessStartInfo("explorer.exe", LogFolder) { UseShellExecute = true });
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (IOException ex) { StatusMessage = ex.Message; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = ex.Message; }
+        catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = ex.Message; }
     }
 
     [RelayCommand]
@@ -189,7 +192,8 @@ public partial class LogsViewModel : ViewModelBase
         {
             Process.Start(new ProcessStartInfo("eventvwr.msc") { UseShellExecute = true });
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = ex.Message; }
     }
 
     [RelayCommand]
@@ -208,7 +212,8 @@ public partial class LogsViewModel : ViewModelBase
             .AppendLine("Full message:").AppendLine(e.FullMessage)
             .ToString();
         try { Clipboard.SetText(text); StatusMessage = "Copied to clipboard"; }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (System.Runtime.InteropServices.ExternalException ex) { StatusMessage = ex.Message; }
+        catch (System.Threading.ThreadStateException ex) { StatusMessage = ex.Message; }
     }
 
     [RelayCommand]
@@ -238,7 +243,8 @@ public partial class LogsViewModel : ViewModelBase
             }
             StatusMessage = $"Exported {Entries.Count} events to {dlg.FileName}";
         }
-        catch (Exception ex) { StatusMessage = "Export failed: " + ex.Message; }
+        catch (IOException ex) { StatusMessage = "Export failed: " + ex.Message; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = "Export failed: " + ex.Message; }
     }
 
     [RelayCommand]
@@ -247,7 +253,8 @@ public partial class LogsViewModel : ViewModelBase
         if (SelectedEntry == null) return;
         var q = Uri.EscapeDataString($"Event ID {SelectedEntry.EventId} {SelectedEntry.ProviderName}");
         try { Process.Start(new ProcessStartInfo($"https://www.google.com/search?q={q}") { UseShellExecute = true }); }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = ex.Message; }
     }
 
     // ---------- Helpers ----------

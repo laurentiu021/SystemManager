@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-05-06
+
+### Fixed
+- **Code quality** — replaced 8 generic `catch (Exception)` blocks with
+  specific exception types in `AppUpdatesViewModel`, `DashboardViewModel`,
+  and `LogsViewModel`. No behavior change — same error messages, but now
+  CodeQL-clean and explicit about what can fail.
+
 ## [0.29.0] - 2026-05-06
 
 ### Added

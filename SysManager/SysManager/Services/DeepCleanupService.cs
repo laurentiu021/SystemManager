@@ -299,13 +299,13 @@ public sealed class DeepCleanupService
     {
         var result = new List<string>
         {
-            Path.Combine(localAppData, "Riot Games", "Riot Client", "Logs"),
-            Path.Combine(pfx86, "Riot Games", "League of Legends", "Logs"),
-            Path.Combine(pf, "Riot Games", "League of Legends", "Logs"),
+            Path.Join(localAppData, "Riot Games", "Riot Client", "Logs"),
+            Path.Join(pfx86, "Riot Games", "League of Legends", "Logs"),
+            Path.Join(pf, "Riot Games", "League of Legends", "Logs"),
         };
         foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
         {
-            var candidate = Path.Combine(drive.RootDirectory.FullName, "Riot Games", "League of Legends", "Logs");
+            var candidate = Path.Join(drive.RootDirectory.FullName, "Riot Games", "League of Legends", "Logs");
             result.Add(candidate);
         }
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();

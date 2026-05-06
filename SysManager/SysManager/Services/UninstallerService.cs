@@ -133,9 +133,9 @@ public sealed partial class UninstallerService
         if (apps.Count == 0) return;
 
         var lookup = new Dictionary<string, InstalledApp>(StringComparer.OrdinalIgnoreCase);
-        foreach (var app in apps)
+        foreach (var app in apps.Where(a => !string.IsNullOrWhiteSpace(a.Name)))
         {
-            if (!string.IsNullOrWhiteSpace(app.Name) && !lookup.ContainsKey(app.Name))
+            if (!lookup.ContainsKey(app.Name))
                 lookup[app.Name] = app;
         }
 

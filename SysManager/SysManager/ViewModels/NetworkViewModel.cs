@@ -111,11 +111,8 @@ public partial class NetworkViewModel : ViewModelBase
             // Force LiveCharts2 to re-evaluate the series by flushing any
             // pending samples and triggering a collection change notification.
             FlushPending();
-            foreach (var series in LatencySeries)
-            {
-                if (series is LineSeries<DateTimePoint> line)
-                    line.Values = line.Values; // identity assignment triggers change
-            }
+            foreach (var line in LatencySeries.OfType<LineSeries<DateTimePoint>>())
+                line.Values = line.Values; // identity assignment triggers change
         }
     }
 

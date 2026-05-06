@@ -45,20 +45,18 @@ public partial class DuplicateFileViewModel : ViewModelBase
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
+            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
             Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
             Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
             Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
         };
 
-        foreach (var f in folders)
-            if (!string.IsNullOrEmpty(f) && Directory.Exists(f))
-                PresetFolders.Add(f);
+        foreach (var f in folders.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x)))
+            PresetFolders.Add(f);
 
         // Add fixed drives
-        foreach (var d in DriveInfo.GetDrives())
-            if (d.DriveType == DriveType.Fixed && d.IsReady)
-                PresetFolders.Add(d.RootDirectory.FullName);
+        foreach (var d in DriveInfo.GetDrives().Where(x => x.DriveType == DriveType.Fixed && x.IsReady))
+            PresetFolders.Add(d.RootDirectory.FullName);
 
         if (PresetFolders.Count > 0)
             SelectedFolder = PresetFolders[0];

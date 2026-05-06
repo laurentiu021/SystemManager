@@ -93,7 +93,7 @@ public class PerformanceService
             NvidiaSubKey: nvidiaKey);
     }
 
-    private static readonly string SnapshotPath = Path.Combine(
+    private static readonly string SnapshotPath = Path.Join(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SysManager", "performance-snapshot.json");
 
@@ -243,9 +243,8 @@ public class PerformanceService
 
     internal static string? ParsePlanGuidByName(IList<string> lines, string nameSubstring)
     {
-        foreach (var line in lines)
+        foreach (var line in lines.Where(l => l.Contains(nameSubstring, StringComparison.OrdinalIgnoreCase)))
         {
-            if (!line.Contains(nameSubstring, StringComparison.OrdinalIgnoreCase)) continue;
             var idx = line.IndexOf(':');
             if (idx < 0) continue;
             var after = line[(idx + 1)..].Trim();
@@ -374,11 +373,8 @@ public class PerformanceService
             using var classRoot = Registry.LocalMachine.OpenSubKey(GpuClassRoot);
             if (classRoot == null) return null;
 
-            foreach (var subName in classRoot.GetSubKeyNames())
+            foreach (var subName in classRoot.GetSubKeyNames().Where(s => int.TryParse(s, out _)))
             {
-                // Only check numeric subkeys (0000, 0001, etc.)
-                if (!int.TryParse(subName, out _)) continue;
-
                 try
                 {
                     using var sub = classRoot.OpenSubKey(subName);
@@ -481,10 +477,8 @@ public class PerformanceService
     internal static int ParseProcessorMinPercent(IList<string> lines)
     {
         // Look for "Current AC Power Setting Index: 0x00000064" (100 = 0x64)
-        foreach (var line in lines)
+        foreach (var line in lines.Where(l => l.Contains("Current AC Power Setting Index", StringComparison.OrdinalIgnoreCase)))
         {
-            if (!line.Contains("Current AC Power Setting Index", StringComparison.OrdinalIgnoreCase))
-                continue;
             var hexIdx = line.IndexOf("0x", StringComparison.OrdinalIgnoreCase);
             if (hexIdx < 0) continue;
             var hex = line[(hexIdx + 2)..].Trim();
@@ -570,7 +564,7 @@ public class PerformanceService
     {
         var systemDrive = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var root = System.IO.Path.GetPathRoot(systemDrive) ?? @"C:\";
-        var hiberFile = System.IO.Path.Combine(root, "hiberfil.sys");
+        var hiberFile = System.IO.Path.Join(root, "hiberfil.sys");
         return System.IO.File.Exists(hiberFile);
     }
 

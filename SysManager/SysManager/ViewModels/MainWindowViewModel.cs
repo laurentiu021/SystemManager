@@ -174,9 +174,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         Log.Information("Tab navigated: {TabLabel}", value.Label);
 
         // Auto-expand the parent group when a child is selected.
-        foreach (var g in NavGroups)
-            if (g.Children.Contains(value))
-            { g.IsExpanded = true; break; }
+        var parentGroup = NavGroups.FirstOrDefault(g => g.Children.Contains(value));
+        if (parentGroup != null) parentGroup.IsExpanded = true;
     }
 
     /// <summary>Select a nav item by its automation id.</summary>

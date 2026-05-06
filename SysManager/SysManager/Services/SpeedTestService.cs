@@ -267,7 +267,7 @@ public sealed class SpeedTestService
         var needsDownload = await Task.Run(() =>
         {
             Directory.CreateDirectory(toolsDir);
-            var path = Path.Combine(toolsDir, "speedtest.exe");
+            var path = Path.Join(toolsDir, "speedtest.exe");
             if (File.Exists(path) && new FileInfo(path).Length < 1024)
             {
                 try { File.Delete(path); }
@@ -277,7 +277,7 @@ public sealed class SpeedTestService
             return !File.Exists(path);
         }, ct).ConfigureAwait(false);
 
-        var exe = Path.Combine(toolsDir, "speedtest.exe");
+        var exe = Path.Join(toolsDir, "speedtest.exe");
         if (!needsDownload) return exe;
 
         progress?.Report((5, "Downloading Ookla CLI…"));

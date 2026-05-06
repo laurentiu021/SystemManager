@@ -131,11 +131,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             AddTarget(name, host, role);
         }
 
-        foreach (var t in Targets)
-        {
-            if (t.Host is "8.8.8.8" or "1.1.1.1" or "9.9.9.9")
-                t.Role = TargetRole.PublicDns;
-        }
+        foreach (var t in Targets.Where(t => t.Host is "8.8.8.8" or "1.1.1.1" or "9.9.9.9"))
+            t.Role = TargetRole.PublicDns;
     }
 
     // ── Target management ──
@@ -318,9 +315,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             touched.Add(sample.Host);
         }
 
-        foreach (var host in touched)
+        foreach (var host in touched.Where(h => Buffers.ContainsKey(h)))
         {
-            if (!Buffers.TryGetValue(host, out var buffer)) continue;
+            var buffer = Buffers[host];
             TrimBuffer(buffer);
             var target = Targets.FirstOrDefault(t => t.Host == host);
             if (target == null) continue;
@@ -346,10 +343,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
         var successful = 0;
         var sum = 0.0;
-        foreach (var p in buffer)
+        foreach (var p in buffer.Where(p => p.Value.HasValue))
         {
-            if (!p.Value.HasValue) continue;
-            var raw = p.Value.Value - offset;
+            var raw = p.Value!.Value - offset;
             successful++;
             sum += raw;
         }
@@ -408,11 +404,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     internal void RefreshHopTable()
     {
         TracerouteHops.Clear();
-        foreach (var target in Targets)
-        {
-            if (!LatestRoutes.TryGetValue(target.Host, out var hops)) continue;
-            foreach (var h in hops) TracerouteHops.Add(h);
-        }
+        foreach (var target in Targets.Where(t => LatestRoutes.ContainsKey(t.Host)))
+            foreach (var h in LatestRoutes[target.Host])
+                TracerouteHops.Add(h);
     }
 
     internal void TrimBuffer(ObservableCollection<DateTimePoint> buffer)

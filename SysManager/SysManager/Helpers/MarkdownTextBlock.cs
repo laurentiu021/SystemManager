@@ -39,12 +39,11 @@ public static class MarkdownTextBlock
         var md = e.NewValue as string;
         if (string.IsNullOrWhiteSpace(md)) return;
 
-        var lines = md.Split('\n');
+        var lines = md.Split('\n').Select(l => l.TrimEnd('\r'));
         var isFirst = true;
 
-        foreach (var rawLine in lines)
+        foreach (var line in lines)
         {
-            var line = rawLine.TrimEnd('\r');
 
             // Skip blank lines — insert a small paragraph break instead
             if (string.IsNullOrWhiteSpace(line))

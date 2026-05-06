@@ -66,7 +66,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
             await Task.Delay(250);
             await CheckModuleAsync();
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { /* expected on shutdown — no action needed */ }
         catch (InvalidOperationException ex) { Log.Warning("Module check failed: {Error}", ex.Message); }
     }
 
@@ -386,18 +386,17 @@ public partial class WindowsUpdateViewModel : ViewModelBase
                 ? root.EnumerateArray()
                 : new[] { root }.AsEnumerable();
 
-            foreach (var el in items)
+            foreach (var entry in items.Select(el => new UpdateEntry
             {
-                var entry = new UpdateEntry
-                {
-                    Title = el.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "",
-                    KB = el.TryGetProperty("KB", out var kb) ? kb.GetString() ?? "" : "",
-                    Size = el.TryGetProperty("Size", out var sz) ? FormatSize(sz) : "",
-                    Status = el.TryGetProperty("Status", out var st) ? st.GetString() ?? "" : "",
-                    Date = ParseDate(el.TryGetProperty("Date", out var dt) ? dt : default),
-                    IsHidden = el.TryGetProperty("IsHidden", out var ih) && ih.ValueKind == JsonValueKind.True,
-                    Category = el.TryGetProperty("Category", out var cat) ? cat.GetString() ?? "" : "",
-                };
+                Title = el.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "",
+                KB = el.TryGetProperty("KB", out var kb) ? kb.GetString() ?? "" : "",
+                Size = el.TryGetProperty("Size", out var sz) ? FormatSize(sz) : "",
+                Status = el.TryGetProperty("Status", out var st) ? st.GetString() ?? "" : "",
+                Date = ParseDate(el.TryGetProperty("Date", out var dt) ? dt : default),
+                IsHidden = el.TryGetProperty("IsHidden", out var ih) && ih.ValueKind == JsonValueKind.True,
+                Category = el.TryGetProperty("Category", out var cat) ? cat.GetString() ?? "" : "",
+            }))
+            {
                 Updates.Add(entry);
             }
         }

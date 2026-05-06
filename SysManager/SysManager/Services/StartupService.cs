@@ -222,9 +222,8 @@ public sealed class StartupService
 
             var rootName = root == Registry.CurrentUser ? "HKCU" : "HKLM";
 
-            foreach (var valueName in key.GetValueNames())
+            foreach (var valueName in key.GetValueNames().Where(v => !string.IsNullOrWhiteSpace(v)))
             {
-                if (string.IsNullOrWhiteSpace(valueName)) continue;
                 var command = key.GetValue(valueName)?.ToString() ?? "";
                 if (string.IsNullOrWhiteSpace(command)) continue;
 

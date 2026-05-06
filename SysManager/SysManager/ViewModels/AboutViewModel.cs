@@ -284,11 +284,8 @@ public partial class AboutViewModel : ViewModelBase
             // Storage
             try
             {
-                foreach (var drive in DriveInfo.GetDrives())
-                {
-                    if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
+                foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
                     sb.AppendLine($"Disk {drive.Name.TrimEnd('\\')} {drive.TotalSize / 1024.0 / 1024.0 / 1024.0:F0} GB total, {drive.AvailableFreeSpace / 1024.0 / 1024.0 / 1024.0:F0} GB free ({drive.DriveFormat})");
-                }
             }
             catch (IOException ex) { Log.Debug("Storage info unavailable: {Error}", ex.Message); }
             catch (UnauthorizedAccessException ex) { Log.Debug("Storage info access denied: {Error}", ex.Message); }

@@ -92,10 +92,9 @@ public partial class CleanupViewModel : ViewModelBase
             {
                 // Measure temp folders
                 long tempBytes = 0;
-                var tempPaths = new[] { Environment.GetEnvironmentVariable("TEMP") ?? "", System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp") };
-                foreach (var p in tempPaths)
+                var tempPaths = new[] { Environment.GetEnvironmentVariable("TEMP") ?? "", System.IO.Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp") };
+                foreach (var p in tempPaths.Where(x => !string.IsNullOrEmpty(x) && System.IO.Directory.Exists(x)))
                 {
-                    if (string.IsNullOrEmpty(p) || !System.IO.Directory.Exists(p)) continue;
                     try
                     {
                         foreach (var f in System.IO.Directory.EnumerateFiles(p, "*", System.IO.SearchOption.AllDirectories))

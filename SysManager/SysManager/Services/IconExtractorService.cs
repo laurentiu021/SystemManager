@@ -192,7 +192,7 @@ public sealed class IconExtractorService
     {
         try
         {
-            var shell32 = Path.Combine(
+            var shell32 = Path.Join(
                 Environment.GetFolderPath(Environment.SpecialFolder.System), "shell32.dll");
 
             var hIcon = ExtractIconW(IntPtr.Zero, shell32, index);
@@ -236,7 +236,7 @@ public sealed class IconExtractorService
         // Handle msiexec — use msiexec.exe itself for icon
         if (expanded.Contains("msiexec", StringComparison.OrdinalIgnoreCase))
         {
-            var msi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "msiexec.exe");
+            var msi = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.System), "msiexec.exe");
             if (File.Exists(msi)) return msi;
         }
 
@@ -312,7 +312,7 @@ public sealed class IconExtractorService
             return dllPart;
 
         var sys32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
-        var fullPath = Path.Combine(sys32, dllPart);
+        var fullPath = Path.Join(sys32, dllPart);
         return File.Exists(fullPath) ? fullPath : null;
     }
 
@@ -326,7 +326,7 @@ public sealed class IconExtractorService
         {
             try
             {
-                var candidate = Path.Combine(dir.Trim(), exeName);
+                var candidate = Path.Join(dir.Trim(), exeName);
                 if (File.Exists(candidate)) return candidate;
             }
             catch (ArgumentException ex) { Log.Debug(ex, "Invalid PATH directory entry: {Dir}", dir); }
@@ -338,15 +338,14 @@ public sealed class IconExtractorService
             Environment.GetFolderPath(Environment.SpecialFolder.Windows),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
+            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
         };
 
-        foreach (var dir in commonDirs)
+        foreach (var dir in commonDirs.Where(d => !string.IsNullOrEmpty(d)))
         {
-            if (string.IsNullOrEmpty(dir)) continue;
             try
             {
-                var candidate = Path.Combine(dir, exeName);
+                var candidate = Path.Join(dir, exeName);
                 if (File.Exists(candidate)) return candidate;
             }
             catch (ArgumentException ex) { Log.Debug(ex, "Invalid common directory entry: {Dir}", dir); }
@@ -368,17 +367,16 @@ public sealed class IconExtractorService
         {
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
+            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
         };
 
-        foreach (var baseDir in programDirs)
+        foreach (var baseDir in programDirs.Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d)))
         {
-            if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(baseDir)) continue;
             try
             {
                 foreach (var subDir in Directory.GetDirectories(baseDir))
                 {
-                    var candidate = Path.Combine(subDir, exeName);
+                    var candidate = Path.Join(subDir, exeName);
                     if (File.Exists(candidate)) return candidate;
                 }
             }

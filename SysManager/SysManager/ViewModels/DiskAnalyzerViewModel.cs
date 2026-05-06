@@ -46,9 +46,8 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
 
     private void PopulatePresets()
     {
-        foreach (var d in DriveInfo.GetDrives())
-            if (d.DriveType == DriveType.Fixed && d.IsReady)
-                PresetPaths.Add(d.RootDirectory.FullName);
+        foreach (var d in DriveInfo.GetDrives().Where(x => x.DriveType == DriveType.Fixed && x.IsReady))
+            PresetPaths.Add(d.RootDirectory.FullName);
 
         var special = new[]
         {
@@ -56,9 +55,8 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
         };
-        foreach (var p in special)
-            if (!string.IsNullOrEmpty(p) && Directory.Exists(p) && !PresetPaths.Contains(p))
-                PresetPaths.Add(p);
+        foreach (var p in special.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x) && !PresetPaths.Contains(x)))
+            PresetPaths.Add(p);
 
         if (PresetPaths.Count > 0)
             SelectedPath = PresetPaths[0];

@@ -144,9 +144,7 @@ public sealed class DuplicateFileService
             }
 
             // Only full-hash files whose partial hashes matched 2+ files
-            foreach (var pg in partialGroups.Values)
-            {
-                if (pg.Count < 2) continue;
+            foreach (var pg in partialGroups.Values.Where(g => g.Count >= 2))
                 foreach (var fi in pg)
                 {
                     if (ct.IsCancellationRequested) break;
@@ -180,7 +178,6 @@ public sealed class DuplicateFileService
                     catch (UnauthorizedAccessException) { /* skip inaccessible file during full hash */ }
                     catch (IOException) { /* skip inaccessible file during full hash */ }
                 }
-            }
         }
 
         progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, "Done", "Complete"));

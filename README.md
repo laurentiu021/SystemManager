@@ -33,18 +33,22 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 21 feature tabs into 7 collapsible groups so you can
+The sidebar organises 36 feature tabs into 9 collapsible groups so you can
 find what you need without scrolling through a flat list:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System health · Windows Update · Performance · Services · Startup · Processes |
-| 🧹 Cleanup | Quick cleanup (TEMP / Bin / SFC / DISM) · Deep cleanup |
-| 💾 Storage | Disk Analyzer · Duplicates |
-| 🌐 Network | Ping · Traceroute · Speed Test · Repair |
-| 📦 Apps | App updates · Uninstaller |
-| ℹ️ Info | Drivers · Battery · Logs · About |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features ⚙️ |
+| 📊 Monitor | Process Manager · Resource History ⚙️ · App Alerts ⚙️ · Privacy Monitor ⚙️ |
+| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner ⚙️ · File Shredder ⚙️ |
+| 💾 Storage | Disk Analyzer · Duplicate Finder |
+| 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS Changer ⚙️ · Hosts Editor ⚙️ |
+| 📦 Apps | App Updates · Bulk Installer ⚙️ · Uninstaller · App Blocker ⚙️ |
+| 🛡️ Control | Privacy Settings ⚙️ · Context Menu ⚙️ · Restore Points ⚙️ · Scheduled Maintenance ⚙️ · System Report ⚙️ |
+| ℹ️ Info | Drivers · Battery Health · System Logs · About |
+
+> ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
 
 Groups expand and collapse with a click. Collapsed groups show a child count
 badge, a subtitle with abbreviated child labels, and a tooltip with the full

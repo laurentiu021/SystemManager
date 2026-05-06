@@ -29,18 +29,21 @@ SysManager/
 
 ## Tabs (view models)
 
-The sidebar organises tabs into 7 collapsible groups via `NavGroup` →
+The sidebar organises tabs into 9 collapsible groups via `NavGroup` →
 `NavItem` hierarchy. Dashboard renders as a flat top-level entry.
 Collapsed groups show a child count badge, subtitle, and tooltip.
+Planned features use `PlaceholderViewModel` with a WIP view.
 
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `ProcessManagerViewModel` |
-| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `PlaceholderViewModel` (Windows Features) |
+| Monitor | `ProcessManagerViewModel` · `PlaceholderViewModel` (Resource History · App Alerts · Privacy Monitor) |
+| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `PlaceholderViewModel` (Shortcut Cleaner · File Shredder) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
-| Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) |
-| Apps | `AppUpdatesViewModel` · `UninstallerViewModel` |
+| Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `PlaceholderViewModel` (DNS Changer · Hosts Editor) |
+| Apps | `AppUpdatesViewModel` · `UninstallerViewModel` · `PlaceholderViewModel` (Bulk Installer · App Blocker) |
+| Control | `PlaceholderViewModel` (Privacy Settings · Context Menu · Restore Points · Scheduled Maintenance · System Report) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `AboutViewModel` |
 
 - `DashboardViewModel` — OS / CPU / RAM / disk snapshot + live uptime.

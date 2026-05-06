@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.33] - 2026-05-06
+
+### Fixed
+- **Code quality** — resolved `cs/missed-using-statement` CodeQL alert in
+  `ProcessManagerService`: wrapped `Process.GetProcesses()` array in
+  try/finally to guarantee disposal of all process handles, even on early
+  cancellation.
+
 ## [0.28.32] - 2026-05-06
 
 ### Fixed

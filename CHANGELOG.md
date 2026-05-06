@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-05-06
+
+### Added
+- **Sidebar restructure** — reorganized navigation from 7 groups / 21 tabs to
+  9 groups / 36 tabs. New groups: **Monitor** (Process Manager moved here,
+  plus Resource History, App Alerts, Privacy Monitor placeholders) and
+  **Control** (Privacy Settings, Context Menu, Restore Points, Scheduled
+  Maintenance, System Report placeholders). Existing groups expanded: System
+  (+Windows Features), Cleanup (+Shortcut Cleaner, File Shredder), Network
+  (+DNS Changer, Hosts Editor), Apps (+Bulk Installer, App Blocker).
+- **PlaceholderView** — generic WIP view showing feature name, description,
+  issue reference, and "Work in Progress" badge for planned tabs.
+- **PlaceholderViewModel** — lightweight ViewModel for placeholder tabs,
+  stores feature name, description, and issue number.
+
 ## [0.28.34] - 2026-05-06
 
 ### Removed

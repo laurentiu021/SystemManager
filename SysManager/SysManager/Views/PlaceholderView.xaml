@@ -1,0 +1,44 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.PlaceholderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#070A0F" Offset="0"/>
+            <GradientStop Color="#0B1220" Offset="0.5"/>
+            <GradientStop Color="#090D16" Offset="1"/>
+        </LinearGradientBrush>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource PageBg}">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="500">
+            <!-- WIP Icon -->
+            <TextBlock Text="&#xE9F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                       FontSize="48" Foreground="{StaticResource Accent}"
+                       HorizontalAlignment="Center" Margin="0,0,0,16"/>
+
+            <!-- Feature name -->
+            <TextBlock Text="{Binding FeatureName}" FontSize="28" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center"
+                       TextWrapping="Wrap" TextAlignment="Center"/>
+
+            <!-- WIP badge -->
+            <Border Background="#2A1A3A" CornerRadius="4" Padding="12,6"
+                    HorizontalAlignment="Center" Margin="0,12,0,0">
+                <TextBlock Text="Work in Progress" FontSize="14" FontWeight="SemiBold"
+                           Foreground="{StaticResource Accent}"/>
+            </Border>
+
+            <!-- Description -->
+            <TextBlock Text="{Binding Description}" FontSize="14"
+                       Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"
+                       TextWrapping="Wrap" TextAlignment="Center" Margin="0,16,0,0"/>
+
+            <!-- Issue reference -->
+            <TextBlock FontSize="12" Foreground="{StaticResource TextMuted}"
+                       HorizontalAlignment="Center" Margin="0,12,0,0">
+                <Run Text="Tracked in issue #"/><Run Text="{Binding IssueNumber, Mode=OneTime}"/>
+            </TextBlock>
+        </StackPanel>
+    </Grid>
+</UserControl>

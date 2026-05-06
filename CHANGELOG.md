@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.30] - 2026-05-06
+
+### Fixed
+- **Code quality** — resolved 40 CodeQL alerts across 16 files: replaced
+  `Path.Combine` with `Path.Join` to prevent silent argument dropping (18),
+  converted `foreach`+`if continue` to LINQ `.Where()` (17), replaced
+  `foreach`+immediate-map to `.Select()` (3), added comments to intentional
+  empty catch blocks (2).
+
+## [0.28.29] - 2026-05-05
+
+### Fixed
+- **Logs / Console** — replaced generic `catch (Exception)` with specific
+  exception types in `LogsViewModel` and `ConsoleViewModel` (resolves
+  CodeQL catch-of-all-exceptions alerts).
+
 ## [0.28.28] - 2026-05-05
 
 ### Fixed

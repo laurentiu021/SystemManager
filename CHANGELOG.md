@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.31] - 2026-05-06
+
+### Fixed
+- **Code quality** — resolved 2 additional CodeQL alerts: converted
+  `foreach`+immediate-map to `.Select()` in `DriversViewModel`, converted
+  `foreach`+type-check to `.Where()` in `StartupService.ReadApprovedKey`.
+
 ## [0.28.30] - 2026-05-06
 
 ### Fixed

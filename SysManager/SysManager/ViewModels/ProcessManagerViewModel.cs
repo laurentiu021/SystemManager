@@ -57,6 +57,19 @@ public partial class ProcessManagerViewModel : ViewModelBase
             foreach (var p in snapshot)
             {
                 p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
+                var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name);
+                if (dbEntry != null)
+                {
+                    p.PlainDescription = dbEntry.Description;
+                    p.Category = dbEntry.Category;
+                    p.SafetyLevel = dbEntry.Safety.ToString();
+                }
+                else
+                {
+                    p.PlainDescription = p.Description; // fallback to FileVersionInfo description
+                    p.Category = "Unknown";
+                    p.SafetyLevel = "Unknown";
+                }
                 Processes.Add(p);
             }
 
@@ -129,6 +142,8 @@ public partial class ProcessManagerViewModel : ViewModelBase
             source = source.Where(p =>
                 p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
                 p.Description.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                p.PlainDescription.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                p.Category.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
                 p.Pid.ToString().Contains(filter));
         }
 

@@ -24,6 +24,9 @@ public partial class ProcessEntry : ObservableObject
     [ObservableProperty] private string _filePath = "";
     [ObservableProperty] private ImageSource? _icon;
     [ObservableProperty] private bool _hasMainWindow;
+    [ObservableProperty] private string _plainDescription = "";
+    [ObservableProperty] private string _category = "Unknown";
+    [ObservableProperty] private string _safetyLevel = "Unknown";
 
     /// <summary>True when the process has a valid, accessible file path.</summary>
     public bool CanOpenFileLocation => !string.IsNullOrWhiteSpace(FilePath)

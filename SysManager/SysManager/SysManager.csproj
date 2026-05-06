@@ -29,6 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Data\ProcessDescriptions.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.2" />
     <PackageReference Include="ModernWpfUI" Version="0.9.6" />

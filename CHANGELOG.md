@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-05-06
+
+### Added
+- **Process Description Database** — built-in JSON database with 107 common
+  Windows processes and popular applications, each with a plain-language
+  description, category (System, Browser, Development, Communication, Media,
+  Gaming, Graphics, Productivity, Creative, Cloud, Utility, Network, Security),
+  and safety indicator (System, Trusted, Unknown).
+- **ProcessDescriptionService** — singleton service that loads the embedded
+  JSON database and provides fast case-insensitive lookup by process name.
+- **ProcessEntry model** — extended with `PlainDescription`, `Category`, and
+  `SafetyLevel` fields populated from the database on each refresh.
+- **Enhanced filtering** — Process Manager search now matches against
+  plain description and category in addition to name and PID.
+- Unit tests for `ProcessDescriptionService` covering lookup, case
+  insensitivity, .exe stripping, categories, and safety levels.
+
 ## [0.30.0] - 2026-05-06
 
 ### Added

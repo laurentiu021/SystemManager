@@ -22,7 +22,6 @@ public class AllViewModelsSweepTests
     [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService()));
     [Fact] public void Cleanup_Constructs() => Assert.NotNull(new CleanupViewModel(new PowerShellRunner()));
     [Fact] public void DeepCleanup_Constructs() => Assert.NotNull(new DeepCleanupViewModel());
-    [Fact] public void Network_Constructs() => Assert.NotNull(new NetworkViewModel());
     [Fact] public void Drivers_Constructs() => Assert.NotNull(new DriversViewModel(new PowerShellRunner()));
     [Fact] public void Logs_Constructs() => Assert.NotNull(new LogsViewModel());
     [Fact] public void About_Constructs() => Assert.NotNull(new AboutViewModel());
@@ -79,7 +78,6 @@ public class AllViewModelsSweepTests
     [InlineData(typeof(SystemHealthViewModel))]
     [InlineData(typeof(CleanupViewModel))]
     [InlineData(typeof(DeepCleanupViewModel))]
-    [InlineData(typeof(NetworkViewModel))]
     [InlineData(typeof(DriversViewModel))]
     [InlineData(typeof(LogsViewModel))]
     [InlineData(typeof(AboutViewModel))]

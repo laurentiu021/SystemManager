@@ -380,62 +380,6 @@ public class QaAuditTests
     }
 
     // ==================================================================
-    //  NetworkViewModel — FlushPending contract
-    // ==================================================================
-
-    [Fact]
-    public void NetworkViewModel_FlushDoesNotFlipOrderOfTargets()
-    {
-        var vm = new NetworkViewModel();
-        var originalOrder = vm.Targets.Select(t => t.Host).ToList();
-
-        var m = typeof(NetworkViewModel).GetMethod("OnSample", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        foreach (var host in originalOrder)
-            m.Invoke(vm, new object[] { new PingSample(DateTime.UtcNow, host, 10, "OK") });
-
-        // Target order is stable across flushes.
-        Assert.Equal(originalOrder, vm.Targets.Select(t => t.Host).ToList());
-    }
-
-    [Fact]
-    public void NetworkViewModel_SwitchPreset_WhileSamplesPending_DoesNotLeakStaleData()
-    {
-        var vm = new NetworkViewModel();
-        var m = typeof(NetworkViewModel).GetMethod("OnSample", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        foreach (var t in vm.Targets)
-            m.Invoke(vm, new object[] { new PingSample(DateTime.UtcNow, t.Host, 99, "OK") });
-
-        vm.SelectedPreset = TargetPresets.Streaming;
-
-        // After preset switch, former preset's hosts must not still live in Targets.
-        Assert.All(vm.Targets, t =>
-            Assert.True(t.Role == TargetRole.Gateway || t.IsCustom ||
-                        TargetPresets.Streaming.Targets.Any(pt => pt.Host == t.Host)));
-    }
-
-    [Fact]
-    public void NetworkViewModel_PresetSwitchTwice_SameTarget_NotDuplicated()
-    {
-        var vm = new NetworkViewModel();
-        vm.SelectedPreset = TargetPresets.CS2Europe;
-        vm.SelectedPreset = TargetPresets.CS2Europe;
-        var cs2Hosts = vm.Targets.Where(t => t.Host.StartsWith("146.66.") || t.Host.StartsWith("155.133."))
-            .Select(t => t.Host).ToList();
-        Assert.Equal(cs2Hosts.Count, cs2Hosts.Distinct().Count());
-    }
-
-    [Fact]
-    public void NetworkViewModel_IntervalClampedByService_NotNegativeInUi()
-    {
-        // UI allows entering negative; service clamps to ≥1s. Verify no crash.
-        var vm = new NetworkViewModel();
-        vm.IntervalSeconds = -999;
-        vm.StartCommand.Execute(null);
-        vm.StopCommand.Execute(null);
-    }
-
-    // ==================================================================
     //  ConsoleViewModel — high throughput
     // ==================================================================
 

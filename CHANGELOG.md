@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.34] - 2026-05-06
+
+### Removed
+- **Dead code** — removed legacy `NetworkViewModel.cs` (superseded by split
+  ViewModels: PingViewModel, TracerouteViewModel, SpeedTestViewModel,
+  NetworkRepairViewModel + NetworkSharedState). Removed associated integration
+  tests that exercised the dead class.
+
 ## [0.28.33] - 2026-05-06
 
 ### Fixed

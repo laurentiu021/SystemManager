@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
 using SysManager.Models;
+using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
@@ -34,6 +35,12 @@ public partial class SpeedTestViewModel : ViewModelBase
     private async Task RunHttpSpeedAsync()
     {
         if (IsSpeedTesting) return;
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "HTTP Speed Test");
+        if (opLock == null)
+        {
+            HttpStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
+            return;
+        }
         IsSpeedTesting = true;
         IsHttpTesting = true;
         SpeedProgress = 0;
@@ -60,6 +67,12 @@ public partial class SpeedTestViewModel : ViewModelBase
     private async Task RunOoklaSpeedAsync()
     {
         if (IsSpeedTesting) return;
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Ookla Speed Test");
+        if (opLock == null)
+        {
+            OoklaStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
+            return;
+        }
         IsSpeedTesting = true;
         IsOoklaTesting = true;
         SpeedProgress = 0;

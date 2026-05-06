@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
 using SysManager.Helpers;
+using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
@@ -73,6 +74,12 @@ public partial class NetworkRepairViewModel : ViewModelBase
     private async Task RunRepairAsync(
         Func<Task<Models.NetworkRepairResult>> operation)
     {
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
+        if (opLock == null)
+        {
+            RepairStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
+            return;
+        }
         IsRepairing = true;
         RepairStatus = "Running…";
         try

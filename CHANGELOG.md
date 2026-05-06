@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-05-06
+
+### Added
+- **Operation Lock Service** — new `OperationLockService` singleton that
+  prevents conflicting concurrent operations across tabs. Operations are
+  grouped by category (Disk, Network, SystemModification). If a user tries
+  to start a conflicting operation while another is running, the UI shows
+  which operation is blocking and refuses to start the new one.
+- Integrated operation locks into: `DeepCleanupViewModel` (scan, clean,
+  large file scan), `DiskAnalyzerViewModel` (analyze), `DuplicateFileViewModel`
+  (scan), `CleanupViewModel` (temp cleanup), `SpeedTestViewModel` (HTTP and
+  Ookla tests), `TracerouteViewModel` (trace), `NetworkRepairViewModel`
+  (all repair operations).
+- Unit tests for `OperationLockService` covering acquire, release, conflict
+  detection, thread safety, and double-dispose safety.
+
 ## [0.29.1] - 2026-05-06
 
 ### Fixed

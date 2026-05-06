@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
 using SysManager.Models;
+using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
@@ -59,6 +60,12 @@ public partial class TracerouteViewModel : ViewModelBase
     private async Task TraceAsync()
     {
         if (string.IsNullOrWhiteSpace(TraceHost)) return;
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Traceroute");
+        if (opLock == null)
+        {
+            TraceStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
+            return;
+        }
         IsTracing = true;
         TraceStatus = $"Tracing {TraceHost}…";
 

@@ -67,6 +67,13 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(SelectedPath)) return;
 
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Disk Analysis");
+        if (opLock == null)
+        {
+            ScanSummary = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
+
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();

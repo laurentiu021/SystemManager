@@ -156,6 +156,12 @@ public partial class CleanupViewModel : ViewModelBase
     private async Task CleanTempAsync()
     {
         if (IsTempRunning) return;
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Temp Cleanup");
+        if (opLock == null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
         IsTempRunning = true;
         StatusMessage = "Cleaning temp folders...";
         _tempCts?.Dispose();

@@ -341,14 +341,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         var idx = Targets.IndexOf(target);
         var offset = ((idx % 8) - 3.5) * 0.25;
 
-        var successful = 0;
-        var sum = 0.0;
-        foreach (var p in buffer.Where(p => p.Value.HasValue))
-        {
-            var raw = p.Value!.Value - offset;
-            successful++;
-            sum += raw;
-        }
+        var values = buffer.Where(p => p.Value.HasValue).Select(p => p.Value!.Value - offset).ToList();
+        var successful = values.Count;
+        var sum = values.Sum();
         var recent = new List<double>(JitterSampleWindow);
         for (int i = buffer.Count - 1; i >= 0 && recent.Count < JitterSampleWindow; i--)
         {

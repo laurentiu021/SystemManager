@@ -419,7 +419,8 @@ public sealed class StartupService
 
             if (!proc.WaitForExit(10_000))
             {
-                try { proc.Kill(); } catch (InvalidOperationException) { }
+                try { proc.Kill(); }
+                catch (InvalidOperationException ex) { Log.Debug(ex, "Process already exited before Kill"); }
                 entry.StatusText = "Error — schtasks timed out";
                 return false;
             }

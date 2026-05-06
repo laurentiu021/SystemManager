@@ -258,16 +258,12 @@ public sealed class IconExtractorService
         }
 
         // Split on common argument patterns
-        foreach (var sep in new[] { " /", " -", " --", ",," })
-        {
-            var idx = clean.IndexOf(sep, StringComparison.Ordinal);
-            if (idx > 0)
-            {
-                var candidate = clean[..idx].Trim('"', ' ');
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-        }
+        var separatorMatch = new[] { " /", " -", " --", ",," }
+            .Select(sep => clean.IndexOf(sep, StringComparison.Ordinal))
+            .Where(idx => idx > 0)
+            .Select(idx => clean[..idx].Trim('"', ' '))
+            .FirstOrDefault(File.Exists);
+        if (separatorMatch != null) return separatorMatch;
 
         // Progressive space-split
         var parts = clean.Split(' ');
@@ -374,11 +370,10 @@ public sealed class IconExtractorService
         {
             try
             {
-                foreach (var subDir in Directory.GetDirectories(baseDir))
-                {
-                    var candidate = Path.Join(subDir, exeName);
-                    if (File.Exists(candidate)) return candidate;
-                }
+                var match = Directory.GetDirectories(baseDir)
+                    .Select(subDir => Path.Join(subDir, exeName))
+                    .FirstOrDefault(File.Exists);
+                if (match != null) return match;
             }
             catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied scanning {Dir} for {Exe}", baseDir, exeName); }
             catch (IOException ex) { Log.Debug(ex, "I/O error scanning {Dir} for {Exe}", baseDir, exeName); }

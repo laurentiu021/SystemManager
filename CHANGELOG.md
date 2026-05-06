@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.32] - 2026-05-06
+
+### Fixed
+- **Code quality** — resolved final 5 CodeQL alerts: replaced `foreach`+
+  `ContainsKey` guard with `TryAdd` in `UninstallerService`, converted
+  `foreach`+immediate-map to LINQ `.Select()` in `NetworkSharedState` and
+  `IconExtractorService` (×2), added logging to previously empty catch block
+  in `StartupService`.
+
 ## [0.28.31] - 2026-05-06
 
 ### Fixed

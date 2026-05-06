@@ -135,8 +135,7 @@ public sealed partial class UninstallerService
         var lookup = new Dictionary<string, InstalledApp>(StringComparer.OrdinalIgnoreCase);
         foreach (var app in apps.Where(a => !string.IsNullOrWhiteSpace(a.Name)))
         {
-            if (!lookup.ContainsKey(app.Name))
-                lookup[app.Name] = app;
+            lookup.TryAdd(app.Name, app);
         }
 
         var regPaths = new[]

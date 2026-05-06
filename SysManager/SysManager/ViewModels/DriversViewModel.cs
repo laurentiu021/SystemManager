@@ -95,15 +95,14 @@ public partial class DriversViewModel : ViewModelBase
                 ? root.EnumerateArray()
                 : new[] { root }.AsEnumerable();
 
-            foreach (var el in items)
+            foreach (var entry in items.Select(el => new DriverEntry
             {
-                var entry = new DriverEntry
-                {
-                    DeviceName = el.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? "" : "",
-                    Manufacturer = el.TryGetProperty("Manufacturer", out var mf) ? mf.GetString() ?? "" : "",
-                    DriverVersion = el.TryGetProperty("DriverVersion", out var dv) ? dv.GetString() ?? "" : "",
-                    DriverDate = ParseCimDate(el.TryGetProperty("DriverDate", out var dd) ? dd : default),
-                };
+                DeviceName = el.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? "" : "",
+                Manufacturer = el.TryGetProperty("Manufacturer", out var mf) ? mf.GetString() ?? "" : "",
+                DriverVersion = el.TryGetProperty("DriverVersion", out var dv) ? dv.GetString() ?? "" : "",
+                DriverDate = ParseCimDate(el.TryGetProperty("DriverDate", out var dd) ? dd : default),
+            }))
+            {
                 Drivers.Add(entry);
             }
         }

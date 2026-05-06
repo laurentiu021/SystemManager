@@ -289,11 +289,8 @@ public sealed class StartupService
             if (key == null) return null;
 
             var dict = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-            foreach (var name in key.GetValueNames())
-            {
-                if (key.GetValue(name) is byte[] data)
-                    dict[name] = data;
-            }
+            foreach (var name in key.GetValueNames().Where(n => key.GetValue(n) is byte[]))
+                dict[name] = (byte[])key.GetValue(name)!;
             return dict;
         }
         catch (System.Security.SecurityException) { return null; /* protected key */ }

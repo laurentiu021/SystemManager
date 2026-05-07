@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-05-07
+
+### Added
+- **App Alerts** — fully implemented tab replacing the WIP placeholder.
+  Monitors Program Files, AppData\Programs, and registry uninstall keys for
+  new application installations using FileSystemWatcher and periodic registry
+  polling. Shows timestamped install history with app name, publisher, path,
+  and detection source. Start/stop monitoring, acknowledge alerts, show all
+  currently installed apps, clear history.
+- `AppAlertService` — FileSystemWatcher on install directories + 30s registry
+  poll cycle. Thread-safe with ConcurrentDictionary baseline.
+- `AppAlertsViewModel` — full MVVM with start/stop, acknowledge, clear,
+  refresh installed apps.
+- `AppInstallEntry` model with observable properties.
+- `AppAlertsView` XAML with DataGrid and toolbar.
+- Unit tests for ViewModel and Model.
+
 ## [0.32.0] - 2026-05-06
 
 ### Added

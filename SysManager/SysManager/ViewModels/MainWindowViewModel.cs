@@ -39,7 +39,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     public PlaceholderViewModel WipWindowsFeatures { get; }
     public PlaceholderViewModel WipResourceHistory { get; }
-    public PlaceholderViewModel WipAppAlerts { get; }
+    public AppAlertsViewModel AppAlerts { get; }
     public PlaceholderViewModel WipPrivacyMonitor { get; }
     public ShortcutCleanerViewModel ShortcutCleaner { get; }
     public PlaceholderViewModel WipFileShredder { get; }
@@ -93,7 +93,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         // ── WIP placeholders for planned features ──────────────────────
         WipWindowsFeatures = new PlaceholderViewModel("Windows Features", "Toggle Windows optional features on or off.", "388");
         WipResourceHistory = new PlaceholderViewModel("Resource History", "Historical CPU, RAM, GPU and temperature graphs.", "377");
-        WipAppAlerts = new PlaceholderViewModel("App Alerts", "Get notified when new applications are installed.", "379");
+        AppAlerts = new AppAlertsViewModel();
         WipPrivacyMonitor = new PlaceholderViewModel("Privacy Monitor", "Monitor and alert on webcam, microphone, and location access.", "380");
         ShortcutCleaner = new ShortcutCleanerViewModel();
         WipFileShredder = new PlaceholderViewModel("File Shredder", "Securely delete files beyond recovery.", "386");
@@ -141,7 +141,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             Children = {
             new NavItem { Id = "nav-processes",        Label = "Process Manager",  Glyph = "\uEBC4", Content = ProcessManager,    ViewType = typeof(Views.ProcessManagerView) },
             new NavItem { Id = "nav-resource-history", Label = "Resource History", Glyph = "\uE9D9", Content = WipResourceHistory, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-app-alerts",       Label = "App Alerts",       Glyph = "\uEA8F", Content = WipAppAlerts,       ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-app-alerts",       Label = "App Alerts",       Glyph = "\uEA8F", Content = AppAlerts,          ViewType = typeof(Views.AppAlertsView) },
             new NavItem { Id = "nav-privacy-monitor",  Label = "Privacy Monitor",  Glyph = "\uE727", Content = WipPrivacyMonitor,  ViewType = typeof(Views.PlaceholderView) },
         }};
 
@@ -294,7 +294,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         NetworkShared?.Dispose();
         WipWindowsFeatures?.Dispose();
         WipResourceHistory?.Dispose();
-        WipAppAlerts?.Dispose();
+        AppAlerts?.Dispose();
         WipPrivacyMonitor?.Dispose();
         ShortcutCleaner?.Dispose();
         WipFileShredder?.Dispose();

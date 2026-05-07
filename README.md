@@ -3,7 +3,8 @@
 A modern Windows system monitoring toolkit: live network monitoring with
 gamer-friendly presets, Windows updates, disk and memory health, gaming
 launcher cache cleanup, app updates via winget, performance tuning,
-battery health, process management, startup control, and a friendly
+battery health, process management with built-in descriptions, startup
+control, shortcut cleanup, app blocking, install alerts, and a friendly
 Event Log viewer — all in one WPF desktop app.
 
 [![CI](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml)
@@ -34,17 +35,18 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 
 ### Sidebar navigation
 The sidebar organises 36 feature tabs into 9 collapsible groups so you can
-find what you need without scrolling through a flat list:
+find what you need without scrolling through a flat list. 24 tabs are fully
+implemented; 12 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features ⚙️ |
-| 📊 Monitor | Process Manager · Resource History ⚙️ · App Alerts ⚙️ · Privacy Monitor ⚙️ |
-| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner ⚙️ · File Shredder ⚙️ |
+| 📊 Monitor | Process Manager · Resource History ⚙️ · App Alerts · Privacy Monitor ⚙️ |
+| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · File Shredder ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS Changer ⚙️ · Hosts Editor ⚙️ |
-| 📦 Apps | App Updates · Bulk Installer ⚙️ · Uninstaller · App Blocker ⚙️ |
+| 📦 Apps | App Updates · Bulk Installer ⚙️ · Uninstaller · App Blocker |
 | 🛡️ Control | Privacy Settings ⚙️ · Context Menu ⚙️ · Restore Points ⚙️ · Scheduled Maintenance ⚙️ · System Report ⚙️ |
 | ℹ️ Info | Drivers · Battery Health · System Logs · About |
 
@@ -152,10 +154,48 @@ long-running operation, so you always know which tab is working.
 
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, and status
-- Real-time filter by name, description, or PID
+- Real-time filter by name, description, category, or PID
 - Sort by memory, CPU usage, name, or PID via clickable column headers
+- **Built-in description database** — 107 common Windows processes and popular
+  applications with plain-language descriptions, categories (System, Browser,
+  Development, Communication, Media, Gaming, etc.), and safety indicators
+  (System, Trusted, Unknown)
 - Kill process with confirmation dialog
 - Open file location in Explorer
+
+### Operation Lock
+- Prevents conflicting concurrent operations across tabs
+- Operations grouped by category (Disk, Network, SystemModification)
+- If a conflicting operation is already running, the UI shows which operation
+  is blocking and refuses to start the new one
+- Integrated into: Deep Cleanup, Disk Analyzer, Duplicate Finder, Quick
+  Cleanup, Speed Test, Traceroute, Network Repair, Shortcut Cleaner
+
+### Shortcut Cleaner
+- Scans Desktop, Start Menu, Quick Launch, and Recent Items for broken .lnk
+  shortcuts whose targets no longer exist
+- Lists results with name, location, and missing target path
+- Select all / deselect individual items
+- Move to Recycle Bin or permanent delete, with confirmation dialog
+- COM-based IShellLink resolution for accurate target validation
+
+### App Alerts
+- Monitors Program Files, AppData\Programs, and registry uninstall keys for
+  new application installations
+- FileSystemWatcher on install directories + 30-second registry poll cycle
+- Shows timestamped install history with app name, publisher, path, and
+  detection source
+- Start/stop monitoring, acknowledge alerts, show all currently installed
+  apps, clear history
+
+### App Blocker
+- Blocks applications from executing using Image File Execution Options (IFEO)
+  registry mechanism
+- Enter an exe name or browse for a file, confirm, and the app is prevented
+  from launching
+- Fully reversible — unblock restores normal execution
+- Shows list of currently blocked apps with select/deselect and batch unblock
+- Requires admin privileges for registry modifications
 
 ### Battery Health
 - Charge %, health %, wear level, cycle count, chemistry

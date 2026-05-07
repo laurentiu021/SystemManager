@@ -43,12 +43,12 @@ public partial class DuplicateFileViewModel : ViewModelBase
         var folders = new[]
         {
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
+            Helpers.KnownFolders.GetDocumentsPath(),
+            Helpers.KnownFolders.GetDesktopPath(),
+            Helpers.KnownFolders.GetDownloadsPath(),
+            Helpers.KnownFolders.GetPicturesPath(),
+            Helpers.KnownFolders.GetMusicPath(),
+            Helpers.KnownFolders.GetVideosPath(),
         };
 
         foreach (var f in folders.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x)))

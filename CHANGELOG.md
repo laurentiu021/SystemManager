@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-05-07
+
+### Fixed
+- **Deep Cleanup / Duplicate Finder** — use Windows Known Folder API
+  (SHGetKnownFolderPath) to resolve Downloads, Documents, Desktop, Pictures,
+  Music, and Videos paths. If the user has moved these folders to a different
+  drive (e.g. D:\Downloads), the application now detects the actual location
+  instead of assuming the default C:\Users path (#483).
+
 ## [0.35.0] - 2026-05-07
 
 ### Added

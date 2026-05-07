@@ -72,12 +72,12 @@ public partial class DeepCleanupViewModel : ViewModelBase
         {
             ScanLocations.Clear();
 
-            AddLocation("📥  Downloads", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads");
-            AddLocation("📄  Documents", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
-            AddLocation("🖥️  Desktop",   Environment.GetFolderPath(Environment.SpecialFolder.Desktop));
-            AddLocation("🎬  Videos",    Environment.GetFolderPath(Environment.SpecialFolder.MyVideos));
-            AddLocation("🖼️  Pictures",  Environment.GetFolderPath(Environment.SpecialFolder.MyPictures));
-            AddLocation("🎵  Music",     Environment.GetFolderPath(Environment.SpecialFolder.MyMusic));
+            AddLocation("📥  Downloads", Helpers.KnownFolders.GetDownloadsPath());
+            AddLocation("📄  Documents", Helpers.KnownFolders.GetDocumentsPath());
+            AddLocation("🖥️  Desktop",   Helpers.KnownFolders.GetDesktopPath());
+            AddLocation("🎬  Videos",    Helpers.KnownFolders.GetVideosPath());
+            AddLocation("🖼️  Pictures",  Helpers.KnownFolders.GetPicturesPath());
+            AddLocation("🎵  Music",     Helpers.KnownFolders.GetMusicPath());
 
             var pf    = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);

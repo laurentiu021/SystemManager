@@ -109,6 +109,7 @@ public sealed partial class UninstallerService
             var source = idxSource > 0 ? Slice(idxSource, -1) : "";
 
             if (string.IsNullOrWhiteSpace(id)) continue;
+            if (string.IsNullOrWhiteSpace(name)) continue;
 
             apps.Add(new InstalledApp
             {

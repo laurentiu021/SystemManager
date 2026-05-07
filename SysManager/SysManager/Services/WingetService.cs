@@ -101,7 +101,7 @@ public partial class WingetService
             || !PackageIdPattern().IsMatch(packageId))
             throw new ArgumentException("Invalid package ID.", nameof(packageId));
 
-        var args = $"upgrade --id \"{packageId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity";
+        var args = $"upgrade --id \"{packageId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity --include-unknown";
         return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
     }
 

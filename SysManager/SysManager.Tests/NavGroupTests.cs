@@ -60,9 +60,9 @@ public class NavGroupTests
     }
 
     [Fact]
-    public void IsExpanded_DefaultTrue()
+    public void IsExpanded_DefaultFalse()
     {
         var g = new NavGroup { Id = "test", Label = "Test", Glyph = "T" };
-        Assert.True(g.IsExpanded);
+        Assert.False(g.IsExpanded);
     }
 }

@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.1] - 2026-05-07
+
+### Fixed
+- **Sidebar** — all groups now start collapsed on launch instead of expanded,
+  reducing visual clutter (#482).
+- **Speed Test** — swapped card order: Ookla (primary) now appears first,
+  HTTP (backup) second (#485).
+- **App Updates** — per-package upgrade now includes `--include-unknown` flag
+  so packages with undetermined versions can be upgraded (#486).
+- **Uninstaller** — blank entries with empty names are now filtered out of
+  the installed applications list (#487).
+- **About** — "View license" button no longer appears grayed out; changed
+  from GhostButton to SecondaryButton style (#490).
+
 ## [0.34.0] - 2026-05-07
 
 ### Added

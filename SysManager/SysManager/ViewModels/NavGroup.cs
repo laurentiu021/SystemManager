@@ -18,7 +18,7 @@ public sealed partial class NavGroup : ObservableObject
     public required string Label { get; init; }
     public required string Glyph { get; init; }
 
-    [ObservableProperty] private bool _isExpanded = true;
+    [ObservableProperty] private bool _isExpanded;
 
     public ObservableCollection<NavItem> Children { get; init; } = new();
 

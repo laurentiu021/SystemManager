@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-05-07
+
+### Added
+- **DataGrid sort arrows** — all sortable DataGrid column headers now display
+  an ascending (▲) or descending (▼) arrow indicator on the currently sorted
+  column (#488).
+- **DataGrid hover highlight** — column headers change background color and
+  show a hand cursor on hover to signal interactivity (#489).
+
 ## [0.34.2] - 2026-05-07
 
 ### Fixed

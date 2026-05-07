@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-05-07
+
+### Added
+- **App Blocker** — fully implemented tab replacing the WIP placeholder.
+  Blocks applications from executing using Image File Execution Options (IFEO)
+  registry mechanism. Enter an exe name or browse for a file, confirm, and the
+  app is prevented from launching. Fully reversible — unblock restores normal
+  execution. Shows list of currently blocked apps with select/deselect.
+- `AppBlockerService` — IFEO-based block/unblock with specific exception
+  handling, admin privilege detection, and GetBlockedApps enumeration.
+- `AppBlockerViewModel` — block, unblock selected, browse, refresh, select all.
+- `BlockedApp` model with observable properties.
+- `AppBlockerView` XAML with input field, toolbar, and DataGrid.
+- Unit tests for ViewModel and Model.
+
 ## [0.33.0] - 2026-05-07
 
 ### Added

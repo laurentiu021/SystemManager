@@ -46,7 +46,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipDnsChanger { get; }
     public PlaceholderViewModel WipHostsEditor { get; }
     public PlaceholderViewModel WipBulkInstaller { get; }
-    public PlaceholderViewModel WipAppBlocker { get; }
+    public AppBlockerViewModel AppBlocker { get; }
     public PlaceholderViewModel WipPrivacySettings { get; }
     public PlaceholderViewModel WipContextMenu { get; }
     public PlaceholderViewModel WipRestorePoints { get; }
@@ -100,7 +100,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         WipDnsChanger = new PlaceholderViewModel("DNS Changer", "Quickly switch DNS servers for any network adapter.", "382");
         WipHostsEditor = new PlaceholderViewModel("Hosts Editor", "Edit the Windows hosts file with a friendly UI.", "382");
         WipBulkInstaller = new PlaceholderViewModel("Bulk Installer", "Install multiple applications at once via winget.", "387");
-        WipAppBlocker = new PlaceholderViewModel("App Blocker", "Prevent specific applications from running.", "378");
+        AppBlocker = new AppBlockerViewModel();
         WipPrivacySettings = new PlaceholderViewModel("Privacy Settings", "Windows debloat and privacy toggles.", "384");
         WipContextMenu = new PlaceholderViewModel("Context Menu", "Manage right-click context menu entries.", "385");
         WipRestorePoints = new PlaceholderViewModel("Restore Points", "Create and manage system restore points.", "383");
@@ -186,7 +186,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-app-updates",    Label = "App Updates",     Glyph = "\uE7B8", Content = AppUpdates,      ViewType = typeof(Views.AppUpdatesView) },
             new NavItem { Id = "nav-bulk-installer", Label = "Bulk Installer",  Glyph = "\uE896", Content = WipBulkInstaller, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-uninstaller",    Label = "Uninstaller",     Glyph = "\uE738", Content = Uninstaller,     ViewType = typeof(Views.UninstallerView) },
-            new NavItem { Id = "nav-app-blocker",    Label = "App Blocker",     Glyph = "\uE8F8", Content = WipAppBlocker,   ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-app-blocker",    Label = "App Blocker",     Glyph = "\uE8F8", Content = AppBlocker,      ViewType = typeof(Views.AppBlockerView) },
         }};
 
         // 🛡️ Control (5) — NEW GROUP
@@ -301,7 +301,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         WipDnsChanger?.Dispose();
         WipHostsEditor?.Dispose();
         WipBulkInstaller?.Dispose();
-        WipAppBlocker?.Dispose();
+        AppBlocker?.Dispose();
         WipPrivacySettings?.Dispose();
         WipContextMenu?.Dispose();
         WipRestorePoints?.Dispose();

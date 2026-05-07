@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.2] - 2026-05-07
+
+### Fixed
+- **Disk Analyzer** — skip junctions, symbolic links, and mount points during
+  folder traversal to prevent double-counting files reachable through multiple
+  paths (e.g. `C:\Documents and Settings` → `C:\Users`). Fixes reported total
+  exceeding actual disk capacity (#484).
+
 ## [0.34.1] - 2026-05-07
 
 ### Fixed

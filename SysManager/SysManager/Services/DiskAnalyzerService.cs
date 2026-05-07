@@ -70,6 +70,15 @@ public sealed class DiskAnalyzerService
             if (ct.IsCancellationRequested) break;
             if (ShouldSkip(dir)) continue;
 
+            // Skip junctions, symbolic links, and mount points at top level
+            try
+            {
+                var attr = File.GetAttributes(dir);
+                if ((attr & FileAttributes.ReparsePoint) != 0) continue;
+            }
+            catch (UnauthorizedAccessException) { continue; }
+            catch (IOException) { continue; }
+
             scanned++;
             progress?.Report(new AnalysisProgress(scanned, Path.GetFileName(dir)));
 
@@ -151,6 +160,16 @@ public sealed class DiskAnalyzerService
 
             foreach (var d in dirs)
             {
+                // Skip junctions, symbolic links, and mount points to avoid
+                // double-counting the same files through multiple paths.
+                try
+                {
+                    var attr = File.GetAttributes(d);
+                    if ((attr & FileAttributes.ReparsePoint) != 0) continue;
+                }
+                catch (UnauthorizedAccessException) { continue; }
+                catch (IOException) { continue; }
+
                 folderCount++;
                 stack.Push(d);
             }

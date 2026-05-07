@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-05-06
+
+### Added
+- **Shortcut Cleaner** — fully implemented tab replacing the WIP placeholder.
+  Scans Desktop, Start Menu, Quick Launch, and Recent Items for broken .lnk
+  shortcuts whose targets no longer exist. Lists results with name, location,
+  and missing target path. Supports select all/deselect, move to Recycle Bin
+  or permanent delete, with confirmation dialog before any deletion.
+- `ShortcutCleanerService` — COM-based IShellLink resolution, SHFileOperation
+  for Recycle Bin support, scans 6 common shortcut locations.
+- `ShortcutCleanerViewModel` — full MVVM implementation with scan, delete,
+  select/deselect, cancel, and OperationLockService integration.
+- `BrokenShortcut` model with observable properties.
+- `ShortcutCleanerView` XAML with DataGrid, toolbar, and status footer.
+- Unit tests for ViewModel and Model.
+
 ## [0.31.0] - 2026-05-06
 
 ### Added

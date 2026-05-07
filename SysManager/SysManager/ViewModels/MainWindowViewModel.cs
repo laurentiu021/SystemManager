@@ -41,7 +41,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipResourceHistory { get; }
     public PlaceholderViewModel WipAppAlerts { get; }
     public PlaceholderViewModel WipPrivacyMonitor { get; }
-    public PlaceholderViewModel WipShortcutCleaner { get; }
+    public ShortcutCleanerViewModel ShortcutCleaner { get; }
     public PlaceholderViewModel WipFileShredder { get; }
     public PlaceholderViewModel WipDnsChanger { get; }
     public PlaceholderViewModel WipHostsEditor { get; }
@@ -95,7 +95,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         WipResourceHistory = new PlaceholderViewModel("Resource History", "Historical CPU, RAM, GPU and temperature graphs.", "377");
         WipAppAlerts = new PlaceholderViewModel("App Alerts", "Get notified when new applications are installed.", "379");
         WipPrivacyMonitor = new PlaceholderViewModel("Privacy Monitor", "Monitor and alert on webcam, microphone, and location access.", "380");
-        WipShortcutCleaner = new PlaceholderViewModel("Shortcut Cleaner", "Find and remove broken shortcuts.", "390");
+        ShortcutCleaner = new ShortcutCleanerViewModel();
         WipFileShredder = new PlaceholderViewModel("File Shredder", "Securely delete files beyond recovery.", "386");
         WipDnsChanger = new PlaceholderViewModel("DNS Changer", "Quickly switch DNS servers for any network adapter.", "382");
         WipHostsEditor = new PlaceholderViewModel("Hosts Editor", "Edit the Windows hosts file with a friendly UI.", "382");
@@ -152,7 +152,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             Children = {
             new NavItem { Id = "nav-cleanup",           Label = "Quick Cleanup",    Glyph = "\uE74D", Content = Cleanup,            ViewType = typeof(Views.CleanupView) },
             new NavItem { Id = "nav-deep-cleanup",      Label = "Deep Cleanup",     Glyph = "\uE81E", Content = DeepCleanup,        ViewType = typeof(Views.DeepCleanupView) },
-            new NavItem { Id = "nav-shortcut-cleaner",  Label = "Shortcut Cleaner", Glyph = "\uE71B", Content = WipShortcutCleaner, ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-shortcut-cleaner",  Label = "Shortcut Cleaner", Glyph = "\uE71B", Content = ShortcutCleaner, ViewType = typeof(Views.ShortcutCleanerView) },
             new NavItem { Id = "nav-file-shredder",     Label = "File Shredder",    Glyph = "\uE74D", Content = WipFileShredder,    ViewType = typeof(Views.PlaceholderView) },
         }};
 
@@ -296,7 +296,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         WipResourceHistory?.Dispose();
         WipAppAlerts?.Dispose();
         WipPrivacyMonitor?.Dispose();
-        WipShortcutCleaner?.Dispose();
+        ShortcutCleaner?.Dispose();
         WipFileShredder?.Dispose();
         WipDnsChanger?.Dispose();
         WipHostsEditor?.Dispose();

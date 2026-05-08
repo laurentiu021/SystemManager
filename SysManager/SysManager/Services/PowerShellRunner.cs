@@ -19,6 +19,26 @@ public class PowerShellRunner
     public event Action<int>? ProgressChanged; // 0-100
 
     /// <summary>
+    /// OEM encoding for native Windows tools (chkdsk, sfc, DISM, ipconfig,
+    /// netsh, powercfg, sc). Requires CodePagesEncodingProvider registered at startup.
+    /// </summary>
+    public static System.Text.Encoding OemEncoding { get; } =
+        GetOemEncodingSafe();
+
+    private static System.Text.Encoding GetOemEncodingSafe()
+    {
+        try
+        {
+            return System.Text.Encoding.GetEncoding(
+                System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+        }
+        catch (NotSupportedException)
+        {
+            return System.Text.Encoding.UTF8;
+        }
+    }
+
+    /// <summary>
     /// Execute a script and return the collected PSObject results.
     /// All streams are forwarded via <see cref="LineReceived"/> for live UI display.
     /// </summary>

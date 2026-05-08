@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.7] - 2026-05-08
+
+### Fixed
+- **Encoding** — all native Windows tools (powercfg, ipconfig, netsh, sc.exe)
+  now use OEM encoding for output parsing, matching the fix applied to chkdsk,
+  sfc, and DISM. Added centralized `PowerShellRunner.OemEncoding` static
+  property. Prevents garbled output on non-English Windows systems.
+
 ## [0.35.6] - 2026-05-08
 
 ### Removed

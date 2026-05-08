@@ -131,7 +131,7 @@ public class ServiceManagerService
         if (!allowedTypes.Contains(startType, StringComparer.OrdinalIgnoreCase))
             throw new ArgumentException($"Invalid start type: {startType}", nameof(startType));
 
-        await ps.RunProcessAsync("sc.exe", $"config \"{serviceName}\" start= {startType}", ct)
+        await ps.RunProcessAsync("sc.exe", $"config \"{serviceName}\" start= {startType}", ct, PowerShellRunner.OemEncoding)
             .ConfigureAwait(false);
     }
 

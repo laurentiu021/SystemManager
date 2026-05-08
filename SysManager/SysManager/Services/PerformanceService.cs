@@ -166,7 +166,7 @@ public class PerformanceService
         var lines = new List<string>();
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
-        try { await _ps.RunProcessAsync("powercfg.exe", "/getactivescheme", ct); }
+        try { await _ps.RunProcessAsync("powercfg.exe", "/getactivescheme", ct, PowerShellRunner.OemEncoding); }
         finally { _ps.LineReceived -= OnLine; }
 
         return ParseActivePlan(lines);
@@ -199,7 +199,7 @@ public class PerformanceService
     /// <summary>Activate a power plan by GUID.</summary>
     public async Task SetActivePlanAsync(string guid, CancellationToken ct = default)
     {
-        await _ps.RunProcessAsync("powercfg.exe", $"/setactive {guid}", ct).ConfigureAwait(false);
+        await _ps.RunProcessAsync("powercfg.exe", $"/setactive {guid}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -213,7 +213,7 @@ public class PerformanceService
         var lines = new List<string>();
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
-        try { await _ps.RunProcessAsync("powercfg.exe", $"-duplicatescheme {UltimatePerfScheme}", ct); }
+        try { await _ps.RunProcessAsync("powercfg.exe", $"-duplicatescheme {UltimatePerfScheme}", ct, PowerShellRunner.OemEncoding); }
         finally { _ps.LineReceived -= OnLine; }
 
         // Parse GUID from output: "Power Scheme GUID: <guid>  (Ultimate Performance)"
@@ -235,7 +235,7 @@ public class PerformanceService
         var lines = new List<string>();
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
-        try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct); }
+        try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct, PowerShellRunner.OemEncoding); }
         finally { _ps.LineReceived -= OnLine; }
 
         return ParsePlanGuidByName(lines, nameSubstring);
@@ -467,7 +467,7 @@ public class PerformanceService
         try
         {
             await _ps.RunProcessAsync("powercfg.exe",
-                "/query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN", ct).ConfigureAwait(false);
+                "/query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
         }
         finally { _ps.LineReceived -= OnLine; }
 
@@ -495,10 +495,10 @@ public class PerformanceService
     public async Task SetProcessorMinStateAsync(int percent, CancellationToken ct = default)
     {
         await _ps.RunProcessAsync("powercfg.exe",
-            $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct).ConfigureAwait(false);
+            $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
         await _ps.RunProcessAsync("powercfg.exe",
-            $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct).ConfigureAwait(false);
-        await _ps.RunProcessAsync("powercfg.exe", "/setactive SCHEME_CURRENT", ct).ConfigureAwait(false);
+            $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+        await _ps.RunProcessAsync("powercfg.exe", "/setactive SCHEME_CURRENT", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -576,7 +576,7 @@ public class PerformanceService
     public async Task SetHibernationAsync(bool enabled, CancellationToken ct = default)
     {
         var arg = enabled ? "/hibernate on" : "/hibernate off";
-        await _ps.RunProcessAsync("powercfg.exe", arg, ct).ConfigureAwait(false);
+        await _ps.RunProcessAsync("powercfg.exe", arg, ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
     }
 
     // ═══════════════════════════════════════════════════════════════

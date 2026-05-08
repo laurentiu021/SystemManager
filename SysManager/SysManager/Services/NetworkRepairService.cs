@@ -26,7 +26,7 @@ public class NetworkRepairService
         _ps.LineReceived += OnLine;
         try
         {
-            var exit = await _ps.RunProcessAsync("ipconfig.exe", "/flushdns", ct)
+            var exit = await _ps.RunProcessAsync("ipconfig.exe", "/flushdns", ct, PowerShellRunner.OemEncoding)
                 .ConfigureAwait(false);
             return new NetworkRepairResult(
                 "DNS Flush",
@@ -47,7 +47,7 @@ public class NetworkRepairService
         _ps.LineReceived += OnLine;
         try
         {
-            var exit = await _ps.RunProcessAsync("netsh.exe", "winsock reset", ct)
+            var exit = await _ps.RunProcessAsync("netsh.exe", "winsock reset", ct, PowerShellRunner.OemEncoding)
                 .ConfigureAwait(false);
             return new NetworkRepairResult(
                 "Winsock Reset",
@@ -68,7 +68,7 @@ public class NetworkRepairService
         _ps.LineReceived += OnLine;
         try
         {
-            var exit = await _ps.RunProcessAsync("netsh.exe", "int ip reset", ct)
+            var exit = await _ps.RunProcessAsync("netsh.exe", "int ip reset", ct, PowerShellRunner.OemEncoding)
                 .ConfigureAwait(false);
             return new NetworkRepairResult(
                 "TCP/IP Reset",

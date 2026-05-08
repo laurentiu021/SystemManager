@@ -251,6 +251,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             t.LossPercent = 0;
             t.Status = "—";
         }
+        // Reset axis limits so the chart starts fresh
+        LatencyXAxes[0].MinLimit = null;
+        LatencyXAxes[0].MaxLimit = null;
         UpdateHealth();
     }
 
@@ -273,6 +276,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         FlushTimer?.Stop();
         FlushPending();
         IsMonitoring = false;
+        // Release axis limits so the chart auto-fits to remaining data
+        LatencyXAxes[0].MinLimit = null;
+        LatencyXAxes[0].MaxLimit = null;
     }
 
     partial void OnIntervalSecondsChanged(int value)
@@ -324,7 +330,15 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             RecomputeStats(target, buffer);
         }
 
-        if (touched.Count > 0) UpdateHealth();
+        if (touched.Count > 0)
+        {
+            // Pin the X-axis to a fixed time window so the chart never visually
+            // collapses when points are added/removed from the buffer.
+            var now = DateTime.Now;
+            LatencyXAxes[0].MinLimit = now.AddSeconds(-WindowSeconds).Ticks;
+            LatencyXAxes[0].MaxLimit = now.Ticks;
+            UpdateHealth();
+        }
     }
 
     private void RecomputeStats(PingTarget target, ObservableCollection<DateTimePoint> buffer)
@@ -407,7 +421,12 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     internal void TrimBuffer(ObservableCollection<DateTimePoint> buffer)
     {
         var cutoff = DateTime.Now - TimeSpan.FromSeconds(WindowSeconds);
-        while (buffer.Count > 0 && buffer[0].DateTime < cutoff)
+        int removeCount = 0;
+        while (removeCount < buffer.Count && buffer[removeCount].DateTime < cutoff)
+            removeCount++;
+
+        // Remove expired points; pre-counting avoids repeated boundary checks
+        for (int i = 0; i < removeCount; i++)
             buffer.RemoveAt(0);
     }
 

@@ -164,7 +164,7 @@
                         <ComboBox SelectedValue="{Binding Shared.WindowSeconds}" ItemsSource="{Binding Shared.WindowOptions}" Width="82" Margin="8,0,0,0"/>
                     </StackPanel>
                 </DockPanel>
-                <lvc:CartesianChart Grid.Row="1" Background="Transparent"
+                <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="200"
                                     Series="{Binding Shared.LatencySeries}"
                                     XAxes="{Binding Shared.LatencyXAxes}" YAxes="{Binding Shared.LatencyYAxes}"
                                     LegendPosition="Bottom"

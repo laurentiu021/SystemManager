@@ -126,4 +126,49 @@ public class NetworkSharedStateTests
         Assert.Equal(60, state.TraceIntervalSeconds);
         Assert.False(state.IsMonitoring);
     }
+
+    [Fact]
+    public void TrimBuffer_RemovesExpiredPoints()
+    {
+        var state = new NetworkSharedState();
+        var buffer = new System.Collections.ObjectModel.ObservableCollection<LiveChartsCore.Defaults.DateTimePoint>
+        {
+            new(DateTime.Now.AddSeconds(-120), 10),
+            new(DateTime.Now.AddSeconds(-90), 15),
+            new(DateTime.Now.AddSeconds(-30), 20),
+            new(DateTime.Now.AddSeconds(-5), 25),
+        };
+        // WindowSeconds defaults to 60, so first two points should be trimmed
+        state.TrimBuffer(buffer);
+        Assert.Equal(2, buffer.Count);
+        Assert.Equal(20, buffer[0].Value);
+        Assert.Equal(25, buffer[1].Value);
+    }
+
+    [Fact]
+    public void FlushPending_PinsXAxisLimits()
+    {
+        var state = new NetworkSharedState();
+        var host = state.Targets[0].Host;
+        state.Pending.Enqueue(new Models.PingSample(DateTime.UtcNow, host, 15.0, "OK"));
+        state.FlushPending();
+
+        // After flushing with data, X-axis should have MinLimit and MaxLimit set
+        Assert.NotNull(state.LatencyXAxes[0].MinLimit);
+        Assert.NotNull(state.LatencyXAxes[0].MaxLimit);
+    }
+
+    [Fact]
+    public void ClearHistory_ResetsAxisLimits()
+    {
+        var state = new NetworkSharedState();
+        // Simulate pinned axes
+        state.LatencyXAxes[0].MinLimit = DateTime.Now.AddSeconds(-60).Ticks;
+        state.LatencyXAxes[0].MaxLimit = DateTime.Now.Ticks;
+
+        state.ClearHistory();
+
+        Assert.Null(state.LatencyXAxes[0].MinLimit);
+        Assert.Null(state.LatencyXAxes[0].MaxLimit);
+    }
 }

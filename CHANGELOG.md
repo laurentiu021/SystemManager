@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Ping chart** — fixed chart visual collapse that occurred after 2–5 seconds
+  of monitoring. Root cause: LiveCharts auto-scaled the X-axis on every buffer
+  trim, causing momentary layout thrashing. Fix pins the X-axis to a fixed
+  time window (now − windowSeconds → now) during active monitoring, and adds
+  MinHeight="200" to prevent layout collapse. Axis limits reset on Stop/Clear
+  (#518).
+
 ## [0.35.7] - 2026-05-08
 
 ### Fixed

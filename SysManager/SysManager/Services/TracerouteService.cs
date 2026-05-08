@@ -19,7 +19,7 @@ public sealed class TracerouteService
     public event Action<TracerouteHop>? HopCompleted;
 
     public int MaxHops { get; set; } = 30;
-    public int TimeoutMs { get; set; } = 3000;
+    public int TimeoutMs { get; set; } = 2000;
     public int ProbesPerHop { get; set; } = 2;
 
     public async Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, CancellationToken ct)
@@ -73,7 +73,7 @@ public sealed class TracerouteService
                 try
                 {
                     using var dnsCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    dnsCts.CancelAfter(1500); // 1.5s max for reverse DNS
+                    dnsCts.CancelAfter(800); // 800ms max for reverse DNS
                     var entry = await Dns.GetHostEntryAsync(addr.ToString()).WaitAsync(dnsCts.Token).ConfigureAwait(false);
                     hop.HostName = entry.HostName;
                 }

@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.4] - 2026-05-08
+
+### Fixed
+- **Traceroute** — reduced per-hop timeout from 3s to 2s and DNS reverse
+  lookup timeout from 1.5s to 800ms. Prevents the appearance of freezing
+  when intermediate hops don't respond (#519).
+
 ## [0.35.3] - 2026-05-08
 
 ### Fixed

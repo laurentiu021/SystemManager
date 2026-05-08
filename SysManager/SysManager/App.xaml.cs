@@ -32,6 +32,10 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Register OEM/ANSI code pages (437, 852, etc.) required by system
+        // tools like chkdsk.exe, sfc.exe, and DISM.exe on .NET 8+.
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
         _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
         if (!createdNew)
         {

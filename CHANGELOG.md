@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.5] - 2026-05-08
+
+### Fixed
+- **chkdsk** — register OEM code pages (437, 852, etc.) at application startup
+  via `CodePagesEncodingProvider`. On .NET 8, these code pages are not available
+  by default, causing chkdsk output parsing to fail with encoding errors on
+  non-English systems (#505).
+
 ## [0.35.4] - 2026-05-08
 
 ### Fixed

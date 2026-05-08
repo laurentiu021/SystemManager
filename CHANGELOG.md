@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.3] - 2026-05-08
+
+### Fixed
+- **Duplicate Finder** — replaced non-virtualized `ItemsControl` with a
+  virtualized `ListView` to prevent UI freezes when displaying thousands of
+  duplicate groups (#527).
+- **Process Manager** — reduced column widths (PID 55, Mem 70, CPU 50,
+  Thr 45) and added `MinWidth="200"` on the Name column to prevent columns
+  from crowding on smaller screens (#511).
+
 ## [0.35.2] - 2026-05-08
 
 ### Fixed

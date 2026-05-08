@@ -61,7 +61,7 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="60"
+                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="55"
                                         SortMemberPath="Pid">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -72,7 +72,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Header="Name" Width="*" SortMemberPath="Name">
+                    <DataGridTemplateColumn Header="Name" Width="*" MinWidth="200" SortMemberPath="Name">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
@@ -90,7 +90,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Memory" Binding="{Binding MemoryDisplay}" Width="80"
+                    <DataGridTextColumn Header="Mem" Binding="{Binding MemoryDisplay}" Width="70"
                                         SortMemberPath="MemoryBytes">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -101,7 +101,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="CPU %" Binding="{Binding CpuPercent, StringFormat={}{0:F1}%}" Width="60"
+                    <DataGridTextColumn Header="CPU" Binding="{Binding CpuPercent, StringFormat={}{0:F1}%}" Width="50"
                                         SortMemberPath="CpuPercent">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -113,7 +113,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Threads" Binding="{Binding ThreadCount}" Width="60"
+                    <DataGridTextColumn Header="Thr" Binding="{Binding ThreadCount}" Width="45"
                                         SortMemberPath="ThreadCount">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">

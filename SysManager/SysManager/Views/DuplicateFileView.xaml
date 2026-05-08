@@ -53,63 +53,73 @@
             <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" FontSize="13"/>
         </Border>
 
-        <!-- Results: grouped list -->
+        <!-- Results: grouped list (virtualized for performance) -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding Groups}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border BorderBrush="{StaticResource Border1}" BorderThickness="0,0,0,1"
-                                    Padding="12,10" Margin="0">
-                                <StackPanel>
-                                    <!-- Group header -->
-                                    <DockPanel Margin="0,0,0,6">
-                                        <TextBlock DockPanel.Dock="Left" FontWeight="SemiBold" FontSize="13">
-                                            <Run Text="{Binding Count, Mode=OneWay, StringFormat='{}{0} files'}"/>
-                                            <Run Text=" · " Foreground="{StaticResource TextDisabled}"/>
-                                            <Run Text="{Binding FileSize, Mode=OneWay, StringFormat='{}{0:N0} bytes each'}"/>
-                                        </TextBlock>
-                                        <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   Foreground="{StaticResource Accent}" FontSize="12">
-                                            <Run Text="Hash: "/>
-                                            <Run Text="{Binding Hash, Mode=OneWay}" FontFamily="Consolas" FontSize="11"/>
-                                        </TextBlock>
-                                    </DockPanel>
+            <ListView ItemsSource="{Binding Groups}"
+                      Background="Transparent" BorderThickness="0"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      ScrollViewer.CanContentScroll="True">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Border BorderBrush="{StaticResource Border1}" BorderThickness="0,0,0,1"
+                                Padding="12,10" Margin="0">
+                            <StackPanel>
+                                <!-- Group header -->
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock DockPanel.Dock="Left" FontWeight="SemiBold" FontSize="13">
+                                        <Run Text="{Binding Count, Mode=OneWay, StringFormat='{}{0} files'}"/>
+                                        <Run Text=" · " Foreground="{StaticResource TextDisabled}"/>
+                                        <Run Text="{Binding FileSize, Mode=OneWay, StringFormat='{}{0:N0} bytes each'}"/>
+                                    </TextBlock>
+                                    <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource Accent}" FontSize="12">
+                                        <Run Text="Hash: "/>
+                                        <Run Text="{Binding Hash, Mode=OneWay}" FontFamily="Consolas" FontSize="11"/>
+                                    </TextBlock>
+                                </DockPanel>
 
-                                    <!-- Files in group -->
-                                    <ItemsControl ItemsSource="{Binding Files}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <DockPanel Margin="16,3,0,3">
-                                                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                                                        <Button Content="Open" ToolTip="Show in Explorer"
-                                                                Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                                CommandParameter="{Binding}"
-                                                                Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
-                                                                Margin="0,0,4,0"/>
-                                                        <Button Content="Copy" ToolTip="Copy path"
-                                                                Command="{Binding DataContext.CopyPathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                                CommandParameter="{Binding}"
-                                                                Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
-                                                                Margin="0,0,8,0"/>
-                                                    </StackPanel>
-                                                    <TextBlock VerticalAlignment="Center" FontSize="12"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding Path}">
-                                                        <Run Text="{Binding Name, Mode=OneWay}" FontWeight="Medium"/>
-                                                        <Run Text=" — " Foreground="{StaticResource TextDisabled}"/>
-                                                        <Run Text="{Binding Path, Mode=OneWay}" Foreground="{StaticResource TextMuted}"/>
-                                                    </TextBlock>
-                                                </DockPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+                                <!-- Files in group -->
+                                <ItemsControl ItemsSource="{Binding Files}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="16,3,0,3">
+                                                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                                    <Button Content="Open" ToolTip="Show in Explorer"
+                                                            Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
+                                                            Margin="0,0,4,0"/>
+                                                    <Button Content="Copy" ToolTip="Copy path"
+                                                            Command="{Binding DataContext.CopyPathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
+                                                            Margin="0,0,8,0"/>
+                                                </StackPanel>
+                                                <TextBlock VerticalAlignment="Center" FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding Path}">
+                                                    <Run Text="{Binding Name, Mode=OneWay}" FontWeight="Medium"/>
+                                                    <Run Text=" — " Foreground="{StaticResource TextDisabled}"/>
+                                                    <Run Text="{Binding Path, Mode=OneWay}" Foreground="{StaticResource TextMuted}"/>
+                                                </TextBlock>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
         </Border>
 
         <!-- Status bar -->

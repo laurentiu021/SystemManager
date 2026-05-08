@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Auto-update** — UpdateService now points to the new `SystemManager` repo
+  name instead of the old `SysManager`. Without this fix, the in-app update
+  checker would fail to find new releases.
+
 ## [0.35.9] - 2026-05-08
 
 ### Changed

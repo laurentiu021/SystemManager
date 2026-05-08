@@ -21,7 +21,7 @@ namespace SysManager.Services;
 public sealed class UpdateService
 {
     public const string Owner = "laurentiu021";
-    public const string Repo  = "SysManager";
+    public const string Repo  = "SystemManager";
     public const string AssetName = "SysManager.exe";
 
     private static readonly HttpClient Http = CreateClient();

@@ -42,6 +42,7 @@
         <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
             <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Entries}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
+                      CanUserAddRows="False"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="False"
                       RowBackground="Transparent" AlternatingRowBackground="#0F141C"

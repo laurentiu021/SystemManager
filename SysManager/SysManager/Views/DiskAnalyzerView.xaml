@@ -105,7 +105,7 @@
                             </Grid.ColumnDefinitions>
 
                             <!-- Drill-down button -->
-                            <Button Grid.Column="0" Content="Open" ToolTip="Drill into folder"
+                            <Button Grid.Column="0" Content="→" ToolTip="Drill into folder"
                                     Command="{Binding DataContext.DrillDownCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"
                                     Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
@@ -133,7 +133,7 @@
                                        HorizontalAlignment="Right"/>
 
                             <!-- Open in Explorer -->
-                            <Button Grid.Column="4" Content="Open" ToolTip="Open in Explorer"
+                            <Button Grid.Column="4" Content="📂" ToolTip="Show in Explorer"
                                     Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"
                                     Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"

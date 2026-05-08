@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.2] - 2026-05-08
+
+### Fixed
+- **Shortcut Cleaner** — tab was showing a black page due to referencing
+  undefined `BoolToVisibility` converter. Rewrote the View with correct
+  converter names and matching app theme styles (#512).
+- **Startup Manager** — blank placeholder row at the bottom of the table
+  caused by missing `CanUserAddRows="False"` on the DataGrid (#509).
+- **Disk Analyzer** — two confusing "Open" buttons renamed: drill-down is
+  now "→" and Show in Explorer is now "📂" with distinct tooltips (#514, #515).
+
 ## [0.35.1] - 2026-05-07
 
 ### Fixed

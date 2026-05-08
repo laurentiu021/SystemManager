@@ -7,60 +7,73 @@
         <vm:ShortcutCleanerViewModel />
     </UserControl.DataContext>
 
-    <Grid Margin="24">
+    <UserControl.Resources>
+        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#070A0F" Offset="0"/>
+            <GradientStop Color="#0B1220" Offset="0.5"/>
+            <GradientStop Color="#090D16" Offset="1"/>
+        </LinearGradientBrush>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource PageBg}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Broken Shortcut Cleaner" FontSize="20" FontWeight="SemiBold"
-                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
-            <TextBlock Text="{Binding ScanStatus}" Opacity="0.7" Margin="0,4,0,0"
-                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
-            <TextBlock Text="{Binding CurrentLocation}" Opacity="0.5" Margin="0,2,0,0"
-                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"
-                       Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}" />
+        <StackPanel Grid.Row="0" Margin="28,24,28,0">
+            <TextBlock Text="Shortcut Cleaner" Style="{StaticResource Display}"/>
+            <TextBlock Text="{Binding ScanStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding CurrentLocation}" Style="{StaticResource Subtle}" Margin="0,2,0,0"
+                       Opacity="0.6"
+                       Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 
         <!-- Toolbar -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
-            <Button Content="&#x1F50D;  Scan" Command="{Binding ScanCommand}" Padding="12,6" Margin="0,0,8,0" />
-            <Button Content="&#x1F5D1;  Delete Selected" Command="{Binding DeleteSelectedCommand}" Padding="12,6" Margin="0,0,8,0" />
-            <Button Content="Cancel" Command="{Binding CancelCommand}" Padding="12,6" Margin="0,0,16,0"
-                    Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}" />
-            <Separator Margin="0,0,16,0" />
-            <Button Content="Select All" Command="{Binding SelectAllCommand}" Padding="8,6" Margin="0,0,4,0" />
-            <Button Content="Deselect All" Command="{Binding DeselectAllCommand}" Padding="8,6" Margin="0,0,16,0" />
-            <CheckBox Content="Move to Recycle Bin" IsChecked="{Binding MoveToRecycleBin}" VerticalAlignment="Center" />
-        </StackPanel>
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
+            <WrapPanel>
+                <Button Content="Scan" Command="{Binding ScanCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                <Button Content="Delete Selected" Command="{Binding DeleteSelectedCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}"
+                        Style="{StaticResource GhostButton}" Margin="0,0,16,0"
+                        Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
+                <Button Content="Select All" Command="{Binding SelectAllCommand}"
+                        Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
+                <Button Content="Deselect All" Command="{Binding DeselectAllCommand}"
+                        Style="{StaticResource GhostButton}" Margin="0,0,16,0"/>
+                <CheckBox Content="Move to Recycle Bin" IsChecked="{Binding MoveToRecycleBin}"
+                          VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}"/>
+            </WrapPanel>
+        </Border>
 
-        <!-- Results list -->
+        <!-- Results DataGrid -->
         <DataGrid Grid.Row="2" ItemsSource="{Binding BrokenShortcuts}"
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
-                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                  BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+                  CanUserSortColumns="True"
+                  HeadersVisibility="Column" GridLinesVisibility="None"
+                  Margin="28,12,28,0">
             <DataGrid.Columns>
-                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" />
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="180" IsReadOnly="True" />
-                <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="130" IsReadOnly="True" />
-                <DataGridTextColumn Header="Target (missing)" Binding="{Binding TargetPath}" Width="*" IsReadOnly="True" />
+                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40"/>
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="150" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Target (missing)" Binding="{Binding TargetPath}" Width="*" IsReadOnly="True"/>
             </DataGrid.Columns>
         </DataGrid>
 
         <!-- Footer -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
-            <TextBlock Opacity="0.6" VerticalAlignment="Center"
-                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}">
-                <Run Text="{Binding BrokenCount, Mode=OneWay}" />
-                <Run Text=" broken · " />
-                <Run Text="{Binding SelectedCount, Mode=OneWay}" />
-                <Run Text=" selected" />
+        <Border Grid.Row="3" Margin="28,8,28,16" Padding="8">
+            <TextBlock Style="{StaticResource Subtle}">
+                <Run Text="{Binding BrokenCount, Mode=OneWay}"/>
+                <Run Text=" broken · "/>
+                <Run Text="{Binding SelectedCount, Mode=OneWay}"/>
+                <Run Text=" selected"/>
             </TextBlock>
-        </StackPanel>
+        </Border>
     </Grid>
 </UserControl>

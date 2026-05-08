@@ -6,12 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.9] - 2026-05-08
+
 ### Changed
 - **Code quality** — refactored implicit `foreach` filters to explicit LINQ
   `.Where()` calls across 7 files (GatewayHelper, FixedDriveService,
   AppAlertService, DeepCleanupService, LargeFileScanner,
   ProcessDescriptionService, ShortcutCleanerViewModel). Resolves CodeQL
   `cs/linq/missed-where` alerts.
+
+## [0.35.8] - 2026-05-08
 
 ### Fixed
 - **Ping chart** — fixed chart visual collapse that occurred after 2–5 seconds

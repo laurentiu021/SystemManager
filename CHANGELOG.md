@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.6] - 2026-05-08
+
+### Removed
+- **Old green progress panel** — removed the legacy green-bordered background
+  task tray from the sidebar footer. Progress is now shown exclusively via the
+  blue indeterminate bar under each tab name in the sidebar (#513).
+
 ## [0.35.5] - 2026-05-08
 
 ### Fixed

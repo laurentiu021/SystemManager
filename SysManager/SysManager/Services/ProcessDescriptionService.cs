@@ -125,10 +125,8 @@ public sealed class ProcessDescriptionService
 
             if (entries == null) return db;
 
-            foreach (var e in entries)
+            foreach (var e in entries.Where(e => !string.IsNullOrWhiteSpace(e.Name)))
             {
-                if (string.IsNullOrWhiteSpace(e.Name)) continue;
-
                 var safety = e.Safety?.ToLowerInvariant() switch
                 {
                     "system" => ProcessSafety.System,

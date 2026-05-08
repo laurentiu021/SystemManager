@@ -31,14 +31,12 @@ public sealed class FixedDriveService
     {
         // Primary source: DriveInfo (fast, always works, no admin).
         var drives = new List<FixedDrive>();
-        foreach (var di in DriveInfo.GetDrives())
+        var fixedReady = DriveInfo.GetDrives()
+            .Where(di => di.DriveType == DriveType.Fixed && di.IsReady)
+            .Where(di => (di.DriveFormat ?? string.Empty).ToUpperInvariant() is "NTFS" or "REFS");
+
+        foreach (var di in fixedReady)
         {
-            if (di.DriveType != DriveType.Fixed) continue;
-            if (!di.IsReady) continue;
-
-            var fs = (di.DriveFormat ?? string.Empty).ToUpperInvariant();
-            if (fs != "NTFS" && fs != "REFS") continue;
-
             var letter = di.Name.TrimEnd('\\', '/');
             drives.Add(new FixedDrive(
                 Letter: letter,

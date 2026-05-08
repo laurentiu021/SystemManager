@@ -15,19 +15,20 @@ public static class GatewayHelper
 {
     public static string? DetectDefaultGateway()
     {
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-        {
-            if (nic.OperationalStatus != OperationalStatus.Up) continue;
-            if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+        var activeNics = NetworkInterface.GetAllNetworkInterfaces()
+            .Where(nic => nic.OperationalStatus == OperationalStatus.Up
+                       && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback);
 
-            var gateways = nic.GetIPProperties().GatewayAddresses;
-            foreach (var gw in gateways)
-            {
-                if (gw?.Address == null) continue;
-                if (gw.Address.AddressFamily != AddressFamily.InterNetwork) continue;
-                if (gw.Address.ToString() == "0.0.0.0") continue;
-                return gw.Address.ToString();
-            }
+        foreach (var nic in activeNics)
+        {
+            var gateway = nic.GetIPProperties().GatewayAddresses
+                .Where(gw => gw?.Address != null
+                          && gw.Address.AddressFamily == AddressFamily.InterNetwork
+                          && gw.Address.ToString() != "0.0.0.0")
+                .FirstOrDefault();
+
+            if (gateway != null)
+                return gateway.Address.ToString();
         }
         return null;
     }

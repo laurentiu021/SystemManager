@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Code quality** — refactored implicit `foreach` filters to explicit LINQ
+  `.Where()` calls across 7 files (GatewayHelper, FixedDriveService,
+  AppAlertService, DeepCleanupService, LargeFileScanner,
+  ProcessDescriptionService, ShortcutCleanerViewModel). Resolves CodeQL
+  `cs/linq/missed-where` alerts.
+
 ### Fixed
 - **Ping chart** — fixed chart visual collapse that occurred after 2–5 seconds
   of monitoring. Root cause: LiveCharts auto-scaled the X-axis on every buffer

@@ -8,7 +8,9 @@ control, shortcut cleanup, app blocking, install alerts, and a friendly
 Event Log viewer — all in one WPF desktop app.
 
 [![CI](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml)
 [![codecov](https://codecov.io/gh/laurentiu021/SystemManager/branch/main/graph/badge.svg)](https://codecov.io/gh/laurentiu021/SystemManager)
+[![CodeRabbit](https://img.shields.io/badge/CodeRabbit-AI%20Reviews-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQyIDAtOC0zLjU4LTgtOHMzLjU4LTggOC04IDggMy41OCA4IDgtMy41OCA4LTggOHoiLz48L3N2Zz4=)](https://coderabbit.ai)
 [![Release](https://img.shields.io/github/v/release/laurentiu021/SystemManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SystemManager/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/laurentiu021/SystemManager/total)](https://github.com/laurentiu021/SystemManager/releases)
 [![Issues](https://img.shields.io/github/issues/laurentiu021/SystemManager)](https://github.com/laurentiu021/SystemManager/issues)

@@ -1,5 +1,5 @@
 // SysManager · IconExtractorService — extract exe/file icons for display
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 using System.Collections.Concurrent;

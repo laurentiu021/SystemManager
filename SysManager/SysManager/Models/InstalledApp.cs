@@ -1,5 +1,5 @@
 // SysManager · InstalledApp — model for installed applications
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 using System.Windows.Media;

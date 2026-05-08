@@ -1,5 +1,5 @@
 // SysManager — Windows system monitoring toolkit
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 using System.Diagnostics;

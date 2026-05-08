@@ -26,7 +26,7 @@ available.
 Instead, use one of these private channels:
 
 1. **GitHub private vulnerability reporting** (preferred) —
-   go to the [Security tab](https://github.com/laurentiu021/SysManager/security)
+   go to the [Security tab](https://github.com/laurentiu021/SystemManager/security)
    of this repo and click **"Report a vulnerability"**. Only the maintainer
    sees the report.
 2. **Email** the maintainer at the address on the

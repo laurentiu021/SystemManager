@@ -1,5 +1,5 @@
 // SysManager · AboutView — version info + update management UI
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 
 using System.Windows.Controls;
 

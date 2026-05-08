@@ -1,5 +1,5 @@
 // SysManager · SystemSnapshot
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 namespace SysManager.Models;

@@ -1,4 +1,4 @@
-<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SysManager · License: MIT -->
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
 <UserControl x:Class="SysManager.Views.AboutView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -44,7 +44,7 @@
                                 <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{StaticResource TextSecondary}" FontSize="12"/>
                                 <TextBlock Text="SOURCE" Style="{StaticResource Caption}"/>
                                 <TextBlock Margin="8,0,0,0" FontSize="12">
-                                    <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{StaticResource Accent}">github.com/laurentiu021/SysManager</Hyperlink>
+                                    <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{StaticResource Accent}">github.com/laurentiu021/SystemManager</Hyperlink>
                                 </TextBlock>
                             </StackPanel>
                         </StackPanel>

@@ -1,5 +1,5 @@
 // SysManager · ReleaseNoteTests
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 using SysManager.ViewModels;
@@ -32,7 +32,7 @@ public class ReleaseNoteTests
             Title = "Bug fixes",
             PublishedAt = "22 Apr 2026",
             Body = "Fixed crash on startup",
-            Url = "https://github.com/laurentiu021/SysManager/releases/tag/v0.5.2",
+            Url = "https://github.com/laurentiu021/SystemManager/releases/tag/v0.5.2",
             IsCurrent = true
         };
         Assert.Equal("v0.5.2", n.Version);

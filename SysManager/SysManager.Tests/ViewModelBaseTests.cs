@@ -1,5 +1,5 @@
 // SysManager · ViewModelBaseTests
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 using SysManager.ViewModels;

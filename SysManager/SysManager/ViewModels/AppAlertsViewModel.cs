@@ -1,5 +1,5 @@
 // SysManager · AppAlertsViewModel — monitors and alerts on new app installations
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 using System.Collections.ObjectModel;

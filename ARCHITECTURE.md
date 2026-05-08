@@ -148,7 +148,7 @@ retained). The in-app Console mirrors the same stream per tab.
 
 ## Updates
 
-`UpdateService` hits `api.github.com/repos/laurentiu021/SysManager/releases`
+`UpdateService` hits `api.github.com/repos/laurentiu021/SystemManager/releases`
 at startup and on demand. Downloads land in
 `%LOCALAPPDATA%\SysManager\updates\SysManager-{version}.exe` with size
 checksum so re-opening the app doesn't re-download a good copy. The "Install"

@@ -46,7 +46,7 @@ dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ## Coverage
 
 Coverage is collected automatically on CI via `coverlet` and uploaded to
-[Codecov](https://codecov.io/gh/laurentiu021/SysManager). The badge in
+[Codecov](https://codecov.io/gh/laurentiu021/SystemManager). The badge in
 `README.md` reflects the latest `main` branch result.
 
 To generate a local coverage report:

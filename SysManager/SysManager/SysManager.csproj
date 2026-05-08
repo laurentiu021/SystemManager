@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -19,8 +19,8 @@
     <Product>SysManager</Product>
     <Copyright>Copyright (c) 2026 laurentiu021</Copyright>
     <Description>SysManager — Windows system monitoring toolkit by laurentiu021. Network, updates, health, logs, safe deep cleanup.</Description>
-    <PackageProjectUrl>https://github.com/laurentiu021/SysManager</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/laurentiu021/SysManager</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/laurentiu021/SystemManager</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/laurentiu021/SystemManager</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 

@@ -30,7 +30,7 @@ follows, and what to expect when you open a pull request.
   spec for this project.
 - 📚 **Improve docs** — typos, clearer wording, fresh screenshots, better
   examples. Doc-only PRs are merged fast.
-- 🛠 **Fix a bug or implement a feature** — see [open issues](https://github.com/laurentiu021/SysManager/issues).
+- 🛠 **Fix a bug or implement a feature** — see [open issues](https://github.com/laurentiu021/SystemManager/issues).
   Please comment on the issue before starting significant work so we
   don't both build the same thing.
 
@@ -47,7 +47,7 @@ follows, and what to expect when you open a pull request.
 **Clone and build**
 
 ```powershell
-git clone https://github.com/laurentiu021/SysManager.git
+git clone https://github.com/laurentiu021/SystemManager.git
 cd SysManager
 dotnet build -c Debug
 ```

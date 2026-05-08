@@ -1,5 +1,5 @@
 // SysManager · ShortcutCleanerService — scans for broken .lnk shortcuts
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 using System.IO;

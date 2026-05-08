@@ -1,8 +1,8 @@
 // SysManager — Windows system monitoring toolkit
-// Author: laurentiu021 · https://github.com/laurentiu021/SysManager
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 // Author : laurentiu021
-// Source : https://github.com/laurentiu021/SysManager
+// Source : https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 using System.Reflection;

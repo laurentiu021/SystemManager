@@ -7,11 +7,11 @@ battery health, process management with built-in descriptions, startup
 control, shortcut cleanup, app blocking, install alerts, and a friendly
 Event Log viewer — all in one WPF desktop app.
 
-[![CI](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SysManager/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/laurentiu021/SysManager/branch/main/graph/badge.svg)](https://codecov.io/gh/laurentiu021/SysManager)
-[![Release](https://img.shields.io/github/v/release/laurentiu021/SysManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SysManager/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/laurentiu021/SysManager/total)](https://github.com/laurentiu021/SysManager/releases)
-[![Issues](https://img.shields.io/github/issues/laurentiu021/SysManager)](https://github.com/laurentiu021/SysManager/issues)
+[![CI](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/laurentiu021/SystemManager/branch/main/graph/badge.svg)](https://codecov.io/gh/laurentiu021/SystemManager)
+[![Release](https://img.shields.io/github/v/release/laurentiu021/SystemManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SystemManager/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/laurentiu021/SystemManager/total)](https://github.com/laurentiu021/SystemManager/releases)
+[![Issues](https://img.shields.io/github/issues/laurentiu021/SystemManager)](https://github.com/laurentiu021/SystemManager/issues)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -334,7 +334,7 @@ long-running operation, so you always know which tab is working.
 
 ## Download
 
-Grab `SysManager.exe` from the [latest release](https://github.com/laurentiu021/SysManager/releases/latest)
+Grab `SysManager.exe` from the [latest release](https://github.com/laurentiu021/SystemManager/releases/latest)
 and double-click it. The executable is self-contained — no installer, no .NET
 runtime required.
 
@@ -356,7 +356,7 @@ recommended mitigation — see [SECURITY.md](SECURITY.md) for details.
 Prerequisites: Windows 10 or newer and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ```powershell
-git clone https://github.com/laurentiu021/SysManager.git
+git clone https://github.com/laurentiu021/SystemManager.git
 cd SysManager
 dotnet run --project SysManager/SysManager/SysManager.csproj
 ```
@@ -403,15 +403,15 @@ Windows 10 / 11 x64 machine.
 
 Found something broken? Missing a feature you'd love to have?
 
-- 🐛 **Bugs** — [open an issue](https://github.com/laurentiu021/SysManager/issues/new?template=bug_report.yml)
+- 🐛 **Bugs** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=bug_report.yml)
   using the bug report template.
-- 💡 **Features** — [open an issue](https://github.com/laurentiu021/SysManager/issues/new?template=feature_request.yml)
+- 💡 **Features** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=feature_request.yml)
   using the feature request template.
 - 💬 **Questions and how-to's** — use
-  [Discussions](https://github.com/laurentiu021/SysManager/discussions) instead
+  [Discussions](https://github.com/laurentiu021/SystemManager/discussions) instead
   of issues for anything open-ended.
 - 🔒 **Security vulnerabilities** — please report privately via the
-  [Security tab](https://github.com/laurentiu021/SysManager/security/advisories/new).
+  [Security tab](https://github.com/laurentiu021/SystemManager/security/advisories/new).
   See [SECURITY.md](SECURITY.md) for the full policy.
 
 The **About** tab inside the app has a "Copy environment info" helper that

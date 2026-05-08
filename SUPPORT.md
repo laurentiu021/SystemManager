@@ -7,10 +7,10 @@ useful. Here's where to go depending on what you need.
 
 | Kind of question                                    | Go here                                                               |
 | --------------------------------------------------- | --------------------------------------------------------------------- |
-| "How do I...?" / "Is this possible?"                | [Discussions › Q&A](https://github.com/laurentiu021/SysManager/discussions) |
-| "This feature would be useful"                      | [Feature request issue](https://github.com/laurentiu021/SysManager/issues/new?template=feature_request.yml) |
-| "Something is broken"                               | [Bug report issue](https://github.com/laurentiu021/SysManager/issues/new?template=bug_report.yml) |
-| "I found a security problem"                        | [Security Advisory](https://github.com/laurentiu021/SysManager/security/advisories/new) (private) · see [SECURITY.md](SECURITY.md) |
+| "How do I...?" / "Is this possible?"                | [Discussions › Q&A](https://github.com/laurentiu021/SystemManager/discussions) |
+| "This feature would be useful"                      | [Feature request issue](https://github.com/laurentiu021/SystemManager/issues/new?template=feature_request.yml) |
+| "Something is broken"                               | [Bug report issue](https://github.com/laurentiu021/SystemManager/issues/new?template=bug_report.yml) |
+| "I found a security problem"                        | [Security Advisory](https://github.com/laurentiu021/SystemManager/security/advisories/new) (private) · see [SECURITY.md](SECURITY.md) |
 | "I want to contribute code or docs"                 | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## Before you open an issue
@@ -18,7 +18,7 @@ useful. Here's where to go depending on what you need.
 A few quick things that make bug reports land faster:
 
 1. **Check the latest release** — visit
-   [Releases](https://github.com/laurentiu021/SysManager/releases/latest)
+   [Releases](https://github.com/laurentiu021/SystemManager/releases/latest)
    and make sure you're on the newest build. Many reports turn out to be
    fixed already.
 2. **Search existing issues** — same topic may already be open or closed.

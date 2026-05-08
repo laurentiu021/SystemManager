@@ -106,10 +106,9 @@ public partial class ShortcutCleanerViewModel : ViewModelBase
         var deleted = ShortcutCleanerService.DeleteShortcuts(selected, MoveToRecycleBin);
 
         // Remove deleted items from the list
-        foreach (var s in selected)
+        foreach (var s in selected.Where(s => !System.IO.File.Exists(s.ShortcutPath)))
         {
-            if (!System.IO.File.Exists(s.ShortcutPath))
-                BrokenShortcuts.Remove(s);
+            BrokenShortcuts.Remove(s);
         }
 
         BrokenCount = BrokenShortcuts.Count;

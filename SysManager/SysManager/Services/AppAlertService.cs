@@ -31,9 +31,8 @@ public sealed class AppAlertService : IDisposable
     /// </summary>
     public void TakeBaseline()
     {
-        foreach (var dir in GetMonitoredDirectories())
+        foreach (var dir in GetMonitoredDirectories().Where(Directory.Exists))
         {
-            if (!Directory.Exists(dir)) continue;
             try
             {
                 foreach (var sub in Directory.GetDirectories(dir))
@@ -54,9 +53,8 @@ public sealed class AppAlertService : IDisposable
     {
         if (_disposed) return;
 
-        foreach (var dir in GetMonitoredDirectories())
+        foreach (var dir in GetMonitoredDirectories().Where(Directory.Exists))
         {
-            if (!Directory.Exists(dir)) continue;
             try
             {
                 var watcher = new FileSystemWatcher(dir)
@@ -165,9 +163,8 @@ public sealed class AppAlertService : IDisposable
         try
         {
             var current = GetRegistryApps();
-            foreach (var app in current)
+            foreach (var app in current.Where(a => !_knownRegistryApps.ContainsKey(a.Name)))
             {
-                if (_knownRegistryApps.ContainsKey(app.Name)) continue;
                 _knownRegistryApps[app.Name] = true;
 
                 app.DetectedAt = DateTime.Now;

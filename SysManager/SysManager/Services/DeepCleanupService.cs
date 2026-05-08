@@ -254,9 +254,8 @@ public sealed class DeepCleanupService
             Path.Combine(pfx86, "Steam"),
             Path.Combine(pf, "Steam"),
         };
-        foreach (var drive in DriveInfo.GetDrives())
+        foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
         {
-            if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
             var candidate = Path.Combine(drive.RootDirectory.FullName, "Steam");
             if (Directory.Exists(candidate)) roots.Add(candidate);
         }
@@ -282,9 +281,8 @@ public sealed class DeepCleanupService
         var result = new List<string>();
         foreach (var root in SteamRoots(pfx86, pf))
             result.Add(Path.Combine(root, "steamapps", "shadercache"));
-        foreach (var drive in DriveInfo.GetDrives())
+        foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
         {
-            if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
             var candidate = Path.Combine(drive.RootDirectory.FullName, "SteamLibrary", "steamapps", "shadercache");
             if (Directory.Exists(candidate)) result.Add(candidate);
         }

@@ -47,6 +47,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   scrollable when the window is small. DataGrid has explicit
   VerticalScrollBarVisibility and MaxHeight for large driver lists.
   Closes #235.
+- **ETA Calculator** — reusable helper that estimates time remaining for
+  any progress-based operation. Integrated into Speed Test (HTTP + Ookla)
+  and Deep Cleanup (scan + clean). Shows human-friendly estimates like
+  "~2 min 15 s" next to progress bars. Closes #241.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing

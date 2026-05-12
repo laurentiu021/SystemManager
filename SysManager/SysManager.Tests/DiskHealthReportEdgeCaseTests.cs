@@ -128,8 +128,8 @@ public class DiskHealthReportEdgeCaseTests
     public void TemperatureColorHex_NullTemp_FallsToDefault()
     {
         var report = new DiskHealthReport { TemperatureC = null };
-        // null <= 40 returns false in C#, so it falls to _ => "#EF4444"
-        Assert.Equal("#EF4444", report.TemperatureColorHex);
+        // QA-004 fix: null temperature returns grey (no sensor) instead of red
+        Assert.Equal("#9AA0A6", report.TemperatureColorHex);
     }
 
     [Fact]

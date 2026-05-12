@@ -27,10 +27,11 @@ public class BatteryInfoEdgeCaseTests
     }
 
     [Fact]
-    public void HealthPercent_NewBatteryOverDesign_CanExceed100()
+    public void HealthPercent_NewBatteryOverDesign_ClampedTo100()
     {
         var info = new BatteryInfo { DesignCapacityMWh = 40000, FullChargeCapacityMWh = 44000 };
-        Assert.True(info.HealthPercent > 100);
+        // QA-005 fix: clamped to 100 max
+        Assert.Equal(100, info.HealthPercent);
     }
 
     [Fact]
@@ -55,10 +56,11 @@ public class BatteryInfoEdgeCaseTests
     }
 
     [Fact]
-    public void WearPercent_NewBatteryOverDesign_NegativeWear()
+    public void WearPercent_NewBatteryOverDesign_ClampedToZero()
     {
         var info = new BatteryInfo { DesignCapacityMWh = 40000, FullChargeCapacityMWh = 44000 };
-        Assert.True(info.WearPercent < 0);
+        // QA-005 fix: clamped to 0 min
+        Assert.Equal(0, info.WearPercent);
     }
 
     [Fact]

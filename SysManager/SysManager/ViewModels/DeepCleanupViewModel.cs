@@ -8,6 +8,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -21,6 +22,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _cleanCts;
     private CancellationTokenSource? _largeCts;
+    private readonly EtaCalculator _scanEta = new();
+    private readonly EtaCalculator _cleanEta = new();
 
     public ObservableCollection<CleanupCategory> Categories { get; } = new();
     public ObservableCollection<LargeFileEntry> LargeFiles { get; } = new();
@@ -33,8 +36,10 @@ public partial class DeepCleanupViewModel : ViewModelBase
     // Scan progress (determinate, category-based)
     [ObservableProperty] private int _scanProgress;          // 0..100
     [ObservableProperty] private string _scanStatusLine = string.Empty;
+    [ObservableProperty] private string _scanEtaText = string.Empty;
     [ObservableProperty] private int _cleanProgress;         // 0..100
     [ObservableProperty] private string _cleanStatusLine = string.Empty;
+    [ObservableProperty] private string _cleanEtaText = string.Empty;
 
     // Large files progress (indeterminate, counter-based)
     [ObservableProperty] private long _largeFilesScanned;
@@ -133,6 +138,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
         IsScanning = true;
         ScanProgress = 0;
         ScanStatusLine = "Starting...";
+        ScanEtaText = "";
+        _scanEta.Reset();
         ScanSummary = "Scanning safe cleanup locations...";
         _scanCts = new CancellationTokenSource();
         try
@@ -141,6 +148,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
             {
                 ScanProgress = p.Total > 0 ? p.Current * 100 / p.Total : 0;
                 ScanStatusLine = $"[{p.Current}/{p.Total}]  {p.CategoryName}";
+                ScanEtaText = _scanEta.Update(ScanProgress);
             });
             var cats = await _cleanup.ScanAsync(progress, _scanCts.Token);
 
@@ -187,6 +195,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
         IsCleaning = true;
         CleanProgress = 0;
         CleanStatusLine = "Starting...";
+        CleanEtaText = "";
+        _cleanEta.Reset();
         CleanSummary = "Cleaning selected categories — you can keep using the app.";
         _cleanCts = new CancellationTokenSource();
         try
@@ -195,6 +205,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
             {
                 CleanProgress = p.Total > 0 ? p.Current * 100 / p.Total : 0;
                 CleanStatusLine = $"[{p.Current}/{p.Total}]  {p.CategoryName}";
+                CleanEtaText = _cleanEta.Update(CleanProgress);
             });
             var result = await _cleanup.CleanAsync(Categories, progress, _cleanCts.Token);
             CleanSummary = result.Summary;

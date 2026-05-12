@@ -97,11 +97,9 @@ public partial class ShortcutCleanerViewModel : ViewModelBase
         }
 
         var action = MoveToRecycleBin ? "move to Recycle Bin" : "permanently delete";
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"Are you sure you want to {action} {selected.Count} broken shortcut{(selected.Count == 1 ? "" : "s")}?",
-            "Delete Broken Shortcuts — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "Delete Broken Shortcuts — Confirm")) return;
 
         var deleted = ShortcutCleanerService.DeleteShortcuts(selected, MoveToRecycleBin);
 

@@ -84,11 +84,9 @@ public partial class ServicesViewModel : ViewModelBase
         if (entry == null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Starting services requires admin."; return; }
 
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"Start service \"{entry.DisplayName}\"?",
-            "Start Service — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "Start Service — Confirm")) return;
 
         try
         {
@@ -107,11 +105,9 @@ public partial class ServicesViewModel : ViewModelBase
         if (entry == null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Stopping services requires admin."; return; }
 
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"Stop service \"{entry.DisplayName}\"?\n\nThis may affect system functionality.",
-            "Stop Service — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+            "Stop Service — Confirm")) return;
 
         try
         {
@@ -130,11 +126,9 @@ public partial class ServicesViewModel : ViewModelBase
         if (entry == null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"Disable service \"{entry.DisplayName}\"?\n\nThis prevents the service from starting automatically.",
-            "Disable Service — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+            "Disable Service — Confirm")) return;
 
         try
         {

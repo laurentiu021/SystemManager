@@ -70,11 +70,9 @@ public partial class AppBlockerViewModel : ViewModelBase
             return;
         }
 
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"Block \"{exeName}\" from running?\n\nThis will prevent the application from launching until you unblock it.",
-            "Block Application — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+            "Block Application — Confirm")) return;
 
         var success = AppBlockerService.BlockApp(exeName);
         if (success)
@@ -100,11 +98,9 @@ public partial class AppBlockerViewModel : ViewModelBase
             return;
         }
 
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"Unblock {selected.Count} application{(selected.Count == 1 ? "" : "s")}?\n\nThey will be allowed to run again.",
-            "Unblock Applications — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "Unblock Applications — Confirm")) return;
 
         int unblocked = 0;
         foreach (var app in selected)

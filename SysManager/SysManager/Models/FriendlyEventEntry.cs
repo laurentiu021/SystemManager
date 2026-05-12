@@ -27,6 +27,7 @@ public partial class FriendlyEventEntry : ObservableObject
     [ObservableProperty] private long _recordId;
     [ObservableProperty] private string _explanation = "";       // friendly explanation
     [ObservableProperty] private string _recommendation = "";    // what to try
+    [ObservableProperty] private bool _isHighlighted;
 
     public string SeverityIcon => Severity switch
     {

@@ -17,6 +17,7 @@ public partial class ServiceEntry : ObservableObject
 
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private string _startType = "";
+    [ObservableProperty] private bool _isHighlighted;
 
     /// <summary>Gaming recommendation: "safe-to-disable", "keep-enabled", "advanced", or "" (no recommendation).</summary>
     public string Recommendation { get; init; } = "";

@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Dashboard — Quick Tune-Up wizard** — one-click button that runs safe
+  cleanup (temp files), optionally empties Recycle Bin (with confirmation),
+  scans for broken shortcuts (report only), checks disk SMART health,
+  flags high uptime (14+ days) and high RAM usage (85%+). Displays a
+  dismissible summary card with freed space, disk verdicts, and
+  recommendations. Non-destructive, no admin required. Closes #261.
+- **IntGreaterThanZeroConverter** — value converter for conditional
+  visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing
   direct `MessageBox.Show` calls in ViewModels. Enables unit testing of
   confirmation-gated code paths (CQ-003).

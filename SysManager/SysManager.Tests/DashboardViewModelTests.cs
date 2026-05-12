@@ -13,7 +13,12 @@ namespace SysManager.Tests;
 /// </summary>
 public class DashboardViewModelTests
 {
-    private static DashboardViewModel NewVm() => new(new SystemInfoService());
+    private static DashboardViewModel NewVm()
+    {
+        var sys = new SystemInfoService();
+        return new DashboardViewModel(sys, new TuneUpService(
+            new ShortcutCleanerService(), new DiskHealthService(), sys));
+    }
 
     // ---------- construction & defaults ----------
 
@@ -126,5 +131,82 @@ public class DashboardViewModelTests
         vm.PropertyChanged += (_, e) => { if (e.PropertyName == propName) fired = true; };
         typeof(DashboardViewModel).GetProperty(propName)!.SetValue(vm, value);
         Assert.True(fired);
+    }
+
+    // ---------- Tune-Up properties ----------
+
+    [Fact]
+    public void Constructor_TuneUpProperties_DefaultValues()
+    {
+        var vm = NewVm();
+        Assert.False(vm.IsTuneUpRunning);
+        Assert.Equal("", vm.TuneUpStep);
+        Assert.Equal(0, vm.TuneUpProgress);
+        Assert.Null(vm.TuneUpResult);
+        Assert.False(vm.HasTuneUpResult);
+    }
+
+    [Theory]
+    [InlineData("RunTuneUpCommand")]
+    [InlineData("CancelTuneUpCommand")]
+    [InlineData("DismissTuneUpResultCommand")]
+    public void TuneUpCommand_IsExposedAndNotNull(string name)
+    {
+        var vm = NewVm();
+        var prop = vm.GetType().GetProperty(name);
+        Assert.NotNull(prop);
+        Assert.NotNull(prop!.GetValue(vm));
+    }
+
+    [Fact]
+    public void DismissTuneUpResult_ClearsResult()
+    {
+        var vm = NewVm();
+        // Simulate having a result
+        vm.HasTuneUpResult = true;
+        vm.TuneUpResult = new Models.TuneUpResult();
+
+        vm.DismissTuneUpResultCommand.Execute(null);
+
+        Assert.False(vm.HasTuneUpResult);
+        Assert.Null(vm.TuneUpResult);
+    }
+
+    [Fact]
+    public void TuneUpStep_Setter_FiresPropertyChanged()
+    {
+        var vm = NewVm();
+        var fired = false;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.TuneUpStep)) fired = true; };
+        vm.TuneUpStep = "Cleaning temp…";
+        Assert.True(fired);
+    }
+
+    [Fact]
+    public void TuneUpProgress_Setter_FiresPropertyChanged()
+    {
+        var vm = NewVm();
+        var fired = false;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.TuneUpProgress)) fired = true; };
+        vm.TuneUpProgress = 50;
+        Assert.True(fired);
+    }
+
+    [Fact]
+    public void IsTuneUpRunning_Setter_FiresPropertyChanged()
+    {
+        var vm = NewVm();
+        var fired = false;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.IsTuneUpRunning)) fired = true; };
+        vm.IsTuneUpRunning = true;
+        Assert.True(fired);
+    }
+
+    [Fact]
+    public void Dispose_DoesNotThrow()
+    {
+        var vm = NewVm();
+        var ex = Record.Exception(() => vm.Dispose());
+        Assert.Null(ex);
     }
 }

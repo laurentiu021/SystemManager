@@ -65,7 +65,6 @@ public partial class DriversViewModel : ViewModelBase
             finally { _runner.LineReceived -= Capture; }
 
             ParseDriverJson(json.ToString());
-            ApplyFilter();
             Summary = $"{_allDrivers.Count} drivers found" +
                       (HideSystemDrivers ? $" ({DriverCount} shown, system drivers hidden)." : ".");
             StatusMessage = "Done";
@@ -117,6 +116,8 @@ public partial class DriversViewModel : ViewModelBase
             Log.Warning("Failed to parse driver JSON: {Error}", ex.Message);
             StatusMessage = "Parse error — some drivers may not be shown.";
         }
+
+        ApplyFilter();
     }
 
     private void ApplyFilter()

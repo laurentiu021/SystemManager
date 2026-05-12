@@ -37,6 +37,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   for better visibility when reviewing events. Closes #233.
 - **Services — Row highlight** — toggle highlight on any service row
   to mark entries of interest while browsing. Closes #239.
+- **Speed Test — History tracking** — each speed test result (HTTP and
+  Ookla) is saved to disk and displayed in a history table below the
+  test card. Stores up to 20 results per engine with date, download,
+  upload, ping, and server. Clear button per engine. Persists between
+  sessions. Closes #237.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing

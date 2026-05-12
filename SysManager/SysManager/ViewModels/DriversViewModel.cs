@@ -17,16 +17,20 @@ public partial class DriversViewModel : ViewModelBase
 {
     private readonly PowerShellRunner _runner;
     private CancellationTokenSource? _cts;
+    private readonly List<DriverEntry> _allDrivers = new();
 
     public ObservableCollection<DriverEntry> Drivers { get; } = new();
 
     [ObservableProperty] private int _driverCount;
     [ObservableProperty] private string _summary = "Click List drivers to scan installed drivers.";
+    [ObservableProperty] private bool _hideSystemDrivers;
 
     public DriversViewModel(PowerShellRunner runner)
     {
         _runner = runner;
     }
+
+    partial void OnHideSystemDriversChanged(bool value) => ApplyFilter();
 
     [RelayCommand]
     private async Task ListDriversAsync()
@@ -35,6 +39,7 @@ public partial class DriversViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         StatusMessage = "Scanning installed drivers…";
         Drivers.Clear();
+        _allDrivers.Clear();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
@@ -60,8 +65,9 @@ public partial class DriversViewModel : ViewModelBase
             finally { _runner.LineReceived -= Capture; }
 
             ParseDriverJson(json.ToString());
-            DriverCount = Drivers.Count;
-            Summary = $"{DriverCount} drivers found.";
+            ApplyFilter();
+            Summary = $"{_allDrivers.Count} drivers found" +
+                      (HideSystemDrivers ? $" ({DriverCount} shown, system drivers hidden)." : ".");
             StatusMessage = "Done";
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
@@ -103,7 +109,7 @@ public partial class DriversViewModel : ViewModelBase
                 DriverDate = ParseCimDate(el.TryGetProperty("DriverDate", out var dd) ? dd : default),
             }))
             {
-                Drivers.Add(entry);
+                _allDrivers.Add(entry);
             }
         }
         catch (JsonException ex)
@@ -112,6 +118,27 @@ public partial class DriversViewModel : ViewModelBase
             StatusMessage = "Parse error — some drivers may not be shown.";
         }
     }
+
+    private void ApplyFilter()
+    {
+        Drivers.Clear();
+        var filtered = HideSystemDrivers
+            ? _allDrivers.Where(d => !IsSystemDriver(d))
+            : _allDrivers;
+
+        foreach (var d in filtered)
+            Drivers.Add(d);
+
+        DriverCount = Drivers.Count;
+        if (_allDrivers.Count > 0)
+            Summary = HideSystemDrivers
+                ? $"{_allDrivers.Count} drivers found ({DriverCount} shown, system drivers hidden)."
+                : $"{_allDrivers.Count} drivers found.";
+    }
+
+    private static bool IsSystemDriver(DriverEntry d)
+        => d.Manufacturer.Contains("Microsoft", StringComparison.OrdinalIgnoreCase) ||
+           d.Manufacturer.Contains("Windows", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// CIM dates come as "/Date(ticks)/" strings in JSON.

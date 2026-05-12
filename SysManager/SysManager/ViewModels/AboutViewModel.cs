@@ -205,6 +205,9 @@ public partial class AboutViewModel : ViewModelBase
     private void OpenRepo() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}");
 
     [RelayCommand]
+    private void OpenChangelog() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/blob/main/CHANGELOG.md");
+
+    [RelayCommand]
     private void OpenLicense() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/blob/main/LICENSE");
 
     /// <summary>

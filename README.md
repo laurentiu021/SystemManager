@@ -72,6 +72,8 @@ long-running operation, so you always know which tab is working.
   - **Streaming** — YouTube and Twitch ingest
 - Auto-traceroute on a configurable interval (30 s – 10 min)
 - Speed tests: HTTP (Cloudflare) and the official Ookla CLI (auto-downloaded)
+  with persistent history (last 20 results per engine) for tracking service
+  degradation over time
 - Jitter, loss %, and average ping per target rolled up into health pills
 - **Network repair tools**: DNS flush, Winsock reset, TCP/IP reset with
   confirmation dialogs and admin checks

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -10,10 +11,11 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-/// <summary>HTTP + Ookla speed tests.</summary>
+/// <summary>HTTP + Ookla speed tests with persistent history.</summary>
 public partial class SpeedTestViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
+    private readonly SpeedTestHistoryService _history = new();
     private CancellationTokenSource? _speedCts;
 
     [ObservableProperty] private SpeedTestResult? _httpResult;
@@ -26,9 +28,36 @@ public partial class SpeedTestViewModel : ViewModelBase
     [ObservableProperty] private bool _isHttpTesting;
     [ObservableProperty] private bool _isOoklaTesting;
 
+    /// <summary>Persisted history of HTTP speed test results (newest first).</summary>
+    public ObservableCollection<SpeedTestResult> HttpHistory { get; } = new();
+
+    /// <summary>Persisted history of Ookla speed test results (newest first).</summary>
+    public ObservableCollection<SpeedTestResult> OoklaHistory { get; } = new();
+
     public SpeedTestViewModel(NetworkSharedState shared)
     {
         Shared = shared;
+        _ = LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        try
+        {
+            var all = await _history.LoadAsync();
+            HttpHistory.Clear();
+            OoklaHistory.Clear();
+            foreach (var r in all.Where(r => string.Equals(r.Engine, "HTTP", StringComparison.OrdinalIgnoreCase))
+                                 .OrderByDescending(r => r.CompletedAt))
+                HttpHistory.Add(r);
+            foreach (var r in all.Where(r => string.Equals(r.Engine, "Ookla", StringComparison.OrdinalIgnoreCase))
+                                 .OrderByDescending(r => r.CompletedAt))
+                OoklaHistory.Add(r);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Warning(ex, "Failed to load speed test history");
+        }
     }
 
     [RelayCommand]
@@ -54,6 +83,12 @@ public partial class SpeedTestViewModel : ViewModelBase
             HttpStatus = "HTTP done";
             Log.Information("HTTP speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 HttpResult.DownloadMbps, HttpResult.UploadMbps);
+
+            // Persist result to history.
+            await _history.SaveAsync(HttpResult);
+            HttpHistory.Insert(0, HttpResult);
+            if (HttpHistory.Count > SpeedTestHistoryService.MaxPerEngine)
+                HttpHistory.RemoveAt(HttpHistory.Count - 1);
         }
         catch (OperationCanceledException) { HttpStatus = "Cancelled"; }
         catch (System.Net.Http.HttpRequestException ex)
@@ -86,6 +121,12 @@ public partial class SpeedTestViewModel : ViewModelBase
             OoklaStatus = "Ookla done";
             Log.Information("Ookla speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 OoklaResult.DownloadMbps, OoklaResult.UploadMbps);
+
+            // Persist result to history.
+            await _history.SaveAsync(OoklaResult);
+            OoklaHistory.Insert(0, OoklaResult);
+            if (OoklaHistory.Count > SpeedTestHistoryService.MaxPerEngine)
+                OoklaHistory.RemoveAt(OoklaHistory.Count - 1);
         }
         catch (OperationCanceledException) { OoklaStatus = "Cancelled"; }
         catch (System.ComponentModel.Win32Exception ex)
@@ -93,6 +134,20 @@ public partial class SpeedTestViewModel : ViewModelBase
         catch (InvalidOperationException ex)
         { OoklaStatus = "Error: " + ex.Message; }
         finally { IsSpeedTesting = false; IsOoklaTesting = false; }
+    }
+
+    [RelayCommand]
+    private async Task ClearHttpHistoryAsync()
+    {
+        await _history.ClearAsync("HTTP");
+        HttpHistory.Clear();
+    }
+
+    [RelayCommand]
+    private async Task ClearOoklaHistoryAsync()
+    {
+        await _history.ClearAsync("Ookla");
+        OoklaHistory.Clear();
     }
 
     [RelayCommand]

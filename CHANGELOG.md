@@ -42,6 +42,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   test card. Stores up to 20 results per engine with date, download,
   upload, ping, and server. Clear button per engine. Persists between
   sessions. Closes #237.
+- **Drivers — Scrollable view** — wrapped the Drivers tab in a
+  ScrollViewer so the full content (toolbar, summary, table) is
+  scrollable when the window is small. DataGrid has explicit
+  VerticalScrollBarVisibility and MaxHeight for large driver lists.
+  Closes #235.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing

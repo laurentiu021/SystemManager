@@ -9,101 +9,104 @@
              mc:Ignorable="d"
              Background="{StaticResource Surface0}">
 
-    <Grid Margin="32,24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="32,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Drivers" Style="{StaticResource Display}"/>
-            <TextBlock Text="Installed system drivers — click column headers to sort."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
-        </StackPanel>
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                <TextBlock Text="Drivers" Style="{StaticResource Display}"/>
+                <TextBlock Text="Installed system drivers — click column headers to sort."
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            </StackPanel>
 
-        <!-- Toolbar -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
-            <WrapPanel>
-                <Button Content="List drivers" Command="{Binding ListDriversCommand}"
-                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
-                <Button Content="Cancel" Command="{Binding CancelCommand}"
-                        Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
-            </WrapPanel>
-        </Border>
+            <!-- Toolbar -->
+            <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+                <WrapPanel>
+                    <Button Content="List drivers" Command="{Binding ListDriversCommand}"
+                            Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                    <Button Content="Cancel" Command="{Binding CancelCommand}"
+                            Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
+                </WrapPanel>
+            </Border>
 
-        <!-- Summary -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
-            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
-        </Border>
+            <!-- Summary -->
+            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+                <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
+            </Border>
 
-        <!-- Driver table -->
-        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
-            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Drivers}"
-                      AutoGenerateColumns="False" HeadersVisibility="Column"
-                      Background="Transparent" BorderThickness="0"
-                      GridLinesVisibility="None" IsReadOnly="True"
-                      RowBackground="Transparent" AlternatingRowBackground="#0F141C"
-                      SelectionMode="Single" CanUserSortColumns="True"
-                      VirtualizingPanel.IsVirtualizing="True"
-                      VirtualizingPanel.VirtualizationMode="Recycling">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="Device Name" Binding="{Binding DeviceName}" Width="*"
-                                        SortMemberPath="DeviceName" SortDirection="Ascending">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontWeight" Value="Medium"/>
-                                <Setter Property="FontSize" Value="13"/>
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+            <!-- Driver table -->
+            <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0" MinHeight="200" MaxHeight="600">
+                <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Drivers}"
+                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                          Background="Transparent" BorderThickness="0"
+                          GridLinesVisibility="None" IsReadOnly="True"
+                          RowBackground="Transparent" AlternatingRowBackground="#0F141C"
+                          SelectionMode="Single" CanUserSortColumns="True"
+                          VerticalScrollBarVisibility="Auto"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Device Name" Binding="{Binding DeviceName}" Width="*"
+                                            SortMemberPath="DeviceName" SortDirection="Ascending">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontWeight" Value="Medium"/>
+                                    <Setter Property="FontSize" Value="13"/>
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="180"
-                                        SortMemberPath="Manufacturer">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+                        <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="180"
+                                            SortMemberPath="Manufacturer">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontSize" Value="12"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Version" Binding="{Binding DriverVersion}" Width="140"
-                                        SortMemberPath="DriverVersion">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontFamily" Value="Consolas"/>
-                                <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+                        <DataGridTextColumn Header="Version" Binding="{Binding DriverVersion}" Width="140"
+                                            SortMemberPath="DriverVersion">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontFamily" Value="Consolas"/>
+                                    <Setter Property="FontSize" Value="12"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Date" Binding="{Binding DriverDateDisplay}" Width="100"
-                                        SortMemberPath="DriverDate">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontFamily" Value="Consolas"/>
-                                <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Border>
+                        <DataGridTextColumn Header="Date" Binding="{Binding DriverDateDisplay}" Width="100"
+                                            SortMemberPath="DriverDate">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontFamily" Value="Consolas"/>
+                                    <Setter Property="FontSize" Value="12"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
 
-        <!-- Status bar -->
-        <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
-                         IsIndeterminate="{Binding IsProgressIndeterminate}"
-                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
-        </DockPanel>
-    </Grid>
+            <!-- Status bar -->
+            <DockPanel Grid.Row="4" Margin="0,8,0,0">
+                <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                             IsIndeterminate="{Binding IsProgressIndeterminate}"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+            </DockPanel>
+        </Grid>
+    </ScrollViewer>
 </UserControl>

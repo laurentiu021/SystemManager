@@ -7,9 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
-- **Auto-update** — UpdateService now points to the new `SystemManager` repo
-  name instead of the old `SysManager`. Without this fix, the in-app update
-  checker would fail to find new releases.
+- **Process Manager** — null-safe filter: `ApplyFilter` no longer throws
+  `NullReferenceException` when `Description`, `PlainDescription`, or
+  `Category` are null (QA-002).
+- **Network Monitor** — `Buffers`/`TraceBuffers` changed from `Dictionary`
+  to `ConcurrentDictionary` to prevent `InvalidOperationException` under
+  concurrent timer + UI access (QA-003).
+- **Disk Analyzer** — `DrillDown`/`GoUp` now await `AnalyzeAsync()` instead
+  of fire-and-forget, preventing race conditions with the operation lock
+  (QA-001).
+- **Console** — `Dispatcher.Invoke` → `BeginInvoke` to avoid thread-pool
+  starvation under heavy output (CQ-005).
+- **Integration tests** — `UpdateServiceTests.Constants_AreSet` expects
+  `"SystemManager"` matching the renamed repo (TEST-004).
+
+### Security
+- **chkdsk** — drive letter validated with `^[A-Z]:$` regex before
+  interpolation into process arguments (SEC-003).
+- **App Blocker** — `exeName` validated with `^[A-Za-z0-9_\-. ]+\.exe$`
+  regex to prevent registry path injection via IFEO (SEC-004).
+- **Restore Point** — `CreateRestorePointAsync` uses parameterized
+  PowerShell (`$desc` variable) instead of string concatenation (SEC-002).
 
 ## [0.35.9] - 2026-05-08
 

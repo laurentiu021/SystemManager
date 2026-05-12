@@ -32,6 +32,13 @@ public sealed class AppBlockerService
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
 
+        // SEC-004: reject path separators and invalid chars to prevent registry path injection
+        if (!System.Text.RegularExpressions.Regex.IsMatch(exeName, @"^[A-Za-z0-9_\-. ]+\.exe$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            Log.Warning("Rejected invalid exeName: {ExeName}", exeName);
+            return false;
+        }
+
         try
         {
             using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath, writable: true);

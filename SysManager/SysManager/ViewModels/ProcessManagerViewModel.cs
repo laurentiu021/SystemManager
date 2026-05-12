@@ -141,9 +141,9 @@ public partial class ProcessManagerViewModel : ViewModelBase
             var filter = FilterText.Trim();
             source = source.Where(p =>
                 p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
-                p.Description.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
-                p.PlainDescription.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
-                p.Category.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                (p.Description?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (p.PlainDescription?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (p.Category?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 p.Pid.ToString().Contains(filter));
         }
 

@@ -197,6 +197,13 @@ public partial class SystemHealthViewModel : ViewModelBase
             return;
         }
 
+        // SEC-003: validate drive letter format to prevent argument injection
+        if (!System.Text.RegularExpressions.Regex.IsMatch(driveLetter, @"^[A-Z]:$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            StatusMessage = "Invalid drive letter format.";
+            return;
+        }
+
         var target = ChkdskDrives.FirstOrDefault(d => string.Equals(d.Letter, driveLetter, StringComparison.OrdinalIgnoreCase));
         IsChkdskRunning = true;
         _cts?.Dispose();

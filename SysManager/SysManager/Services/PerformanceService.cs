@@ -511,10 +511,10 @@ public class PerformanceService
     /// </summary>
     public async Task<bool> CreateRestorePointAsync(string description, CancellationToken ct = default)
     {
-        var script =
-            "Checkpoint-Computer -Description '" + description.Replace("'", "''") + "' -RestorePointType 'MODIFY_SETTINGS'";
-        var exit = await _ps.RunScriptViaPwshAsync(script, ct).ConfigureAwait(false);
-        return exit == 0;
+        var script = "Checkpoint-Computer -Description $desc -RestorePointType 'MODIFY_SETTINGS'";
+        var parameters = new Dictionary<string, object?> { ["desc"] = description };
+        var results = await _ps.RunAsync(script, parameters, ct).ConfigureAwait(false);
+        return results != null;
     }
 
     // ═══════════════════════════════════════════════════════════════

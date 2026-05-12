@@ -36,7 +36,12 @@ public partial class ConsoleViewModel : ObservableObject
         lock (_gate)
         {
             Lines.Add(line);
-            while (Lines.Count > MaxLines) Lines.RemoveAt(0);
+            if (Lines.Count > MaxLines)
+            {
+                var excess = Lines.Count - MaxLines;
+                for (int i = excess - 1; i >= 0; i--)
+                    Lines.RemoveAt(i);
+            }
         }
     }
 

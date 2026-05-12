@@ -33,13 +33,5 @@ public partial class ProcessEntry : ObservableObject
                                        && System.IO.File.Exists(FilePath);
 
     /// <summary>Formatted memory for display.</summary>
-    public string MemoryDisplay => FormatSize(MemoryBytes);
-
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1L << 30 => $"{bytes / (double)(1L << 30):F1} GB",
-        >= 1L << 20 => $"{bytes / (double)(1L << 20):F1} MB",
-        >= 1L << 10 => $"{bytes / (double)(1L << 10):F1} KB",
-        _ => $"{bytes} B"
-    };
+    public string MemoryDisplay => CleanupCategory.HumanSize(MemoryBytes);
 }

@@ -44,6 +44,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   confirmation-gated code paths (CQ-003).
 
 ### Fixed
+- **Auto-update** — "Install" now performs a true in-place update: verifies
+  SHA256 hash of the downloaded build, writes an updater script that waits
+  for the current process to exit, copies the new executable over the old
+  one, and restarts. Previously it only launched the new exe from a temp
+  folder without replacing the original. Closes #240.
 - **Disk Health** — `TemperatureColorHex` returns grey (#9AA0A6) for drives
   without temperature sensors instead of misleading red (QA-004).
 - **Battery Health** — `HealthPercent` clamped to 0–100, `WearPercent`

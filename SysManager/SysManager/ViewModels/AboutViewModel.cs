@@ -362,30 +362,102 @@ public partial class AboutViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void InstallUpdate()
+    private async Task InstallUpdateAsync()
     {
         if (string.IsNullOrWhiteSpace(DownloadedPath) || !File.Exists(DownloadedPath))
         {
             DownloadStatus = "No downloaded file to install.";
             return;
         }
+
+        if (_latest == null)
+        {
+            DownloadStatus = "No release info available.";
+            return;
+        }
+
+        // Step 1: Verify SHA256 hash before installing.
+        DownloadStatus = "Verifying file integrity...";
+        var (verified, expected, actual) = await _updates.VerifyHashAsync(_latest, DownloadedPath);
+        if (!verified)
+        {
+            DownloadStatus = expected != null && actual != null
+                ? $"SHA256 mismatch — file may be corrupted. Expected: {expected[..12]}… Got: {actual[..12]}…"
+                : "Hash verification failed — file may be corrupted. Try downloading again.";
+            return;
+        }
+
+        // Step 2: Determine current executable path.
+        var currentExe = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(currentExe) || !File.Exists(currentExe))
+        {
+            DownloadStatus = "Cannot determine current executable path.";
+            return;
+        }
+
+        // Step 3: Write an updater script that waits for this process to exit,
+        // copies the new exe over the old one, then launches the new version.
         try
         {
+            var pid = Environment.ProcessId;
+            var scriptPath = Path.Combine(
+                Path.GetDirectoryName(DownloadedPath)!,
+                "update.cmd");
+
+            var script = $"""
+                @echo off
+                title SysManager Updater
+                echo Waiting for SysManager to close...
+                :wait
+                tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
+                if not errorlevel 1 (
+                    timeout /t 1 /nobreak >NUL
+                    goto wait
+                )
+                echo Applying update...
+                copy /Y "{DownloadedPath}" "{currentExe}" >NUL
+                if errorlevel 1 (
+                    echo Update failed — could not copy file. Press any key to exit.
+                    pause >NUL
+                    exit /b 1
+                )
+                echo Starting SysManager...
+                start "" "{currentExe}"
+                del "%~f0"
+                """;
+
+            await File.WriteAllTextAsync(scriptPath, script);
+
+            DownloadStatus = "Installing update — SysManager will restart...";
+
             Process.Start(new ProcessStartInfo
             {
-                FileName = DownloadedPath,
-                UseShellExecute = true  // lets UAC prompt if needed
+                FileName = "cmd.exe",
+                Arguments = $"/C \"{scriptPath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             });
-            // Close the current instance so the new one takes over.
+
+            // Give the script a moment to start before we exit.
+            await Task.Delay(500);
             System.Windows.Application.Current?.Shutdown();
+        }
+        catch (IOException ex)
+        {
+            DownloadStatus = $"Update failed: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            DownloadStatus = $"Update failed (access denied): {ex.Message}. Try running as administrator.";
         }
         catch (InvalidOperationException ex)
         {
-            DownloadStatus = $"Couldn't launch installer: {ex.Message}";
+            DownloadStatus = $"Update failed: {ex.Message}";
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            DownloadStatus = $"Couldn't launch installer: {ex.Message}";
+            DownloadStatus = $"Update failed: {ex.Message}";
         }
     }
 

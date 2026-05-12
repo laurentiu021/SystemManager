@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -140,11 +141,36 @@ public class AboutViewModelTests
     }
 
     [Fact]
-    public void InstallUpdateCommand_WithoutDownload_SetsErrorStatus()
+    public async Task InstallUpdateCommand_WithoutDownload_SetsErrorStatus()
     {
         var vm = new AboutViewModel { DownloadedPath = null };
-        vm.InstallUpdateCommand.Execute(null);
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
         Assert.Contains("No downloaded", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task InstallUpdateCommand_WithFakePath_SetsNoFileStatus()
+    {
+        var vm = new AboutViewModel { DownloadedPath = @"C:\nonexistent\fake.exe" };
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
+        Assert.Contains("No downloaded", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task InstallUpdateCommand_WithPathButNoRelease_SetsNoReleaseStatus()
+    {
+        // Create a temp file to simulate a downloaded exe
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            var vm = new AboutViewModel { DownloadedPath = tmp };
+            await vm.InstallUpdateCommand.ExecuteAsync(null);
+            Assert.Contains("No release info", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
     }
 
     [Fact]

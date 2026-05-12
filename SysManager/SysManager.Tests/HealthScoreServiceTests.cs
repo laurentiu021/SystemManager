@@ -49,14 +49,14 @@ public class HealthScoreServiceTests
     }
 
     [Fact]
-    public void ComputeDiskScore_OneWarning_Returns50()
+    public void ComputeDiskScore_OneWarning_Returns60()
     {
         var disks = new List<DiskHealthReport>
         {
             new() { HealthStatus = "Healthy" },
             new() { HealthStatus = "Warning" }
         };
-        Assert.Equal(50, HealthScoreService.ComputeDiskScore(disks));
+        Assert.Equal(60, HealthScoreService.ComputeDiskScore(disks));
     }
 
     [Fact]

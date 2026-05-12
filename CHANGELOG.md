@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.35.11] - 2026-05-12
 
 ### Fixed
 - **Process Manager** — null-safe filter: `ApplyFilter` no longer throws
@@ -28,6 +28,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   regex to prevent registry path injection via IFEO (SEC-004).
 - **Restore Point** — `CreateRestorePointAsync` uses parameterized
   PowerShell (`$desc` variable) instead of string concatenation (SEC-002).
+
+## [0.35.10] - 2026-05-08
+
+### Fixed
+- **Auto-update** — UpdateService now points to the new `SystemManager` repo
+  name instead of the old `SysManager`. Without this fix, the in-app update
+  checker would fail to find new releases.
 
 ## [0.35.9] - 2026-05-08
 

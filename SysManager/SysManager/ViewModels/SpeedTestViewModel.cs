@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -16,6 +17,7 @@ public partial class SpeedTestViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
     private readonly SpeedTestHistoryService _history = new();
+    private readonly EtaCalculator _eta = new();
     private CancellationTokenSource? _speedCts;
 
     [ObservableProperty] private SpeedTestResult? _httpResult;
@@ -27,6 +29,7 @@ public partial class SpeedTestViewModel : ViewModelBase
     [ObservableProperty] private bool _isSpeedTesting;
     [ObservableProperty] private bool _isHttpTesting;
     [ObservableProperty] private bool _isOoklaTesting;
+    [ObservableProperty] private string _estimatedTime = "";
 
     /// <summary>Persisted history of HTTP speed test results (newest first).</summary>
     public ObservableCollection<SpeedTestResult> HttpHistory { get; } = new();
@@ -73,10 +76,12 @@ public partial class SpeedTestViewModel : ViewModelBase
         IsSpeedTesting = true;
         IsHttpTesting = true;
         SpeedProgress = 0;
+        EstimatedTime = "";
+        _eta.Reset();
         HttpStatus = "Starting HTTP speed test…";
         _speedCts = new CancellationTokenSource();
         var progress = new Progress<(int p, string m)>(t =>
-        { SpeedProgress = t.p; HttpStatus = t.m; });
+        { SpeedProgress = t.p; HttpStatus = t.m; EstimatedTime = _eta.Update(t.p); });
         try
         {
             HttpResult = await Shared.Speed.RunHttpAsync(progress, _speedCts.Token);
@@ -111,10 +116,12 @@ public partial class SpeedTestViewModel : ViewModelBase
         IsSpeedTesting = true;
         IsOoklaTesting = true;
         SpeedProgress = 0;
+        EstimatedTime = "";
+        _eta.Reset();
         OoklaStatus = "Starting Ookla speed test…";
         _speedCts = new CancellationTokenSource();
         var progress = new Progress<(int p, string m)>(t =>
-        { SpeedProgress = t.p; OoklaStatus = t.m; });
+        { SpeedProgress = t.p; OoklaStatus = t.m; EstimatedTime = _eta.Update(t.p); });
         try
         {
             OoklaResult = await Shared.Speed.RunOoklaAsync(progress, _speedCts.Token);

@@ -50,4 +50,53 @@ public class SpeedTestViewModelTests
         var vm = new SpeedTestViewModel(shared);
         vm.CancelSpeedCommand.Execute(null);
     }
+
+    [Fact]
+    public void HttpHistory_StartsEmpty()
+    {
+        var shared = new NetworkSharedState();
+        var vm = new SpeedTestViewModel(shared);
+        Assert.NotNull(vm.HttpHistory);
+    }
+
+    [Fact]
+    public void OoklaHistory_StartsEmpty()
+    {
+        var shared = new NetworkSharedState();
+        var vm = new SpeedTestViewModel(shared);
+        Assert.NotNull(vm.OoklaHistory);
+    }
+
+    [Theory]
+    [InlineData("RunHttpSpeedCommand")]
+    [InlineData("RunOoklaSpeedCommand")]
+    [InlineData("CancelSpeedCommand")]
+    [InlineData("ClearHttpHistoryCommand")]
+    [InlineData("ClearOoklaHistoryCommand")]
+    public void CommandExists(string propertyName)
+    {
+        var shared = new NetworkSharedState();
+        var vm = new SpeedTestViewModel(shared);
+        var prop = vm.GetType().GetProperty(propertyName);
+        Assert.NotNull(prop);
+        Assert.NotNull(prop!.GetValue(vm));
+    }
+
+    [Fact]
+    public async Task ClearHttpHistoryCommand_DoesNotThrow()
+    {
+        var shared = new NetworkSharedState();
+        var vm = new SpeedTestViewModel(shared);
+        var ex = await Record.ExceptionAsync(() => vm.ClearHttpHistoryCommand.ExecuteAsync(null));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task ClearOoklaHistoryCommand_DoesNotThrow()
+    {
+        var shared = new NetworkSharedState();
+        var vm = new SpeedTestViewModel(shared);
+        var ex = await Record.ExceptionAsync(() => vm.ClearOoklaHistoryCommand.ExecuteAsync(null));
+        Assert.Null(ex);
+    }
 }

@@ -14,9 +14,13 @@ public partial class App : Application
 {
     private const string MutexName = "Global\\SysManager_SingleInstance_laurentiu021";
     private Mutex? _instanceMutex;
+    private TrayIconService? _trayService;
 
     // Guard against cascading error dialogs — show at most one at a time.
     private static int _errorDialogActive;
+
+    /// <summary>The shared tray icon service instance.</summary>
+    public TrayIconService? TrayService => _trayService;
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -45,6 +49,13 @@ public partial class App : Application
         }
 
         LogService.Init();
+
+        // Don't shutdown when main window is hidden (tray mode)
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+        // Initialize tray icon service
+        _trayService = new TrayIconService(new SystemInfoService());
+
         DispatcherUnhandledException += OnUi;
         AppDomain.CurrentDomain.UnhandledException += OnDomain;
         TaskScheduler.UnobservedTaskException += OnTask;
@@ -53,6 +64,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _trayService?.Dispose();
         LogService.Shutdown();
         _instanceMutex?.ReleaseMutex();
         _instanceMutex?.Dispose();

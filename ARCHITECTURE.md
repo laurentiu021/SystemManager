@@ -94,6 +94,8 @@ Key services:
   Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Non-destructive.
 - `HealthScoreService` — aggregates disk health, RAM, uptime, and battery
   wear into a single 0–100 score with color-coded verdict and recommendations.
+- `TrayIconService` — system tray icon with background monitoring (60s),
+  tooltip updates, context menu, and Windows toast notifications.
 - `LogService` — Serilog wrapper with rolling file sink.
 - `FixedDriveService` — enumerate fixed NTFS/ReFS volumes.
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming

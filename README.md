@@ -252,6 +252,10 @@ long-running operation, so you always know which tab is working.
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
   a summary card with freed space, warnings, and links to relevant tabs.
   Non-destructive, no admin required.
+- **Health Score** — overall system health gauge (0–100) combining disk
+  SMART, RAM usage, uptime, and battery wear. Color-coded ring (green /
+  amber / red) with up to 3 actionable recommendations. Auto-computes on
+  load and refreshes with "Scan system".
 
 ### Updates (for SysManager itself)
 - Auto-check on startup against the GitHub Releases API, plus a manual

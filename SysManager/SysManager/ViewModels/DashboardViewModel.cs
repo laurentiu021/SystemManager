@@ -16,6 +16,7 @@ public partial class DashboardViewModel : ViewModelBase
 {
     private readonly SystemInfoService _sys;
     private readonly TuneUpService _tuneUp;
+    private readonly HealthScoreService _healthScore;
     private CancellationTokenSource? _tuneUpCts;
 
     [ObservableProperty] private SystemSnapshot? _snapshot;
@@ -26,6 +27,11 @@ public partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private string _diskLine = "";
     [ObservableProperty] private string _uptimeLine = "";
 
+    // ── Health Score state ─────────────────────────────────────────────
+    [ObservableProperty] private HealthScoreResult? _healthResult;
+    [ObservableProperty] private bool _hasHealthScore;
+    [ObservableProperty] private bool _isHealthScoreLoading;
+
     // ── Tune-Up state ──────────────────────────────────────────────────
     [ObservableProperty] private bool _isTuneUpRunning;
     [ObservableProperty] private string _tuneUpStep = "";
@@ -34,21 +40,47 @@ public partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private bool _hasTuneUpResult;
 
     public DashboardViewModel(SystemInfoService sys)
-        : this(sys, new TuneUpService(
-            new ShortcutCleanerService(),
-            new DiskHealthService(),
-            sys))
+        : this(sys,
+            new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), sys),
+            new HealthScoreService(sys, new DiskHealthService(), new BatteryService()))
     {
     }
 
     /// <summary>
     /// Testable constructor — accepts all dependencies explicitly.
     /// </summary>
-    public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp)
+    public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp, HealthScoreService healthScore)
     {
         _sys = sys;
         _tuneUp = tuneUp;
+        _healthScore = healthScore;
         IsElevated = AdminHelper.IsElevated();
+        _ = LoadHealthScoreAsync();
+    }
+
+    // ── Health Score ───────────────────────────────────────────────────
+
+    private async Task LoadHealthScoreAsync()
+    {
+        IsHealthScoreLoading = true;
+        try
+        {
+            HealthResult = await _healthScore.ComputeAsync();
+            HasHealthScore = true;
+            Log.Information("Health Score computed: {Score}", HealthResult.Score);
+        }
+        catch (System.Management.ManagementException ex)
+        {
+            Log.Warning("Health Score failed: {Error}", ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Warning("Health Score failed: {Error}", ex.Message);
+        }
+        finally
+        {
+            IsHealthScoreLoading = false;
+        }
     }
 
     [RelayCommand]
@@ -67,6 +99,9 @@ public partial class DashboardViewModel : ViewModelBase
             UptimeLine = $"Uptime: {Snapshot.Os.Uptime.Days}d {Snapshot.Os.Uptime.Hours}h {Snapshot.Os.Uptime.Minutes}m";
             StatusMessage = $"Last scan: {Snapshot.CapturedAt:HH:mm:ss}";
             Log.Information("Dashboard scan completed");
+
+            // Refresh health score too
+            await LoadHealthScoreAsync();
         }
         catch (System.Management.ManagementException ex)
         {

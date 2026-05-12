@@ -92,6 +92,8 @@ Key services:
 - `SystemInfoService` — OS / CPU / RAM / uptime snapshot.
 - `TuneUpService` — orchestrates the Quick Tune-Up wizard: temp cleanup,
   Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Non-destructive.
+- `HealthScoreService` — aggregates disk health, RAM, uptime, and battery
+  wear into a single 0–100 score with color-coded verdict and recommendations.
 - `LogService` — Serilog wrapper with rolling file sink.
 - `FixedDriveService` — enumerate fixed NTFS/ReFS volumes.
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming

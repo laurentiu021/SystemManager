@@ -16,8 +16,10 @@ public class DashboardViewModelTests
     private static DashboardViewModel NewVm()
     {
         var sys = new SystemInfoService();
-        return new DashboardViewModel(sys, new TuneUpService(
-            new ShortcutCleanerService(), new DiskHealthService(), sys));
+        var diskHealth = new DiskHealthService();
+        return new DashboardViewModel(sys,
+            new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
+            new HealthScoreService(sys, diskHealth, new BatteryService()));
     }
 
     // ---------- construction & defaults ----------

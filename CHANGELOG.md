@@ -13,6 +13,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   flags high uptime (14+ days) and high RAM usage (85%+). Displays a
   dismissible summary card with freed space, disk verdicts, and
   recommendations. Non-destructive, no admin required. Closes #261.
+- **Dashboard — Health Score card** — overall system health gauge (0–100)
+  combining disk SMART, RAM usage, uptime, and battery wear (on laptops).
+  Color-coded circular ring with label (Excellent/Good/Fair/Poor) and up
+  to 3 actionable recommendations. Auto-computes on load and refreshes
+  with "Scan system". Closes #259.
+- **HealthScoreService** — aggregates SystemInfoService, DiskHealthService,
+  and BatteryService into a weighted health score.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing

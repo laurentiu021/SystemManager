@@ -28,7 +28,7 @@ public partial class ConsoleViewModel : ObservableObject
         // Marshal to UI thread
         if (Application.Current?.Dispatcher.CheckAccess() == false)
         {
-            Application.Current.Dispatcher.Invoke(() => Append(line));
+            Application.Current.Dispatcher.BeginInvoke(() => Append(line));
             return;
         }
         // Even on the UI thread, two services can BeginInvoke in quick

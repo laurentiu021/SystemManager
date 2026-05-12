@@ -79,7 +79,7 @@ public class UpdateServiceTests
     public void Constants_AreSet()
     {
         Assert.Equal("laurentiu021", UpdateService.Owner);
-        Assert.Equal("SysManager", UpdateService.Repo);
+        Assert.Equal("SystemManager", UpdateService.Repo);
         Assert.Equal("SysManager.exe", UpdateService.AssetName);
     }
 

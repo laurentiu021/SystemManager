@@ -96,13 +96,9 @@ public partial class ProcessManagerViewModel : ViewModelBase
     {
         if (entry == null) return;
 
-        var result = System.Windows.MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"Are you sure you want to kill \"{entry.Name}\" (PID {entry.Pid})?\n\nThis may cause unsaved data loss.",
-            "Kill process",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning);
-
-        if (result != System.Windows.MessageBoxResult.Yes) return;
+            "Kill process")) return;
 
         var success = ProcessManagerService.KillProcess(entry.Pid);
         if (success)

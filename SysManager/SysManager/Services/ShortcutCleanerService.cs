@@ -135,16 +135,24 @@ public sealed class ShortcutCleanerService
     {
         var link = (IShellLink)new ShellLink();
         var file = (IPersistFile)link;
-        file.Load(lnkPath, 0);
+        try
+        {
+            file.Load(lnkPath, 0);
 
-        var sb = new char[260];
-        link.GetPath(sb, sb.Length, IntPtr.Zero, 0);
-        var target = new string(sb).TrimEnd('\0');
+            var sb = new char[260];
+            link.GetPath(sb, sb.Length, IntPtr.Zero, 0);
+            var target = new string(sb).TrimEnd('\0');
 
-        if (target.Contains('%'))
-            target = Environment.ExpandEnvironmentVariables(target);
+            if (target.Contains('%'))
+                target = Environment.ExpandEnvironmentVariables(target);
 
-        return target;
+            return target;
+        }
+        finally
+        {
+            System.Runtime.InteropServices.Marshal.ReleaseComObject(file);
+            System.Runtime.InteropServices.Marshal.ReleaseComObject(link);
+        }
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]

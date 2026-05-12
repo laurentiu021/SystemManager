@@ -78,6 +78,7 @@ public partial class DiskHealthReport : ObservableObject
     /// <summary>Color hex for the temperature reading.</summary>
     public string TemperatureColorHex => TemperatureC switch
     {
+        null => "#9AA0A6",
         <= 40 => "#22C55E",
         <= 50 => "#F59E0B",
         <= 60 => "#F87171",

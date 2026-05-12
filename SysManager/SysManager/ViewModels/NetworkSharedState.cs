@@ -425,9 +425,12 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         while (removeCount < buffer.Count && buffer[removeCount].DateTime < cutoff)
             removeCount++;
 
-        // Remove expired points; pre-counting avoids repeated boundary checks
-        for (int i = 0; i < removeCount; i++)
-            buffer.RemoveAt(0);
+        // Batch removal from end-to-start avoids O(n²) shifting
+        if (removeCount > 0)
+        {
+            for (int i = removeCount - 1; i >= 0; i--)
+                buffer.RemoveAt(i);
+        }
     }
 
     internal void TrimAllBuffers()

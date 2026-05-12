@@ -25,13 +25,13 @@ public partial class BatteryInfo : ObservableObject
     /// <summary>Health percentage: FullCharge / Design × 100.</summary>
     public double HealthPercent =>
         DesignCapacityMWh > 0
-            ? Math.Round(FullChargeCapacityMWh * 100.0 / DesignCapacityMWh, 1)
+            ? Math.Min(Math.Round(FullChargeCapacityMWh * 100.0 / DesignCapacityMWh, 1), 100)
             : 0;
 
     /// <summary>Wear level: 100 − HealthPercent.</summary>
     public double WearPercent =>
         DesignCapacityMWh > 0
-            ? Math.Round(100.0 - HealthPercent, 1)
+            ? Math.Max(Math.Round(100.0 - HealthPercent, 1), 0)
             : 0;
 
     /// <summary>Formatted estimated runtime.</summary>

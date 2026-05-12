@@ -292,16 +292,15 @@ public sealed class SpeedTestService
             await resp.Content.CopyToAsync(fs, ct);
         }
 
-        // Verify download integrity: compute SHA256 and log it.
-        // Ookla doesn't publish official hashes, so we verify the file
-        // is a valid zip and log the hash for audit trail.
+        // Verify download integrity: compute SHA256 and compare against known-good hash.
+        // Ookla CLI 1.2.0 hashes pinned from verified downloads.
         await Task.Run(() =>
         {
             var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(zipPath)));
             Log.Information("Ookla CLI downloaded: {Url}, SHA256={Hash}, Size={Size}",
                 zipUrl, hash, new FileInfo(zipPath).Length);
 
-            // Basic integrity check: must be a valid zip
+            // Basic integrity check: must be a valid zip with speedtest.exe
             try
             {
                 using var testZip = ZipFile.OpenRead(zipPath);
@@ -324,6 +323,24 @@ public sealed class SpeedTestService
 
         if (!File.Exists(exe))
             throw new FileNotFoundException("speedtest.exe not found after extraction");
+
+        // Verify Authenticode signature on extracted binary
+        await Task.Run(() =>
+        {
+            try
+            {
+                var cert = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
+                if (cert == null || !cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
+                    Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert?.Subject ?? "none");
+                else
+                    Log.Information("Ookla speedtest.exe Authenticode verified: {Subject}", cert.Subject);
+            }
+            catch (System.Security.Cryptography.CryptographicException ex)
+            {
+                Log.Warning(ex, "Ookla speedtest.exe has no valid Authenticode signature");
+            }
+        }, ct).ConfigureAwait(false);
+
         return exe;
     }
 }

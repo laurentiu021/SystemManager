@@ -87,13 +87,9 @@ public partial class UninstallerViewModel : ViewModelBase
         if (toRemove.Count > 10)
             names += $"\n  … and {toRemove.Count - 10} more";
 
-        var result = System.Windows.MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"You are about to uninstall {toRemove.Count} application(s):\n\n{names}\n\nThis cannot be undone. Continue?",
-            "Confirm uninstall",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning);
-
-        if (result != System.Windows.MessageBoxResult.Yes) return;
+            "Confirm uninstall")) return;
 
         IsBusy = true;
         _cts?.Dispose();
@@ -156,13 +152,9 @@ public partial class UninstallerViewModel : ViewModelBase
     {
         if (FilteredApps.Count > 20 && string.IsNullOrWhiteSpace(FilterText))
         {
-            var result = System.Windows.MessageBox.Show(
+            if (!DialogService.Instance.Confirm(
                 $"This will select all {FilteredApps.Count} applications.\n\nUse the filter to narrow down the list first.\nAre you sure you want to select all?",
-                "Select all apps",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
-
-            if (result != System.Windows.MessageBoxResult.Yes) return;
+                "Select all apps")) return;
         }
 
         foreach (var app in FilteredApps) app.IsSelected = true;

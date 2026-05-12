@@ -18,6 +18,7 @@ namespace SysManager.ViewModels;
 public partial class StartupViewModel : ViewModelBase
 {
     private readonly StartupService _service = new();
+    private readonly List<StartupEntry> _allEntries = new();
 
     public ObservableCollection<StartupEntry> Entries { get; } = new();
 
@@ -25,11 +26,14 @@ public partial class StartupViewModel : ViewModelBase
     [ObservableProperty] private int _disabledCount;
     [ObservableProperty] private int _totalCount;
     [ObservableProperty] private string _scanSummary = "Click Scan to discover startup items.";
+    [ObservableProperty] private bool _hideWindowsEntries;
 
     public StartupViewModel()
     {
         _ = InitAsync();
     }
+
+    partial void OnHideWindowsEntriesChanged(bool value) => ApplyFilter();
 
     private async Task InitAsync()
     {
@@ -46,15 +50,16 @@ public partial class StartupViewModel : ViewModelBase
         try
         {
             var items = await _service.ScanAsync();
+            _allEntries.Clear();
             Entries.Clear();
             foreach (var item in items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
             {
                 item.Icon = IconExtractorService.GetIcon(item.Command);
-                Entries.Add(item);
+                _allEntries.Add(item);
             }
 
-            UpdateCounts();
-            StatusMessage = $"Found {TotalCount} startup items.";
+            ApplyFilter();
+            StatusMessage = $"Found {_allEntries.Count} startup items.";
         }
         catch (InvalidOperationException ex)
         {
@@ -132,4 +137,22 @@ public partial class StartupViewModel : ViewModelBase
         TotalCount = Entries.Count;
         ScanSummary = $"{EnabledCount} enabled · {DisabledCount} disabled · {TotalCount} total";
     }
+
+    private void ApplyFilter()
+    {
+        Entries.Clear();
+        var filtered = HideWindowsEntries
+            ? _allEntries.Where(e => !IsWindowsEntry(e))
+            : _allEntries;
+
+        foreach (var item in filtered)
+            Entries.Add(item);
+
+        UpdateCounts();
+    }
+
+    private static bool IsWindowsEntry(StartupEntry entry)
+        => entry.Publisher.Contains("Microsoft", StringComparison.OrdinalIgnoreCase) ||
+           entry.Command.Contains(@"\Windows\", StringComparison.OrdinalIgnoreCase) ||
+           entry.Command.Contains(@"\Microsoft\", StringComparison.OrdinalIgnoreCase);
 }

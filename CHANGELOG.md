@@ -25,6 +25,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Windows toast notifications when RAM > 90%, uptime > 14 days, or disk
   health degrades. Right-click context menu with Show / Exit. Uses
   H.NotifyIcon.Wpf 2.2.1. Closes #262.
+- **About — Changelog link** — new "View Changelog" button opens the
+  GitHub CHANGELOG.md in the browser. Closes #232.
+- **Drivers — Hide system drivers** — toggle to filter out Microsoft /
+  Windows drivers from the list, showing only third-party drivers.
+  Closes #234.
+- **Startup Manager — Hide Windows entries** — toggle to filter out
+  Microsoft / Windows startup items that should not be disabled.
+  Closes #238.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing

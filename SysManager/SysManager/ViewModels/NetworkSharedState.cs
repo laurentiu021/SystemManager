@@ -44,8 +44,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     internal readonly ConcurrentQueue<PingSample> Pending = new();
     internal int PaletteIndex;
 
-    internal readonly Dictionary<string, ObservableCollection<DateTimePoint>> Buffers = new();
-    internal readonly Dictionary<string, ObservableCollection<ObservablePoint>> TraceBuffers = new();
+    internal readonly ConcurrentDictionary<string, ObservableCollection<DateTimePoint>> Buffers = new();
+    internal readonly ConcurrentDictionary<string, ObservableCollection<ObservablePoint>> TraceBuffers = new();
     internal readonly Dictionary<string, IReadOnlyList<TracerouteHop>> LatestRoutes = new();
     private readonly Dictionary<string, PropertyChangedEventHandler> _targetHandlers = new();
 
@@ -229,8 +229,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         if (idx >= 0) LatencySeries.RemoveAt(idx);
         var tIdx = TraceSeries.ToList().FindIndex(s => s.Name?.Contains($"({target.Host})") == true);
         if (tIdx >= 0) TraceSeries.RemoveAt(tIdx);
-        Buffers.Remove(target.Host);
-        TraceBuffers.Remove(target.Host);
+        Buffers.TryRemove(target.Host, out _);
+        TraceBuffers.TryRemove(target.Host, out _);
         LatestRoutes.Remove(target.Host);
         Pinger.Remove(target.Host);
         TraceMonitor.Remove(target.Host);

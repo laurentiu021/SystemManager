@@ -165,24 +165,24 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void DrillDown(DiskUsageEntry? entry)
+    private async Task DrillDown(DiskUsageEntry? entry)
     {
         if (entry == null || entry.Name == "(files in root)") return;
         SelectedPath = entry.FullPath;
         if (!PresetPaths.Contains(entry.FullPath))
             PresetPaths.Add(entry.FullPath);
-        _ = AnalyzeAsync();
+        await AnalyzeAsync();
     }
 
     [RelayCommand]
-    private void GoUp()
+    private async Task GoUp()
     {
         if (string.IsNullOrWhiteSpace(SelectedPath)) return;
         var parent = Directory.GetParent(SelectedPath);
         if (parent != null)
         {
             SelectedPath = parent.FullName;
-            _ = AnalyzeAsync();
+            await AnalyzeAsync();
         }
     }
 

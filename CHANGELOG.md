@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **IDialogService** — abstraction for user confirmation dialogs, replacing
+  direct `MessageBox.Show` calls in ViewModels. Enables unit testing of
+  confirmation-gated code paths (CQ-003).
+
+### Fixed
+- **Disk Health** — `TemperatureColorHex` returns grey (#9AA0A6) for drives
+  without temperature sensors instead of misleading red (QA-004).
+- **Battery Health** — `HealthPercent` clamped to 0–100, `WearPercent`
+  clamped to ≥0 for new batteries exceeding design capacity (QA-005).
+- **Network Monitor** — `TrimBuffer` batch-removes expired points from
+  end-to-start, eliminating O(n²) array shifting (CQ-001).
+- **Shortcut Cleaner** — COM objects (`IShellLink`, `IPersistFile`) now
+  released via `Marshal.ReleaseComObject` in finally block (SEC-006).
+
+### Security
+- **Speed Test** — improved download integrity comment and added
+  Authenticode signature verification on extracted speedtest.exe (SEC-001).
+
 ## [0.35.11] - 2026-05-12
 
 ### Fixed

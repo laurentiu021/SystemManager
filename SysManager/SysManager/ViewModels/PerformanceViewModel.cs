@@ -144,11 +144,9 @@ public partial class PerformanceViewModel : ViewModelBase
             _ => "Balanced"
         };
 
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"Switch power plan to {planName}?",
-            "Power Plan — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "Power Plan — Confirm")) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -196,11 +194,9 @@ public partial class PerformanceViewModel : ViewModelBase
         }
 
         var action = WantVisualEffectsReduced ? "Reduce" : "Restore";
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"{action} visual effects (animations, fades, shadows)?",
-            "Visual Effects — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) { SyncTogglesFromProfile(); return; }
+            "Visual Effects — Confirm")) { SyncTogglesFromProfile(); return; }
 
         try
         {
@@ -230,11 +226,9 @@ public partial class PerformanceViewModel : ViewModelBase
         }
 
         var action = enabling ? "Enable" : "Disable";
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"{action} Game Mode?",
-            "Game Mode — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) { SyncTogglesFromProfile(); return; }
+            "Game Mode — Confirm")) { SyncTogglesFromProfile(); return; }
 
         try
         {
@@ -264,11 +258,9 @@ public partial class PerformanceViewModel : ViewModelBase
         }
 
         var action = disabling ? "Disable" : "Enable";
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"{action} Xbox Game Bar and Game DVR overlay?",
-            "Xbox Game Bar — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) { SyncTogglesFromProfile(); return; }
+            "Xbox Game Bar — Confirm")) { SyncTogglesFromProfile(); return; }
 
         try
         {
@@ -302,12 +294,10 @@ public partial class PerformanceViewModel : ViewModelBase
         }
 
         var action = WantGpuMaxPerformance ? "Enable" : "Disable";
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"{action} NVIDIA GPU max performance (DisableDynamicPstate)?\n\n"
             + "⚠ This change requires a REBOOT to take effect.",
-            "GPU Performance — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) { SyncTogglesFromProfile(); return; }
+            "GPU Performance — Confirm")) { SyncTogglesFromProfile(); return; }
 
         try
         {
@@ -352,11 +342,9 @@ public partial class PerformanceViewModel : ViewModelBase
         }
 
         var action = WantProcessorMaxState ? "Set to 100%" : "Restore default";
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"{action} processor minimum state?",
-            "Processor State — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) { SyncTogglesFromProfile(); return; }
+            "Processor State — Confirm")) { SyncTogglesFromProfile(); return; }
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -388,11 +376,7 @@ public partial class PerformanceViewModel : ViewModelBase
             return;
         }
 
-        var result = MessageBox.Show(
-            "Create a System Restore point?\n\nThis saves the current system state so you can roll back later if something goes wrong.",
-            "Restore Point — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+        if (!DialogService.Instance.Confirm("Create a System Restore point?\n\nThis saves the current system state so you can roll back later if something goes wrong.", "Restore Point — Confirm")) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -420,15 +404,13 @@ public partial class PerformanceViewModel : ViewModelBase
     [RelayCommand]
     private void TrimRam()
     {
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             "Trim the working set of all processes?\n\n"
             + "This frees physical RAM by moving pages to the standby list. "
             + "No data is lost — pages are soft-faulted back on demand. "
             + "Apps may feel briefly slower on next access.\n\n"
             + "This is the same as \"Empty Working Set\" in RAMMap.",
-            "RAM Trim — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "RAM Trim — Confirm")) return;
 
         try
         {
@@ -461,11 +443,9 @@ public partial class PerformanceViewModel : ViewModelBase
             ? "This creates hiberfil.sys and allows the PC to hibernate."
             : "This deletes hiberfil.sys and frees disk space (often several GB).";
 
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             $"{action} hibernation?\n\n{detail}",
-            "Hibernation — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "Hibernation — Confirm")) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -499,7 +479,7 @@ public partial class PerformanceViewModel : ViewModelBase
         var gpuWasChanged = _snapshot.NvidiaSubKey != null
             && Profile.GpuMaxPerformance != !_snapshot.GpuDynamicPstate;
 
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             "Restore ALL settings to the state before any changes were made?\n\n"
             + $"• Power plan → {_snapshot.PowerPlanName}\n"
             + $"• Visual effects → {(_snapshot.UiEffectsEnabled ? "Normal" : "Reduced")}\n"
@@ -508,9 +488,7 @@ public partial class PerformanceViewModel : ViewModelBase
             + $"• Processor min state → {_snapshot.ProcessorMinPercentAc}%\n"
             + (gpuWasChanged ? "• GPU → Dynamic P-state (reboot needed)\n" : "")
             + "\nContinue?",
-            "Restore Original Settings — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "Restore Original Settings — Confirm")) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;

@@ -28,12 +28,10 @@ public partial class NetworkRepairViewModel : ViewModelBase
     [RelayCommand]
     private async Task FlushDnsAsync()
     {
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             "Flush the DNS resolver cache?\n\nThis clears cached DNS lookups "
             + "and forces fresh resolution. Safe and instant — no reboot needed.",
-            "DNS Flush — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "DNS Flush — Confirm")) return;
         await RunRepairAsync(() => Shared.Repair.FlushDnsAsync());
     }
 
@@ -45,12 +43,10 @@ public partial class NetworkRepairViewModel : ViewModelBase
             RepairStatus = "⚠ Winsock reset requires administrator privileges.";
             return;
         }
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             "Reset the Winsock catalog?\n\nThis repairs corrupted network "
             + "socket settings. A reboot is required for changes to take effect.",
-            "Winsock Reset — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+            "Winsock Reset — Confirm")) return;
         await RunRepairAsync(() => Shared.Repair.ResetWinsockAsync());
     }
 
@@ -62,12 +58,10 @@ public partial class NetworkRepairViewModel : ViewModelBase
             RepairStatus = "⚠ TCP/IP reset requires administrator privileges.";
             return;
         }
-        var result = MessageBox.Show(
+        if (!DialogService.Instance.Confirm(
             "Reset the TCP/IP stack?\n\nThis restores all TCP/IP settings "
             + "to their defaults. A reboot is required for changes to take effect.",
-            "TCP/IP Reset — Confirm",
-            MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+            "TCP/IP Reset — Confirm")) return;
         await RunRepairAsync(() => Shared.Repair.ResetTcpIpAsync());
     }
 

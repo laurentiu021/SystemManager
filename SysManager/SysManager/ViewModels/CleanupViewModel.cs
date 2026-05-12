@@ -219,12 +219,9 @@ public partial class CleanupViewModel : ViewModelBase
         if (IsSfcRunning) return;
         if (!AdminHelper.IsElevated())
         {
-            var result = System.Windows.MessageBox.Show(
+            if (!DialogService.Instance.Confirm(
                 "SFC requires admin privileges. Restart the application with elevated privileges?",
-                "Admin Required",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
-            if (result != System.Windows.MessageBoxResult.Yes)
+                "Admin Required"))
             {
                 StatusMessage = "SFC cancelled — admin privileges required.";
                 return;
@@ -306,12 +303,9 @@ public partial class CleanupViewModel : ViewModelBase
         if (IsDismRunning) return;
         if (!AdminHelper.IsElevated())
         {
-            var result = System.Windows.MessageBox.Show(
+            if (!DialogService.Instance.Confirm(
                 "DISM requires admin privileges. Restart the application with elevated privileges?",
-                "Admin Required",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
-            if (result != System.Windows.MessageBoxResult.Yes)
+                "Admin Required"))
             {
                 StatusMessage = "DISM cancelled — admin privileges required.";
                 return;

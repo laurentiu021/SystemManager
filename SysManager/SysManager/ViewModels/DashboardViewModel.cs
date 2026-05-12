@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -14,6 +15,8 @@ namespace SysManager.ViewModels;
 public partial class DashboardViewModel : ViewModelBase
 {
     private readonly SystemInfoService _sys;
+    private readonly TuneUpService _tuneUp;
+    private CancellationTokenSource? _tuneUpCts;
 
     [ObservableProperty] private SystemSnapshot? _snapshot;
     [ObservableProperty] private bool _isElevated;
@@ -23,9 +26,28 @@ public partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private string _diskLine = "";
     [ObservableProperty] private string _uptimeLine = "";
 
+    // ── Tune-Up state ──────────────────────────────────────────────────
+    [ObservableProperty] private bool _isTuneUpRunning;
+    [ObservableProperty] private string _tuneUpStep = "";
+    [ObservableProperty] private int _tuneUpProgress;
+    [ObservableProperty] private TuneUpResult? _tuneUpResult;
+    [ObservableProperty] private bool _hasTuneUpResult;
+
     public DashboardViewModel(SystemInfoService sys)
+        : this(sys, new TuneUpService(
+            new ShortcutCleanerService(),
+            new DiskHealthService(),
+            sys))
+    {
+    }
+
+    /// <summary>
+    /// Testable constructor — accepts all dependencies explicitly.
+    /// </summary>
+    public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp)
     {
         _sys = sys;
+        _tuneUp = tuneUp;
         IsElevated = AdminHelper.IsElevated();
     }
 
@@ -67,5 +89,94 @@ public partial class DashboardViewModel : ViewModelBase
         Log.Information("Admin elevation requested from Dashboard");
         if (AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current.Shutdown();
+    }
+
+    // ── Tune-Up commands ───────────────────────────────────────────────
+
+    [RelayCommand(CanExecute = nameof(CanRunTuneUp))]
+    private async Task RunTuneUpAsync()
+    {
+        // Confirm Recycle Bin emptying before starting
+        bool emptyBin = DialogService.Instance.Confirm(
+            "Quick Tune-Up will clean temp files and scan your system.\n\n" +
+            "Do you also want to empty the Recycle Bin?",
+            "Quick Tune-Up");
+
+        var opLock = OperationLockService.Instance.TryAcquire(
+            OperationCategory.Disk, "Quick Tune-Up");
+        if (opLock == null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
+
+        _tuneUpCts = new CancellationTokenSource();
+        IsTuneUpRunning = true;
+        HasTuneUpResult = false;
+        TuneUpResult = null;
+        TuneUpProgress = 0;
+        RunTuneUpCommand.NotifyCanExecuteChanged();
+
+        var progress = new Progress<(int Step, string Message)>(p =>
+        {
+            TuneUpStep = p.Message;
+            // 6 steps total (0-5), map to 0-100
+            TuneUpProgress = Math.Min((p.Step + 1) * 100 / 6, 100);
+        });
+
+        try
+        {
+            TuneUpResult = await _tuneUp.RunAsync(emptyBin, progress, _tuneUpCts.Token);
+            HasTuneUpResult = true;
+            StatusMessage = $"Tune-Up complete — {TuneUpResult.FreedDisplay} freed, {TuneUpResult.OverallVerdict}";
+            Log.Information("Quick Tune-Up completed: {Freed} freed, {Warnings} warnings",
+                TuneUpResult.FreedDisplay, TuneUpResult.WarningCount);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Tune-Up cancelled.";
+        }
+        catch (IOException ex)
+        {
+            StatusMessage = $"Tune-Up error: {ex.Message}";
+            Log.Warning("TuneUp failed: {Error}", ex.Message);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            StatusMessage = $"Tune-Up error: {ex.Message}";
+            Log.Warning("TuneUp failed: {Error}", ex.Message);
+        }
+        finally
+        {
+            opLock.Dispose();
+            IsTuneUpRunning = false;
+            _tuneUpCts?.Dispose();
+            _tuneUpCts = null;
+            RunTuneUpCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanRunTuneUp() => !IsTuneUpRunning;
+
+    [RelayCommand]
+    private void CancelTuneUp()
+    {
+        _tuneUpCts?.Cancel();
+    }
+
+    [RelayCommand]
+    private void DismissTuneUpResult()
+    {
+        HasTuneUpResult = false;
+        TuneUpResult = null;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _tuneUpCts?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }

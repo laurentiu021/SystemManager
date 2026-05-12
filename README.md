@@ -247,6 +247,11 @@ long-running operation, so you always know which tab is working.
 ### Dashboard
 - One-line OS / CPU / RAM / disk summary
 - Live uptime counter
+- **Quick Tune-Up** — one-click wizard that cleans temp files, optionally
+  empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
+  health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
+  a summary card with freed space, warnings, and links to relevant tabs.
+  Non-destructive, no admin required.
 
 ### Updates (for SysManager itself)
 - Auto-check on startup against the GitHub Releases API, plus a manual

@@ -90,6 +90,8 @@ Key services:
   human-readable explanations.
 - `HealthAnalyzer` — raw SMART / ping data into verdict pills.
 - `SystemInfoService` — OS / CPU / RAM / uptime snapshot.
+- `TuneUpService` — orchestrates the Quick Tune-Up wizard: temp cleanup,
+  Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Non-destructive.
 - `LogService` — Serilog wrapper with rolling file sink.
 - `FixedDriveService` — enumerate fixed NTFS/ReFS volumes.
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming

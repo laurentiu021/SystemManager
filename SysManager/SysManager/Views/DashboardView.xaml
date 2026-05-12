@@ -63,6 +63,92 @@
 
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <StackPanel>
+                <!-- Health Score card -->
+                <Border CornerRadius="8" Padding="16" Background="#0D1117" Margin="0,0,0,12"
+                        BorderBrush="#30363D" BorderThickness="1"
+                        Visibility="{Binding HasHealthScore, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Circular gauge (score number with colored ring) -->
+                        <Border Grid.Column="0" Width="100" Height="100" CornerRadius="50"
+                                BorderThickness="6" Margin="0,0,16,0"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border.BorderBrush>
+                                <SolidColorBrush Color="{Binding HealthResult.ColorHex}"/>
+                            </Border.BorderBrush>
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding HealthResult.Score}" FontSize="32" FontWeight="Bold"
+                                           HorizontalAlignment="Center" Foreground="White"/>
+                                <TextBlock Text="{Binding HealthResult.Label}" FontSize="11"
+                                           HorizontalAlignment="Center" Foreground="#9AA0A6"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Score details + recommendations -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="System Health" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,6"/>
+
+                            <!-- Component breakdown -->
+                            <WrapPanel Margin="0,0,0,8">
+                                <TextBlock Margin="0,0,12,0" Foreground="#9AA0A6" FontSize="12">
+                                    <Run Text="Disk "/>
+                                    <Run Text="{Binding HealthResult.DiskScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="#C9D1D9"/>
+                                </TextBlock>
+                                <TextBlock Margin="0,0,12,0" Foreground="#9AA0A6" FontSize="12">
+                                    <Run Text="RAM "/>
+                                    <Run Text="{Binding HealthResult.RamScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="#C9D1D9"/>
+                                </TextBlock>
+                                <TextBlock Margin="0,0,12,0" Foreground="#9AA0A6" FontSize="12">
+                                    <Run Text="Uptime "/>
+                                    <Run Text="{Binding HealthResult.UptimeScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="#C9D1D9"/>
+                                </TextBlock>
+                                <TextBlock Foreground="#9AA0A6" FontSize="12"
+                                           Visibility="{Binding HealthResult.HasBattery, Converter={StaticResource BoolToVis}}">
+                                    <Run Text="Battery "/>
+                                    <Run Text="{Binding HealthResult.BatteryScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="#C9D1D9"/>
+                                </TextBlock>
+                            </WrapPanel>
+
+                            <!-- Recommendations -->
+                            <ItemsControl ItemsSource="{Binding HealthResult.Recommendations}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                            <TextBlock Text="{Binding IconGlyph}" FontFamily="Segoe Fluent Icons"
+                                                       FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                <TextBlock.Foreground>
+                                                    <SolidColorBrush Color="{Binding ColorHex}"/>
+                                                </TextBlock.Foreground>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Message}" FontSize="12" VerticalAlignment="Center">
+                                                <TextBlock.Foreground>
+                                                    <SolidColorBrush Color="{Binding ColorHex}"/>
+                                                </TextBlock.Foreground>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Health Score loading indicator -->
+                <Border CornerRadius="8" Padding="14" Background="#0D1117" Margin="0,0,0,8"
+                        BorderBrush="#30363D" BorderThickness="1"
+                        Visibility="{Binding IsHealthScoreLoading, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <ProgressBar AutomationProperties.Name="Health score loading" IsIndeterminate="True"
+                                     Width="80" Height="4" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Computing health score…" Foreground="#9AA0A6" FontSize="12"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- Tune-Up progress panel -->
                 <Border CornerRadius="8" Padding="14" Background="#0D1117" Margin="0,0,0,8"
                         BorderBrush="#238636" BorderThickness="1"

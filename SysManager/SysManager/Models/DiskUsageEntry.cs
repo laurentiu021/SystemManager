@@ -21,13 +21,5 @@ public partial class DiskUsageEntry : ObservableObject
     [ObservableProperty] private bool _isAccessDenied;
 
     /// <summary>Formatted size for display.</summary>
-    public string SizeDisplay => FormatSize(SizeBytes);
-
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1L << 30 => $"{bytes / (double)(1L << 30):F1} GB",
-        >= 1L << 20 => $"{bytes / (double)(1L << 20):F1} MB",
-        >= 1L << 10 => $"{bytes / (double)(1L << 10):F1} KB",
-        _ => $"{bytes} B"
-    };
+    public string SizeDisplay => CleanupCategory.HumanSize(SizeBytes);
 }

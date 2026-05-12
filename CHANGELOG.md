@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   end-to-start, eliminating O(n²) array shifting (CQ-001).
 - **Shortcut Cleaner** — COM objects (`IShellLink`, `IPersistFile`) now
   released via `Marshal.ReleaseComObject` in finally block (SEC-006).
+- **Models** — deduplicated `FormatSize` from `DiskUsageEntry`, `InstalledApp`,
+  and `ProcessEntry`; all now use `CleanupCategory.HumanSize` (CQ-002).
+- **Console** — batch-remove excess lines from end-to-start instead of
+  repeated `RemoveAt(0)`, reducing O(n) per append to amortized O(1) (CQ-008).
 
 ### Security
 - **Speed Test** — improved download integrity comment and added

@@ -117,7 +117,7 @@ public class ProcessManagerServiceTests
     public void ProcessEntry_MemoryDisplay_FormatsCorrectly()
     {
         var entry = new ProcessEntry { MemoryBytes = 52_428_800 }; // 50 MB
-        Assert.Equal("50.0 MB", entry.MemoryDisplay);
+        Assert.Equal("50 MB", entry.MemoryDisplay);
     }
 
     [Fact]

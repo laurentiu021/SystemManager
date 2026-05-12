@@ -181,4 +181,11 @@ public partial class ServicesViewModel : ViewModelBase
 
         foreach (var s in filtered) Services.Add(s);
     }
+
+    [RelayCommand]
+    private void ToggleHighlight(object? parameter)
+    {
+        if (parameter is ServiceEntry entry)
+            entry.IsHighlighted = !entry.IsHighlighted;
+    }
 }

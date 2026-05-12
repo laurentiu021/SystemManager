@@ -33,6 +33,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Startup Manager — Hide Windows entries** — toggle to filter out
   Microsoft / Windows startup items that should not be disabled.
   Closes #238.
+- **System Logs — Row highlight** — toggle highlight on any log entry
+  for better visibility when reviewing events. Closes #233.
+- **Services — Row highlight** — toggle highlight on any service row
+  to mark entries of interest while browsing. Closes #239.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing

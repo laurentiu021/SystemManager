@@ -311,4 +311,11 @@ public partial class LogsViewModel : ViewModelBase
             return "\"" + s.Replace("\"", "\"\"") + "\"";
         return s;
     }
+
+    [RelayCommand]
+    private void ToggleHighlight(object? parameter)
+    {
+        if (parameter is FriendlyEventEntry entry)
+            entry.IsHighlighted = !entry.IsHighlighted;
+    }
 }

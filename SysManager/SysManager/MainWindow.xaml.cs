@@ -5,6 +5,7 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager;
@@ -29,6 +30,10 @@ public partial class MainWindow : Window
         base.OnSourceInitialized(e);
         if (PresentationSource.FromVisual(this) is HwndSource source)
             source.AddHook(WndProc);
+
+        // Initialize tray icon after window handle is available
+        if (Application.Current is App app && app.TrayService != null)
+            app.TrayService.Initialize(this);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -61,6 +66,18 @@ public partial class MainWindow : Window
         if (sender is FrameworkElement fe && fe.Tag is NavItem item
             && DataContext is MainWindowViewModel vm)
             vm.SelectedNav = item;
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        // Minimize to tray instead of closing (if enabled)
+        if (Application.Current is App app && app.TrayService is { MinimizeToTray: true })
+        {
+            e.Cancel = true;
+            TrayIconService.HideWindow(this);
+            return;
+        }
+        base.OnClosing(e);
     }
 
     protected override void OnClosed(EventArgs e)

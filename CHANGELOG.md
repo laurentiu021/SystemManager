@@ -20,6 +20,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with "Scan system". Closes #259.
 - **HealthScoreService** — aggregates SystemInfoService, DiskHealthService,
   and BatteryService into a weighted health score.
+- **System Tray mode** — minimize-to-tray on window close, background
+  health monitoring every 60 seconds, CPU/RAM/uptime tooltip on hover,
+  Windows toast notifications when RAM > 90%, uptime > 14 days, or disk
+  health degrades. Right-click context menu with Show / Exit. Uses
+  H.NotifyIcon.Wpf 2.2.1. Closes #262.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing

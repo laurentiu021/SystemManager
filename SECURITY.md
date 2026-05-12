@@ -12,7 +12,7 @@ older build, the first step is usually to update.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.35.x  | :white_check_mark: |
+| 0.43.x  | :white_check_mark: |
 | 0.34.x  | :white_check_mark: |
 | 0.33.x  | :x:                |
 | < 0.33  | :x:                |

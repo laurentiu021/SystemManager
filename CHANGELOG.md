@@ -6,25 +6,52 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-05-12
+
 ### Added
-- **Dashboard — Quick Tune-Up wizard** — one-click button that runs safe
-  cleanup (temp files), optionally empties Recycle Bin (with confirmation),
-  scans for broken shortcuts (report only), checks disk SMART health,
-  flags high uptime (14+ days) and high RAM usage (85%+). Displays a
-  dismissible summary card with freed space, disk verdicts, and
-  recommendations. Non-destructive, no admin required. Closes #261.
-- **Dashboard — Health Score card** — overall system health gauge (0–100)
-  combining disk SMART, RAM usage, uptime, and battery wear (on laptops).
-  Color-coded circular ring with label (Excellent/Good/Fair/Poor) and up
-  to 3 actionable recommendations. Auto-computes on load and refreshes
-  with "Scan system". Closes #259.
-- **HealthScoreService** — aggregates SystemInfoService, DiskHealthService,
-  and BatteryService into a weighted health score.
-- **System Tray mode** — minimize-to-tray on window close, background
-  health monitoring every 60 seconds, CPU/RAM/uptime tooltip on hover,
-  Windows toast notifications when RAM > 90%, uptime > 14 days, or disk
-  health degrades. Right-click context menu with Show / Exit. Uses
-  H.NotifyIcon.Wpf 2.2.1. Closes #262.
+- **ETA Calculator** — reusable helper that estimates time remaining for
+  any progress-based operation. Integrated into Speed Test (HTTP + Ookla)
+  and Deep Cleanup (scan + clean). Shows human-friendly estimates like
+  "~2 min 15 s" next to progress bars. Closes #241.
+
+## [0.42.0] - 2026-05-12
+
+### Added
+- **Drivers — Scrollable view** — wrapped the Drivers tab in a
+  ScrollViewer so the full content (toolbar, summary, table) is
+  scrollable when the window is small. DataGrid has explicit
+  VerticalScrollBarVisibility and MaxHeight for large driver lists.
+  Closes #235.
+
+## [0.41.0] - 2026-05-12
+
+### Added
+- **Speed Test — History tracking** — each speed test result (HTTP and
+  Ookla) is saved to disk and displayed in a history table below the
+  test card. Stores up to 20 results per engine with date, download,
+  upload, ping, and server. Clear button per engine. Persists between
+  sessions. Closes #237.
+
+## [0.40.1] - 2026-05-12
+
+### Fixed
+- **Auto-update** — "Install" now performs a true in-place update: verifies
+  SHA256 hash of the downloaded build, writes an updater script that waits
+  for the current process to exit, copies the new executable over the old
+  one, and restarts. Previously it only launched the new exe from a temp
+  folder without replacing the original. Closes #240.
+
+## [0.40.0] - 2026-05-12
+
+### Added
+- **System Logs — Row highlight** — toggle highlight on any log entry
+  for better visibility when reviewing events. Closes #233.
+- **Services — Row highlight** — toggle highlight on any service row
+  to mark entries of interest while browsing. Closes #239.
+
+## [0.39.0] - 2026-05-12
+
+### Added
 - **About — Changelog link** — new "View Changelog" button opens the
   GitHub CHANGELOG.md in the browser. Closes #232.
 - **Drivers — Hide system drivers** — toggle to filter out Microsoft /
@@ -33,24 +60,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Startup Manager — Hide Windows entries** — toggle to filter out
   Microsoft / Windows startup items that should not be disabled.
   Closes #238.
-- **System Logs — Row highlight** — toggle highlight on any log entry
-  for better visibility when reviewing events. Closes #233.
-- **Services — Row highlight** — toggle highlight on any service row
-  to mark entries of interest while browsing. Closes #239.
-- **Speed Test — History tracking** — each speed test result (HTTP and
-  Ookla) is saved to disk and displayed in a history table below the
-  test card. Stores up to 20 results per engine with date, download,
-  upload, ping, and server. Clear button per engine. Persists between
-  sessions. Closes #237.
-- **Drivers — Scrollable view** — wrapped the Drivers tab in a
-  ScrollViewer so the full content (toolbar, summary, table) is
-  scrollable when the window is small. DataGrid has explicit
-  VerticalScrollBarVisibility and MaxHeight for large driver lists.
-  Closes #235.
-- **ETA Calculator** — reusable helper that estimates time remaining for
-  any progress-based operation. Integrated into Speed Test (HTTP + Ookla)
-  and Deep Cleanup (scan + clean). Shows human-friendly estimates like
-  "~2 min 15 s" next to progress bars. Closes #241.
+
+## [0.38.0] - 2026-05-12
+
+### Added
+- **System Tray mode** — minimize-to-tray on window close, background
+  health monitoring every 60 seconds, CPU/RAM/uptime tooltip on hover,
+  Windows toast notifications when RAM > 90%, uptime > 14 days, or disk
+  health degrades. Right-click context menu with Show / Exit. Uses
+  H.NotifyIcon.Wpf 2.2.1. Closes #262.
+
+## [0.37.0] - 2026-05-12
+
+### Added
+- **Dashboard — Health Score card** — overall system health gauge (0–100)
+  combining disk SMART, RAM usage, uptime, and battery wear (on laptops).
+  Color-coded circular ring with label (Excellent/Good/Fair/Poor) and up
+  to 3 actionable recommendations. Auto-computes on load and refreshes
+  with "Scan system". Closes #259.
+- **HealthScoreService** — aggregates SystemInfoService, DiskHealthService,
+  and BatteryService into a weighted health score.
+
+## [0.36.0] - 2026-05-12
+
+### Added
+- **Dashboard — Quick Tune-Up wizard** — one-click button that runs safe
+  cleanup (temp files), optionally empties Recycle Bin (with confirmation),
+  scans for broken shortcuts (report only), checks disk SMART health,
+  flags high uptime (14+ days) and high RAM usage (85%+). Displays a
+  dismissible summary card with freed space, disk verdicts, and
+  recommendations. Non-destructive, no admin required. Closes #261.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
 - **IDialogService** — abstraction for user confirmation dialogs, replacing
@@ -58,11 +97,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   confirmation-gated code paths (CQ-003).
 
 ### Fixed
-- **Auto-update** — "Install" now performs a true in-place update: verifies
-  SHA256 hash of the downloaded build, writes an updater script that waits
-  for the current process to exit, copies the new executable over the old
-  one, and restarts. Previously it only launched the new exe from a temp
-  folder without replacing the original. Closes #240.
 - **Disk Health** — `TemperatureColorHex` returns grey (#9AA0A6) for drives
   without temperature sensors instead of misleading red (QA-004).
 - **Battery Health** — `HealthPercent` clamped to 0–100, `WearPercent`

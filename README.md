@@ -256,6 +256,9 @@ long-running operation, so you always know which tab is working.
   SMART, RAM usage, uptime, and battery wear. Color-coded ring (green /
   amber / red) with up to 3 actionable recommendations. Auto-computes on
   load and refreshes with "Scan system".
+- **System Tray** — minimize-to-tray on close, background health monitoring
+  (60s polling), CPU/RAM tooltip, Windows notifications when RAM > 90%,
+  uptime > 14 days, or disk health degrades. Context menu: Show / Exit.
 
 ### Updates (for SysManager itself)
 - Auto-check on startup against the GitHub Releases API, plus a manual

@@ -15,10 +15,19 @@ public partial class BatteryInfo : ObservableObject
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _status = "";          // Charging / Discharging / Full / AC (no battery)
     [ObservableProperty] private int _chargePercent;            // 0-100
-    [ObservableProperty] private uint _designCapacityMWh;       // milliwatt-hours
-    [ObservableProperty] private uint _fullChargeCapacityMWh;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HealthPercent))]
+    [NotifyPropertyChangedFor(nameof(WearPercent))]
+    private uint _designCapacityMWh;       // milliwatt-hours
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HealthPercent))]
+    [NotifyPropertyChangedFor(nameof(WearPercent))]
+    private uint _fullChargeCapacityMWh;
     [ObservableProperty] private int _cycleCount;
-    [ObservableProperty] private int _estimatedRuntimeMinutes;  // -1 = unlimited (AC)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RuntimeDisplay))]
+    private int _estimatedRuntimeMinutes;  // -1 = unlimited (AC)
     [ObservableProperty] private string _chemistry = "";        // LiIon, NiMH, etc.
     [ObservableProperty] private string _manufacturer = "";
 

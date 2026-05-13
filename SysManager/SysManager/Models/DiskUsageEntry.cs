@@ -14,7 +14,9 @@ public partial class DiskUsageEntry : ObservableObject
 {
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _fullPath = "";
-    [ObservableProperty] private long _sizeBytes;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SizeDisplay))]
+    private long _sizeBytes;
     [ObservableProperty] private double _percentage;
     [ObservableProperty] private int _fileCount;
     [ObservableProperty] private int _folderCount;

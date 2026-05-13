@@ -46,7 +46,11 @@ public partial class ShortcutCleanerViewModel : ViewModelBase
         IsScanning = true;
         IsBusy = true;
         IsProgressIndeterminate = true;
-        BrokenShortcuts.Clear();
+            // MEM-007: Unsubscribe from old items before clearing to prevent
+            // PropertyChanged lambda leaks across rescans.
+            foreach (var old in BrokenShortcuts)
+                old.PropertyChanged -= OnShortcutPropertyChanged;
+            BrokenShortcuts.Clear();
         BrokenCount = 0;
         SelectedCount = 0;
         ScanStatus = "Scanning...";
@@ -59,11 +63,7 @@ public partial class ShortcutCleanerViewModel : ViewModelBase
 
             foreach (var s in results)
             {
-                s.PropertyChanged += (_, e) =>
-                {
-                    if (e.PropertyName == nameof(BrokenShortcut.IsSelected))
-                        SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
-                };
+                s.PropertyChanged += OnShortcutPropertyChanged;
                 BrokenShortcuts.Add(s);
             }
 
@@ -132,9 +132,20 @@ public partial class ShortcutCleanerViewModel : ViewModelBase
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
 
+    private void OnShortcutPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(BrokenShortcut.IsSelected))
+            SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
+    }
+
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _cts?.Dispose();
+        if (disposing)
+        {
+            foreach (var s in BrokenShortcuts)
+                s.PropertyChanged -= OnShortcutPropertyChanged;
+            _cts?.Dispose();
+        }
         base.Dispose(disposing);
     }
 }

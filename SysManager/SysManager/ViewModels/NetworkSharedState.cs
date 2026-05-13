@@ -425,12 +425,11 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         while (removeCount < buffer.Count && buffer[removeCount].DateTime < cutoff)
             removeCount++;
 
-        // Batch removal from end-to-start avoids O(n²) shifting
-        if (removeCount > 0)
-        {
-            for (int i = removeCount - 1; i >= 0; i--)
-                buffer.RemoveAt(i);
-        }
+        // PERF-003: Remove stale items from the front. Removing from index 0
+        // repeatedly is O(n*removeCount) but unavoidable with ObservableCollection.
+        // We remove forward (always index 0) which is simpler and equivalent.
+        for (int i = 0; i < removeCount; i++)
+            buffer.RemoveAt(0);
     }
 
     internal void TrimAllBuffers()

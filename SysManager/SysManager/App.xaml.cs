@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using SysManager.Services;
 
 namespace SysManager;
@@ -18,6 +19,9 @@ public partial class App : Application
 
     // Guard against cascading error dialogs — show at most one at a time.
     private static int _errorDialogActive;
+
+    /// <summary>The DI service provider for the application.</summary>
+    public static IServiceProvider? Services { get; private set; }
 
     /// <summary>The shared tray icon service instance.</summary>
     public TrayIconService? TrayService => _trayService;
@@ -50,11 +54,16 @@ public partial class App : Application
 
         LogService.Init();
 
+        // ── Build DI container ─────────────────────────────────────────
+        var serviceCollection = new ServiceCollection();
+        serviceCollection.ConfigureServices();
+        Services = serviceCollection.BuildServiceProvider();
+
         // Don't shutdown when main window is hidden (tray mode)
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        // Initialize tray icon service
-        _trayService = new TrayIconService(new SystemInfoService());
+        // Initialize tray icon service from DI
+        _trayService = Services.GetRequiredService<TrayIconService>();
 
         DispatcherUnhandledException += OnUi;
         AppDomain.CurrentDomain.UnhandledException += OnDomain;

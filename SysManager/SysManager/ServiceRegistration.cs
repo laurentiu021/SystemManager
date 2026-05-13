@@ -1,0 +1,60 @@
+// SysManager · ServiceRegistration — DI container configuration
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using Microsoft.Extensions.DependencyInjection;
+using SysManager.Services;
+using SysManager.ViewModels;
+
+namespace SysManager;
+
+/// <summary>
+/// Registers all services and ViewModels in the DI container.
+/// Called once at application startup from <see cref="App.OnStartup"/>.
+/// </summary>
+public static class ServiceRegistration
+{
+    public static IServiceCollection ConfigureServices(this IServiceCollection services)
+    {
+        // ── Core services (Singleton — one shared instance) ─────────────
+        services.AddSingleton<PowerShellRunner>();
+        services.AddSingleton<SystemInfoService>();
+        services.AddSingleton<WingetService>();
+        services.AddSingleton<TrayIconService>();
+        services.AddSingleton<UpdateService>();
+        services.AddSingleton<ShortcutCleanerService>();
+        services.AddSingleton<DiskHealthService>();
+        services.AddSingleton<BatteryService>();
+        services.AddSingleton<TuneUpService>();
+        services.AddSingleton<HealthScoreService>();
+
+        // ── ViewModels (Singleton — one instance per tab) ──────────────
+        services.AddSingleton<DashboardViewModel>();
+        services.AddSingleton<AppUpdatesViewModel>();
+        services.AddSingleton<WindowsUpdateViewModel>();
+        services.AddSingleton<SystemHealthViewModel>();
+        services.AddSingleton<CleanupViewModel>();
+        services.AddSingleton<DeepCleanupViewModel>();
+        services.AddSingleton<DuplicateFileViewModel>();
+        services.AddSingleton<DiskAnalyzerViewModel>();
+        services.AddSingleton<ProcessManagerViewModel>();
+        services.AddSingleton<BatteryHealthViewModel>();
+        services.AddSingleton<UninstallerViewModel>();
+        services.AddSingleton<PerformanceViewModel>();
+        services.AddSingleton<StartupViewModel>();
+        services.AddSingleton<NetworkSharedState>();
+        services.AddSingleton<PingViewModel>();
+        services.AddSingleton<TracerouteViewModel>();
+        services.AddSingleton<SpeedTestViewModel>();
+        services.AddSingleton<NetworkRepairViewModel>();
+        services.AddSingleton<DriversViewModel>();
+        services.AddSingleton<LogsViewModel>();
+        services.AddSingleton<AboutViewModel>();
+        services.AddSingleton<ServicesViewModel>();
+        services.AddSingleton<AppAlertsViewModel>();
+        services.AddSingleton<ShortcutCleanerViewModel>();
+        services.AddSingleton<AppBlockerViewModel>();
+
+        return services;
+    }
+}

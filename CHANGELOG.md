@@ -6,6 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-05-13
+
+### Added
+- **Navigation: 4 new groups** — Gaming & Profiles, Privacy & Security,
+  Customization, and Advanced groups added to sidebar navigation.
+- **Gaming & Profiles (5 WIP tabs)** — Gaming Profile, Standby List Cleaner,
+  Timer Resolution, CPU Core Affinity, Display Profiles.
+- **Privacy & Security (6 WIP tabs)** — Privacy & Telemetry, Debloater & Ads,
+  Browser Cleaner, Edge/OneDrive Remover, Defender Tweaks, Notification Blocker.
+- **Customization (4 WIP tabs)** — Context Menu, Dark Mode Scheduler, Volume
+  Control, Environment Variables.
+- **Advanced (4 WIP tabs)** — Restore Points, Profile Export/Import, CLI
+  Interface, System Report.
+- **Monitor (3 new WIP tabs)** — File Lock Detector, Settings Watchdog,
+  Bandwidth Monitor added to existing Monitor group.
+- **System (2 new WIP tabs)** — Task Scheduler, Boot Analyzer added to
+  existing System group.
+- **Cleanup (1 new WIP tab)** — Scheduled Maintenance moved into Cleanup group.
+
+### Changed
+- **Navigation structure** — reorganized from 9 groups to 12 groups for better
+  feature categorization as the app grows.
+- **Placeholder descriptions** — improved all WIP placeholder descriptions with
+  clearer feature explanations and correct issue references.
+
 ## [0.52.0] - 2026-05-13
 
 ### Fixed

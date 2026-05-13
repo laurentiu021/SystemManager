@@ -75,47 +75,91 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavItems_ContainAll36()
+    public void NavItems_ContainAll56()
     {
         var vm = new MainWindowViewModel();
-        Assert.Equal(36, vm.NavItems.Count);
+        Assert.Equal(56, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
+
+        // Dashboard
         Assert.Contains("nav-dashboard", ids);
+
+        // System (8)
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-performance", ids);
         Assert.Contains("nav-services", ids);
         Assert.Contains("nav-startup", ids);
         Assert.Contains("nav-windows-features", ids);
+        Assert.Contains("nav-task-scheduler", ids);
+        Assert.Contains("nav-boot-analyzer", ids);
+
+        // Gaming & Profiles (5)
+        Assert.Contains("nav-gaming-profile", ids);
+        Assert.Contains("nav-standby-cleaner", ids);
+        Assert.Contains("nav-timer-resolution", ids);
+        Assert.Contains("nav-cpu-affinity", ids);
+        Assert.Contains("nav-display-profiles", ids);
+
+        // Monitor (7)
         Assert.Contains("nav-processes", ids);
         Assert.Contains("nav-resource-history", ids);
         Assert.Contains("nav-app-alerts", ids);
         Assert.Contains("nav-privacy-monitor", ids);
+        Assert.Contains("nav-file-lock", ids);
+        Assert.Contains("nav-settings-watchdog", ids);
+        Assert.Contains("nav-bandwidth-monitor", ids);
+
+        // Cleanup (5)
         Assert.Contains("nav-cleanup", ids);
         Assert.Contains("nav-deep-cleanup", ids);
         Assert.Contains("nav-shortcut-cleaner", ids);
         Assert.Contains("nav-file-shredder", ids);
+        Assert.Contains("nav-scheduled-maintenance", ids);
+
+        // Storage (2)
         Assert.Contains("nav-disk-analyzer", ids);
         Assert.Contains("nav-duplicates", ids);
+
+        // Network (6)
         Assert.Contains("nav-ping", ids);
         Assert.Contains("nav-traceroute", ids);
         Assert.Contains("nav-speed-test", ids);
         Assert.Contains("nav-network-repair", ids);
         Assert.Contains("nav-dns-changer", ids);
         Assert.Contains("nav-hosts-editor", ids);
+
+        // Apps (4)
         Assert.Contains("nav-app-updates", ids);
         Assert.Contains("nav-bulk-installer", ids);
         Assert.Contains("nav-uninstaller", ids);
         Assert.Contains("nav-app-blocker", ids);
+
+        // Privacy & Security (6)
         Assert.Contains("nav-privacy-settings", ids);
+        Assert.Contains("nav-debloater", ids);
+        Assert.Contains("nav-browser-cleaner", ids);
+        Assert.Contains("nav-edge-onedrive", ids);
+        Assert.Contains("nav-defender-tweaks", ids);
+        Assert.Contains("nav-notification-blocker", ids);
+
+        // Customization (4)
         Assert.Contains("nav-context-menu", ids);
-        Assert.Contains("nav-restore-points", ids);
-        Assert.Contains("nav-scheduled-maintenance", ids);
-        Assert.Contains("nav-system-report", ids);
+        Assert.Contains("nav-dark-mode", ids);
+        Assert.Contains("nav-volume-control", ids);
+        Assert.Contains("nav-env-variables", ids);
+
+        // Info (4)
         Assert.Contains("nav-drivers", ids);
         Assert.Contains("nav-battery", ids);
         Assert.Contains("nav-logs", ids);
         Assert.Contains("nav-about", ids);
+
+        // Advanced (4)
+        Assert.Contains("nav-restore-points", ids);
+        Assert.Contains("nav-profile-export", ids);
+        Assert.Contains("nav-cli-interface", ids);
+        Assert.Contains("nav-system-report", ids);
     }
 
     [Fact]
@@ -159,10 +203,10 @@ public class MainWindowViewModelTests
     // ── NavGroup tests ──────────────────────────────────────────────
 
     [Fact]
-    public void NavGroups_Has9Groups()
+    public void NavGroups_Has12Groups()
     {
         var vm = new MainWindowViewModel();
-        Assert.Equal(9, vm.NavGroups.Count);
+        Assert.Equal(12, vm.NavGroups.Count);
     }
 
     [Fact]
@@ -195,11 +239,11 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_SystemGroup_Contains6Items()
+    public void NavGroups_SystemGroup_Contains8Items()
     {
         var vm = new MainWindowViewModel();
         var sys = vm.NavGroups.First(g => g.Id == "grp-system");
-        Assert.Equal(6, sys.Children.Count);
+        Assert.Equal(8, sys.Children.Count);
         var ids = sys.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
@@ -207,6 +251,8 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-services", ids);
         Assert.Contains("nav-startup", ids);
         Assert.Contains("nav-windows-features", ids);
+        Assert.Contains("nav-task-scheduler", ids);
+        Assert.Contains("nav-boot-analyzer", ids);
     }
 
     [Fact]
@@ -220,12 +266,12 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_CleanupGroup_Has4Items()
+    public void NavGroups_CleanupGroup_Has5Items()
     {
-        // Cleanup now has: Quick, Deep, Shortcut Cleaner, File Shredder
+        // Cleanup now has: Quick, Deep, Shortcut Cleaner, File Shredder, Scheduled Maintenance
         var vm = new MainWindowViewModel();
         var cleanup = vm.NavGroups.First(g => g.Id == "grp-cleanup");
-        Assert.Equal(4, cleanup.Children.Count);
+        Assert.Equal(5, cleanup.Children.Count);
     }
 
     [Fact]

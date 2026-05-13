@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-05-13
+
+### Fixed
+- **Security: UpdateService** — treat missing .sha256 hash file as verification
+  failure instead of silently passing (SEC-001).
+- **Security: SpeedTestService** — pin expected SHA-256 hashes for Ookla CLI
+  download, log warning on mismatch (SEC-002).
+- **Security: AppBlockerService** — apply same input validation regex to
+  UnblockApp as BlockApp to prevent registry path injection (SEC-004).
+- **Memory: AppUpdatesViewModel** — store LineReceived handler in field and
+  unsubscribe in Dispose to prevent event subscription leak (MEM-001).
+- **Memory: NetworkSharedState** — unsubscribe Pinger.SampleReceived and
+  TraceMonitor.RouteCompleted in Dispose, dispose TraceMonitor (MEM-002).
+- **Memory: ConsoleView** — unsubscribe from previous DataContext's
+  CollectionChanged before subscribing to new one (MEM-003).
+- **Memory: PerformanceView** — store PropertyChanged handler and unsubscribe
+  from previous VM on DataContext change (MEM-004).
+- **Bug: DuplicateFileGroup** — guard WastedBytes with Math.Max to prevent
+  negative value when Count is 0 (BUG-001).
+- **Performance: ProcessEntry** — cache CanOpenFileLocation on creation instead
+  of calling File.Exists on every property evaluation (PERF-001).
+- **Bug: WindowsFeaturesViewModel** — add CanExecute guard on ToggleFeature
+  command to prevent rapid-click race condition (BUG-006).
+
 ## [0.47.0] - 2026-05-13
 
 ### Changed

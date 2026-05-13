@@ -10,6 +10,8 @@ namespace SysManager.Views;
 
 public partial class PerformanceView : UserControl
 {
+    private System.ComponentModel.PropertyChangedEventHandler? _propertyHandler;
+
     public PerformanceView()
     {
         InitializeComponent();
@@ -18,13 +20,18 @@ public partial class PerformanceView : UserControl
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        // MEM-004: unsubscribe from previous VM to prevent leak
+        if (e.OldValue is PerformanceViewModel oldVm && _propertyHandler != null)
+            oldVm.PropertyChanged -= _propertyHandler;
+
         if (e.NewValue is PerformanceViewModel vm)
         {
-            vm.PropertyChanged += (_, args) =>
+            _propertyHandler = (_, args) =>
             {
                 if (args.PropertyName == nameof(PerformanceViewModel.SelectedPlan))
                     SyncRadioButtons(vm.SelectedPlan);
             };
+            vm.PropertyChanged += _propertyHandler;
             SyncRadioButtons(vm.SelectedPlan);
         }
     }

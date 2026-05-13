@@ -75,7 +75,7 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanToggle))]
     private async Task ToggleFeatureAsync(WindowsFeature? feature)
     {
         if (feature == null) return;
@@ -151,6 +151,8 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
+
+    private bool CanToggle(WindowsFeature? _) => !IsBusy;
 
     protected override void Dispose(bool disposing)
     {

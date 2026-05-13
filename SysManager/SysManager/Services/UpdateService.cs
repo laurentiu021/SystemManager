@@ -230,7 +230,7 @@ public sealed class UpdateService
         catch (HttpRequestException ex)
         {
             Serilog.Log.Warning(ex, "Could not download .sha256 file for verification");
-            return (true, null, null); // best-effort: don't block install if .sha256 unavailable
+            return (false, null, null); // SEC-001: treat missing hash as verification failure
         }
         catch (OperationCanceledException)
         {

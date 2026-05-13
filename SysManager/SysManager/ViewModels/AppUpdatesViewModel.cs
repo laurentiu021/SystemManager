@@ -15,6 +15,7 @@ public partial class AppUpdatesViewModel : ViewModelBase
 {
     private readonly WingetService _winget;
     private CancellationTokenSource? _cts;
+    private readonly Action<PowerShellLine> _lineHandler;
 
     public ObservableCollection<AppPackage> Packages { get; } = new();
     public ConsoleViewModel Console { get; } = new();
@@ -25,7 +26,8 @@ public partial class AppUpdatesViewModel : ViewModelBase
     public AppUpdatesViewModel(WingetService winget)
     {
         _winget = winget;
-        _winget.LineReceived += line => Console.Append(line);
+        _lineHandler = line => Console.Append(line);
+        _winget.LineReceived += _lineHandler;
         IsElevated = SysManager.Helpers.AdminHelper.IsElevated();
     }
 
@@ -103,6 +105,7 @@ public partial class AppUpdatesViewModel : ViewModelBase
     {
         if (disposing)
         {
+            _winget.LineReceived -= _lineHandler;
             _cts?.Dispose();
         }
         base.Dispose(disposing);

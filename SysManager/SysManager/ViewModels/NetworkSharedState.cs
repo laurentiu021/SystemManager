@@ -481,9 +481,12 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        Pinger.SampleReceived -= OnSample;
+        TraceMonitor.RouteCompleted -= OnRouteCompleted;
         Pinger.Stop();
         Pinger.Dispose();
         TraceMonitor.Stop();
+        TraceMonitor.Dispose();
         FlushTimer?.Stop();
     }
 }

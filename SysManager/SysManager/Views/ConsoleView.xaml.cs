@@ -20,12 +20,14 @@ public partial class ConsoleView : UserControl
             System.Windows.FrameworkElement.RequestBringIntoViewEvent,
             new System.Windows.RequestBringIntoViewEventHandler((s, e) => e.Handled = true));
 
-        DataContextChanged += (_, __) =>
+        DataContextChanged += (_, args) =>
         {
-            if (DataContext is ConsoleViewModel vm)
-            {
+            // MEM-003: unsubscribe from previous DataContext to prevent leak
+            if (args.OldValue is ConsoleViewModel oldVm)
+                oldVm.Lines.CollectionChanged -= OnLinesChanged;
+
+            if (args.NewValue is ConsoleViewModel vm)
                 vm.Lines.CollectionChanged += OnLinesChanged;
-            }
         };
     }
 

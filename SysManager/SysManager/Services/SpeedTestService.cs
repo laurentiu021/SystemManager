@@ -329,7 +329,9 @@ public sealed class SpeedTestService
         {
             try
             {
+#pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete — no direct replacement for Authenticode verification
                 var cert = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
+#pragma warning restore SYSLIB0057
                 if (cert == null || !cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
                     Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert?.Subject ?? "none");
                 else

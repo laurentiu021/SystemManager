@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-05-13
+
+### Added
+- **Uninstaller — Local app support** — apps not managed by winget (per-user
+  installs, legacy software, custom apps) can now be uninstalled directly
+  using their registry UninstallString. The service parses quoted paths,
+  MsiExec commands, and rundll32 invocations. Prefers QuietUninstallString
+  when available. Closes #236.
+
 ## [0.43.0] - 2026-05-12
 
 ### Added

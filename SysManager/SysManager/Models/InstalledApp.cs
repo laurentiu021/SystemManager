@@ -21,6 +21,8 @@ public partial class InstalledApp : ObservableObject
     [ObservableProperty] private long _sizeBytes;
     [ObservableProperty] private string _publisher = "";
     [ObservableProperty] private ImageSource? _icon;
+    [ObservableProperty] private string _uninstallString = "";
+    [ObservableProperty] private string _quietUninstallString = "";
 
     /// <summary>Formatted size for display.</summary>
     public string SizeDisplay => SizeBytes > 0 ? CleanupCategory.HumanSize(SizeBytes) : "—";

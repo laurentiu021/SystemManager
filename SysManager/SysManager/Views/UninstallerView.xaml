@@ -139,7 +139,7 @@
                                                 <DataTrigger Binding="{Binding Source}" Value="">
                                                     <Setter Property="Text" Value="Local"/>
                                                     <Setter Property="Foreground" Value="#F59E0B"/>
-                                                    <Setter Property="ToolTip" Value="Not from winget — uninstall may require the app's own installer"/>
+                                                    <Setter Property="ToolTip" Value="Not from winget — uses registry uninstall command"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

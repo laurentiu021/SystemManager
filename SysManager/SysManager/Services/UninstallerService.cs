@@ -1,4 +1,4 @@
-// SysManager · UninstallerService — list and uninstall apps via winget
+// SysManager · UninstallerService — list and uninstall apps via winget and registry
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
@@ -200,6 +200,17 @@ public sealed partial class UninstallerService
                         app.Publisher = pub;
                 }
 
+                if (string.IsNullOrWhiteSpace(app.UninstallString))
+                {
+                    var quietUninst = sub.GetValue("QuietUninstallString") as string;
+                    if (!string.IsNullOrWhiteSpace(quietUninst))
+                        app.QuietUninstallString = quietUninst;
+
+                    var uninst = sub.GetValue("UninstallString") as string;
+                    if (!string.IsNullOrWhiteSpace(uninst))
+                        app.UninstallString = uninst;
+                }
+
                 if (app.Icon == null)
                 {
                     var iconPath = sub.GetValue("DisplayIcon") as string;
@@ -219,5 +230,89 @@ public sealed partial class UninstallerService
             catch (System.Security.SecurityException) { /* skip protected subkey */ }
             catch (UnauthorizedAccessException) { /* skip protected subkey */ }
         }
+    }
+
+    /// <summary>
+    /// Uninstalls a local application using its registry UninstallString.
+    /// Prefers QuietUninstallString when available.
+    /// </summary>
+    public async Task<int> UninstallLocalAsync(InstalledApp app, CancellationToken ct = default)
+    {
+        var command = !string.IsNullOrWhiteSpace(app.QuietUninstallString)
+            ? app.QuietUninstallString
+            : app.UninstallString;
+
+        if (string.IsNullOrWhiteSpace(command))
+            throw new InvalidOperationException(
+                $"No uninstall command found for '{app.Name}'. The app may need to be removed manually.");
+
+        // Parse the uninstall string into executable + arguments.
+        // Handles both quoted paths ("C:\path\uninstall.exe" /S) and unquoted.
+        var (exe, args) = ParseUninstallCommand(command);
+
+        Log.Information("Uninstalling local app '{Name}' via: {Exe} {Args}", app.Name, exe, args);
+        return await _runner.RunProcessAsync(exe, args, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Parses an uninstall command string into executable and arguments.
+    /// Handles: "C:\path\uninstall.exe" /S, C:\path\uninstall.exe /S,
+    /// MsiExec.exe /X{GUID}, rundll32.exe ...
+    /// </summary>
+    internal static (string Exe, string Args) ParseUninstallCommand(string command)
+    {
+        command = command.Trim();
+
+        // Case 1: Quoted executable path
+        if (command.StartsWith('"'))
+        {
+            var endQuote = command.IndexOf('"', 1);
+            if (endQuote > 0)
+            {
+                var exe = command[1..endQuote];
+                var args = endQuote + 1 < command.Length
+                    ? command[(endQuote + 1)..].TrimStart()
+                    : "";
+                return (exe, args);
+            }
+        }
+
+        // Case 2: MsiExec — common pattern: MsiExec.exe /I{GUID} or /X{GUID}
+        if (command.StartsWith("MsiExec", StringComparison.OrdinalIgnoreCase))
+        {
+            var spaceIdx = command.IndexOf(' ');
+            if (spaceIdx > 0)
+            {
+                var exe = command[..spaceIdx];
+                var args = command[(spaceIdx + 1)..].TrimStart();
+                // Convert /I (modify) to /X (uninstall) if needed, add /quiet
+                args = args.Replace("/I", "/X", StringComparison.OrdinalIgnoreCase);
+                if (!args.Contains("/quiet", StringComparison.OrdinalIgnoreCase)
+                    && !args.Contains("/qn", StringComparison.OrdinalIgnoreCase))
+                    args += " /quiet /norestart";
+                return (exe, args);
+            }
+        }
+
+        // Case 3: rundll32 — pass as-is
+        if (command.StartsWith("rundll32", StringComparison.OrdinalIgnoreCase))
+        {
+            var spaceIdx = command.IndexOf(' ');
+            if (spaceIdx > 0)
+                return (command[..spaceIdx], command[(spaceIdx + 1)..].TrimStart());
+        }
+
+        // Case 4: Unquoted path with spaces — find first .exe boundary
+        var exeEnd = command.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+        if (exeEnd > 0)
+        {
+            exeEnd += 4; // include ".exe"
+            var exe = command[..exeEnd].Trim();
+            var args = exeEnd < command.Length ? command[exeEnd..].TrimStart() : "";
+            return (exe, args);
+        }
+
+        // Fallback: treat entire string as executable
+        return (command, "");
     }
 }

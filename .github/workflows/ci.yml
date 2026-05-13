@@ -104,12 +104,18 @@ jobs:
         run: dotnet build SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 
       - name: Run UI tests
+        id: ui-tests
         run: >
           dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj
           -c Release --no-build
           --logger "trx;LogFileName=ui-results.trx"
           --results-directory TestResults
         continue-on-error: true
+
+      # TEST-005: Surface UI test failures as a visible PR annotation
+      - name: Annotate UI test failures
+        if: steps.ui-tests.outcome == 'failure'
+        run: echo "::warning::UI automation tests failed — review test results artifact for details."
 
       - name: Upload UI test results
         if: always()

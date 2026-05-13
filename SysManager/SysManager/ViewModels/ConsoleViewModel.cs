@@ -38,9 +38,11 @@ public partial class ConsoleViewModel : ObservableObject
             Lines.Add(line);
             if (Lines.Count > MaxLines)
             {
+                // PERF-005: Remove excess items from front (index 0). Each removal
+                // is O(n) but unavoidable with ObservableCollection.
                 var excess = Lines.Count - MaxLines;
-                for (int i = excess - 1; i >= 0; i--)
-                    Lines.RemoveAt(i);
+                for (int i = 0; i < excess; i++)
+                    Lines.RemoveAt(0);
             }
         }
     }

@@ -28,19 +28,22 @@ public sealed class BatteryService
 
             foreach (ManagementObject obj in results)
             {
-                info.HasBattery = true;
-                info.Name = obj["Name"]?.ToString() ?? "";
-                info.Manufacturer = obj["DeviceID"]?.ToString() ?? "";
-                info.ChargePercent = Convert.ToInt32(obj["EstimatedChargeRemaining"] ?? 0);
-                info.Chemistry = MapChemistry(Convert.ToUInt16(obj["Chemistry"] ?? 0));
+                using (obj)
+                {
+                    info.HasBattery = true;
+                    info.Name = obj["Name"]?.ToString() ?? "";
+                    info.Manufacturer = obj["DeviceID"]?.ToString() ?? "";
+                    info.ChargePercent = Convert.ToInt32(obj["EstimatedChargeRemaining"] ?? 0);
+                    info.Chemistry = MapChemistry(Convert.ToUInt16(obj["Chemistry"] ?? 0));
 
-                var statusCode = Convert.ToUInt16(obj["BatteryStatus"] ?? 0);
-                info.Status = MapBatteryStatus(statusCode);
+                    var statusCode = Convert.ToUInt16(obj["BatteryStatus"] ?? 0);
+                    info.Status = MapBatteryStatus(statusCode);
 
-                var runtime = Convert.ToInt64(obj["EstimatedRunTime"] ?? 0);
-                info.EstimatedRuntimeMinutes = runtime >= 71_582_788 ? -1 : (int)runtime;
+                    var runtime = Convert.ToInt64(obj["EstimatedRunTime"] ?? 0);
+                    info.EstimatedRuntimeMinutes = runtime >= 71_582_788 ? -1 : (int)runtime;
 
-                break; // first battery only
+                    break; // first battery only
+                }
             }
         }
         catch (ManagementException) { /* WMI class not available */ }
@@ -61,8 +64,11 @@ public sealed class BatteryService
 
             foreach (ManagementObject obj in results)
             {
-                info.DesignCapacityMWh = Convert.ToUInt32(obj["DesignedCapacity"] ?? 0);
-                break;
+                using (obj)
+                {
+                    info.DesignCapacityMWh = Convert.ToUInt32(obj["DesignedCapacity"] ?? 0);
+                    break;
+                }
             }
         }
         catch (ManagementException) { /* WMI class not present on this device */ }
@@ -77,8 +83,11 @@ public sealed class BatteryService
 
             foreach (ManagementObject obj in results)
             {
-                info.FullChargeCapacityMWh = Convert.ToUInt32(obj["FullChargedCapacity"] ?? 0);
-                break;
+                using (obj)
+                {
+                    info.FullChargeCapacityMWh = Convert.ToUInt32(obj["FullChargedCapacity"] ?? 0);
+                    break;
+                }
             }
         }
         catch (ManagementException) { /* WMI class not present on this device */ }
@@ -93,8 +102,11 @@ public sealed class BatteryService
 
             foreach (ManagementObject obj in results)
             {
-                info.CycleCount = Convert.ToInt32(obj["CycleCount"] ?? 0);
-                break;
+                using (obj)
+                {
+                    info.CycleCount = Convert.ToInt32(obj["CycleCount"] ?? 0);
+                    break;
+                }
             }
         }
         catch (ManagementException) { /* WMI class not present on this device */ }

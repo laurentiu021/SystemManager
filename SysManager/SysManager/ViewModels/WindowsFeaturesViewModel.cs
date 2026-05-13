@@ -94,6 +94,7 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
             return;
 
         IsBusy = true;
+        ToggleFeatureCommand.NotifyCanExecuteChanged();
         feature.Status = feature.IsEnabled ? "Disabling…" : "Enabling…";
         StatusMessage = $"{(feature.IsEnabled ? "Disabling" : "Enabling")} {feature.DisplayName}…";
         _cts?.Dispose();
@@ -146,6 +147,7 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
+            ToggleFeatureCommand.NotifyCanExecuteChanged();
         }
     }
 

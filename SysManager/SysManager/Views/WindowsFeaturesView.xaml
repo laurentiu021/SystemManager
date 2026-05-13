@@ -1,0 +1,175 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.WindowsFeaturesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             d:DataContext="{d:DesignInstance vm:WindowsFeaturesViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource Surface0}">
+
+    <Grid Margin="32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Windows Features" Style="{StaticResource Display}"/>
+            <TextBlock Text="Enable or disable Windows optional features. Requires administrator privileges."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <WrapPanel>
+                <Button Content="Scan" Command="{Binding ScanCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}"
+                        Style="{StaticResource GhostButton}" Margin="0,0,12,0"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                <TextBlock Text="Search:" VerticalAlignment="Center" Margin="8,0,8,0"
+                           Style="{StaticResource Subtle}"/>
+                <Grid Width="220" Margin="0,0,12,0">
+                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="Search features…" IsHitTestVisible="False"
+                               Foreground="{StaticResource TextMuted}" Margin="6,0,0,0"
+                               VerticalAlignment="Center" FontSize="12"
+                               Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
+                <Border Background="#2D1F1F" CornerRadius="4" Padding="6,2" Margin="4,0"
+                        Visibility="{Binding PendingReboot, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="⚠ Reboot pending" FontSize="11" Foreground="#F59E0B"/>
+                </Border>
+                <Border Background="#1F2D1F" CornerRadius="4" Padding="6,2" Margin="4,0"
+                        Visibility="{Binding IsElevated, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="✓ Administrator" FontSize="11" Foreground="#4ADE80"/>
+                </Border>
+            </WrapPanel>
+        </Border>
+
+        <!-- Summary -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
+        </Border>
+
+        <!-- Feature list -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <DataGrid AutomationProperties.Name="Features table" ItemsSource="{Binding FilteredFeatures}"
+                      AutoGenerateColumns="False" HeadersVisibility="Column"
+                      Background="Transparent" BorderThickness="0"
+                      GridLinesVisibility="None" IsReadOnly="True"
+                      RowBackground="Transparent" AlternatingRowBackground="#0F141C"
+                      SelectionMode="Single" CanUserSortColumns="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120"
+                                        SortMemberPath="Category" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Feature" Binding="{Binding DisplayName}" Width="*"
+                                        SortMemberPath="DisplayName" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTemplateColumn Header="State" Width="90" SortMemberPath="IsEnabled">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Disabled"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                                    <Setter Property="Text" Value="Enabled"/>
+                                                    <Setter Property="Foreground" Value="#4ADE80"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTemplateColumn Header="Toggle" Width="80">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding DataContext.ToggleFeatureCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"
+                                        FontSize="11" Padding="6,2">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                            <Setter Property="Content" Value="Enable"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                                    <Setter Property="Content" Value="Disable"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTemplateColumn Header="Status" Width="120" SortMemberPath="Status">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Status}" FontSize="11"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Status}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="Reboot required">
+                                                    <Setter Property="Foreground" Value="#F59E0B"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="Done">
+                                                    <Setter Property="Foreground" Value="#4ADE80"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="Failed">
+                                                    <Setter Property="Foreground" Value="#EF4444"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

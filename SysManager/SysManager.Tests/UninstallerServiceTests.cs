@@ -209,4 +209,81 @@ public class UninstallerServiceTests
         var ex = Record.Exception(() => UninstallerService.EnrichFromRegistry(apps));
         Assert.Null(ex);
     }
+
+    // ── ParseUninstallCommand ──
+
+    [Fact]
+    public void ParseUninstallCommand_QuotedPath_SplitsCorrectly()
+    {
+        var (exe, args) = UninstallerService.ParseUninstallCommand(
+            "\"C:\\Program Files\\App\\uninstall.exe\" /S");
+        Assert.Equal("C:\\Program Files\\App\\uninstall.exe", exe);
+        Assert.Equal("/S", args);
+    }
+
+    [Fact]
+    public void ParseUninstallCommand_QuotedPathNoArgs_ReturnsEmptyArgs()
+    {
+        var (exe, args) = UninstallerService.ParseUninstallCommand(
+            "\"C:\\Program Files\\App\\uninstall.exe\"");
+        Assert.Equal("C:\\Program Files\\App\\uninstall.exe", exe);
+        Assert.Equal("", args);
+    }
+
+    [Fact]
+    public void ParseUninstallCommand_MsiExec_ConvertsToUninstall()
+    {
+        var (exe, args) = UninstallerService.ParseUninstallCommand(
+            "MsiExec.exe /I{12345-GUID}");
+        Assert.Equal("MsiExec.exe", exe);
+        Assert.Contains("/X{12345-GUID}", args);
+        Assert.Contains("/quiet", args);
+    }
+
+    [Fact]
+    public void ParseUninstallCommand_MsiExecAlreadyQuiet_DoesNotDuplicate()
+    {
+        var (exe, args) = UninstallerService.ParseUninstallCommand(
+            "MsiExec.exe /X{GUID} /quiet");
+        Assert.Equal("MsiExec.exe", exe);
+        Assert.Contains("/X{GUID}", args);
+        // Should not add /quiet again
+        Assert.Equal(1, args.Split("/quiet").Length - 1);
+    }
+
+    [Fact]
+    public void ParseUninstallCommand_Rundll32_PassesAsIs()
+    {
+        var (exe, args) = UninstallerService.ParseUninstallCommand(
+            "rundll32.exe advpack.dll,LaunchINFSection something.inf");
+        Assert.Equal("rundll32.exe", exe);
+        Assert.Equal("advpack.dll,LaunchINFSection something.inf", args);
+    }
+
+    [Fact]
+    public void ParseUninstallCommand_UnquotedExePath_FindsExeBoundary()
+    {
+        var (exe, args) = UninstallerService.ParseUninstallCommand(
+            "C:\\Apps\\uninstall.exe --silent");
+        Assert.Equal("C:\\Apps\\uninstall.exe", exe);
+        Assert.Equal("--silent", args);
+    }
+
+    [Fact]
+    public void ParseUninstallCommand_NoExeExtension_FallsBackToFullString()
+    {
+        var (exe, args) = UninstallerService.ParseUninstallCommand("some-command");
+        Assert.Equal("some-command", exe);
+        Assert.Equal("", args);
+    }
+
+    [Fact]
+    public void ParseUninstallCommand_MsiExecWithQn_DoesNotAddQuiet()
+    {
+        var (exe, args) = UninstallerService.ParseUninstallCommand(
+            "MsiExec.exe /X{GUID} /qn");
+        Assert.Equal("MsiExec.exe", exe);
+        Assert.DoesNotContain("/quiet", args);
+        Assert.Contains("/qn", args);
+    }
 }

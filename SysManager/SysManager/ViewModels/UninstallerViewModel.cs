@@ -107,7 +107,19 @@ public partial class UninstallerViewModel : ViewModelBase
 
                 try
                 {
-                    var code = await _service.UninstallAsync(app.Id, _cts.Token);
+                    int code;
+                    if (string.IsNullOrWhiteSpace(app.Source)
+                        && !string.IsNullOrWhiteSpace(app.UninstallString))
+                    {
+                        // Local app — use registry UninstallString directly
+                        code = await _service.UninstallLocalAsync(app, _cts.Token);
+                    }
+                    else
+                    {
+                        // Winget-managed app — use winget uninstall
+                        code = await _service.UninstallAsync(app.Id, _cts.Token);
+                    }
+
                     if (code == 0)
                     {
                         app.Status = "Removed";

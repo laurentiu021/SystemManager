@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-05-13
+
+### Fixed
+- **Resource leak: BatteryService** — dispose WMI ManagementObject instances
+  in foreach loops to prevent COM RCW accumulation (LEAK-001, partial).
+- **Resource leak: ShortcutCleanerService** — remove double ReleaseComObject
+  on same COM interface to prevent undefined behavior (LEAK-002).
+- **Resource leak: UninstallerViewModel** — store LineReceived handler in field
+  and unsubscribe in Dispose to prevent memory leak (LEAK-004).
+- **Bug: WindowsFeaturesViewModel** — call NotifyCanExecuteChanged on
+  ToggleFeatureCommand when IsBusy changes to prevent double-clicks (BUG-001).
+- **Thread safety: ProcessStatusToBrushConverter** — freeze static brushes to
+  prevent cross-thread InvalidOperationException (THR-001, partial).
+- **Performance: BoolToElevationBadgeBrushConverter** — pre-create static frozen
+  brush instances instead of allocating per Convert call (PERF-001, partial).
+
 ## [0.51.0] - 2026-05-13
 
 ### Fixed

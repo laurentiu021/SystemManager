@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-05-13
+
+### Fixed
+- **Security: PowerShellRunner** — document ExecutionPolicy Bypass usage and
+  caller restrictions in XML doc comment (SEC-005).
+- **Performance: App.xaml** — remove DropShadowEffect from CardElevated style
+  to avoid software-rendered shadows (PERF-008).
+- **Testing: IntegrationTests** — align dependency versions with Tests project
+  (coverlet 10.0.0, Test.Sdk 18.5.1, xunit.runner 3.1.5) (TEST-008).
+
 ## [0.50.0] - 2026-05-13
 
 ### Fixed

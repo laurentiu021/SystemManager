@@ -12,6 +12,12 @@ namespace SysManager.Services;
 /// <summary>
 /// Runs PowerShell scripts in-process with live streaming of all output streams.
 /// Uses System.Management.Automation so we don't spawn external pwsh.exe processes.
+///
+/// <para><b>Security note (SEC-005):</b> ExecutionPolicy is set to Bypass for in-process
+/// runspaces because SysManager only executes its own static scripts — never user-supplied
+/// or downloaded scripts. RunScriptViaPwshAsync also uses -ExecutionPolicy Bypass for the
+/// same reason. Callers that use RunAsync or RunScriptViaPwshAsync must only pass
+/// hard-coded script strings; never pass user input directly as a script.</para>
 /// </summary>
 public class PowerShellRunner
 {

@@ -52,26 +52,34 @@ public partial class ProcessManagerViewModel : ViewModelBase
 
         try
         {
-            var snapshot = await _service.SnapshotAsync();
-            Processes.Clear();
-            foreach (var p in snapshot)
+            // PERF-007: Perform snapshot, icon extraction, and description lookup
+            // on a background thread to avoid UI freezes on slow processes.
+            var enriched = await Task.Run(() =>
             {
-                p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
-                var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name);
-                if (dbEntry != null)
+                var snapshot = _service.SnapshotAsync().GetAwaiter().GetResult();
+                foreach (var p in snapshot)
                 {
-                    p.PlainDescription = dbEntry.Description;
-                    p.Category = dbEntry.Category;
-                    p.SafetyLevel = dbEntry.Safety.ToString();
+                    p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
+                    var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name);
+                    if (dbEntry != null)
+                    {
+                        p.PlainDescription = dbEntry.Description;
+                        p.Category = dbEntry.Category;
+                        p.SafetyLevel = dbEntry.Safety.ToString();
+                    }
+                    else
+                    {
+                        p.PlainDescription = p.Description;
+                        p.Category = "Unknown";
+                        p.SafetyLevel = "Unknown";
+                    }
                 }
-                else
-                {
-                    p.PlainDescription = p.Description; // fallback to FileVersionInfo description
-                    p.Category = "Unknown";
-                    p.SafetyLevel = "Unknown";
-                }
+                return snapshot;
+            });
+
+            Processes.Clear();
+            foreach (var p in enriched)
                 Processes.Add(p);
-            }
 
             ApplyFilter();
             StatusMessage = $"Loaded {ProcessCount} processes.";

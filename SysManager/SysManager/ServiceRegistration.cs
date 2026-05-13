@@ -53,6 +53,8 @@ public static class ServiceRegistration
         services.AddSingleton<ServicesViewModel>();
         services.AddSingleton<AppAlertsViewModel>();
         services.AddSingleton<ShortcutCleanerViewModel>();
+        services.AddSingleton<WindowsFeaturesService>();
+        services.AddSingleton<WindowsFeaturesViewModel>();
         services.AddSingleton<AppBlockerViewModel>();
 
         return services;

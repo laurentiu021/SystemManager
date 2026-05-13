@@ -38,7 +38,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public ServicesViewModel Services { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
-    public PlaceholderViewModel WipWindowsFeatures { get; private set; } = null!;
+    public WindowsFeaturesViewModel WindowsFeatures { get; }
     public PlaceholderViewModel WipResourceHistory { get; private set; } = null!;
     public AppAlertsViewModel AppAlerts { get; }
     public PlaceholderViewModel WipPrivacyMonitor { get; private set; } = null!;
@@ -101,6 +101,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             AppAlerts = sp.GetRequiredService<AppAlertsViewModel>();
             ShortcutCleaner = sp.GetRequiredService<ShortcutCleanerViewModel>();
             AppBlocker = sp.GetRequiredService<AppBlockerViewModel>();
+            WindowsFeatures = sp.GetRequiredService<WindowsFeaturesViewModel>();
         }
         else
         {
@@ -134,6 +135,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             AppAlerts = new AppAlertsViewModel();
             ShortcutCleaner = new ShortcutCleanerViewModel();
             AppBlocker = new AppBlockerViewModel();
+            WindowsFeatures = new WindowsFeaturesViewModel(runner);
         }
 
         InitPlaceholders();
@@ -143,7 +145,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void InitPlaceholders()
     {
         // ── WIP placeholders for planned features ──────────────────────
-        WipWindowsFeatures = new PlaceholderViewModel("Windows Features", "Toggle Windows optional features on or off.", "388");
         WipResourceHistory = new PlaceholderViewModel("Resource History", "Historical CPU, RAM, GPU and temperature graphs.", "377");
         WipPrivacyMonitor = new PlaceholderViewModel("Privacy Monitor", "Monitor and alert on webcam, microphone, and location access.", "380");
         WipFileShredder = new PlaceholderViewModel("File Shredder", "Securely delete files beyond recovery.", "386");
@@ -183,7 +184,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-performance",       Label = "Performance Mode",  Glyph = "\uE945", Content = Performance,        ViewType = typeof(Views.PerformanceView) },
             new NavItem { Id = "nav-services",          Label = "Services",          Glyph = "\uE912", Content = Services,           ViewType = typeof(Views.ServicesView) },
             new NavItem { Id = "nav-startup",           Label = "Startup Manager",   Glyph = "\uE7B5", Content = Startup,            ViewType = typeof(Views.StartupView) },
-            new NavItem { Id = "nav-windows-features",  Label = "Windows Features",  Glyph = "\uE9CE", Content = WipWindowsFeatures, ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-windows-features",  Label = "Windows Features",  Glyph = "\uE9CE", Content = WindowsFeatures, ViewType = typeof(Views.WindowsFeaturesView) },
         }};
 
         // 📊 Monitor (4) — NEW GROUP
@@ -344,7 +345,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         About?.Dispose();
         Services?.Dispose();
         NetworkShared?.Dispose();
-        WipWindowsFeatures?.Dispose();
+        WindowsFeatures?.Dispose();
         WipResourceHistory?.Dispose();
         AppAlerts?.Dispose();
         WipPrivacyMonitor?.Dispose();

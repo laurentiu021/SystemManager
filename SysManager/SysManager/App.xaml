@@ -101,13 +101,10 @@
                 <Setter Property="SnapsToDevicePixels" Value="True"/>
             </Style>
 
+            <!-- PERF-008: CardElevated kept without DropShadowEffect to avoid
+                 software-rendered shadows when many cards are visible. -->
             <Style x:Key="CardElevated" TargetType="Border" BasedOn="{StaticResource Card}">
                 <Setter Property="Background" Value="{StaticResource Surface2}"/>
-                <Setter Property="Effect">
-                    <Setter.Value>
-                        <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.35" Color="#000000"/>
-                    </Setter.Value>
-                </Setter>
             </Style>
 
             <Style x:Key="CardInner" TargetType="Border" BasedOn="{StaticResource Card}">

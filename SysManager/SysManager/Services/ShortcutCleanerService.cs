@@ -150,7 +150,9 @@ public sealed class ShortcutCleanerService
         }
         finally
         {
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(file);
+            // LEAK-002: Only release the original COM object once. IPersistFile
+            // is the same underlying COM object (QueryInterface), so releasing
+            // both would double-decrement the ref count.
             System.Runtime.InteropServices.Marshal.ReleaseComObject(link);
         }
     }

@@ -17,6 +17,7 @@ namespace SysManager.ViewModels;
 public partial class UninstallerViewModel : ViewModelBase
 {
     private readonly UninstallerService _service;
+    private readonly Action<PowerShellLine> _lineHandler;
     private CancellationTokenSource? _cts;
 
     public ObservableCollection<InstalledApp> AllApps { get; } = new();
@@ -32,7 +33,8 @@ public partial class UninstallerViewModel : ViewModelBase
     public UninstallerViewModel(PowerShellRunner runner)
     {
         _service = new UninstallerService(runner);
-        _service.LineReceived += line => Console.Append(line);
+        _lineHandler = line => Console.Append(line);
+        _service.LineReceived += _lineHandler;
     }
 
     [RelayCommand]
@@ -154,6 +156,7 @@ public partial class UninstallerViewModel : ViewModelBase
     {
         if (disposing)
         {
+            _service.LineReceived -= _lineHandler;
             _cts?.Dispose();
         }
         base.Dispose(disposing);

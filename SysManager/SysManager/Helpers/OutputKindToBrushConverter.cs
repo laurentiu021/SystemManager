@@ -73,9 +73,13 @@ public sealed class BoolInverterConverter : IValueConverter
 
 public class BoolToElevationBadgeBrushConverter : IValueConverter
 {
+    private static readonly Brush ElevatedBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)));
+    private static readonly Brush NotElevatedBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)));
+
+    private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => (value is bool b && b) ? (Brush)new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
-                                  : new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E));
+        => (value is bool b && b) ? ElevatedBrush : NotElevatedBrush;
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
@@ -102,8 +106,15 @@ public class HexToBrushConverter : IValueConverter
 /// </summary>
 public class ProcessStatusToBrushConverter : IValueConverter
 {
-    private static readonly Brush RunningBrush = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
-    private static readonly Brush NotRespondingBrush = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+    private static readonly Brush RunningBrush = CreateFrozen(Color.FromRgb(0x22, 0xC5, 0x5E));
+    private static readonly Brush NotRespondingBrush = CreateFrozen(Color.FromRgb(0xEF, 0x44, 0x44));
+
+    private static SolidColorBrush CreateFrozen(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {

@@ -46,7 +46,7 @@
                             <TextBlock Text="Safe-to-clean categories" Style="{StaticResource SectionTitle}"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                                 <Button Content="Scan" Command="{Binding ScanCommand}" Style="{StaticResource PrimaryButton}"
-                                        IsEnabled="{Binding IsScanning, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                        IsEnabled="{Binding IsScanning, Converter={StaticResource BoolInvert}}"/>
                                 <Button Content="Select all safe" Command="{Binding SelectAllCommand}" CommandParameter="{StaticResource TrueValue}"
                                         Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
                                 <Button Content="Clear" Command="{Binding SelectAllCommand}" CommandParameter="{StaticResource FalseValue}"
@@ -115,7 +115,7 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button Content="Clean selected" Command="{Binding CleanCommand}"
                                             Style="{StaticResource PrimaryButton}"
-                                            IsEnabled="{Binding IsCleaning, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                            IsEnabled="{Binding IsCleaning, Converter={StaticResource BoolInvert}}"/>
                                     <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Grid>
@@ -146,7 +146,7 @@
                             <TextBlock Text="Large files finder" Style="{StaticResource SectionTitle}"/>
                             <Button Content="Scan drive" Command="{Binding ScanLargeFilesCommand}"
                                     Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" DockPanel.Dock="Right"
-                                    IsEnabled="{Binding IsLargeScanning, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                    IsEnabled="{Binding IsLargeScanning, Converter={StaticResource BoolInvert}}"/>
                         </DockPanel>
                         <TextBlock Text="Read-only — shows biggest files so you know where your space went. Results have 'Show in Explorer' and 'Copy path' only. Deletion is disabled by design, even with admin."
                                    Style="{StaticResource Subtle}" Margin="0,4,0,10" TextWrapping="Wrap"/>

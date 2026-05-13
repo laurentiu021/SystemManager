@@ -16,7 +16,9 @@ public partial class ProcessEntry : ObservableObject
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _description = "";
     [ObservableProperty] private double _cpuPercent;
-    [ObservableProperty] private long _memoryBytes;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MemoryDisplay))]
+    private long _memoryBytes;
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private string _userName = "";
     [ObservableProperty] private DateTime _startTime;

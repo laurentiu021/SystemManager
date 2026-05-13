@@ -57,6 +57,20 @@ public class FlexibleBoolToVisibilityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// Inverts a boolean value. Use for IsEnabled bindings where the source
+/// property indicates a "busy" state and the target should be disabled.
+/// </summary>
+[ValueConversion(typeof(bool), typeof(bool))]
+public sealed class BoolInverterConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is bool b ? !b : true;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is bool b ? !b : true;
+}
+
 public class BoolToElevationBadgeBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

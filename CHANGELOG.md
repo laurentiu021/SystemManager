@@ -6,6 +6,49 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-05-13
+
+### Fixed
+- **Binding: BatteryInfo** — add NotifyPropertyChangedFor on DesignCapacityMWh,
+  FullChargeCapacityMWh, EstimatedRuntimeMinutes for computed properties
+  HealthPercent, WearPercent, RuntimeDisplay (BIND-001).
+- **Binding: DiskHealthReport** — add NotifyPropertyChangedFor on HealthStatus,
+  TemperatureC, WearPercent, PowerOnHours, ReadErrors, WriteErrors for 6+
+  computed properties (BIND-002).
+- **Binding: FriendlyEventEntry** — add NotifyPropertyChangedFor on Timestamp
+  and Severity for RelativeTime, FullTimestamp, SeverityIcon, SeverityColor
+  (BIND-003).
+- **Binding: PerformanceProfile** — add NotifyPropertyChangedFor on
+  ActivePlanName and ActivePlanGuid for ProfileSummary (BIND-004).
+- **Binding: ProcessEntry** — add NotifyPropertyChangedFor on MemoryBytes for
+  MemoryDisplay (BIND-005).
+- **Binding: DiskUsageEntry** — add NotifyPropertyChangedFor on SizeBytes for
+  SizeDisplay (BIND-006).
+- **Binding: InstalledApp** — add NotifyPropertyChangedFor on SizeBytes for
+  SizeDisplay (BIND-007).
+- **Memory: DeepCleanupViewModel** — replace anonymous PropertyChanged lambda
+  with named handler, unsubscribe on rescan and Dispose (MEM-006).
+- **Memory: ShortcutCleanerViewModel** — replace anonymous PropertyChanged
+  lambda with named handler, unsubscribe on rescan and Dispose (MEM-007).
+- **Bug: MemoryTestService** — set ReverseDirection=true on EventLogQuery so
+  the cutoff break works correctly with newest-first ordering (BUG-002).
+- **Bug: PerformanceService** — fix CreateRestorePointAsync by embedding
+  description directly in script instead of using AddParameter which doesn't
+  create script-scope variables (BUG-003).
+- **Bug: SpeedTestView/CleanupView/DeepCleanupView/NetworkRepairView/
+  SystemHealthView/TracerouteView/AboutView** — replace FlexVis converter
+  misuse on IsEnabled with dedicated BoolInverterConverter (BUG-004, BUG-005).
+- **Security: ServiceManagerService** — replace weak quote-only validation with
+  strict allowlist regex for sc.exe service name arguments (SEC-006).
+- **Performance: LogsViewModel** — use CollectionView.Count directly instead of
+  iterating entire filtered view via Cast/Count (PERF-002).
+- **Performance: NetworkSharedState** — simplify buffer trimming to remove from
+  front sequentially (PERF-003).
+- **Performance: MarkdownTextBlock** — use static compiled Regex instead of
+  creating new state machine on every parse call (PERF-004).
+- **Performance: DiskAnalyzerService** — use StringComparison.OrdinalIgnoreCase
+  instead of allocating ToLowerInvariant copy on every path (PERF-006).
+
 ## [0.48.0] - 2026-05-13
 
 ### Fixed

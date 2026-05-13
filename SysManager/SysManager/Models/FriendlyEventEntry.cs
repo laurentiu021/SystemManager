@@ -13,11 +13,17 @@ namespace SysManager.Models;
 /// </summary>
 public partial class FriendlyEventEntry : ObservableObject
 {
-    [ObservableProperty] private DateTime _timestamp;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RelativeTime))]
+    [NotifyPropertyChangedFor(nameof(FullTimestamp))]
+    private DateTime _timestamp;
     [ObservableProperty] private string _logName = "";          // System / Application / Security / Setup
     [ObservableProperty] private string _providerName = "";      // source
     [ObservableProperty] private int _eventId;
-    [ObservableProperty] private EventSeverity _severity;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SeverityIcon))]
+    [NotifyPropertyChangedFor(nameof(SeverityColor))]
+    private EventSeverity _severity;
     [ObservableProperty] private string _severityLabel = "";
     [ObservableProperty] private string _message = "";           // first line / summary
     [ObservableProperty] private string _fullMessage = "";       // full rendered text

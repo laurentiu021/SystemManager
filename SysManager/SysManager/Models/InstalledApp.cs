@@ -18,7 +18,9 @@ public partial class InstalledApp : ObservableObject
     [ObservableProperty] private string _version = "";
     [ObservableProperty] private string _source = "";
     [ObservableProperty] private string _status = "";
-    [ObservableProperty] private long _sizeBytes;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SizeDisplay))]
+    private long _sizeBytes;
     [ObservableProperty] private string _publisher = "";
     [ObservableProperty] private ImageSource? _icon;
     [ObservableProperty] private string _uninstallString = "";

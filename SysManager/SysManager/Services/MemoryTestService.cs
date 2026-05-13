@@ -35,7 +35,8 @@ public sealed class MemoryTestService
                 using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(
                     new System.Diagnostics.Eventing.Reader.EventLogQuery("System",
                         System.Diagnostics.Eventing.Reader.PathType.LogName,
-                        "*[System[Provider[@Name='Microsoft-Windows-WHEA-Logger' or @Name='Microsoft-Windows-MemoryDiagnostics-Results']]]"));
+                        "*[System[Provider[@Name='Microsoft-Windows-WHEA-Logger' or @Name='Microsoft-Windows-MemoryDiagnostics-Results']]]")
+                    { ReverseDirection = true });
 
                 var cutoff = DateTime.Now.AddDays(-30);
                 System.Diagnostics.Eventing.Reader.EventRecord? rec;

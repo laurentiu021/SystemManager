@@ -180,7 +180,7 @@ public sealed class DiskAnalyzerService
 
     private static bool ShouldSkip(string path)
     {
-        var lower = path.ToLowerInvariant();
-        return SkipSegments.Any(seg => lower.Contains(seg));
+        // PERF-006: Use OrdinalIgnoreCase instead of allocating a lowercase copy.
+        return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
     }
 }

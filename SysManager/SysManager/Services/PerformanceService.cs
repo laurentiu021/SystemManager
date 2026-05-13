@@ -511,9 +511,11 @@ public class PerformanceService
     /// </summary>
     public async Task<bool> CreateRestorePointAsync(string description, CancellationToken ct = default)
     {
-        var script = "Checkpoint-Computer -Description $desc -RestorePointType 'MODIFY_SETTINGS'";
-        var parameters = new Dictionary<string, object?> { ["desc"] = description };
-        var results = await _ps.RunAsync(script, parameters, ct).ConfigureAwait(false);
+        // BUG-003: Embed description directly in the script with single-quote
+        // escaping. AddParameter doesn't create script-scope variables.
+        var safeDesc = (description ?? "SysManager Restore Point").Replace("'", "''");
+        var script = $"Checkpoint-Computer -Description '{safeDesc}' -RestorePointType 'MODIFY_SETTINGS'";
+        var results = await _ps.RunAsync(script, null, ct).ConfigureAwait(false);
         return results != null;
     }
 

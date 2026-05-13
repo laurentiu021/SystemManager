@@ -17,13 +17,39 @@ public partial class DiskHealthReport : ObservableObject
     [ObservableProperty] private string _mediaType = "";       // HDD / SSD / NVMe
     [ObservableProperty] private string _busType = "";
     [ObservableProperty] private double _sizeGB;
-    [ObservableProperty] private string _healthStatus = "";    // Healthy / Warning / Unhealthy
-    [ObservableProperty] private double? _temperatureC;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HealthPercent))]
+    [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
+    private string _healthStatus = "";    // Healthy / Warning / Unhealthy
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HealthPercent))]
+    [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
+    [NotifyPropertyChangedFor(nameof(TemperatureColorHex))]
+    [NotifyPropertyChangedFor(nameof(TemperatureGauge))]
+    private double? _temperatureC;
+
     [ObservableProperty] private double? _temperatureMaxC;
-    [ObservableProperty] private int? _wearPercent;            // 0 = new, 100 = worn out (SSD only)
-    [ObservableProperty] private long? _powerOnHours;
-    [ObservableProperty] private long? _readErrors;
-    [ObservableProperty] private long? _writeErrors;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HealthPercent))]
+    [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
+    [NotifyPropertyChangedFor(nameof(WearGauge))]
+    [NotifyPropertyChangedFor(nameof(WearColorHex))]
+    private int? _wearPercent;            // 0 = new, 100 = worn out (SSD only)
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PowerOnDisplay))]
+    private long? _powerOnHours;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HealthPercent))]
+    [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
+    private long? _readErrors;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HealthPercent))]
+    [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
+    private long? _writeErrors;
     [ObservableProperty] private long? _startStopCount;
     [ObservableProperty] private string _verdict = "";         // plain-English summary
     [ObservableProperty] private string _verdictColorHex = "#9AA0A6";

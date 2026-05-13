@@ -112,10 +112,21 @@ public partial class DeepCleanupViewModel : ViewModelBase
     partial void OnIsCleaningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
     partial void OnIsLargeScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
 
+    private void OnCategoryPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(CleanupCategory.IsSelected))
+        {
+            OnPropertyChanged(nameof(TotalSelectedBytes));
+            OnPropertyChanged(nameof(TotalSelectedDisplay));
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            foreach (var c in Categories)
+                c.PropertyChanged -= OnCategoryPropertyChanged;
             _scanCts?.Dispose();
             _cleanCts?.Dispose();
             _largeCts?.Dispose();
@@ -154,19 +165,14 @@ public partial class DeepCleanupViewModel : ViewModelBase
 
             // Batch-update the observable collection to avoid per-item UI
             // re-renders that can stall the dispatcher on large lists.
+            // MEM-006: Unsubscribe from old categories before clearing to prevent
+            // PropertyChanged lambda leaks across rescans.
+            foreach (var old in Categories)
+                old.PropertyChanged -= OnCategoryPropertyChanged;
             Categories.Clear();
             var catList = cats.ToList();
             foreach (var c in catList)
-            {
-                c.PropertyChanged += (_, e) =>
-                {
-                    if (e.PropertyName == nameof(CleanupCategory.IsSelected))
-                    {
-                        OnPropertyChanged(nameof(TotalSelectedBytes));
-                        OnPropertyChanged(nameof(TotalSelectedDisplay));
-                    }
-                };
-            }
+                c.PropertyChanged += OnCategoryPropertyChanged;
             foreach (var c in catList) Categories.Add(c);
             var total = cats.Sum(c => c.TotalSizeBytes);
             ScanSummary = $"Found {CleanupCategory.HumanSize(total)} across {cats.Count} categories. Untick anything you want to keep.";

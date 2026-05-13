@@ -207,7 +207,7 @@
                                         Style="{StaticResource GhostButton}"/>
                                 <Button Content="Scan selected" Command="{Binding RunChkdskOnSelectedCommand}"
                                         Style="{StaticResource PrimaryButton}" Margin="6,0,0,0"
-                                        IsEnabled="{Binding IsChkdskRunning, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                        IsEnabled="{Binding IsChkdskRunning, Converter={StaticResource BoolInvert}}"/>
                                 <Button Content="Cancel" Command="{Binding CancelScanCommand}"
                                         Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                             </StackPanel>
@@ -278,7 +278,7 @@
                                                     Command="{Binding DataContext.RunChkdskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding Letter}"
                                                     Style="{StaticResource SecondaryButton}" Padding="12,6"
-                                                    IsEnabled="{Binding DataContext.IsChkdskRunning, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                                    IsEnabled="{Binding DataContext.IsChkdskRunning, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolInvert}}"/>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

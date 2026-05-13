@@ -81,7 +81,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBox Text="{Binding TraceHost, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
                             <Button Content="Trace now" Command="{Binding TraceCommand}" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
-                                    IsEnabled="{Binding IsTracing, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                    IsEnabled="{Binding IsTracing, Converter={StaticResource BoolInvert}}"/>
                             <Button Content="Cancel" Command="{Binding CancelTraceCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                         </StackPanel>
                         <TextBlock Text="{Binding TraceStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>

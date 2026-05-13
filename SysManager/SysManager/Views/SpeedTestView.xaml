@@ -43,7 +43,7 @@
                             </StackPanel>
                             <Button Content="Run" Command="{Binding RunOoklaSpeedCommand}" Style="{StaticResource PrimaryButton}"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
-                                    IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                    IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvert}}"/>
                         </DockPanel>
                         <Grid Margin="0,16,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -68,7 +68,7 @@
                             </StackPanel>
                             <Button Content="Run" Command="{Binding RunHttpSpeedCommand}" Style="{StaticResource PrimaryButton}"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
-                                    IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                    IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvert}}"/>
                         </DockPanel>
                         <Grid Margin="0,16,0,0" Visibility="{Binding HttpResult, Converter={StaticResource FlexVis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

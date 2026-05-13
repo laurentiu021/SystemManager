@@ -67,7 +67,9 @@ public partial class LogsViewModel : ViewModelBase
 
     private void UpdateVisibleCount()
     {
-        VisibleCount = EntriesView.Cast<object>().Count();
+        // PERF-002: Use CollectionView.Count directly instead of iterating
+        // the entire filtered collection via Cast<object>().Count().
+        VisibleCount = ((CollectionView)EntriesView).Count;
         HasNoResults = Entries.Count > 0 && VisibleCount == 0;
     }
 

@@ -14,8 +14,13 @@ namespace SysManager.Models;
 public partial class PerformanceProfile : ObservableObject
 {
     // ── Power plan ──
-    [ObservableProperty] private string _activePlanName = "";
-    [ObservableProperty] private string _activePlanGuid = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProfileSummary))]
+    private string _activePlanName = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProfileSummary))]
+    private string _activePlanGuid = "";
 
     // ── Visual effects ──
     [ObservableProperty] private bool _visualEffectsReduced;

@@ -81,6 +81,10 @@ public static class MarkdownTextBlock
         }
     }
 
+    // PERF-004: Pre-compiled regex avoids creating a new state machine on every call.
+    private static readonly Regex InlineFormattingRegex = new(
+        @"\*\*(.+?)\*\*|`([^`]+)`", RegexOptions.Compiled);
+
     /// <summary>
     /// Parses a single line for **bold** and `code` inline formatting
     /// and appends the resulting Inlines to the TextBlock.
@@ -88,7 +92,7 @@ public static class MarkdownTextBlock
     private static void AddFormattedText(TextBlock tb, string text)
     {
         // Merge bold and code patterns, process left-to-right
-        var combined = Regex.Matches(text, @"\*\*(.+?)\*\*|`([^`]+)`");
+        var combined = InlineFormattingRegex.Matches(text);
         var pos = 0;
 
         foreach (Match m in combined)

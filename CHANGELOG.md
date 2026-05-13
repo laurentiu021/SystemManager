@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-05-13
+
+### Added
+- **Dependency Injection container** — introduced
+  `Microsoft.Extensions.DependencyInjection` for service and ViewModel
+  lifetime management. All services (PowerShellRunner, SystemInfoService,
+  WingetService, TrayIconService) are now shared singletons resolved from
+  the container. MainWindowViewModel resolves child VMs from DI at runtime,
+  falls back to manual creation in tests. Closes #255.
+
 ## [0.44.0] - 2026-05-13
 
 ### Added

@@ -21,6 +21,7 @@ SysManager/
 │   ├── Resources/              # icons and assets
 │   ├── App.xaml(.cs)
 │   ├── MainWindow.xaml(.cs)
+│   ├── ServiceRegistration.cs  # DI container configuration
 │   └── SysManager.csproj
 ├── SysManager.Tests/           # xUnit unit tests (CI-safe, no system deps)
 ├── SysManager.IntegrationTests/# xUnit integration tests (local only)
@@ -37,12 +38,12 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `PlaceholderViewModel` (Windows Features) |
-| Monitor | `ProcessManagerViewModel` · `PlaceholderViewModel` (Resource History · App Alerts · Privacy Monitor) |
-| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `PlaceholderViewModel` (Shortcut Cleaner · File Shredder) |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` |
+| Monitor | `ProcessManagerViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Resource History · Privacy Monitor) |
+| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (File Shredder) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `PlaceholderViewModel` (DNS Changer · Hosts Editor) |
-| Apps | `AppUpdatesViewModel` · `UninstallerViewModel` · `PlaceholderViewModel` (Bulk Installer · App Blocker) |
+| Apps | `AppUpdatesViewModel` · `UninstallerViewModel` · `AppBlockerViewModel` · `PlaceholderViewModel` (Bulk Installer) |
 | Control | `PlaceholderViewModel` (Privacy Settings · Context Menu · Restore Points · Scheduled Maintenance · System Report) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `AboutViewModel` |
 
@@ -68,6 +69,10 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `DriversViewModel` — driver inventory + Windows Update driver scan.
 - `LogsViewModel` — friendly Event Log viewer.
 - `AboutViewModel` — version info, auto-update, release history.
+- `WindowsFeaturesViewModel` — list, enable, disable Windows optional features.
+- `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry.
+- `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
+- `AppBlockerViewModel` — block/unblock apps via Windows Firewall rules.
 
 ## Services
 
@@ -113,6 +118,10 @@ Key services:
   reporting and system-path skipping.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
   open file location.
+- `WindowsFeaturesService` — list, enable, disable Windows optional features
+  via `Get-WindowsOptionalFeature` / `Enable-WindowsOptionalFeature` PowerShell.
+- `UninstallerService` — winget-based uninstall + registry UninstallString
+  fallback for local apps not in winget.
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
   Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
   working set trim, hibernation toggle. Snapshot-based restore.
@@ -120,6 +129,15 @@ Key services:
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming
   recommendations, start/stop/disable with admin checks.
+
+## Dependency Injection
+
+`ServiceRegistration.cs` configures `Microsoft.Extensions.DependencyInjection`.
+`App.OnStartup` builds the `IServiceProvider` and exposes it as `App.Services`.
+All services and ViewModels are registered as singletons — one shared instance
+per app lifetime. `MainWindowViewModel` resolves child VMs from the container
+at runtime; falls back to manual creation in tests (no DI dependency in the
+test project).
 
 ## Admin elevation
 

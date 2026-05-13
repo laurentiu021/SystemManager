@@ -37,8 +37,8 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 
 ### Sidebar navigation
 The sidebar organises 36 feature tabs into 9 collapsible groups so you can
-find what you need without scrolling through a flat list. 24 tabs are fully
-implemented; 12 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 25 tabs are fully
+implemented; 11 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|

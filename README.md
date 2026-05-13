@@ -212,6 +212,7 @@ long-running operation, so you always know which tab is working.
 - Filter by name or package ID
 - Sort by name, size, or publisher via clickable column headers
 - Select/deselect all, batch uninstall with confirmation dialog
+- Local app support — uninstalls apps not in winget via registry UninstallString
 - Live console output from winget
 
 ### Performance Mode

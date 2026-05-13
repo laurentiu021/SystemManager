@@ -43,7 +43,7 @@ implemented; 12 are work-in-progress placeholders marked with ⚙️:
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · App Alerts · Privacy Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · File Shredder ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
@@ -141,6 +141,14 @@ long-running operation, so you always know which tab is working.
 - Sort by name, publisher, or status via clickable column headers
 - Shows name, publisher, command, and enabled/disabled status
 - Open file location in Explorer
+
+### Windows Features
+- Lists all Windows optional features with current state (Enabled/Disabled)
+- Toggle enable/disable per feature with confirmation dialog
+- Categorized: Virtualization, Networking, Development, Media & Print, Legacy
+- Shows reboot-required status after toggling
+- Search/filter across all features
+- Requires administrator privileges for modifications
 
 ### Duplicate File Finder
 - Two-pass scan: group by size, then SHA-256 hash only size-matched files

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-05-13
+
+### Added
+- **Windows Features tab** — list, enable, and disable Windows optional
+  features (Hyper-V, WSL, .NET 3.5, Telnet, etc.) directly from SysManager.
+  Features are categorized (Virtualization, Networking, Development, Media,
+  Legacy). Toggle requires admin. Shows reboot-required status. Includes
+  search/filter. Closes #5.
+
 ## [0.45.0] - 2026-05-13
 
 ### Added

@@ -77,6 +77,8 @@ public sealed class ProcessManagerService
                     try { entry.FilePath = p.MainModule?.FileName ?? ""; }
                     catch (InvalidOperationException) { /* access denied or process exited */ }
                     catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
+                    entry.CanOpenFileLocation = !string.IsNullOrWhiteSpace(entry.FilePath)
+                                               && System.IO.File.Exists(entry.FilePath);
                     try { entry.StartTime = p.StartTime; }
                     catch (InvalidOperationException) { /* access denied or process exited */ }
                     catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }

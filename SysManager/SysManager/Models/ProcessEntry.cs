@@ -28,9 +28,8 @@ public partial class ProcessEntry : ObservableObject
     [ObservableProperty] private string _category = "Unknown";
     [ObservableProperty] private string _safetyLevel = "Unknown";
 
-    /// <summary>True when the process has a valid, accessible file path.</summary>
-    public bool CanOpenFileLocation => !string.IsNullOrWhiteSpace(FilePath)
-                                       && System.IO.File.Exists(FilePath);
+    /// <summary>True when the process has a valid, accessible file path (cached on creation).</summary>
+    [ObservableProperty] private bool _canOpenFileLocation;
 
     /// <summary>Formatted memory for display.</summary>
     public string MemoryDisplay => CleanupCategory.HumanSize(MemoryBytes);

@@ -20,7 +20,7 @@ public partial class DuplicateFileGroup : ObservableObject
     public ObservableCollection<DuplicateFileEntry> Files { get; } = new();
 
     /// <summary>Wasted space = (count - 1) * fileSize.</summary>
-    public long WastedBytes => (Count - 1) * FileSize;
+    public long WastedBytes => Math.Max(Count - 1, 0) * FileSize;
 }
 
 /// <summary>A single file within a duplicate group.</summary>

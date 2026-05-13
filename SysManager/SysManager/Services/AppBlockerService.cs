@@ -77,6 +77,13 @@ public sealed class AppBlockerService
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
 
+        // SEC-004: apply same validation as BlockApp to prevent registry path injection
+        if (!System.Text.RegularExpressions.Regex.IsMatch(exeName, @"^[A-Za-z0-9_\-. ]+\.exe$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            Log.Warning("Rejected invalid exeName for unblock: {ExeName}", exeName);
+            return false;
+        }
+
         try
         {
             using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath, writable: true);

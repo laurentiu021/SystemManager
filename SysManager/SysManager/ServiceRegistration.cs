@@ -16,8 +16,10 @@ public static class ServiceRegistration
 {
     public static IServiceCollection ConfigureServices(this IServiceCollection services)
     {
-        // ── Core services (Singleton — one shared instance) ─────────────
-        services.AddSingleton<PowerShellRunner>();
+        // ── Core services ──────────────────────────────────────────────
+        // PowerShellRunner is Transient — each consumer gets its own instance
+        // to avoid LineReceived event cross-talk between tabs.
+        services.AddTransient<PowerShellRunner>();
         services.AddSingleton<SystemInfoService>();
         services.AddSingleton<WingetService>();
         services.AddSingleton<TrayIconService>();

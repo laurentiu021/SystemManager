@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Services;
@@ -37,21 +38,21 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public ServicesViewModel Services { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
-    public PlaceholderViewModel WipWindowsFeatures { get; }
-    public PlaceholderViewModel WipResourceHistory { get; }
+    public PlaceholderViewModel WipWindowsFeatures { get; private set; } = null!;
+    public PlaceholderViewModel WipResourceHistory { get; private set; } = null!;
     public AppAlertsViewModel AppAlerts { get; }
-    public PlaceholderViewModel WipPrivacyMonitor { get; }
+    public PlaceholderViewModel WipPrivacyMonitor { get; private set; } = null!;
     public ShortcutCleanerViewModel ShortcutCleaner { get; }
-    public PlaceholderViewModel WipFileShredder { get; }
-    public PlaceholderViewModel WipDnsChanger { get; }
-    public PlaceholderViewModel WipHostsEditor { get; }
-    public PlaceholderViewModel WipBulkInstaller { get; }
+    public PlaceholderViewModel WipFileShredder { get; private set; } = null!;
+    public PlaceholderViewModel WipDnsChanger { get; private set; } = null!;
+    public PlaceholderViewModel WipHostsEditor { get; private set; } = null!;
+    public PlaceholderViewModel WipBulkInstaller { get; private set; } = null!;
     public AppBlockerViewModel AppBlocker { get; }
-    public PlaceholderViewModel WipPrivacySettings { get; }
-    public PlaceholderViewModel WipContextMenu { get; }
-    public PlaceholderViewModel WipRestorePoints { get; }
-    public PlaceholderViewModel WipScheduledMaintenance { get; }
-    public PlaceholderViewModel WipSystemReport { get; }
+    public PlaceholderViewModel WipPrivacySettings { get; private set; } = null!;
+    public PlaceholderViewModel WipContextMenu { get; private set; } = null!;
+    public PlaceholderViewModel WipRestorePoints { get; private set; } = null!;
+    public PlaceholderViewModel WipScheduledMaintenance { get; private set; } = null!;
+    public PlaceholderViewModel WipSystemReport { get; private set; } = null!;
 
     /// <summary>Grouped sidebar tree (9 categories).</summary>
     public ObservableCollection<NavGroup> NavGroups { get; } = new();
@@ -64,49 +65,100 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _elevationBadge = "";
 
+    /// <summary>
+    /// Parameterless constructor — used by XAML designer and tests.
+    /// When DI container is available (runtime), resolves child VMs from it.
+    /// When not available (tests/designer), creates dependencies manually.
+    /// </summary>
     public MainWindowViewModel()
     {
-        var sysInfo = new SystemInfoService();
-        var winget = new WingetService(new PowerShellRunner());        Dashboard = new DashboardViewModel(sysInfo);
-        AppUpdates = new AppUpdatesViewModel(winget);
-        WindowsUpdate = new WindowsUpdateViewModel(new PowerShellRunner());
-        SystemHealth = new SystemHealthViewModel(sysInfo);
-        Cleanup = new CleanupViewModel(new PowerShellRunner());
-        DeepCleanup = new DeepCleanupViewModel();
-        DuplicateFile = new DuplicateFileViewModel();
-        DiskAnalyzer = new DiskAnalyzerViewModel();
-        ProcessManager = new ProcessManagerViewModel();
-        BatteryHealth = new BatteryHealthViewModel();
-        Uninstaller = new UninstallerViewModel(new PowerShellRunner());
-        Performance = new PerformanceViewModel(new PowerShellRunner());
-        Startup = new StartupViewModel();
-        NetworkShared = new NetworkSharedState();
-        Ping = new PingViewModel(NetworkShared);
-        Traceroute = new TracerouteViewModel(NetworkShared);
-        SpeedTest = new SpeedTestViewModel(NetworkShared);
-        NetworkRepair = new NetworkRepairViewModel(NetworkShared);
-        Drivers = new DriversViewModel(new PowerShellRunner());
-        Logs = new LogsViewModel();
-        About = new AboutViewModel();
-        Services = new ServicesViewModel();
+        var sp = App.Services;
+        if (sp != null)
+        {
+            // Runtime path — resolve from DI container (shared singletons)
+            Dashboard = sp.GetRequiredService<DashboardViewModel>();
+            AppUpdates = sp.GetRequiredService<AppUpdatesViewModel>();
+            WindowsUpdate = sp.GetRequiredService<WindowsUpdateViewModel>();
+            SystemHealth = sp.GetRequiredService<SystemHealthViewModel>();
+            Cleanup = sp.GetRequiredService<CleanupViewModel>();
+            DeepCleanup = sp.GetRequiredService<DeepCleanupViewModel>();
+            DuplicateFile = sp.GetRequiredService<DuplicateFileViewModel>();
+            DiskAnalyzer = sp.GetRequiredService<DiskAnalyzerViewModel>();
+            ProcessManager = sp.GetRequiredService<ProcessManagerViewModel>();
+            BatteryHealth = sp.GetRequiredService<BatteryHealthViewModel>();
+            Uninstaller = sp.GetRequiredService<UninstallerViewModel>();
+            Performance = sp.GetRequiredService<PerformanceViewModel>();
+            Startup = sp.GetRequiredService<StartupViewModel>();
+            NetworkShared = sp.GetRequiredService<NetworkSharedState>();
+            Ping = sp.GetRequiredService<PingViewModel>();
+            Traceroute = sp.GetRequiredService<TracerouteViewModel>();
+            SpeedTest = sp.GetRequiredService<SpeedTestViewModel>();
+            NetworkRepair = sp.GetRequiredService<NetworkRepairViewModel>();
+            Drivers = sp.GetRequiredService<DriversViewModel>();
+            Logs = sp.GetRequiredService<LogsViewModel>();
+            About = sp.GetRequiredService<AboutViewModel>();
+            Services = sp.GetRequiredService<ServicesViewModel>();
+            AppAlerts = sp.GetRequiredService<AppAlertsViewModel>();
+            ShortcutCleaner = sp.GetRequiredService<ShortcutCleanerViewModel>();
+            AppBlocker = sp.GetRequiredService<AppBlockerViewModel>();
+        }
+        else
+        {
+            // Test/designer path — create dependencies manually
+            var runner = new PowerShellRunner();
+            var sysInfo = new SystemInfoService();
+            var winget = new WingetService(runner);
 
+            Dashboard = new DashboardViewModel(sysInfo);
+            AppUpdates = new AppUpdatesViewModel(winget);
+            WindowsUpdate = new WindowsUpdateViewModel(runner);
+            SystemHealth = new SystemHealthViewModel(sysInfo);
+            Cleanup = new CleanupViewModel(runner);
+            DeepCleanup = new DeepCleanupViewModel();
+            DuplicateFile = new DuplicateFileViewModel();
+            DiskAnalyzer = new DiskAnalyzerViewModel();
+            ProcessManager = new ProcessManagerViewModel();
+            BatteryHealth = new BatteryHealthViewModel();
+            Uninstaller = new UninstallerViewModel(runner);
+            Performance = new PerformanceViewModel(runner);
+            Startup = new StartupViewModel();
+            NetworkShared = new NetworkSharedState();
+            Ping = new PingViewModel(NetworkShared);
+            Traceroute = new TracerouteViewModel(NetworkShared);
+            SpeedTest = new SpeedTestViewModel(NetworkShared);
+            NetworkRepair = new NetworkRepairViewModel(NetworkShared);
+            Drivers = new DriversViewModel(runner);
+            Logs = new LogsViewModel();
+            About = new AboutViewModel();
+            Services = new ServicesViewModel();
+            AppAlerts = new AppAlertsViewModel();
+            ShortcutCleaner = new ShortcutCleanerViewModel();
+            AppBlocker = new AppBlockerViewModel();
+        }
+
+        InitPlaceholders();
+        InitNavigation();
+    }
+
+    private void InitPlaceholders()
+    {
         // ── WIP placeholders for planned features ──────────────────────
         WipWindowsFeatures = new PlaceholderViewModel("Windows Features", "Toggle Windows optional features on or off.", "388");
         WipResourceHistory = new PlaceholderViewModel("Resource History", "Historical CPU, RAM, GPU and temperature graphs.", "377");
-        AppAlerts = new AppAlertsViewModel();
         WipPrivacyMonitor = new PlaceholderViewModel("Privacy Monitor", "Monitor and alert on webcam, microphone, and location access.", "380");
-        ShortcutCleaner = new ShortcutCleanerViewModel();
         WipFileShredder = new PlaceholderViewModel("File Shredder", "Securely delete files beyond recovery.", "386");
         WipDnsChanger = new PlaceholderViewModel("DNS Changer", "Quickly switch DNS servers for any network adapter.", "382");
         WipHostsEditor = new PlaceholderViewModel("Hosts Editor", "Edit the Windows hosts file with a friendly UI.", "382");
         WipBulkInstaller = new PlaceholderViewModel("Bulk Installer", "Install multiple applications at once via winget.", "387");
-        AppBlocker = new AppBlockerViewModel();
         WipPrivacySettings = new PlaceholderViewModel("Privacy Settings", "Windows debloat and privacy toggles.", "384");
         WipContextMenu = new PlaceholderViewModel("Context Menu", "Manage right-click context menu entries.", "385");
         WipRestorePoints = new PlaceholderViewModel("Restore Points", "Create and manage system restore points.", "383");
         WipScheduledMaintenance = new PlaceholderViewModel("Scheduled Maintenance", "Automate cleanup and maintenance tasks.", "383");
         WipSystemReport = new PlaceholderViewModel("System Report", "Comprehensive system info export.", "389");
+    }
 
+    private void InitNavigation()
+    {
         IsElevated = AdminHelper.IsElevated();
         ElevationBadge = IsElevated ? "Administrator" : "Standard user";
         Title = IsElevated ? "SysManager — Administrator" : "SysManager";

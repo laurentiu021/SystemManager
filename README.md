@@ -380,7 +380,7 @@ recommended mitigation — see [SECURITY.md](SECURITY.md) for details.
 
 ## Build from source
 
-Prerequisites: Windows 10 or newer and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+Prerequisites: Windows 10 or newer and the [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0).
 
 ```powershell
 git clone https://github.com/laurentiu021/SystemManager.git
@@ -447,7 +447,7 @@ and elevation state in a format ready to paste into a bug report.
 
 ## Tech stack
 
-- .NET 8 (WPF, C# 12)
+- .NET 9 (WPF, C# 13)
 - CommunityToolkit.Mvvm for MVVM plumbing
 - ModernWpfUI for the modern title bar
 - LiveCharts2 for the real-time latency chart

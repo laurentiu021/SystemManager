@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-05-13
+
+### Changed
+- **Migrate to .NET 9** — all projects now target `net9.0-windows`. CI
+  workflows updated to use .NET 9 SDK. `Microsoft.Extensions.DependencyInjection`
+  bumped to 9.0.4. Closes #257.
+- **DI: PowerShellRunner is now Transient** — each ViewModel gets its own
+  instance to prevent LineReceived event cross-talk between tabs.
+
+### Fixed
+- **Uninstaller** — filter out entries with names shorter than 2 characters
+  (eliminates empty rows from winget list parsing edge cases).
+- **Process Manager** — explicitly enable column resizing (`CanUserResizeColumns`).
+- **Windows Features** — show "Not elevated" warning badge when not running
+  as Administrator.
+- **SpeedTestService** — suppress SYSLIB0057 obsolete warning for
+  `CreateFromSignedFile` (no .NET 9 replacement for Authenticode verification).
+
 ## [0.46.0] - 2026-05-13
 
 ### Added

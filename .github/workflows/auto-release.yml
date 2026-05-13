@@ -35,9 +35,12 @@ jobs:
           FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1)
           echo "commit_msg=$FIRST_LINE"
 
-          if echo "$FIRST_LINE" | grep -qiE '^feat(\(.*\))?!?:'; then
+          # CI-001: Check for breaking changes (! suffix) before minor/patch
+          if echo "$FIRST_LINE" | grep -qiE '^(feat|fix)(\(.*\))?!:'; then
+            echo "type=major" >> "$GITHUB_OUTPUT"
+          elif echo "$FIRST_LINE" | grep -qiE '^feat(\(.*\))?:'; then
             echo "type=minor" >> "$GITHUB_OUTPUT"
-          elif echo "$FIRST_LINE" | grep -qiE '^fix(\(.*\))?!?:'; then
+          elif echo "$FIRST_LINE" | grep -qiE '^fix(\(.*\))?:'; then
             echo "type=patch" >> "$GITHUB_OUTPUT"
           else
             echo "type=none" >> "$GITHUB_OUTPUT"
@@ -64,7 +67,11 @@ jobs:
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
           BUMP="${{ steps.bump.outputs.type }}"
-          if [ "$BUMP" = "minor" ]; then
+          if [ "$BUMP" = "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$BUMP" = "minor" ]; then
             MINOR=$((MINOR + 1))
             PATCH=0
           else

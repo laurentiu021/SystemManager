@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-05-13
+
+### Fixed
+- **Performance: ConsoleViewModel** — fix O(n²) trim by removing from index 0
+  forward instead of reverse-order removal (PERF-005).
+- **Performance: ProcessManagerViewModel** — move icon extraction and process
+  description lookup to background thread to prevent UI freezes (PERF-007).
+- **CI: auto-release** — detect breaking change commits (feat!:/fix!:) and
+  bump major version instead of treating them as minor/patch (CI-001).
+- **CI: ci.yml** — add warning annotation when UI automation tests fail so
+  failures are visible on PRs without blocking merge (TEST-005).
+
 ## [0.49.0] - 2026-05-13
 
 ### Fixed

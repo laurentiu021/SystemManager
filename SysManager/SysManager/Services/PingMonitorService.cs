@@ -31,6 +31,7 @@ public sealed class PingMonitorService : IDisposable
 
     private CancellationTokenSource? _cts;
     private Task? _loop;
+    private readonly object _stateLock = new();
 
     public bool IsRunning => _loop is { IsCompleted: false };
 
@@ -39,18 +40,24 @@ public sealed class PingMonitorService : IDisposable
 
     public void Start()
     {
-        if (IsRunning) return;
-        _cts = new CancellationTokenSource();
-        _loop = Task.Run(() => PumpAsync(_cts.Token));
+        lock (_stateLock)
+        {
+            if (IsRunning) return;
+            _cts = new CancellationTokenSource();
+            _loop = Task.Run(() => PumpAsync(_cts.Token));
+        }
     }
 
     public void Stop()
     {
-        _cts?.Cancel();
-        try { _loop?.Wait(1500); } catch { /* ignore */ }
-        _cts?.Dispose();
-        _cts = null;
-        _loop = null;
+        lock (_stateLock)
+        {
+            _cts?.Cancel();
+            try { _loop?.Wait(1500); } catch { /* ignore */ }
+            _cts?.Dispose();
+            _cts = null;
+            _loop = null;
+        }
     }
 
     private async Task PumpAsync(CancellationToken ct)

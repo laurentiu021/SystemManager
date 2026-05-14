@@ -14,8 +14,13 @@ namespace SysManager.Models;
 public partial class DuplicateFileGroup : ObservableObject
 {
     [ObservableProperty] private string _hash = "";
-    [ObservableProperty] private long _fileSize;
-    [ObservableProperty] private int _count;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WastedBytes))]
+    private long _fileSize;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WastedBytes))]
+    private int _count;
 
     public ObservableCollection<DuplicateFileEntry> Files { get; } = new();
 

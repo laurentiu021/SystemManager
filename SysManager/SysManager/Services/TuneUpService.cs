@@ -218,8 +218,9 @@ public sealed class TuneUpService
         try
         {
             // SHEmptyRecycleBin with SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND
-            NativeMethods.SHEmptyRecycleBin(IntPtr.Zero, null, 0x00000007);
-            return true;
+            int hr = NativeMethods.SHEmptyRecycleBin(IntPtr.Zero, null, 0x00000007);
+            // S_OK (0) = success, 0x80070012 (ERROR_NO_MORE_FILES) = bin already empty
+            return hr >= 0 || unchecked((uint)hr) == 0x80070012;
         }
         catch (System.ComponentModel.Win32Exception ex)
         {

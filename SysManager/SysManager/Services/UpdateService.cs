@@ -260,6 +260,7 @@ public sealed class UpdateService
     private static ReleaseInfo? Map(GhRelease dto)
     {
         if (dto.TagName == null) return null;
+        if (dto.Prerelease || dto.Draft) return null;
         var version = ParseVersion(dto.TagName);
         if (version == null) return null;
 

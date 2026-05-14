@@ -41,7 +41,7 @@ public sealed class LargeFileScanner
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
-            return Array.Empty<LargeFileEntry>();
+            return [];
 
         var heap = new SortedSet<(long Size, string Path)>(Comparer<(long, string)>.Create(
             (a, b) =>

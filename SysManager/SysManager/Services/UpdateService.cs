@@ -101,22 +101,22 @@ public sealed class UpdateService
         {
             var url = $"https://api.github.com/repos/{Owner}/{Repo}/releases?per_page={count}";
             var dto = await Http.GetFromJsonAsync<GhRelease[]>(url, ct).ConfigureAwait(false);
-            if (dto == null) return Array.Empty<ReleaseInfo>();
+            if (dto == null) return [];
             return dto.Select(Map).OfType<ReleaseInfo>().ToList();
         }
         catch (OperationCanceledException)
         {
-            return Array.Empty<ReleaseInfo>();
+            return [];
         }
         catch (HttpRequestException ex)
         {
             Serilog.Log.Warning(ex, "Failed to fetch recent releases (network)");
-            return Array.Empty<ReleaseInfo>();
+            return [];
         }
         catch (System.Text.Json.JsonException ex)
         {
             Serilog.Log.Warning(ex, "Failed to parse recent releases JSON");
-            return Array.Empty<ReleaseInfo>();
+            return [];
         }
     }
 

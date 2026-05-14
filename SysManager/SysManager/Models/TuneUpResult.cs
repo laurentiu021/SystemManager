@@ -23,7 +23,7 @@ public sealed class TuneUpResult
     public int BrokenShortcutsFound { get; init; }
 
     // ── Disk health ────────────────────────────────────────────────────
-    public IReadOnlyList<DiskHealthSummary> DiskResults { get; init; } = Array.Empty<DiskHealthSummary>();
+    public IReadOnlyList<DiskHealthSummary> DiskResults { get; init; } = [];
 
     // ── Uptime ─────────────────────────────────────────────────────────
     public TimeSpan Uptime { get; init; }

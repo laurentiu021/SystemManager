@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.7] - 2026-05-14
+
+### Changed
+- **Modern C#** — replaced Array.Empty<T>() with collection expressions []
+  across 7 files: DiskAnalyzerService, DuplicateFileService, LargeFileScanner,
+  UpdateService, CleanupCategory, TuneUpResult, HealthScoreResult (MODERN-003).
+
 ## [0.48.6] - 2026-05-14
 
 ### Fixed

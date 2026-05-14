@@ -146,7 +146,14 @@ public sealed class EventLogService
 
         if (!string.IsNullOrWhiteSpace(opt.ProviderName))
         {
-            var safe = opt.ProviderName.Replace("'", "");
+            // SEC-003: Strip XPath metacharacters to prevent injection.
+            var safe = opt.ProviderName
+                .Replace("'", "")
+                .Replace("\"", "")
+                .Replace("[", "")
+                .Replace("]", "")
+                .Replace("/", "")
+                .Replace("\\", "");
             clauses.Add($"Provider[@Name='{safe}']");
         }
 

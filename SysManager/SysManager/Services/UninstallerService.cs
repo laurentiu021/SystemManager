@@ -250,6 +250,22 @@ public sealed partial class UninstallerService
         // Handles both quoted paths ("C:\path\uninstall.exe" /S) and unquoted.
         var (exe, args) = ParseUninstallCommand(command);
 
+        // SEC-002: Validate the executable exists and is a real file (not a
+        // script or arbitrary command). HKCU uninstall keys can be modified
+        // without admin, so we must not blindly execute whatever is there.
+        if (!exe.StartsWith("MsiExec", StringComparison.OrdinalIgnoreCase) &&
+            !exe.StartsWith("rundll32", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!System.IO.File.Exists(exe))
+                throw new InvalidOperationException(
+                    $"Uninstall executable not found: '{exe}'. The app may have been removed already.");
+
+            var ext = System.IO.Path.GetExtension(exe);
+            if (!ext.Equals(".exe", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Uninstall target is not an executable (.exe): '{exe}'. Refusing to run for security.");
+        }
+
         Log.Information("Uninstalling local app '{Name}' via: {Exe} {Args}", app.Name, exe, args);
         return await _runner.RunProcessAsync(exe, args, ct).ConfigureAwait(false);
     }

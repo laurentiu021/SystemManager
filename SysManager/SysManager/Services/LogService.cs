@@ -16,9 +16,9 @@ public static class LogService
     public static string LogDir { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager", "logs");
 
-    // Matches C:\Users\<username>\ and replaces the username with [user].
+    // Matches <DriveLetter>:\Users\<username>\ and replaces the username with [user].
     private static readonly Regex UserPathRegex = new(
-        @"(?i)(C:\\Users\\)[^\\]+",
+        @"(?i)([A-Z]:\\Users\\)[^\\]+",
         RegexOptions.Compiled);
 
     public static void Init()

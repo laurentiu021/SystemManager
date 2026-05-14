@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.8] - 2026-05-14
+
+### Fixed
+- **UninstallerService (SEC-002)** — UninstallLocalAsync now validates that the
+  executable exists and has a .exe extension before running. Prevents execution
+  of arbitrary commands from HKCU registry keys (modifiable without admin).
+- **EventLogService (SEC-003)** — XPath sanitization now strips quotes, brackets,
+  slashes in addition to single quotes to prevent XPath injection.
+- **LogService (SEC-004)** — path sanitization regex now covers all drive letters
+  (A-Z:\Users\) instead of only C: drive.
+
 ## [0.48.7] - 2026-05-14
 
 ### Changed

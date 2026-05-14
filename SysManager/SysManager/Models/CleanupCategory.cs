@@ -39,7 +39,7 @@ public sealed class CleanupResult
 {
     public long BytesFreed { get; init; }
     public int FilesDeleted { get; init; }
-    public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Errors { get; init; } = [];
     public string Summary =>
         $"Freed {CleanupCategory.HumanSize(BytesFreed)} across {FilesDeleted:N0} files" +
         (Errors.Count > 0 ? $" · {Errors.Count} skipped" : string.Empty);

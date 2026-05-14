@@ -217,7 +217,26 @@ public partial class AboutViewModel : ViewModelBase
     /// Fully defensive — falls back gracefully on any WMI / registry miss.
     /// </summary>
     [RelayCommand]
-    private void CopyEnvironmentInfo()
+    private async Task CopyEnvironmentInfoAsync()
+    {
+        try
+        {
+            var text = await Task.Run(() => CollectEnvironmentInfo()).ConfigureAwait(true);
+            try { Clipboard.SetText(text); }
+            catch (System.Runtime.InteropServices.ExternalException ex) { Log.Debug("Clipboard locked: {Error}", ex.Message); }
+            UpdateStatus = "Environment info copied to clipboard.";
+        }
+        catch (System.Management.ManagementException ex)
+        {
+            UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
+        }
+        catch (InvalidOperationException ex)
+        {
+            UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
+        }
+    }
+
+    private string CollectEnvironmentInfo()
     {
         try
         {
@@ -315,17 +334,15 @@ public partial class AboutViewModel : ViewModelBase
             catch (System.Management.ManagementException ex) { Log.Debug("Display info unavailable: {Error}", ex.Message); }
 
             var text = sb.ToString();
-            try { Clipboard.SetText(text); }
-            catch (System.Runtime.InteropServices.ExternalException ex) { Log.Debug("Clipboard locked: {Error}", ex.Message); }
-            UpdateStatus = "Environment info copied to clipboard.";
+            return text;
         }
         catch (System.Management.ManagementException ex)
         {
-            UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
+            return $"Couldn't collect environment info: {ex.Message}";
         }
         catch (InvalidOperationException ex)
         {
-            UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
+            return $"Couldn't collect environment info: {ex.Message}";
         }
     }
 

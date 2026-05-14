@@ -226,8 +226,7 @@ public sealed class DuplicateFileService
 
     private static bool ShouldSkipDir(string path)
     {
-        var lower = path.ToLowerInvariant();
-        return SkipSegments.Any(seg => lower.Contains(seg));
+        return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool ShouldSkipFile(string name)

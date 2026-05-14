@@ -82,7 +82,7 @@ public sealed class DiskAnalyzerService
             scanned++;
             progress?.Report(new AnalysisProgress(scanned, Path.GetFileName(dir)));
 
-            var (size, files, folders) = MeasureFolder(dir, ct);
+            var (size, files, folders, denied) = MeasureFolder(dir, ct);
             var name = Path.GetFileName(dir);
             if (string.IsNullOrEmpty(name)) name = dir;
 
@@ -93,7 +93,7 @@ public sealed class DiskAnalyzerService
                 SizeBytes = size,
                 FileCount = files,
                 FolderCount = folders,
-                IsAccessDenied = size == 0 && files == 0 && folders == 0
+                IsAccessDenied = denied
             });
         }
 
@@ -124,11 +124,12 @@ public sealed class DiskAnalyzerService
         return results;
     }
 
-    private static (long size, int files, int folders) MeasureFolder(string path, CancellationToken ct)
+    private static (long size, int files, int folders, bool accessDenied) MeasureFolder(string path, CancellationToken ct)
     {
         long totalSize = 0;
         int fileCount = 0;
         int folderCount = 0;
+        bool accessDenied = false;
 
         var stack = new Stack<string>();
         stack.Push(path);
@@ -140,10 +141,10 @@ public sealed class DiskAnalyzerService
             string[] files = Array.Empty<string>();
             string[] dirs = Array.Empty<string>();
             try { files = Directory.GetFiles(current); }
-            catch (UnauthorizedAccessException) { /* skip protected folder */ }
+            catch (UnauthorizedAccessException) { accessDenied = true; }
             catch (IOException) { /* skip inaccessible folder */ }
             try { dirs = Directory.GetDirectories(current); }
-            catch (UnauthorizedAccessException) { /* skip protected folder */ }
+            catch (UnauthorizedAccessException) { accessDenied = true; }
             catch (IOException) { /* skip inaccessible folder */ }
 
             foreach (var f in files)
@@ -154,7 +155,7 @@ public sealed class DiskAnalyzerService
                     totalSize += new FileInfo(f).Length;
                     fileCount++;
                 }
-                catch (UnauthorizedAccessException) { /* skip inaccessible file */ }
+                catch (UnauthorizedAccessException) { accessDenied = true; }
                 catch (IOException) { /* skip inaccessible file */ }
             }
 
@@ -167,7 +168,7 @@ public sealed class DiskAnalyzerService
                     var attr = File.GetAttributes(d);
                     if ((attr & FileAttributes.ReparsePoint) != 0) continue;
                 }
-                catch (UnauthorizedAccessException) { continue; }
+                catch (UnauthorizedAccessException) { accessDenied = true; continue; }
                 catch (IOException) { continue; }
 
                 folderCount++;
@@ -175,7 +176,7 @@ public sealed class DiskAnalyzerService
             }
         }
 
-        return (totalSize, fileCount, folderCount);
+        return (totalSize, fileCount, folderCount, accessDenied);
     }
 
     private static bool ShouldSkip(string path)

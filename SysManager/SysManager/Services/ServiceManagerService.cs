@@ -86,18 +86,19 @@ public class ServiceManagerService
     public static void StartService(string serviceName)
     {
         using var sc = new ServiceController(serviceName);
-        if (sc.Status != ServiceControllerStatus.Running)
+        if (sc.Status == ServiceControllerStatus.Running ||
+            sc.Status == ServiceControllerStatus.StartPending)
+            return;
+
+        sc.Start();
+        try
         {
-            sc.Start();
-            try
-            {
-                sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
-            }
-            catch (System.ServiceProcess.TimeoutException)
-            {
-                throw new InvalidOperationException(
-                    $"Service '{serviceName}' did not start within 30 seconds. It may still be starting — check Services again in a moment.");
-            }
+            sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+        }
+        catch (System.ServiceProcess.TimeoutException)
+        {
+            throw new InvalidOperationException(
+                $"Service '{serviceName}' did not start within 30 seconds. It may still be starting — check Services again in a moment.");
         }
     }
 

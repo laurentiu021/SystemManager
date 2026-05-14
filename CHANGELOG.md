@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.3] - 2026-05-14
+
+### Fixed
+- **DuplicateFileGroup** — WastedBytes now raises PropertyChanged when Count or
+  FileSize changes (missing NotifyPropertyChangedFor attributes).
+- **UpdateService** — pre-release and draft GitHub releases are now filtered out
+  in GetRecentAsync results.
+- **ServiceManagerService** — StartService no longer throws when the service is
+  already in StartPending state.
+- **DiskAnalyzerService** — empty directories are no longer incorrectly flagged
+  as access-denied; the flag now tracks actual UnauthorizedAccessException.
+- **WindowsUpdateViewModel** — null-conditional on Application.Current before
+  calling Shutdown() prevents NullReferenceException during unit tests or
+  non-standard hosting.
+- **TuneUpService** — SHEmptyRecycleBin HRESULT is now checked; returns false
+  on failure instead of always reporting success.
+
 ## [0.48.2] - 2026-05-14
 
 ### Fixed

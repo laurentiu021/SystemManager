@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.48.8] - 2026-05-14
+## [0.48.7] - 2026-05-14
 
 ### Fixed
 - **UninstallerService (SEC-002)** — UninstallLocalAsync now validates that the
@@ -16,8 +16,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   slashes in addition to single quotes to prevent XPath injection.
 - **LogService (SEC-004)** — path sanitization regex now covers all drive letters
   (A-Z:\Users\) instead of only C: drive.
-
-## [0.48.7] - 2026-05-14
 
 ### Changed
 - **Modern C#** — replaced Array.Empty<T>() with collection expressions []

@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.49.0] - 2026-05-14
+## [0.48.4] - 2026-05-14
 
 ### Fixed
 - **IconExtractorService** — cache eviction race condition resolved with

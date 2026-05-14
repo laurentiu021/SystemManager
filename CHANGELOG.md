@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.2] - 2026-05-14
+
+### Fixed
+- **Security: SpeedTestService** — remove fabricated placeholder SHA-256 hashes
+  that caused perpetual warning logs (alert fatigue). Security now relies on
+  Authenticode signature verification of the extracted binary + zip structural
+  integrity check (SEC-001).
+
 ## [0.53.1] - 2026-05-14
 
 ### Fixed

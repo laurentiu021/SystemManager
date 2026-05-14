@@ -80,7 +80,7 @@ public sealed class MemoryTestService
             // mdsched.exe prompts interactively. Use the schedule flag to avoid UI.
             // On Win10/11, the easiest way without UI is the "bcdedit" toggle used
             // behind the scenes, but safest portable option is to launch mdsched.
-            Process.Start(new ProcessStartInfo
+            using var proc = Process.Start(new ProcessStartInfo
             {
                 FileName = "mdsched.exe",
                 UseShellExecute = true

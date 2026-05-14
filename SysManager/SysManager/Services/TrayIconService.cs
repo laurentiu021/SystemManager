@@ -90,8 +90,10 @@ public sealed class TrayIconService : IDisposable
         try
         {
             var uri = new Uri("pack://application:,,,/Resources/app.ico", UriKind.Absolute);
-            var stream = Application.GetResourceStream(uri)?.Stream;
-            return stream != null ? new System.Drawing.Icon(stream) : null;
+            var streamInfo = Application.GetResourceStream(uri);
+            if (streamInfo?.Stream == null) return null;
+            using var stream = streamInfo.Stream;
+            return new System.Drawing.Icon(stream);
         }
         catch (System.IO.IOException ex)
         {

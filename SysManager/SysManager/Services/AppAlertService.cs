@@ -17,6 +17,7 @@ namespace SysManager.Services;
 public sealed class AppAlertService : IDisposable
 {
     private readonly List<FileSystemWatcher> _watchers = new();
+    private readonly object _watcherLock = new();
     private readonly ConcurrentDictionary<string, bool> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _knownRegistryApps = new(StringComparer.OrdinalIgnoreCase);
     private Timer? _registryTimer;
@@ -53,21 +54,24 @@ public sealed class AppAlertService : IDisposable
     {
         if (_disposed) return;
 
-        foreach (var dir in GetMonitoredDirectories().Where(Directory.Exists))
+        lock (_watcherLock)
         {
-            try
+            foreach (var dir in GetMonitoredDirectories().Where(Directory.Exists))
             {
-                var watcher = new FileSystemWatcher(dir)
+                try
                 {
-                    NotifyFilter = NotifyFilters.DirectoryName,
-                    IncludeSubdirectories = false,
-                    EnableRaisingEvents = true
-                };
-                watcher.Created += OnDirectoryCreated;
-                _watchers.Add(watcher);
+                    var watcher = new FileSystemWatcher(dir)
+                    {
+                        NotifyFilter = NotifyFilters.DirectoryName,
+                        IncludeSubdirectories = false,
+                        EnableRaisingEvents = true
+                    };
+                    watcher.Created += OnDirectoryCreated;
+                    _watchers.Add(watcher);
+                }
+                catch (IOException ex) { Log.Debug(ex, "Failed to watch {Dir}", dir); }
+                catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied watching {Dir}", dir); }
             }
-            catch (IOException ex) { Log.Debug(ex, "Failed to watch {Dir}", dir); }
-            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied watching {Dir}", dir); }
         }
 
         _registryTimer = new Timer(CheckRegistry, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
@@ -82,12 +86,15 @@ public sealed class AppAlertService : IDisposable
         _registryTimer?.Dispose();
         _registryTimer = null;
 
-        foreach (var w in _watchers)
+        lock (_watcherLock)
         {
-            w.EnableRaisingEvents = false;
-            w.Dispose();
+            foreach (var w in _watchers)
+            {
+                w.EnableRaisingEvents = false;
+                w.Dispose();
+            }
+            _watchers.Clear();
         }
-        _watchers.Clear();
         Log.Information("App alert monitoring stopped");
     }
 

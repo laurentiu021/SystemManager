@@ -38,6 +38,11 @@ public partial class PerformanceView : UserControl
 
     private void SyncRadioButtons(string plan)
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(() => SyncRadioButtons(plan));
+            return;
+        }
         RbBalanced.IsChecked = plan == "balanced";
         RbHigh.IsChecked = plan == "high";
         RbUltimate.IsChecked = plan == "ultimate";

@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.5] - 2026-05-14
+
+### Changed
+- **DuplicateFileService** — ShouldSkipDir uses OrdinalIgnoreCase instead of
+  ToLowerInvariant allocation on every path (PERF-002).
+- **LargeFileScanner** — same OrdinalIgnoreCase fix (PERF-002).
+- **SpeedTestService** — SHA-256 hashing uses stream instead of
+  File.ReadAllBytes to avoid loading entire zip into memory (PERF-004).
+- **ProcessManagerService** — MainModule accessed once per process instead of
+  twice, halving P/Invoke overhead (PERF-005).
+- **AboutViewModel** — CopyEnvironmentInfo WMI queries now run on background
+  thread via Task.Run, preventing UI freeze (PERF-008).
+
 ## [0.48.4] - 2026-05-14
 
 ### Fixed

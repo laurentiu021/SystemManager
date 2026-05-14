@@ -71,10 +71,12 @@ public sealed class ProcessManagerService
                         catch (System.ComponentModel.Win32Exception) { /* process may have exited */ }
                     }
 
-                    try { entry.Description = p.MainModule?.FileVersionInfo.FileDescription ?? ""; }
-                    catch (InvalidOperationException) { /* access denied or process exited */ }
-                    catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
-                    try { entry.FilePath = p.MainModule?.FileName ?? ""; }
+                    try
+                    {
+                        var module = p.MainModule;
+                        entry.Description = module?.FileVersionInfo.FileDescription ?? "";
+                        entry.FilePath = module?.FileName ?? "";
+                    }
                     catch (InvalidOperationException) { /* access denied or process exited */ }
                     catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
                     entry.CanOpenFileLocation = !string.IsNullOrWhiteSpace(entry.FilePath)

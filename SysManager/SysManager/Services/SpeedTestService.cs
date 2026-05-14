@@ -297,7 +297,8 @@ public sealed class SpeedTestService
         // extracted binary, not on pinned hashes (which break on Ookla updates).
         await Task.Run(() =>
         {
-            var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(zipPath)));
+            using var stream = File.OpenRead(zipPath);
+            var hash = Convert.ToHexString(SHA256.HashData(stream));
             Log.Information("Ookla CLI downloaded: {Url}, SHA256={Hash}, Size={Size}",
                 zipUrl, hash, new FileInfo(zipPath).Length);
 

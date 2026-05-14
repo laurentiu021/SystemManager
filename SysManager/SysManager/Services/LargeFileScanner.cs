@@ -125,7 +125,6 @@ public sealed class LargeFileScanner
 
     private static bool ShouldSkip(string path)
     {
-        var lower = path.ToLowerInvariant();
-        return SkipSegments.Any(seg => lower.Contains(seg));
+        return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
     }
 }

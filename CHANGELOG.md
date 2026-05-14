@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.9] - 2026-05-14
+
+### Fixed
+- **SpeedTestService** — empty catch blocks replaced with `Log.Debug` calls for
+  best-effort file cleanup (resolves 4 CodeQL `cs/empty-catch-block` alerts).
+- **WindowsFeaturesViewModel** — if/else replaced with ternary for enable/disable
+  dispatch (CodeQL `cs/missed-ternary-operator`).
+- **UninstallerViewModel** — if/else replaced with ternary for local vs winget
+  uninstall dispatch (CodeQL `cs/missed-ternary-operator`).
+
 ## [0.48.8] - 2026-05-14
 
 ### Fixed

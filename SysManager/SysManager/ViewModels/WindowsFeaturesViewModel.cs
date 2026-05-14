@@ -104,17 +104,9 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
 
         try
         {
-            bool success;
-            bool reboot;
-
-            if (feature.IsEnabled)
-            {
-                (success, reboot) = await _service.DisableFeatureAsync(feature.Name, _cts.Token);
-            }
-            else
-            {
-                (success, reboot) = await _service.EnableFeatureAsync(feature.Name, _cts.Token);
-            }
+            var (success, reboot) = feature.IsEnabled
+                ? await _service.DisableFeatureAsync(feature.Name, _cts.Token)
+                : await _service.EnableFeatureAsync(feature.Name, _cts.Token);
 
             if (success)
             {

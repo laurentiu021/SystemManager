@@ -21,8 +21,8 @@ public class NetworkRepairService
     /// </summary>
     public async Task<NetworkRepairResult> FlushDnsAsync(CancellationToken ct = default)
     {
-        var output = new List<string>();
-        void OnLine(PowerShellLine line) => output.Add(line.Text);
+        var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        void OnLine(PowerShellLine line) => output.Enqueue(line.Text);
         _ps.LineReceived += OnLine;
         try
         {
@@ -42,8 +42,8 @@ public class NetworkRepairService
     /// </summary>
     public async Task<NetworkRepairResult> ResetWinsockAsync(CancellationToken ct = default)
     {
-        var output = new List<string>();
-        void OnLine(PowerShellLine line) => output.Add(line.Text);
+        var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        void OnLine(PowerShellLine line) => output.Enqueue(line.Text);
         _ps.LineReceived += OnLine;
         try
         {
@@ -63,8 +63,8 @@ public class NetworkRepairService
     /// </summary>
     public async Task<NetworkRepairResult> ResetTcpIpAsync(CancellationToken ct = default)
     {
-        var output = new List<string>();
-        void OnLine(PowerShellLine line) => output.Add(line.Text);
+        var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        void OnLine(PowerShellLine line) => output.Enqueue(line.Text);
         _ps.LineReceived += OnLine;
         try
         {

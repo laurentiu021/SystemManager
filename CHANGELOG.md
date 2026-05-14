@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-05-14
+
+### Fixed
+- **IconExtractorService** — cache eviction race condition resolved with
+  double-checked lock pattern (THR-002).
+- **PingMonitorService** — Start/Stop race on _cts resolved with lock around
+  state transitions (THR-003).
+- **TracerouteMonitorService** — same Start/Stop race fix as PingMonitor
+  (THR-003).
+- **AppAlertService** — List<FileSystemWatcher> access from concurrent threads
+  protected with lock on Start/Stop (THR-004).
+- **NetworkRepairService** — List<string> output replaced with ConcurrentQueue
+  to prevent corruption from background thread callbacks (THR-005).
+- **PerformanceView** — SyncRadioButtons now marshals to UI thread via
+  Dispatcher.BeginInvoke when called from background (THR-006).
+
 ## [0.48.3] - 2026-05-14
 
 ### Fixed

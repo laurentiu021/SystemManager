@@ -23,6 +23,7 @@ namespace SysManager.Services;
 public sealed class IconExtractorService
 {
     private static readonly ConcurrentDictionary<string, ImageSource?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object _evictionLock = new();
 
     /// <summary>Maximum number of cached icons before eviction kicks in.</summary>
     public static int MaxCacheSize { get; set; } = 500;
@@ -50,8 +51,15 @@ public sealed class IconExtractorService
         // the cache to amortize the cost of eviction.
         if (_cache.Count >= MaxCacheSize)
         {
-            var keys = _cache.Keys.Take(_cache.Count / 2).ToList();
-            foreach (var k in keys) _cache.TryRemove(k, out _);
+            lock (_evictionLock)
+            {
+                // Double-check inside lock to avoid redundant eviction.
+                if (_cache.Count >= MaxCacheSize)
+                {
+                    var keys = _cache.Keys.Take(_cache.Count / 2).ToList();
+                    foreach (var k in keys) _cache.TryRemove(k, out _);
+                }
+            }
         }
 
         return _cache.GetOrAdd(normalized, static path => ExtractIcon(path));

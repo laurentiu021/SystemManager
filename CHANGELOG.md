@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.8] - 2026-05-14
+
+### Fixed
+- **UninstallerService (SEC-005)** — `StartsWith` allowlist replaced with exact
+  filename match to prevent bypass via similarly-named executables (e.g.
+  "MsiExecEvil.exe"). `/I` → `/X` replacement now uses regex word-boundary
+  match to avoid corrupting GUIDs.
+- **SpeedTestService (SEC-006)** — Authenticode verification now fail-closed:
+  if the Ookla binary is unsigned or subject mismatches, it is deleted and an
+  exception is thrown instead of just logging a warning.
+- **DialogService** — singleton setter now rejects null to prevent global
+  null-swap hazards.
+- **Application.Current.Shutdown()** — added null-conditional `?.` operator on
+  all 5 shutdown call sites (WindowsUpdateVM ×2, DashboardVM, AppUpdatesVM,
+  TrayIconService) to prevent NullReferenceException in tests or non-standard
+  hosting.
+- **AboutViewModel** — clipboard copy no longer reports success when
+  `Clipboard.SetText` throws `ExternalException` (clipboard locked).
+- **NetworkSharedState** — TOCTOU race in FlushPending replaced
+  `ContainsKey` + indexer with `TryGetValue`; all paint SKTypeface instances
+  now disposed on cleanup (LEAK-003 complete).
+- **AppAlertService** — replaced `ContainsKey` + set with atomic `TryAdd` to
+  prevent duplicate new-app notifications in race conditions.
+- **PerformanceService** — `CreateRestorePointAsync` no longer uses always-true
+  `results != null` check; relies on exception propagation for failure.
+- **ServiceManagerService** — service name regex narrowed from `\s` (any
+  whitespace including newlines) to literal space only.
+- **WindowsFeaturesViewModel** — CancellationTokenSource now cancelled before
+  disposal in all code paths to prevent orphaned in-flight operations.
+- **App.xaml.cs** — DI ServiceProvider now disposed on application exit,
+  ensuring all DI-owned singletons implementing IDisposable are cleaned up.
+- **DashboardView.xaml** — disk verdict and overall tune-up verdict colors now
+  bound to model `ColorHex`/`OverallColorHex` instead of hardcoded green.
+
 ## [0.48.7] - 2026-05-14
 
 ### Fixed

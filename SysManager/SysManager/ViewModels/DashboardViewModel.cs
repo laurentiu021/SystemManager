@@ -123,7 +123,7 @@ public partial class DashboardViewModel : ViewModelBase
     {
         Log.Information("Admin elevation requested from Dashboard");
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current.Shutdown();
+            System.Windows.Application.Current?.Shutdown();
     }
 
     // ── Tune-Up commands ───────────────────────────────────────────────

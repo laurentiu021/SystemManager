@@ -13,7 +13,12 @@ namespace SysManager.Services;
 public sealed class DialogService : IDialogService
 {
     /// <summary>Shared singleton instance for ViewModels without DI.</summary>
-    public static IDialogService Instance { get; set; } = new DialogService();
+    private static volatile IDialogService _instance = new DialogService();
+    public static IDialogService Instance
+    {
+        get => _instance;
+        set => _instance = value ?? throw new ArgumentNullException(nameof(value));
+    }
 
     /// <inheritdoc/>
     public bool Confirm(string message, string title)

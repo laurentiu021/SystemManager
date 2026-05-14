@@ -47,6 +47,7 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
         StatusMessage = "Querying Windows optional features…";
         AllFeatures.Clear();
         FilteredFeatures.Clear();
+        _cts?.Cancel();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
@@ -97,6 +98,7 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
         ToggleFeatureCommand.NotifyCanExecuteChanged();
         feature.Status = feature.IsEnabled ? "Disabling…" : "Enabling…";
         StatusMessage = $"{(feature.IsEnabled ? "Disabling" : "Enabling")} {feature.DisplayName}…";
+        _cts?.Cancel();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
@@ -158,7 +160,7 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _cts?.Dispose();
+        if (disposing) { _cts?.Cancel(); _cts?.Dispose(); }
         base.Dispose(disposing);
     }
 

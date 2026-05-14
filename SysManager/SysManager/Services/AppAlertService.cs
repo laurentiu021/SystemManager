@@ -150,8 +150,7 @@ public sealed class AppAlertService : IDisposable
 
     private void OnDirectoryCreated(object sender, FileSystemEventArgs e)
     {
-        if (_knownFolders.ContainsKey(e.FullPath)) return;
-        _knownFolders[e.FullPath] = true;
+        if (!_knownFolders.TryAdd(e.FullPath, true)) return;
 
         var entry = new AppInstallEntry
         {
@@ -172,7 +171,7 @@ public sealed class AppAlertService : IDisposable
             var current = GetRegistryApps();
             foreach (var app in current.Where(a => !_knownRegistryApps.ContainsKey(a.Name)))
             {
-                _knownRegistryApps[app.Name] = true;
+                if (!_knownRegistryApps.TryAdd(app.Name, true)) continue;
 
                 app.DetectedAt = DateTime.Now;
                 Log.Information("New app detected in registry: {Name}", app.Name);

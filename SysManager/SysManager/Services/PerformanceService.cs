@@ -515,8 +515,10 @@ public class PerformanceService
         // escaping. AddParameter doesn't create script-scope variables.
         var safeDesc = (description ?? "SysManager Restore Point").Replace("'", "''");
         var script = $"Checkpoint-Computer -Description '{safeDesc}' -RestorePointType 'MODIFY_SETTINGS'";
-        var results = await _ps.RunAsync(script, null, ct).ConfigureAwait(false);
-        return results != null;
+        await _ps.RunAsync(script, null, ct).ConfigureAwait(false);
+        // If RunAsync completes without throwing, the command succeeded.
+        // Checkpoint-Computer produces no output on success but throws on failure.
+        return true;
     }
 
     // ═══════════════════════════════════════════════════════════════

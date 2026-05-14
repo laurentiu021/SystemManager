@@ -222,9 +222,16 @@ public partial class AboutViewModel : ViewModelBase
         try
         {
             var text = await Task.Run(() => CollectEnvironmentInfo()).ConfigureAwait(true);
-            try { Clipboard.SetText(text); }
-            catch (System.Runtime.InteropServices.ExternalException ex) { Log.Debug("Clipboard locked: {Error}", ex.Message); }
-            UpdateStatus = "Environment info copied to clipboard.";
+            try
+            {
+                Clipboard.SetText(text);
+                UpdateStatus = "Environment info copied to clipboard.";
+            }
+            catch (System.Runtime.InteropServices.ExternalException ex)
+            {
+                Log.Debug("Clipboard locked: {Error}", ex.Message);
+                UpdateStatus = "Couldn't copy to clipboard: it's currently in use by another application.";
+            }
         }
         catch (System.Management.ManagementException ex)
         {

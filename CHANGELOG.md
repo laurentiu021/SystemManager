@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.6] - 2026-05-14
+
+### Fixed
+- **PingMonitorService** — bare catch replaced with specific AggregateException
+  and ObjectDisposedException (CodeQL cs/catch-of-all-exceptions).
+- **TracerouteMonitorService** — same bare catch fix.
+- **OutputKindToBrushConverter** — simplifiable boolean expression refactored
+  to pattern matching (CodeQL cs/simplifiable-boolean-expression).
+- **LogsViewModel** — unsafe cast from ICollectionView to CollectionView
+  replaced with safe as-cast with fallback (CodeQL cs/cast-from-abstract).
+
 ## [0.48.5] - 2026-05-14
 
 ### Changed

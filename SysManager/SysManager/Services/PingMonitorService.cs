@@ -53,7 +53,9 @@ public sealed class PingMonitorService : IDisposable
         lock (_stateLock)
         {
             _cts?.Cancel();
-            try { _loop?.Wait(1500); } catch { /* ignore */ }
+            try { _loop?.Wait(1500); }
+            catch (AggregateException) { /* task cancellation or faulted — expected during stop */ }
+            catch (ObjectDisposedException) { /* task already cleaned up */ }
             _cts?.Dispose();
             _cts = null;
             _loop = null;

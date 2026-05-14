@@ -74,6 +74,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _trayService?.Dispose();
+        (Services as IDisposable)?.Dispose();
         LogService.Shutdown();
         _instanceMutex?.ReleaseMutex();
         _instanceMutex?.Dispose();

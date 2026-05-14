@@ -326,7 +326,8 @@ public sealed class SpeedTestService
         if (!File.Exists(exe))
             throw new FileNotFoundException("speedtest.exe not found after extraction");
 
-        // Verify Authenticode signature on extracted binary
+        // Verify Authenticode signature on extracted binary — fail-closed.
+        // If the binary is not signed by Ookla, delete it and throw.
         await Task.Run(() =>
         {
             try
@@ -335,13 +336,20 @@ public sealed class SpeedTestService
                 var cert = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
 #pragma warning restore SYSLIB0057
                 if (cert == null || !cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
+                {
                     Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert?.Subject ?? "none");
-                else
-                    Log.Information("Ookla speedtest.exe Authenticode verified: {Subject}", cert.Subject);
+                    try { File.Delete(exe); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                    throw new InvalidOperationException(
+                        $"Ookla speedtest.exe failed Authenticode verification (subject: {cert?.Subject ?? "none"}). Binary deleted for security.");
+                }
+                Log.Information("Ookla speedtest.exe Authenticode verified: {Subject}", cert.Subject);
             }
             catch (System.Security.Cryptography.CryptographicException ex)
             {
                 Log.Warning(ex, "Ookla speedtest.exe has no valid Authenticode signature");
+                try { File.Delete(exe); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                throw new InvalidOperationException(
+                    "Ookla speedtest.exe has no valid Authenticode signature. Binary deleted for security.", ex);
             }
         }, ct).ConfigureAwait(false);
 

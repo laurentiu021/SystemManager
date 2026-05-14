@@ -321,9 +321,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             touched.Add(sample.Host);
         }
 
-        foreach (var host in touched.Where(h => Buffers.ContainsKey(h)))
+        foreach (var host in touched)
         {
-            var buffer = Buffers[host];
+            if (!Buffers.TryGetValue(host, out var buffer)) continue;
             TrimBuffer(buffer);
             var target = Targets.FirstOrDefault(t => t.Host == host);
             if (target == null) continue;
@@ -490,5 +490,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
         // Dispose SKTypeface (unmanaged SkiaSharp memory) — LEAK-003
         LegendTextPaint.SKTypeface?.Dispose();
+        LegendBackgroundPaint.SKTypeface?.Dispose();
+        TooltipTextPaint.SKTypeface?.Dispose();
+        TooltipBackgroundPaint.SKTypeface?.Dispose();
     }
 }

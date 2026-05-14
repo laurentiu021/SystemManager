@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.53.1] - 2026-05-14
+
+### Fixed
+- **Resource leak: NetworkSharedState** — dispose SKTypeface on LegendTextPaint
+  in Dispose() to release unmanaged SkiaSharp memory (LEAK-003).
+- **Resource leak: TrayIconService** — dispose icon resource stream after
+  creating System.Drawing.Icon to prevent stream leak (LEAK-006).
+- **Resource leak: MemoryTestService** — dispose Process returned by
+  Process.Start when launching mdsched.exe (LEAK-007).
+
 ## [0.53.0] - 2026-05-13
 
 ### Added

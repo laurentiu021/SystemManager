@@ -487,5 +487,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         TraceMonitor.Stop();
         TraceMonitor.Dispose();
         FlushTimer?.Stop();
+
+        // Dispose SKTypeface (unmanaged SkiaSharp memory) — LEAK-003
+        LegendTextPaint.SKTypeface?.Dispose();
     }
 }

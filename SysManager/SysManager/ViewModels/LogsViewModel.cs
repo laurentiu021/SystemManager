@@ -69,7 +69,7 @@ public partial class LogsViewModel : ViewModelBase
     {
         // PERF-002: Use CollectionView.Count directly instead of iterating
         // the entire filtered collection via Cast<object>().Count().
-        VisibleCount = ((CollectionView)EntriesView).Count;
+        VisibleCount = (EntriesView as CollectionView)?.Count ?? EntriesView.Cast<object>().Count();
         HasNoResults = Entries.Count > 0 && VisibleCount == 0;
     }
 

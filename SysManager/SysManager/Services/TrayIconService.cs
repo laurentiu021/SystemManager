@@ -115,7 +115,7 @@ public sealed class TrayIconService : IDisposable
         var exitItem = new System.Windows.Controls.MenuItem { Header = "Exit" };
         exitItem.Click += (_, _) =>
         {
-            Application.Current.Shutdown();
+            Application.Current?.Shutdown();
         };
         menu.Items.Add(exitItem);
 

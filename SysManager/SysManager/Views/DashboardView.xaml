@@ -250,7 +250,7 @@
                                         <TextBlock Text="{Binding Name}" Foreground="#C9D1D9" Margin="0,0,6,0"
                                                    VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding Verdict}" FontWeight="SemiBold"
-                                                   VerticalAlignment="Center" Foreground="#22C55E"/>
+                                                   VerticalAlignment="Center" Foreground="{Binding ColorHex}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -295,7 +295,7 @@
                         <!-- Overall verdict -->
                         <Separator Margin="0,8" Background="#21262D"/>
                         <TextBlock Text="{Binding TuneUpResult.OverallVerdict}" FontWeight="SemiBold" FontSize="13"
-                                   Foreground="#22C55E"/>
+                                   Foreground="{Binding TuneUpResult.OverallColorHex}"/>
                     </StackPanel>
                 </Border>
 

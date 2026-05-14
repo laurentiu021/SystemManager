@@ -111,7 +111,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         if (!AdminHelper.IsElevated())
         {
             StatusMessage = "Requesting admin rights...";
-            if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current.Shutdown();
+            if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current?.Shutdown();
             return;
         }
         IsBusy = true;
@@ -347,7 +347,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
         if (!AdminHelper.IsElevated())
         {
             StatusMessage = "Admin required. Relaunching elevated...";
-            if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current.Shutdown();
+            if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current?.Shutdown();
             return;
         }
         IsBusy = true;

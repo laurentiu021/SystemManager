@@ -253,8 +253,16 @@ public sealed partial class UninstallerService
         // SEC-002: Validate the executable exists and is a real file (not a
         // script or arbitrary command). HKCU uninstall keys can be modified
         // without admin, so we must not blindly execute whatever is there.
-        if (!exe.StartsWith("MsiExec", StringComparison.OrdinalIgnoreCase) &&
-            !exe.StartsWith("rundll32", StringComparison.OrdinalIgnoreCase))
+        // Use exact filename match for system binaries to prevent bypass via
+        // similarly-named executables (e.g. "MsiExecEvil.exe").
+        var exeFileName = System.IO.Path.GetFileName(exe);
+        var isTrustedSystemBinary =
+            exeFileName.Equals("MsiExec.exe", StringComparison.OrdinalIgnoreCase) ||
+            exeFileName.Equals("MsiExec", StringComparison.OrdinalIgnoreCase) ||
+            exeFileName.Equals("rundll32.exe", StringComparison.OrdinalIgnoreCase) ||
+            exeFileName.Equals("rundll32", StringComparison.OrdinalIgnoreCase);
+
+        if (!isTrustedSystemBinary)
         {
             if (!System.IO.File.Exists(exe))
                 throw new InvalidOperationException(
@@ -301,8 +309,11 @@ public sealed partial class UninstallerService
             {
                 var exe = command[..spaceIdx];
                 var args = command[(spaceIdx + 1)..].TrimStart();
-                // Convert /I (modify) to /X (uninstall) if needed, add /quiet
-                args = args.Replace("/I", "/X", StringComparison.OrdinalIgnoreCase);
+                // Convert /I (modify) to /X (uninstall) if needed, add /quiet.
+                // Use regex to match /I only as a standalone switch (not inside GUIDs).
+                args = System.Text.RegularExpressions.Regex.Replace(
+                    args, @"(?<![A-Za-z0-9])/I(?![A-Za-z0-9])", "/X",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 if (!args.Contains("/quiet", StringComparison.OrdinalIgnoreCase)
                     && !args.Contains("/qn", StringComparison.OrdinalIgnoreCase))
                     args += " /quiet /norestart";

@@ -74,7 +74,7 @@ public partial class WindowsUpdateViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current.Shutdown();
+            System.Windows.Application.Current?.Shutdown();
     }
 
     [RelayCommand]

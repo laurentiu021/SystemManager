@@ -127,6 +127,19 @@ public class DiskAnalyzerServiceTests : IDisposable
         Assert.True(big.Percentage > small.Percentage);
     }
 
+    [Fact]
+    public async Task Analyze_EmptySubfolder_NotMarkedAsAccessDenied()
+    {
+        // An empty directory should NOT be flagged as access denied
+        CreateDir("emptydir");
+        var result = await _service.AnalyzeAsync(_root);
+        Assert.Single(result);
+        Assert.Equal("emptydir", result[0].Name);
+        Assert.False(result[0].IsAccessDenied);
+        Assert.Equal(0, result[0].SizeBytes);
+        Assert.Equal(0, result[0].FileCount);
+    }
+
     // ── Invalid inputs ──
 
     [Fact]

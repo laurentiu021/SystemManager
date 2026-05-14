@@ -56,7 +56,7 @@ public sealed class DuplicateFileService
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
-            return Array.Empty<DuplicateFileGroup>();
+            return [];
 
         // ── Pass 1: discover files and group by size ──
         var sizeGroups = new Dictionary<long, List<FileInfo>>();

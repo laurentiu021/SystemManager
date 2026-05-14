@@ -33,7 +33,7 @@ public sealed class HealthScoreResult
 
     /// <summary>Top recommendations (max 3).</summary>
     public IReadOnlyList<HealthRecommendation> Recommendations { get; init; }
-        = Array.Empty<HealthRecommendation>();
+        = [];
 
     /// <summary>Individual component scores for breakdown display.</summary>
     public int DiskScore { get; init; } = 100;

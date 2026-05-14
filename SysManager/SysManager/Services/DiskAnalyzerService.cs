@@ -35,12 +35,12 @@ public sealed class DiskAnalyzerService
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
-            return Array.Empty<DiskUsageEntry>();
+            return [];
 
         string[] topDirs;
         try { topDirs = Directory.GetDirectories(rootPath); }
-        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied listing directories in {Root}", rootPath); return Array.Empty<DiskUsageEntry>(); }
-        catch (IOException ex) { Log.Warning(ex, "I/O error listing directories in {Root}", rootPath); return Array.Empty<DiskUsageEntry>(); }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied listing directories in {Root}", rootPath); return []; }
+        catch (IOException ex) { Log.Warning(ex, "I/O error listing directories in {Root}", rootPath); return []; }
 
         var results = new List<DiskUsageEntry>();
         int scanned = 0;

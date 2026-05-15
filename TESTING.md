@@ -6,9 +6,9 @@ SysManager has three test projects, each with a distinct scope and runner.
 
 | Project | What it tests | Runs on CI |
 |---|---|---|
-| `SysManager.Tests` | Pure unit tests — no WPF, no WMI, no network, no process spawning | ✅ Every push / PR |
+| `SysManager.Tests` | Unit tests — mostly pure logic, but some tests touch lightweight OS APIs (registry reads, process enumeration, Task Scheduler queries). No WPF dispatcher, no WMI, no network I/O, no admin required. | ✅ Every push / PR |
 | `SysManager.IntegrationTests` | Integration tests — real Windows APIs (Event Log, WMI, PowerShell, ICMP, WPF dispatcher) | ❌ Local only |
-| `SysManager.UITests` | End-to-end UI automation via FlaUI | ❌ Local only (needs a desktop session) |
+| `SysManager.UITests` | End-to-end UI automation via FlaUI | ✅ CI (headless, limited) |
 
 ## Running unit tests (CI-equivalent)
 

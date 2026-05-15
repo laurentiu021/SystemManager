@@ -11,7 +11,7 @@ namespace SysManager.Services;
 /// Enumerates Windows services, provides gaming recommendations, and
 /// allows starting/stopping/changing startup type. All mutations require admin.
 /// </summary>
-public class ServiceManagerService
+public sealed partial class ServiceManagerService
 {
     /// <summary>
     /// Gaming-oriented recommendations for common Windows services.
@@ -128,7 +128,7 @@ public class ServiceManagerService
         // hyphens, underscores, dots, and dollar signs only (covers all valid
         // Windows service names including instance names like MSSQL$INSTANCE).
         if (string.IsNullOrWhiteSpace(serviceName) ||
-            !System.Text.RegularExpressions.Regex.IsMatch(serviceName, @"^[\w \-.$]+$"))
+            !ServiceNamePattern().IsMatch(serviceName))
             throw new ArgumentException("Invalid service name.", nameof(serviceName));
 
         var allowedTypes = new[] { "auto", "delayed-auto", "demand", "disabled" };
@@ -162,4 +162,7 @@ public class ServiceManagerService
         catch (System.Security.SecurityException) { return ""; }
         catch (UnauthorizedAccessException) { return ""; }
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[\w \-.$]+$")]
+    private static partial System.Text.RegularExpressions.Regex ServiceNamePattern();
 }

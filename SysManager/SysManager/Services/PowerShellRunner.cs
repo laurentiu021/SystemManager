@@ -19,7 +19,7 @@ namespace SysManager.Services;
 /// same reason. Callers that use RunAsync or RunScriptViaPwshAsync must only pass
 /// hard-coded script strings; never pass user input directly as a script.</para>
 /// </summary>
-public class PowerShellRunner
+public sealed class PowerShellRunner
 {
     public event Action<PowerShellLine>? LineReceived;
     public event Action<int>? ProgressChanged; // 0-100

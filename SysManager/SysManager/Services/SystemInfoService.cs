@@ -10,7 +10,7 @@ namespace SysManager.Services;
 /// <summary>
 /// Collects system information via WMI / CIM (no PowerShell spawn needed).
 /// </summary>
-public class SystemInfoService
+public sealed class SystemInfoService
 {
     public Task<SystemSnapshot> CaptureAsync(CancellationToken ct = default)
         => Task.Run(() => Capture(), ct);

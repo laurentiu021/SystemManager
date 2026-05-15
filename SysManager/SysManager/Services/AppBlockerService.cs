@@ -17,7 +17,7 @@ namespace SysManager.Services;
 /// effectively preventing it from running. Fully reversible by removing the key.
 /// Requires administrator privileges.
 /// </summary>
-public sealed class AppBlockerService
+public sealed partial class AppBlockerService
 {
     private const string IfeoPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
     private const string BlockerDebugger = @"C:\Windows\System32\SysManager_Blocked.exe";
@@ -33,7 +33,7 @@ public sealed class AppBlockerService
             exeName += ".exe";
 
         // SEC-004: reject path separators and invalid chars to prevent registry path injection
-        if (!System.Text.RegularExpressions.Regex.IsMatch(exeName, @"^[A-Za-z0-9_\-. ]+\.exe$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        if (!ExeNamePattern().IsMatch(exeName))
         {
             Log.Warning("Rejected invalid exeName: {ExeName}", exeName);
             return false;
@@ -78,7 +78,7 @@ public sealed class AppBlockerService
             exeName += ".exe";
 
         // SEC-004: apply same validation as BlockApp to prevent registry path injection
-        if (!System.Text.RegularExpressions.Regex.IsMatch(exeName, @"^[A-Za-z0-9_\-. ]+\.exe$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        if (!ExeNamePattern().IsMatch(exeName))
         {
             Log.Warning("Rejected invalid exeName for unblock: {ExeName}", exeName);
             return false;
@@ -190,4 +190,7 @@ public sealed class AppBlockerService
 
         return blocked;
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[A-Za-z0-9_\-. ]+\.exe$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ExeNamePattern();
 }

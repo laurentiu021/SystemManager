@@ -380,7 +380,19 @@ public sealed class DeepCleanupService
             IEnumerable<string> dirs;
             try { files = Directory.EnumerateFiles(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
             try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { dirs = []; } catch (UnauthorizedAccessException) { dirs = []; }
-            foreach (var f in files) yield return f;
+
+            // Wrap iteration to handle exceptions thrown during MoveNext()
+            // (e.g., file becomes inaccessible mid-enumeration).
+            using var enumerator = files.GetEnumerator();
+            while (true)
+            {
+                string? item;
+                try { if (!enumerator.MoveNext()) break; item = enumerator.Current; }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+                yield return item;
+            }
+
             foreach (var d in dirs) stack.Push(d);
         }
     }

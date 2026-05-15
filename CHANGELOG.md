@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.19] - 2026-05-15
+
+### Fixed
+- **DuplicateFileService** — skip reparse points (symlinks, junctions) during
+  directory traversal to prevent infinite loops on circular symlinks.
+- **LargeFileScanner** — same reparse point check added.
+- **DeepCleanupService** — `EnumerateFiles()` now catches `IOException` and
+  `UnauthorizedAccessException` during `MoveNext()` iteration, not just at
+  enumerator creation. Prevents crashes on files that become inaccessible
+  mid-scan.
+- **TrayIconService** — `OnTimerTick` (async void) now wraps the entire call
+  in try-catch to prevent unhandled exceptions from crashing the application.
+
 ## [0.48.18] - 2026-05-15
 
 ### Fixed

@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.12] - 2026-05-15
+
+### Fixed
+- **DiskHealthService (CQ-007)** — WQL ASSOCIATORS OF query now escapes single
+  quotes in objectId, preventing potential WQL injection.
+- **OperationLockService (CQ-008)** — removed redundant lock object; TryAcquire
+  and Release now use ConcurrentDictionary atomic TryAdd/TryRemove directly.
+- **PingMonitorService (CQ-015)** — CancellationTokenSource only disposed if the
+  background loop actually completed, preventing ObjectDisposedException in
+  still-running pump tasks.
+
 ## [0.48.11] - 2026-05-15
 
 ### Fixed

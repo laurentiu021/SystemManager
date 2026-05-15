@@ -9,22 +9,47 @@ namespace SysManager.Services;
 
 /// <summary>
 /// Collects system information via WMI / CIM (no PowerShell spawn needed).
+/// PERF-M1: Static data (OS caption, CPU name, disk models) is cached on first
+/// query and reused — only dynamic data (CPU load, RAM, uptime) is refreshed.
 /// </summary>
 public sealed class SystemInfoService
 {
+    // Cached static data — queried once, never changes during app lifetime.
+    private OsInfo? _cachedOs;
+    private CpuInfo? _cachedCpuStatic;
+    private List<DiskInfo>? _cachedDisks;
+    private readonly object _cacheLock = new();
+
     public Task<SystemSnapshot> CaptureAsync(CancellationToken ct = default)
         => Task.Run(() => Capture(), ct);
 
     private SystemSnapshot Capture()
     {
-        var os = QueryOs();
-        var cpu = QueryCpu();
+        OsInfo os;
+        CpuInfo cpu;
+        List<DiskInfo> disks;
+
+        lock (_cacheLock)
+        {
+            // Static OS info (caption, version, build, arch) — cache it.
+            // Uptime is dynamic, so we always refresh it.
+            _cachedOs ??= QueryOsStatic();
+            os = _cachedOs with { Uptime = QueryUptime() };
+
+            // CPU name/cores/threads/clock are static; only LoadPercentage is dynamic.
+            _cachedCpuStatic ??= QueryCpuStatic();
+            cpu = _cachedCpuStatic with { LoadPercent = QueryCpuLoad() };
+
+            // Disk info is static (models don't change at runtime).
+            _cachedDisks ??= QueryDisks();
+            disks = _cachedDisks;
+        }
+
         var mem = QueryMemory();
-        var disks = QueryDisks();
         return new SystemSnapshot(os, cpu, mem, disks, DateTime.Now);
     }
 
-    private static OsInfo QueryOs()
+    private static OsInfo QueryOsStatic()
     {
         using var searcher = new ManagementObjectSearcher("SELECT Caption,Version,BuildNumber,OSArchitecture,LastBootUpTime FROM Win32_OperatingSystem");
         using var osCollection = searcher.Get();
@@ -48,9 +73,29 @@ public sealed class SystemInfoService
         return new OsInfo("Windows", "", "", TimeSpan.Zero, "");
     }
 
-    private static CpuInfo QueryCpu()
+    private static TimeSpan QueryUptime()
     {
-        using var searcher = new ManagementObjectSearcher("SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,LoadPercentage FROM Win32_Processor");
+        using var searcher = new ManagementObjectSearcher("SELECT LastBootUpTime FROM Win32_OperatingSystem");
+        using var osCollection = searcher.Get();
+        foreach (ManagementObject mo in osCollection)
+        {
+            using (mo)
+            {
+                var lastBootRaw = mo["LastBootUpTime"]?.ToString();
+                if (!string.IsNullOrEmpty(lastBootRaw))
+                {
+                    try { return DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
+                    catch (FormatException) { }
+                    catch (InvalidCastException) { }
+                }
+            }
+        }
+        return TimeSpan.Zero;
+    }
+
+    private static CpuInfo QueryCpuStatic()
+    {
+        using var searcher = new ManagementObjectSearcher("SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
         using var cpuCollection = searcher.Get();
         foreach (ManagementObject mo in cpuCollection)
         {
@@ -61,10 +106,24 @@ public sealed class SystemInfoService
                     Convert.ToUInt32(mo["NumberOfCores"] ?? 0u),
                     Convert.ToUInt32(mo["NumberOfLogicalProcessors"] ?? 0u),
                     Convert.ToUInt32(mo["MaxClockSpeed"] ?? 0u),
-                    Convert.ToDouble(mo["LoadPercentage"] ?? 0.0));
+                    0);
             }
         }
         return new CpuInfo("Unknown", 0, 0, 0, 0);
+    }
+
+    private static double QueryCpuLoad()
+    {
+        using var searcher = new ManagementObjectSearcher("SELECT LoadPercentage FROM Win32_Processor");
+        using var cpuCollection = searcher.Get();
+        foreach (ManagementObject mo in cpuCollection)
+        {
+            using (mo)
+            {
+                return Convert.ToDouble(mo["LoadPercentage"] ?? 0.0);
+            }
+        }
+        return 0;
     }
 
     private static MemoryInfo QueryMemory()

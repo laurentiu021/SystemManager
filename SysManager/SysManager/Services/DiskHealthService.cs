@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Management;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -68,6 +69,15 @@ public sealed class DiskHealthService
     {
         try
         {
+            // Defense-in-depth: validate objectId format before WQL interpolation.
+            // ObjectId from MSFT_PhysicalDisk is typically like {guid}\\PhysicalDisk0.
+            // Reject anything that doesn't match expected characters.
+            if (!System.Text.RegularExpressions.Regex.IsMatch(objectId, @"^[\w{}\-\\.:/]+$"))
+            {
+                Log.Warning("DiskHealth: unexpected objectId format, skipping reliability query");
+                return;
+            }
+
             // Escape quotes & backslashes for the WQL literal.
             var safeId = objectId.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("'", "\\'");
             var query = new ObjectQuery(

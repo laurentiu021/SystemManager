@@ -107,7 +107,16 @@ public sealed class DuplicateFileService
                 catch (IOException) { /* skip inaccessible file */ }
             }
 
-            foreach (var d in dirs) stack.Push(d);
+            foreach (var d in dirs)
+            {
+                try
+                {
+                    if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;
+                }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+                stack.Push(d);
+            }
         }
 
         // ── Pass 2: partial hash pre-filter, then full hash ──

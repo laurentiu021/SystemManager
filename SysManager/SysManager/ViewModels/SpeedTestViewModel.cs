@@ -79,6 +79,7 @@ public partial class SpeedTestViewModel : ViewModelBase
         EstimatedTime = "";
         _eta.Reset();
         HttpStatus = "Starting HTTP speed test…";
+        _speedCts?.Dispose();
         _speedCts = new CancellationTokenSource();
         var progress = new Progress<(int p, string m)>(t =>
         { SpeedProgress = t.p; HttpStatus = t.m; EstimatedTime = _eta.Update(t.p); });
@@ -119,6 +120,7 @@ public partial class SpeedTestViewModel : ViewModelBase
         EstimatedTime = "";
         _eta.Reset();
         OoklaStatus = "Starting Ookla speed test…";
+        _speedCts?.Dispose();
         _speedCts = new CancellationTokenSource();
         var progress = new Progress<(int p, string m)>(t =>
         { SpeedProgress = t.p; OoklaStatus = t.m; EstimatedTime = _eta.Update(t.p); });

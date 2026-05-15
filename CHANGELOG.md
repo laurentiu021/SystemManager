@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.17] - 2026-05-15
+
+### Fixed
+- **DeepCleanupViewModel** — dispose previous CancellationTokenSource before
+  creating a new one in Scan/Clean/LargeScan (3 locations). Prevents kernel
+  handle leak on repeated operations.
+- **SpeedTestViewModel** — same CTS disposal fix (2 locations: HTTP + Ookla).
+- **TracerouteViewModel** — same CTS disposal fix.
+- **ShortcutCleanerViewModel** — same CTS disposal fix.
+- **NavItem** — implement `IDisposable` to unsubscribe `PropertyChanged`
+  handler from ViewModel on teardown. Previously 51 subscriptions leaked
+  permanently. `MainWindowViewModel.Dispose()` now disposes all NavItems.
+
 ## [0.48.14] - 2026-05-15
 
 ### Fixed

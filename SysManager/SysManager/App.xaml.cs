@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.Diagnostics;
+using System.IO;
+using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
@@ -14,8 +16,10 @@ namespace SysManager;
 public partial class App : Application
 {
     private const string MutexName = "Global\\SysManager_SingleInstance_laurentiu021";
+    private const string PipeName = "SysManager_SingleInstance_Pipe_laurentiu021";
     private Mutex? _instanceMutex;
     private TrayIconService? _trayService;
+    private CancellationTokenSource? _pipeCts;
 
     // Guard against cascading error dialogs — show at most one at a time.
     private static int _errorDialogActive;
@@ -69,10 +73,15 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnDomain;
         TaskScheduler.UnobservedTaskException += OnTask;
         base.OnStartup(e);
+
+        // Start listening for activation requests from subsequent instances
+        StartPipeListener();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _pipeCts?.Cancel();
+        _pipeCts?.Dispose();
         _trayService?.Dispose();
         (Services as IDisposable)?.Dispose();
         LogService.Shutdown();
@@ -84,6 +93,17 @@ public partial class App : Application
 
     private static void ActivateExistingInstance()
     {
+        // Try named pipe first — works even when the window is hidden (tray mode)
+        try
+        {
+            using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+            client.Connect(timeout: 2000);
+            // Connection alone signals the running instance to activate
+        }
+        catch (TimeoutException) { /* pipe not available, fall back to window activation */ }
+        catch (IOException) { /* pipe not available */ }
+
+        // Fallback: find the window handle (works when window is visible)
         using var current = Process.GetCurrentProcess();
         foreach (var proc in Process.GetProcessesByName(current.ProcessName))
         {
@@ -98,6 +118,38 @@ public partial class App : Application
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Listens for named pipe connections from subsequent instances and
+    /// activates the main window when one connects.
+    /// </summary>
+    private async void StartPipeListener()
+    {
+        _pipeCts = new CancellationTokenSource();
+        var ct = _pipeCts.Token;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await using var server = new NamedPipeServerStream(
+                    PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte,
+                    PipeOptions.Asynchronous);
+                await server.WaitForConnectionAsync(ct).ConfigureAwait(false);
+
+                // A second instance connected — activate our window on the UI thread
+                _ = Dispatcher.BeginInvoke(() =>
+                {
+                    var win = MainWindow;
+                    if (win != null)
+                    {
+                        TrayIconService.ShowWindow(win);
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException) { /* shutdown */ }
+        catch (IOException) { /* pipe broken during shutdown */ }
     }
 
     private static void OnUi(object s, DispatcherUnhandledExceptionEventArgs e)

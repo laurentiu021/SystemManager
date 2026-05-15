@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -30,7 +31,7 @@ public partial class AppAlertsViewModel : ViewModelBase
 
     public AppAlertsViewModel()
     {
-        _dispatcher = Dispatcher.CurrentDispatcher;
+        _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _service.NewAppDetected += OnNewAppDetected;
     }
 

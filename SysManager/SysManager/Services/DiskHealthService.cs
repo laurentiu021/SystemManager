@@ -69,7 +69,7 @@ public sealed class DiskHealthService
         try
         {
             // Escape quotes & backslashes for the WQL literal.
-            var safeId = objectId.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            var safeId = objectId.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("'", "\\'");
             var query = new ObjectQuery(
                 $"ASSOCIATORS OF {{MSFT_PhysicalDisk.ObjectId=\"{safeId}\"}} WHERE AssocClass=MSFT_PhysicalDiskToStorageReliabilityCounter");
             using var searcher = new ManagementObjectSearcher(scope, query);

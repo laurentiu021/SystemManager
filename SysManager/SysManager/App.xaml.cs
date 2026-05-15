@@ -76,7 +76,8 @@ public partial class App : Application
         _trayService?.Dispose();
         (Services as IDisposable)?.Dispose();
         LogService.Shutdown();
-        _instanceMutex?.ReleaseMutex();
+        try { _instanceMutex?.ReleaseMutex(); }
+        catch (ApplicationException) { /* mutex not owned by this thread */ }
         _instanceMutex?.Dispose();
         base.OnExit(e);
     }

@@ -27,7 +27,8 @@ public static class AdminHelper
     {
         try
         {
-            var exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
+            using var currentProc = Process.GetCurrentProcess();
+            var exePath = Environment.ProcessPath ?? currentProc.MainModule?.FileName;
             if (string.IsNullOrWhiteSpace(exePath)) return false;
 
             var psi = new ProcessStartInfo

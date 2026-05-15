@@ -100,12 +100,7 @@ public partial class AboutViewModel : ViewModelBase
             if (UpdateService.IsNewer(latest.Version, UpdateService.CurrentVersion))
             {
                 UpdateAvailable = true;
-                UpdateStatus = $"Update available: {LatestVersionLabel} ({LatestPublishedLabel}).";
-
-                // Auto-download when a new version is found — falls back
-                // gracefully if blocked.
-                if (!IsDownloading && DownloadedPath == null)
-                    _ = DownloadAsync();
+                UpdateStatus = $"Update available: {LatestVersionLabel} ({LatestPublishedLabel}). Click Download to get it.";
             }
             else
             {

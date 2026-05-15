@@ -27,6 +27,7 @@ namespace SysManager.Services;
 public sealed class PerformanceService
 {
     private readonly PowerShellRunner _ps;
+    private readonly SemaphoreSlim _psGate = new(1, 1);
 
     // ── Well-known power plan GUIDs ──
     internal const string BalancedGuid = "381b4222-f694-41f0-9685-ff5bb260df2e";
@@ -163,11 +164,12 @@ public sealed class PerformanceService
     /// <summary>Parse active plan from powercfg /getactivescheme output.</summary>
     public async Task<(string Name, string Guid)> GetActivePlanAsync(CancellationToken ct = default)
     {
+        await _psGate.WaitAsync(ct).ConfigureAwait(false);
         var lines = new List<string>();
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", "/getactivescheme", ct, PowerShellRunner.OemEncoding); }
-        finally { _ps.LineReceived -= OnLine; }
+        finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
         return ParseActivePlan(lines);
     }
@@ -212,9 +214,10 @@ public sealed class PerformanceService
 
         var lines = new List<string>();
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
+        await _psGate.WaitAsync(ct).ConfigureAwait(false);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", $"-duplicatescheme {UltimatePerfScheme}", ct, PowerShellRunner.OemEncoding); }
-        finally { _ps.LineReceived -= OnLine; }
+        finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
         // Parse GUID from output: "Power Scheme GUID: <guid>  (Ultimate Performance)"
         foreach (var line in lines)
@@ -232,11 +235,12 @@ public sealed class PerformanceService
     /// <summary>Find a plan GUID by name substring.</summary>
     public async Task<string?> FindPlanGuidByNameAsync(string nameSubstring, CancellationToken ct = default)
     {
+        await _psGate.WaitAsync(ct).ConfigureAwait(false);
         var lines = new List<string>();
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct, PowerShellRunner.OemEncoding); }
-        finally { _ps.LineReceived -= OnLine; }
+        finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
         return ParsePlanGuidByName(lines, nameSubstring);
     }
@@ -461,6 +465,7 @@ public sealed class PerformanceService
     /// <summary>Read the current processor minimum state percentage (AC).</summary>
     internal async Task<int> ReadProcessorMinPercentAsync(CancellationToken ct = default)
     {
+        await _psGate.WaitAsync(ct).ConfigureAwait(false);
         var lines = new List<string>();
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
@@ -469,7 +474,7 @@ public sealed class PerformanceService
             await _ps.RunProcessAsync("powercfg.exe",
                 "/query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
         }
-        finally { _ps.LineReceived -= OnLine; }
+        finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
         return ParseProcessorMinPercent(lines);
     }

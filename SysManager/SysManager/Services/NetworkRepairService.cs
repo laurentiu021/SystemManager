@@ -13,6 +13,7 @@ namespace SysManager.Services;
 public sealed class NetworkRepairService
 {
     private readonly PowerShellRunner _ps;
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     public NetworkRepairService(PowerShellRunner ps) => _ps = ps;
 
@@ -21,6 +22,7 @@ public sealed class NetworkRepairService
     /// </summary>
     public async Task<NetworkRepairResult> FlushDnsAsync(CancellationToken ct = default)
     {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
         var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
         void OnLine(PowerShellLine line) => output.Enqueue(line.Text);
         _ps.LineReceived += OnLine;
@@ -34,7 +36,7 @@ public sealed class NetworkRepairService
                 string.Join(Environment.NewLine, output),
                 NeedsReboot: false);
         }
-        finally { _ps.LineReceived -= OnLine; }
+        finally { _ps.LineReceived -= OnLine; _gate.Release(); }
     }
 
     /// <summary>
@@ -42,6 +44,7 @@ public sealed class NetworkRepairService
     /// </summary>
     public async Task<NetworkRepairResult> ResetWinsockAsync(CancellationToken ct = default)
     {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
         var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
         void OnLine(PowerShellLine line) => output.Enqueue(line.Text);
         _ps.LineReceived += OnLine;
@@ -55,7 +58,7 @@ public sealed class NetworkRepairService
                 string.Join(Environment.NewLine, output),
                 NeedsReboot: true);
         }
-        finally { _ps.LineReceived -= OnLine; }
+        finally { _ps.LineReceived -= OnLine; _gate.Release(); }
     }
 
     /// <summary>
@@ -63,6 +66,7 @@ public sealed class NetworkRepairService
     /// </summary>
     public async Task<NetworkRepairResult> ResetTcpIpAsync(CancellationToken ct = default)
     {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
         var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
         void OnLine(PowerShellLine line) => output.Enqueue(line.Text);
         _ps.LineReceived += OnLine;
@@ -76,6 +80,6 @@ public sealed class NetworkRepairService
                 string.Join(Environment.NewLine, output),
                 NeedsReboot: true);
         }
-        finally { _ps.LineReceived -= OnLine; }
+        finally { _ps.LineReceived -= OnLine; _gate.Release(); }
     }
 }

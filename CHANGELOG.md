@@ -6,6 +6,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.22] - 2026-05-15
+
+### Fixed
+- **AppAlertService** — `NewAppDetected` event now marshaled to the UI thread
+  via captured `SynchronizationContext`, preventing crashes when
+  `FileSystemWatcher`/`Timer` callbacks invoke subscribers directly.
+- **NetworkRepairService** — added `SemaphoreSlim` gate to serialize
+  subscribe/unsubscribe on the shared `PowerShellRunner`, preventing
+  concurrent calls from interleaving output.
+- **PerformanceService** — same `SemaphoreSlim` serialization for all methods
+  that subscribe to `PowerShellRunner.LineReceived`.
+- **PowerShellRunner** — documented that `LineReceived` fires on thread-pool
+  threads; subscribers must marshal to the dispatcher for UI updates.
+- **StartupService** — added `RuntimeBinderException` catch for dynamic COM
+  shortcut resolution (`.lnk` files with broken targets).
+- **StartupService** — `GetAwaiter().GetResult()` on stderr task now guarded
+  with a 5-second timeout to prevent hangs if the pipe isn't fully drained.
+- **AppAlertsViewModel** — use `Application.Current.Dispatcher` instead of
+  `Dispatcher.CurrentDispatcher` to avoid capturing the wrong dispatcher.
+- **NetworkSharedState** — documented that `FlushPending` direct-call path
+  (when `Dispatcher == null`) is intentional for unit tests / headless mode.
+- **AboutViewModel** — removed auto-download of updates without user consent;
+  user must now explicitly click Download.
+- **App.xaml.cs** — single-instance activation now uses a named pipe listener,
+  fixing activation when the window is minimized to tray (no `MainWindowHandle`).
+- **MainWindow.xaml.cs** — ViewModel disposal now also hooks
+  `Application.Current.Exit` as a safety net for when `OnClosed` is not called.
+
+### Changed
+- **SysManager.csproj** — version updated from 0.12.1 to 0.48.21 (cosmetic;
+  auto-release overrides at build time).
+- **SysManager.Tests.csproj** — xunit bumped from 2.5.3 to 2.9.3 (matches
+  UITests project).
+- **SysManager.IntegrationTests.csproj** — xunit bumped from 2.5.3 to 2.9.3.
+- **dependabot.yml** — added `IntegrationTests` directory entry for NuGet
+  dependency monitoring.
+
 ## [0.48.21] - 2026-05-15
 
 ### Fixed

@@ -21,6 +21,11 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class PowerShellRunner
 {
+    /// <summary>
+    /// Raised for each line of output from any stream (stdout, stderr, information,
+    /// warning, error, verbose, debug, progress). Fires on a thread-pool thread —
+    /// subscribers that update UI elements must marshal to the dispatcher.
+    /// </summary>
     public event Action<PowerShellLine>? LineReceived;
     public event Action<int>? ProgressChanged; // 0-100
 

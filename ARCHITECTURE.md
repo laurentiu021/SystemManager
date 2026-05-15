@@ -30,7 +30,7 @@ SysManager/
 
 ## Tabs (view models)
 
-The sidebar organises tabs into 9 collapsible groups via `NavGroup` →
+The sidebar organises tabs into 12 collapsible groups via `NavGroup` →
 `NavItem` hierarchy. Dashboard renders as a flat top-level entry.
 Collapsed groups show a child count badge, subtitle, and tooltip.
 Planned features use `PlaceholderViewModel` with a WIP view.
@@ -38,14 +38,17 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` |
-| Monitor | `ProcessManagerViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Resource History · Privacy Monitor) |
-| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (File Shredder) |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `PlaceholderViewModel` (Task Scheduler · Boot Analyzer) |
+| Gaming & Profiles | `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles) |
+| Monitor | `ProcessManagerViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Resource History · Privacy Monitor · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
+| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (File Shredder · Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `PlaceholderViewModel` (DNS Changer · Hosts Editor) |
 | Apps | `AppUpdatesViewModel` · `UninstallerViewModel` · `AppBlockerViewModel` · `PlaceholderViewModel` (Bulk Installer) |
-| Control | `PlaceholderViewModel` (Privacy Settings · Context Menu · Restore Points · Scheduled Maintenance · System Report) |
+| Privacy & Security | `PlaceholderViewModel` (Privacy & Telemetry · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
+| Customization | `PlaceholderViewModel` (Context Menu · Dark Mode Scheduler · Volume Control · Environment Variables) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `AboutViewModel` |
+| Advanced | `PlaceholderViewModel` (Restore Points · Profile Export/Import · CLI Interface · System Report) |
 
 - `DashboardViewModel` — OS / CPU / RAM / disk snapshot + live uptime.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
@@ -72,7 +75,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry.
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
-- `AppBlockerViewModel` — block/unblock apps via Windows Firewall rules.
+- `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism.
 
 ## Services
 

@@ -36,21 +36,24 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 36 feature tabs into 9 collapsible groups so you can
-find what you need without scrolling through a flat list. 25 tabs are fully
-implemented; 11 are work-in-progress placeholders marked with ⚙️:
+The sidebar organises 51 feature tabs into 12 collapsible groups so you can
+find what you need without scrolling through a flat list. 20 tabs are fully
+implemented; 31 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features |
-| 📊 Monitor | Process Manager · Resource History ⚙️ · App Alerts · Privacy Monitor ⚙️ |
-| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · File Shredder ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
+| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
+| 📊 Monitor | Process Manager · Resource History ⚙️ · App Alerts · Privacy Monitor ⚙️ · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
+| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · File Shredder ⚙️ · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS Changer ⚙️ · Hosts Editor ⚙️ |
 | 📦 Apps | App Updates · Bulk Installer ⚙️ · Uninstaller · App Blocker |
-| 🛡️ Control | Privacy Settings ⚙️ · Context Menu ⚙️ · Restore Points ⚙️ · Scheduled Maintenance ⚙️ · System Report ⚙️ |
+| 🛡️ Privacy & Security | Privacy & Telemetry ⚙️ · Debloater & Ads ⚙️ · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
+| 🎨 Customization | Context Menu ⚙️ · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables ⚙️ |
 | ℹ️ Info | Drivers · Battery Health · System Logs · About |
+| ⚙️ Advanced | Restore Points ⚙️ · Profile Export/Import ⚙️ · CLI Interface ⚙️ · System Report ⚙️ |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
 

@@ -509,9 +509,16 @@ public partial class AboutViewModel : ViewModelBase
     {
         try
         {
-            var path = typeof(AboutViewModel).Assembly.Location;
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                return File.GetLastWriteTime(path).ToString("dd MMM yyyy");
+            // Use AppContext.BaseDirectory instead of Assembly.Location which
+            // returns empty string in single-file publish (IL3000).
+            var dir = AppContext.BaseDirectory;
+            var exe = Path.Combine(dir, "SysManager.exe");
+            if (File.Exists(exe))
+                return File.GetLastWriteTime(exe).ToString("dd MMM yyyy");
+            // Fallback: try the DLL
+            var dll = Path.Combine(dir, "SysManager.dll");
+            if (File.Exists(dll))
+                return File.GetLastWriteTime(dll).ToString("dd MMM yyyy");
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }

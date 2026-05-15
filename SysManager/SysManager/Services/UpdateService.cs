@@ -143,9 +143,35 @@ public sealed class UpdateService
         Directory.CreateDirectory(dir);
         var target = Path.Combine(dir, $"SysManager-{rel.Version}.exe");
 
-        // Skip re-download if we already have a good copy.
-        if (File.Exists(target) && rel.AssetSize.HasValue && new FileInfo(target).Length == rel.AssetSize.Value)
-            return target;
+        // SEC-M2: Skip re-download only if we have a cached hash that matches.
+        // File size alone is insufficient — an attacker could replace the binary
+        // with a same-size payload. We store a companion .sha256 file after each
+        // successful download to enable fast cache validation without re-downloading
+        // the hash from GitHub on every launch.
+        var hashFile = target + ".sha256";
+        if (File.Exists(target) && File.Exists(hashFile))
+        {
+            try
+            {
+                var cachedHash = (await File.ReadAllTextAsync(hashFile, ct).ConfigureAwait(false)).Trim();
+                if (cachedHash.Length >= 64)
+                {
+                    var actualHash = await Task.Run(() =>
+                    {
+                        using var stream = File.OpenRead(target);
+                        return Convert.ToHexString(SHA256.HashData(stream));
+                    }, ct).ConfigureAwait(false);
+
+                    if (string.Equals(cachedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+                        return target;
+
+                    // Hash mismatch — cached file is corrupt or tampered, re-download.
+                    Serilog.Log.Warning("Cached update binary hash mismatch — re-downloading");
+                }
+            }
+            catch (IOException) { /* hash file unreadable — re-download */ }
+            catch (UnauthorizedAccessException) { /* hash file unreadable — re-download */ }
+        }
 
         try
         {
@@ -165,6 +191,19 @@ public sealed class UpdateService
                 read += n;
                 progress?.Report((read, total));
             }
+
+            // SEC-M2: Store SHA-256 hash of the downloaded binary for cache validation.
+            try
+            {
+                var downloadedHash = await Task.Run(() =>
+                {
+                    using var hashStream = File.OpenRead(target);
+                    return Convert.ToHexString(SHA256.HashData(hashStream));
+                }, ct).ConfigureAwait(false);
+                await File.WriteAllTextAsync(hashFile, downloadedHash, ct).ConfigureAwait(false);
+            }
+            catch (IOException) { /* non-fatal — next launch will re-download */ }
+            catch (UnauthorizedAccessException) { /* non-fatal */ }
 
             return target;
         }

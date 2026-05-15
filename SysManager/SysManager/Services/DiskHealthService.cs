@@ -160,19 +160,28 @@ public sealed class DiskHealthService
     private static double? ToDouble(object? o)
     {
         if (o == null) return null;
-        try { var v = Convert.ToDouble(o); return Math.Abs(v) < 1e-9 ? null : v; } catch { return null; }
+        try { var v = Convert.ToDouble(o); return Math.Abs(v) < 1e-9 ? null : v; }
+        catch (FormatException) { return null; }
+        catch (OverflowException) { return null; }
+        catch (InvalidCastException) { return null; }
     }
 
     private static int? ToInt(object? o)
     {
         if (o == null) return null;
-        try { return Convert.ToInt32(o); } catch { return null; }
+        try { return Convert.ToInt32(o); }
+        catch (FormatException) { return null; }
+        catch (OverflowException) { return null; }
+        catch (InvalidCastException) { return null; }
     }
 
     private static long? ToLong(object? o)
     {
         if (o == null) return null;
-        try { var v = Convert.ToInt64(o); return v == 0 ? null : v; } catch { return null; }
+        try { var v = Convert.ToInt64(o); return v == 0 ? null : v; }
+        catch (FormatException) { return null; }
+        catch (OverflowException) { return null; }
+        catch (InvalidCastException) { return null; }
     }
 
     private static string MapMedia(uint v) => v switch

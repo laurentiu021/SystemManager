@@ -103,7 +103,8 @@ public sealed class TracerouteService
         foreach (var h in handlers)
         {
             try { ((Action<TracerouteHop>)h).Invoke(hop); }
-            catch (Exception) { /* swallow subscriber errors to protect iteration */ }
+            catch (ObjectDisposedException) { /* subscriber disposed — skip */ }
+            catch (InvalidOperationException) { /* subscriber error — skip */ }
         }
     }
 }

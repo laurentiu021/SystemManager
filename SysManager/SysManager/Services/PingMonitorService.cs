@@ -134,7 +134,8 @@ public sealed class PingMonitorService : IDisposable
         foreach (var h in handlers)
         {
             try { ((Action<PingSample>)h).Invoke(sample); }
-            catch { /* swallow subscriber errors */ }
+            catch (ObjectDisposedException) { /* subscriber disposed — skip */ }
+            catch (InvalidOperationException) { /* subscriber error — skip */ }
         }
     }
 

@@ -192,7 +192,12 @@ public sealed class SpeedTestService
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            ErrorDialog = false   // suppress Win32 "DLL not found" system dialogs
+            ErrorDialog = false,   // suppress Win32 "DLL not found" system dialogs
+            // SEC-M4: Set working directory to System32 instead of the tools dir.
+            // This prevents DLL hijacking via CWD search order — if an attacker
+            // plants a malicious DLL in the user-writable tools directory, the
+            // process won't load it because CWD is System32 (admin-protected).
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System)
         };
 
         // Start the process on a thread-pool thread so Process.Start()
@@ -342,7 +347,31 @@ public sealed class SpeedTestService
         progress?.Report((15, "Extracting…"));
         await Task.Run(() =>
         {
-            ZipFile.ExtractToDirectory(zipPath, toolsDir, overwriteFiles: true);
+            // SEC-M3: Manual extraction with Zip Slip protection.
+            // ZipFile.ExtractToDirectory does not validate that entry paths
+            // stay within the target directory — a crafted zip with "../"
+            // entries could write files outside toolsDir.
+            using var archive = ZipFile.OpenRead(zipPath);
+            var fullToolsDir = Path.GetFullPath(toolsDir);
+            foreach (var entry in archive.Entries)
+            {
+                // Skip directory entries
+                if (string.IsNullOrEmpty(entry.Name)) continue;
+
+                var destinationPath = Path.GetFullPath(Path.Combine(toolsDir, entry.FullName));
+                if (!destinationPath.StartsWith(fullToolsDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Warning("Zip Slip attempt blocked: {Entry} resolves outside target dir", entry.FullName);
+                    continue;
+                }
+
+                // Ensure subdirectory exists
+                var entryDir = Path.GetDirectoryName(destinationPath);
+                if (!string.IsNullOrEmpty(entryDir))
+                    Directory.CreateDirectory(entryDir);
+
+                entry.ExtractToFile(destinationPath, overwrite: true);
+            }
             File.Delete(zipPath);
         }, ct).ConfigureAwait(false);
 

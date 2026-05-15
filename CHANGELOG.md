@@ -6,6 +6,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.24] - 2026-05-15
+
+### Fixed
+- **UpdateService** — cached download now validated by SHA-256 hash (stored in
+  companion `.sha256` file) instead of file size alone; prevents cache poisoning
+  with same-size payloads (SEC-M2).
+- **SpeedTestService** — Zip Slip protection: manual extraction validates each
+  entry path stays within the target directory; blocks path traversal attacks
+  via crafted zip archives (SEC-M3).
+- **SpeedTestService** — DLL hijacking mitigation: Ookla CLI process now
+  launches with `WorkingDirectory` set to System32 instead of the user-writable
+  tools directory, preventing CWD-based DLL search order hijacking (SEC-M4).
+- **ServiceManagerService** — defensive validation on service names before
+  interpolating into registry paths; rejects names containing path separators
+  or null characters (SEC-M6).
+- **UninstallerService** — `ParseUninstallCommand` hardened: rejects shell
+  metacharacters (`|&;` backtick `$(`) to prevent command injection; improved
+  `.exe` boundary detection to avoid misparsing paths with `.exe` substrings;
+  removed unsafe fallback that treated unparseable strings as executables
+  (SEC-M7).
+- **PowerShellRunner** — expanded security contract documentation clarifying
+  that `ExecutionPolicy.Bypass` is safe only because all script content is
+  hard-coded in source; callers must never interpolate user input (SEC-M8).
+- **DiskHealthService** — replaced bare `catch` blocks in WMI conversion
+  helpers with specific exception types (`FormatException`, `OverflowException`,
+  `InvalidCastException`).
+- **DeepCleanupService** — replaced bare `catch` with specific `IOException`,
+  `UnauthorizedAccessException`, `SecurityException`.
+- **TracerouteMonitorService** — replaced bare `catch` with specific network
+  and operation exception types.
+- **TracerouteService** — replaced generic `catch (Exception)` in event raiser
+  with specific `ObjectDisposedException`, `InvalidOperationException`.
+- **PingMonitorService** — replaced bare `catch` in event raiser with specific
+  exception types.
+- **EventLogService** — replaced bare `catch` blocks in record projection and
+  message formatting with specific `EventLogException`,
+  `InvalidOperationException`.
+
 ## [0.48.23] - 2026-05-15
 
 ### Fixed

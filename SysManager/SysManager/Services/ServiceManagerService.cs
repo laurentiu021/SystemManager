@@ -155,8 +155,18 @@ public sealed partial class ServiceManagerService
     {
         try
         {
+            // SEC-M6: Validate service name before interpolating into registry path.
+            // Although ServiceController.GetServices() returns names from the SCM
+            // (trusted source), we defensively reject names with path separators or
+            // registry metacharacters to prevent registry path traversal.
+            var name = sc.ServiceName;
+            if (string.IsNullOrWhiteSpace(name) ||
+                name.Contains('\\') || name.Contains('/') ||
+                name.Contains('\0'))
+                return "";
+
             using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                $@"SYSTEM\CurrentControlSet\Services\{sc.ServiceName}");
+                $@"SYSTEM\CurrentControlSet\Services\{name}");
             return key?.GetValue("Description")?.ToString() ?? "";
         }
         catch (System.Security.SecurityException) { return ""; }

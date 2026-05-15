@@ -146,6 +146,15 @@ public partial class DeepCleanupViewModel : ViewModelBase
             ScanSummary = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
         }
+        await ScanCoreAsync();
+    }
+
+    /// <summary>
+    /// Inner scan logic without lock acquisition. Called directly from CleanAsync
+    /// (which already holds the disk operation lock) to avoid deadlock.
+    /// </summary>
+    private async Task ScanCoreAsync()
+    {
         IsScanning = true;
         ScanProgress = 0;
         ScanStatusLine = "Starting...";
@@ -219,7 +228,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
             CleanSummary = result.Summary;
             CleanStatusLine = "Clean complete.";
             Log.Information("Deep cleanup completed");
-            await ScanAsync();
+            await ScanCoreAsync();
         }
         catch (OperationCanceledException) { CleanSummary = "Clean cancelled."; CleanStatusLine = "Cancelled."; }
         catch (IOException ex) { CleanSummary = $"Clean failed: {ex.Message}"; }

@@ -19,7 +19,8 @@ namespace SysManager.ViewModels;
 public partial class WindowsFeaturesViewModel : ViewModelBase
 {
     private readonly WindowsFeaturesService _service;
-    private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _scanCts;
+    private CancellationTokenSource? _toggleCts;
 
     public ObservableCollection<WindowsFeature> AllFeatures { get; } = new();
     public ObservableCollection<WindowsFeature> FilteredFeatures { get; } = new();
@@ -47,13 +48,13 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
         StatusMessage = "Querying Windows optional features…";
         AllFeatures.Clear();
         FilteredFeatures.Clear();
-        _cts?.Cancel();
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
+        _scanCts?.Cancel();
+        _scanCts?.Dispose();
+        _scanCts = new CancellationTokenSource();
 
         try
         {
-            var list = await _service.ListFeaturesAsync(_cts.Token);
+            var list = await _service.ListFeaturesAsync(_scanCts.Token);
             foreach (var feature in list)
                 AllFeatures.Add(feature);
 
@@ -98,15 +99,15 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
         ToggleFeatureCommand.NotifyCanExecuteChanged();
         feature.Status = feature.IsEnabled ? "Disabling…" : "Enabling…";
         StatusMessage = $"{(feature.IsEnabled ? "Disabling" : "Enabling")} {feature.DisplayName}…";
-        _cts?.Cancel();
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
+        _toggleCts?.Cancel();
+        _toggleCts?.Dispose();
+        _toggleCts = new CancellationTokenSource();
 
         try
         {
             var (success, reboot) = feature.IsEnabled
-                ? await _service.DisableFeatureAsync(feature.Name, _cts.Token)
-                : await _service.EnableFeatureAsync(feature.Name, _cts.Token);
+                ? await _service.DisableFeatureAsync(feature.Name, _toggleCts.Token)
+                : await _service.EnableFeatureAsync(feature.Name, _toggleCts.Token);
 
             if (success)
             {
@@ -146,13 +147,21 @@ public partial class WindowsFeaturesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancel() => _cts?.Cancel();
+    private void Cancel()
+    {
+        _scanCts?.Cancel();
+        _toggleCts?.Cancel();
+    }
 
     private bool CanToggle(WindowsFeature? _) => !IsBusy;
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _cts?.Cancel(); _cts?.Dispose(); }
+        if (disposing)
+        {
+            _scanCts?.Cancel(); _scanCts?.Dispose();
+            _toggleCts?.Cancel(); _toggleCts?.Dispose();
+        }
         base.Dispose(disposing);
     }
 

@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.18] - 2026-05-15
+
+### Fixed
+- **SystemInfoService** — `QueryMemory()` and `QueryDisks()` now properly
+  dispose `ManagementObject` and `ManagementObjectCollection` instances via
+  `using` statements (4 foreach loops fixed, prevents COM handle leaks).
+- **FixedDriveService** — same WMI disposal fix for MSFT_PhysicalDisk query.
+- **DeepCleanupViewModel** — post-clean rescan no longer deadlocks on the
+  operation lock. Extracted `ScanCoreAsync()` (lock-free) called from
+  `CleanAsync` which already holds the disk lock.
+- **WindowsFeaturesViewModel** — separated shared `_cts` into `_scanCts` and
+  `_toggleCts` so toggling a feature no longer cancels a running scan.
+
 ## [0.48.17] - 2026-05-15
 
 ### Fixed

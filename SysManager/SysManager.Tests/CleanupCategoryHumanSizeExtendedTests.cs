@@ -123,7 +123,9 @@ public class CleanupCategoryHumanSizeExtendedTests
             LastModified = new DateTime(2024, 3, 1)
         };
         Assert.Contains("2024", entry.LastModifiedDisplay);
-        Assert.Contains("Mar", entry.LastModifiedDisplay);
+        // Use the expected month name from the current culture to avoid locale failures
+        var expectedMonth = new DateTime(2024, 3, 1).ToString("MMM", System.Globalization.CultureInfo.CurrentCulture);
+        Assert.Contains(expectedMonth, entry.LastModifiedDisplay);
     }
 
     [Fact]

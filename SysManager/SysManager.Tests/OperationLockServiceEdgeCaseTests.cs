@@ -3,6 +3,7 @@ using SysManager.Services;
 
 namespace SysManager.Tests;
 
+[Collection("OperationLock")]
 public class OperationLockServiceEdgeCaseTests
 {
     private static OperationLockService Service => OperationLockService.Instance;
@@ -117,14 +118,22 @@ public class OperationLockServiceEdgeCaseTests
     public void PropertyChanged_FiredOnAcquire()
     {
         var changed = new List<string>();
-        Service.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        void handler(object? _, System.ComponentModel.PropertyChangedEventArgs e) => changed.Add(e.PropertyName!);
+        Service.PropertyChanged += handler;
 
-        var handle = Service.TryAcquire(OperationCategory.Disk, "PropChanged");
-        Assert.NotNull(handle);
-        handle.Dispose();
+        try
+        {
+            var handle = Service.TryAcquire(OperationCategory.Disk, "PropChanged");
+            Assert.NotNull(handle);
+            handle.Dispose();
 
-        Assert.Contains("ActiveOperations", changed);
-        Assert.Contains("HasActiveOperations", changed);
+            Assert.Contains("ActiveOperations", changed);
+            Assert.Contains("HasActiveOperations", changed);
+        }
+        finally
+        {
+            Service.PropertyChanged -= handler;
+        }
     }
 
     [Fact]

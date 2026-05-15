@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.14] - 2026-05-15
+
+### Fixed
+- **SystemInfoService (CQ-002)** — ManagementObjectCollection and ManagementObject
+  instances now properly disposed via `using` in QueryOs() and QueryCpu().
+- **HexToBrushConverter** — SolidColorBrush now frozen after creation to prevent
+  cross-thread access crashes; bare `catch` narrowed to `catch (FormatException)`.
+
+### Changed
+- **LargeFileScanner, DuplicateFileService, DiskAnalyzerService** — replaced
+  remaining `Array.Empty<T>()` with collection expressions `[]` (MODERN-003).
+
 ## [0.48.13] - 2026-05-15
 
 ### Fixed

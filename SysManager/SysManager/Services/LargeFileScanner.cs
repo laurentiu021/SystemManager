@@ -62,8 +62,8 @@ public sealed class LargeFileScanner
             var cur = stack.Pop();
             if (ShouldSkip(cur)) continue;
 
-            string[] files = Array.Empty<string>();
-            string[] dirs = Array.Empty<string>();
+            string[] files = [];
+            string[] dirs = [];
             try { files = Directory.GetFiles(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             try { dirs  = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
 

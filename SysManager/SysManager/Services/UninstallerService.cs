@@ -318,6 +318,14 @@ public sealed partial class UninstallerService
     {
         command = command.Trim();
 
+        // SEC-M7: Reject obviously malicious patterns before parsing.
+        // Commands containing shell metacharacters that could chain commands.
+        if (command.Contains('|') || command.Contains('&') ||
+            command.Contains(';') || command.Contains('`') ||
+            command.Contains("$("))
+            throw new InvalidOperationException(
+                $"Uninstall command contains shell metacharacters — refusing to parse: '{command}'");
+
         // Case 1: Quoted executable path
         if (command.StartsWith('"'))
         {
@@ -360,17 +368,35 @@ public sealed partial class UninstallerService
                 return (command[..spaceIdx], command[(spaceIdx + 1)..].TrimStart());
         }
 
-        // Case 4: Unquoted path with spaces — find first .exe boundary
-        var exeEnd = command.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
-        if (exeEnd > 0)
+        // Case 4: Unquoted path with spaces — find first .exe boundary.
+        // SEC-M7: Only match ".exe" followed by end-of-string, whitespace, or a
+        // switch character (/,-). This prevents misparsing paths like
+        // "C:\dir\app.executable\tool.exe" where an earlier ".exe" substring
+        // would incorrectly split the path.
+        var searchStart = 0;
+        while (searchStart < command.Length)
         {
+            var exeEnd = command.IndexOf(".exe", searchStart, StringComparison.OrdinalIgnoreCase);
+            if (exeEnd < 0) break;
+
             exeEnd += 4; // include ".exe"
-            var exe = command[..exeEnd].Trim();
-            var args = exeEnd < command.Length ? command[exeEnd..].TrimStart() : "";
-            return (exe, args);
+            // Valid boundary: end of string, or followed by whitespace/switch
+            if (exeEnd >= command.Length ||
+                command[exeEnd] == ' ' || command[exeEnd] == '\t' ||
+                command[exeEnd] == '/' || command[exeEnd] == '-')
+            {
+                var exe = command[..exeEnd].Trim();
+                var args = exeEnd < command.Length ? command[exeEnd..].TrimStart() : "";
+                return (exe, args);
+            }
+            // Not a valid boundary — keep searching after this occurrence
+            searchStart = exeEnd;
         }
 
-        // Fallback: treat entire string as executable
-        return (command, "");
+        // SEC-M7: No fallback — if we can't parse it safely, reject it.
+        // The old fallback treated the entire string as an executable, which
+        // could execute arbitrary commands if the string was crafted.
+        throw new InvalidOperationException(
+            $"Cannot safely parse uninstall command — no valid executable found: '{command}'");
     }
 }

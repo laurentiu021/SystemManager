@@ -270,11 +270,11 @@ public class UninstallerServiceTests
     }
 
     [Fact]
-    public void ParseUninstallCommand_NoExeExtension_FallsBackToFullString()
+    public void ParseUninstallCommand_NoExeExtension_ThrowsInvalidOperation()
     {
-        var (exe, args) = UninstallerService.ParseUninstallCommand("some-command");
-        Assert.Equal("some-command", exe);
-        Assert.Equal("", args);
+        // SEC-M7: Commands without a valid .exe boundary are rejected for security.
+        Assert.Throws<InvalidOperationException>(
+            () => UninstallerService.ParseUninstallCommand("some-command"));
     }
 
     [Fact]
@@ -285,5 +285,28 @@ public class UninstallerServiceTests
         Assert.Equal("MsiExec.exe", exe);
         Assert.DoesNotContain("/quiet", args);
         Assert.Contains("/qn", args);
+    }
+
+    [Theory]
+    [InlineData("cmd.exe /c calc.exe | evil.exe")]
+    [InlineData("uninstall.exe & del /q *")]
+    [InlineData("app.exe; rm -rf /")]
+    [InlineData("tool.exe `whoami`")]
+    [InlineData("app.exe $(malicious)")]
+    public void ParseUninstallCommand_ShellMetacharacters_Throws(string command)
+    {
+        // SEC-M7: Shell metacharacters are rejected to prevent command injection.
+        Assert.Throws<InvalidOperationException>(
+            () => UninstallerService.ParseUninstallCommand(command));
+    }
+
+    [Fact]
+    public void ParseUninstallCommand_ExeInMiddleOfPath_FindsCorrectBoundary()
+    {
+        // SEC-M7: ".exe" followed by non-boundary char should not split there.
+        var (exe, args) = UninstallerService.ParseUninstallCommand(
+            @"C:\dir\app.exefiles\tool.exe /silent");
+        Assert.Equal(@"C:\dir\app.exefiles\tool.exe", exe);
+        Assert.Equal("/silent", args);
     }
 }

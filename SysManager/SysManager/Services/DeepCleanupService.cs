@@ -224,7 +224,9 @@ public sealed class DeepCleanupService
                         }
                         files++;
                     }
-                    catch { }
+                    catch (IOException) { /* file locked or inaccessible — skip */ }
+                    catch (UnauthorizedAccessException) { /* no permission — skip */ }
+                    catch (System.Security.SecurityException) { /* restricted — skip */ }
                 }
             }
 

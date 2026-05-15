@@ -52,7 +52,8 @@ public sealed class EventLogService
 
                 FriendlyEventEntry? entry = null;
                 try { entry = Project(rec, opt.LogName); }
-                catch { /* skip malformed record */ }
+                catch (EventLogException) { /* skip malformed record */ }
+                catch (InvalidOperationException) { /* skip malformed record */ }
                 finally { rec.Dispose(); }
 
                 if (entry == null) continue;
@@ -96,7 +97,8 @@ public sealed class EventLogService
             var msg = rec.FormatDescription();
             if (!string.IsNullOrWhiteSpace(msg)) return msg;
         }
-        catch { /* ignore; fall back */ }
+        catch (EventLogException) { /* format failed — fall back */ }
+        catch (InvalidOperationException) { /* format failed — fall back */ }
 
         // Fallback: assemble from properties so we at least show something.
         try
@@ -104,7 +106,8 @@ public sealed class EventLogService
             var parts = rec.Properties?.Select(p => p?.Value?.ToString() ?? "") ?? [];
             return string.Join(" ", parts).Trim();
         }
-        catch { return "(message not available)"; }
+        catch (EventLogException) { return "(message not available)"; }
+        catch (InvalidOperationException) { return "(message not available)"; }
     }
 
     private static string FirstLine(string s)

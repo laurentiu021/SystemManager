@@ -94,7 +94,10 @@ public sealed class TracerouteMonitorService : IDisposable
                         RouteCompleted?.Invoke(target.Host, hops);
                 }
                 catch (OperationCanceledException) { return; }
-                catch { /* swallow per-target errors */ }
+                catch (System.Net.Sockets.SocketException) { /* network error — skip */ }
+                catch (System.Net.NetworkInformation.PingException) { /* ping failed — skip */ }
+                catch (TimeoutException) { /* target unreachable — skip */ }
+                catch (InvalidOperationException) { /* traceroute failed for this target — skip */ }
             }
 
             try { await Task.Delay(Interval, ct); }

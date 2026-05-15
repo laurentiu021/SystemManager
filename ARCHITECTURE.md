@@ -137,10 +137,12 @@ Key services:
 
 `ServiceRegistration.cs` configures `Microsoft.Extensions.DependencyInjection`.
 `App.OnStartup` builds the `IServiceProvider` and exposes it as `App.Services`.
-All services and ViewModels are registered as singletons — one shared instance
-per app lifetime. `MainWindowViewModel` resolves child VMs from the container
-at runtime; falls back to manual creation in tests (no DI dependency in the
-test project).
+Core services and ViewModels are registered as singletons — one shared instance
+per app lifetime. Some lightweight services (e.g. `TuneUpService`,
+`ShortcutCleanerService`) are instantiated directly by their consumers rather
+than registered in the container. `MainWindowViewModel` resolves child VMs from
+the container at runtime; falls back to manual creation in tests (no DI
+dependency in the test project).
 
 ## Admin elevation
 

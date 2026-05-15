@@ -51,7 +51,7 @@
                     <TextBlock Text="✓ Administrator" FontSize="11" Foreground="#4ADE80"/>
                 </Border>
                 <Border Background="#2D1F1F" CornerRadius="4" Padding="6,2" Margin="4,0"
-                        Visibility="{Binding IsElevated, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                        Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
                     <TextBlock Text="⚠ Not elevated — toggle disabled" FontSize="11" Foreground="#F59E0B"/>
                 </Border>
             </WrapPanel>

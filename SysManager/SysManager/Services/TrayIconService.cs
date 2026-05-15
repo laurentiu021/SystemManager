@@ -22,6 +22,7 @@ public sealed class TrayIconService : IDisposable
     private readonly DispatcherTimer _timer;
     private TaskbarIcon? _trayIcon;
     private bool _disposed;
+    private int _updating; // PERF-M4: re-entrancy guard for WMI calls
 
     // Notification cooldowns — don't spam the user
     private DateTime _lastRamNotification = DateTime.MinValue;
@@ -137,6 +138,9 @@ public sealed class TrayIconService : IDisposable
 
     private async Task UpdateTooltipAsync()
     {
+        // PERF-M4: Skip if a previous update is still running (WMI can be slow).
+        if (Interlocked.CompareExchange(ref _updating, 1, 0) != 0)
+            return;
         try
         {
             var snapshot = await _sysInfo.CaptureAsync();
@@ -161,6 +165,10 @@ public sealed class TrayIconService : IDisposable
         catch (InvalidOperationException ex)
         {
             Log.Warning("TrayIcon tooltip update failed: {Error}", ex.Message);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _updating, 0);
         }
     }
 

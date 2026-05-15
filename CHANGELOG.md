@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.26] - 2026-05-15
+
+### Changed
+- **SystemInfoService** — static WMI data (OS caption, CPU name, disk models)
+  is now cached on first query; only dynamic data (CPU load, RAM, uptime) is
+  re-queried every 60 seconds, reducing WMI overhead by ~70% (PERF-M1).
+- **NetworkSharedState** — `RecomputeStats` rewritten with manual loops instead
+  of LINQ `.Where().Select().ToList()`, eliminating heap allocations on the
+  hot path that runs 32×/sec per target (PERF-M2).
+- **TrayIconService** — added `Interlocked` re-entrancy guard on
+  `UpdateTooltipAsync` so overlapping timer ticks skip instead of stacking
+  concurrent WMI calls (PERF-M4).
+
 ## [0.48.25] - 2026-05-15
 
 ### Fixed

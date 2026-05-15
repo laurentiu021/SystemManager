@@ -113,7 +113,8 @@ the meantime.
 
 - Dependencies are tracked via NuGet and kept current by
   [Dependabot](.github/dependabot.yml).
-- CI builds and runs the full test suite on every pull request.
+- CI builds and runs the unit test suite on every pull request.
+  Integration tests (which access real OS APIs) run locally only.
 - The release workflow builds the binary from source on a clean GitHub
   Actions runner and publishes both the `.exe` and its SHA256 sum together.
 

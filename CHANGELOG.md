@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.21] - 2026-05-15
+
+### Fixed
+- **AdminHelper** — `Process.GetCurrentProcess()` now properly disposed via
+  `using` in `RelaunchAsAdmin()` (prevents brief handle leak).
+- **HexToBrushConverter** — frozen brushes now cached by hex value in a
+  `ConcurrentDictionary` to eliminate repeated allocations and GC pressure
+  on frequently-updating bindings (dashboard, health score, tune-up).
+- **App.xaml.cs** — `ReleaseMutex()` wrapped in try-catch for
+  `ApplicationException` (thrown if called from wrong thread on shutdown).
+- **EtaCalculator** — added thread-safety documentation (single-thread
+  requirement via UI dispatcher).
+
 ## [0.48.20] - 2026-05-15
 
 ### Fixed

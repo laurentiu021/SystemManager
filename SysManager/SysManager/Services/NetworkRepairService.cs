@@ -10,7 +10,7 @@ namespace SysManager.Services;
 /// Runs common network repair commands: DNS flush, Winsock reset, TCP/IP reset.
 /// Each method captures stdout/stderr and returns a <see cref="NetworkRepairResult"/>.
 /// </summary>
-public class NetworkRepairService
+public sealed class NetworkRepairService
 {
     private readonly PowerShellRunner _ps;
 

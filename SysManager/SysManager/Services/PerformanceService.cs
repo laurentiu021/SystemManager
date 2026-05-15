@@ -24,7 +24,7 @@ namespace SysManager.Services;
 /// • NVIDIA GPU subkey is auto-detected (not hardcoded to 0000).
 /// • Visual effects use SystemParametersInfo (instant), not registry-only.
 /// </summary>
-public class PerformanceService
+public sealed class PerformanceService
 {
     private readonly PowerShellRunner _ps;
 

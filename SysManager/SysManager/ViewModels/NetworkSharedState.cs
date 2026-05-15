@@ -358,9 +358,20 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         var idx = Targets.IndexOf(target);
         var offset = ((idx % 8) - 3.5) * 0.25;
 
-        var values = buffer.Where(p => p.Value.HasValue).Select(p => p.Value!.Value - offset).ToList();
-        var successful = values.Count;
-        var sum = values.Sum();
+        // PERF-M2: Avoid LINQ allocations (this runs 32x/sec per target).
+        // Single pass over buffer to compute sum and count.
+        int successful = 0;
+        double sum = 0;
+        for (int i = 0; i < buffer.Count; i++)
+        {
+            if (buffer[i].Value.HasValue)
+            {
+                sum += buffer[i].Value!.Value - offset;
+                successful++;
+            }
+        }
+
+        // Collect recent samples for jitter (walk backwards, no allocation beyond the list).
         var recent = new List<double>(JitterSampleWindow);
         for (int i = buffer.Count - 1; i >= 0 && recent.Count < JitterSampleWindow; i--)
         {
@@ -372,8 +383,12 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
         if (recent.Count >= 2)
         {
-            var mean = recent.Average();
-            var variance = recent.Sum(v => (v - mean) * (v - mean)) / recent.Count;
+            double mean = 0;
+            for (int i = 0; i < recent.Count; i++) mean += recent[i];
+            mean /= recent.Count;
+            double variance = 0;
+            for (int i = 0; i < recent.Count; i++) variance += (recent[i] - mean) * (recent[i] - mean);
+            variance /= recent.Count;
             target.JitterMs = Math.Round(Math.Sqrt(variance), 1);
         }
         else

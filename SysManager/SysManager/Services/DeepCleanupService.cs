@@ -376,10 +376,10 @@ public sealed class DeepCleanupService
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
             var cur = stack.Pop();
-            string[] files = Array.Empty<string>();
-            string[] dirs = Array.Empty<string>();
-            try { files = Directory.GetFiles(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-            try { dirs = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            IEnumerable<string> files;
+            IEnumerable<string> dirs;
+            try { files = Directory.EnumerateFiles(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
+            try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { dirs = []; } catch (UnauthorizedAccessException) { dirs = []; }
             foreach (var f in files) yield return f;
             foreach (var d in dirs) stack.Push(d);
         }
@@ -393,8 +393,8 @@ public sealed class DeepCleanupService
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
             var cur = stack.Pop();
-            string[] dirs = Array.Empty<string>();
-            try { dirs = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            IEnumerable<string> dirs;
+            try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
             foreach (var d in dirs) stack.Push(d);
             if (!string.Equals(cur, root, StringComparison.OrdinalIgnoreCase)) all.Add(cur);
         }

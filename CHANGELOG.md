@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.11] - 2026-05-15
+
+### Fixed
+- **ProcessManagerViewModel (CQ-004)** — replaced sync-over-async
+  `GetAwaiter().GetResult()` with proper `await` inside `Task.Run` async
+  lambda, preventing thread pool thread blocking.
+- **DeepCleanupService (CQ-010)** — replaced `Directory.GetFiles()` and
+  `GetDirectories()` (full array allocation) with lazy `EnumerateFiles()`
+  and `EnumerateDirectories()` to reduce memory pressure on large directories.
+- **TracerouteService (CQ-011)** — bare `catch {}` replaced with specific
+  `PingException`, `SocketException`, `InvalidOperationException` catches;
+  subscriber error catch narrowed to `catch (Exception)`.
+
 ## [0.48.10] - 2026-05-15
 
 ### Fixed

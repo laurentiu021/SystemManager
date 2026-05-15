@@ -54,7 +54,9 @@ public sealed class TracerouteService
                     }
                 }
                 catch (OperationCanceledException) { throw; }
-                catch { /* swallow per-probe errors; we report them as a timeout */ }
+                catch (System.Net.NetworkInformation.PingException) { /* per-probe failure; reported as timeout */ }
+                catch (System.Net.Sockets.SocketException) { /* per-probe failure; reported as timeout */ }
+                catch (InvalidOperationException) { /* per-probe failure; reported as timeout */ }
             }
 
             var hop = new TracerouteHop
@@ -101,7 +103,7 @@ public sealed class TracerouteService
         foreach (var h in handlers)
         {
             try { ((Action<TracerouteHop>)h).Invoke(hop); }
-            catch { /* swallow subscriber errors */ }
+            catch (Exception) { /* swallow subscriber errors to protect iteration */ }
         }
     }
 }

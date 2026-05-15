@@ -54,9 +54,9 @@ public partial class ProcessManagerViewModel : ViewModelBase
         {
             // PERF-007: Perform snapshot, icon extraction, and description lookup
             // on a background thread to avoid UI freezes on slow processes.
-            var enriched = await Task.Run(() =>
+            var enriched = await Task.Run(async () =>
             {
-                var snapshot = _service.SnapshotAsync().GetAwaiter().GetResult();
+                var snapshot = await _service.SnapshotAsync();
                 foreach (var p in snapshot)
                 {
                     p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);

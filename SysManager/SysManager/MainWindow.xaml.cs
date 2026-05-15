@@ -17,6 +17,15 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Ensure ViewModel disposal even if OnClosed is not called (e.g. app shutdown)
+        if (Application.Current != null)
+            Application.Current.Exit += OnApplicationExit;
+    }
+
+    private void OnApplicationExit(object sender, ExitEventArgs e)
+    {
+        (DataContext as MainWindowViewModel)?.Dispose();
     }
 
     /// <summary>

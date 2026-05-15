@@ -294,6 +294,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     private void OnSample(PingSample sample)
     {
         Pending.Enqueue(sample);
+        // When Dispatcher is null (unit tests / headless), flush immediately on the
+        // calling thread. ObservableCollections are not bound to UI in that scenario,
+        // so direct modification is safe.
         if (Dispatcher == null) FlushPending();
     }
 

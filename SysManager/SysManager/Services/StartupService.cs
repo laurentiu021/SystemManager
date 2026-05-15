@@ -111,6 +111,10 @@ public sealed class StartupService
                     {
                         Log.Debug("Failed to resolve shortcut {File}: {Error}", file, ex.Message);
                     }
+                    catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex)
+                    {
+                        Log.Debug("Failed to resolve shortcut {File}: {Error}", file, ex.Message);
+                    }
                     finally
                     {
                         if (shortcut != null) Marshal.ReleaseComObject(shortcut);
@@ -425,7 +429,9 @@ public sealed class StartupService
                 return false;
             }
 
-            var stderr = stderrTask.GetAwaiter().GetResult().Trim();
+            var stderr = stderrTask.Wait(TimeSpan.FromSeconds(5))
+                ? stderrTask.GetAwaiter().GetResult().Trim()
+                : string.Empty;
 
             if (proc.ExitCode == 0)
             {

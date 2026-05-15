@@ -20,11 +20,23 @@ public sealed class AppAlertService : IDisposable
     private readonly object _watcherLock = new();
     private readonly ConcurrentDictionary<string, bool> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _knownRegistryApps = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SynchronizationContext? _syncContext;
     private Timer? _registryTimer;
     private bool _disposed;
 
-    /// <summary>Raised when a new application installation is detected.</summary>
+    /// <summary>Raised when a new application installation is detected.
+    /// Marshaled to the <see cref="SynchronizationContext"/> captured at construction
+    /// (typically the UI thread) so subscribers can safely update UI elements.</summary>
     public event Action<AppInstallEntry>? NewAppDetected;
+
+    /// <summary>
+    /// Creates a new instance, capturing the current <see cref="SynchronizationContext"/>
+    /// so that events are raised on the UI thread.
+    /// </summary>
+    public AppAlertService()
+    {
+        _syncContext = SynchronizationContext.Current;
+    }
 
     /// <summary>
     /// Takes a snapshot of currently installed apps (baseline).
@@ -161,7 +173,7 @@ public sealed class AppAlertService : IDisposable
         };
 
         Log.Information("New app folder detected: {Path}", e.FullPath);
-        NewAppDetected?.Invoke(entry);
+        RaiseNewAppDetected(entry);
     }
 
     private void CheckRegistry(object? state)
@@ -175,12 +187,24 @@ public sealed class AppAlertService : IDisposable
 
                 app.DetectedAt = DateTime.Now;
                 Log.Information("New app detected in registry: {Name}", app.Name);
-                NewAppDetected?.Invoke(app);
+                RaiseNewAppDetected(app);
             }
         }
         catch (IOException) { /* registry read failed — retry next cycle */ }
         catch (UnauthorizedAccessException) { /* registry read failed — retry next cycle */ }
         catch (System.Security.SecurityException) { /* registry read failed — retry next cycle */ }
+    }
+
+    /// <summary>
+    /// Raises <see cref="NewAppDetected"/> on the captured synchronization context
+    /// (UI thread) if available, otherwise invokes directly on the current thread.
+    /// </summary>
+    private void RaiseNewAppDetected(AppInstallEntry entry)
+    {
+        if (_syncContext != null)
+            _syncContext.Post(_ => NewAppDetected?.Invoke(entry), null);
+        else
+            NewAppDetected?.Invoke(entry);
     }
 
     private static List<string> GetMonitoredDirectories()

@@ -153,7 +153,14 @@ public sealed class EventLogService
                 .Replace("[", "")
                 .Replace("]", "")
                 .Replace("/", "")
-                .Replace("\\", "");
+                .Replace("\\", "")
+                .Replace("|", "")
+                .Replace("(", "")
+                .Replace(")", "")
+                .Replace("@", "")
+                .Replace("*", "")
+                .Replace("<", "")
+                .Replace(">", "");
             clauses.Add($"Provider[@Name='{safe}']");
         }
 

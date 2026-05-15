@@ -406,6 +406,13 @@ public partial class AboutViewModel : ViewModelBase
             return;
         }
 
+        // Step 1b: Verify Authenticode signature (detects tampered binaries).
+        if (!UpdateService.VerifyAuthenticode(DownloadedPath))
+        {
+            DownloadStatus = "Update binary has an invalid digital signature — possible tampering. Download aborted.";
+            return;
+        }
+
         // Step 2: Determine current executable path.
         var currentExe = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(currentExe) || !File.Exists(currentExe))
@@ -421,7 +428,7 @@ public partial class AboutViewModel : ViewModelBase
             var pid = Environment.ProcessId;
             var scriptPath = Path.Combine(
                 Path.GetDirectoryName(DownloadedPath)!,
-                "update.cmd");
+                $"update-{Guid.NewGuid():N}.cmd");
 
             var script = $"""
                 @echo off

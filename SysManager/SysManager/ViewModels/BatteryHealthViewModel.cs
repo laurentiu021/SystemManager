@@ -45,7 +45,9 @@ public partial class BatteryHealthViewModel : ViewModelBase
             Battery = await _service.GetBatteryInfoAsync();
 
             Summary = Battery.HasBattery
-                ? $"{Battery.Name} · {Battery.ChargePercent}% · Health {Battery.HealthPercent}% · {Battery.Status}"
+                ? Battery.HealthPercent >= 0
+                    ? $"{Battery.Name} · {Battery.ChargePercent}% · Health {Battery.HealthPercent}% · {Battery.Status}"
+                    : $"{Battery.Name} · {Battery.ChargePercent}% · Health: requires elevation · {Battery.Status}"
                 : "No battery detected — this device runs on AC power only.";
 
             StatusMessage = Battery.HasBattery

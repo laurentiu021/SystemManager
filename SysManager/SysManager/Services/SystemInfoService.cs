@@ -72,10 +72,14 @@ public sealed class SystemInfoService
         double totalKb = 0, freeKb = 0;
         using (var s = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem"))
         {
-            foreach (ManagementObject mo in s.Get())
+            using var memCollection = s.Get();
+            foreach (ManagementObject mo in memCollection)
             {
-                totalKb = Convert.ToDouble(mo["TotalVisibleMemorySize"] ?? 0);
-                freeKb = Convert.ToDouble(mo["FreePhysicalMemory"] ?? 0);
+                using (mo)
+                {
+                    totalKb = Convert.ToDouble(mo["TotalVisibleMemorySize"] ?? 0);
+                    freeKb = Convert.ToDouble(mo["FreePhysicalMemory"] ?? 0);
+                }
             }
         }
         double totalGB = totalKb / 1024d / 1024d;
@@ -86,15 +90,19 @@ public sealed class SystemInfoService
         var modules = new List<MemoryModule>();
         using (var s = new ManagementObjectSearcher("SELECT BankLabel,Manufacturer,Capacity,Speed,PartNumber FROM Win32_PhysicalMemory"))
         {
-            foreach (ManagementObject mo in s.Get())
+            using var modCollection = s.Get();
+            foreach (ManagementObject mo in modCollection)
             {
-                double capBytes = Convert.ToDouble(mo["Capacity"] ?? 0);
-                modules.Add(new MemoryModule(
-                    mo["BankLabel"]?.ToString() ?? "",
-                    mo["Manufacturer"]?.ToString()?.Trim() ?? "",
-                    capBytes / 1024d / 1024d / 1024d,
-                    Convert.ToUInt32(mo["Speed"] ?? 0u),
-                    mo["PartNumber"]?.ToString()?.Trim() ?? ""));
+                using (mo)
+                {
+                    double capBytes = Convert.ToDouble(mo["Capacity"] ?? 0);
+                    modules.Add(new MemoryModule(
+                        mo["BankLabel"]?.ToString() ?? "",
+                        mo["Manufacturer"]?.ToString()?.Trim() ?? "",
+                        capBytes / 1024d / 1024d / 1024d,
+                        Convert.ToUInt32(mo["Speed"] ?? 0u),
+                        mo["PartNumber"]?.ToString()?.Trim() ?? ""));
+                }
             }
         }
         return new MemoryInfo(totalGB, freeGB, usedGB, pct, modules);
@@ -110,47 +118,55 @@ public sealed class SystemInfoService
             scope.Connect();
             var query = new ObjectQuery("SELECT FriendlyName,MediaType,BusType,Size,HealthStatus,OperationalStatus FROM MSFT_PhysicalDisk");
             using var searcher = new ManagementObjectSearcher(scope, query);
-            foreach (ManagementObject mo in searcher.Get())
+            using var diskCollection = searcher.Get();
+            foreach (ManagementObject mo in diskCollection)
             {
-                var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
-                var mediaType = (ushort)Convert.ToUInt32(mo["MediaType"] ?? 0u) switch
+                using (mo)
                 {
-                    3 => "HDD",
-                    4 => "SSD",
-                    5 => "SCM",
-                    _ => "Unspecified"
-                };
-                var busType = (ushort)Convert.ToUInt32(mo["BusType"] ?? 0u) switch
-                {
-                    1 => "SCSI", 2 => "ATAPI", 3 => "ATA", 4 => "1394", 5 => "SSA",
-                    6 => "Fibre", 7 => "USB", 8 => "RAID", 9 => "iSCSI", 10 => "SAS",
-                    11 => "SATA", 12 => "SD", 13 => "MMC", 17 => "NVMe",
-                    _ => "Other"
-                };
-                var health = (ushort)Convert.ToUInt32(mo["HealthStatus"] ?? 0u) switch
-                {
-                    0 => "Healthy", 1 => "Warning", 2 => "Unhealthy", _ => "Unknown"
-                };
-                var opStatus = mo["OperationalStatus"] is ushort[] arr && arr.Length > 0
-                    ? string.Join(",", arr.Select(OpStatusName))
-                    : "Unknown";
-                list.Add(new DiskInfo(
-                    mo["FriendlyName"]?.ToString() ?? "Disk",
-                    mediaType, busType, size, health, opStatus, null, null));
+                    var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
+                    var mediaType = (ushort)Convert.ToUInt32(mo["MediaType"] ?? 0u) switch
+                    {
+                        3 => "HDD",
+                        4 => "SSD",
+                        5 => "SCM",
+                        _ => "Unspecified"
+                    };
+                    var busType = (ushort)Convert.ToUInt32(mo["BusType"] ?? 0u) switch
+                    {
+                        1 => "SCSI", 2 => "ATAPI", 3 => "ATA", 4 => "1394", 5 => "SSA",
+                        6 => "Fibre", 7 => "USB", 8 => "RAID", 9 => "iSCSI", 10 => "SAS",
+                        11 => "SATA", 12 => "SD", 13 => "MMC", 17 => "NVMe",
+                        _ => "Other"
+                    };
+                    var health = (ushort)Convert.ToUInt32(mo["HealthStatus"] ?? 0u) switch
+                    {
+                        0 => "Healthy", 1 => "Warning", 2 => "Unhealthy", _ => "Unknown"
+                    };
+                    var opStatus = mo["OperationalStatus"] is ushort[] arr && arr.Length > 0
+                        ? string.Join(",", arr.Select(OpStatusName))
+                        : "Unknown";
+                    list.Add(new DiskInfo(
+                        mo["FriendlyName"]?.ToString() ?? "Disk",
+                        mediaType, busType, size, health, opStatus, null, null));
+                }
             }
         }
         catch (ManagementException)
         {
             // Fallback to Win32_DiskDrive if MSFT_PhysicalDisk isn't available
             using var s = new ManagementObjectSearcher("SELECT Model,Size,Status FROM Win32_DiskDrive");
-            foreach (ManagementObject mo in s.Get())
+            using var fallbackCollection = s.Get();
+            foreach (ManagementObject mo in fallbackCollection)
             {
-                var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
-                list.Add(new DiskInfo(
-                    mo["Model"]?.ToString() ?? "Disk",
-                    "Unknown", "Unknown", size,
-                    mo["Status"]?.ToString() ?? "Unknown",
-                    "Unknown", null, null));
+                using (mo)
+                {
+                    var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
+                    list.Add(new DiskInfo(
+                        mo["Model"]?.ToString() ?? "Disk",
+                        "Unknown", "Unknown", size,
+                        mo["Status"]?.ToString() ?? "Unknown",
+                        "Unknown", null, null));
+                }
             }
         }
         return list;

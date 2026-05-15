@@ -165,6 +165,10 @@ public sealed class HealthScoreService
         if (battery == null || !battery.HasBattery) return 100;
 
         double health = battery.HealthPercent;
+        // -1 means capacity data unavailable (no admin for root\WMI).
+        // Return neutral score to avoid false-critical warnings.
+        if (health < 0) return 100;
+
         return health switch
         {
             >= 80 => 100,

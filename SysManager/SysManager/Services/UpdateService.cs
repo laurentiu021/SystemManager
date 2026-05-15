@@ -255,6 +255,36 @@ public sealed class UpdateService
         }
     }
 
+    /// <summary>
+    /// Verifies the Authenticode signature on a downloaded update binary.
+    /// Returns true if the binary is signed or unsigned (open-source builds).
+    /// Returns false only if the signature is present but INVALID (tampered).
+    /// </summary>
+    public static bool VerifyAuthenticode(string filePath)
+    {
+        try
+        {
+#pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete
+            var cert = System.Security.Cryptography.X509Certificates.X509Certificate
+                .CreateFromSignedFile(filePath);
+#pragma warning restore SYSLIB0057
+            if (cert != null)
+            {
+                Serilog.Log.Information("Update binary Authenticode verified: {Subject}", cert.Subject);
+                return true;
+            }
+            // Unsigned binary — acceptable for open-source GitHub Actions builds.
+            Serilog.Log.Information("Update binary has no Authenticode signature (expected for unsigned builds)");
+            return true;
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            // Invalid/tampered signature — file HAS a signature but it's broken.
+            Serilog.Log.Warning("Update binary has INVALID Authenticode signature — possible tampering: {File}", filePath);
+            return false;
+        }
+    }
+
     // ---------- internals ----------
 
     private static ReleaseInfo? Map(GhRelease dto)

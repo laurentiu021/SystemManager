@@ -69,6 +69,7 @@ public partial class TracerouteViewModel : ViewModelBase
         IsTracing = true;
         TraceStatus = $"Tracing {TraceHost}…";
 
+        _traceCts?.Dispose();
         _traceCts = new CancellationTokenSource();
         var collected = new List<TracerouteHop>();
         void OnHop(TracerouteHop hop)

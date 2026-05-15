@@ -27,19 +27,23 @@ public sealed class SystemInfoService
     private static OsInfo QueryOs()
     {
         using var searcher = new ManagementObjectSearcher("SELECT Caption,Version,BuildNumber,OSArchitecture,LastBootUpTime FROM Win32_OperatingSystem");
-        foreach (ManagementObject mo in searcher.Get())
+        using var osCollection = searcher.Get();
+        foreach (ManagementObject mo in osCollection)
         {
-            var caption = mo["Caption"]?.ToString() ?? "Windows";
-            var version = mo["Version"]?.ToString() ?? "";
-            var build = mo["BuildNumber"]?.ToString() ?? "";
-            var arch = mo["OSArchitecture"]?.ToString() ?? "";
-            var lastBootRaw = mo["LastBootUpTime"]?.ToString();
-            var uptime = TimeSpan.Zero;
-            if (!string.IsNullOrEmpty(lastBootRaw))
+            using (mo)
             {
-                try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); } catch (FormatException) { } catch (InvalidCastException) { }
+                var caption = mo["Caption"]?.ToString() ?? "Windows";
+                var version = mo["Version"]?.ToString() ?? "";
+                var build = mo["BuildNumber"]?.ToString() ?? "";
+                var arch = mo["OSArchitecture"]?.ToString() ?? "";
+                var lastBootRaw = mo["LastBootUpTime"]?.ToString();
+                var uptime = TimeSpan.Zero;
+                if (!string.IsNullOrEmpty(lastBootRaw))
+                {
+                    try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); } catch (FormatException) { } catch (InvalidCastException) { }
+                }
+                return new OsInfo(caption, version, build, uptime, arch);
             }
-            return new OsInfo(caption, version, build, uptime, arch);
         }
         return new OsInfo("Windows", "", "", TimeSpan.Zero, "");
     }
@@ -47,14 +51,18 @@ public sealed class SystemInfoService
     private static CpuInfo QueryCpu()
     {
         using var searcher = new ManagementObjectSearcher("SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,LoadPercentage FROM Win32_Processor");
-        foreach (ManagementObject mo in searcher.Get())
+        using var cpuCollection = searcher.Get();
+        foreach (ManagementObject mo in cpuCollection)
         {
-            return new CpuInfo(
-                mo["Name"]?.ToString()?.Trim() ?? "Unknown CPU",
-                Convert.ToUInt32(mo["NumberOfCores"] ?? 0u),
-                Convert.ToUInt32(mo["NumberOfLogicalProcessors"] ?? 0u),
-                Convert.ToUInt32(mo["MaxClockSpeed"] ?? 0u),
-                Convert.ToDouble(mo["LoadPercentage"] ?? 0.0));
+            using (mo)
+            {
+                return new CpuInfo(
+                    mo["Name"]?.ToString()?.Trim() ?? "Unknown CPU",
+                    Convert.ToUInt32(mo["NumberOfCores"] ?? 0u),
+                    Convert.ToUInt32(mo["NumberOfLogicalProcessors"] ?? 0u),
+                    Convert.ToUInt32(mo["MaxClockSpeed"] ?? 0u),
+                    Convert.ToDouble(mo["LoadPercentage"] ?? 0.0));
+            }
         }
         return new CpuInfo("Unknown", 0, 0, 0, 0);
     }

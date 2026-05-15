@@ -138,8 +138,8 @@ public sealed class DiskAnalyzerService
         {
             var current = stack.Pop();
 
-            string[] files = Array.Empty<string>();
-            string[] dirs = Array.Empty<string>();
+            string[] files = [];
+            string[] dirs = [];
             try { files = Directory.GetFiles(current); }
             catch (UnauthorizedAccessException) { accessDenied = true; }
             catch (IOException) { /* skip inaccessible folder */ }

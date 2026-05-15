@@ -70,8 +70,8 @@ public sealed class DuplicateFileService
             var dir = stack.Pop();
             if (ShouldSkipDir(dir)) continue;
 
-            string[] files = Array.Empty<string>();
-            string[] dirs = Array.Empty<string>();
+            string[] files = [];
+            string[] dirs = [];
             try { files = Directory.GetFiles(dir); }
             catch (UnauthorizedAccessException) { /* skip protected directory */ }
             catch (IOException) { /* skip inaccessible directory */ }
@@ -201,7 +201,7 @@ public sealed class DuplicateFileService
             ct.ThrowIfCancellationRequested();
             sha.TransformBlock(buffer, 0, read, null, 0);
         }
-        sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+        sha.TransformFinalBlock([], 0, 0);
         return Convert.ToHexString(sha.Hash!);
     }
 

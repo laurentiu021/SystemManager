@@ -57,12 +57,16 @@ public sealed class FixedDriveService
 
             using var search = new ManagementObjectSearcher(scope,
                 new ObjectQuery("SELECT DeviceId, MediaType, BusType FROM MSFT_PhysicalDisk"));
-            foreach (ManagementObject mo in search.Get())
+            using var physCollection = search.Get();
+            foreach (ManagementObject mo in physCollection)
             {
-                var id = mo["DeviceId"]?.ToString() ?? "";
-                media[id] = (
-                    MapMedia(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
-                    MapBus(Convert.ToUInt32(mo["BusType"] ?? 0u)));
+                using (mo)
+                {
+                    var id = mo["DeviceId"]?.ToString() ?? "";
+                    media[id] = (
+                        MapMedia(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
+                        MapBus(Convert.ToUInt32(mo["BusType"] ?? 0u)));
+                }
             }
 
             // We can't easily map DeviceId -> drive letter without another join,

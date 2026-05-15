@@ -279,7 +279,10 @@ public sealed class StartupService
 
             if (approved != null && approved.TryGetValue(entry.ValueName, out var blob) && blob.Length >= 1)
             {
-                entry.IsEnabled = blob[0] != 3;
+                // Windows uses bit 0 to indicate disabled state:
+                // 02/06 = enabled (even), 03/07 = disabled (odd).
+                // Windows 11 uses 07 in addition to the classic 03.
+                entry.IsEnabled = (blob[0] & 1) == 0;
                 entry.StatusText = entry.IsEnabled ? "Enabled" : "Disabled";
             }
         }

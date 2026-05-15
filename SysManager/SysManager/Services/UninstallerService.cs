@@ -281,6 +281,28 @@ public sealed partial class UninstallerService
             if (!ext.Equals(".exe", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
                     $"Uninstall target is not an executable (.exe): '{exe}'. Refusing to run for security.");
+
+            // SEC-H2: Validate the executable resides under a trusted directory.
+            // Registry uninstall keys (especially HKCU) can be modified without admin,
+            // so we must not execute arbitrary paths. Allow: Program Files, Windows,
+            // ProgramData, and LocalApplicationData (per-user installs like VS Code).
+            var fullPath = System.IO.Path.GetFullPath(exe);
+            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            var winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            var progData = Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData";
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+            var isTrustedPath =
+                (!string.IsNullOrEmpty(pf) && fullPath.StartsWith(pf, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(pfx86) && fullPath.StartsWith(pfx86, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(winDir) && fullPath.StartsWith(winDir, StringComparison.OrdinalIgnoreCase)) ||
+                fullPath.StartsWith(progData, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(localAppData) && fullPath.StartsWith(localAppData, StringComparison.OrdinalIgnoreCase));
+
+            if (!isTrustedPath)
+                throw new InvalidOperationException(
+                    $"Uninstall executable is outside trusted directories: '{exe}'. Refusing to run for security.");
         }
 
         Log.Information("Uninstalling local app '{Name}' via: {Exe} {Args}", app.Name, exe, args);

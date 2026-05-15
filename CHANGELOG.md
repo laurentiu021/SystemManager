@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.23] - 2026-05-15
+
+### Fixed
+- **UpdateService** — added Authenticode signature verification on downloaded
+  update binaries; rejects files with invalid (tampered) signatures (SEC-H1).
+- **AboutViewModel** — update script now uses a random GUID filename to prevent
+  TOCTOU race conditions on the updater .cmd file (SEC-M1).
+- **UninstallerService** — uninstall executables from registry are now validated
+  against trusted directories (Program Files, Windows, ProgramData,
+  LocalApplicationData); rejects paths outside these locations (SEC-H2).
+- **EventLogService** — XPath sanitization now strips all metacharacters
+  including `|()@*<>` in addition to the existing set (SEC-M5).
+- **BatteryInfo** — `HealthPercent` returns -1 (unavailable) instead of 0 when
+  WMI capacity data is missing (no admin elevation), preventing false-critical
+  health scores on every non-elevated laptop (FUNC-H1).
+- **HealthScoreService** — `ComputeBatteryScore` treats -1 (unavailable) as
+  neutral (100) instead of critical (10).
+- **BatteryHealthViewModel** — displays "requires elevation" when health data
+  is unavailable instead of showing 0%.
+- **StartupService** — registry approved-state blob now uses bitmask
+  `(blob[0] & 1) == 0` for enabled detection, fixing Windows 11 which uses
+  `07` (not just `03`) for disabled entries (FUNC-M1).
+
 ## [0.48.22] - 2026-05-15
 
 ### Fixed

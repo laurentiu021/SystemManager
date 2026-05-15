@@ -31,17 +31,21 @@ public partial class BatteryInfo : ObservableObject
     [ObservableProperty] private string _chemistry = "";        // LiIon, NiMH, etc.
     [ObservableProperty] private string _manufacturer = "";
 
-    /// <summary>Health percentage: FullCharge / Design × 100.</summary>
+    /// <summary>
+    /// Health percentage: FullCharge / Design × 100.
+    /// Returns -1 when capacity data is unavailable (e.g. no admin elevation
+    /// for root\WMI queries) to avoid false-critical health scores.
+    /// </summary>
     public double HealthPercent =>
-        DesignCapacityMWh > 0
+        DesignCapacityMWh > 0 && FullChargeCapacityMWh > 0
             ? Math.Min(Math.Round(FullChargeCapacityMWh * 100.0 / DesignCapacityMWh, 1), 100)
-            : 0;
+            : -1;
 
-    /// <summary>Wear level: 100 − HealthPercent.</summary>
+    /// <summary>Wear level: 100 − HealthPercent. Returns -1 when data unavailable.</summary>
     public double WearPercent =>
-        DesignCapacityMWh > 0
+        HealthPercent >= 0
             ? Math.Max(Math.Round(100.0 - HealthPercent, 1), 0)
-            : 0;
+            : -1;
 
     /// <summary>Formatted estimated runtime.</summary>
     public string RuntimeDisplay => EstimatedRuntimeMinutes switch

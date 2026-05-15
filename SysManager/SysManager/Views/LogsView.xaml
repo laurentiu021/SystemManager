@@ -156,7 +156,7 @@
             </StackPanel>
         </Border>
 
-        <!-- Master-detail -->
+        <!-- List-detail -->
         <Grid Grid.Row="3" Margin="28,16,28,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*"/>

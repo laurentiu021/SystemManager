@@ -95,7 +95,7 @@ public partial class WingetService
 
     public async Task<int> UpgradeAsync(string packageId, CancellationToken ct = default)
     {
-        // Validate packageId: whitelist alphanumeric, dots, hyphens, underscores,
+        // Validate packageId: allowlist alphanumeric, dots, hyphens, underscores,
         // forward slashes (scoped IDs), and plus signs (e.g. "Notepad++.Notepad++").
         if (string.IsNullOrWhiteSpace(packageId)
             || !PackageIdPattern().IsMatch(packageId))

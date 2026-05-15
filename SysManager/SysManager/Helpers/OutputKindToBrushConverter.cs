@@ -90,8 +90,13 @@ public class HexToBrushConverter : IValueConverter
     {
         if (value is string s && !string.IsNullOrWhiteSpace(s))
         {
-            try { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(s)); }
-            catch { /* fall through */ }
+            try
+            {
+                var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(s));
+                brush.Freeze();
+                return brush;
+            }
+            catch (FormatException) { /* fall through */ }
         }
         return Brushes.Gray;
     }

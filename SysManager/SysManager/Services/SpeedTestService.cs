@@ -207,7 +207,17 @@ public sealed class SpeedTestService
         await Task.Run(() => proc.Start(), linked).ConfigureAwait(false);
         var stdout = await proc.StandardOutput.ReadToEndAsync(linked);
         var stderr = await proc.StandardError.ReadToEndAsync(linked);
-        await proc.WaitForExitAsync(linked);
+        try
+        {
+            await proc.WaitForExitAsync(linked);
+        }
+        catch (OperationCanceledException)
+        {
+            // Timeout or user cancellation — kill the orphan process
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { /* already exited */ }
+            throw;
+        }
 
         if (proc.ExitCode != 0)
         {
@@ -215,8 +225,8 @@ public sealed class SpeedTestService
             if (proc.ExitCode == -1073741515) // STATUS_DLL_NOT_FOUND
             {
                 try { File.Delete(exe); }
-                catch (IOException ex) { Log.Debug("Cleanup failed (locked): {Error}", ex.Message); }
-                catch (UnauthorizedAccessException ex) { Log.Debug("Cleanup failed (access): {Error}", ex.Message); }
+                catch (IOException ex2) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex2.Message)); }
+                catch (UnauthorizedAccessException ex2) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex2.Message)); }
             }
             throw new InvalidOperationException($"Ookla failed ({proc.ExitCode}): {stderr}");
         }
@@ -276,8 +286,8 @@ public sealed class SpeedTestService
             if (File.Exists(path) && new FileInfo(path).Length < 1024)
             {
                 try { File.Delete(path); }
-                catch (IOException ex) { Log.Debug("Cleanup failed (locked): {Error}", ex.Message); }
-                catch (UnauthorizedAccessException ex) { Log.Debug("Cleanup failed (access): {Error}", ex.Message); }
+                catch (IOException ex) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex.Message)); }
+                catch (UnauthorizedAccessException ex) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex.Message)); }
             }
             return !File.Exists(path);
         }, ct).ConfigureAwait(false);
@@ -344,8 +354,8 @@ public sealed class SpeedTestService
                 {
                     Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert?.Subject ?? "none");
                     try { File.Delete(exe); }
-                    catch (IOException ex2) { Log.Debug("Cleanup failed (locked): {Error}", ex2.Message); }
-                    catch (UnauthorizedAccessException ex2) { Log.Debug("Cleanup failed (access): {Error}", ex2.Message); }
+                    catch (IOException ex2) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex2.Message)); }
+                    catch (UnauthorizedAccessException ex2) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex2.Message)); }
                     throw new InvalidOperationException(
                         $"Ookla speedtest.exe failed Authenticode verification (subject: {cert?.Subject ?? "none"}). Binary deleted for security.");
                 }
@@ -355,8 +365,8 @@ public sealed class SpeedTestService
             {
                 Log.Warning(ex, "Ookla speedtest.exe has no valid Authenticode signature");
                 try { File.Delete(exe); }
-                catch (IOException ex2) { Log.Debug("Cleanup failed (locked): {Error}", ex2.Message); }
-                catch (UnauthorizedAccessException ex2) { Log.Debug("Cleanup failed (access): {Error}", ex2.Message); }
+                catch (IOException ex2) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex2.Message)); }
+                catch (UnauthorizedAccessException ex2) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex2.Message)); }
                 throw new InvalidOperationException(
                     "Ookla speedtest.exe has no valid Authenticode signature. Binary deleted for security.", ex);
             }

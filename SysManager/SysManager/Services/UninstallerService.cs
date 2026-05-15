@@ -255,6 +255,7 @@ public sealed partial class UninstallerService
         // without admin, so we must not blindly execute whatever is there.
         // Use exact filename match for system binaries to prevent bypass via
         // similarly-named executables (e.g. "MsiExecEvil.exe").
+        // Resolve trusted binaries to absolute System32 path to prevent PATH hijacking.
         var exeFileName = System.IO.Path.GetFileName(exe);
         var isTrustedSystemBinary =
             exeFileName.Equals("MsiExec.exe", StringComparison.OrdinalIgnoreCase) ||
@@ -262,7 +263,15 @@ public sealed partial class UninstallerService
             exeFileName.Equals("rundll32.exe", StringComparison.OrdinalIgnoreCase) ||
             exeFileName.Equals("rundll32", StringComparison.OrdinalIgnoreCase);
 
-        if (!isTrustedSystemBinary)
+        if (isTrustedSystemBinary)
+        {
+            // Resolve to absolute path in System32 to prevent PATH hijacking
+            var systemDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
+            var resolvedName = exeFileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                ? exeFileName : exeFileName + ".exe";
+            exe = System.IO.Path.Combine(systemDir, resolvedName);
+        }
+        else
         {
             if (!System.IO.File.Exists(exe))
                 throw new InvalidOperationException(

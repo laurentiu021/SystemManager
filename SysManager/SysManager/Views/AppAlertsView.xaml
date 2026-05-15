@@ -2,10 +2,11 @@
 <UserControl x:Class="SysManager.Views.AppAlertsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:SysManager.ViewModels">
-    <UserControl.DataContext>
-        <vm:AppAlertsViewModel />
-    </UserControl.DataContext>
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             d:DataContext="{d:DesignInstance vm:AppAlertsViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
 
     <Grid Margin="24">
         <Grid.RowDefinitions>
@@ -18,9 +19,9 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="App Installation Alerts" FontSize="20" FontWeight="SemiBold"
-                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                       Foreground="{StaticResource TextPrimary}" />
             <TextBlock Text="{Binding MonitorStatus}" Opacity="0.7" Margin="0,4,0,0"
-                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                       Foreground="{StaticResource TextSecondary}" />
         </StackPanel>
 
         <!-- Toolbar -->
@@ -38,7 +39,7 @@
                   AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                  BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+                  BorderThickness="1" BorderBrush="{StaticResource Border1}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Detected" Binding="{Binding DetectedAt, StringFormat='{}{0:HH:mm:ss dd-MMM}'}" Width="120" />
                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" />
@@ -51,7 +52,7 @@
         <!-- Footer -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
             <TextBlock Opacity="0.6" VerticalAlignment="Center"
-                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}">
+                       Foreground="{StaticResource TextSecondary}">
                 <Run Text="{Binding AlertCount, Mode=OneWay}" />
                 <Run Text=" total · " />
                 <Run Text="{Binding UnacknowledgedCount, Mode=OneWay}" />

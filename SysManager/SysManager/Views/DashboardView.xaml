@@ -76,10 +76,8 @@
                         <!-- Circular gauge (score number with colored ring) -->
                         <Border Grid.Column="0" Width="100" Height="100" CornerRadius="50"
                                 BorderThickness="6" Margin="0,0,16,0"
-                                HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Border.BorderBrush>
-                                <SolidColorBrush Color="{Binding HealthResult.ColorHex}"/>
-                            </Border.BorderBrush>
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                BorderBrush="{Binding HealthResult.ColorHex, Converter={StaticResource HexBrush}}">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding HealthResult.Score}" FontSize="32" FontWeight="Bold"
                                            HorizontalAlignment="Center" Foreground="White"/>
@@ -119,16 +117,10 @@
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                             <TextBlock Text="{Binding IconGlyph}" FontFamily="Segoe Fluent Icons"
-                                                       FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center">
-                                                <TextBlock.Foreground>
-                                                    <SolidColorBrush Color="{Binding ColorHex}"/>
-                                                </TextBlock.Foreground>
-                                            </TextBlock>
-                                            <TextBlock Text="{Binding Message}" FontSize="12" VerticalAlignment="Center">
-                                                <TextBlock.Foreground>
-                                                    <SolidColorBrush Color="{Binding ColorHex}"/>
-                                                </TextBlock.Foreground>
-                                            </TextBlock>
+                                                       FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                       Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
+                                            <TextBlock Text="{Binding Message}" FontSize="12" VerticalAlignment="Center"
+                                                       Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -250,7 +242,8 @@
                                         <TextBlock Text="{Binding Name}" Foreground="#C9D1D9" Margin="0,0,6,0"
                                                    VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding Verdict}" FontWeight="SemiBold"
-                                                   VerticalAlignment="Center" Foreground="{Binding ColorHex}"/>
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -295,7 +288,7 @@
                         <!-- Overall verdict -->
                         <Separator Margin="0,8" Background="#21262D"/>
                         <TextBlock Text="{Binding TuneUpResult.OverallVerdict}" FontWeight="SemiBold" FontSize="13"
-                                   Foreground="{Binding TuneUpResult.OverallColorHex}"/>
+                                   Foreground="{Binding TuneUpResult.OverallColorHex, Converter={StaticResource HexBrush}}"/>
                     </StackPanel>
                 </Border>
 

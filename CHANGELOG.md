@@ -47,6 +47,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **WindowsFeaturesService** — added SECURITY-CRITICAL documentation comment
   on `FeatureNamePattern()` regex explaining it is the sole injection defense.
 
+## [0.48.15] - 2026-05-15
+
+### Fixed
+- **AppBlockerView, AppAlertsView, ShortcutCleanerView** — removed XAML
+  `<UserControl.DataContext>` that bypassed DI container, causing these views
+  to operate on isolated ViewModel instances instead of the shared singletons.
+- **DashboardView** — ColorHex string bindings now use `HexToBrushConverter`
+  instead of invalid `<SolidColorBrush Color="{Binding}"/>` which produced
+  runtime binding errors (health score ring, recommendations, disk verdicts,
+  tune-up overall verdict).
+- **WindowsFeaturesView** — "Not elevated" warning badge now uses `FlexVis`
+  converter (supports `ConverterParameter=Inverse`) instead of `BoolToVis`
+  which ignores the parameter, causing the badge to always display.
+
+### Changed
+- **AppBlockerView, AppAlertsView** — replaced legacy `SystemControlForeground*`
+  brushes with app-standard `TextPrimary`/`TextSecondary`/`Border1` resources
+  for consistent dark-theme styling.
+- **MainWindowViewModel** — corrected stale comment "non-DI resolved" to
+  "resolved from DI at runtime" (all 4 VMs are DI singletons since v0.48.0).
+
 ## [0.48.14] - 2026-05-15
 
 ### Fixed

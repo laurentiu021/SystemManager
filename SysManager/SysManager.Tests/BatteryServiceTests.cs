@@ -66,10 +66,10 @@ public class BatteryServiceTests
     }
 
     [Fact]
-    public void BatteryInfo_HealthPercent_ZeroDesign_ReturnsZero()
+    public void BatteryInfo_HealthPercent_ZeroDesign_ReturnsUnavailable()
     {
         var info = new BatteryInfo { DesignCapacityMWh = 0, FullChargeCapacityMWh = 1000 };
-        Assert.Equal(0, info.HealthPercent);
+        Assert.Equal(-1, info.HealthPercent);
     }
 
     [Fact]
@@ -84,10 +84,10 @@ public class BatteryServiceTests
     }
 
     [Fact]
-    public void BatteryInfo_WearPercent_ZeroDesign_ReturnsZero()
+    public void BatteryInfo_WearPercent_ZeroDesign_ReturnsUnavailable()
     {
         var info = new BatteryInfo { DesignCapacityMWh = 0 };
-        Assert.Equal(0, info.WearPercent);
+        Assert.Equal(-1, info.WearPercent);
     }
 
     [Fact]

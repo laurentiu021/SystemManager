@@ -6,10 +6,10 @@ namespace SysManager.Tests;
 public class BatteryInfoEdgeCaseTests
 {
     [Fact]
-    public void HealthPercent_ZeroDesignCapacity_ReturnsZero()
+    public void HealthPercent_ZeroDesignCapacity_ReturnsUnavailable()
     {
         var info = new BatteryInfo { DesignCapacityMWh = 0, FullChargeCapacityMWh = 5000 };
-        Assert.Equal(0, info.HealthPercent);
+        Assert.Equal(-1, info.HealthPercent);
     }
 
     [Fact]
@@ -35,10 +35,10 @@ public class BatteryInfoEdgeCaseTests
     }
 
     [Fact]
-    public void WearPercent_ZeroDesignCapacity_ReturnsZero()
+    public void WearPercent_ZeroDesignCapacity_ReturnsUnavailable()
     {
         var info = new BatteryInfo { DesignCapacityMWh = 0, FullChargeCapacityMWh = 5000 };
-        Assert.Equal(0, info.WearPercent);
+        Assert.Equal(-1, info.WearPercent);
     }
 
     [Fact]

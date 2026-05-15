@@ -37,7 +37,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public AboutViewModel About { get; }
     public ServicesViewModel Services { get; }
 
-    // ── Implemented ViewModels (non-DI resolved) ─────────────────────
+    // ── Implemented ViewModels (resolved from DI at runtime) ────────
     public WindowsFeaturesViewModel WindowsFeatures { get; }
     public AppAlertsViewModel AppAlerts { get; }
     public ShortcutCleanerViewModel ShortcutCleaner { get; }

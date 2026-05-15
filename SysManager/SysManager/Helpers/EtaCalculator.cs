@@ -15,6 +15,10 @@ namespace SysManager.Helpers;
 /// <see cref="Update"/> each time progress changes. Read <see cref="Remaining"/>
 /// or <see cref="RemainingText"/> for the current estimate.
 /// </para>
+/// <para>
+/// Thread safety: this class is NOT thread-safe. All calls must be made from
+/// the same thread (typically the UI thread via Progress&lt;T&gt; callbacks).
+/// </para>
 /// </summary>
 public sealed class EtaCalculator
 {

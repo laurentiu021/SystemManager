@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
@@ -86,17 +87,26 @@ public class BoolToElevationBadgeBrushConverter : IValueConverter
 /// <summary>Converts a hex string like "#4CC9F0" to a SolidColorBrush.</summary>
 public class HexToBrushConverter : IValueConverter
 {
+    // Cache frozen brushes by hex value to reduce GC pressure on frequently-updating bindings.
+    private static readonly ConcurrentDictionary<string, SolidColorBrush> _cache = new(StringComparer.OrdinalIgnoreCase);
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is string s && !string.IsNullOrWhiteSpace(s))
         {
-            try
+            return _cache.GetOrAdd(s, static hex =>
             {
-                var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(s));
-                brush.Freeze();
-                return brush;
-            }
-            catch (FormatException) { /* fall through */ }
+                try
+                {
+                    var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+                    brush.Freeze();
+                    return brush;
+                }
+                catch (FormatException)
+                {
+                    return (SolidColorBrush)Brushes.Gray;
+                }
+            });
         }
         return Brushes.Gray;
     }

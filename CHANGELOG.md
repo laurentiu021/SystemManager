@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.13] - 2026-05-15
+
+### Fixed
+- **UninstallerService (SEC-007)** — trusted system binaries (MsiExec, rundll32)
+  now resolved to absolute System32 path before execution, preventing PATH
+  hijacking attacks.
+- **SpeedTestService (SEC-008)** — Ookla CLI process now killed on timeout or
+  cancellation, preventing orphan processes consuming resources indefinitely.
+- **SpeedTestService (PRIV-001)** — all exception messages in Log.Debug calls
+  now sanitized via LogService.SanitizePath to prevent username leakage in logs.
+
 ## [0.48.12] - 2026-05-15
 
 ### Fixed

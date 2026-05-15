@@ -422,6 +422,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.48.2] - 2026-05-14
 
+> **Note:** Versions 0.49.0–0.53.1 below were released under the previous
+> repository (`SysManager`). When the project migrated to `SystemManager`
+> (2026-05-14), the auto-release workflow reset to the last tag on the new
+> repo (v0.48.1). Subsequent releases continue from 0.48.2 onward.
+> The entries below are preserved for historical completeness.
+
 ### Fixed
 - **Security: SpeedTestService** — remove fabricated placeholder SHA-256 hashes
   that caused perpetual warning logs (alert fatigue). Security now relies on

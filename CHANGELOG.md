@@ -980,9 +980,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.28.18] - 2026-05-04
 
 ### Fixed
-- **Input validation: whitelist regex** — `UninstallerService` and
-  `WingetService` now validate package IDs with a whitelist regex
-  (`[a-zA-Z0-9._-/+]`, max 256 chars) instead of a blacklist (#397).
+- **Input validation: allowlist regex** — `UninstallerService` and
+  `WingetService` now validate package IDs with an allowlist regex
+  (`[a-zA-Z0-9._-/+]`, max 256 chars) instead of a blocklist (#397).
 - **Null checks: verified safe** — confirmed all `OpenSubKey` calls and
   Process API access already have proper null checks (#398).
 

@@ -50,7 +50,7 @@ public sealed partial class UninstallerService
     /// </summary>
     public async Task<int> UninstallAsync(string packageId, CancellationToken ct = default)
     {
-        // Validate packageId: whitelist alphanumeric, dots, hyphens, underscores,
+        // Validate packageId: allowlist alphanumeric, dots, hyphens, underscores,
         // forward slashes (scoped IDs like "Microsoft.VisualStudio.2022.Community"),
         // and plus signs (e.g. "Notepad++.Notepad++").
         if (string.IsNullOrWhiteSpace(packageId)

@@ -124,7 +124,15 @@ public sealed class TrayIconService : IDisposable
 
     private async void OnTimerTick(object? sender, EventArgs e)
     {
-        await UpdateTooltipAsync();
+        try
+        {
+            await UpdateTooltipAsync();
+        }
+        catch (Exception ex)
+        {
+            // async void must never throw — unhandled exceptions crash the app.
+            Log.Warning("TrayIcon timer tick failed: {Error}", ex.Message);
+        }
     }
 
     private async Task UpdateTooltipAsync()

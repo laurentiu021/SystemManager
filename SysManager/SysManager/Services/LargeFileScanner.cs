@@ -116,7 +116,16 @@ public sealed class LargeFileScanner
                 lastReport = now;
             }
 
-            foreach (var d in dirs) stack.Push(d);
+            foreach (var d in dirs)
+            {
+                try
+                {
+                    if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;
+                }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+                stack.Push(d);
+            }
         }
 
         progress?.Report(new LargeFileProgress(scanned, bytesScanned, "Done"));

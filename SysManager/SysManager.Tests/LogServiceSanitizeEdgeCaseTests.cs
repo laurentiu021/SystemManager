@@ -39,10 +39,12 @@ public class LogServiceSanitizeEdgeCaseTests
     }
 
     [Fact]
-    public void SanitizePath_MultipleUsersInPath_ReplacesFirst()
+    public void SanitizePath_MultipleUsersInPath_ReplacesAll()
     {
         var result = LogService.SanitizePath(@"C:\Users\alice\backup\C:\Users\bob\file.txt");
         Assert.Contains("[user]", result);
+        Assert.DoesNotContain("alice", result);
+        Assert.DoesNotContain("bob", result);
     }
 
     [Fact]

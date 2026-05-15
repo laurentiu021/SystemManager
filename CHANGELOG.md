@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.20] - 2026-05-15
+
+### Fixed
+- **NetworkSharedState** — replaced obsolete `SkiaPaint.FontFamily` with
+  `SKTypeface = SKTypeface.FromFamilyName()` on 4 axis paint objects,
+  eliminating all CS0618 build warnings.
+- **AboutViewModel** — replaced `Assembly.Location` (returns empty in
+  single-file publish) with `AppContext.BaseDirectory` lookup, eliminating
+  IL3000 warning.
+
 ## [0.48.19] - 2026-05-15
 
 ### Fixed

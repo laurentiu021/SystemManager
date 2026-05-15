@@ -183,11 +183,9 @@ public class HealthAnalyzerTests
             M("dns", TargetRole.PublicDns, loss: 5),
             M("game", TargetRole.GameServer, loss: 5),
         });
-        // dns bad + game bad → not pure ISP, not pure GameServer → Mixed
-        // Actually per the code: dnsBad && !gameBad → ISP. But here gameBad is true too.
-        // The code checks: if (dnsBad && !gameBad && !streamBad) → ISP. Fails.
-        // Then: if (gameBad) → GameServer. This wins.
-        Assert.Equal(HealthVerdict.GameServer, d.Verdict);
+        // FUNC-M2: dns bad + game bad → Mixed (not GameServer, because DNS
+        // is NOT clean — claiming "it's the game server, not you" would be wrong).
+        Assert.Equal(HealthVerdict.Mixed, d.Verdict);
     }
 
     [Fact]

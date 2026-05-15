@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.25] - 2026-05-15
+
+### Fixed
+- **HealthAnalyzer** — no longer claims "DNS is clean" when DNS IS bad; when
+  both DNS and game server show trouble, correctly returns Mixed verdict
+  instead of GameServer (FUNC-M2).
+- **TuneUpService** — empty directory removal now sorts by path depth (separator
+  count) instead of string length, ensuring deepest directories are deleted
+  first regardless of path name length (FUNC-M3).
+- **SpeedTestHistoryService** — `SaveAsync` and `ClearAsync` now serialize via
+  `SemaphoreSlim` to prevent concurrent load-modify-save races that could lose
+  history entries (FUNC-M4).
+- **FixedDriveService** — multi-disk enrichment now maps drive letters to
+  physical disks via `MSFT_Partition.DiskNumber`, correctly annotating media
+  type and bus type on systems with multiple drives (FUNC-M5).
+
 ## [0.48.24] - 2026-05-15
 
 ### Fixed

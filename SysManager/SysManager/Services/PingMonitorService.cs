@@ -56,7 +56,11 @@ public sealed class PingMonitorService : IDisposable
             try { _loop?.Wait(1500); }
             catch (AggregateException) { /* task cancellation or faulted — expected during stop */ }
             catch (ObjectDisposedException) { /* task already cleaned up */ }
-            _cts?.Dispose();
+            // Only dispose CTS if the loop actually completed; otherwise the
+            // background task still holds a reference to the token and would
+            // throw ObjectDisposedException on next cancellation check.
+            if (_loop is { IsCompleted: true })
+                _cts?.Dispose();
             _cts = null;
             _loop = null;
         }

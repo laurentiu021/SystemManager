@@ -34,7 +34,6 @@ public sealed partial class OperationLockService : ObservableObject
     public static OperationLockService Instance => _instance.Value;
 
     private readonly ConcurrentDictionary<OperationCategory, OperationInfo> _active = new();
-    private readonly object _lock = new();
 
     private OperationLockService() { }
 
@@ -47,17 +46,13 @@ public sealed partial class OperationLockService : ObservableObject
     /// <returns>A disposable lock handle, or null if the category is busy.</returns>
     public OperationHandle? TryAcquire(OperationCategory category, string operationName)
     {
-        lock (_lock)
-        {
-            if (_active.ContainsKey(category))
-                return null;
+        var info = new OperationInfo(operationName, DateTime.UtcNow);
+        if (!_active.TryAdd(category, info))
+            return null;
 
-            var info = new OperationInfo(operationName, DateTime.UtcNow);
-            _active[category] = info;
-            OnPropertyChanged(nameof(ActiveOperations));
-            OnPropertyChanged(nameof(HasActiveOperations));
-            return new OperationHandle(this, category);
-        }
+        OnPropertyChanged(nameof(ActiveOperations));
+        OnPropertyChanged(nameof(HasActiveOperations));
+        return new OperationHandle(this, category);
     }
 
     /// <summary>
@@ -84,12 +79,9 @@ public sealed partial class OperationLockService : ObservableObject
 
     private void Release(OperationCategory category)
     {
-        lock (_lock)
-        {
-            _active.TryRemove(category, out _);
-            OnPropertyChanged(nameof(ActiveOperations));
-            OnPropertyChanged(nameof(HasActiveOperations));
-        }
+        _active.TryRemove(category, out _);
+        OnPropertyChanged(nameof(ActiveOperations));
+        OnPropertyChanged(nameof(HasActiveOperations));
     }
 
     /// <summary>

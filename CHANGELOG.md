@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.10] - 2026-05-15
+
+### Fixed
+- **DiskHealthService (CQ-001)** — ManagementObjectCollection and ManagementObject
+  instances now properly disposed via `using` statements, preventing COM resource
+  leaks during SMART/reliability queries.
+- **SpeedTestService (CQ-003)** — Ookla CLI process now has a 5-minute independent
+  timeout via linked CancellationTokenSource, preventing indefinite hangs.
+
+### Changed
+- **CONTRIBUTING.md** — corrected .NET SDK reference from 8 to 9; added
+  SysManager.IntegrationTests to project layout.
+- **SECURITY.md** — updated supported versions table to reflect 0.48.x as latest.
+
 ## [0.48.9] - 2026-05-14
 
 ### Fixed

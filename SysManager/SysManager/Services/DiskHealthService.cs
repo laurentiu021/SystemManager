@@ -29,24 +29,28 @@ public sealed class DiskHealthService
             // First pull MSFT_PhysicalDisk for basic info.
             using var searcher = new ManagementObjectSearcher(scope,
                 new ObjectQuery("SELECT ObjectId, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"));
-            foreach (ManagementObject mo in searcher.Get())
+            using var collection = searcher.Get();
+            foreach (ManagementObject mo in collection)
             {
-                var report = new DiskHealthReport
+                using (mo)
                 {
-                    FriendlyName = mo["FriendlyName"]?.ToString() ?? "Disk",
-                    MediaType = MapMedia(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
-                    BusType = MapBus(Convert.ToUInt32(mo["BusType"] ?? 0u)),
-                    SizeGB = Math.Round(Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d, 0),
-                    HealthStatus = MapHealth(Convert.ToUInt32(mo["HealthStatus"] ?? 0u))
-                };
+                    var report = new DiskHealthReport
+                    {
+                        FriendlyName = mo["FriendlyName"]?.ToString() ?? "Disk",
+                        MediaType = MapMedia(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
+                        BusType = MapBus(Convert.ToUInt32(mo["BusType"] ?? 0u)),
+                        SizeGB = Math.Round(Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d, 0),
+                        HealthStatus = MapHealth(Convert.ToUInt32(mo["HealthStatus"] ?? 0u))
+                    };
 
-                // Get reliability counters for this disk.
-                var objectId = mo["ObjectId"]?.ToString();
-                if (!string.IsNullOrEmpty(objectId))
-                    EnrichWithReliability(scope, objectId, report);
+                    // Get reliability counters for this disk.
+                    var objectId = mo["ObjectId"]?.ToString();
+                    if (!string.IsNullOrEmpty(objectId))
+                        EnrichWithReliability(scope, objectId, report);
 
-                ApplyVerdict(report);
-                results.Add(report);
+                    ApplyVerdict(report);
+                    results.Add(report);
+                }
             }
         }
         catch (ManagementException)
@@ -69,17 +73,21 @@ public sealed class DiskHealthService
             var query = new ObjectQuery(
                 $"ASSOCIATORS OF {{MSFT_PhysicalDisk.ObjectId=\"{safeId}\"}} WHERE AssocClass=MSFT_PhysicalDiskToStorageReliabilityCounter");
             using var searcher = new ManagementObjectSearcher(scope, query);
-            foreach (ManagementObject mo in searcher.Get())
+            using var collection = searcher.Get();
+            foreach (ManagementObject mo in collection)
             {
-                report.TemperatureC = ToDouble(mo["Temperature"]);
-                report.TemperatureMaxC = ToDouble(mo["TemperatureMax"]);
-                var wear = ToInt(mo["Wear"]);
-                if (wear.HasValue) report.WearPercent = wear;
-                report.PowerOnHours = ToLong(mo["PowerOnHours"]);
-                report.ReadErrors = ToLong(mo["ReadErrorsTotal"]);
-                report.WriteErrors = ToLong(mo["WriteErrorsTotal"]);
-                report.StartStopCount = ToLong(mo["StartStopCycleCount"]);
-                return; // one counter per disk
+                using (mo)
+                {
+                    report.TemperatureC = ToDouble(mo["Temperature"]);
+                    report.TemperatureMaxC = ToDouble(mo["TemperatureMax"]);
+                    var wear = ToInt(mo["Wear"]);
+                    if (wear.HasValue) report.WearPercent = wear;
+                    report.PowerOnHours = ToLong(mo["PowerOnHours"]);
+                    report.ReadErrors = ToLong(mo["ReadErrorsTotal"]);
+                    report.WriteErrors = ToLong(mo["WriteErrorsTotal"]);
+                    report.StartStopCount = ToLong(mo["StartStopCycleCount"]);
+                    return; // one counter per disk
+                }
             }
         }
         catch (ManagementException) { /* driver may not expose counters */ }

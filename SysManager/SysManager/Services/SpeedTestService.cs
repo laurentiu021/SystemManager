@@ -196,13 +196,18 @@ public sealed class SpeedTestService
         };
 
         // Start the process on a thread-pool thread so Process.Start()
-        // never blocks the UI thread.
+        // never blocks the UI thread. Link a 5-minute timeout to prevent
+        // indefinite hangs if the Ookla CLI freezes (CQ-003).
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromMinutes(5));
+        var linked = timeoutCts.Token;
+
         using var proc = new Process();
         proc.StartInfo = psi;
-        await Task.Run(() => proc.Start(), ct).ConfigureAwait(false);
-        var stdout = await proc.StandardOutput.ReadToEndAsync(ct);
-        var stderr = await proc.StandardError.ReadToEndAsync(ct);
-        await proc.WaitForExitAsync(ct);
+        await Task.Run(() => proc.Start(), linked).ConfigureAwait(false);
+        var stdout = await proc.StandardOutput.ReadToEndAsync(linked);
+        var stderr = await proc.StandardError.ReadToEndAsync(linked);
+        await proc.WaitForExitAsync(linked);
 
         if (proc.ExitCode != 0)
         {

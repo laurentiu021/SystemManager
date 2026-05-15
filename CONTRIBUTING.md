@@ -39,7 +39,7 @@ follows, and what to expect when you open a pull request.
 **Prerequisites**
 
 - Windows 10 or later (WPF + Windows APIs won't build elsewhere).
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0).
 - Git 2.40+.
 - A Windows account with admin rights (needed to test elevated features;
   the app itself runs fine unelevated for everything else).
@@ -75,7 +75,8 @@ SysManager/
 │   ├── Views/                 # XAML + minimal code-behind
 │   ├── Helpers/               # small utilities, converters
 │   └── Resources/             # icons, generated assets
-├── SysManager.Tests/          # xUnit unit + integration tests
+├── SysManager.Tests/          # xUnit unit tests
+├── SysManager.IntegrationTests/ # integration tests (local only, not CI)
 └── SysManager.UITests/        # FlaUI UI-automation tests
 ```
 

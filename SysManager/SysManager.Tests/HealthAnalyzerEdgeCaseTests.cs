@@ -133,7 +133,7 @@ public class HealthAnalyzerEdgeCaseTests
     }
 
     [Fact]
-    public void Analyze_DnsAndGameBad_ReturnsGameServer()
+    public void Analyze_DnsAndGameBad_ReturnsMixed()
     {
         var metrics = new[]
         {
@@ -142,9 +142,9 @@ public class HealthAnalyzerEdgeCaseTests
             new TargetMetric("game", TargetRole.GameServer, 80.0, JitterWarnMs + 5, 0, 10),
         };
         var result = HealthAnalyzer.Analyze(metrics);
-        // When dns AND game are bad, it doesn't match "dnsBad && !gameBad && !streamBad"
-        // so falls through to gameBad check
-        Assert.Equal(HealthVerdict.GameServer, result.Verdict);
+        // FUNC-M2: When dns AND game are bad, return Mixed — not GameServer,
+        // because saying "DNS is clean" would be incorrect.
+        Assert.Equal(HealthVerdict.Mixed, result.Verdict);
     }
 
     [Fact]

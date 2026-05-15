@@ -69,13 +69,41 @@ public sealed class FixedDriveService
                 }
             }
 
-            // We can't easily map DeviceId -> drive letter without another join,
-            // so if we have exactly one disk we annotate everything with it.
-            if (media.Count == 1)
+            // FUNC-M5: Map drive letters to physical disks via MSFT_Partition.
+            // This works for multi-disk systems (not just single-disk).
+            var letterToDisk = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
             {
-                var (m, b) = media.Values.First();
-                for (var i = 0; i < drives.Count; i++)
+                using var partSearch = new ManagementObjectSearcher(scope,
+                    new ObjectQuery("SELECT DriveLetter, DiskNumber FROM MSFT_Partition WHERE DriveLetter IS NOT NULL"));
+                using var partCollection = partSearch.Get();
+                foreach (ManagementObject mo in partCollection)
+                {
+                    using (mo)
+                    {
+                        var letter = mo["DriveLetter"]?.ToString();
+                        var diskNum = mo["DiskNumber"]?.ToString();
+                        if (!string.IsNullOrEmpty(letter) && !string.IsNullOrEmpty(diskNum))
+                            letterToDisk[letter + ":"] = diskNum;
+                    }
+                }
+            }
+            catch (ManagementException) { /* partition query not supported — fall through */ }
+
+            for (var i = 0; i < drives.Count; i++)
+            {
+                var driveLetter = drives[i].Letter.TrimEnd('\\', '/');
+                if (letterToDisk.TryGetValue(driveLetter, out var diskId) &&
+                    media.TryGetValue(diskId, out var info))
+                {
+                    drives[i] = drives[i] with { MediaType = info.Media, BusType = info.Bus };
+                }
+                else if (media.Count == 1)
+                {
+                    // Fallback: single disk — annotate all drives with it.
+                    var (m, b) = media.Values.First();
                     drives[i] = drives[i] with { MediaType = m, BusType = b };
+                }
             }
         }
         catch (ManagementException)

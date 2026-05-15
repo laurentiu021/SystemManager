@@ -28,10 +28,19 @@ public sealed class SpeedTestHistoryService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    // FUNC-M4: Serialize all file operations to prevent concurrent SaveAsync
+    // calls from racing (load-modify-save is not atomic). A SemaphoreSlim(1,1)
+    // acts as an async-compatible mutex.
+    private readonly SemaphoreSlim _fileLock = new(1, 1);
+
     /// <summary>
     /// Loads all saved results from disk. Returns empty list on any error.
     /// </summary>
     public async Task<List<SpeedTestResult>> LoadAsync(CancellationToken ct = default)
+        => await LoadCoreAsync(ct).ConfigureAwait(false);
+
+    /// <summary>Internal load without locking — called from within locked sections.</summary>
+    private async Task<List<SpeedTestResult>> LoadCoreAsync(CancellationToken ct)
     {
         try
         {
@@ -68,9 +77,10 @@ public sealed class SpeedTestHistoryService
     /// </summary>
     public async Task SaveAsync(SpeedTestResult result, CancellationToken ct = default)
     {
+        await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var all = await LoadAsync(ct).ConfigureAwait(false);
+            var all = await LoadCoreAsync(ct).ConfigureAwait(false);
             all.Add(result);
 
             // Trim per engine: keep only the most recent MaxPerEngine entries.
@@ -104,6 +114,10 @@ public sealed class SpeedTestHistoryService
         {
             Log.Warning(ex, "Access denied saving speed test history");
         }
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 
     /// <summary>
@@ -111,6 +125,7 @@ public sealed class SpeedTestHistoryService
     /// </summary>
     public async Task ClearAsync(string? engine = null, CancellationToken ct = default)
     {
+        await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             if (engine == null)
@@ -120,7 +135,7 @@ public sealed class SpeedTestHistoryService
                 return;
             }
 
-            var all = await LoadAsync(ct).ConfigureAwait(false);
+            var all = await LoadCoreAsync(ct).ConfigureAwait(false);
             var filtered = all.Where(r => !string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase)).ToList();
 
             if (filtered.Count == 0)
@@ -150,6 +165,10 @@ public sealed class SpeedTestHistoryService
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Access denied clearing speed test history");
+        }
+        finally
+        {
+            _fileLock.Release();
         }
     }
 

@@ -32,6 +32,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   handler from ViewModel on teardown. Previously 51 subscriptions leaked
   permanently. `MainWindowViewModel.Dispose()` now disposes all NavItems.
 
+## [0.48.16] - 2026-05-15
+
+### Fixed
+- **SpeedTestService** — stdout and stderr now read in parallel via
+  `Task.WhenAll` to prevent classic Windows pipe buffer deadlock when
+  Ookla CLI writes enough to stderr while stdout is being consumed.
+- **DiskHealthService** — added regex validation (`^[\w{}\-\\.:/]+$`) on
+  WMI objectId before WQL interpolation (defense-in-depth against injection).
+- **UninstallerService** — tightened `PackageIdPattern` regex: replaced `\s`
+  (which allows tabs/newlines) with a literal space character.
+
+### Changed
+- **WindowsFeaturesService** — added SECURITY-CRITICAL documentation comment
+  on `FeatureNamePattern()` regex explaining it is the sole injection defense.
+
 ## [0.48.14] - 2026-05-15
 
 ### Fixed

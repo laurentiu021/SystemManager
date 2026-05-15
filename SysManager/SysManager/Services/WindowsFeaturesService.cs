@@ -155,6 +155,9 @@ public sealed partial class WindowsFeaturesService
 
     /// <summary>
     /// Validates feature names: alphanumeric, hyphens, underscores, dots. Max 128 chars.
+    /// SECURITY-CRITICAL: This regex is the sole defense against PowerShell injection
+    /// in Enable/DisableFeatureAsync where featureName is interpolated into a command.
+    /// Do NOT relax this pattern without reviewing injection implications.
     /// </summary>
     [GeneratedRegex(@"^[\w.\-]{1,128}$")]
     private static partial Regex FeatureNamePattern();

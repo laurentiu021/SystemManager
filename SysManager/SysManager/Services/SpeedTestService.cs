@@ -205,8 +205,16 @@ public sealed class SpeedTestService
         using var proc = new Process();
         proc.StartInfo = psi;
         await Task.Run(() => proc.Start(), linked).ConfigureAwait(false);
-        var stdout = await proc.StandardOutput.ReadToEndAsync(linked);
-        var stderr = await proc.StandardError.ReadToEndAsync(linked);
+
+        // Read stdout and stderr in parallel to prevent pipe buffer deadlock.
+        // If one pipe fills while the other is being read sequentially, the
+        // child process blocks indefinitely (classic Windows pipe deadlock).
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync(linked);
+        var stderrTask = proc.StandardError.ReadToEndAsync(linked);
+        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+        var stdout = stdoutTask.Result;
+        var stderr = stderrTask.Result;
+
         try
         {
             await proc.WaitForExitAsync(linked);

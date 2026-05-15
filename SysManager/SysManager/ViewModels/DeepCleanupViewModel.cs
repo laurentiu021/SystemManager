@@ -152,6 +152,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
         ScanEtaText = "";
         _scanEta.Reset();
         ScanSummary = "Scanning safe cleanup locations...";
+        _scanCts?.Dispose();
         _scanCts = new CancellationTokenSource();
         try
         {
@@ -204,6 +205,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
         CleanEtaText = "";
         _cleanEta.Reset();
         CleanSummary = "Cleaning selected categories — you can keep using the app.";
+        _cleanCts?.Dispose();
         _cleanCts = new CancellationTokenSource();
         try
         {
@@ -264,6 +266,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
         LargeBytesScanned = 0;
         LargeCurrentFolder = string.Empty;
         LargeScanStatus = $"Scanning {SelectedLocation.Label.Trim()}...";
+        _largeCts?.Dispose();
         _largeCts = new CancellationTokenSource();
         try
         {

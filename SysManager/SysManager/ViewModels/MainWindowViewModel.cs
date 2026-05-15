@@ -444,6 +444,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        // Dispose NavItems to unsubscribe PropertyChanged handlers
+        foreach (var item in NavItems)
+            item.Dispose();
+
         Dashboard?.Dispose();
         AppUpdates?.Dispose();
         WindowsUpdate?.Dispose();

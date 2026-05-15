@@ -13,8 +13,10 @@ namespace SysManager.ViewModels;
 /// access — keeps unit tests STA-free and makes the VM cheap to construct.
 /// Exposes <see cref="IsBusy"/> from the underlying ViewModel so the sidebar
 /// can show a progress indicator when the tab is working.
+/// Implements <see cref="IDisposable"/> to unsubscribe from ViewModel
+/// PropertyChanged events on teardown.
 /// </summary>
-public sealed partial class NavItem : ObservableObject
+public sealed partial class NavItem : ObservableObject, IDisposable
 {
     private UserControl? _view;
 
@@ -34,6 +36,13 @@ public sealed partial class NavItem : ObservableObject
         if (Content is ViewModelBase vm)
             vm.PropertyChanged += OnViewModelPropertyChanged;
         return this;
+    }
+
+    /// <summary>Unsubscribe from ViewModel events to prevent memory leaks.</summary>
+    public void Dispose()
+    {
+        if (Content is ViewModelBase vm)
+            vm.PropertyChanged -= OnViewModelPropertyChanged;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

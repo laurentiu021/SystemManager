@@ -54,6 +54,7 @@ public partial class ShortcutCleanerViewModel : ViewModelBase
         BrokenCount = 0;
         SelectedCount = 0;
         ScanStatus = "Scanning...";
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
         try

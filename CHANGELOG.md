@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.27] - 2026-05-15
+
+### Fixed
+- **NetworkSharedState** — SkiaSharp `SolidColorPaint` objects are now disposed
+  when a ping target is removed, preventing unmanaged memory leaks (CQ-M1).
+- **NetworkSharedState** — latency chart offset now uses a stable hash of the
+  target host instead of `Targets.IndexOf`, preventing visual jumps when
+  targets are removed mid-session (CQ-M2).
+- **PerformanceViewModel** — added `Dispose` override to clean up snapshot
+  reference and satisfy the base class disposal contract (CQ-M4).
+
 ## [0.48.26] - 2026-05-15
 
 ### Changed

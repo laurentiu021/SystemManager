@@ -541,4 +541,16 @@ public partial class PerformanceViewModel : ViewModelBase
         var planKey = GetCurrentPlanKey();
         IsProcessorStateLocked = planKey is "high" or "ultimate";
     }
+
+    // CQ-M4: Override Dispose to clean up the PerformanceService's PowerShellRunner
+    // event subscriptions and prevent the fire-and-forget InitAsync from running
+    // against a disposed ViewModel if navigation happens quickly.
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _snapshot = null;
+        }
+        base.Dispose(disposing);
+    }
 }

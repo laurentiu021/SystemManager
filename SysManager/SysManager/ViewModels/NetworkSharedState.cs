@@ -225,16 +225,41 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             _targetHandlers.Remove(target.Host);
         }
         Targets.Remove(target);
+
+        // CQ-M1: Dispose SkiaSharp paint objects attached to the series being removed.
+        // Without this, SolidColorPaint instances (and their unmanaged SKPaint handles)
+        // leak every time a target is removed.
         var idx = LatencySeries.ToList().FindIndex(s => s.Name?.Contains($"({target.Host})") == true);
-        if (idx >= 0) LatencySeries.RemoveAt(idx);
+        if (idx >= 0)
+        {
+            DisposeSeries(LatencySeries[idx]);
+            LatencySeries.RemoveAt(idx);
+        }
         var tIdx = TraceSeries.ToList().FindIndex(s => s.Name?.Contains($"({target.Host})") == true);
-        if (tIdx >= 0) TraceSeries.RemoveAt(tIdx);
+        if (tIdx >= 0)
+        {
+            DisposeSeries(TraceSeries[tIdx]);
+            TraceSeries.RemoveAt(tIdx);
+        }
+
         Buffers.TryRemove(target.Host, out _);
         TraceBuffers.TryRemove(target.Host, out _);
         LatestRoutes.Remove(target.Host);
         Pinger.Remove(target.Host);
         TraceMonitor.Remove(target.Host);
         RefreshHopTable();
+    }
+
+    /// <summary>Disposes paint resources attached to a chart series.</summary>
+    private static void DisposeSeries(ISeries series)
+    {
+        if (series is LineSeries<DateTimePoint> line)
+        {
+            (line.Stroke as IDisposable)?.Dispose();
+            (line.GeometryStroke as IDisposable)?.Dispose();
+            (line.GeometryFill as IDisposable)?.Dispose();
+            (line.Fill as IDisposable)?.Dispose();
+        }
     }
 
     public void ClearHistory()
@@ -313,8 +338,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             double? shown = sample.LatencyMs;
             if (shown.HasValue)
             {
-                var idx = Targets.IndexOf(target);
-                var offset = ((idx % 8) - 3.5) * 0.25;
+                // CQ-M2: Stable offset (same fix as RecomputeStats).
+                var stableIdx = Math.Abs(target.Host.GetHashCode()) % 8;
+                var offset = ((stableIdx % 8) - 3.5) * 0.25;
                 shown = shown.Value + offset;
             }
 
@@ -355,8 +381,11 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             return;
         }
 
-        var idx = Targets.IndexOf(target);
-        var offset = ((idx % 8) - 3.5) * 0.25;
+        // CQ-M2: Use a stable offset derived from the target's host hash instead
+        // of Targets.IndexOf. IndexOf shifts after target removal, causing all
+        // remaining targets to jump visually on the chart.
+        var stableIdx = Math.Abs(target.Host.GetHashCode()) % 8;
+        var offset = ((stableIdx % 8) - 3.5) * 0.25;
 
         // PERF-M2: Avoid LINQ allocations (this runs 32x/sec per target).
         // Single pass over buffer to compute sum and count.

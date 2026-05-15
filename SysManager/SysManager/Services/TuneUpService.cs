@@ -182,8 +182,11 @@ public sealed class TuneUpService
                 }
 
                 // Try to remove empty subdirectories
+                // FUNC-M3: Sort by directory depth (separator count) descending,
+                // not string length. A path like "C:\a\b\c" is deeper than
+                // "C:\longname" despite being shorter — we must delete deepest first.
                 foreach (var sub in Directory.EnumerateDirectories(dir, "*", SearchOption.AllDirectories)
-                             .OrderByDescending(d => d.Length))
+                             .OrderByDescending(d => d.Count(c => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar)))
                 {
                     ct.ThrowIfCancellationRequested();
                     try

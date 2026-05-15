@@ -90,12 +90,21 @@ public static class HealthAnalyzer
             return diag;
         }
 
-        if (gameBad)
+        if (gameBad && !dnsBad)
         {
             diag.Verdict = HealthVerdict.GameServer;
             diag.Headline = "It's the game server, not you";
             diag.Detail = "Your connection to DNS and gateway is clean — only the game server is showing loss/jitter. Try another region or wait it out.";
             diag.ColorHex = "#F72585";
+            return diag;
+        }
+
+        if (gameBad && dnsBad)
+        {
+            diag.Verdict = HealthVerdict.Mixed;
+            diag.Headline = "Multiple layers affected";
+            diag.Detail = "Both DNS and game server are showing trouble — likely an ISP or routing issue affecting multiple endpoints.";
+            diag.ColorHex = "#FF6B6B";
             return diag;
         }
 

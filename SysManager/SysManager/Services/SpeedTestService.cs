@@ -286,7 +286,7 @@ public sealed class SpeedTestService
     private static async Task<string> EnsureOoklaAsync(
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
-        var toolsDir = Path.Combine(
+        var toolsDir = Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysManager", "tools");
 
@@ -312,7 +312,7 @@ public sealed class SpeedTestService
         var arch = Environment.Is64BitOperatingSystem ? "win64" : "win32";
         var zipUrl = $"https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-{arch}.zip";
 
-        var zipPath = Path.Combine(toolsDir, "ookla.zip");
+        var zipPath = Path.Join(toolsDir, "ookla.zip");
         using (var resp = await _http.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead, ct))
         {
             resp.EnsureSuccessStatusCode();
@@ -353,12 +353,9 @@ public sealed class SpeedTestService
             // entries could write files outside toolsDir.
             using var archive = ZipFile.OpenRead(zipPath);
             var fullToolsDir = Path.GetFullPath(toolsDir);
-            foreach (var entry in archive.Entries)
+            foreach (var entry in archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)))
             {
-                // Skip directory entries
-                if (string.IsNullOrEmpty(entry.Name)) continue;
-
-                var destinationPath = Path.GetFullPath(Path.Combine(toolsDir, entry.FullName));
+                var destinationPath = Path.GetFullPath(Path.Join(toolsDir, entry.FullName));
                 if (!destinationPath.StartsWith(fullToolsDir, StringComparison.OrdinalIgnoreCase))
                 {
                     Log.Warning("Zip Slip attempt blocked: {Entry} resolves outside target dir", entry.FullName);

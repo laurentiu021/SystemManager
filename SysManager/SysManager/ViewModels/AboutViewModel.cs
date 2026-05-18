@@ -426,7 +426,7 @@ public partial class AboutViewModel : ViewModelBase
         try
         {
             var pid = Environment.ProcessId;
-            var scriptPath = Path.Combine(
+            var scriptPath = Path.Join(
                 Path.GetDirectoryName(DownloadedPath)!,
                 $"update-{Guid.NewGuid():N}.cmd");
 
@@ -514,11 +514,11 @@ public partial class AboutViewModel : ViewModelBase
             // Use AppContext.BaseDirectory instead of Assembly.Location which
             // returns empty string in single-file publish (IL3000).
             var dir = AppContext.BaseDirectory;
-            var exe = Path.Combine(dir, "SysManager.exe");
+            var exe = Path.Join(dir, "SysManager.exe");
             if (File.Exists(exe))
                 return File.GetLastWriteTime(exe).ToString("dd MMM yyyy");
             // Fallback: try the DLL
-            var dll = Path.Combine(dir, "SysManager.dll");
+            var dll = Path.Join(dir, "SysManager.dll");
             if (File.Exists(dll))
                 return File.GetLastWriteTime(dll).ToString("dd MMM yyyy");
         }

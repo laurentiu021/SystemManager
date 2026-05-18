@@ -137,7 +137,7 @@ public sealed class UpdateService
     {
         if (string.IsNullOrWhiteSpace(rel.AssetUrl)) return null;
 
-        var dir = Path.Combine(
+        var dir = Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysManager", "updates");
         Directory.CreateDirectory(dir);

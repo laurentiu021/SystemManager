@@ -129,7 +129,15 @@ public sealed class TrayIconService : IDisposable
         {
             await UpdateTooltipAsync();
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
+        {
+            // Timer disposed during shutdown — safe to ignore.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Tray icon disposed during shutdown — safe to ignore.
+        }
+        catch (InvalidOperationException ex)
         {
             // async void must never throw — unhandled exceptions crash the app.
             Log.Warning("TrayIcon timer tick failed: {Error}", ex.Message);
@@ -193,15 +201,12 @@ public sealed class TrayIconService : IDisposable
         }
 
         // Disk health warning
-        foreach (var disk in snapshot.Disks)
+        var unhealthyDisk = snapshot.Disks.FirstOrDefault(d => d.HealthStatus != "Healthy");
+        if (unhealthyDisk != null && now - _lastDiskNotification > NotificationCooldown)
         {
-            if (disk.HealthStatus != "Healthy" && now - _lastDiskNotification > NotificationCooldown)
-            {
-                _lastDiskNotification = now;
-                ShowNotification("Disk Health Warning",
-                    $"{disk.FriendlyName} reports status: {disk.HealthStatus}. Consider backing up important data.");
-                break;
-            }
+            _lastDiskNotification = now;
+            ShowNotification("Disk Health Warning",
+                $"{unhealthyDisk.FriendlyName} reports status: {unhealthyDisk.HealthStatus}. Consider backing up important data.");
         }
     }
 

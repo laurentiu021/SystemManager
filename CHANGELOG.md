@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.28] - 2026-05-18
+
+### Fixed
+- **CodeQL** — resolved 38 code scanning alerts across 16 source files:
+  - Replaced `Path.Combine` with `Path.Join` in 8 locations to prevent
+    unexpected path rooting when arguments contain absolute paths.
+  - Added descriptive comments to 6 empty catch blocks (intentional
+    swallowing of expected exceptions like `FormatException`, `IOException`).
+  - Replaced generic `catch (Exception)` in `TrayIconService.OnTimerTick`
+    with specific exception types (`OperationCanceledException`,
+    `ObjectDisposedException`, `InvalidOperationException`).
+  - Converted implicit foreach filters to explicit `.Where()` calls in
+    `AppAlertService`, `NetworkSharedState`, `WindowsFeaturesService`,
+    `SpeedTestService`, and `TrayIconService`.
+  - Extracted complex conditions into helper methods in
+    `UninstallerService.IsUnderTrustedDirectory` and
+    `ProcessManagerViewModel.MatchesFilter`.
+  - Flattened nested if-statements in `UninstallerViewModel.SelectAll`.
+  - Replaced `if/else` assignment with ternary in
+    `HealthScoreService` weighted average calculation.
+  - Converted `ComputeDiskScore` foreach loop to LINQ `.Select().Min()`.
+  - Converted `DashboardViewModel` manual `Dispose()` call to `using var`
+    declaration for `OperationLockService` lock guard.
+  - Removed redundant `(SolidColorBrush)` cast in
+    `OutputKindToBrushConverter`.
+- **CodeQL workflow** — added `codeql-config.yml` to exclude `obj/` and
+  `bin/` directories from analysis (36 alerts in auto-generated code).
+
 ## [0.48.27] - 2026-05-15
 
 ### Fixed

@@ -145,6 +145,7 @@ public partial class DashboardViewModel : ViewModelBase
             return;
         }
 
+        using var opLockGuard = opLock;
         _tuneUpCts = new CancellationTokenSource();
         IsTuneUpRunning = true;
         HasTuneUpResult = false;
@@ -183,7 +184,6 @@ public partial class DashboardViewModel : ViewModelBase
         }
         finally
         {
-            opLock.Dispose();
             IsTuneUpRunning = false;
             _tuneUpCts?.Dispose();
             _tuneUpCts = null;

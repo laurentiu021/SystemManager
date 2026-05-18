@@ -143,12 +143,7 @@ public partial class ProcessManagerViewModel : ViewModelBase
         if (!string.IsNullOrWhiteSpace(FilterText))
         {
             var filter = FilterText.Trim();
-            source = source.Where(p =>
-                p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
-                (p.Description?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (p.PlainDescription?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (p.Category?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                p.Pid.ToString().Contains(filter));
+            source = source.Where(p => MatchesFilter(p, filter));
         }
 
         // Default order by memory descending; DataGrid column headers handle user sorting.
@@ -169,4 +164,11 @@ public partial class ProcessManagerViewModel : ViewModelBase
         >= 1L << 10 => $"{bytes / (double)(1L << 10):F1} KB",
         _ => $"{bytes} B"
     };
+
+    private static bool MatchesFilter(ProcessEntry p, string filter) =>
+        p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+        (p.Description?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
+        (p.PlainDescription?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
+        (p.Category?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
+        p.Pid.ToString().Contains(filter);
 }

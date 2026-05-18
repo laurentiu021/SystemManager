@@ -49,6 +49,33 @@ Coverage is collected automatically on CI via `coverlet` and uploaded to
 [Codecov](https://codecov.io/gh/laurentiu021/SystemManager). The badge in
 `README.md` reflects the latest `main` branch result.
 
+## Test infrastructure
+
+### Frameworks
+
+| Package | Purpose |
+|---|---|
+| xUnit 2.9 | Test framework |
+| NSubstitute 5.3 | Mocking/substitution for interface-based testing |
+| coverlet | Code coverage collection |
+| Xunit.StaFact | STA thread support for WPF-dependent tests |
+
+### Parallelism
+
+Unit tests run in parallel by default (`parallelizeTestCollections: true`).
+Tests that share state or touch OS resources are isolated via xUnit
+collection definitions:
+
+- `[Collection("Network")]` — tests using ICMP sockets run sequentially.
+
+### Conventions
+
+- Pure logic tests (parsers, analyzers, converters) need no mocking.
+- Tests that depend on OS services should use NSubstitute to mock the
+  service interface, keeping the test fast and deterministic.
+- Time-dependent tests should use injectable time sources or generous
+  tolerances to avoid flakiness on slow CI runners.
+
 To generate a local coverage report:
 
 ```powershell

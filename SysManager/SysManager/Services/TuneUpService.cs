@@ -158,7 +158,7 @@ public sealed class TuneUpService
         var tempPaths = new[]
         {
             Environment.GetEnvironmentVariable("TEMP") ?? "",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")
+            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")
         };
 
         foreach (var dir in tempPaths.Where(p => !string.IsNullOrEmpty(p) && Directory.Exists(p)))
@@ -194,8 +194,8 @@ public sealed class TuneUpService
                         if (!Directory.EnumerateFileSystemEntries(sub).Any())
                             Directory.Delete(sub);
                     }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
+                    catch (IOException) { /* Directory in use or locked — skip */ }
+                    catch (UnauthorizedAccessException) { /* No permission to delete — skip */ }
                 }
             }
             catch (IOException ex)

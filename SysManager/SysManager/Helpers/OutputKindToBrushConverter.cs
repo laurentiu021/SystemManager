@@ -104,7 +104,7 @@ public class HexToBrushConverter : IValueConverter
                 }
                 catch (FormatException)
                 {
-                    return (SolidColorBrush)Brushes.Gray;
+                    return Brushes.Gray;
                 }
             });
         }

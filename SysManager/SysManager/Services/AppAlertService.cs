@@ -181,10 +181,10 @@ public sealed class AppAlertService : IDisposable
         try
         {
             var current = GetRegistryApps();
-            foreach (var app in current.Where(a => !_knownRegistryApps.ContainsKey(a.Name)))
+            foreach (var app in current
+                         .Where(a => !_knownRegistryApps.ContainsKey(a.Name))
+                         .Where(a => _knownRegistryApps.TryAdd(a.Name, true)))
             {
-                if (!_knownRegistryApps.TryAdd(app.Name, true)) continue;
-
                 app.DetectedAt = DateTime.Now;
                 Log.Information("New app detected in registry: {Name}", app.Name);
                 RaiseNewAppDetected(app);

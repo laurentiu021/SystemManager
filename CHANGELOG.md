@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.32] - 2026-05-18
+
+### Fixed
+- **FormatSize duplication** — extracted shared `FormatHelper.FormatSize` method;
+  `ProcessManagerViewModel`, `DiskAnalyzerViewModel`, and `DuplicateFileViewModel`
+  now delegate to the shared helper instead of duplicating the switch expression.
+- **OEM encoding duplication** — `CleanupViewModel` (SFC + DISM) and
+  `SystemHealthViewModel` (chkdsk) now use `PowerShellRunner.OemEncoding`
+  instead of duplicating the encoding resolution logic inline.
+
 ## [0.48.31] - 2026-05-18
 
 ### Changed

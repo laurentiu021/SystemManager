@@ -3,6 +3,7 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using Serilog;
 
 namespace SysManager.ViewModels;
 
@@ -14,6 +15,27 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     [ObservableProperty] private bool _isProgressIndeterminate;
 
     private bool _disposed;
+
+    /// <summary>
+    /// Safely launches an async task from a constructor or non-async context.
+    /// Exceptions are caught and logged instead of becoming unobserved task
+    /// exceptions that could crash the application (CQ-M3).
+    /// </summary>
+    protected static async void InitializeAsync(Func<Task> asyncAction, [System.Runtime.CompilerServices.CallerMemberName] string callerName = "")
+    {
+        try
+        {
+            await asyncAction().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected during shutdown — no action needed.
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Unhandled exception in async initialization of {Caller}", callerName);
+        }
+    }
 
     /// <summary>
     /// Override in derived classes to release managed resources

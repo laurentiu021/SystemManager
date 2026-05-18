@@ -40,7 +40,7 @@ public partial class SpeedTestViewModel : ViewModelBase
     public SpeedTestViewModel(NetworkSharedState shared)
     {
         Shared = shared;
-        _ = LoadHistoryAsync();
+        InitializeAsync(LoadHistoryAsync);
     }
 
     private async Task LoadHistoryAsync()

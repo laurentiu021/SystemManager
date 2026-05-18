@@ -60,7 +60,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
 
     public DeepCleanupViewModel()
     {
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     private async Task InitAsync()

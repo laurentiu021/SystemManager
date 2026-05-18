@@ -36,7 +36,7 @@ public partial class ServicesViewModel : ViewModelBase
 
     public ServicesViewModel()
     {
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     private async Task InitAsync()

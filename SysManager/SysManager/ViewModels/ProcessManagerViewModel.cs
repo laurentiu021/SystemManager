@@ -160,9 +160,16 @@ public partial class ProcessManagerViewModel : ViewModelBase
     private static string FormatSize(long bytes) => Helpers.FormatHelper.FormatSize(bytes);
 
     private static bool MatchesFilter(ProcessEntry p, string filter) =>
-        p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+        MatchesName(p, filter) || MatchesDescription(p, filter) || MatchesPid(p, filter);
+
+    private static bool MatchesName(ProcessEntry p, string filter) =>
+        p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+    private static bool MatchesDescription(ProcessEntry p, string filter) =>
         (p.Description?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
         (p.PlainDescription?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
-        (p.Category?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
+        (p.Category?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private static bool MatchesPid(ProcessEntry p, string filter) =>
         p.Pid.ToString().Contains(filter);
 }

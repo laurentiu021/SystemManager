@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.29] - 2026-05-18
+
+### Changed
+- **IconExtractorService** — `FindExecutableByName` results are now cached in a
+  `ConcurrentDictionary`, eliminating repeated Program Files directory scans
+  (~100+ subdirs) on every process list refresh (PERF-M5).
+- **NetworkSharedState** — `TrimBuffer` now uses a clear-and-rebuild strategy
+  when removing more than 25% of buffer entries, reducing worst-case complexity
+  from O(n×removeCount) to O(n) (PERF-M3).
+
 ## [0.48.28] - 2026-05-18
 
 ### Fixed

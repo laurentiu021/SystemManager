@@ -358,11 +358,20 @@ public sealed class IconExtractorService
         return null;
     }
 
+    // PERF-M5: Cache resolved executable paths to avoid re-scanning Program Files
+    // directories on every process list refresh (~100+ subdirs per scan).
+    private static readonly ConcurrentDictionary<string, string?> _pathCache = new(StringComparer.OrdinalIgnoreCase);
+
     private static string? FindExecutableByName(string processName)
     {
         var exeName = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
             ? processName : processName + ".exe";
 
+        return _pathCache.GetOrAdd(exeName, static name => ResolveExecutablePath(name));
+    }
+
+    private static string? ResolveExecutablePath(string exeName)
+    {
         var found = SearchInPath(exeName);
         if (found != null) return found;
 

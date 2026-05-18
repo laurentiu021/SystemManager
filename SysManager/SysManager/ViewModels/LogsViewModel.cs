@@ -132,14 +132,41 @@ public partial class LogsViewModel : ViewModelBase
 
         try
         {
+            const int batchSize = 50;
+            var batch = new List<FriendlyEventEntry>(batchSize);
+
             await foreach (var entry in _eventLogs.ReadAsync(opt, _cts.Token))
             {
+                batch.Add(entry);
+                if (batch.Count >= batchSize)
+                {
+                    var items = batch.ToArray();
+                    batch.Clear();
+                    Post(() =>
+                    {
+                        foreach (var item in items)
+                        {
+                            Entries.Add(item);
+                            UpdateCounts(item, 1);
+                        }
+                    });
+                }
+            }
+
+            // Flush remaining items
+            if (batch.Count > 0)
+            {
+                var remaining = batch.ToArray();
                 Post(() =>
                 {
-                    Entries.Add(entry);
-                    UpdateCounts(entry, 1);
+                    foreach (var item in remaining)
+                    {
+                        Entries.Add(item);
+                        UpdateCounts(item, 1);
+                    }
                 });
             }
+
             StatusMessage = $"Loaded {Entries.Count} events from {SelectedLog}";
             UpdateVisibleCount();
         }

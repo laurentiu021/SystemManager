@@ -472,11 +472,27 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         while (removeCount < buffer.Count && buffer[removeCount].DateTime < cutoff)
             removeCount++;
 
-        // PERF-003: Remove stale items from the front. Removing from index 0
-        // repeatedly is O(n*removeCount) but unavoidable with ObservableCollection.
-        // We remove forward (always index 0) which is simpler and equivalent.
-        for (int i = 0; i < removeCount; i++)
-            buffer.RemoveAt(0);
+        if (removeCount == 0) return;
+
+        // PERF-M3: When removing many items from the front, repeated RemoveAt(0)
+        // is O(n*removeCount) because each removal shifts all remaining elements.
+        // If we're removing more than 25% of the buffer, it's cheaper to snapshot
+        // the items we want to keep, clear, and re-add them (O(n) total).
+        if (removeCount > buffer.Count / 4)
+        {
+            var keep = new DateTimePoint[buffer.Count - removeCount];
+            for (int i = 0; i < keep.Length; i++)
+                keep[i] = buffer[removeCount + i];
+            buffer.Clear();
+            foreach (var item in keep)
+                buffer.Add(item);
+        }
+        else
+        {
+            // Small number of removals — RemoveAt(0) is acceptable.
+            for (int i = 0; i < removeCount; i++)
+                buffer.RemoveAt(0);
+        }
     }
 
     internal void TrimAllBuffers()

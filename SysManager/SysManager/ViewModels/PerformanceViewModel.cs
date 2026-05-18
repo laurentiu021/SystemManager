@@ -54,7 +54,7 @@ public partial class PerformanceViewModel : ViewModelBase
     public PerformanceViewModel(PowerShellRunner ps)
     {
         _service = new PerformanceService(ps);
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     private async Task InitAsync()

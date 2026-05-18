@@ -23,7 +23,7 @@ public partial class BatteryHealthViewModel : ViewModelBase
 
     public BatteryHealthViewModel()
     {
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     private async Task InitAsync()

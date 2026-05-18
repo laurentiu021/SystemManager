@@ -30,7 +30,7 @@ public partial class StartupViewModel : ViewModelBase
 
     public StartupViewModel()
     {
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     partial void OnHideWindowsEntriesChanged(bool value) => ApplyFilter();

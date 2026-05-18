@@ -55,7 +55,7 @@ public partial class DashboardViewModel : ViewModelBase
         _tuneUp = tuneUp;
         _healthScore = healthScore;
         IsElevated = AdminHelper.IsElevated();
-        _ = LoadHealthScoreAsync();
+        InitializeAsync(LoadHealthScoreAsync);
     }
 
     // ── Health Score ───────────────────────────────────────────────────

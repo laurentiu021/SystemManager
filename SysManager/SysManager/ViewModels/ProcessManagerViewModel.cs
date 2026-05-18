@@ -33,7 +33,7 @@ public partial class ProcessManagerViewModel : ViewModelBase
 
     public ProcessManagerViewModel()
     {
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     private async Task InitAsync()

@@ -53,7 +53,7 @@ public partial class CleanupViewModel : ViewModelBase
         _runner.ProgressChanged += OnRunnerProgressChanged;
         IsElevated = AdminHelper.IsElevated();
 
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);

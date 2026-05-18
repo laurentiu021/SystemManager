@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.30] - 2026-05-18
+
+### Fixed
+- **ViewModelBase** — added `InitializeAsync` helper method that wraps
+  fire-and-forget async calls with structured error handling. Exceptions
+  from async initialization are now caught and logged via Serilog instead
+  of becoming unobserved task exceptions (CQ-M3).
+- **12 ViewModels** — replaced `_ = InitAsync()` fire-and-forget pattern
+  with `InitializeAsync(InitAsync)` in: AboutViewModel, BatteryHealthViewModel,
+  CleanupViewModel, DashboardViewModel, DeepCleanupViewModel,
+  PerformanceViewModel, ProcessManagerViewModel, ServicesViewModel,
+  SpeedTestViewModel, StartupViewModel, SystemHealthViewModel,
+  WindowsUpdateViewModel.
+
 ## [0.48.29] - 2026-05-18
 
 ### Changed

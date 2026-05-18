@@ -47,7 +47,7 @@ public partial class AboutViewModel : ViewModelBase
     public AboutViewModel(UpdateService updates)
     {
         _updates = updates;
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     private async Task InitAsync()

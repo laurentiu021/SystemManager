@@ -50,7 +50,7 @@ public partial class SystemHealthViewModel : ViewModelBase
         IsElevated = AdminHelper.IsElevated();
         _runner.LineReceived += OnRunnerLineReceived;
 
-        _ = InitAsync();
+        InitializeAsync(InitAsync);
     }
 
     private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);

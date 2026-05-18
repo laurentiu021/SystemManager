@@ -274,23 +274,10 @@ public partial class SystemHealthViewModel : ViewModelBase
             void OnLine(PowerShellLine l) => captured.Add(l.Text);
             _runner.LineReceived += OnLine;
 
-            System.Text.Encoding oemEncoding;
-            try
-            {
-                oemEncoding = System.Text.Encoding.GetEncoding(
-                    System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
-            }
-            catch (NotSupportedException)
-            {
-                // Code page (e.g. 437) may not be registered on some systems;
-                // fall back to UTF-8 which handles chkdsk output safely.
-                oemEncoding = System.Text.Encoding.UTF8;
-            }
-
             int exit;
             try
             {
-                exit = await _runner.RunProcessAsync("chkdsk.exe", $"{driveLetter} /scan", ct, oemEncoding);
+                exit = await _runner.RunProcessAsync("chkdsk.exe", $"{driveLetter} /scan", ct, PowerShellRunner.OemEncoding);
             }
             finally { _runner.LineReceived -= OnLine; }
 

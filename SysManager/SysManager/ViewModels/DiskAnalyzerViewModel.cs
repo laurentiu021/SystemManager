@@ -227,11 +227,5 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
         HasDriveInfo = false;
     }
 
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1L << 30 => $"{bytes / (double)(1L << 30):F1} GB",
-        >= 1L << 20 => $"{bytes / (double)(1L << 20):F1} MB",
-        >= 1L << 10 => $"{bytes / (double)(1L << 10):F1} KB",
-        _ => $"{bytes} B"
-    };
+    private static string FormatSize(long bytes) => Helpers.FormatHelper.FormatSize(bytes);
 }

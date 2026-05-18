@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.31] - 2026-05-18
+
+### Changed
+- **Test parallelism** — enabled `parallelizeTestCollections` in xunit.runner.json
+  so pure-logic unit tests run concurrently, reducing CI test time. Tests that
+  touch shared OS resources remain serialized via `[Collection("Network")]`
+  (TEST-M4).
+- **Mocking framework** — added NSubstitute 5.3 to the test project, enabling
+  interface-based mocking for future tests that need to isolate OS dependencies
+  (TEST-H1).
+- **TESTING.md** — documented test infrastructure (frameworks, parallelism
+  strategy, conventions for mocking and time-dependent tests).
+
 ## [0.48.30] - 2026-05-18
 
 ### Fixed

@@ -65,7 +65,9 @@ public sealed class SystemInfoService
                 var uptime = TimeSpan.Zero;
                 if (!string.IsNullOrEmpty(lastBootRaw))
                 {
-                    try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); } catch (FormatException) { } catch (InvalidCastException) { }
+                    try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
+                    catch (FormatException) { /* WMI date string malformed — keep zero uptime */ }
+                    catch (InvalidCastException) { /* WMI returned unexpected type — keep zero uptime */ }
                 }
                 return new OsInfo(caption, version, build, uptime, arch);
             }
@@ -85,8 +87,8 @@ public sealed class SystemInfoService
                 if (!string.IsNullOrEmpty(lastBootRaw))
                 {
                     try { return DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
-                    catch (FormatException) { }
-                    catch (InvalidCastException) { }
+                    catch (FormatException) { /* WMI date string malformed — fall through to zero */ }
+                    catch (InvalidCastException) { /* WMI returned unexpected type — fall through to zero */ }
                 }
             }
         }

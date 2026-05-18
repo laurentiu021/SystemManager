@@ -157,11 +157,13 @@ public partial class UninstallerViewModel : ViewModelBase
     [RelayCommand]
     private void SelectAll()
     {
-        if (FilteredApps.Count > 20 && string.IsNullOrWhiteSpace(FilterText))
-        {
-            if (!DialogService.Instance.Confirm(
+        if (FilteredApps.Count > 20
+            && string.IsNullOrWhiteSpace(FilterText)
+            && !DialogService.Instance.Confirm(
                 $"This will select all {FilteredApps.Count} applications.\n\nUse the filter to narrow down the list first.\nAre you sure you want to select all?",
-                "Select all apps")) return;
+                "Select all apps"))
+        {
+            return;
         }
 
         foreach (var app in FilteredApps) app.IsSelected = true;

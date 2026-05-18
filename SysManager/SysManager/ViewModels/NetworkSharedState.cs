@@ -350,9 +350,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             touched.Add(sample.Host);
         }
 
-        foreach (var host in touched)
+        foreach (var host in touched.Where(h => Buffers.ContainsKey(h)))
         {
-            if (!Buffers.TryGetValue(host, out var buffer)) continue;
+            var buffer = Buffers[host];
             TrimBuffer(buffer);
             var target = Targets.FirstOrDefault(t => t.Host == host);
             if (target == null) continue;

@@ -18,7 +18,7 @@ public sealed class SpeedTestHistoryService
 {
     public const int MaxPerEngine = 20;
 
-    private static readonly string HistoryPath = Path.Combine(
+    private static readonly string HistoryPath = Path.Join(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SysManager", "speedtest-history.json");
 

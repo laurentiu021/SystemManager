@@ -67,23 +67,16 @@ public sealed class HealthScoreService
         bool hasBattery = battery?.HasBattery ?? false;
 
         // Weighted average
-        int overall;
-        if (hasBattery)
-        {
-            overall = (int)Math.Round(
+        int overall = hasBattery
+            ? (int)Math.Round(
                 diskScore * 0.35 +
                 ramScore * 0.25 +
                 uptimeScore * 0.20 +
-                batteryScore * 0.20);
-        }
-        else
-        {
-            // No battery — redistribute weight: disk 40%, RAM 30%, uptime 30%
-            overall = (int)Math.Round(
+                batteryScore * 0.20)
+            : (int)Math.Round(
                 diskScore * 0.40 +
                 ramScore * 0.30 +
                 uptimeScore * 0.30);
-        }
 
         overall = Math.Clamp(overall, 0, 100);
 
@@ -110,18 +103,13 @@ public sealed class HealthScoreService
         if (disks == null || disks.Count == 0) return 100;
 
         // Use the worst disk's health percentage, or map status string
-        int worstScore = 100;
-        foreach (var d in disks)
+        int worstScore = disks.Select(d => d.HealthPercent ?? d.HealthStatus switch
         {
-            int score = d.HealthPercent ?? d.HealthStatus switch
-            {
-                "Healthy" => 100,
-                "Warning" => 50,
-                "Unhealthy" => 20,
-                _ => 80
-            };
-            if (score < worstScore) worstScore = score;
-        }
+            "Healthy" => 100,
+            "Warning" => 50,
+            "Unhealthy" => 20,
+            _ => 80
+        }).Min();
         return Math.Clamp(worstScore, 0, 100);
     }
 

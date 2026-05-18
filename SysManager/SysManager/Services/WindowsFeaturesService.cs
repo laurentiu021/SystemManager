@@ -116,10 +116,8 @@ public sealed partial class WindowsFeaturesService
     {
         var features = new List<WindowsFeature>();
 
-        foreach (var line in lines)
+        foreach (var line in lines.Where(l => !string.IsNullOrWhiteSpace(l)))
         {
-            if (string.IsNullOrWhiteSpace(line)) continue;
-
             var parts = line.Split('|', 2);
             if (parts.Length < 2) continue;
 

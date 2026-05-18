@@ -269,7 +269,7 @@ public sealed partial class UninstallerService
             var systemDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
             var resolvedName = exeFileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
                 ? exeFileName : exeFileName + ".exe";
-            exe = System.IO.Path.Combine(systemDir, resolvedName);
+            exe = System.IO.Path.Join(systemDir, resolvedName);
         }
         else
         {
@@ -287,20 +287,7 @@ public sealed partial class UninstallerService
             // so we must not execute arbitrary paths. Allow: Program Files, Windows,
             // ProgramData, and LocalApplicationData (per-user installs like VS Code).
             var fullPath = System.IO.Path.GetFullPath(exe);
-            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            var winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-            var progData = Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData";
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-
-            var isTrustedPath =
-                (!string.IsNullOrEmpty(pf) && fullPath.StartsWith(pf, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrEmpty(pfx86) && fullPath.StartsWith(pfx86, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrEmpty(winDir) && fullPath.StartsWith(winDir, StringComparison.OrdinalIgnoreCase)) ||
-                fullPath.StartsWith(progData, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrEmpty(localAppData) && fullPath.StartsWith(localAppData, StringComparison.OrdinalIgnoreCase));
-
-            if (!isTrustedPath)
+            if (!IsUnderTrustedDirectory(fullPath))
                 throw new InvalidOperationException(
                     $"Uninstall executable is outside trusted directories: '{exe}'. Refusing to run for security.");
         }
@@ -398,5 +385,28 @@ public sealed partial class UninstallerService
         // could execute arbitrary commands if the string was crafted.
         throw new InvalidOperationException(
             $"Cannot safely parse uninstall command — no valid executable found: '{command}'");
+    }
+
+    /// <summary>
+    /// Checks whether the given absolute path resides under a trusted system directory
+    /// (Program Files, Windows, ProgramData, or LocalApplicationData).
+    /// </summary>
+    private static bool IsUnderTrustedDirectory(string fullPath)
+    {
+        var trustedDirs = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData",
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+        };
+
+        foreach (var dir in trustedDirs)
+        {
+            if (!string.IsNullOrEmpty(dir) && fullPath.StartsWith(dir, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 }

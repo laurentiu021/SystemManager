@@ -402,11 +402,8 @@ public sealed partial class UninstallerService
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         };
 
-        foreach (var dir in trustedDirs)
-        {
-            if (!string.IsNullOrEmpty(dir) && fullPath.StartsWith(dir, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
+        return trustedDirs.Any(dir =>
+            !string.IsNullOrEmpty(dir) &&
+            fullPath.StartsWith(dir, StringComparison.OrdinalIgnoreCase));
     }
 }

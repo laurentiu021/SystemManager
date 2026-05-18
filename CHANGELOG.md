@@ -8,7 +8,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.48.33] - 2026-05-18
 
-### Changed
+### Fixed
+- **CodeQL** — resolved 5 remaining source code alerts:
+  - Replaced generic `catch (Exception)` in `ViewModelBase.InitializeAsync`
+    with specific exception types (`InvalidOperationException`,
+    `UnauthorizedAccessException`, `IOException`, `HttpRequestException`,
+    `TimeoutException`).
+  - Converted `UninstallerService.IsUnderTrustedDirectory` foreach+if to
+    LINQ `.Any()` (cs/linq/missed-where).
+  - Converted `WindowsFeaturesService.ParseFeatureList` foreach loop to
+    LINQ `.Select().Where()` pipeline (cs/linq/missed-select).
+  - Extracted `ProcessManagerViewModel.MatchesFilter` complex condition into
+    three focused helper methods (cs/complex-condition).
+  - Replaced `Path.Combine` with `Path.Join` in `UpdateService.DownloadAsync`
+    (cs/path-combine).
+- **CodeQL workflow** — added query filter to suppress `cs/call-to-obsolete-method`
+  for `UpdateService.VerifyAuthenticode` (intentional use of `CreateFromSignedFile`
+  — no modern .NET replacement exists without P/Invoke).
+
+## [0.48.32] - 2026-05-18
+
+### Fixed
 - **ConsoleViewModel** — buffer trimming now uses clear-and-rebuild when
   removing more than 25% of lines, reducing worst-case from O(n×excess)
   to O(n) (CQ-LOW: ConsoleViewModel O(n²)).
@@ -16,7 +36,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in batches of 50 instead of one-at-a-time, reducing dispatcher overhead
   by ~98% when loading large event logs (CQ-LOW: LogsViewModel batch dispatch).
 
-## [0.48.32] - 2026-05-18
+## [0.48.31] - 2026-05-18
 
 ### Fixed
 - **FormatSize duplication** — extracted shared `FormatHelper.FormatSize` method;
@@ -25,8 +45,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **OEM encoding duplication** — `CleanupViewModel` (SFC + DISM) and
   `SystemHealthViewModel` (chkdsk) now use `PowerShellRunner.OemEncoding`
   instead of duplicating the encoding resolution logic inline.
-
-## [0.48.31] - 2026-05-18
 
 ### Changed
 - **Test parallelism** — enabled `parallelizeTestCollections` in xunit.runner.json

@@ -114,32 +114,32 @@ public sealed partial class WindowsFeaturesService
     /// <summary>Parses the pipe-delimited feature list output.</summary>
     internal static List<WindowsFeature> ParseFeatureList(List<string> lines)
     {
-        var features = new List<WindowsFeature>();
-
-        foreach (var line in lines.Where(l => !string.IsNullOrWhiteSpace(l)))
-        {
-            var parts = line.Split('|', 2);
-            if (parts.Length < 2) continue;
-
-            var name = parts[0].Trim();
-            var state = parts[1].Trim();
-
-            if (string.IsNullOrWhiteSpace(name)) continue;
-
-            var isEnabled = state.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
-
-            features.Add(new WindowsFeature
+        return lines
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .Select(line =>
             {
-                Name = name,
-                DisplayName = HumanizeName(name),
-                IsEnabled = isEnabled,
-                Category = WindowsFeature.CategorizeFeature(name)
-            });
-        }
+                var parts = line.Split('|', 2);
+                if (parts.Length < 2) return null;
 
-        return features.OrderBy(f => f.Category)
-                       .ThenBy(f => f.DisplayName)
-                       .ToList();
+                var name = parts[0].Trim();
+                var state = parts[1].Trim();
+
+                if (string.IsNullOrWhiteSpace(name)) return null;
+
+                var isEnabled = state.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
+
+                return new WindowsFeature
+                {
+                    Name = name,
+                    DisplayName = HumanizeName(name),
+                    IsEnabled = isEnabled,
+                    Category = WindowsFeature.CategorizeFeature(name)
+                };
+            })
+            .Where(f => f is not null)
+            .OrderBy(f => f!.Category)
+            .ThenBy(f => f!.DisplayName)
+            .ToList()!;
     }
 
     /// <summary>

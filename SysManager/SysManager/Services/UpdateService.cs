@@ -141,7 +141,7 @@ public sealed class UpdateService
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysManager", "updates");
         Directory.CreateDirectory(dir);
-        var target = Path.Combine(dir, $"SysManager-{rel.Version}.exe");
+        var target = Path.Join(dir, $"SysManager-{rel.Version}.exe");
 
         // SEC-M2: Skip re-download only if we have a cached hash that matches.
         // File size alone is insufficient — an attacker could replace the binary

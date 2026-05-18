@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.33] - 2026-05-18
+
+### Changed
+- **ConsoleViewModel** — buffer trimming now uses clear-and-rebuild when
+  removing more than 25% of lines, reducing worst-case from O(n×excess)
+  to O(n) (CQ-LOW: ConsoleViewModel O(n²)).
+- **LogsViewModel** — event log entries are now dispatched to the UI thread
+  in batches of 50 instead of one-at-a-time, reducing dispatcher overhead
+  by ~98% when loading large event logs (CQ-LOW: LogsViewModel batch dispatch).
+
 ## [0.48.32] - 2026-05-18
 
 ### Fixed

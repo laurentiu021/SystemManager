@@ -3,3 +3,11 @@ name: "SysManager CodeQL Configuration"
 paths-ignore:
   - '**/obj/**'
   - '**/bin/**'
+
+query-filters:
+  # Intentional use of CreateFromSignedFile for Authenticode verification —
+  # no modern .NET replacement exists without P/Invoke. Already suppressed
+  # with #pragma warning disable SYSLIB0057.
+  - exclude:
+      id: cs/call-to-obsolete-method
+      path: SysManager/SysManager/Services/UpdateService.cs

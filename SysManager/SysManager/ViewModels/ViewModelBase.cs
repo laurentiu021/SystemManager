@@ -31,9 +31,25 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
         {
             // Expected during shutdown — no action needed.
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            Log.Error(ex, "Unhandled exception in async initialization of {Caller}", callerName);
+            Log.Error(ex, "Invalid operation in async initialization of {Caller}", callerName);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Error(ex, "Access denied in async initialization of {Caller}", callerName);
+        }
+        catch (System.IO.IOException ex)
+        {
+            Log.Error(ex, "I/O error in async initialization of {Caller}", callerName);
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Log.Error(ex, "Network error in async initialization of {Caller}", callerName);
+        }
+        catch (TimeoutException ex)
+        {
+            Log.Error(ex, "Timeout in async initialization of {Caller}", callerName);
         }
     }
 

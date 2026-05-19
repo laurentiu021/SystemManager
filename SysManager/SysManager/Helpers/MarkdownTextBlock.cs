@@ -85,6 +85,9 @@ public static class MarkdownTextBlock
     private static readonly Regex InlineFormattingRegex = new(
         @"\*\*(.+?)\*\*|`([^`]+)`", RegexOptions.Compiled);
 
+    // PERF-007: Cache FontFamily to avoid allocating a new instance per code span render.
+    private static readonly FontFamily CodeFontFamily = new("Consolas");
+
     /// <summary>
     /// Parses a single line for **bold** and `code` inline formatting
     /// and appends the resulting Inlines to the TextBlock.
@@ -111,7 +114,7 @@ public static class MarkdownTextBlock
                 // `code`
                 tb.Inlines.Add(new Run(m.Groups[2].Value)
                 {
-                    FontFamily = new FontFamily("Consolas"),
+                    FontFamily = CodeFontFamily,
                     Foreground = Application.Current?.TryFindResource("Accent") as Brush ?? Brushes.CornflowerBlue
                 });
             }

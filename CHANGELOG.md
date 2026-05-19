@@ -14,6 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   resources: series paints (stroke, geometry, fill), axis paints (name, labels,
   separators), and class-level legend/tooltip paints. Previously only typefaces
   were disposed, leaking unmanaged `SKPaint` handles.
+- **DiskHealthReport** — fixed potential integer overflow in `HealthPercent`
+  calculation when `ReadErrors` or `WriteErrors` exceed `int.MaxValue`; arithmetic
+  now uses `long` before clamping to the 0–20 deduction cap.
+- **SpeedTestService** — documented pinned Ookla CLI version (`1.2.0`) with
+  maintenance comment explaining update procedure and Authenticode verification.
 
 ### Added
 - **ServicesViewModelTests** — 20 unit tests covering ApplyFilter logic: category

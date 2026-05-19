@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.34] - 2026-05-19
+
 ### Fixed
 - **PerformanceService** — implemented `IDisposable` to properly dispose the
   internal `SemaphoreSlim` gate, preventing resource leaks on app shutdown.

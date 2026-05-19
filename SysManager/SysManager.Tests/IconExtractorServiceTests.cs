@@ -114,11 +114,14 @@ public class IconExtractorServiceTests
     public void GetIcon_SamePath_UsesCachedResult()
     {
         IconExtractorService.ClearCache();
-        var bogus = @"C:\NonExistent\CacheTest12345.exe";
+        // Use a GUID-based path to avoid interference from parallel tests.
+        var bogus = @"C:\NonExistent\CacheTest_" + Guid.NewGuid().ToString("N") + ".exe";
         _ = IconExtractorService.GetIcon(bogus);
         var countAfterFirst = IconExtractorService.CacheCount;
         _ = IconExtractorService.GetIcon(bogus);
-        Assert.Equal(countAfterFirst, IconExtractorService.CacheCount);
+        var countAfterSecond = IconExtractorService.CacheCount;
+        // Second call to the same path must not increase the cache count.
+        Assert.Equal(countAfterFirst, countAfterSecond);
     }
 
     // ── Model Icon property defaults ──

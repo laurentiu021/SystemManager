@@ -452,10 +452,12 @@ and elevation state in a format ready to paste into a bug report.
 
 - .NET 9 (WPF, C# 13)
 - CommunityToolkit.Mvvm for MVVM plumbing
+- Microsoft.Extensions.DependencyInjection for IoC
 - ModernWpfUI for the modern title bar
 - LiveCharts2 for the real-time latency chart
+- H.NotifyIcon.Wpf for system tray integration
 - Serilog for structured logging
-- xUnit and FlaUI for unit, integration, and UI-automation tests
+- xUnit, NSubstitute, and FlaUI for unit, integration, and UI-automation tests
 
 ## Privacy
 

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **OperationLockServiceTests** — replaced flaky `Barrier` + `Thread.Sleep`
+  thread-safety test with deterministic `CountdownEvent` + `ManualResetEventSlim`
+  synchronization; asserts exactly 1 acquisition instead of `>= 1`.
+
+### Changed
+- **README.md** — added missing tech stack entries: Microsoft.Extensions.DependencyInjection,
+  H.NotifyIcon.Wpf, NSubstitute.
+
 ## [0.48.34] - 2026-05-19
 
 ### Fixed

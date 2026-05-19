@@ -165,10 +165,16 @@ public partial class ProcessManagerViewModel : ViewModelBase
     private static bool MatchesName(ProcessEntry p, string filter) =>
         p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase);
 
-    private static bool MatchesDescription(ProcessEntry p, string filter) =>
-        (p.Description?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
-        (p.PlainDescription?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false) ||
-        (p.Category?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
+    private static bool MatchesDescription(ProcessEntry p, string filter)
+    {
+        ReadOnlySpan<string?> fields = [p.Description, p.PlainDescription, p.Category];
+        foreach (var field in fields)
+        {
+            if (field?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true)
+                return true;
+        }
+        return false;
+    }
 
     private static bool MatchesPid(ProcessEntry p, string filter) =>
         p.Pid.ToString().Contains(filter);

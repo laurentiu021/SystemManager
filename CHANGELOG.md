@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **PerformanceService** — implemented `IDisposable` to properly dispose the
+  internal `SemaphoreSlim` gate, preventing resource leaks on app shutdown.
+
+### Changed
+- **README.md** — corrected sidebar tab counts (56 total, 25 implemented).
+- **ARCHITECTURE.md** — removed false claim that TuneUpService and
+  ShortcutCleanerService are instantiated directly (both are registered in DI).
+- **ARCHITECTURE.md** — added 9 missing services to the Key services section
+  (AppAlertService, AppBlockerService, BatteryService, DialogService,
+  IconExtractorService, OperationLockService, ProcessDescriptionService,
+  SpeedTestHistoryService, ShortcutCleanerService).
+
 ## [0.48.33] - 2026-05-18
 
 ### Fixed

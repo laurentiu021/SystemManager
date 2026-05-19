@@ -132,15 +132,31 @@ Key services:
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming
   recommendations, start/stop/disable with admin checks.
+- `AppAlertService` — monitors installed apps for available updates and
+  surfaces alerts on the dashboard.
+- `AppBlockerService` — blocks/unblocks app execution via Image File
+  Execution Options (IFEO) debugger redirect.
+- `BatteryService` — battery health, charge cycles, wear level, and
+  power report generation via WMI and `powercfg /batteryreport`.
+- `DialogService` — centralized confirmation/message dialogs (replaces
+  direct MessageBox calls for testability).
+- `IconExtractorService` — extracts application icons from executables
+  for display in process/app lists; caches results.
+- `OperationLockService` — prevents concurrent destructive operations
+  via named semaphore acquisition with timeout.
+- `ProcessDescriptionService` — enriches process entries with friendly
+  descriptions from file version info and known-process database.
+- `SpeedTestHistoryService` — persists speed test results to JSON for
+  historical charting and trend analysis.
+- `ShortcutCleanerService` — scans Start Menu and Desktop for broken
+  shortcuts (dead targets) and offers safe removal.
 
 ## Dependency Injection
 
 `ServiceRegistration.cs` configures `Microsoft.Extensions.DependencyInjection`.
 `App.OnStartup` builds the `IServiceProvider` and exposes it as `App.Services`.
 Core services and ViewModels are registered as singletons — one shared instance
-per app lifetime. Some lightweight services (e.g. `TuneUpService`,
-`ShortcutCleanerService`) are instantiated directly by their consumers rather
-than registered in the container. `MainWindowViewModel` resolves child VMs from
+per app lifetime. `MainWindowViewModel` resolves child VMs from
 the container at runtime; falls back to manual creation in tests (no DI
 dependency in the test project).
 

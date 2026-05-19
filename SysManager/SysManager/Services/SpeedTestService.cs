@@ -310,6 +310,10 @@ public sealed class SpeedTestService
 
         progress?.Report((5, "Downloading Ookla CLI…"));
         var arch = Environment.Is64BitOperatingSystem ? "win64" : "win32";
+        // MAINTENANCE: Ookla CLI version is pinned. When a new version is released,
+        // update the version string below. Check https://www.speedtest.net/apps/cli
+        // for the latest version. Authenticode signature verification (below) ensures
+        // binary integrity regardless of version.
         var zipUrl = $"https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-{arch}.zip";
 
         var zipPath = Path.Join(toolsDir, "ookla.zip");

@@ -74,8 +74,8 @@ public partial class DiskHealthReport : ObservableObject
                 else if (TemperatureC.Value > 50) score -= 5;
             }
 
-            if (ReadErrors is > 0) score -= Math.Min((int)ReadErrors.Value * 5, 20);
-            if (WriteErrors is > 0) score -= Math.Min((int)WriteErrors.Value * 5, 20);
+            if (ReadErrors is > 0) score -= (int)Math.Min(ReadErrors.Value * 5L, 20L);
+            if (WriteErrors is > 0) score -= (int)Math.Min(WriteErrors.Value * 5L, 20L);
 
             if (!WearPercent.HasValue && !TemperatureC.HasValue && ReadErrors is null && WriteErrors is null)
             {

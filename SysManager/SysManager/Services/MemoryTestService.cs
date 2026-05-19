@@ -103,16 +103,19 @@ public sealed class MemoryTestService
                     "SELECT BankLabel, DeviceLocator, Manufacturer, Capacity, Speed, ConfiguredClockSpeed, PartNumber FROM Win32_PhysicalMemory");
                 foreach (ManagementObject mo in s.Get())
                 {
-                    double cap = Convert.ToDouble(mo["Capacity"] ?? 0) / 1024d / 1024d / 1024d;
-                    list.Add(new MemoryModuleHealth
+                    using (mo)
                     {
-                        Slot = mo["DeviceLocator"]?.ToString() ?? mo["BankLabel"]?.ToString() ?? "",
-                        Manufacturer = (mo["Manufacturer"]?.ToString() ?? "").Trim(),
-                        CapacityGB = Math.Round(cap, 0),
-                        SpeedMHz = Convert.ToUInt32(mo["Speed"] ?? 0u),
-                        ConfiguredSpeedMHz = Convert.ToUInt32(mo["ConfiguredClockSpeed"] ?? 0u),
-                        PartNumber = (mo["PartNumber"]?.ToString() ?? "").Trim()
-                    });
+                        double cap = Convert.ToDouble(mo["Capacity"] ?? 0) / 1024d / 1024d / 1024d;
+                        list.Add(new MemoryModuleHealth
+                        {
+                            Slot = mo["DeviceLocator"]?.ToString() ?? mo["BankLabel"]?.ToString() ?? "",
+                            Manufacturer = (mo["Manufacturer"]?.ToString() ?? "").Trim(),
+                            CapacityGB = Math.Round(cap, 0),
+                            SpeedMHz = Convert.ToUInt32(mo["Speed"] ?? 0u),
+                            ConfiguredSpeedMHz = Convert.ToUInt32(mo["ConfiguredClockSpeed"] ?? 0u),
+                            PartNumber = (mo["PartNumber"]?.ToString() ?? "").Trim()
+                        });
+                    }
                 }
             }
             catch (ManagementException) { /* WMI class not available */ }

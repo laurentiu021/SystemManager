@@ -95,14 +95,19 @@ public class OperationLockServiceTests
         int successCount = 0;
         var ready = new CountdownEvent(10);
         var go = new ManualResetEventSlim(false);
+        var allTried = new CountdownEvent(10);
 
         var tasks = Enumerable.Range(0, 10).Select(_ => Task.Run(() =>
         {
             ready.Signal();
             go.Wait();
-            using var handle = Sut.TryAcquire(OperationCategory.SystemModification, "Race");
+            var handle = Sut.TryAcquire(OperationCategory.SystemModification, "Race");
             if (handle != null)
                 Interlocked.Increment(ref successCount);
+            // Wait until all threads have attempted acquisition before releasing
+            allTried.Signal();
+            allTried.Wait();
+            handle?.Dispose();
         })).ToArray();
 
         ready.Wait();

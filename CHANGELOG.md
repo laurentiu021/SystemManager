@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **ServicesViewModelTests** — 20 unit tests covering ApplyFilter logic: category
+  filters (All, Running, Stopped, Safe to disable, Advanced), text search by name/
+  display name/description, combined filters, sort order, empty data, and property
+  change triggers.
+
 ## [0.48.35] - 2026-05-19
 
 ### Fixed

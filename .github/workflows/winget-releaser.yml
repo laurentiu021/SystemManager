@@ -1,0 +1,19 @@
+# Automatically submit new releases to winget-pkgs
+# Triggers on every published GitHub Release and creates a PR on microsoft/winget-pkgs
+
+name: Winget Releaser
+
+on:
+  release:
+    types: [released]
+
+jobs:
+  winget-update:
+    name: Update winget package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: laurentiu021.SysManager
+          installers-regex: '\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}

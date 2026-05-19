@@ -22,6 +22,7 @@
             <h:OutputKindToBrushConverter x:Key="KindBrush"/>
             <h:ProcessStatusToBrushConverter x:Key="StatusBrush"/>
             <h:IntGreaterThanZeroConverter x:Key="GreaterThanZero"/>
+            <h:EqualityConverter x:Key="IsEqual"/>
 
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="TrueValue">True</sys:Boolean>
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="FalseValue">False</sys:Boolean>

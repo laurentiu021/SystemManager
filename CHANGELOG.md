@@ -7,11 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **ProcessManagerViewModel** — resolved CodeQL `cs/complex-condition` alert (#302)
+  by replacing chained null-conditional `||` expression with a `ReadOnlySpan` loop
+  in `MatchesDescription`.
+- **PerformanceView** — eliminated MVVM violation: removed `PropertyChanged`
+  subscription and `Checked` event handler from code-behind; radio buttons now use
+  two-way `EqualityConverter` binding to `SelectedPlan` (pure XAML, no code-behind
+  logic).
 - **OperationLockServiceTests** — replaced flaky `Barrier` + `Thread.Sleep`
   thread-safety test with deterministic `CountdownEvent` + `ManualResetEventSlim`
   synchronization; asserts exactly 1 acquisition instead of `>= 1`.
 
 ### Added
+- **EqualityConverter** — reusable two-way `IValueConverter` that compares a bound
+  value to `ConverterParameter`; ideal for radio button groups bound to a string
+  property.
+- **EqualityConverterTests** — 10 unit tests covering Convert/ConvertBack, null
+  handling, and case sensitivity.
 - **FormatHelperTests** — 14 unit tests covering `FormatSize` at all boundaries
   (bytes, KB, MB, GB) with exact boundary and mid-range values.
 

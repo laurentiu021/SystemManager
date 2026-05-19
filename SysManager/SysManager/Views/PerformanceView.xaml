@@ -61,15 +61,15 @@
                             <RadioButton x:Name="RbBalanced"
                                          Content="Balanced (default — recommended for laptops)"
                                          GroupName="PowerPlan" Margin="0,0,0,8"
-                                         Tag="balanced" Checked="PowerPlan_Checked"/>
+                                         IsChecked="{Binding SelectedPlan, Converter={StaticResource IsEqual}, ConverterParameter=balanced}"/>
                             <RadioButton x:Name="RbHigh"
                                          Content="High Performance"
                                          GroupName="PowerPlan" Margin="0,0,0,8"
-                                         Tag="high" Checked="PowerPlan_Checked"/>
+                                         IsChecked="{Binding SelectedPlan, Converter={StaticResource IsEqual}, ConverterParameter=high}"/>
                             <RadioButton x:Name="RbUltimate"
                                          Content="Ultimate Performance (max clocks, no throttling)"
                                          GroupName="PowerPlan" Margin="0,0,0,12"
-                                         Tag="ultimate" Checked="PowerPlan_Checked"/>
+                                         IsChecked="{Binding SelectedPlan, Converter={StaticResource IsEqual}, ConverterParameter=ultimate}"/>
                             <Button Content="Apply Power Plan" Command="{Binding ApplyPowerPlanCommand}"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                         </StackPanel>

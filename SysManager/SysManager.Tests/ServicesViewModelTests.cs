@@ -29,6 +29,10 @@ public class ServicesViewModelTests
         var vm = new ServicesViewModel();
         var field = typeof(ServicesViewModel).GetField("_allServices", BindingFlags.NonPublic | BindingFlags.Instance)!;
         field.SetValue(vm, services ?? TestServices);
+
+        // Trigger ApplyFilter so the Services collection reflects the injected data.
+        var applyFilter = typeof(ServicesViewModel).GetMethod("ApplyFilter", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        applyFilter.Invoke(vm, null);
         return vm;
     }
 

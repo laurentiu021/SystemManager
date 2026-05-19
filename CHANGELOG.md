@@ -11,6 +11,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   thread-safety test with deterministic `CountdownEvent` + `ManualResetEventSlim`
   synchronization; asserts exactly 1 acquisition instead of `>= 1`.
 
+### Added
+- **FormatHelperTests** — 14 unit tests covering `FormatSize` at all boundaries
+  (bytes, KB, MB, GB) with exact boundary and mid-range values.
+
 ### Changed
 - **README.md** — added missing tech stack entries: Microsoft.Extensions.DependencyInjection,
   H.NotifyIcon.Wpf, NSubstitute.

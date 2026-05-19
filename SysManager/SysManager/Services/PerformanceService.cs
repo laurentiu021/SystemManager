@@ -24,10 +24,11 @@ namespace SysManager.Services;
 /// • NVIDIA GPU subkey is auto-detected (not hardcoded to 0000).
 /// • Visual effects use SystemParametersInfo (instant), not registry-only.
 /// </summary>
-public sealed class PerformanceService
+public sealed class PerformanceService : IDisposable
 {
     private readonly PowerShellRunner _ps;
     private readonly SemaphoreSlim _psGate = new(1, 1);
+    private bool _disposed;
 
     // ── Well-known power plan GUIDs ──
     internal const string BalancedGuid = "381b4222-f694-41f0-9685-ff5bb260df2e";
@@ -617,5 +618,13 @@ public sealed class PerformanceService
 
         // Processor state
         await SetProcessorMinStateAsync(snapshot.ProcessorMinPercentAc, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _psGate.Dispose();
     }
 }

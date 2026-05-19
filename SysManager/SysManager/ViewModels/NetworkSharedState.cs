@@ -260,6 +260,13 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             (line.GeometryFill as IDisposable)?.Dispose();
             (line.Fill as IDisposable)?.Dispose();
         }
+        else if (series is LineSeries<ObservablePoint> traceLine)
+        {
+            (traceLine.Stroke as IDisposable)?.Dispose();
+            (traceLine.GeometryStroke as IDisposable)?.Dispose();
+            (traceLine.GeometryFill as IDisposable)?.Dispose();
+            (traceLine.Fill as IDisposable)?.Dispose();
+        }
     }
 
     public void ClearHistory()
@@ -551,10 +558,31 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         TraceMonitor.Dispose();
         FlushTimer?.Stop();
 
-        // Dispose SKTypeface (unmanaged SkiaSharp memory) — LEAK-003
+        // Dispose series paint objects (unmanaged SkiaSharp handles)
+        foreach (var series in LatencySeries) DisposeSeries(series);
+        foreach (var series in TraceSeries) DisposeSeries(series);
+
+        // Dispose axis paint objects
+        DisposeAxisPaints(LatencyXAxes);
+        DisposeAxisPaints(LatencyYAxes);
+        DisposeAxisPaints(TraceXAxes);
+        DisposeAxisPaints(TraceYAxes);
+
+        // Dispose class-level paint objects and their typefaces
         LegendTextPaint.SKTypeface?.Dispose();
-        LegendBackgroundPaint.SKTypeface?.Dispose();
-        TooltipTextPaint.SKTypeface?.Dispose();
-        TooltipBackgroundPaint.SKTypeface?.Dispose();
+        (LegendTextPaint as IDisposable)?.Dispose();
+        (LegendBackgroundPaint as IDisposable)?.Dispose();
+        (TooltipTextPaint as IDisposable)?.Dispose();
+        (TooltipBackgroundPaint as IDisposable)?.Dispose();
+    }
+
+    private static void DisposeAxisPaints(Axis[] axes)
+    {
+        foreach (var axis in axes)
+        {
+            (axis.NamePaint as IDisposable)?.Dispose();
+            (axis.LabelsPaint as IDisposable)?.Dispose();
+            (axis.SeparatorsPaint as IDisposable)?.Dispose();
+        }
     }
 }

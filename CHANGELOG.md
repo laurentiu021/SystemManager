@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **MemoryTestService** — `ManagementObject` instances in `GetModulesAsync` WMI
+  query are now properly disposed via `using (mo)` block, preventing native handle
+  leaks when enumerating physical memory modules.
+- **NetworkSharedState** — `Dispose()` now fully releases all SkiaSharp paint
+  resources: series paints (stroke, geometry, fill), axis paints (name, labels,
+  separators), and class-level legend/tooltip paints. Previously only typefaces
+  were disposed, leaking unmanaged `SKPaint` handles.
+
 ### Added
 - **ServicesViewModelTests** — 20 unit tests covering ApplyFilter logic: category
   filters (All, Running, Stopped, Safe to disable, Advanced), text search by name/

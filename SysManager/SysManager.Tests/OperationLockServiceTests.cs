@@ -93,20 +93,23 @@ public class OperationLockServiceTests
     public async Task TryAcquire_IsThreadSafe()
     {
         int successCount = 0;
-        var barrier = new Barrier(10);
+        var ready = new CountdownEvent(10);
+        var go = new ManualResetEventSlim(false);
 
         var tasks = Enumerable.Range(0, 10).Select(_ => Task.Run(() =>
         {
-            barrier.SignalAndWait();
-            using var handle = Sut.TryAcquire(OperationCategory.Network, "Race");
+            ready.Signal();
+            go.Wait();
+            using var handle = Sut.TryAcquire(OperationCategory.SystemModification, "Race");
             if (handle != null)
                 Interlocked.Increment(ref successCount);
-            Thread.Sleep(50);
         })).ToArray();
 
+        ready.Wait();
+        go.Set();
         await Task.WhenAll(tasks);
 
-        // Only one thread should have acquired the lock at a time
-        Assert.True(successCount >= 1);
+        // Exactly one thread should have acquired the lock
+        Assert.Equal(1, successCount);
     }
 }

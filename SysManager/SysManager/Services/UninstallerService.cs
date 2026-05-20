@@ -79,53 +79,19 @@ public sealed partial class UninstallerService
 
     internal static List<InstalledApp> ParseListTable(List<string> lines)
     {
-        var apps = new List<InstalledApp>();
+        var rows = Helpers.WingetTableParser.Parse(lines, ListHeaderPattern(), PackageSummaryPattern());
+        var apps = new List<InstalledApp>(rows.Count);
 
-        // Find header line: "Name   Id   Version  [Available]  Source"
-        int headerIdx = lines.FindIndex(l =>
-            ListHeaderPattern().IsMatch(l));
-        if (headerIdx < 0) return apps;
-
-        var header = lines[headerIdx];
-        int idxId = header.IndexOf("Id", StringComparison.OrdinalIgnoreCase);
-        int idxVersion = header.IndexOf("Version", StringComparison.OrdinalIgnoreCase);
-        int idxAvailable = header.IndexOf("Available", StringComparison.OrdinalIgnoreCase);
-        int idxSource = header.IndexOf("Source", StringComparison.OrdinalIgnoreCase);
-        if (idxId < 0 || idxVersion < 0) return apps;
-
-        // Version end boundary: Available if present, else Source, else line end
-        int versionEnd = idxAvailable > 0 ? idxAvailable
-                       : idxSource > 0 ? idxSource
-                       : -1;
-
-        for (int i = headerIdx + 2; i < lines.Count; i++)
+        foreach (var row in rows)
         {
-            var line = lines[i];
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            if (line.StartsWith("--")) continue;
-            // Stop at summary lines like "123 packages installed"
-            if (PackageSummaryPattern().IsMatch(line)) break;
-            if (line.Length < idxVersion) continue;
-
-            string Slice(int start, int end) =>
-                start < line.Length
-                    ? line[start..Math.Min(end < 0 ? line.Length : end, line.Length)].Trim()
-                    : string.Empty;
-
-            var name = Slice(0, idxId);
-            var id = Slice(idxId, idxVersion);
-            var version = Slice(idxVersion, versionEnd);
-            var source = idxSource > 0 ? Slice(idxSource, -1) : "";
-
-            if (string.IsNullOrWhiteSpace(id)) continue;
-            if (string.IsNullOrWhiteSpace(name) || name.Length < 2) continue;
+            if (string.IsNullOrWhiteSpace(row.Name) || row.Name.Length < 2) continue;
 
             apps.Add(new InstalledApp
             {
-                Name = name,
-                Id = id,
-                Version = version,
-                Source = string.IsNullOrWhiteSpace(source) ? "" : source,
+                Name = row.Name,
+                Id = row.Id,
+                Version = row.Version,
+                Source = string.IsNullOrWhiteSpace(row.Source) ? "" : row.Source,
                 Status = ""
             });
         }

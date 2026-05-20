@@ -65,8 +65,17 @@ public sealed partial class UninstallerService
     /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
     /// underscores, forward slashes, plus signs, and spaces. Max 256 chars.
     /// </summary>
-    [System.Text.RegularExpressions.GeneratedRegex(@"^[\w.\-/+ ]{1,256}$")]
-    private static partial System.Text.RegularExpressions.Regex PackageIdPattern();
+    [GeneratedRegex(@"^[\w.\-/+ ]{1,256}$")]
+    private static partial Regex PackageIdPattern();
+
+    [GeneratedRegex(@"^\s*Name\s+Id\s+Version", RegexOptions.IgnoreCase)]
+    private static partial Regex ListHeaderPattern();
+
+    [GeneratedRegex(@"^\d+\s+packages?\s+", RegexOptions.IgnoreCase)]
+    private static partial Regex PackageSummaryPattern();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])/I(?![A-Za-z0-9])", RegexOptions.IgnoreCase)]
+    private static partial Regex MsiInstallSwitchPattern();
 
     internal static List<InstalledApp> ParseListTable(List<string> lines)
     {
@@ -74,7 +83,7 @@ public sealed partial class UninstallerService
 
         // Find header line: "Name   Id   Version  [Available]  Source"
         int headerIdx = lines.FindIndex(l =>
-            Regex.IsMatch(l, @"^\s*Name\s+Id\s+Version", RegexOptions.IgnoreCase));
+            ListHeaderPattern().IsMatch(l));
         if (headerIdx < 0) return apps;
 
         var header = lines[headerIdx];
@@ -95,7 +104,7 @@ public sealed partial class UninstallerService
             if (string.IsNullOrWhiteSpace(line)) continue;
             if (line.StartsWith("--")) continue;
             // Stop at summary lines like "123 packages installed"
-            if (Regex.IsMatch(line, @"^\d+\s+packages?\s+", RegexOptions.IgnoreCase)) break;
+            if (PackageSummaryPattern().IsMatch(line)) break;
             if (line.Length < idxVersion) continue;
 
             string Slice(int start, int end) =>
@@ -337,9 +346,7 @@ public sealed partial class UninstallerService
                 var args = command[(spaceIdx + 1)..].TrimStart();
                 // Convert /I (modify) to /X (uninstall) if needed, add /quiet.
                 // Use regex to match /I only as a standalone switch (not inside GUIDs).
-                args = System.Text.RegularExpressions.Regex.Replace(
-                    args, @"(?<![A-Za-z0-9])/I(?![A-Za-z0-9])", "/X",
-                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                args = MsiInstallSwitchPattern().Replace(args, "/X");
                 if (!args.Contains("/quiet", StringComparison.OrdinalIgnoreCase)
                     && !args.Contains("/qn", StringComparison.OrdinalIgnoreCase))
                     args += " /quiet /norestart";

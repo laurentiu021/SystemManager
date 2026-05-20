@@ -19,7 +19,7 @@ namespace SysManager.Helpers;
 /// Supported syntax: ## headings, **bold**, - / * bullets, `code`,
 /// blank-line paragraph breaks. Anything else is rendered as plain text.
 /// </summary>
-public static class MarkdownTextBlock
+public static partial class MarkdownTextBlock
 {
     public static readonly DependencyProperty MarkdownProperty =
         DependencyProperty.RegisterAttached(
@@ -81,9 +81,8 @@ public static class MarkdownTextBlock
         }
     }
 
-    // PERF-004: Pre-compiled regex avoids creating a new state machine on every call.
-    private static readonly Regex InlineFormattingRegex = new(
-        @"\*\*(.+?)\*\*|`([^`]+)`", RegexOptions.Compiled);
+    [GeneratedRegex(@"\*\*(.+?)\*\*|`([^`]+)`")]
+    private static partial Regex InlineFormattingRegex();
 
     // PERF-007: Cache FontFamily to avoid allocating a new instance per code span render.
     private static readonly FontFamily CodeFontFamily = new("Consolas");
@@ -95,7 +94,7 @@ public static class MarkdownTextBlock
     private static void AddFormattedText(TextBlock tb, string text)
     {
         // Merge bold and code patterns, process left-to-right
-        var combined = InlineFormattingRegex.Matches(text);
+        var combined = InlineFormattingRegex().Matches(text);
         var pos = 0;
 
         foreach (Match m in combined)

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -24,7 +25,7 @@ public class CleanupCategoryHumanSizeBulkTests
     [MemberData(nameof(Powers))]
     public void HumanSize_PowersOfTwo_DoNotCrash(long n)
     {
-        var s = CleanupCategory.HumanSize(n);
+        var s = FormatHelper.FormatSize(n);
         Assert.False(string.IsNullOrWhiteSpace(s));
         Assert.Matches(@"^[\d.,]+ (B|KB|MB|GB|TB)$", s);
     }
@@ -41,7 +42,7 @@ public class CleanupCategoryHumanSizeBulkTests
     [InlineData(1024L * 1024 * 1024 * 1024, "TB")]
     public void HumanSize_PicksCorrectUnit(long bytes, string expectedUnit)
     {
-        var s = CleanupCategory.HumanSize(bytes);
+        var s = FormatHelper.FormatSize(bytes);
         Assert.EndsWith(expectedUnit, s);
     }
 
@@ -58,7 +59,7 @@ public class CleanupCategoryHumanSizeBulkTests
     [InlineData(100_000_000_000L)]
     public void HumanSize_RealisticSizes_HaveNumericPrefix(long bytes)
     {
-        var s = CleanupCategory.HumanSize(bytes);
+        var s = FormatHelper.FormatSize(bytes);
         Assert.Matches(@"^\d", s);
     }
 
@@ -68,7 +69,7 @@ public class CleanupCategoryHumanSizeBulkTests
     [InlineData(long.MinValue, "0 B")]
     public void HumanSize_ZeroOrNegative_IsZeroBytes(long bytes, string expected)
     {
-        Assert.Equal(expected, CleanupCategory.HumanSize(bytes));
+        Assert.Equal(expected, FormatHelper.FormatSize(bytes));
     }
 
     [Theory]
@@ -78,7 +79,7 @@ public class CleanupCategoryHumanSizeBulkTests
     [InlineData(1024L * 1024 * 1024 * 1023)]
     public void HumanSize_NearBoundary_ValidFormat(long n)
     {
-        Assert.Matches(@"^[\d.,]+ (B|KB|MB|GB|TB)$", CleanupCategory.HumanSize(n));
+        Assert.Matches(@"^[\d.,]+ (B|KB|MB|GB|TB)$", FormatHelper.FormatSize(n));
     }
 
     [Theory]
@@ -92,7 +93,7 @@ public class CleanupCategoryHumanSizeBulkTests
     [InlineData(15_500_000_000L)]
     public void HumanSize_FractionalResult_IsFormatted(long bytes)
     {
-        var s = CleanupCategory.HumanSize(bytes);
+        var s = FormatHelper.FormatSize(bytes);
         Assert.False(string.IsNullOrWhiteSpace(s));
     }
 
@@ -109,7 +110,7 @@ public class CleanupCategoryHumanSizeBulkTests
     [InlineData(512L)]
     public void HumanSize_SmallByteValues_StayInBytes(long n)
     {
-        var s = CleanupCategory.HumanSize(n);
+        var s = FormatHelper.FormatSize(n);
         Assert.EndsWith(" B", s);
     }
 
@@ -117,8 +118,8 @@ public class CleanupCategoryHumanSizeBulkTests
     public void HumanSize_SameInputSameOutput()
     {
         // Determinism
-        var a = CleanupCategory.HumanSize(123456789);
-        var b = CleanupCategory.HumanSize(123456789);
+        var a = FormatHelper.FormatSize(123456789);
+        var b = FormatHelper.FormatSize(123456789);
         Assert.Equal(a, b);
     }
 
@@ -132,6 +133,6 @@ public class CleanupCategoryHumanSizeBulkTests
     [InlineData(1024L * 1024 * 1024 * 1024 * 10, "TB")]
     public void HumanSize_LargeMultiples(long n, string unit)
     {
-        Assert.EndsWith(unit, CleanupCategory.HumanSize(n));
+        Assert.EndsWith(unit, FormatHelper.FormatSize(n));
     }
 }

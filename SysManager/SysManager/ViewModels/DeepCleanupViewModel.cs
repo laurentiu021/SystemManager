@@ -54,9 +54,9 @@ public partial class DeepCleanupViewModel : ViewModelBase
     [ObservableProperty] private int _topCount = 100;
 
     public long TotalSelectedBytes => Categories.Where(c => c.IsSelected).Sum(c => c.TotalSizeBytes);
-    public string TotalSelectedDisplay => CleanupCategory.HumanSize(TotalSelectedBytes);
+    public string TotalSelectedDisplay => FormatHelper.FormatSize(TotalSelectedBytes);
 
-    public string LargeBytesScannedDisplay => CleanupCategory.HumanSize(LargeBytesScanned);
+    public string LargeBytesScannedDisplay => FormatHelper.FormatSize(LargeBytesScanned);
 
     public DeepCleanupViewModel()
     {
@@ -185,10 +185,10 @@ public partial class DeepCleanupViewModel : ViewModelBase
                 c.PropertyChanged += OnCategoryPropertyChanged;
             foreach (var c in catList) Categories.Add(c);
             var total = cats.Sum(c => c.TotalSizeBytes);
-            ScanSummary = $"Found {CleanupCategory.HumanSize(total)} across {cats.Count} categories. Untick anything you want to keep.";
+            ScanSummary = $"Found {FormatHelper.FormatSize(total)} across {cats.Count} categories. Untick anything you want to keep.";
             ScanStatusLine = "Scan complete.";
             Log.Information("Deep cleanup scan completed: {Size} across {Count} categories",
-                CleanupCategory.HumanSize(total), cats.Count);
+                FormatHelper.FormatSize(total), cats.Count);
             OnPropertyChanged(nameof(TotalSelectedBytes));
             OnPropertyChanged(nameof(TotalSelectedDisplay));
         }

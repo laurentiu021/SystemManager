@@ -9,7 +9,7 @@ namespace SysManager.Models;
 /// <summary>
 /// Represents a Windows service with its current state and gaming recommendation.
 /// </summary>
-public partial class ServiceEntry : ObservableObject
+public sealed partial class ServiceEntry : ObservableObject
 {
     public string Name { get; init; } = "";
     public string DisplayName { get; init; } = "";

@@ -11,7 +11,7 @@ using SysManager.Models;
 
 namespace SysManager.Helpers;
 
-public class OutputKindToBrushConverter : IValueConverter
+public sealed class OutputKindToBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
@@ -38,7 +38,7 @@ public class OutputKindToBrushConverter : IValueConverter
 /// Also treats any non-null object reference as "true" so it can be used to
 /// toggle visibility based on a nullable result being populated.
 /// </summary>
-public class FlexibleBoolToVisibilityConverter : IValueConverter
+public sealed class FlexibleBoolToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
@@ -72,7 +72,7 @@ public sealed class BoolInverterConverter : IValueConverter
         => value is not true;
 }
 
-public class BoolToElevationBadgeBrushConverter : IValueConverter
+public sealed class BoolToElevationBadgeBrushConverter : IValueConverter
 {
     private static readonly Brush ElevatedBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)));
     private static readonly Brush NotElevatedBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)));
@@ -85,7 +85,7 @@ public class BoolToElevationBadgeBrushConverter : IValueConverter
 }
 
 /// <summary>Converts a hex string like "#4CC9F0" to a SolidColorBrush.</summary>
-public class HexToBrushConverter : IValueConverter
+public sealed class HexToBrushConverter : IValueConverter
 {
     // Cache frozen brushes by hex value to reduce GC pressure on frequently-updating bindings.
     private static readonly ConcurrentDictionary<string, SolidColorBrush> _cache = new(StringComparer.OrdinalIgnoreCase);
@@ -119,7 +119,7 @@ public class HexToBrushConverter : IValueConverter
 /// Maps process status text ("Running" / "Not responding") to a coloured brush.
 /// Green for running, red for not responding, grey for anything else.
 /// </summary>
-public class ProcessStatusToBrushConverter : IValueConverter
+public sealed class ProcessStatusToBrushConverter : IValueConverter
 {
     private static readonly Brush RunningBrush = CreateFrozen(Color.FromRgb(0x22, 0xC5, 0x5E));
     private static readonly Brush NotRespondingBrush = CreateFrozen(Color.FromRgb(0xEF, 0x44, 0x44));

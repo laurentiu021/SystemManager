@@ -9,7 +9,7 @@ namespace SysManager.Models;
 /// <summary>
 /// Represents a Windows optional feature with its current state.
 /// </summary>
-public partial class WindowsFeature : ObservableObject
+public sealed partial class WindowsFeature : ObservableObject
 {
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _displayName = "";

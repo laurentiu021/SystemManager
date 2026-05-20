@@ -10,7 +10,7 @@ namespace SysManager.Models;
 /// A single hop in a traceroute result. LatencyMs is an average across the
 /// attempted probes (null if all probes timed out at this hop).
 /// </summary>
-public partial class TracerouteHop : ObservableObject
+public sealed partial class TracerouteHop : ObservableObject
 {
     [ObservableProperty] private int _hopNumber;
     [ObservableProperty] private string _address = "*";

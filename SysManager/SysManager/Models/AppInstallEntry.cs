@@ -9,7 +9,7 @@ namespace SysManager.Models;
 /// <summary>
 /// Represents a newly detected application installation.
 /// </summary>
-public partial class AppInstallEntry : ObservableObject
+public sealed partial class AppInstallEntry : ObservableObject
 {
     /// <summary>Application display name.</summary>
     [ObservableProperty] private string _name = "";

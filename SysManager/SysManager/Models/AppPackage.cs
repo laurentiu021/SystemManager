@@ -6,7 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
 
-public partial class AppPackage : ObservableObject
+public sealed partial class AppPackage : ObservableObject
 {
     [ObservableProperty] private bool _isSelected = true;
     [ObservableProperty] private string _name = string.Empty;

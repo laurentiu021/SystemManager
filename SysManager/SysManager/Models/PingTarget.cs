@@ -11,7 +11,7 @@ namespace SysManager.Models;
 /// (assigned when added) and a live latency series. Enabled can be toggled
 /// at runtime to temporarily hide a series without losing its history.
 /// </summary>
-public partial class PingTarget : ObservableObject
+public sealed partial class PingTarget : ObservableObject
 {
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _host = "";

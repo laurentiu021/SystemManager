@@ -1,4 +1,4 @@
-// SysManager · OutputKindToBrushConverter
+// SysManager · ValueConverters
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 

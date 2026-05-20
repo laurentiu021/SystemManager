@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-20
+
 ### Changed
 - **BREAKING:** migrated from .NET 9 to .NET 10 — requires .NET 10 Desktop Runtime
   to run. All projects (main, tests, integration tests, UI tests) now target

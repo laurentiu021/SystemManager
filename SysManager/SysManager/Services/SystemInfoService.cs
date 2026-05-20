@@ -194,14 +194,28 @@ public sealed class SystemInfoService
                     };
                     var busType = (ushort)Convert.ToUInt32(mo["BusType"] ?? 0u) switch
                     {
-                        1 => "SCSI", 2 => "ATAPI", 3 => "ATA", 4 => "1394", 5 => "SSA",
-                        6 => "Fibre", 7 => "USB", 8 => "RAID", 9 => "iSCSI", 10 => "SAS",
-                        11 => "SATA", 12 => "SD", 13 => "MMC", 17 => "NVMe",
+                        1 => "SCSI",
+                        2 => "ATAPI",
+                        3 => "ATA",
+                        4 => "1394",
+                        5 => "SSA",
+                        6 => "Fibre",
+                        7 => "USB",
+                        8 => "RAID",
+                        9 => "iSCSI",
+                        10 => "SAS",
+                        11 => "SATA",
+                        12 => "SD",
+                        13 => "MMC",
+                        17 => "NVMe",
                         _ => "Other"
                     };
                     var health = (ushort)Convert.ToUInt32(mo["HealthStatus"] ?? 0u) switch
                     {
-                        0 => "Healthy", 1 => "Warning", 2 => "Unhealthy", _ => "Unknown"
+                        0 => "Healthy",
+                        1 => "Warning",
+                        2 => "Unhealthy",
+                        _ => "Unknown"
                     };
                     var opStatus = mo["OperationalStatus"] is ushort[] arr && arr.Length > 0
                         ? string.Join(",", arr.Select(OpStatusName))
@@ -235,8 +249,17 @@ public sealed class SystemInfoService
 
     private static string OpStatusName(ushort v) => v switch
     {
-        1 => "Other", 2 => "Unknown", 3 => "OK", 4 => "Degraded",
-        5 => "Stressed", 6 => "Predictive Failure", 7 => "Error", 8 => "Non-Recoverable Error",
-        9 => "Starting", 10 => "Stopping", 11 => "Stopped", _ => $"Code {v}"
+        1 => "Other",
+        2 => "Unknown",
+        3 => "OK",
+        4 => "Degraded",
+        5 => "Stressed",
+        6 => "Predictive Failure",
+        7 => "Error",
+        8 => "Non-Recoverable Error",
+        9 => "Starting",
+        10 => "Stopping",
+        11 => "Stopped",
+        _ => $"Code {v}"
     };
 }

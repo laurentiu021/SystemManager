@@ -42,12 +42,12 @@ public sealed class DeepCleanupService
     private static List<Def> BuildDefinitions()
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var programData  = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        var systemDrive  = Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\";
-        var windowsDir   = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var tempUser     = Path.GetTempPath();
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var systemDrive = Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\";
+        var windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var tempUser = Path.GetTempPath();
         var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        var pf    = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
 
         var defs = new List<Def>
         {

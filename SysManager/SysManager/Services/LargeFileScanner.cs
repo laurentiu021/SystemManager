@@ -65,7 +65,7 @@ public sealed class LargeFileScanner
             string[] files = [];
             string[] dirs = [];
             try { files = Directory.GetFiles(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-            try { dirs  = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            try { dirs = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
 
             foreach (var f in files)
             {
@@ -84,7 +84,9 @@ public sealed class LargeFileScanner
                         heap.Add((fi.Length, f));
                         meta[f] = new LargeFileEntry
                         {
-                            Path = f, Name = fi.Name, SizeBytes = fi.Length,
+                            Path = f,
+                            Name = fi.Name,
+                            SizeBytes = fi.Length,
                             LastModified = fi.LastWriteTime
                         };
                     }
@@ -98,7 +100,9 @@ public sealed class LargeFileScanner
                             heap.Add((fi.Length, f));
                             meta[f] = new LargeFileEntry
                             {
-                                Path = f, Name = fi.Name, SizeBytes = fi.Length,
+                                Path = f,
+                                Name = fi.Name,
+                                SizeBytes = fi.Length,
                                 LastModified = fi.LastWriteTime
                             };
                         }

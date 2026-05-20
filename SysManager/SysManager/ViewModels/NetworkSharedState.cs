@@ -94,8 +94,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
         LatencyXAxes = new[] { BuildTimeAxis() };
         LatencyYAxes = new[] { BuildValueAxis("Latency (ms)") };
-        TraceXAxes  = new[] { BuildHopAxis() };
-        TraceYAxes  = new[] { BuildValueAxis("Latency (ms)") };
+        TraceXAxes = new[] { BuildHopAxis() };
+        TraceYAxes = new[] { BuildValueAxis("Latency (ms)") };
 
         Pinger.SampleReceived += OnSample;
         TraceMonitor.RouteCompleted += OnRouteCompleted;

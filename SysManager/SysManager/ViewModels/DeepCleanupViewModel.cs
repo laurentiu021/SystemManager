@@ -79,14 +79,14 @@ public partial class DeepCleanupViewModel : ViewModelBase
 
             AddLocation("📥  Downloads", Helpers.KnownFolders.GetDownloadsPath());
             AddLocation("📄  Documents", Helpers.KnownFolders.GetDocumentsPath());
-            AddLocation("🖥️  Desktop",   Helpers.KnownFolders.GetDesktopPath());
-            AddLocation("🎬  Videos",    Helpers.KnownFolders.GetVideosPath());
-            AddLocation("🖼️  Pictures",  Helpers.KnownFolders.GetPicturesPath());
-            AddLocation("🎵  Music",     Helpers.KnownFolders.GetMusicPath());
+            AddLocation("🖥️  Desktop", Helpers.KnownFolders.GetDesktopPath());
+            AddLocation("🎬  Videos", Helpers.KnownFolders.GetVideosPath());
+            AddLocation("🖼️  Pictures", Helpers.KnownFolders.GetPicturesPath());
+            AddLocation("🎵  Music", Helpers.KnownFolders.GetMusicPath());
 
-            var pf    = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            AddLocation("💼  Program Files",      pf);
+            AddLocation("💼  Program Files", pf);
             AddLocation("💼  Program Files (x86)", pfx86);
 
             var drives = await _drives.EnumerateAsync();

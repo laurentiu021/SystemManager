@@ -19,6 +19,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now uses `long` before clamping to the 0–20 deduction cap.
 - **SpeedTestService** — documented pinned Ookla CLI version (`1.2.0`) with
   maintenance comment explaining update procedure and Authenticode verification.
+- **LogService** — path sanitization regex now dynamically derives the user
+  profile directory from `Environment.GetFolderPath` instead of assuming a
+  hardcoded `<drive>:\Users\` pattern; falls back to the generic regex if the
+  environment variable is unavailable.
+- **MarkdownTextBlock** — cached `FontFamily("Consolas")` as a static field to
+  eliminate per-render allocation in code span formatting.
 
 ### Added
 - **ServicesViewModelTests** — 20 unit tests covering ApplyFilter logic: category

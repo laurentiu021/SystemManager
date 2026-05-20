@@ -16,10 +16,26 @@ public static class LogService
     public static string LogDir { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager", "logs");
 
-    // Matches <DriveLetter>:\Users\<username>\ and replaces the username with [user].
-    private static readonly Regex UserPathRegex = new(
-        @"(?i)([A-Z]:\\Users\\)[^\\]+",
-        RegexOptions.Compiled);
+    // Dynamically build regex from the actual user profile parent directory
+    // (e.g. C:\Users) so it works even if Windows is installed on a non-standard
+    // drive or the Users folder has a custom path.
+    private static readonly Regex UserPathRegex = BuildUserPathRegex();
+
+    private static Regex BuildUserPathRegex()
+    {
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrEmpty(userProfile))
+        {
+            var usersDir = Path.GetDirectoryName(userProfile);
+            if (!string.IsNullOrEmpty(usersDir))
+            {
+                var escaped = Regex.Escape(usersDir + @"\");
+                return new Regex($@"(?i)({escaped})[^\\]+", RegexOptions.Compiled);
+            }
+        }
+        // Fallback: match any drive letter followed by \Users\<username>
+        return new Regex(@"(?i)([A-Z]:\\Users\\)[^\\]+", RegexOptions.Compiled);
+    }
 
     public static void Init()
     {

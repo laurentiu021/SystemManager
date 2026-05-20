@@ -437,7 +437,7 @@ public class SfcResultParsingTests
     [Fact]
     public void ParseSfcResult_EmptyLines_FallsBackToExitCode()
     {
-        var (verdict, color) = CleanupViewModel.ParseSfcResult(Array.Empty<string>(), 0);
+        var (verdict, color) = CleanupViewModel.ParseSfcResult([], 0);
         Assert.Contains("successfully", verdict);
         Assert.Equal("#22C55E", color);
     }

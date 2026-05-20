@@ -34,7 +34,7 @@ public class HealthScoreServiceTests
     [Fact]
     public void ComputeDiskScore_EmptyList_Returns100()
     {
-        Assert.Equal(100, HealthScoreService.ComputeDiskScore(Array.Empty<DiskHealthReport>()));
+        Assert.Equal(100, HealthScoreService.ComputeDiskScore([]));
     }
 
     [Fact]

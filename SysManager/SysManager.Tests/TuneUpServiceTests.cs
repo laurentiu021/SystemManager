@@ -108,7 +108,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 5,
             Uptime = TimeSpan.FromDays(1),
             RamUsedPercent = 50,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal(1, result.WarningCount);
     }
@@ -121,7 +121,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 0,
             Uptime = TimeSpan.FromDays(20),
             RamUsedPercent = 50,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal(1, result.WarningCount);
     }
@@ -134,7 +134,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 0,
             Uptime = TimeSpan.FromDays(1),
             RamUsedPercent = 90,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal(1, result.WarningCount);
     }
@@ -181,7 +181,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 0,
             Uptime = TimeSpan.FromDays(1),
             RamUsedPercent = 50,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal("All good", result.OverallVerdict);
     }
@@ -194,7 +194,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 2,
             Uptime = TimeSpan.FromDays(1),
             RamUsedPercent = 50,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal("1 recommendation", result.OverallVerdict);
     }
@@ -207,7 +207,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 2,
             Uptime = TimeSpan.FromDays(20),
             RamUsedPercent = 50,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal("2 recommendations", result.OverallVerdict);
     }
@@ -220,7 +220,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 0,
             Uptime = TimeSpan.FromDays(1),
             RamUsedPercent = 50,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal("#22C55E", result.OverallColorHex);
     }
@@ -233,7 +233,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 2,
             Uptime = TimeSpan.FromDays(1),
             RamUsedPercent = 50,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal("#F59E0B", result.OverallColorHex);
     }
@@ -246,7 +246,7 @@ public class TuneUpServiceTests
             BrokenShortcutsFound = 2,
             Uptime = TimeSpan.FromDays(20),
             RamUsedPercent = 92,
-            DiskResults = Array.Empty<DiskHealthSummary>()
+            DiskResults = []
         };
         Assert.Equal("#EF4444", result.OverallColorHex);
     }

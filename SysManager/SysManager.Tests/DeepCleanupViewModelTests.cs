@@ -195,12 +195,12 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         var c1 = new CleanupCategory
         {
-            Name = "A", Description = "a", Paths = Array.Empty<string>(),
+            Name = "A", Description = "a", Paths = [],
             TotalSizeBytes = 1000, FileCount = 1, IsSelected = true
         };
         var c2 = new CleanupCategory
         {
-            Name = "B", Description = "b", Paths = Array.Empty<string>(),
+            Name = "B", Description = "b", Paths = [],
             TotalSizeBytes = 2000, FileCount = 2, IsSelected = false
         };
         vm.Categories.Add(c1);
@@ -272,12 +272,12 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         vm.Categories.Add(new CleanupCategory
         {
-            Name = "Safe", Description = "d", Paths = Array.Empty<string>(),
+            Name = "Safe", Description = "d", Paths = [],
             TotalSizeBytes = 100, FileCount = 1, IsDestructiveHint = false
         });
         vm.Categories.Add(new CleanupCategory
         {
-            Name = "Dangerous", Description = "d", Paths = Array.Empty<string>(),
+            Name = "Dangerous", Description = "d", Paths = [],
             TotalSizeBytes = 200, FileCount = 1, IsDestructiveHint = true
         });
 
@@ -293,7 +293,7 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         var c = new CleanupCategory
         {
-            Name = "X", Description = "d", Paths = Array.Empty<string>(),
+            Name = "X", Description = "d", Paths = [],
             TotalSizeBytes = 100, FileCount = 1, IsSelected = true
         };
         vm.Categories.Add(c);
@@ -309,7 +309,7 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         vm.Categories.Add(new CleanupCategory
         {
-            Name = "X", Description = "d", Paths = Array.Empty<string>(),
+            Name = "X", Description = "d", Paths = [],
             TotalSizeBytes = 100, FileCount = 1, IsDestructiveHint = false
         });
 

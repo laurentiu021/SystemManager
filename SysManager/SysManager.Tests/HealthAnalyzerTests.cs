@@ -23,7 +23,7 @@ public class HealthAnalyzerTests
     [Fact]
     public void NoMetrics_ReturnsUnknown()
     {
-        var d = Analyze(Array.Empty<TargetMetric>());
+        var d = Analyze([]);
         Assert.Equal(HealthVerdict.Unknown, d.Verdict);
         Assert.False(string.IsNullOrWhiteSpace(d.Headline));
         Assert.Equal("#9AA0A6", d.ColorHex);

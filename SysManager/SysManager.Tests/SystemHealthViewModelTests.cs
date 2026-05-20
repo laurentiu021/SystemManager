@@ -262,14 +262,14 @@ public class SystemHealthViewModelTests
     [Fact]
     public void ParseChkdskVerdict_EmptyOutput_ExitZero_ReturnsHealthy()
     {
-        var lines = Array.Empty<string>();
+        string[] lines = [];
         Assert.Equal("Healthy", SystemHealthViewModel.ParseChkdskVerdict(lines, 0));
     }
 
     [Fact]
     public void ParseChkdskVerdict_EmptyOutput_NonZeroExit_ReturnsExitCode()
     {
-        var lines = Array.Empty<string>();
+        string[] lines = [];
         Assert.Equal("Exit 3", SystemHealthViewModel.ParseChkdskVerdict(lines, 3));
     }
 }

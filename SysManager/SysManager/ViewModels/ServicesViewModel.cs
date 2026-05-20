@@ -95,7 +95,7 @@ public partial class ServicesViewModel : ViewModelBase
             StatusMessage = $"✓ {entry.DisplayName} started.";
             Log.Information("Service started: {ServiceName}", entry.Name);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Start service failed: {ex.Message}"; }
         catch (System.ServiceProcess.TimeoutException) { StatusMessage = $"Timeout starting {entry.DisplayName}."; }
     }
 
@@ -116,7 +116,7 @@ public partial class ServicesViewModel : ViewModelBase
             StatusMessage = $"✓ {entry.DisplayName} stopped.";
             Log.Information("Service stopped: {ServiceName}", entry.Name);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Stop service failed: {ex.Message}"; }
         catch (System.ServiceProcess.TimeoutException) { StatusMessage = $"Timeout stopping {entry.DisplayName}."; }
     }
 

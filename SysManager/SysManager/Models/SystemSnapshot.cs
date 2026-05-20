@@ -4,21 +4,21 @@
 
 namespace SysManager.Models;
 
-public record MemoryInfo(
+public sealed record MemoryInfo(
     double TotalGB,
     double AvailableGB,
     double UsedGB,
     double UsedPercent,
-    List<MemoryModule> Modules);
+    IReadOnlyList<MemoryModule> Modules);
 
-public record MemoryModule(
+public sealed record MemoryModule(
     string BankLabel,
     string Manufacturer,
     double CapacityGB,
     uint SpeedMHz,
     string PartNumber);
 
-public record DiskInfo(
+public sealed record DiskInfo(
     string FriendlyName,
     string MediaType,
     string BusType,
@@ -28,23 +28,23 @@ public record DiskInfo(
     double? TemperatureC,
     int? WearPercent);
 
-public record CpuInfo(
+public sealed record CpuInfo(
     string Name,
     uint Cores,
     uint LogicalProcessors,
     uint MaxClockMHz,
     double LoadPercent);
 
-public record OsInfo(
+public sealed record OsInfo(
     string Caption,
     string Version,
     string BuildNumber,
     TimeSpan Uptime,
     string Architecture);
 
-public record SystemSnapshot(
+public sealed record SystemSnapshot(
     OsInfo Os,
     CpuInfo Cpu,
     MemoryInfo Memory,
-    List<DiskInfo> Disks,
+    IReadOnlyList<DiskInfo> Disks,
     DateTime CapturedAt);

@@ -6,7 +6,7 @@ namespace SysManager.Models;
 
 public enum OutputKind { Info, Output, Warning, Error, Verbose, Debug, Progress }
 
-public record PowerShellLine(OutputKind Kind, string Text, DateTime Timestamp)
+public sealed record PowerShellLine(OutputKind Kind, string Text, DateTime Timestamp)
 {
     public static PowerShellLine Info(string text) => new(OutputKind.Info, text, DateTime.Now);
     public static PowerShellLine Output(string text) => new(OutputKind.Output, text, DateTime.Now);

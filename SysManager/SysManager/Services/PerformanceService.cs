@@ -24,7 +24,7 @@ namespace SysManager.Services;
 /// • NVIDIA GPU subkey is auto-detected (not hardcoded to 0000).
 /// • Visual effects use SystemParametersInfo (instant), not registry-only.
 /// </summary>
-public sealed class PerformanceService : IDisposable
+public sealed partial class PerformanceService : IDisposable
 {
     private readonly PowerShellRunner _ps;
     private readonly SemaphoreSlim _psGate = new(1, 1);
@@ -46,15 +46,15 @@ public sealed class PerformanceService : IDisposable
     private const uint SPI_SETUIEFFECTS = 0x103F;
     private const uint SPIF_SENDCHANGE = 0x02;
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SystemParametersInfo(
-        uint uiAction, uint uiParam, ref bool pvParam, uint fWinIni);
+    private static partial bool SystemParametersInfoGet(
+        uint uiAction, uint uiParam, ref int pvParam, uint fWinIni);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SystemParametersInfo(
-        uint uiAction, uint uiParam, bool pvParam, uint fWinIni);
+    private static partial bool SystemParametersInfoSet(
+        uint uiAction, uint uiParam, int pvParam, uint fWinIni);
 
     public PerformanceService(PowerShellRunner ps) => _ps = ps;
 
@@ -266,9 +266,9 @@ public sealed class PerformanceService : IDisposable
     /// <summary>Read whether UI effects are currently enabled.</summary>
     internal static bool GetUiEffectsEnabled()
     {
-        bool enabled = true;
-        SystemParametersInfo(SPI_GETUIEFFECTS, 0, ref enabled, 0);
-        return enabled;
+        int enabled = 1;
+        SystemParametersInfoGet(SPI_GETUIEFFECTS, 0, ref enabled, 0);
+        return enabled != 0;
     }
 
     /// <summary>
@@ -279,7 +279,7 @@ public sealed class PerformanceService : IDisposable
     /// </summary>
     public static void SetUiEffects(bool enabled)
     {
-        SystemParametersInfo(SPI_SETUIEFFECTS, 0, enabled, SPIF_SENDCHANGE);
+        SystemParametersInfoSet(SPI_SETUIEFFECTS, 0, enabled ? 1 : 0, SPIF_SENDCHANGE);
         Log.Information("System: Visual effects {Action}", enabled ? "enabled" : "reduced");
     }
 
@@ -531,9 +531,9 @@ public sealed class PerformanceService : IDisposable
     //  RAM WORKING SET TRIM — via EmptyWorkingSet (instant)
     // ═══════════════════════════════════════════════════════════════
 
-    [DllImport("psapi.dll", SetLastError = true)]
+    [LibraryImport("psapi.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EmptyWorkingSet(IntPtr hProcess);
+    private static partial bool EmptyWorkingSet(IntPtr hProcess);
 
     /// <summary>
     /// Trim the working set of all accessible processes, freeing physical

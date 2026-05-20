@@ -4,6 +4,7 @@
 
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Helpers;
 
 namespace SysManager.Models;
 
@@ -34,5 +35,5 @@ public sealed partial class ProcessEntry : ObservableObject
     [ObservableProperty] private bool _canOpenFileLocation;
 
     /// <summary>Formatted memory for display.</summary>
-    public string MemoryDisplay => CleanupCategory.HumanSize(MemoryBytes);
+    public string MemoryDisplay => FormatHelper.FormatSize(MemoryBytes);
 }

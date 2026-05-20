@@ -4,6 +4,7 @@
 
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Helpers;
 
 namespace SysManager.Models;
 
@@ -27,5 +28,5 @@ public sealed partial class InstalledApp : ObservableObject
     [ObservableProperty] private string _quietUninstallString = "";
 
     /// <summary>Formatted size for display.</summary>
-    public string SizeDisplay => SizeBytes > 0 ? CleanupCategory.HumanSize(SizeBytes) : "—";
+    public string SizeDisplay => SizeBytes > 0 ? FormatHelper.FormatSize(SizeBytes) : "—";
 }

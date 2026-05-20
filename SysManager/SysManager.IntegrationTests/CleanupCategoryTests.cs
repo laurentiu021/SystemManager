@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.IntegrationTests;
@@ -18,7 +19,7 @@ public class CleanupCategoryTests
     [InlineData(1024L * 1024 * 1024 * 1024, "1 TB")]
     public void HumanSize_FormatsCorrectly(long bytes, string expected)
     {
-        Assert.Equal(expected, CleanupCategory.HumanSize(bytes));
+        Assert.Equal(expected, FormatHelper.FormatSize(bytes));
     }
 
     [Theory]
@@ -27,13 +28,13 @@ public class CleanupCategoryTests
     [InlineData(long.MinValue)]
     public void HumanSize_NegativeIsZero(long bytes)
     {
-        Assert.Equal("0 B", CleanupCategory.HumanSize(bytes));
+        Assert.Equal("0 B", FormatHelper.FormatSize(bytes));
     }
 
     [Fact]
     public void HumanSize_VeryLarge_DoesNotCrash()
     {
-        var s = CleanupCategory.HumanSize(long.MaxValue);
+        var s = FormatHelper.FormatSize(long.MaxValue);
         Assert.NotNull(s);
         Assert.Contains("TB", s);
     }

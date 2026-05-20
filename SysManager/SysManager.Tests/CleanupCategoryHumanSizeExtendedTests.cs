@@ -1,4 +1,5 @@
-// SysManager · CleanupCategory.HumanSize extended boundary tests
+// SysManager · FormatHelper.FormatSize extended boundary tests
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -8,69 +9,69 @@ public class CleanupCategoryHumanSizeExtendedTests
     [Fact]
     public void HumanSize_Zero_ReturnsZeroB()
     {
-        Assert.Equal("0 B", CleanupCategory.HumanSize(0));
+        Assert.Equal("0 B", FormatHelper.FormatSize(0));
     }
 
     [Fact]
     public void HumanSize_Negative_ReturnsZeroB()
     {
-        Assert.Equal("0 B", CleanupCategory.HumanSize(-100));
+        Assert.Equal("0 B", FormatHelper.FormatSize(-100));
     }
 
     [Fact]
     public void HumanSize_OneByte_Returns1B()
     {
-        Assert.Equal("1 B", CleanupCategory.HumanSize(1));
+        Assert.Equal("1 B", FormatHelper.FormatSize(1));
     }
 
     [Fact]
     public void HumanSize_1023Bytes_Returns1023B()
     {
-        Assert.Equal("1023 B", CleanupCategory.HumanSize(1023));
+        Assert.Equal("1023 B", FormatHelper.FormatSize(1023));
     }
 
     [Fact]
     public void HumanSize_1024Bytes_Returns1KB()
     {
-        Assert.Equal("1 KB", CleanupCategory.HumanSize(1024));
+        Assert.Equal("1 KB", FormatHelper.FormatSize(1024));
     }
 
     [Fact]
     public void HumanSize_1MB_Returns1MB()
     {
-        Assert.Equal("1 MB", CleanupCategory.HumanSize(1024 * 1024));
+        Assert.Equal("1 MB", FormatHelper.FormatSize(1024 * 1024));
     }
 
     [Fact]
     public void HumanSize_1GB_Returns1GB()
     {
-        Assert.Equal("1 GB", CleanupCategory.HumanSize(1024L * 1024 * 1024));
+        Assert.Equal("1 GB", FormatHelper.FormatSize(1024L * 1024 * 1024));
     }
 
     [Fact]
     public void HumanSize_1TB_Returns1TB()
     {
-        Assert.Equal("1 TB", CleanupCategory.HumanSize(1024L * 1024 * 1024 * 1024));
+        Assert.Equal("1 TB", FormatHelper.FormatSize(1024L * 1024 * 1024 * 1024));
     }
 
     [Fact]
     public void HumanSize_1point5GB_FormatsCorrectly()
     {
         long bytes = (long)(1.5 * 1024 * 1024 * 1024);
-        Assert.Equal("1.5 GB", CleanupCategory.HumanSize(bytes));
+        Assert.Equal("1.5 GB", FormatHelper.FormatSize(bytes));
     }
 
     [Fact]
     public void HumanSize_LargeValue_StaysInTB()
     {
         long bytes = 10L * 1024 * 1024 * 1024 * 1024;
-        Assert.Equal("10 TB", CleanupCategory.HumanSize(bytes));
+        Assert.Equal("10 TB", FormatHelper.FormatSize(bytes));
     }
 
     [Fact]
     public void HumanSize_MaxLong_DoesNotThrow()
     {
-        var result = CleanupCategory.HumanSize(long.MaxValue);
+        var result = FormatHelper.FormatSize(long.MaxValue);
         Assert.Contains("TB", result);
     }
 

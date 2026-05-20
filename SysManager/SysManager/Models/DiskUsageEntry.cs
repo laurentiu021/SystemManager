@@ -3,6 +3,7 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Helpers;
 
 namespace SysManager.Models;
 
@@ -23,5 +24,5 @@ public sealed partial class DiskUsageEntry : ObservableObject
     [ObservableProperty] private bool _isAccessDenied;
 
     /// <summary>Formatted size for display.</summary>
-    public string SizeDisplay => CleanupCategory.HumanSize(SizeBytes);
+    public string SizeDisplay => FormatHelper.FormatSize(SizeBytes);
 }

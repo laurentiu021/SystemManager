@@ -83,7 +83,7 @@ public class DeepCleanupViewUiTests
                 };
                 var uri = new Uri("pack://application:,,,/SysManager;component/App.xaml", UriKind.Absolute);
                 var dict = (ResourceDictionary)Application.LoadComponent(uri);
-                System.Windows.Application.Current.Resources.MergedDictionaries.Add(dict);
+                System.Windows.Application.Current?.Resources.MergedDictionaries.Add(dict);
             }
             catch { }
         }

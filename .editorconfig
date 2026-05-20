@@ -118,8 +118,8 @@ csharp_indent_case_contents = true
 csharp_indent_switch_labels = true
 csharp_indent_labels = flush_left
 
-# Nullability analysis produces warnings, not errors, by default.
-dotnet_diagnostic.CS8600.severity = suggestion
-dotnet_diagnostic.CS8602.severity = suggestion
-dotnet_diagnostic.CS8603.severity = suggestion
-dotnet_diagnostic.CS8625.severity = suggestion
+# Nullability analysis at warning severity (TreatWarningsAsErrors promotes to error).
+dotnet_diagnostic.CS8600.severity = warning
+dotnet_diagnostic.CS8602.severity = warning
+dotnet_diagnostic.CS8603.severity = warning
+dotnet_diagnostic.CS8625.severity = warning

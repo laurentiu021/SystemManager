@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// Disk Analyzer tab — shows space breakdown by top-level folders.
 /// Read-only: only "Show in Explorer" is offered.
 /// </summary>
-public partial class DiskAnalyzerViewModel : ViewModelBase
+public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 {
     private readonly DiskAnalyzerService _service = new();
     private CancellationTokenSource? _cts;

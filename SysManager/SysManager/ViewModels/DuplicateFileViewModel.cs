@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// content and shows them grouped by hash. Read-only: only "Show in
 /// Explorer" and "Copy path" are offered.
 /// </summary>
-public partial class DuplicateFileViewModel : ViewModelBase
+public sealed partial class DuplicateFileViewModel : ViewModelBase
 {
     private readonly DuplicateFileService _service = new();
     private CancellationTokenSource? _cts;

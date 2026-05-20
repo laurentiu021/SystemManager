@@ -15,7 +15,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class SystemHealthViewModel : ViewModelBase
+public sealed partial class SystemHealthViewModel : ViewModelBase
 {
     private readonly SystemInfoService _sys;
     private readonly DiskHealthService _diskHealth = new();

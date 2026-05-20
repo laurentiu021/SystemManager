@@ -12,7 +12,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class DashboardViewModel : ViewModelBase
+public sealed partial class DashboardViewModel : ViewModelBase
 {
     private readonly SystemInfoService _sys;
     private readonly TuneUpService _tuneUp;

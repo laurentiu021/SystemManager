@@ -10,3 +10,10 @@ namespace SysManager.Tests;
 /// </summary>
 [CollectionDefinition("Network", DisableParallelization = true)]
 public class NetworkCollection { }
+
+/// <summary>
+/// Groups tests that use the shared OperationLockService singleton so they
+/// run sequentially and avoid cross-test lock contention.
+/// </summary>
+[CollectionDefinition("OperationLock", DisableParallelization = true)]
+public class OperationLockCollection { }

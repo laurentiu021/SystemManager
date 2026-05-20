@@ -12,7 +12,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class MainWindowViewModel : ObservableObject, IDisposable
+public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     public DashboardViewModel Dashboard { get; }
     public AppUpdatesViewModel AppUpdates { get; }

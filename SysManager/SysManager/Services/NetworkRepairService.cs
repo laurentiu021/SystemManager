@@ -10,12 +10,15 @@ namespace SysManager.Services;
 /// Runs common network repair commands: DNS flush, Winsock reset, TCP/IP reset.
 /// Each method captures stdout/stderr and returns a <see cref="NetworkRepairResult"/>.
 /// </summary>
-public sealed class NetworkRepairService
+public sealed class NetworkRepairService : IDisposable
 {
     private readonly PowerShellRunner _ps;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public NetworkRepairService(PowerShellRunner ps) => _ps = ps;
+
+    /// <inheritdoc />
+    public void Dispose() => _gate.Dispose();
 
     /// <summary>
     /// Flush the DNS resolver cache. Does not require a reboot.

@@ -81,7 +81,7 @@ public sealed class TuneUpService
 
         // Step 4: Disk SMART
         progress?.Report((3, "Checking disk health…"));
-        var diskSummaries = new List<DiskHealthSummary>();
+        List<DiskHealthSummary> diskSummaries = [];
         try
         {
             var reports = await _diskHealth.CollectAsync(ct);

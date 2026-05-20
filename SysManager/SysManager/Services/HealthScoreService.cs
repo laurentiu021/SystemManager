@@ -100,7 +100,7 @@ public sealed class HealthScoreService
 
     internal static int ComputeDiskScore(IReadOnlyList<DiskHealthReport>? disks)
     {
-        if (disks == null || disks.Count == 0) return 100;
+        if (disks is null || disks.Count == 0) return 100;
 
         // Use the worst disk's health percentage, or map status string
         int worstScore = disks.Select(d => d.HealthPercent ?? d.HealthStatus switch
@@ -115,7 +115,7 @@ public sealed class HealthScoreService
 
     internal static int ComputeRamScore(SystemSnapshot? snapshot)
     {
-        if (snapshot == null) return 100;
+        if (snapshot is null) return 100;
         double usedPct = snapshot.Memory.UsedPercent;
 
         // Linear scale: 0% used = 100 score, 100% used = 0 score
@@ -134,7 +134,7 @@ public sealed class HealthScoreService
 
     internal static int ComputeUptimeScore(SystemSnapshot? snapshot)
     {
-        if (snapshot == null) return 100;
+        if (snapshot is null) return 100;
         double days = snapshot.Os.Uptime.TotalDays;
 
         return days switch
@@ -150,7 +150,7 @@ public sealed class HealthScoreService
 
     internal static int ComputeBatteryScore(BatteryInfo? battery)
     {
-        if (battery == null || !battery.HasBattery) return 100;
+        if (battery is null || !battery.HasBattery) return 100;
 
         double health = battery.HealthPercent;
         // -1 means capacity data unavailable (no admin for root\WMI).
@@ -174,10 +174,10 @@ public sealed class HealthScoreService
         bool hasBattery, SystemSnapshot? snapshot,
         IReadOnlyList<DiskHealthReport>? disks, BatteryInfo? battery)
     {
-        var recs = new List<HealthRecommendation>();
+        List<HealthRecommendation> recs = [];
 
         // Uptime
-        if (uptimeScore <= 70 && snapshot != null)
+        if (uptimeScore <= 70 && snapshot is not null)
         {
             int days = (int)snapshot.Os.Uptime.TotalDays;
             recs.Add(new HealthRecommendation
@@ -188,7 +188,7 @@ public sealed class HealthScoreService
         }
 
         // Disk
-        if (diskScore < 80 && disks != null)
+        if (diskScore < 80 && disks is not null)
         {
             var worst = disks.OrderBy(d => d.HealthPercent ?? 100).FirstOrDefault();
             string diskName = worst?.FriendlyName ?? "Disk";
@@ -200,7 +200,7 @@ public sealed class HealthScoreService
         }
 
         // RAM
-        if (ramScore < 75 && snapshot != null)
+        if (ramScore < 75 && snapshot is not null)
         {
             recs.Add(new HealthRecommendation
             {
@@ -210,7 +210,7 @@ public sealed class HealthScoreService
         }
 
         // Battery
-        if (hasBattery && batteryScore < 80 && battery != null)
+        if (hasBattery && batteryScore < 80 && battery is not null)
         {
             recs.Add(new HealthRecommendation
             {

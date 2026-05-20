@@ -17,7 +17,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class AboutViewModel : ViewModelBase
+public sealed partial class AboutViewModel : ViewModelBase
 {
     private readonly UpdateService _updates;
     private UpdateService.ReleaseInfo? _latest;

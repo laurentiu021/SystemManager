@@ -14,7 +14,7 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// Battery Health tab — shows charge, health %, wear, cycles, runtime.
 /// </summary>
-public partial class BatteryHealthViewModel : ViewModelBase
+public sealed partial class BatteryHealthViewModel : ViewModelBase
 {
     private readonly BatteryService _service = new();
 

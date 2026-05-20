@@ -13,7 +13,7 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>HTTP + Ookla speed tests with persistent history.</summary>
-public partial class SpeedTestViewModel : ViewModelBase
+public sealed partial class SpeedTestViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
     private readonly SpeedTestHistoryService _history = new();

@@ -14,7 +14,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class DriversViewModel : ViewModelBase
+public sealed partial class DriversViewModel : ViewModelBase
 {
     private readonly PowerShellRunner _runner;
     private CancellationTokenSource? _cts;

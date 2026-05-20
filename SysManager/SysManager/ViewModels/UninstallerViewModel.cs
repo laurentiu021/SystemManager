@@ -14,7 +14,7 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// Uninstaller tab — lists installed apps, filter, select, uninstall.
 /// </summary>
-public partial class UninstallerViewModel : ViewModelBase
+public sealed partial class UninstallerViewModel : ViewModelBase
 {
     private readonly UninstallerService _service;
     private readonly Action<PowerShellLine> _lineHandler;

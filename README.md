@@ -15,7 +15,7 @@ Event Log viewer — all in one WPF desktop app.
 [![Downloads](https://img.shields.io/github/downloads/laurentiu021/SystemManager/total)](https://github.com/laurentiu021/SystemManager/releases)
 [![Issues](https://img.shields.io/github/issues/laurentiu021/SystemManager)](https://github.com/laurentiu021/SystemManager/issues)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
-![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)
+![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---

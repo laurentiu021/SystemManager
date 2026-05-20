@@ -130,7 +130,7 @@ public sealed class PingMonitorService : IDisposable
     private void RaiseSampleReceived(PingSample sample)
     {
         var handlers = SampleReceived?.GetInvocationList();
-        if (handlers == null) return;
+        if (handlers is null) return;
         foreach (var h in handlers)
         {
             try { ((Action<PingSample>)h).Invoke(sample); }

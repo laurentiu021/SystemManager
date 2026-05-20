@@ -12,7 +12,7 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>DNS flush, Winsock reset, TCP/IP reset.</summary>
-public partial class NetworkRepairViewModel : ViewModelBase
+public sealed partial class NetworkRepairViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
 

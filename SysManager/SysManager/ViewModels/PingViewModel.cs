@@ -13,7 +13,7 @@ namespace SysManager.ViewModels;
 /// Live ping monitoring: targets, presets, latency chart, health verdict.
 /// Delegates shared state (targets, buffers, pinger) to <see cref="NetworkSharedState"/>.
 /// </summary>
-public partial class PingViewModel : ViewModelBase
+public sealed partial class PingViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
 

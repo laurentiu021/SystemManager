@@ -76,7 +76,7 @@ public sealed partial class IconExtractorService
         if (!string.IsNullOrWhiteSpace(filePath) && File.Exists(filePath))
         {
             var icon = GetIcon(filePath);
-            if (icon != _appFallback.Value && icon != null)
+            if (icon != _appFallback.Value && icon is not null)
                 return icon;
         }
 
@@ -84,7 +84,7 @@ public sealed partial class IconExtractorService
         if (!string.IsNullOrWhiteSpace(processName))
         {
             var found = FindExecutableByName(processName);
-            if (found != null)
+            if (found is not null)
                 return GetIcon(found);
 
             // Known Windows system processes → Windows icon
@@ -117,7 +117,7 @@ public sealed partial class IconExtractorService
         if (!string.IsNullOrWhiteSpace(displayIconPath))
         {
             var icon = GetIcon(displayIconPath);
-            if (icon != _appFallback.Value && icon != null)
+            if (icon != _appFallback.Value && icon is not null)
                 return icon;
         }
 
@@ -132,7 +132,7 @@ public sealed partial class IconExtractorService
                     var match = exes.FirstOrDefault(e =>
                         Path.GetFileNameWithoutExtension(e)
                             .Contains(appName.Split(' ')[0], StringComparison.OrdinalIgnoreCase));
-                    if (match != null)
+                    if (match is not null)
                         return GetIcon(match);
                 }
                 if (exes.Length > 0)
@@ -271,7 +271,7 @@ public sealed partial class IconExtractorService
             .Where(idx => idx > 0)
             .Select(idx => clean[..idx].Trim('"', ' '))
             .FirstOrDefault(File.Exists);
-        if (separatorMatch != null) return separatorMatch;
+        if (separatorMatch is not null) return separatorMatch;
 
         // Progressive space-split
         var parts = clean.Split(' ');
@@ -292,7 +292,7 @@ public sealed partial class IconExtractorService
         if (!string.IsNullOrEmpty(exeName))
         {
             var found = SearchInPath(exeName);
-            if (found != null) return found;
+            if (found is not null) return found;
         }
 
         return clean;
@@ -373,7 +373,7 @@ public sealed partial class IconExtractorService
     private static string? ResolveExecutablePath(string exeName)
     {
         var found = SearchInPath(exeName);
-        if (found != null) return found;
+        if (found is not null) return found;
 
         // Search one level deep in Program Files
         var programDirs = new[]
@@ -390,7 +390,7 @@ public sealed partial class IconExtractorService
                 var match = Directory.GetDirectories(baseDir)
                     .Select(subDir => Path.Join(subDir, exeName))
                     .FirstOrDefault(File.Exists);
-                if (match != null) return match;
+                if (match is not null) return match;
             }
             catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied scanning {Dir} for {Exe}", baseDir, exeName); }
             catch (IOException ex) { Log.Debug(ex, "I/O error scanning {Dir} for {Exe}", baseDir, exeName); }

@@ -90,7 +90,7 @@ public sealed partial class PerformanceService : IDisposable
             GameModeEnabled: ReadGameMode(),
             XboxGameBarEnabled: ReadXboxGameBarEnabled(),
             XboxGameDvrEnabled: ReadXboxGameDvrEnabled(),
-            GpuDynamicPstate: nvidiaKey != null && !ReadGpuMaxPerformance(nvidiaKey),
+            GpuDynamicPstate: nvidiaKey is not null && !ReadGpuMaxPerformance(nvidiaKey),
             ProcessorMinPercentAc: await ReadProcessorMinPercentAsync(ct).ConfigureAwait(false),
             NvidiaSubKey: nvidiaKey);
     }
@@ -144,8 +144,8 @@ public sealed partial class PerformanceService : IDisposable
         profile.XboxGameBarDisabled = !ReadXboxGameBarEnabled() || !ReadXboxGameDvrEnabled();
 
         var nvidiaKey = FindNvidiaSubKey();
-        profile.HasNvidiaGpu = nvidiaKey != null;
-        if (nvidiaKey != null)
+        profile.HasNvidiaGpu = nvidiaKey is not null;
+        if (nvidiaKey is not null)
         {
             profile.NvidiaGpuName = ReadNvidiaGpuName(nvidiaKey);
             profile.GpuMaxPerformance = ReadGpuMaxPerformance(nvidiaKey);
@@ -166,7 +166,7 @@ public sealed partial class PerformanceService : IDisposable
     public async Task<(string Name, string Guid)> GetActivePlanAsync(CancellationToken ct = default)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
-        var lines = new List<string>();
+        List<string> lines = [];
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", "/getactivescheme", ct, PowerShellRunner.OemEncoding); }
@@ -213,7 +213,7 @@ public sealed partial class PerformanceService : IDisposable
         var existingGuid = await FindPlanGuidByNameAsync("Ultimate Performance", ct).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(existingGuid)) return existingGuid;
 
-        var lines = new List<string>();
+        List<string> lines = [];
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         _ps.LineReceived += OnLine;
@@ -237,7 +237,7 @@ public sealed partial class PerformanceService : IDisposable
     public async Task<string?> FindPlanGuidByNameAsync(string nameSubstring, CancellationToken ct = default)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
-        var lines = new List<string>();
+        List<string> lines = [];
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct, PowerShellRunner.OemEncoding); }
@@ -292,10 +292,10 @@ public sealed partial class PerformanceService : IDisposable
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(GameBarKey);
-            if (key == null) return true; // Windows default = ON
+            if (key is null) return true; // Windows default = ON
             var val = key.GetValue("AllowAutoGameMode");
             // If key exists but value doesn't, default is ON
-            if (val == null) return true;
+            if (val is null) return true;
             return val is int i && i == 1;
         }
         catch (SecurityException) { return true; }
@@ -324,9 +324,9 @@ public sealed partial class PerformanceService : IDisposable
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(GameDvrKey);
-            if (key == null) return true; // default = enabled
+            if (key is null) return true; // default = enabled
             var val = key.GetValue("AppCaptureEnabled");
-            if (val == null) return true;
+            if (val is null) return true;
             return val is int i && i == 1;
         }
         catch (SecurityException) { return true; }
@@ -338,9 +338,9 @@ public sealed partial class PerformanceService : IDisposable
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(GameConfigStoreKey);
-            if (key == null) return true;
+            if (key is null) return true;
             var val = key.GetValue("GameDVR_Enabled");
-            if (val == null) return true;
+            if (val is null) return true;
             return val is int i && i == 1;
         }
         catch (SecurityException) { return true; }
@@ -376,14 +376,14 @@ public sealed partial class PerformanceService : IDisposable
         try
         {
             using var classRoot = Registry.LocalMachine.OpenSubKey(GpuClassRoot);
-            if (classRoot == null) return null;
+            if (classRoot is null) return null;
 
             foreach (var subName in classRoot.GetSubKeyNames().Where(s => int.TryParse(s, out _)))
             {
                 try
                 {
                     using var sub = classRoot.OpenSubKey(subName);
-                    if (sub == null) continue;
+                    if (sub is null) continue;
 
                     var driverDesc = sub.GetValue("DriverDesc")?.ToString() ?? "";
                     var provider = sub.GetValue("ProviderName")?.ToString() ?? "";
@@ -422,7 +422,7 @@ public sealed partial class PerformanceService : IDisposable
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey($@"{GpuClassRoot}\{subKey}");
-            if (key == null) return false;
+            if (key is null) return false;
             var val = key.GetValue("DisableDynamicPstate");
             return val is int i && i == 1;
         }
@@ -442,7 +442,7 @@ public sealed partial class PerformanceService : IDisposable
         {
             using var key = Registry.LocalMachine.OpenSubKey(
                 $@"{GpuClassRoot}\{subKey}", writable: true);
-            if (key == null) return false;
+            if (key is null) return false;
 
             if (maxPerformance)
                 key.SetValue("DisableDynamicPstate", 1, RegistryValueKind.DWord);
@@ -467,7 +467,7 @@ public sealed partial class PerformanceService : IDisposable
     internal async Task<int> ReadProcessorMinPercentAsync(CancellationToken ct = default)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
-        var lines = new List<string>();
+        List<string> lines = [];
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
         try
@@ -613,7 +613,7 @@ public sealed partial class PerformanceService : IDisposable
         SetXboxGameBar(snapshot.XboxGameBarEnabled && snapshot.XboxGameDvrEnabled);
 
         // GPU
-        if (snapshot.NvidiaSubKey != null)
+        if (snapshot.NvidiaSubKey is not null)
             SetGpuMaxPerformance(snapshot.NvidiaSubKey, !snapshot.GpuDynamicPstate);
 
         // Processor state

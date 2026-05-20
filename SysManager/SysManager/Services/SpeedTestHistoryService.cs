@@ -14,7 +14,7 @@ namespace SysManager.Services;
 /// service degradation over time. Stores up to <see cref="MaxPerEngine"/>
 /// results per engine (HTTP / Ookla), oldest entries are trimmed on save.
 /// </summary>
-public sealed class SpeedTestHistoryService
+public sealed class SpeedTestHistoryService : IDisposable
 {
     public const int MaxPerEngine = 20;
 
@@ -33,6 +33,9 @@ public sealed class SpeedTestHistoryService
     // acts as an async-compatible mutex.
     private readonly SemaphoreSlim _fileLock = new(1, 1);
 
+    /// <inheritdoc />
+    public void Dispose() => _fileLock.Dispose();
+
     /// <summary>
     /// Loads all saved results from disk. Returns empty list on any error.
     /// </summary>
@@ -49,7 +52,7 @@ public sealed class SpeedTestHistoryService
 
             var json = await File.ReadAllTextAsync(HistoryPath, ct).ConfigureAwait(false);
             var entries = JsonSerializer.Deserialize<List<SpeedTestHistoryEntry>>(json, JsonOpts);
-            if (entries == null) return new List<SpeedTestResult>();
+            if (entries is null) return new List<SpeedTestResult>();
 
             return entries.Select(e => new SpeedTestResult(
                 e.Engine ?? "HTTP",
@@ -128,7 +131,7 @@ public sealed class SpeedTestHistoryService
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (engine == null)
+            if (engine is null)
             {
                 if (File.Exists(HistoryPath))
                     File.Delete(HistoryPath);

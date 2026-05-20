@@ -24,7 +24,7 @@ public sealed partial class WindowsFeaturesService
     /// </summary>
     public async Task<List<WindowsFeature>> ListFeaturesAsync(CancellationToken ct = default)
     {
-        var captured = new List<string>();
+        List<string> captured = [];
         void Collect(PowerShellLine l)
         {
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);
@@ -55,7 +55,7 @@ public sealed partial class WindowsFeaturesService
 
         Log.Information("Enabling Windows feature: {Feature}", featureName);
 
-        var captured = new List<string>();
+        List<string> captured = [];
         void Collect(PowerShellLine l)
         {
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);
@@ -89,7 +89,7 @@ public sealed partial class WindowsFeaturesService
 
         Log.Information("Disabling Windows feature: {Feature}", featureName);
 
-        var captured = new List<string>();
+        List<string> captured = [];
         void Collect(PowerShellLine l)
         {
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);

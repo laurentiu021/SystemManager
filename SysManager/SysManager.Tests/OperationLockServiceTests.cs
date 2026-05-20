@@ -7,6 +7,7 @@ using Xunit;
 
 namespace SysManager.Tests;
 
+[Collection("OperationLock")]
 public class OperationLockServiceTests
 {
     private OperationLockService Sut => OperationLockService.Instance;

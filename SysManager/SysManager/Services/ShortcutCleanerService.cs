@@ -103,7 +103,7 @@ public sealed partial class ShortcutCleanerService
 
     private static List<(string Label, string Path)> GetScanLocations()
     {
-        var locations = new List<(string, string)>();
+        List<(string, string)> locations = [];
 
         var userDesktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         var publicDesktop = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);

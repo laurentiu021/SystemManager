@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Management;
+using System.Text.RegularExpressions;
 using Serilog;
 using SysManager.Models;
 
@@ -14,7 +15,7 @@ namespace SysManager.Services;
 /// user-friendly verdict ("Healthy / Watch out / Replace soon").
 /// No admin required for read-only queries.
 /// </summary>
-public sealed class DiskHealthService
+public sealed partial class DiskHealthService
 {
     public Task<IReadOnlyList<DiskHealthReport>> CollectAsync(CancellationToken ct = default)
         => Task.Run(() => Collect(), ct);
@@ -72,7 +73,7 @@ public sealed class DiskHealthService
             // Defense-in-depth: validate objectId format before WQL interpolation.
             // ObjectId from MSFT_PhysicalDisk is typically like {guid}\\PhysicalDisk0.
             // Reject anything that doesn't match expected characters.
-            if (!System.Text.RegularExpressions.Regex.IsMatch(objectId, @"^[\w{}\-\\.:/]+$"))
+            if (!ObjectIdFormatPattern().IsMatch(objectId))
             {
                 Log.Warning("DiskHealth: unexpected objectId format, skipping reliability query");
                 return;
@@ -213,4 +214,7 @@ public sealed class DiskHealthService
         2 => "Unhealthy",
         _ => "Unknown"
     };
+
+    [GeneratedRegex(@"^[\w{}\-\\.:/]+$")]
+    private static partial Regex ObjectIdFormatPattern();
 }

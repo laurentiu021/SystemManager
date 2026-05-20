@@ -383,7 +383,7 @@ recommended mitigation — see [SECURITY.md](SECURITY.md) for details.
 
 ## Build from source
 
-Prerequisites: Windows 10 or newer and the [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0).
+Prerequisites: Windows 10 or newer and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ```powershell
 git clone https://github.com/laurentiu021/SystemManager.git
@@ -450,7 +450,7 @@ and elevation state in a format ready to paste into a bug report.
 
 ## Tech stack
 
-- .NET 9 (WPF, C# 13)
+- .NET 10 (WPF, C# 14)
 - CommunityToolkit.Mvvm for MVVM plumbing
 - Microsoft.Extensions.DependencyInjection for IoC
 - ModernWpfUI for the modern title bar

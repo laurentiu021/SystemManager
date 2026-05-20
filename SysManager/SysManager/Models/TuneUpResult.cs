@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -36,7 +38,7 @@ public sealed class TuneUpResult
     public bool RamWarning => RamUsedPercent >= 85;
 
     // ── Summary helpers ────────────────────────────────────────────────
-    public string FreedDisplay => CleanupCategory.HumanSize(TempBytesFreed);
+    public string FreedDisplay => FormatHelper.FormatSize(TempBytesFreed);
 
     public int WarningCount
     {

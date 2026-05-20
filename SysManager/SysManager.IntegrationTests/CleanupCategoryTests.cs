@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.IntegrationTests;
@@ -12,13 +13,13 @@ public class CleanupCategoryTests
     [InlineData(0L, "0 B")]
     [InlineData(1L, "1 B")]
     [InlineData(1023L, "1023 B")]
-    [InlineData(1024L, "1 KB")]
-    [InlineData(1024L * 1024, "1 MB")]
-    [InlineData(1024L * 1024 * 1024, "1 GB")]
-    [InlineData(1024L * 1024 * 1024 * 1024, "1 TB")]
+    [InlineData(1024L, "1.0 KB")]
+    [InlineData(1024L * 1024, "1.0 MB")]
+    [InlineData(1024L * 1024 * 1024, "1.0 GB")]
+    [InlineData(1024L * 1024 * 1024 * 1024, "1.0 TB")]
     public void HumanSize_FormatsCorrectly(long bytes, string expected)
     {
-        Assert.Equal(expected, CleanupCategory.HumanSize(bytes));
+        Assert.Equal(expected, FormatHelper.FormatSize(bytes));
     }
 
     [Theory]
@@ -27,13 +28,13 @@ public class CleanupCategoryTests
     [InlineData(long.MinValue)]
     public void HumanSize_NegativeIsZero(long bytes)
     {
-        Assert.Equal("0 B", CleanupCategory.HumanSize(bytes));
+        Assert.Equal("0 B", FormatHelper.FormatSize(bytes));
     }
 
     [Fact]
     public void HumanSize_VeryLarge_DoesNotCrash()
     {
-        var s = CleanupCategory.HumanSize(long.MaxValue);
+        var s = FormatHelper.FormatSize(long.MaxValue);
         Assert.NotNull(s);
         Assert.Contains("TB", s);
     }
@@ -71,7 +72,7 @@ public class CleanupCategoryTests
             Name = "X", Description = "Y", Paths = Array.Empty<string>(),
             TotalSizeBytes = 2048
         };
-        Assert.Equal("2 KB", c.SizeDisplay);
+        Assert.Equal("2.0 KB", c.SizeDisplay);
     }
 
     [Fact]
@@ -148,7 +149,7 @@ public class CleanupCategoryTests
             SizeBytes = 2048,
             LastModified = DateTime.Now
         };
-        Assert.Equal("2 KB", e.SizeDisplay);
+        Assert.Equal("2.0 KB", e.SizeDisplay);
     }
 
     [Fact]

@@ -3,6 +3,7 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Helpers;
 
 namespace SysManager.Models;
 
@@ -22,17 +23,8 @@ public sealed partial class CleanupCategory : ObservableObject
     public TimeSpan? OlderThan { get; init; }
     public bool IsDestructiveHint { get; init; }
 
-    public string SizeDisplay => HumanSize(TotalSizeBytes);
+    public string SizeDisplay => FormatHelper.FormatSize(TotalSizeBytes);
     public string CountDisplay => $"{FileCount:N0} files";
-
-    public static string HumanSize(long bytes)
-    {
-        if (bytes <= 0) return "0 B";
-        string[] u = { "B", "KB", "MB", "GB", "TB" };
-        double v = bytes; var i = 0;
-        while (v >= 1024 && i < u.Length - 1) { v /= 1024; i++; }
-        return $"{v:0.#} {u[i]}";
-    }
 }
 
 public sealed class CleanupResult
@@ -41,7 +33,7 @@ public sealed class CleanupResult
     public int FilesDeleted { get; init; }
     public IReadOnlyList<string> Errors { get; init; } = [];
     public string Summary =>
-        $"Freed {CleanupCategory.HumanSize(BytesFreed)} across {FilesDeleted:N0} files" +
+        $"Freed {FormatHelper.FormatSize(BytesFreed)} across {FilesDeleted:N0} files" +
         (Errors.Count > 0 ? $" · {Errors.Count} skipped" : string.Empty);
 }
 
@@ -52,6 +44,6 @@ public sealed class LargeFileEntry
     public required string Name { get; init; }
     public required long SizeBytes { get; init; }
     public required DateTime LastModified { get; init; }
-    public string SizeDisplay => CleanupCategory.HumanSize(SizeBytes);
+    public string SizeDisplay => FormatHelper.FormatSize(SizeBytes);
     public string LastModifiedDisplay => LastModified.ToString("dd MMM yyyy");
 }

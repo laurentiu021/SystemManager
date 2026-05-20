@@ -11,6 +11,7 @@
     <AssemblyName>SysManager</AssemblyName>
     <RootNamespace>SysManager</RootNamespace>
     <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Version>0.48.21</Version>
     <FileVersion>0.48.21.0</FileVersion>
     <AssemblyVersion>0.48.21.0</AssemblyVersion>

@@ -14,7 +14,7 @@ namespace SysManager.Services;
 /// Scans common locations for .lnk shortcuts whose targets no longer exist.
 /// Supports deletion to Recycle Bin or permanent delete.
 /// </summary>
-public sealed class ShortcutCleanerService
+public sealed partial class ShortcutCleanerService
 {
     /// <summary>
     /// Scans all common shortcut locations and returns broken shortcuts.

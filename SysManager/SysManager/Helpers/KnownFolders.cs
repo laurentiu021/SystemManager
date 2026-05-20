@@ -12,7 +12,7 @@ namespace SysManager.Helpers;
 /// Handles cases where the user has moved default folders (Downloads,
 /// Documents, Desktop, etc.) to a non-standard location.
 /// </summary>
-internal static class KnownFolders
+internal static partial class KnownFolders
 {
     // Known Folder GUIDs — https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid
     private static readonly Guid Downloads = new("374DE290-123F-4565-9164-39C4925E467B");
@@ -22,9 +22,9 @@ internal static class KnownFolders
     private static readonly Guid Music = new("4BD8D571-6D19-48D3-BE97-422220080E43");
     private static readonly Guid Videos = new("18989B1D-99B5-455B-841C-AB7C74E4DDFC");
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, PreserveSig = false)]
-    private static extern void SHGetKnownFolderPath(
-        [MarshalAs(UnmanagedType.LPStruct)] Guid rfid,
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial void SHGetKnownFolderPath(
+        in Guid rfid,
         uint dwFlags,
         nint hToken,
         out string pszPath);

@@ -58,8 +58,8 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern IntPtr DefWindowProc(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    private static partial IntPtr DefWindowProc(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     /// <summary>Click on a single-item group (Dashboard, Network).</summary>
     private void SingleGroup_Click(object sender, MouseButtonEventArgs e)

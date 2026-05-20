@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -19,8 +20,8 @@ public partial class ProcessManagerViewModel : ViewModelBase
 {
     private readonly ProcessManagerService _service = new();
 
-    public ObservableCollection<ProcessEntry> Processes { get; } = new();
-    public ObservableCollection<ProcessEntry> FilteredProcesses { get; } = new();
+    public BulkObservableCollection<ProcessEntry> Processes { get; } = new();
+    public BulkObservableCollection<ProcessEntry> FilteredProcesses { get; } = new();
 
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private bool _showOnlyApps;
@@ -77,9 +78,7 @@ public partial class ProcessManagerViewModel : ViewModelBase
                 return snapshot;
             });
 
-            Processes.Clear();
-            foreach (var p in enriched)
-                Processes.Add(p);
+            Processes.ReplaceWith(enriched);
 
             ApplyFilter();
             StatusMessage = $"Loaded {ProcessCount} processes.";
@@ -133,8 +132,6 @@ public partial class ProcessManagerViewModel : ViewModelBase
 
     private void ApplyFilter()
     {
-        FilteredProcesses.Clear();
-
         IEnumerable<ProcessEntry> source = Processes;
 
         if (ShowOnlyApps)
@@ -147,10 +144,7 @@ public partial class ProcessManagerViewModel : ViewModelBase
         }
 
         // Default order by memory descending; DataGrid column headers handle user sorting.
-        source = source.OrderByDescending(p => p.MemoryBytes);
-
-        foreach (var p in source)
-            FilteredProcesses.Add(p);
+        FilteredProcesses.ReplaceWith(source.OrderByDescending(p => p.MemoryBytes));
 
         ProcessCount = FilteredProcesses.Count;
         TotalMemory = FilteredProcesses.Sum(p => p.MemoryBytes);

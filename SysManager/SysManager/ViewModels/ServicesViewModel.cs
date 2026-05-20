@@ -23,7 +23,7 @@ public partial class ServicesViewModel : ViewModelBase
     private readonly PowerShellRunner _ps = new();
     private List<ServiceEntry> _allServices = new();
 
-    public ObservableCollection<ServiceEntry> Services { get; } = new();
+    public BulkObservableCollection<ServiceEntry> Services { get; } = new();
 
     [ObservableProperty] private string _filter = "";
     [ObservableProperty] private string _selectedFilter = "All";
@@ -158,7 +158,6 @@ public partial class ServicesViewModel : ViewModelBase
 
     private void ApplyFilter()
     {
-        Services.Clear();
         var filtered = _allServices.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(Filter))
@@ -177,9 +176,7 @@ public partial class ServicesViewModel : ViewModelBase
         };
 
         // Default order by name; DataGrid column headers handle user sorting.
-        filtered = filtered.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var s in filtered) Services.Add(s);
+        Services.ReplaceWith(filtered.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase));
     }
 
     [RelayCommand]

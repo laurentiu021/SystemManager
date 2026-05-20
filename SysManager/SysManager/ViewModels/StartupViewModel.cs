@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -20,7 +21,7 @@ public partial class StartupViewModel : ViewModelBase
     private readonly StartupService _service = new();
     private readonly List<StartupEntry> _allEntries = new();
 
-    public ObservableCollection<StartupEntry> Entries { get; } = new();
+    public BulkObservableCollection<StartupEntry> Entries { get; } = new();
 
     [ObservableProperty] private int _enabledCount;
     [ObservableProperty] private int _disabledCount;
@@ -140,13 +141,11 @@ public partial class StartupViewModel : ViewModelBase
 
     private void ApplyFilter()
     {
-        Entries.Clear();
         var filtered = HideWindowsEntries
             ? _allEntries.Where(e => !IsWindowsEntry(e))
             : _allEntries;
 
-        foreach (var item in filtered)
-            Entries.Add(item);
+        Entries.ReplaceWith(filtered);
 
         UpdateCounts();
     }

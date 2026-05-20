@@ -7,6 +7,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -22,7 +23,7 @@ public partial class DuplicateFileViewModel : ViewModelBase
     private readonly DuplicateFileService _service = new();
     private CancellationTokenSource? _cts;
 
-    public ObservableCollection<DuplicateFileGroup> Groups { get; } = new();
+    public BulkObservableCollection<DuplicateFileGroup> Groups { get; } = new();
     public ObservableCollection<string> PresetFolders { get; } = new();
 
     [ObservableProperty] private string _selectedFolder = "";
@@ -98,8 +99,7 @@ public partial class DuplicateFileViewModel : ViewModelBase
 
             var results = await _service.ScanAsync(SelectedFolder, minBytes, progress, ct);
 
-            foreach (var g in results)
-                Groups.Add(g);
+            Groups.ReplaceWith(results);
 
             GroupCount = Groups.Count;
             DuplicateFileCount = Groups.Sum(g => g.Files.Count);

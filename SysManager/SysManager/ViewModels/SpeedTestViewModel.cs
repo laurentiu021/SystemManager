@@ -32,10 +32,10 @@ public partial class SpeedTestViewModel : ViewModelBase
     [ObservableProperty] private string _estimatedTime = "";
 
     /// <summary>Persisted history of HTTP speed test results (newest first).</summary>
-    public ObservableCollection<SpeedTestResult> HttpHistory { get; } = new();
+    public BulkObservableCollection<SpeedTestResult> HttpHistory { get; } = new();
 
     /// <summary>Persisted history of Ookla speed test results (newest first).</summary>
-    public ObservableCollection<SpeedTestResult> OoklaHistory { get; } = new();
+    public BulkObservableCollection<SpeedTestResult> OoklaHistory { get; } = new();
 
     public SpeedTestViewModel(NetworkSharedState shared)
     {
@@ -48,14 +48,10 @@ public partial class SpeedTestViewModel : ViewModelBase
         try
         {
             var all = await _history.LoadAsync();
-            HttpHistory.Clear();
-            OoklaHistory.Clear();
-            foreach (var r in all.Where(r => string.Equals(r.Engine, "HTTP", StringComparison.OrdinalIgnoreCase))
-                                 .OrderByDescending(r => r.CompletedAt))
-                HttpHistory.Add(r);
-            foreach (var r in all.Where(r => string.Equals(r.Engine, "Ookla", StringComparison.OrdinalIgnoreCase))
-                                 .OrderByDescending(r => r.CompletedAt))
-                OoklaHistory.Add(r);
+            HttpHistory.ReplaceWith(all.Where(r => string.Equals(r.Engine, "HTTP", StringComparison.OrdinalIgnoreCase))
+                                       .OrderByDescending(r => r.CompletedAt));
+            OoklaHistory.ReplaceWith(all.Where(r => string.Equals(r.Engine, "Ookla", StringComparison.OrdinalIgnoreCase))
+                                        .OrderByDescending(r => r.CompletedAt));
         }
         catch (InvalidOperationException ex)
         {

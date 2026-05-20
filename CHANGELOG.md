@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **ObservableCollection batch updates** — replaced Clear() + foreach Add() pattern
+  (N+1 CollectionChanged events) with BulkObservableCollection.ReplaceWith() (single
+  Reset notification) across 10 ViewModels, reducing UI notification overhead during
+  data refreshes.
+
 ## [0.48.38] - 2026-05-20
 
 ### Fixed

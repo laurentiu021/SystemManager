@@ -50,7 +50,7 @@ public partial class WingetService
         var packages = new List<AppPackage>();
         // Find the header line containing "Name" and "Id" and "Version" and "Available"
         int headerIdx = lines.FindIndex(l =>
-            Regex.IsMatch(l, @"^\s*Name\s+Id\s+Version\s+Available", RegexOptions.IgnoreCase));
+            UpgradeHeaderPattern().IsMatch(l));
         if (headerIdx < 0) return packages;
 
         var header = lines[headerIdx];
@@ -66,7 +66,7 @@ public partial class WingetService
             if (string.IsNullOrWhiteSpace(line)) continue;
             if (line.StartsWith("--")) continue;
             // Stop at "X upgrades available." summary or similar
-            if (Regex.IsMatch(line, @"^\d+\s+(upgrades|packages|package)\s+", RegexOptions.IgnoreCase)) break;
+            if (UpgradeSummaryPattern().IsMatch(line)) break;
             if (line.Length < idxAvailable) continue;
 
             string Slice(int start, int end) =>
@@ -111,6 +111,12 @@ public partial class WingetService
     /// </summary>
     [GeneratedRegex(@"^[\w.\-/+\s]{1,256}$")]
     private static partial Regex PackageIdPattern();
+
+    [GeneratedRegex(@"^\s*Name\s+Id\s+Version\s+Available", RegexOptions.IgnoreCase)]
+    private static partial Regex UpgradeHeaderPattern();
+
+    [GeneratedRegex(@"^\d+\s+(upgrades|packages|package)\s+", RegexOptions.IgnoreCase)]
+    private static partial Regex UpgradeSummaryPattern();
 
     public async Task<int> UpgradeAllAsync(CancellationToken ct = default)
     {

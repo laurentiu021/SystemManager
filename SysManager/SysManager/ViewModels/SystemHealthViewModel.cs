@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -198,7 +199,7 @@ public partial class SystemHealthViewModel : ViewModelBase
         }
 
         // SEC-003: validate drive letter format to prevent argument injection
-        if (!System.Text.RegularExpressions.Regex.IsMatch(driveLetter, @"^[A-Z]:$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        if (!DriveLetterPattern().IsMatch(driveLetter))
         {
             StatusMessage = "Invalid drive letter format.";
             return;
@@ -346,6 +347,9 @@ public partial class SystemHealthViewModel : ViewModelBase
         if (AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current?.Shutdown();
     }
+
+    [GeneratedRegex(@"^[A-Z]:$", RegexOptions.IgnoreCase)]
+    private static partial Regex DriveLetterPattern();
 
     [RelayCommand]
     private void CancelScan() => _cts?.Cancel();

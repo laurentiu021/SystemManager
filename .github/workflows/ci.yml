@@ -42,6 +42,9 @@ jobs:
           dotnet restore SysManager/SysManager.Tests/SysManager.Tests.csproj
           dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
 
+      - name: Check formatting
+        run: dotnet format SysManager/SysManager/SysManager.csproj --verify-no-changes --verbosity diagnostic
+
       - name: Build (Release)
         run: dotnet build SysManager/SysManager/SysManager.csproj -c Release --no-restore
 

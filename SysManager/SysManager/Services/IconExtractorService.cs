@@ -31,7 +31,7 @@ public sealed class IconExtractorService
     // Lazy-initialized contextual fallback icons (shell32.dll icon indices)
     private static readonly Lazy<ImageSource?> _appFallback = new(() => ExtractShell32Icon(2));
     private static readonly Lazy<ImageSource?> _windowsIcon = new(() => ExtractShell32Icon(44));
-    private static readonly Lazy<ImageSource?> _gearIcon    = new(() => ExtractShell32Icon(15));
+    private static readonly Lazy<ImageSource?> _gearIcon = new(() => ExtractShell32Icon(15));
 
     /// <summary>
     /// Gets the icon for the given file path or command string.

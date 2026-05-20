@@ -168,17 +168,17 @@ public static class EventExplainer
     private static string BuildGenericExplanation(FriendlyEventEntry e) => e.Severity switch
     {
         EventSeverity.Critical => $"Critical condition reported by '{e.ProviderName}'. The system or a core component is in trouble.",
-        EventSeverity.Error    => $"An error was logged by '{e.ProviderName}'.",
-        EventSeverity.Warning  => $"A warning from '{e.ProviderName}' — not necessarily broken, but worth a look if it repeats.",
-        EventSeverity.Info     => $"Informational event from '{e.ProviderName}'.",
+        EventSeverity.Error => $"An error was logged by '{e.ProviderName}'.",
+        EventSeverity.Warning => $"A warning from '{e.ProviderName}' — not necessarily broken, but worth a look if it repeats.",
+        EventSeverity.Info => $"Informational event from '{e.ProviderName}'.",
         _ => "Low-level diagnostic event."
     };
 
     private static string BuildGenericRecommendation(FriendlyEventEntry e) => e.Severity switch
     {
         EventSeverity.Critical => "Read the full message below. If it repeats, search the web for 'Event ID " + e.EventId + " " + e.ProviderName + "'.",
-        EventSeverity.Error    => "If this keeps repeating, search for 'Event ID " + e.EventId + " " + e.ProviderName + "'.",
-        EventSeverity.Warning  => "Usually safe to ignore one-offs. Check if it's a pattern.",
+        EventSeverity.Error => "If this keeps repeating, search for 'Event ID " + e.EventId + " " + e.ProviderName + "'.",
+        EventSeverity.Warning => "Usually safe to ignore one-offs. Check if it's a pattern.",
         _ => "No action needed."
     };
 }

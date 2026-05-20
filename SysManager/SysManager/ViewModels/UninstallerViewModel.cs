@@ -206,16 +206,16 @@ public partial class UninstallerViewModel : ViewModelBase
     {
         var reason = exitCode switch
         {
-            1  => "The app's uninstaller reported a generic error.",
-            2  => "The uninstall was cancelled by the user or a UAC prompt was declined.",
-            5  => "Access denied — try running SysManager as Administrator.",
+            1 => "The app's uninstaller reported a generic error.",
+            2 => "The uninstall was cancelled by the user or a UAC prompt was declined.",
+            5 => "Access denied — try running SysManager as Administrator.",
             87 => "Invalid parameter — the app may require a manual uninstall.",
             1602 => "The uninstall was cancelled by the user.",
             1603 => "The app's installer encountered a fatal error during removal.",
             1605 => "The app is not currently installed (already removed?).",
             1618 => "Another installation is in progress — wait and try again.",
             3010 => "Uninstall succeeded but a reboot is required to complete removal.",
-            _  => $"The app's uninstaller returned exit code {exitCode}."
+            _ => $"The app's uninstaller returned exit code {exitCode}."
         };
 
         return $"Failed — {reason}";

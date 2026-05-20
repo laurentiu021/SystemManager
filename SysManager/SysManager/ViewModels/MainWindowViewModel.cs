@@ -247,12 +247,22 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         // construct the VM on an MTA thread without pulling WPF resources in.
 
         // 🏠 Dashboard (single-item group — renders flat)
-        var grpDashboard = new NavGroup { Id = "grp-dashboard", Label = "Dashboard", Glyph = "\uE80F", Children = {
+        var grpDashboard = new NavGroup
+        {
+            Id = "grp-dashboard",
+            Label = "Dashboard",
+            Glyph = "\uE80F",
+            Children = {
             new NavItem { Id = "nav-dashboard", Label = "Dashboard", Glyph = "\uE80F", Content = Dashboard, ViewType = typeof(Views.DashboardView) },
-        }};
+        }
+        };
 
         // 🔧 System (8)
-        var grpSystem = new NavGroup { Id = "grp-system", Label = "System", Glyph = "\uE912",
+        var grpSystem = new NavGroup
+        {
+            Id = "grp-system",
+            Label = "System",
+            Glyph = "\uE912",
             Subtitle = "Health · WinUpdate · Perf · Services · Startup · Features · Tasks · Boot",
             Tooltip = "System Health\nWindows Update\nPerformance Mode\nServices\nStartup Manager\nWindows Features\nTask Scheduler\nBoot Analyzer",
             Children = {
@@ -264,10 +274,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-windows-features",  Label = "Windows Features",  Glyph = "\uE9CE", Content = WindowsFeatures,  ViewType = typeof(Views.WindowsFeaturesView) },
             new NavItem { Id = "nav-task-scheduler",    Label = "Task Scheduler",    Glyph = "\uE916", Content = WipTaskScheduler, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-boot-analyzer",     Label = "Boot Analyzer",     Glyph = "\uE7F8", Content = WipBootAnalyzer,  ViewType = typeof(Views.PlaceholderView) },
-        }};
+        }
+        };
 
         // 🎮 Gaming & Profiles (5) — NEW GROUP
-        var grpGaming = new NavGroup { Id = "grp-gaming", Label = "Gaming & Profiles", Glyph = "\uE7FC",
+        var grpGaming = new NavGroup
+        {
+            Id = "grp-gaming",
+            Label = "Gaming & Profiles",
+            Glyph = "\uE7FC",
             Subtitle = "Game Mode · Standby · Timer · Affinity · Display",
             Tooltip = "Gaming Profile\nStandby List Cleaner\nTimer Resolution\nCPU Core Affinity\nDisplay Profiles",
             Children = {
@@ -276,10 +291,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-timer-resolution", Label = "Timer Resolution",     Glyph = "\uE916", Content = WipTimerResolution,    ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-cpu-affinity",     Label = "CPU Core Affinity",    Glyph = "\uE950", Content = WipCpuAffinity,        ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-display-profiles", Label = "Display Profiles",     Glyph = "\uE7F4", Content = WipDisplayProfiles,    ViewType = typeof(Views.PlaceholderView) },
-        }};
+        }
+        };
 
         // 📊 Monitor (7)
-        var grpMonitor = new NavGroup { Id = "grp-monitor", Label = "Monitor", Glyph = "\uE9D9",
+        var grpMonitor = new NavGroup
+        {
+            Id = "grp-monitor",
+            Label = "Monitor",
+            Glyph = "\uE9D9",
             Subtitle = "Processes · Resources · Alerts · Privacy · Lock · Watchdog · Bandwidth",
             Tooltip = "Process Manager\nResource History\nApp Alerts\nPrivacy Monitor\nFile Lock Detector\nSettings Watchdog\nBandwidth Monitor",
             Children = {
@@ -290,10 +310,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-file-lock",         Label = "File Lock Detector", Glyph = "\uE72E", Content = WipFileLockDetector, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-settings-watchdog", Label = "Settings Watchdog",  Glyph = "\uE7BA", Content = WipSettingsWatchdog, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-bandwidth-monitor", Label = "Bandwidth Monitor",  Glyph = "\uE839", Content = WipBandwidthMonitor, ViewType = typeof(Views.PlaceholderView) },
-        }};
+        }
+        };
 
         // 🧹 Cleanup (5)
-        var grpCleanup = new NavGroup { Id = "grp-cleanup", Label = "Cleanup", Glyph = "\uE74D",
+        var grpCleanup = new NavGroup
+        {
+            Id = "grp-cleanup",
+            Label = "Cleanup",
+            Glyph = "\uE74D",
             Subtitle = "Quick · Deep · Shortcuts · Shredder · Maintenance",
             Tooltip = "Quick Cleanup\nDeep Cleanup\nShortcut Cleaner\nFile Shredder\nScheduled Maintenance",
             Children = {
@@ -302,19 +327,29 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-shortcut-cleaner",      Label = "Shortcut Cleaner",      Glyph = "\uE71B", Content = ShortcutCleaner,         ViewType = typeof(Views.ShortcutCleanerView) },
             new NavItem { Id = "nav-file-shredder",         Label = "File Shredder",         Glyph = "\uE74D", Content = WipFileShredder,         ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-scheduled-maintenance", Label = "Scheduled Maintenance", Glyph = "\uE823", Content = WipScheduledMaintenance, ViewType = typeof(Views.PlaceholderView) },
-        }};
+        }
+        };
 
         // 💾 Storage (2)
-        var grpStorage = new NavGroup { Id = "grp-storage", Label = "Storage", Glyph = "\uE958",
+        var grpStorage = new NavGroup
+        {
+            Id = "grp-storage",
+            Label = "Storage",
+            Glyph = "\uE958",
             Subtitle = "Disk Analyzer · Duplicate Finder",
             Tooltip = "Disk Analyzer\nDuplicate Finder",
             Children = {
             new NavItem { Id = "nav-disk-analyzer", Label = "Disk Analyzer",    Glyph = "\uE958", Content = DiskAnalyzer,  ViewType = typeof(Views.DiskAnalyzerView) },
             new NavItem { Id = "nav-duplicates",    Label = "Duplicate Finder", Glyph = "\uE8C8", Content = DuplicateFile, ViewType = typeof(Views.DuplicateFileView) },
-        }};
+        }
+        };
 
         // 🌐 Network (6)
-        var grpNetwork = new NavGroup { Id = "grp-network", Label = "Network", Glyph = "\uE839",
+        var grpNetwork = new NavGroup
+        {
+            Id = "grp-network",
+            Label = "Network",
+            Glyph = "\uE839",
             Subtitle = "Ping · Traceroute · Speed · Repair · DNS · Hosts",
             Tooltip = "Ping\nTraceroute\nSpeed Test\nNetwork Repair\nDNS Changer\nHosts Editor",
             Children = {
@@ -324,10 +359,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-network-repair", Label = "Network Repair", Glyph = "\uE90F", Content = NetworkRepair,  ViewType = typeof(Views.NetworkRepairView) },
             new NavItem { Id = "nav-dns-changer",    Label = "DNS Changer",    Glyph = "\uE968", Content = WipDnsChanger,  ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-hosts-editor",   Label = "Hosts Editor",   Glyph = "\uE8A5", Content = WipHostsEditor, ViewType = typeof(Views.PlaceholderView) },
-        }};
+        }
+        };
 
         // 📦 Apps (4)
-        var grpApps = new NavGroup { Id = "grp-apps", Label = "Apps", Glyph = "\uE7B8",
+        var grpApps = new NavGroup
+        {
+            Id = "grp-apps",
+            Label = "Apps",
+            Glyph = "\uE7B8",
             Subtitle = "Updates · Installer · Uninstaller · Blocker",
             Tooltip = "App Updates\nBulk Installer\nUninstaller\nApp Blocker",
             Children = {
@@ -335,10 +375,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-bulk-installer", Label = "Bulk Installer", Glyph = "\uE896", Content = WipBulkInstaller, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-uninstaller",    Label = "Uninstaller",    Glyph = "\uE738", Content = Uninstaller,      ViewType = typeof(Views.UninstallerView) },
             new NavItem { Id = "nav-app-blocker",    Label = "App Blocker",    Glyph = "\uE8F8", Content = AppBlocker,       ViewType = typeof(Views.AppBlockerView) },
-        }};
+        }
+        };
 
         // 🛡️ Privacy & Security (6) — NEW GROUP
-        var grpPrivacy = new NavGroup { Id = "grp-privacy", Label = "Privacy & Security", Glyph = "\uE72E",
+        var grpPrivacy = new NavGroup
+        {
+            Id = "grp-privacy",
+            Label = "Privacy & Security",
+            Glyph = "\uE72E",
             Subtitle = "Telemetry · Debloat · Browser · Edge/OneDrive · Defender · Notifications",
             Tooltip = "Privacy & Telemetry\nDebloater & Ads\nBrowser Cleaner\nEdge/OneDrive Remover\nDefender Tweaks\nNotification Blocker",
             Children = {
@@ -348,10 +393,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-edge-onedrive",        Label = "Edge/OneDrive Remover", Glyph = "\uE738", Content = WipEdgeOneDriveRemover, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-defender-tweaks",      Label = "Defender Tweaks",       Glyph = "\uE83D", Content = WipDefenderTweaks,      ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-notification-blocker", Label = "Notification Blocker",  Glyph = "\uE7ED", Content = WipNotificationBlocker, ViewType = typeof(Views.PlaceholderView) },
-        }};
+        }
+        };
 
         // 🎨 Customization (4) — NEW GROUP
-        var grpCustomization = new NavGroup { Id = "grp-customization", Label = "Customization", Glyph = "\uE771",
+        var grpCustomization = new NavGroup
+        {
+            Id = "grp-customization",
+            Label = "Customization",
+            Glyph = "\uE771",
             Subtitle = "Context Menu · Dark Mode · Volume · Env Variables",
             Tooltip = "Context Menu\nDark Mode Scheduler\nVolume Control\nEnvironment Variables",
             Children = {
@@ -359,10 +409,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-dark-mode",      Label = "Dark Mode Scheduler",   Glyph = "\uE793", Content = WipDarkModeScheduler, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-volume-control", Label = "Volume Control",        Glyph = "\uE767", Content = WipVolumeControl,     ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-env-variables",  Label = "Environment Variables", Glyph = "\uE943", Content = WipEnvVariableEditor, ViewType = typeof(Views.PlaceholderView) },
-        }};
+        }
+        };
 
         // ℹ️ Info (4)
-        var grpInfo = new NavGroup { Id = "grp-info", Label = "Info", Glyph = "\uE946",
+        var grpInfo = new NavGroup
+        {
+            Id = "grp-info",
+            Label = "Info",
+            Glyph = "\uE946",
             Subtitle = "Drivers · Battery · Logs · About",
             Tooltip = "Drivers\nBattery Health\nSystem Logs\nAbout",
             Children = {
@@ -370,10 +425,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-battery", Label = "Battery Health", Glyph = "\uEBA6", Content = BatteryHealth, ViewType = typeof(Views.BatteryHealthView) },
             new NavItem { Id = "nav-logs",    Label = "System Logs",    Glyph = "\uE9F9", Content = Logs,          ViewType = typeof(Views.LogsView) },
             new NavItem { Id = "nav-about",   Label = "About",          Glyph = "\uE946", Content = About,         ViewType = typeof(Views.AboutView) },
-        }};
+        }
+        };
 
         // ⚙️ Advanced (4) — NEW GROUP
-        var grpAdvanced = new NavGroup { Id = "grp-advanced", Label = "Advanced", Glyph = "\uE713",
+        var grpAdvanced = new NavGroup
+        {
+            Id = "grp-advanced",
+            Label = "Advanced",
+            Glyph = "\uE713",
             Subtitle = "Restore · Export/Import · CLI · Report",
             Tooltip = "Restore Points\nProfile Export/Import\nCLI Interface\nSystem Report",
             Children = {
@@ -381,7 +441,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-profile-export", Label = "Profile Export/Import", Glyph = "\uE8B5", Content = WipProfileExportImport, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-cli-interface",  Label = "CLI Interface",         Glyph = "\uE756", Content = WipCliInterface,        ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-system-report",  Label = "System Report",         Glyph = "\uE9F9", Content = WipSystemReport,        ViewType = typeof(Views.PlaceholderView) },
-        }};
+        }
+        };
 
         NavGroups.Add(grpDashboard);
         NavGroups.Add(grpSystem);

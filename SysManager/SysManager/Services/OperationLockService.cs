@@ -4,6 +4,7 @@
 
 using System.Collections.Concurrent;
 using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Models;
 
 namespace SysManager.Services;
 
@@ -107,8 +108,3 @@ public sealed partial class OperationLockService : ObservableObject
         }
     }
 }
-
-/// <summary>
-/// Information about a currently running operation.
-/// </summary>
-public sealed record OperationInfo(string Name, DateTime StartedUtc);

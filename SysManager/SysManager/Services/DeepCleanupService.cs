@@ -266,7 +266,7 @@ public sealed class DeepCleanupService
 
     private static string[] SteamCacheDirs(string pfx86, string pf, string localAppData)
     {
-        var result = new List<string>();
+        List<string> result = [];
         foreach (var root in SteamRoots(pfx86, pf))
         {
             result.Add(Path.Combine(root, "appcache"));
@@ -280,7 +280,7 @@ public sealed class DeepCleanupService
 
     private static string[] SteamShaderCacheDirs(string pfx86, string pf)
     {
-        var result = new List<string>();
+        List<string> result = [];
         foreach (var root in SteamRoots(pfx86, pf))
             result.Add(Path.Combine(root, "steamapps", "shadercache"));
         foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
@@ -316,7 +316,7 @@ public sealed class DeepCleanupService
     private static CleanupResult Clean(IReadOnlyList<CleanupCategory> categories, IProgress<ScanProgress>? progress, CancellationToken ct)
     {
         long freed = 0;
-        var errors = new List<string>();
+        List<string> errors = [];
         var filesDeleted = 0;
         var selected = categories.Where(c => c.IsSelected).ToList();
         var total = selected.Count;
@@ -401,7 +401,7 @@ public sealed class DeepCleanupService
 
     private static IEnumerable<string> EnumerateDirectoriesDepthFirst(string root, CancellationToken ct)
     {
-        var all = new List<string>();
+        List<string> all = [];
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)

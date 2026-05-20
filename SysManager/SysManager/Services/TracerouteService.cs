@@ -32,7 +32,7 @@ public sealed class TracerouteService
             ct.ThrowIfCancellationRequested();
 
             var options = new PingOptions(ttl, true);
-            var latencies = new List<double>();
+            List<double> latencies = [];
             IPAddress? replyAddress = null;
             IPStatus lastStatus = IPStatus.Unknown;
 
@@ -69,7 +69,7 @@ public sealed class TracerouteService
 
             // Await reverse DNS with a short timeout before emitting the hop.
             // This ensures hop.HostName is populated when the UI receives it.
-            if (replyAddress != null)
+            if (replyAddress is not null)
             {
                 var addr = replyAddress;
                 try
@@ -99,7 +99,7 @@ public sealed class TracerouteService
     private void RaiseHopCompleted(TracerouteHop hop)
     {
         var handlers = HopCompleted?.GetInvocationList();
-        if (handlers == null) return;
+        if (handlers is null) return;
         foreach (var h in handlers)
         {
             try { ((Action<TracerouteHop>)h).Invoke(hop); }

@@ -146,7 +146,7 @@ public sealed partial class DiskHealthService
         }
 
         // All good
-        var bits = new List<string>();
+        List<string> bits = [];
         if (r.TemperatureC.HasValue) bits.Add($"{r.TemperatureC:F0} °C");
         if (r.WearPercent.HasValue) bits.Add($"wear {r.WearPercent}%");
         if (r.PowerOnHours.HasValue) bits.Add($"{r.PowerOnHours} h on");
@@ -160,7 +160,7 @@ public sealed partial class DiskHealthService
 
     private static double? ToDouble(object? o)
     {
-        if (o == null) return null;
+        if (o is null) return null;
         try { var v = Convert.ToDouble(o); return Math.Abs(v) < 1e-9 ? null : v; }
         catch (FormatException) { return null; }
         catch (OverflowException) { return null; }
@@ -169,7 +169,7 @@ public sealed partial class DiskHealthService
 
     private static int? ToInt(object? o)
     {
-        if (o == null) return null;
+        if (o is null) return null;
         try { return Convert.ToInt32(o); }
         catch (FormatException) { return null; }
         catch (OverflowException) { return null; }
@@ -178,7 +178,7 @@ public sealed partial class DiskHealthService
 
     private static long? ToLong(object? o)
     {
-        if (o == null) return null;
+        if (o is null) return null;
         try { var v = Convert.ToInt64(o); return v == 0 ? null : v; }
         catch (FormatException) { return null; }
         catch (OverflowException) { return null; }

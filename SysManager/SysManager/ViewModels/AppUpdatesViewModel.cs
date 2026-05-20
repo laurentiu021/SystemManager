@@ -12,7 +12,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class AppUpdatesViewModel : ViewModelBase
+public sealed partial class AppUpdatesViewModel : ViewModelBase
 {
     private readonly WingetService _winget;
     private CancellationTokenSource? _cts;

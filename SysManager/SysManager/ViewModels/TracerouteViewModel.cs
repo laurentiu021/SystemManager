@@ -14,7 +14,7 @@ namespace SysManager.ViewModels;
 /// Auto-traceroute + manual trace. Has its own Start/Stop for the
 /// auto-trace monitor, independent of the ping monitor.
 /// </summary>
-public partial class TracerouteViewModel : ViewModelBase
+public sealed partial class TracerouteViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
     private CancellationTokenSource? _traceCts;

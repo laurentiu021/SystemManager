@@ -22,7 +22,7 @@ namespace SysManager.ViewModels;
 /// • Confirmation dialog before every destructive action.
 /// • GPU changes warn about reboot requirement.
 /// </summary>
-public partial class PerformanceViewModel : ViewModelBase
+public sealed partial class PerformanceViewModel : ViewModelBase
 {
     private readonly PerformanceService _service;
     private PerformanceService.OriginalSnapshot? _snapshot;

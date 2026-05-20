@@ -16,7 +16,7 @@ namespace SysManager.ViewModels;
 /// Windows Features tab — lists optional features, allows enable/disable toggle.
 /// Requires administrator privileges for modifications.
 /// </summary>
-public partial class WindowsFeaturesViewModel : ViewModelBase
+public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 {
     private readonly WindowsFeaturesService _service;
     private CancellationTokenSource? _scanCts;

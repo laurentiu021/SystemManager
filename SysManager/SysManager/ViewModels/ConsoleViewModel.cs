@@ -14,7 +14,7 @@ namespace SysManager.ViewModels;
 /// Shared, scrollable console view-model. Each tab has its own instance.
 /// Lines are capped to avoid unbounded memory growth on long-running installs.
 /// </summary>
-public partial class ConsoleViewModel : ObservableObject
+public sealed partial class ConsoleViewModel : ObservableObject
 {
     private const int MaxLines = 5000;
     private readonly object _gate = new();

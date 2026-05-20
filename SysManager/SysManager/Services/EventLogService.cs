@@ -48,7 +48,7 @@ public sealed class EventLogService
                 EventRecord? rec = null;
                 try { rec = reader.ReadEvent(); }
                 catch (EventLogException) { continue; }
-                if (rec == null) yield break;
+                if (rec is null) yield break;
 
                 FriendlyEventEntry? entry = null;
                 try { entry = Project(rec, opt.LogName); }
@@ -56,7 +56,7 @@ public sealed class EventLogService
                 catch (InvalidOperationException) { /* skip malformed record */ }
                 finally { rec.Dispose(); }
 
-                if (entry == null) continue;
+                if (entry is null) continue;
                 EventExplainer.Enrich(entry);
 
                 emitted++;
@@ -133,7 +133,7 @@ public sealed class EventLogService
     /// </summary>
     private static string BuildXPath(EventLogQueryOptions opt)
     {
-        var clauses = new List<string>();
+        List<string> clauses = [];
 
         if (opt.Severities is { Count: > 0 })
         {

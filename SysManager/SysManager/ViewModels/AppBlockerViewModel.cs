@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// App Blocker tab — prevents selected applications from executing using
 /// Image File Execution Options (IFEO) registry mechanism.
 /// </summary>
-public partial class AppBlockerViewModel : ViewModelBase
+public sealed partial class AppBlockerViewModel : ViewModelBase
 {
     public ObservableCollection<BlockedApp> BlockedApps { get; } = new();
 

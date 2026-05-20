@@ -28,7 +28,7 @@ public sealed partial class UninstallerService
     /// </summary>
     public async Task<List<InstalledApp>> ListInstalledAsync(CancellationToken ct = default)
     {
-        var captured = new List<string>();
+        List<string> captured = [];
         void Collect(PowerShellLine l)
         {
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);
@@ -125,7 +125,7 @@ public sealed partial class UninstallerService
             try
             {
                 using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(regPath);
-                if (key == null) continue;
+                if (key is null) continue;
 
                 EnrichFromRegistryKey(key, lookup);
             }
@@ -138,7 +138,7 @@ public sealed partial class UninstallerService
         {
             using var hkcuKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
-            if (hkcuKey != null)
+            if (hkcuKey is not null)
                 EnrichFromRegistryKey(hkcuKey, lookup);
         }
         catch (System.Security.SecurityException) { /* skip protected HKCU key */ }
@@ -154,7 +154,7 @@ public sealed partial class UninstallerService
             try
             {
                 using var sub = key.OpenSubKey(subName);
-                if (sub == null) continue;
+                if (sub is null) continue;
 
                 var displayName = sub.GetValue("DisplayName") as string;
                 if (string.IsNullOrWhiteSpace(displayName)) continue;
@@ -186,7 +186,7 @@ public sealed partial class UninstallerService
                         app.UninstallString = uninst;
                 }
 
-                if (app.Icon == null)
+                if (app.Icon is null)
                 {
                     var iconPath = sub.GetValue("DisplayIcon") as string;
                     var installLoc = sub.GetValue("InstallLocation") as string;

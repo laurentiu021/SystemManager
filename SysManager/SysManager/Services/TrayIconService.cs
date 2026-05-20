@@ -152,7 +152,7 @@ public sealed class TrayIconService : IDisposable
         try
         {
             var snapshot = await _sysInfo.CaptureAsync();
-            if (_trayIcon == null) return;
+            if (_trayIcon is null) return;
 
             var tooltip = $"SysManager\n" +
                           $"CPU: {snapshot.Cpu.LoadPercent:0}% | " +
@@ -202,7 +202,7 @@ public sealed class TrayIconService : IDisposable
 
         // Disk health warning
         var unhealthyDisk = snapshot.Disks.FirstOrDefault(d => d.HealthStatus != "Healthy");
-        if (unhealthyDisk != null && now - _lastDiskNotification > NotificationCooldown)
+        if (unhealthyDisk is not null && now - _lastDiskNotification > NotificationCooldown)
         {
             _lastDiskNotification = now;
             ShowNotification("Disk Health Warning",

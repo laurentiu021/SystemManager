@@ -148,7 +148,7 @@ public sealed class SystemInfoService
         double usedGB = totalGB - freeGB;
         double pct = totalGB > 0 ? usedGB / totalGB * 100.0 : 0;
 
-        var modules = new List<MemoryModule>();
+        List<MemoryModule> modules = [];
         using (var s = new ManagementObjectSearcher("SELECT BankLabel,Manufacturer,Capacity,Speed,PartNumber FROM Win32_PhysicalMemory"))
         {
             using var modCollection = s.Get();
@@ -171,7 +171,7 @@ public sealed class SystemInfoService
 
     private static List<DiskInfo> QueryDisks()
     {
-        var list = new List<DiskInfo>();
+        List<DiskInfo> list = [];
         // Use Storage namespace for MSFT_PhysicalDisk (gives HealthStatus / MediaType)
         try
         {

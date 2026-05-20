@@ -57,7 +57,7 @@ public sealed class SpeedTestService
         try
         {
             using var p = new Ping();
-            var samples = new List<long>();
+            List<long> samples = [];
             for (int i = 0; i < 4; i++)
             {
                 var r = await p.SendPingAsync(host, 2000);
@@ -388,7 +388,7 @@ public sealed class SpeedTestService
 #pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete — no direct replacement for Authenticode verification
                 var cert = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
 #pragma warning restore SYSLIB0057
-                if (cert == null || !cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
+                if (cert is null || !cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
                 {
                     Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert?.Subject ?? "none");
                     try { File.Delete(exe); }

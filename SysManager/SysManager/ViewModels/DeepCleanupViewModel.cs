@@ -14,7 +14,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class DeepCleanupViewModel : ViewModelBase
+public sealed partial class DeepCleanupViewModel : ViewModelBase
 {
     private readonly DeepCleanupService _cleanup = new();
     private readonly LargeFileScanner _largeFiles = new();

@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.38] - 2026-05-20
+
+### Fixed
+- **LogService** — path sanitization regex now dynamically derives the user
+  profile directory from `Environment.GetFolderPath` instead of assuming a
+  hardcoded `<drive>:\Users\` pattern; falls back to the generic regex if the
+  environment variable is unavailable.
+- **MarkdownTextBlock** — cached `FontFamily("Consolas")` as a static field to
+  eliminate per-render allocation in code span formatting.
+
+## [0.48.37] - 2026-05-19
+
+### Fixed
+- **DiskHealthReport** — fixed potential integer overflow in `HealthPercent`
+  calculation when `ReadErrors` or `WriteErrors` exceed `int.MaxValue`; arithmetic
+  now uses `long` before clamping to the 0–20 deduction cap.
+- **SpeedTestService** — documented pinned Ookla CLI version (`1.2.0`) with
+  maintenance comment explaining update procedure and Authenticode verification.
+
+## [0.48.36] - 2026-05-19
+
 ### Fixed
 - **MemoryTestService** — `ManagementObject` instances in `GetModulesAsync` WMI
   query are now properly disposed via `using (mo)` block, preventing native handle
@@ -14,17 +35,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   resources: series paints (stroke, geometry, fill), axis paints (name, labels,
   separators), and class-level legend/tooltip paints. Previously only typefaces
   were disposed, leaking unmanaged `SKPaint` handles.
-- **DiskHealthReport** — fixed potential integer overflow in `HealthPercent`
-  calculation when `ReadErrors` or `WriteErrors` exceed `int.MaxValue`; arithmetic
-  now uses `long` before clamping to the 0–20 deduction cap.
-- **SpeedTestService** — documented pinned Ookla CLI version (`1.2.0`) with
-  maintenance comment explaining update procedure and Authenticode verification.
-- **LogService** — path sanitization regex now dynamically derives the user
-  profile directory from `Environment.GetFolderPath` instead of assuming a
-  hardcoded `<drive>:\Users\` pattern; falls back to the generic regex if the
-  environment variable is unavailable.
-- **MarkdownTextBlock** — cached `FontFamily("Consolas")` as a static field to
-  eliminate per-render allocation in code span formatting.
 
 ### Added
 - **ServicesViewModelTests** — 20 unit tests covering ApplyFilter logic: category

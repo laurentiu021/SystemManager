@@ -95,12 +95,12 @@ public class FixedDriveServiceTests
     }
 
     [Fact]
-    public void EnumerateSync_ReturnsSameAsAsync()
+    public async Task EnumerateSync_ReturnsSameAsAsync()
     {
         var s = new FixedDriveService();
         var sync = FixedDriveService.Enumerate();
-        var async = s.EnumerateAsync().Result;
-        Assert.Equal(sync.Count, async.Count);
+        var asyncResult = await s.EnumerateAsync();
+        Assert.Equal(sync.Count, asyncResult.Count);
     }
 
     [Fact]

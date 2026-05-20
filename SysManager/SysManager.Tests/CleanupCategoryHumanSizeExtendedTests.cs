@@ -83,7 +83,7 @@ public class CleanupCategoryHumanSizeExtendedTests
             BytesFreed = 1024 * 1024 * 50,
             FilesDeleted = 100
         };
-        Assert.Contains("50 MB", result.Summary);
+        Assert.Contains("50.0 MB", result.Summary);
         Assert.Contains("100", result.Summary);
         Assert.DoesNotContain("skipped", result.Summary);
     }

@@ -47,46 +47,20 @@ public partial class WingetService
 
     private static List<AppPackage> ParseUpgradeTable(List<string> lines)
     {
-        var packages = new List<AppPackage>();
-        // Find the header line containing "Name" and "Id" and "Version" and "Available"
-        int headerIdx = lines.FindIndex(l =>
-            UpgradeHeaderPattern().IsMatch(l));
-        if (headerIdx < 0) return packages;
+        var rows = Helpers.WingetTableParser.Parse(lines, UpgradeHeaderPattern(), UpgradeSummaryPattern());
+        var packages = new List<AppPackage>(rows.Count);
 
-        var header = lines[headerIdx];
-        int idxId = header.IndexOf("Id", StringComparison.OrdinalIgnoreCase);
-        int idxVersion = header.IndexOf("Version", StringComparison.OrdinalIgnoreCase);
-        int idxAvailable = header.IndexOf("Available", StringComparison.OrdinalIgnoreCase);
-        int idxSource = header.IndexOf("Source", StringComparison.OrdinalIgnoreCase);
-        if (idxId < 0 || idxVersion < 0 || idxAvailable < 0) return packages;
-
-        for (int i = headerIdx + 2; i < lines.Count; i++)
+        foreach (var row in rows)
         {
-            var line = lines[i];
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            if (line.StartsWith("--")) continue;
-            // Stop at "X upgrades available." summary or similar
-            if (UpgradeSummaryPattern().IsMatch(line)) break;
-            if (line.Length < idxAvailable) continue;
-
-            string Slice(int start, int end) =>
-                start < line.Length ? line[start..Math.Min(end, line.Length)].Trim() : string.Empty;
-
-            var name = Slice(0, idxId);
-            var id = Slice(idxId, idxVersion);
-            var version = Slice(idxVersion, idxAvailable);
-            var available = idxSource > 0 ? Slice(idxAvailable, idxSource) : Slice(idxAvailable, line.Length);
-            var source = idxSource > 0 ? Slice(idxSource, line.Length) : "winget";
-
-            if (string.IsNullOrWhiteSpace(id)) continue;
+            if (string.IsNullOrWhiteSpace(row.Available)) continue;
 
             packages.Add(new AppPackage
             {
-                Name = name,
-                Id = id,
-                CurrentVersion = version,
-                AvailableVersion = available,
-                Source = string.IsNullOrWhiteSpace(source) ? "winget" : source,
+                Name = row.Name,
+                Id = row.Id,
+                CurrentVersion = row.Version,
+                AvailableVersion = row.Available,
+                Source = string.IsNullOrWhiteSpace(row.Source) ? "winget" : row.Source,
                 Status = "Pending"
             });
         }

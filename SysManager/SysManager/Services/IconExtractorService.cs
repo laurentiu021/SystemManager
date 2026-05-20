@@ -20,7 +20,7 @@ namespace SysManager.Services;
 /// icons (Windows logo for system processes, gear for services, generic app icon).
 /// Results are cached per-path to avoid repeated extraction.
 /// </summary>
-public sealed class IconExtractorService
+public sealed partial class IconExtractorService
 {
     private static readonly ConcurrentDictionary<string, ImageSource?> _cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object _evictionLock = new();
@@ -203,7 +203,7 @@ public sealed class IconExtractorService
             var shell32 = Path.Join(
                 Environment.GetFolderPath(Environment.SpecialFolder.System), "shell32.dll");
 
-            var hIcon = ExtractIconW(IntPtr.Zero, shell32, index);
+            var hIcon = ExtractIcon(IntPtr.Zero, shell32, index);
             if (hIcon == IntPtr.Zero || hIcon == (IntPtr)1)
                 return null;
 
@@ -470,15 +470,15 @@ public sealed class IconExtractorService
         public string szTypeName;
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SHGetFileInfo(
         string pszPath, uint dwFileAttributes,
         ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
 
-    [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-    private static extern IntPtr ExtractIconW(IntPtr hInst, string lpszExeFileName, int nIconIndex);
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "ExtractIconW")]
+    private static partial IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DestroyIcon(IntPtr hIcon);
+    private static partial bool DestroyIcon(IntPtr hIcon);
 }

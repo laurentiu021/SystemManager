@@ -39,7 +39,7 @@ follows, and what to expect when you open a pull request.
 **Prerequisites**
 
 - Windows 10 or later (WPF + Windows APIs won't build elsewhere).
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0).
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 - Git 2.40+.
 - A Windows account with admin rights (needed to test elevated features;
   the app itself runs fine unelevated for everything else).

@@ -58,7 +58,7 @@ public sealed class MemoryTestService
                         {
                             diagCount++;
                         }
-                        if (rec.TimeCreated.HasValue && (lastError == null || rec.TimeCreated.Value > lastError))
+                        if (rec.TimeCreated.HasValue && (lastError is null || rec.TimeCreated.Value > lastError))
                             lastError = rec.TimeCreated.Value;
                     }
                 }

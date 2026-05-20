@@ -73,7 +73,7 @@ public sealed class PowerShellRunner
         using var ps = PowerShell.Create();
         ps.Runspace = runspace;
         ps.AddScript(script);
-        if (parameters != null)
+        if (parameters is not null)
         {
             foreach (var kv in parameters)
                 ps.AddParameter(kv.Key, kv.Value);

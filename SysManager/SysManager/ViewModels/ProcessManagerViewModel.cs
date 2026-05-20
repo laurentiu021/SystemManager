@@ -16,7 +16,7 @@ namespace SysManager.ViewModels;
 /// Process Manager tab — lists running processes with memory/thread info,
 /// allows kill and open file location.
 /// </summary>
-public partial class ProcessManagerViewModel : ViewModelBase
+public sealed partial class ProcessManagerViewModel : ViewModelBase
 {
     private readonly ProcessManagerService _service = new();
 

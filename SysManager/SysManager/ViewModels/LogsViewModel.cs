@@ -23,7 +23,7 @@ namespace SysManager.ViewModels;
 /// live via a CollectionView, and shows a plain-English explanation for the
 /// selected entry. Supports export to CSV and jumping to the raw log file.
 /// </summary>
-public partial class LogsViewModel : ViewModelBase
+public sealed partial class LogsViewModel : ViewModelBase
 {
     private readonly EventLogService _eventLogs = new();
     private readonly SynchronizationContext? _sync;

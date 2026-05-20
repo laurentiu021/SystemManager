@@ -105,14 +105,14 @@ public sealed class ProcessDescriptionService
             var resourceName = assembly.GetManifestResourceNames()
                 .FirstOrDefault(n => n.EndsWith("ProcessDescriptions.json", StringComparison.OrdinalIgnoreCase));
 
-            if (resourceName == null)
+            if (resourceName is null)
             {
                 Log.Warning("ProcessDescriptions.json embedded resource not found");
                 return db;
             }
 
             using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream == null)
+            if (stream is null)
             {
                 Log.Warning("Could not open ProcessDescriptions.json stream");
                 return db;
@@ -123,7 +123,7 @@ public sealed class ProcessDescriptionService
                 PropertyNameCaseInsensitive = true
             });
 
-            if (entries == null) return db;
+            if (entries is null) return db;
 
             foreach (var e in entries.Where(e => !string.IsNullOrWhiteSpace(e.Name)))
             {

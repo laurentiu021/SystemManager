@@ -1,6 +1,6 @@
 # Architecture
 
-SysManager is a tabbed WPF desktop app on .NET 9, written in C# 13. It follows
+SysManager is a tabbed WPF desktop app on .NET 10, written in C# 14. It follows
 a standard MVVM layout with a thin service layer that wraps Windows APIs,
 PowerShell, and external CLIs (winget, Ookla `speedtest`). It's gamer-focused:
 network presets for CS2 / PUBG / Streaming and safe cleanup for Steam / Epic

@@ -15,7 +15,7 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// Shortcut Cleaner tab — scans for broken .lnk files and allows deletion.
 /// </summary>
-public partial class ShortcutCleanerViewModel : ViewModelBase
+public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 {
     private readonly ShortcutCleanerService _service = new();
     private CancellationTokenSource? _cts;

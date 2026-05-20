@@ -12,9 +12,8 @@ older build, the first step is usually to update.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.49.x  | :white_check_mark: |
-| 0.48.x  | :x:                |
-| < 0.48  | :x:                |
+| 1.0.x   | :white_check_mark: |
+| < 1.0   | :x:                |
 
 ## Reporting a vulnerability
 

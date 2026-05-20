@@ -127,14 +127,14 @@ public sealed class AppAlertService : IDisposable
             try
             {
                 using var key = Registry.LocalMachine.OpenSubKey(path);
-                if (key == null) continue;
+                if (key is null) continue;
 
                 foreach (var subKeyName in key.GetSubKeyNames())
                 {
                     try
                     {
                         using var sub = key.OpenSubKey(subKeyName);
-                        if (sub == null) continue;
+                        if (sub is null) continue;
 
                         var name = sub.GetValue("DisplayName") as string;
                         if (string.IsNullOrWhiteSpace(name)) continue;
@@ -201,7 +201,7 @@ public sealed class AppAlertService : IDisposable
     /// </summary>
     private void RaiseNewAppDetected(AppInstallEntry entry)
     {
-        if (_syncContext != null)
+        if (_syncContext is not null)
             _syncContext.Post(_ => NewAppDetected?.Invoke(entry), null);
         else
             NewAppDetected?.Invoke(entry);
@@ -209,7 +209,7 @@ public sealed class AppAlertService : IDisposable
 
     private static List<string> GetMonitoredDirectories()
     {
-        var dirs = new List<string>();
+        List<string> dirs = [];
 
         var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);

@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// App Alerts tab — monitors for new application installations and shows
 /// a timestamped history of detected installs.
 /// </summary>
-public partial class AppAlertsViewModel : ViewModelBase
+public sealed partial class AppAlertsViewModel : ViewModelBase
 {
     private readonly AppAlertService _service = new();
     private readonly Dispatcher _dispatcher;

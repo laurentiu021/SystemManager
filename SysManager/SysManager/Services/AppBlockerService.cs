@@ -42,7 +42,7 @@ public sealed partial class AppBlockerService
         try
         {
             using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath, writable: true);
-            if (ifeo == null) return false;
+            if (ifeo is null) return false;
 
             using var appKey = ifeo.CreateSubKey(exeName, writable: true);
             appKey.SetValue("Debugger", BlockerDebugger, RegistryValueKind.String);
@@ -87,13 +87,13 @@ public sealed partial class AppBlockerService
         try
         {
             using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath, writable: true);
-            if (ifeo == null) return false;
+            if (ifeo is null) return false;
 
             using var appKey = ifeo.OpenSubKey(exeName, writable: true);
-            if (appKey == null) return true;
+            if (appKey is null) return true;
 
             var debugger = appKey.GetValue("Debugger") as string;
-            if (debugger != null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
+            if (debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
             {
                 appKey.DeleteValue("Debugger", throwOnMissingValue: false);
 
@@ -137,13 +137,13 @@ public sealed partial class AppBlockerService
         try
         {
             using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath);
-            if (ifeo == null) return false;
+            if (ifeo is null) return false;
 
             using var appKey = ifeo.OpenSubKey(exeName);
-            if (appKey == null) return false;
+            if (appKey is null) return false;
 
             var debugger = appKey.GetValue("Debugger") as string;
-            return debugger != null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase);
+            return debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase);
         }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
@@ -160,17 +160,17 @@ public sealed partial class AppBlockerService
         try
         {
             using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath);
-            if (ifeo == null) return blocked;
+            if (ifeo is null) return blocked;
 
             foreach (var subKeyName in ifeo.GetSubKeyNames())
             {
                 try
                 {
                     using var appKey = ifeo.OpenSubKey(subKeyName);
-                    if (appKey == null) continue;
+                    if (appKey is null) continue;
 
                     var debugger = appKey.GetValue("Debugger") as string;
-                    if (debugger != null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
+                    if (debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
                     {
                         blocked.Add(new BlockedApp
                         {

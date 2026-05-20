@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// Services tab — lists all Windows services with gaming recommendations,
 /// allows start/stop and startup type changes.
 /// </summary>
-public partial class ServicesViewModel : ViewModelBase
+public sealed partial class ServicesViewModel : ViewModelBase
 {
     private readonly PowerShellRunner _ps = new();
     private List<ServiceEntry> _allServices = new();

@@ -14,7 +14,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class WindowsUpdateViewModel : ViewModelBase
+public sealed partial class WindowsUpdateViewModel : ViewModelBase
 {
     private readonly PowerShellRunner _runner;
     private CancellationTokenSource? _cts;

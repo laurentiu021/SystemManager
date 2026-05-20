@@ -12,7 +12,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public partial class CleanupViewModel : ViewModelBase
+public sealed partial class CleanupViewModel : ViewModelBase
 {
     private readonly PowerShellRunner _runner;
 

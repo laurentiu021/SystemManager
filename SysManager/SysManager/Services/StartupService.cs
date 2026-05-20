@@ -96,7 +96,7 @@ public sealed class StartupService
                     try
                     {
                         var shellType = Type.GetTypeFromProgID("WScript.Shell");
-                        if (shellType != null)
+                        if (shellType is not null)
                         {
                             shell = Activator.CreateInstance(shellType)!;
                             shortcut = ((dynamic)shell).CreateShortcut(file);
@@ -117,8 +117,8 @@ public sealed class StartupService
                     }
                     finally
                     {
-                        if (shortcut != null) Marshal.ReleaseComObject(shortcut);
-                        if (shell != null) Marshal.ReleaseComObject(shell);
+                        if (shortcut is not null) Marshal.ReleaseComObject(shortcut);
+                        if (shell is not null) Marshal.ReleaseComObject(shell);
                     }
                 }
 
@@ -152,17 +152,17 @@ public sealed class StartupService
         {
             using var key = Registry.LocalMachine.OpenSubKey(
                 @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks", writable: false);
-            if (key == null) return;
+            if (key is null) return;
 
             foreach (var subKeyName in key.GetSubKeyNames())
             {
                 try
                 {
                     using var taskKey = key.OpenSubKey(subKeyName, writable: false);
-                    if (taskKey == null) continue;
+                    if (taskKey is null) continue;
 
                     var triggers = taskKey.GetValue("Triggers") as byte[];
-                    if (triggers == null || triggers.Length < 4) continue;
+                    if (triggers is null || triggers.Length < 4) continue;
 
                     var path = taskKey.GetValue("Path")?.ToString() ?? "";
                     var uri = taskKey.GetValue("URI")?.ToString() ?? path;
@@ -222,7 +222,7 @@ public sealed class StartupService
         try
         {
             using var key = root.OpenSubKey(keyPath, writable: false);
-            if (key == null) return;
+            if (key is null) return;
 
             var rootName = root == Registry.CurrentUser ? "HKCU" : "HKLM";
 
@@ -277,7 +277,7 @@ public sealed class StartupService
                 _ => null
             };
 
-            if (approved != null && approved.TryGetValue(entry.ValueName, out var blob) && blob.Length >= 1)
+            if (approved is not null && approved.TryGetValue(entry.ValueName, out var blob) && blob.Length >= 1)
             {
                 // Windows uses bit 0 to indicate disabled state:
                 // 02/06 = enabled (even), 03/07 = disabled (odd).
@@ -293,7 +293,7 @@ public sealed class StartupService
         try
         {
             using var key = root.OpenSubKey(keyPath, writable: false);
-            if (key == null) return null;
+            if (key is null) return null;
 
             var dict = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             foreach (var name in key.GetValueNames().Where(n => key.GetValue(n) is byte[]))
@@ -328,7 +328,7 @@ public sealed class StartupService
             };
 
             using var key = root.OpenSubKey(approvedPath, writable: true);
-            if (key == null)
+            if (key is null)
             {
                 entry.StatusText = "Error — StartupApproved key not found";
                 return false;
@@ -413,7 +413,7 @@ public sealed class StartupService
             };
 
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null)
+            if (proc is null)
             {
                 entry.StatusText = "Error — could not start schtasks";
                 return false;

@@ -16,7 +16,7 @@ namespace SysManager.ViewModels;
 /// Startup Manager tab — lists all programs that run at Windows boot
 /// and lets the user enable/disable them non-destructively.
 /// </summary>
-public partial class StartupViewModel : ViewModelBase
+public sealed partial class StartupViewModel : ViewModelBase
 {
     private readonly StartupService _service = new();
     private readonly List<StartupEntry> _allEntries = new();

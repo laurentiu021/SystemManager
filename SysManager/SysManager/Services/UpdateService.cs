@@ -69,7 +69,7 @@ public sealed class UpdateService
             try
             {
                 var dto = await Http.GetFromJsonAsync<GhRelease>(url, ct).ConfigureAwait(false);
-                if (dto == null) { LastError = "GitHub returned an empty response."; return null; }
+                if (dto is null) { LastError = "GitHub returned an empty response."; return null; }
                 return Map(dto);
             }
             catch (OperationCanceledException)
@@ -101,7 +101,7 @@ public sealed class UpdateService
         {
             var url = $"https://api.github.com/repos/{Owner}/{Repo}/releases?per_page={count}";
             var dto = await Http.GetFromJsonAsync<GhRelease[]>(url, ct).ConfigureAwait(false);
-            if (dto == null) return [];
+            if (dto is null) return [];
             return dto.Select(Map).OfType<ReleaseInfo>().ToList();
         }
         catch (OperationCanceledException)
@@ -307,7 +307,7 @@ public sealed class UpdateService
             var cert = System.Security.Cryptography.X509Certificates.X509Certificate
                 .CreateFromSignedFile(filePath);
 #pragma warning restore SYSLIB0057
-            if (cert != null)
+            if (cert is not null)
             {
                 Serilog.Log.Information("Update binary Authenticode verified: {Subject}", cert.Subject);
                 return true;
@@ -328,10 +328,10 @@ public sealed class UpdateService
 
     private static ReleaseInfo? Map(GhRelease dto)
     {
-        if (dto.TagName == null) return null;
+        if (dto.TagName is null) return null;
         if (dto.Prerelease || dto.Draft) return null;
         var version = ParseVersion(dto.TagName);
-        if (version == null) return null;
+        if (version is null) return null;
 
         var asset = dto.Assets?.FirstOrDefault(a =>
             string.Equals(a.Name, AssetName, StringComparison.OrdinalIgnoreCase));

@@ -24,10 +24,10 @@ public partial class SystemHealthViewModel : ViewModelBase
     private readonly PowerShellRunner _runner = new();
     private CancellationTokenSource? _cts;
 
-    public ObservableCollection<MemoryModule> Modules { get; } = new();
-    public ObservableCollection<DiskInfo> Disks { get; } = new();
-    public ObservableCollection<DiskHealthReport> DiskHealth { get; } = new();
-    public ObservableCollection<DriveTarget> ChkdskDrives { get; } = new();
+    public BulkObservableCollection<MemoryModule> Modules { get; } = new();
+    public BulkObservableCollection<DiskInfo> Disks { get; } = new();
+    public BulkObservableCollection<DiskHealthReport> DiskHealth { get; } = new();
+    public BulkObservableCollection<DriveTarget> ChkdskDrives { get; } = new();
 
     public ConsoleViewModel Console { get; } = new();
 
@@ -86,10 +86,8 @@ public partial class SystemHealthViewModel : ViewModelBase
             Os = snap.Os;
             Cpu = snap.Cpu;
             Memory = snap.Memory;
-            Modules.Clear();
-            foreach (var m in snap.Memory.Modules) Modules.Add(m);
-            Disks.Clear();
-            foreach (var d in snap.Disks) Disks.Add(d);
+            Modules.ReplaceWith(snap.Memory.Modules);
+            Disks.ReplaceWith(snap.Disks);
             Summary = $"OS {snap.Os.Caption}  —  CPU {snap.Cpu.Name} ({snap.Cpu.Cores}c/{snap.Cpu.LogicalProcessors}t)  —  RAM {snap.Memory.UsedGB:0.0}/{snap.Memory.TotalGB:0.0} GB  —  Disks {snap.Disks.Count}";
             StatusMessage = $"Scan at {snap.CapturedAt:HH:mm:ss}";
             Log.Information("System health scan completed");
@@ -106,22 +104,18 @@ public partial class SystemHealthViewModel : ViewModelBase
         try
         {
             var list = await _drives.EnumerateAsync();
-            ChkdskDrives.Clear();
-            foreach (var d in list)
+            ChkdskDrives.ReplaceWith(list.Select(d => new DriveTarget
             {
-                ChkdskDrives.Add(new DriveTarget
-                {
-                    Letter = d.Letter,
-                    Label = d.Label,
-                    FileSystem = d.FileSystem,
-                    SizeGB = d.SizeGB,
-                    FreeGB = d.FreeGB,
-                    MediaType = d.MediaType,
-                    BusType = d.BusType,
-                    IsSelected = string.Equals(d.Letter, "C:", StringComparison.OrdinalIgnoreCase),
-                    Status = "Idle"
-                });
-            }
+                Letter = d.Letter,
+                Label = d.Label,
+                FileSystem = d.FileSystem,
+                SizeGB = d.SizeGB,
+                FreeGB = d.FreeGB,
+                MediaType = d.MediaType,
+                BusType = d.BusType,
+                IsSelected = string.Equals(d.Letter, "C:", StringComparison.OrdinalIgnoreCase),
+                Status = "Idle"
+            }));
         }
         catch (IOException ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
@@ -134,11 +128,10 @@ public partial class SystemHealthViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Reading SMART data...";
-        DiskHealth.Clear();
         try
         {
             var reports = await _diskHealth.CollectAsync();
-            foreach (var r in reports) DiskHealth.Add(r);
+            DiskHealth.ReplaceWith(reports);
             StatusMessage = $"Collected {reports.Count} disk report(s).";
         }
         catch (System.Management.ManagementException ex) { StatusMessage = $"CheckDiskHealth failed: {ex.Message}"; }

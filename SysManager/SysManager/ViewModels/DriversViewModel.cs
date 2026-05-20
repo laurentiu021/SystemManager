@@ -8,6 +8,7 @@ using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -19,7 +20,7 @@ public partial class DriversViewModel : ViewModelBase
     private CancellationTokenSource? _cts;
     private readonly List<DriverEntry> _allDrivers = new();
 
-    public ObservableCollection<DriverEntry> Drivers { get; } = new();
+    public BulkObservableCollection<DriverEntry> Drivers { get; } = new();
 
     [ObservableProperty] private int _driverCount;
     [ObservableProperty] private string _summary = "Click List drivers to scan installed drivers.";
@@ -122,13 +123,11 @@ public partial class DriversViewModel : ViewModelBase
 
     private void ApplyFilter()
     {
-        Drivers.Clear();
         var filtered = HideSystemDrivers
             ? _allDrivers.Where(d => !IsSystemDriver(d))
             : _allDrivers;
 
-        foreach (var d in filtered)
-            Drivers.Add(d);
+        Drivers.ReplaceWith(filtered);
 
         DriverCount = Drivers.Count;
         if (_allDrivers.Count > 0)

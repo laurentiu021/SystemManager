@@ -33,25 +33,25 @@ public class CleanupCategoryHumanSizeExtendedTests
     [Fact]
     public void HumanSize_1024Bytes_Returns1KB()
     {
-        Assert.Equal("1 KB", FormatHelper.FormatSize(1024));
+        Assert.Equal("1.0 KB", FormatHelper.FormatSize(1024));
     }
 
     [Fact]
     public void HumanSize_1MB_Returns1MB()
     {
-        Assert.Equal("1 MB", FormatHelper.FormatSize(1024 * 1024));
+        Assert.Equal("1.0 MB", FormatHelper.FormatSize(1024 * 1024));
     }
 
     [Fact]
     public void HumanSize_1GB_Returns1GB()
     {
-        Assert.Equal("1 GB", FormatHelper.FormatSize(1024L * 1024 * 1024));
+        Assert.Equal("1.0 GB", FormatHelper.FormatSize(1024L * 1024 * 1024));
     }
 
     [Fact]
     public void HumanSize_1TB_Returns1TB()
     {
-        Assert.Equal("1 TB", FormatHelper.FormatSize(1024L * 1024 * 1024 * 1024));
+        Assert.Equal("1.0 TB", FormatHelper.FormatSize(1024L * 1024 * 1024 * 1024));
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class CleanupCategoryHumanSizeExtendedTests
     public void HumanSize_LargeValue_StaysInTB()
     {
         long bytes = 10L * 1024 * 1024 * 1024 * 1024;
-        Assert.Equal("10 TB", FormatHelper.FormatSize(bytes));
+        Assert.Equal("10.0 TB", FormatHelper.FormatSize(bytes));
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class CleanupCategoryHumanSizeExtendedTests
             TotalSizeBytes = 2048,
             FileCount = 5
         };
-        Assert.Equal("2 KB", cat.SizeDisplay);
+        Assert.Equal("2.0 KB", cat.SizeDisplay);
     }
 
     [Fact]

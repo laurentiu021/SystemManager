@@ -186,17 +186,31 @@ public sealed class DiskHealthService
 
     private static string MapMedia(uint v) => v switch
     {
-        3 => "HDD", 4 => "SSD", 5 => "SCM", _ => "Unspecified"
+        3 => "HDD",
+        4 => "SSD",
+        5 => "SCM",
+        _ => "Unspecified"
     };
 
     private static string MapBus(uint v) => v switch
     {
-        1 => "SCSI", 3 => "ATA", 6 => "Fibre", 7 => "USB", 8 => "RAID",
-        9 => "iSCSI", 10 => "SAS", 11 => "SATA", 17 => "NVMe", _ => "Other"
+        1 => "SCSI",
+        3 => "ATA",
+        6 => "Fibre",
+        7 => "USB",
+        8 => "RAID",
+        9 => "iSCSI",
+        10 => "SAS",
+        11 => "SATA",
+        17 => "NVMe",
+        _ => "Other"
     };
 
     private static string MapHealth(uint v) => v switch
     {
-        0 => "Healthy", 1 => "Warning", 2 => "Unhealthy", _ => "Unknown"
+        0 => "Healthy",
+        1 => "Warning",
+        2 => "Unhealthy",
+        _ => "Unknown"
     };
 }

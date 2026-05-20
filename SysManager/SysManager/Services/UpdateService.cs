@@ -21,7 +21,7 @@ namespace SysManager.Services;
 public sealed class UpdateService
 {
     public const string Owner = "laurentiu021";
-    public const string Repo  = "SystemManager";
+    public const string Repo = "SystemManager";
     public const string AssetName = "SysManager.exe";
 
     private static readonly HttpClient Http = CreateClient();
@@ -367,20 +367,20 @@ public sealed class UpdateService
 
     private sealed class GhRelease
     {
-        [JsonPropertyName("tag_name")]     public string? TagName { get; set; }
-        [JsonPropertyName("name")]         public string? Name { get; set; }
-        [JsonPropertyName("body")]         public string? Body { get; set; }
-        [JsonPropertyName("html_url")]     public string? HtmlUrl { get; set; }
+        [JsonPropertyName("tag_name")] public string? TagName { get; set; }
+        [JsonPropertyName("name")] public string? Name { get; set; }
+        [JsonPropertyName("body")] public string? Body { get; set; }
+        [JsonPropertyName("html_url")] public string? HtmlUrl { get; set; }
         [JsonPropertyName("published_at")] public DateTimeOffset? PublishedAt { get; set; }
-        [JsonPropertyName("prerelease")]   public bool Prerelease { get; set; }
-        [JsonPropertyName("draft")]        public bool Draft { get; set; }
-        [JsonPropertyName("assets")]       public GhAsset[]? Assets { get; set; }
+        [JsonPropertyName("prerelease")] public bool Prerelease { get; set; }
+        [JsonPropertyName("draft")] public bool Draft { get; set; }
+        [JsonPropertyName("assets")] public GhAsset[]? Assets { get; set; }
     }
 
     private sealed class GhAsset
     {
-        [JsonPropertyName("name")]                 public string? Name { get; set; }
-        [JsonPropertyName("size")]                 public long Size { get; set; }
+        [JsonPropertyName("name")] public string? Name { get; set; }
+        [JsonPropertyName("size")] public long Size { get; set; }
         [JsonPropertyName("browser_download_url")] public string? BrowserDownloadUrl { get; set; }
     }
 }

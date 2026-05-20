@@ -14,7 +14,7 @@ using System.Windows;
 [assembly: AssemblyTrademark("SysManager by laurentiu021")]
 [assembly: InternalsVisibleTo("SysManager.Tests")]
 
-[assembly:ThemeInfo(
+[assembly: ThemeInfo(
     ResourceDictionaryLocation.None,            //where theme specific resource dictionaries are located
                                                 //(used if a resource is not found in the page,
                                                 // or application resource dictionaries)

@@ -46,11 +46,11 @@ public partial class ShortcutCleanerViewModel : ViewModelBase
         IsScanning = true;
         IsBusy = true;
         IsProgressIndeterminate = true;
-            // MEM-007: Unsubscribe from old items before clearing to prevent
-            // PropertyChanged lambda leaks across rescans.
-            foreach (var old in BrokenShortcuts)
-                old.PropertyChanged -= OnShortcutPropertyChanged;
-            BrokenShortcuts.Clear();
+        // MEM-007: Unsubscribe from old items before clearing to prevent
+        // PropertyChanged lambda leaks across rescans.
+        foreach (var old in BrokenShortcuts)
+            old.PropertyChanged -= OnShortcutPropertyChanged;
+        BrokenShortcuts.Clear();
         BrokenCount = 0;
         SelectedCount = 0;
         ScanStatus = "Scanning...";

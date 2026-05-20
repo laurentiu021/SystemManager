@@ -89,10 +89,10 @@ public partial class LogsViewModel : ViewModelBase
         var sevOk = e.Severity switch
         {
             EventSeverity.Critical => ShowCritical,
-            EventSeverity.Error    => ShowError,
-            EventSeverity.Warning  => ShowWarning,
-            EventSeverity.Info     => ShowInfo,
-            EventSeverity.Verbose  => ShowVerbose,
+            EventSeverity.Error => ShowError,
+            EventSeverity.Warning => ShowWarning,
+            EventSeverity.Info => ShowInfo,
+            EventSeverity.Verbose => ShowVerbose,
             _ => true
         };
         if (!sevOk) return false;
@@ -321,9 +321,9 @@ public partial class LogsViewModel : ViewModelBase
         switch (e.Severity)
         {
             case EventSeverity.Critical: CriticalCount += delta; break;
-            case EventSeverity.Error:    ErrorCount += delta; break;
-            case EventSeverity.Warning:  WarningCount += delta; break;
-            case EventSeverity.Info:     InfoCount += delta; break;
+            case EventSeverity.Error: ErrorCount += delta; break;
+            case EventSeverity.Warning: WarningCount += delta; break;
+            case EventSeverity.Info: InfoCount += delta; break;
         }
     }
 

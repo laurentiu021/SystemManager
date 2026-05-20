@@ -38,20 +38,20 @@ public sealed partial class FriendlyEventEntry : ObservableObject
     public string SeverityIcon => Severity switch
     {
         EventSeverity.Critical => "⛔",
-        EventSeverity.Error    => "🔴",
-        EventSeverity.Warning  => "🟡",
-        EventSeverity.Info     => "🔵",
-        EventSeverity.Verbose  => "⚪",
+        EventSeverity.Error => "🔴",
+        EventSeverity.Warning => "🟡",
+        EventSeverity.Info => "🔵",
+        EventSeverity.Verbose => "⚪",
         _ => "•"
     };
 
     public string SeverityColor => Severity switch
     {
         EventSeverity.Critical => "#FF3B30",
-        EventSeverity.Error    => "#FF6B6B",
-        EventSeverity.Warning  => "#FFD166",
-        EventSeverity.Info     => "#4CC9F0",
-        EventSeverity.Verbose  => "#9AA0A6",
+        EventSeverity.Error => "#FF6B6B",
+        EventSeverity.Warning => "#FFD166",
+        EventSeverity.Info => "#4CC9F0",
+        EventSeverity.Verbose => "#9AA0A6",
         _ => "#9AA0A6"
     };
 

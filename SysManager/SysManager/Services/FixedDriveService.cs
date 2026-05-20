@@ -116,11 +116,20 @@ public sealed class FixedDriveService
 
     private static string MapMedia(uint v) => v switch
     {
-        3 => "HDD", 4 => "SSD", 5 => "SCM", _ => ""
+        3 => "HDD",
+        4 => "SSD",
+        5 => "SCM",
+        _ => ""
     };
 
     private static string MapBus(uint v) => v switch
     {
-        1 => "SCSI", 3 => "ATA", 7 => "USB", 10 => "SAS", 11 => "SATA", 17 => "NVMe", _ => ""
+        1 => "SCSI",
+        3 => "ATA",
+        7 => "USB",
+        10 => "SAS",
+        11 => "SATA",
+        17 => "NVMe",
+        _ => ""
     };
 }

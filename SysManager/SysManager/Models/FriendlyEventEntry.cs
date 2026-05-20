@@ -11,7 +11,7 @@ namespace SysManager.Models;
 /// Wraps the essentials plus an optional plain-English explanation
 /// attached by <see cref="Services.EventExplainer"/>.
 /// </summary>
-public partial class FriendlyEventEntry : ObservableObject
+public sealed partial class FriendlyEventEntry : ObservableObject
 {
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RelativeTime))]

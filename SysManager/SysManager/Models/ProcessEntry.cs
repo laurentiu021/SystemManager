@@ -10,7 +10,7 @@ namespace SysManager.Models;
 /// <summary>
 /// A running Windows process with its resource usage.
 /// </summary>
-public partial class ProcessEntry : ObservableObject
+public sealed partial class ProcessEntry : ObservableObject
 {
     [ObservableProperty] private int _pid;
     [ObservableProperty] private string _name = "";

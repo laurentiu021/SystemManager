@@ -12,7 +12,7 @@ namespace SysManager.Models;
 /// renames the registry value (adds/removes a "Disabled_" prefix) —
 /// completely non-destructive and reversible.
 /// </summary>
-public partial class StartupEntry : ObservableObject
+public sealed partial class StartupEntry : ObservableObject
 {
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _command = "";

@@ -10,7 +10,7 @@ namespace SysManager.Models;
 /// A folder or drive with its total size and percentage of parent.
 /// Used by the Disk Analyzer tab to show space breakdown.
 /// </summary>
-public partial class DiskUsageEntry : ObservableObject
+public sealed partial class DiskUsageEntry : ObservableObject
 {
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _fullPath = "";

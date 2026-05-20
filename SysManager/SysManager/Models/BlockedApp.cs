@@ -9,7 +9,7 @@ namespace SysManager.Models;
 /// <summary>
 /// Represents an application that has been blocked from executing via IFEO.
 /// </summary>
-public partial class BlockedApp : ObservableObject
+public sealed partial class BlockedApp : ObservableObject
 {
     /// <summary>Executable file name (e.g., "notepad.exe").</summary>
     [ObservableProperty] private string _executableName = "";

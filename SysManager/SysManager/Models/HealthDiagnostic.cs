@@ -21,7 +21,7 @@ public enum HealthVerdict
 /// Aggregated health view over the last few seconds of ping data.
 /// Updated in place by the analyzer so a single binding covers the UI.
 /// </summary>
-public partial class HealthDiagnostic : ObservableObject
+public sealed partial class HealthDiagnostic : ObservableObject
 {
     [ObservableProperty] private HealthVerdict _verdict = HealthVerdict.Unknown;
     [ObservableProperty] private string _headline = "Waiting for data…";

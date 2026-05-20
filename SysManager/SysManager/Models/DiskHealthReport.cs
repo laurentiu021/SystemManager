@@ -11,7 +11,7 @@ namespace SysManager.Models;
 /// counters (SMART-sourced). All fields nullable because not every driver
 /// exposes every counter.
 /// </summary>
-public partial class DiskHealthReport : ObservableObject
+public sealed partial class DiskHealthReport : ObservableObject
 {
     [ObservableProperty] private string _friendlyName = "";
     [ObservableProperty] private string _mediaType = "";       // HDD / SSD / NVMe

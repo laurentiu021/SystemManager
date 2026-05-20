@@ -9,7 +9,7 @@ namespace SysManager.Models;
 /// <summary>
 /// Battery health snapshot from WMI / Win32_Battery.
 /// </summary>
-public partial class BatteryInfo : ObservableObject
+public sealed partial class BatteryInfo : ObservableObject
 {
     [ObservableProperty] private bool _hasBattery;
     [ObservableProperty] private string _name = "";

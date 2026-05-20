@@ -11,7 +11,7 @@ namespace SysManager.Models;
 /// Every property is read-only from the system — the ViewModel holds the
 /// "desired" state separately so we can diff before applying.
 /// </summary>
-public partial class PerformanceProfile : ObservableObject
+public sealed partial class PerformanceProfile : ObservableObject
 {
     // ── Power plan ──
     [ObservableProperty]

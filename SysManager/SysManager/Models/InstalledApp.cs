@@ -10,7 +10,7 @@ namespace SysManager.Models;
 /// <summary>
 /// An installed Windows application as reported by winget list.
 /// </summary>
-public partial class InstalledApp : ObservableObject
+public sealed partial class InstalledApp : ObservableObject
 {
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _name = "";

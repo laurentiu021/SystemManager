@@ -8,7 +8,7 @@ namespace SysManager.Models;
 /// Result of a speed test run. Values are in Mbps. PingMs is the RTT measured
 /// against the test endpoint.
 /// </summary>
-public record SpeedTestResult(
+public sealed record SpeedTestResult(
     string Engine,            // "HTTP" or "Ookla"
     double DownloadMbps,
     double UploadMbps,

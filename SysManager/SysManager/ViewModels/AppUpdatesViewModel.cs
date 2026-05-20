@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -17,7 +18,7 @@ public partial class AppUpdatesViewModel : ViewModelBase
     private CancellationTokenSource? _cts;
     private readonly Action<PowerShellLine> _lineHandler;
 
-    public ObservableCollection<AppPackage> Packages { get; } = new();
+    public BulkObservableCollection<AppPackage> Packages { get; } = new();
     public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private bool _selectAll = true;
@@ -56,7 +57,7 @@ public partial class AppUpdatesViewModel : ViewModelBase
         try
         {
             var list = await _winget.ListUpgradableAsync(_cts.Token);
-            foreach (var p in list) Packages.Add(p);
+            Packages.ReplaceWith(list);
             StatusMessage = $"{Packages.Count} upgradable package(s) found";
         }
         catch (OperationCanceledException) { StatusMessage = "Scan cancelled."; }

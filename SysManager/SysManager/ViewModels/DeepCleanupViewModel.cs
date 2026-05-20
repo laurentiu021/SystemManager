@@ -25,8 +25,8 @@ public partial class DeepCleanupViewModel : ViewModelBase
     private readonly EtaCalculator _scanEta = new();
     private readonly EtaCalculator _cleanEta = new();
 
-    public ObservableCollection<CleanupCategory> Categories { get; } = new();
-    public ObservableCollection<LargeFileEntry> LargeFiles { get; } = new();
+    public BulkObservableCollection<CleanupCategory> Categories { get; } = new();
+    public BulkObservableCollection<LargeFileEntry> LargeFiles { get; } = new();
     public ObservableCollection<ScanLocation> ScanLocations { get; } = new();
 
     [ObservableProperty] private bool _isScanning;
@@ -173,17 +173,14 @@ public partial class DeepCleanupViewModel : ViewModelBase
             });
             var cats = await _cleanup.ScanAsync(progress, _scanCts.Token);
 
-            // Batch-update the observable collection to avoid per-item UI
-            // re-renders that can stall the dispatcher on large lists.
             // MEM-006: Unsubscribe from old categories before clearing to prevent
             // PropertyChanged lambda leaks across rescans.
             foreach (var old in Categories)
                 old.PropertyChanged -= OnCategoryPropertyChanged;
-            Categories.Clear();
             var catList = cats.ToList();
             foreach (var c in catList)
                 c.PropertyChanged += OnCategoryPropertyChanged;
-            foreach (var c in catList) Categories.Add(c);
+            Categories.ReplaceWith(catList);
             var total = cats.Sum(c => c.TotalSizeBytes);
             ScanSummary = $"Found {FormatHelper.FormatSize(total)} across {cats.Count} categories. Untick anything you want to keep.";
             ScanStatusLine = "Scan complete.";
@@ -291,7 +288,7 @@ public partial class DeepCleanupViewModel : ViewModelBase
                 top: TopCount,
                 progress: progress,
                 ct: _largeCts.Token);
-            foreach (var f in list) LargeFiles.Add(f);
+            LargeFiles.ReplaceWith(list);
             LargeScanStatus = $"Found {list.Count} files ≥ {MinSizeMB} MB in {SelectedLocation.Label.Trim()}.";
             Log.Information("Large file scan completed: {Count} files ≥ {MinSize} MB",
                 list.Count, MinSizeMB);

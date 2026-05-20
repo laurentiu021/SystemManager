@@ -7,6 +7,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -21,7 +22,7 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
     private readonly DiskAnalyzerService _service = new();
     private CancellationTokenSource? _cts;
 
-    public ObservableCollection<DiskUsageEntry> Entries { get; } = new();
+    public BulkObservableCollection<DiskUsageEntry> Entries { get; } = new();
     public ObservableCollection<string> PresetPaths { get; } = new();
 
     [ObservableProperty] private string _selectedPath = "";
@@ -100,8 +101,7 @@ public partial class DiskAnalyzerViewModel : ViewModelBase
 
             var results = await _service.AnalyzeAsync(SelectedPath, progress, ct);
 
-            foreach (var e in results)
-                Entries.Add(e);
+            Entries.ReplaceWith(results);
 
             EntryCount = Entries.Count;
             TotalSize = Entries.Sum(e => e.SizeBytes);

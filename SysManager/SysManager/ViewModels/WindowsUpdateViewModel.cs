@@ -344,6 +344,15 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [RelayCommand]
     private async Task InstallUpdatesAsync()
     {
+        var selected = Updates
+            .Where(u => u.IsSelected && !string.IsNullOrWhiteSpace(u.KB) && u.KB.All(c => char.IsLetterOrDigit(c)))
+            .ToList();
+        if (selected.Count == 0)
+        {
+            StatusMessage = "No updates selected.";
+            return;
+        }
+
         if (!AdminHelper.IsElevated())
         {
             StatusMessage = "Admin required. Relaunching elevated...";
@@ -352,22 +361,35 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         }
         IsBusy = true;
         IsProgressIndeterminate = true;
-        StatusMessage = "Installing updates (do not reboot)…";
+        StatusMessage = $"Installing {selected.Count} update(s) (do not reboot)…";
         ShowConsole = true;
         Console.ClearCommand.Execute(null);
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {
-            await _runner.RunScriptViaPwshAsync(@"
+            var kbFilter = string.Join("','", selected.Select(u => u.KB));
+            await _runner.RunScriptViaPwshAsync($@"
                 Import-Module PSWindowsUpdate -ErrorAction Stop
-                Install-WindowsUpdate -MicrosoftUpdate -AcceptAll -IgnoreReboot -Verbose
+                Install-WindowsUpdate -MicrosoftUpdate -KBArticleID '{kbFilter}' -AcceptAll -IgnoreReboot -Verbose
             ", cancellationToken: _cts.Token);
-            StatusMessage = "Installation finished";
+            StatusMessage = $"Installed {selected.Count} update(s).";
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    [RelayCommand]
+    private void SelectAll()
+    {
+        foreach (var u in Updates) u.IsSelected = true;
+    }
+
+    [RelayCommand]
+    private void DeselectAll()
+    {
+        foreach (var u in Updates) u.IsSelected = false;
     }
 
     [RelayCommand]

@@ -104,7 +104,9 @@
                     <Button Content="Feature upgrades" Command="{Binding ListFeatureUpdatesCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="History" Command="{Binding ShowHistoryCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Pending reboot?" Command="{Binding CheckPendingRebootCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="Install updates" Command="{Binding InstallUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
+                    <Button Content="Install selected" Command="{Binding InstallUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
+                    <Button Content="Select all" Command="{Binding SelectAllCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"/>
+                    <Button Content="Deselect all" Command="{Binding DeselectAllCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"/>
                 </WrapPanel>
             </StackPanel>
@@ -121,13 +123,15 @@
             <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Updates}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
-                      GridLinesVisibility="None" IsReadOnly="True"
+                      GridLinesVisibility="None"
                       RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                       SelectionMode="Single" CanUserSortColumns="True"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"
+                    <DataGridCheckBoxColumn Header="✓" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="36"/>
+
+                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" IsReadOnly="True"
                                         SortMemberPath="Title">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">

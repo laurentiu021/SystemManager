@@ -42,6 +42,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public AppAlertsViewModel AppAlerts { get; }
     public ShortcutCleanerViewModel ShortcutCleaner { get; }
     public AppBlockerViewModel AppBlocker { get; }
+    public BulkInstallerViewModel BulkInstaller { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -66,8 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipDnsChanger { get; private set; } = null!;
     public PlaceholderViewModel WipHostsEditor { get; private set; } = null!;
 
-    // Apps group
-    public PlaceholderViewModel WipBulkInstaller { get; private set; } = null!;
+    // Apps group (Bulk Installer is now fully implemented)
 
     // Privacy & Security group
     public PlaceholderViewModel WipPrivacySettings { get; private set; } = null!;
@@ -140,6 +140,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             AppAlerts = sp.GetRequiredService<AppAlertsViewModel>();
             ShortcutCleaner = sp.GetRequiredService<ShortcutCleanerViewModel>();
             AppBlocker = sp.GetRequiredService<AppBlockerViewModel>();
+            BulkInstaller = sp.GetRequiredService<BulkInstallerViewModel>();
             WindowsFeatures = sp.GetRequiredService<WindowsFeaturesViewModel>();
         }
         else
@@ -185,6 +186,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             AppAlerts = new AppAlertsViewModel(new AppAlertService());
             ShortcutCleaner = new ShortcutCleanerViewModel(shortcuts);
             AppBlocker = new AppBlockerViewModel();
+            BulkInstaller = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()));
             WindowsFeatures = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner));
         }
 
@@ -218,8 +220,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipDnsChanger = new PlaceholderViewModel("DNS Changer", "Quick-switch DNS with benchmark, DNS-over-HTTPS, and TCP/IP optimization.", "#11");
         WipHostsEditor = new PlaceholderViewModel("Hosts Editor", "GUI hosts file editor with domain toggle, import block lists, and backup/restore.", "#11");
 
-        // Apps group
-        WipBulkInstaller = new PlaceholderViewModel("Bulk Installer", "Curated checkbox app installer via winget with presets (Gamer/Dev/Creative).", "#6");
+        // Apps group — Bulk Installer is now fully implemented (no placeholder needed)
 
         // Privacy & Security group
         WipPrivacySettings = new PlaceholderViewModel("Privacy & Telemetry", "80-100+ toggles for telemetry, ads, AI/Copilot, location, diagnostics with presets.", "#9");
@@ -383,7 +384,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tooltip = "App Updates\nBulk Installer\nUninstaller\nApp Blocker",
             Children = {
             new NavItem { Id = "nav-app-updates",    Label = "App Updates",    Glyph = "\uE7B8", Content = AppUpdates,       ViewType = typeof(Views.AppUpdatesView) },
-            new NavItem { Id = "nav-bulk-installer", Label = "Bulk Installer", Glyph = "\uE896", Content = WipBulkInstaller, ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-bulk-installer", Label = "Bulk Installer", Glyph = "\uE896", Content = BulkInstaller, ViewType = typeof(Views.BulkInstallerView) },
             new NavItem { Id = "nav-uninstaller",    Label = "Uninstaller",    Glyph = "\uE738", Content = Uninstaller,      ViewType = typeof(Views.UninstallerView) },
             new NavItem { Id = "nav-app-blocker",    Label = "App Blocker",    Glyph = "\uE8F8", Content = AppBlocker,       ViewType = typeof(Views.AppBlockerView) },
         }
@@ -546,6 +547,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         AppAlerts?.Dispose();
         ShortcutCleaner?.Dispose();
         AppBlocker?.Dispose();
+        BulkInstaller?.Dispose();
 
         // WIP placeholders
         WipResourceHistory?.Dispose();
@@ -562,7 +564,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipScheduledMaintenance?.Dispose();
         WipDnsChanger?.Dispose();
         WipHostsEditor?.Dispose();
-        WipBulkInstaller?.Dispose();
         WipPrivacySettings?.Dispose();
         WipDebloater?.Dispose();
         WipBrowserCleaner?.Dispose();

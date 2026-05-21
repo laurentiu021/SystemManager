@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-21
+
 ### Added
 - **Windows Update** — individual update selection via checkboxes. Users can now
   select/deselect specific updates before installing. Added "Select all" and

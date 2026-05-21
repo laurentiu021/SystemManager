@@ -50,6 +50,7 @@ public static class ServiceRegistration
         services.AddSingleton<TracerouteMonitorService>();
         services.AddSingleton<TracerouteService>();
         services.AddSingleton<UninstallerService>();
+        services.AddSingleton<BulkInstallerService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -79,6 +80,7 @@ public static class ServiceRegistration
         services.AddSingleton<WindowsFeaturesService>();
         services.AddSingleton<WindowsFeaturesViewModel>();
         services.AddSingleton<AppBlockerViewModel>();
+        services.AddSingleton<BulkInstallerViewModel>();
 
         return services;
     }

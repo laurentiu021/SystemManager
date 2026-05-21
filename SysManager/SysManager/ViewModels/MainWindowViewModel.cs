@@ -46,6 +46,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public FileShredderViewModel FileShredder { get; }
     public PrivacyViewModel Privacy { get; }
     public DnsHostsViewModel DnsHosts { get; }
+    public ContextMenuViewModel ContextMenu { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -76,8 +77,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipDefenderTweaks { get; private set; } = null!;
     public PlaceholderViewModel WipNotificationBlocker { get; private set; } = null!;
 
-    // Customization group
-    public PlaceholderViewModel WipContextMenu { get; private set; } = null!;
+    // Customization group (Context Menu is now fully implemented)
     public PlaceholderViewModel WipDarkModeScheduler { get; private set; } = null!;
     public PlaceholderViewModel WipVolumeControl { get; private set; } = null!;
     public PlaceholderViewModel WipEnvVariableEditor { get; private set; } = null!;
@@ -144,6 +144,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             DnsHosts = sp.GetRequiredService<DnsHostsViewModel>();
             WindowsFeatures = sp.GetRequiredService<WindowsFeaturesViewModel>();
             Privacy = sp.GetRequiredService<PrivacyViewModel>();
+            ContextMenu = sp.GetRequiredService<ContextMenuViewModel>();
         }
         else
         {
@@ -193,6 +194,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             DnsHosts = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), new HostsFileService());
             WindowsFeatures = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner));
             Privacy = new PrivacyViewModel(new PrivacyService());
+            ContextMenu = new ContextMenuViewModel(new ContextMenuService());
         }
 
         InitPlaceholders();
@@ -231,8 +233,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipDefenderTweaks = new PlaceholderViewModel("Defender Tweaks", "Toggle SmartScreen, manage exclusions, configure PUA and cloud protection.", "#344");
         WipNotificationBlocker = new PlaceholderViewModel("Notification Blocker", "Suppress annoying app pop-ups (update nags, trial reminders) with allowlist.", "#340");
 
-        // Customization group
-        WipContextMenu = new PlaceholderViewModel("Context Menu", "Manage right-click entries, restore Win10 full menu, add custom items.", "#8");
+        // Customization group (Context Menu is now fully implemented)
         WipDarkModeScheduler = new PlaceholderViewModel("Dark Mode Scheduler", "Auto light/dark theme + color temperature (f.lux-style) on schedule or sunset.", "#329");
         WipVolumeControl = new PlaceholderViewModel("Volume Control", "Per-app volume mixer with output device routing and profile presets.", "#332");
         WipEnvVariableEditor = new PlaceholderViewModel("Environment Variables", "GUI PATH editor with drag-reorder, duplicate detection, and path validation.", "#331");
@@ -417,7 +418,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Subtitle = "Context Menu · Dark Mode · Volume · Env Variables",
             Tooltip = "Context Menu\nDark Mode Scheduler\nVolume Control\nEnvironment Variables",
             Children = {
-            new NavItem { Id = "nav-context-menu",   Label = "Context Menu",          Glyph = "\uE700", Content = WipContextMenu,       ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-context-menu",   Label = "Context Menu",          Glyph = "\uE700", Content = ContextMenu,          ViewType = typeof(Views.ContextMenuView) },
             new NavItem { Id = "nav-dark-mode",      Label = "Dark Mode Scheduler",   Glyph = "\uE793", Content = WipDarkModeScheduler, ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-volume-control", Label = "Volume Control",        Glyph = "\uE767", Content = WipVolumeControl,     ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-env-variables",  Label = "Environment Variables", Glyph = "\uE943", Content = WipEnvVariableEditor, ViewType = typeof(Views.PlaceholderView) },
@@ -565,12 +566,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipScheduledMaintenance?.Dispose();
         DnsHosts?.Dispose();
         Privacy?.Dispose();
+        ContextMenu?.Dispose();
         WipDebloater?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipDefenderTweaks?.Dispose();
         WipNotificationBlocker?.Dispose();
-        WipContextMenu?.Dispose();
         WipDarkModeScheduler?.Dispose();
         WipVolumeControl?.Dispose();
         WipEnvVariableEditor?.Dispose();

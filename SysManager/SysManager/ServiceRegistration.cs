@@ -56,6 +56,7 @@ public static class ServiceRegistration
         services.AddSingleton<PrivacyService>();
         services.AddSingleton<DnsService>();
         services.AddSingleton<HostsFileService>();
+        services.AddSingleton<ContextMenuService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -89,6 +90,7 @@ public static class ServiceRegistration
         services.AddSingleton<FileShredderViewModel>();
         services.AddSingleton<PrivacyViewModel>();
         services.AddSingleton<DnsHostsViewModel>();
+        services.AddSingleton<ContextMenuViewModel>();
 
         return services;
     }

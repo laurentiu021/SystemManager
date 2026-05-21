@@ -20,7 +20,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class DuplicateFileViewModel : ViewModelBase
 {
-    private readonly DuplicateFileService _service = new();
+    private readonly DuplicateFileService _service;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<DuplicateFileGroup> Groups { get; } = new();
@@ -34,8 +34,9 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     [ObservableProperty] private string _scanSummary = "Select a folder and click Scan.";
     [ObservableProperty] private string _currentFile = "";
 
-    public DuplicateFileViewModel()
+    public DuplicateFileViewModel(DuplicateFileService service)
     {
+        _service = service;
         PopulatePresets();
     }
 

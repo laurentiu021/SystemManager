@@ -30,9 +30,9 @@ public sealed partial class UninstallerViewModel : ViewModelBase
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
-    public UninstallerViewModel(PowerShellRunner runner)
+    public UninstallerViewModel(UninstallerService service)
     {
-        _service = new UninstallerService(runner);
+        _service = service;
         _lineHandler = line => Console.Append(line);
         _service.LineReceived += _lineHandler;
     }

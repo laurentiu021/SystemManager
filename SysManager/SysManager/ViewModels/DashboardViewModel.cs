@@ -39,16 +39,6 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private TuneUpResult? _tuneUpResult;
     [ObservableProperty] private bool _hasTuneUpResult;
 
-    public DashboardViewModel(SystemInfoService sys)
-        : this(sys,
-            new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), sys),
-            new HealthScoreService(sys, new DiskHealthService(), new BatteryService()))
-    {
-    }
-
-    /// <summary>
-    /// Testable constructor — accepts all dependencies explicitly.
-    /// </summary>
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp, HealthScoreService healthScore)
     {
         _sys = sys;

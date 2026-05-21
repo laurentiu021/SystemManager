@@ -9,7 +9,7 @@ namespace SysManager.IntegrationTests;
 
 public class SystemHealthMultiDriveTests
 {
-    private static SystemHealthViewModel Build() => new(new SystemInfoService());
+    private static SystemHealthViewModel Build() => new(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
 
     [Fact]
     public void ChkdskDrives_Collection_Exists()

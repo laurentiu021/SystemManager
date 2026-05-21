@@ -13,7 +13,7 @@ public class ShortcutCleanerViewModelTests
     [Fact]
     public void InitialState_IsCorrect()
     {
-        var vm = new ShortcutCleanerViewModel();
+        var vm = new ShortcutCleanerViewModel(new Services.ShortcutCleanerService());
         Assert.False(vm.IsScanning);
         Assert.Equal(0, vm.BrokenCount);
         Assert.Equal(0, vm.SelectedCount);
@@ -24,7 +24,7 @@ public class ShortcutCleanerViewModelTests
     [Fact]
     public void SelectAll_SetsAllSelected()
     {
-        var vm = new ShortcutCleanerViewModel();
+        var vm = new ShortcutCleanerViewModel(new Services.ShortcutCleanerService());
         vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "A", IsSelected = false });
         vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "B", IsSelected = false });
 
@@ -36,7 +36,7 @@ public class ShortcutCleanerViewModelTests
     [Fact]
     public void DeselectAll_ClearsAllSelected()
     {
-        var vm = new ShortcutCleanerViewModel();
+        var vm = new ShortcutCleanerViewModel(new Services.ShortcutCleanerService());
         vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "A", IsSelected = true });
         vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "B", IsSelected = true });
 

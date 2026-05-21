@@ -51,9 +51,9 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     [ObservableProperty] private bool _needsReboot;
     [ObservableProperty] private bool _hasSnapshot;
 
-    public PerformanceViewModel(PowerShellRunner ps)
+    public PerformanceViewModel(PerformanceService service)
     {
-        _service = new PerformanceService(ps);
+        _service = service;
         InitializeAsync(InitAsync);
     }
 

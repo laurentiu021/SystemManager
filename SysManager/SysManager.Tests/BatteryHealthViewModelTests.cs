@@ -15,28 +15,28 @@ public class BatteryHealthViewModelTests
     [Fact]
     public void Constructor_RefreshCommand_Exists()
     {
-        var vm = new BatteryHealthViewModel();
+        var vm = new BatteryHealthViewModel(new Services.BatteryService());
         Assert.NotNull(vm.RefreshCommand);
     }
 
     [Fact]
     public void Constructor_Battery_NotNull()
     {
-        var vm = new BatteryHealthViewModel();
+        var vm = new BatteryHealthViewModel(new Services.BatteryService());
         Assert.NotNull(vm.Battery);
     }
 
     [Fact]
     public void Summary_HasDefaultValue()
     {
-        var vm = new BatteryHealthViewModel();
+        var vm = new BatteryHealthViewModel(new Services.BatteryService());
         Assert.False(string.IsNullOrEmpty(vm.Summary));
     }
 
     [Fact]
     public void Battery_CanBeReplaced()
     {
-        var vm = new BatteryHealthViewModel();
+        var vm = new BatteryHealthViewModel(new Services.BatteryService());
         var changed = new List<string>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
 
@@ -48,7 +48,7 @@ public class BatteryHealthViewModelTests
     [Fact]
     public void Summary_CanBeChanged()
     {
-        var vm = new BatteryHealthViewModel();
+        var vm = new BatteryHealthViewModel(new Services.BatteryService());
         vm.Summary = "Custom summary";
         Assert.Equal("Custom summary", vm.Summary);
     }

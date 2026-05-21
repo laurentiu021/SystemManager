@@ -18,10 +18,10 @@ namespace SysManager.ViewModels;
 public sealed partial class SystemHealthViewModel : ViewModelBase
 {
     private readonly SystemInfoService _sys;
-    private readonly DiskHealthService _diskHealth = new();
-    private readonly MemoryTestService _memTest = new();
-    private readonly FixedDriveService _drives = new();
-    private readonly PowerShellRunner _runner = new();
+    private readonly DiskHealthService _diskHealth;
+    private readonly MemoryTestService _memTest;
+    private readonly FixedDriveService _drives;
+    private readonly PowerShellRunner _runner;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<MemoryModule> Modules { get; } = new();
@@ -45,9 +45,13 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     [ObservableProperty] private string _memoryHealthVerdict = "Click 'Check memory errors' to inspect.";
     [ObservableProperty] private string _memoryHealthColorHex = "#9AA0A6";
 
-    public SystemHealthViewModel(SystemInfoService sys)
+    public SystemHealthViewModel(SystemInfoService sys, DiskHealthService diskHealth, MemoryTestService memTest, FixedDriveService drives, PowerShellRunner runner)
     {
         _sys = sys;
+        _diskHealth = diskHealth;
+        _memTest = memTest;
+        _drives = drives;
+        _runner = runner;
         IsElevated = AdminHelper.IsElevated();
         _runner.LineReceived += OnRunnerLineReceived;
 

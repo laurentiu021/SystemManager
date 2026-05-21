@@ -14,7 +14,7 @@ namespace SysManager.Tests;
 /// </summary>
 public class DeepCleanupViewModelTests
 {
-    private static DeepCleanupViewModel NewVm() => new();
+    private static DeepCleanupViewModel NewVm() => new(new Services.DeepCleanupService(), new Services.LargeFileScanner(), new Services.FixedDriveService());
 
     // ---------- construction & defaults ----------
 

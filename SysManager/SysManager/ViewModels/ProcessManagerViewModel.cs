@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ProcessManagerViewModel : ViewModelBase
 {
-    private readonly ProcessManagerService _service = new();
+    private readonly ProcessManagerService _service;
 
     public BulkObservableCollection<ProcessEntry> Processes { get; } = new();
     public BulkObservableCollection<ProcessEntry> FilteredProcesses { get; } = new();
@@ -32,8 +32,9 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     partial void OnFilterTextChanged(string value) => ApplyFilter();
     partial void OnShowOnlyAppsChanged(bool value) => ApplyFilter();
 
-    public ProcessManagerViewModel()
+    public ProcessManagerViewModel(ProcessManagerService service)
     {
+        _service = service;
         InitializeAsync(InitAsync);
     }
 

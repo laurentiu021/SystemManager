@@ -13,7 +13,7 @@ public class SystemHealthViewModelTests
     [Fact]
     public void Ctor_DefaultsAreSafe()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         Assert.Empty(vm.Modules);
         Assert.Empty(vm.Disks);
         Assert.Null(vm.Os);
@@ -25,7 +25,7 @@ public class SystemHealthViewModelTests
     [Fact]
     public async Task ScanCommand_PopulatesInfo()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         await vm.ScanCommand.ExecuteAsync(null);
         Assert.NotNull(vm.Os);
         Assert.NotNull(vm.Cpu);
@@ -36,7 +36,7 @@ public class SystemHealthViewModelTests
     [Fact]
     public async Task ScanCommand_ResetsBusy()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         await vm.ScanCommand.ExecuteAsync(null);
         Assert.False(vm.IsBusy);
     }
@@ -44,7 +44,7 @@ public class SystemHealthViewModelTests
     [Fact]
     public async Task ScanCommand_IsIdempotent()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         await vm.ScanCommand.ExecuteAsync(null);
         var firstDiskCount = vm.Disks.Count;
         await vm.ScanCommand.ExecuteAsync(null);

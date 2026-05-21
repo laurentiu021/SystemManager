@@ -16,13 +16,14 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class BatteryHealthViewModel : ViewModelBase
 {
-    private readonly BatteryService _service = new();
+    private readonly BatteryService _service;
 
     [ObservableProperty] private BatteryInfo _battery = new();
     [ObservableProperty] private string _summary = "Click Refresh to read battery data.";
 
-    public BatteryHealthViewModel()
+    public BatteryHealthViewModel(BatteryService service)
     {
+        _service = service;
         InitializeAsync(InitAsync);
     }
 

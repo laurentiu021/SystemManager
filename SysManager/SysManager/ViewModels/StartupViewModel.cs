@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class StartupViewModel : ViewModelBase
 {
-    private readonly StartupService _service = new();
+    private readonly StartupService _service;
     private readonly List<StartupEntry> _allEntries = new();
 
     public BulkObservableCollection<StartupEntry> Entries { get; } = new();
@@ -29,8 +29,9 @@ public sealed partial class StartupViewModel : ViewModelBase
     [ObservableProperty] private string _scanSummary = "Click Scan to discover startup items.";
     [ObservableProperty] private bool _hideWindowsEntries;
 
-    public StartupViewModel()
+    public StartupViewModel(StartupService service)
     {
+        _service = service;
         InitializeAsync(InitAsync);
     }
 

@@ -54,6 +54,8 @@ public static class ServiceRegistration
         services.AddSingleton<BulkInstallerService>();
         services.AddSingleton<FileShredderService>();
         services.AddSingleton<PrivacyService>();
+        services.AddSingleton<DnsService>();
+        services.AddSingleton<HostsFileService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -86,6 +88,7 @@ public static class ServiceRegistration
         services.AddSingleton<BulkInstallerViewModel>();
         services.AddSingleton<FileShredderViewModel>();
         services.AddSingleton<PrivacyViewModel>();
+        services.AddSingleton<DnsHostsViewModel>();
 
         return services;
     }

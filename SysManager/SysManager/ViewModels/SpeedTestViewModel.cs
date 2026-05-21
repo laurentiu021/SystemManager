@@ -16,7 +16,7 @@ namespace SysManager.ViewModels;
 public sealed partial class SpeedTestViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
-    private readonly SpeedTestHistoryService _history = new();
+    private readonly SpeedTestHistoryService _history;
     private readonly EtaCalculator _eta = new();
     private CancellationTokenSource? _speedCts;
 
@@ -37,9 +37,10 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     /// <summary>Persisted history of Ookla speed test results (newest first).</summary>
     public BulkObservableCollection<SpeedTestResult> OoklaHistory { get; } = new();
 
-    public SpeedTestViewModel(NetworkSharedState shared)
+    public SpeedTestViewModel(NetworkSharedState shared, SpeedTestHistoryService history)
     {
         Shared = shared;
+        _history = history;
         InitializeAsync(LoadHistoryAsync);
     }
 

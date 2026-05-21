@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class AppAlertsViewModel : ViewModelBase
 {
-    private readonly AppAlertService _service = new();
+    private readonly AppAlertService _service;
     private readonly Dispatcher _dispatcher;
 
     public ObservableCollection<AppInstallEntry> Alerts { get; } = new();
@@ -29,8 +29,9 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     [ObservableProperty] private int _alertCount;
     [ObservableProperty] private int _unacknowledgedCount;
 
-    public AppAlertsViewModel()
+    public AppAlertsViewModel(AppAlertService service)
     {
+        _service = service;
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _service.NewAppDetected += OnNewAppDetected;
     }

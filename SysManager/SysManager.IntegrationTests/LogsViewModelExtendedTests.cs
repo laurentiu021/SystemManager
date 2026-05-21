@@ -4,6 +4,7 @@
 
 using System.Reflection;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.IntegrationTests;
@@ -43,42 +44,42 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Defaults_SelectedLogIsSystem()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         Assert.Equal("System", vm.SelectedLog);
     }
 
     [Fact]
     public void Defaults_MaxResultsIs500()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         Assert.Equal("500", vm.SelectedMaxResults);
     }
 
     [Fact]
     public void Defaults_LogFolderIsSet()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         Assert.False(string.IsNullOrWhiteSpace(vm.LogFolder));
     }
 
     [Fact]
     public void Defaults_SearchTextIsEmpty()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         Assert.Equal("", vm.SearchText);
     }
 
     [Fact]
     public void Defaults_SelectedEntryIsNull()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         Assert.Null(vm.SelectedEntry);
     }
 
     [Fact]
     public void Defaults_CollectionViewIsSet()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         Assert.NotNull(vm.EntriesView);
     }
 
@@ -87,7 +88,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void MaxResultOptions_IsDescendingSafe()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         foreach (var opt in vm.MaxResultOptions)
             Assert.True(int.TryParse(opt, out var v) && v > 0);
     }
@@ -102,7 +103,7 @@ public class LogsViewModelExtendedTests
     [InlineData(EventSeverity.Verbose, "ShowVerbose")]
     public void Filter_DisabledSeverity_Hides(EventSeverity sev, string propertyName)
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         typeof(LogsViewModel).GetProperty(propertyName)!.SetValue(vm, true);
         Assert.True(InvokeFilter(vm, Make(sev)));
         typeof(LogsViewModel).GetProperty(propertyName)!.SetValue(vm, false);
@@ -112,7 +113,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Filter_SearchText_IsCaseInsensitive()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         var e = Make(EventSeverity.Error, "Disk controller timeout");
         vm.SearchText = "DISK";
         Assert.True(InvokeFilter(vm, e));
@@ -125,7 +126,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Filter_SearchByProvider_Works()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         var e = Make(EventSeverity.Error, "m", "Microsoft-Windows-Kernel-Power", 41);
         vm.SearchText = "Kernel";
         Assert.True(InvokeFilter(vm, e));
@@ -134,7 +135,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Filter_SearchByEventIdNumeric_Works()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         var e = Make(EventSeverity.Error, "m", "x", 41);
         vm.SearchText = "41";
         Assert.True(InvokeFilter(vm, e));
@@ -143,7 +144,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Filter_SearchMissingText_ReturnsFalse()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         var e = Make(EventSeverity.Error, "simple message");
         vm.SearchText = "nowhere-to-be-found";
         Assert.False(InvokeFilter(vm, e));
@@ -152,7 +153,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Filter_OnNonEntry_ReturnsFalse()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         var m = typeof(LogsViewModel).GetMethod("EntryFilter", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var result = (bool)m.Invoke(vm, new object[] { new object() })!;
         Assert.False(result);
@@ -163,7 +164,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void UpdateCounts_IncrementsCorrectCounter()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         InvokeUpdateCounts(vm, Make(EventSeverity.Critical), 1);
         InvokeUpdateCounts(vm, Make(EventSeverity.Error), 1);
         InvokeUpdateCounts(vm, Make(EventSeverity.Error), 1);
@@ -180,7 +181,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void UpdateCounts_Decrement_SubtractsCorrectly()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         InvokeUpdateCounts(vm, Make(EventSeverity.Error), 5);
         InvokeUpdateCounts(vm, Make(EventSeverity.Error), -2);
         Assert.Equal(3, vm.ErrorCount);
@@ -189,7 +190,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void UpdateCounts_Verbose_DoesNothing()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         InvokeUpdateCounts(vm, Make(EventSeverity.Verbose), 10);
         Assert.Equal(0, vm.CriticalCount);
         Assert.Equal(0, vm.ErrorCount);
@@ -202,7 +203,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void CancelCommand_WithoutActiveJob_IsSafe()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         var ex = Record.Exception(() => vm.CancelCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -210,7 +211,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void CopySelected_WithSelectedEntry_DoesNotThrow()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.SelectedEntry = Make(EventSeverity.Error, "oops", "Test", 1000, full: "full message");
         vm.SelectedEntry.Explanation = "it broke";
         vm.SelectedEntry.Recommendation = "restart";
@@ -221,7 +222,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void SearchOnline_WithoutSelection_IsSafe()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.SelectedEntry = null;
         var ex = Record.Exception(() => vm.SearchOnlineCommand.Execute(null));
         Assert.Null(ex);
@@ -232,7 +233,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void ChangingShowCritical_DoesNotThrow()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.ShowCritical = false;
         vm.ShowCritical = true;
     }
@@ -240,7 +241,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void ChangingSearchText_RefreshesView_NoThrow()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         var ex = Record.Exception(() =>
         {
             for (int i = 0; i < 20; i++) vm.SearchText = $"query{i}";
@@ -258,7 +259,7 @@ public class LogsViewModelExtendedTests
     [InlineData("All")]
     public void SelectedTimeRange_AcceptsAllOptions(string range)
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.SelectedTimeRange = range;
         Assert.Equal(range, vm.SelectedTimeRange);
     }
@@ -268,7 +269,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void AvailableLogs_HasWindowsCoreLogs()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         Assert.Contains("System", vm.AvailableLogs);
         Assert.Contains("Application", vm.AvailableLogs);
         Assert.Contains("Security", vm.AvailableLogs);
@@ -280,7 +281,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public async Task RefreshCommand_CompletesOnInvalidLog_Gracefully()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.SelectedLog = "Bogus-Log-XYZ";
         vm.SelectedMaxResults = "50";
         await vm.RefreshCommand.ExecuteAsync(null);

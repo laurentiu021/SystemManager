@@ -13,7 +13,7 @@ public class AppAlertsViewModelTests
     [Fact]
     public void InitialState_IsCorrect()
     {
-        var vm = new AppAlertsViewModel();
+        var vm = new AppAlertsViewModel(new Services.AppAlertService());
         Assert.False(vm.IsMonitoring);
         Assert.Equal(0, vm.AlertCount);
         Assert.Equal(0, vm.UnacknowledgedCount);
@@ -23,7 +23,7 @@ public class AppAlertsViewModelTests
     [Fact]
     public void AcknowledgeAll_SetsAllAcknowledged()
     {
-        var vm = new AppAlertsViewModel();
+        var vm = new AppAlertsViewModel(new Services.AppAlertService());
         vm.Alerts.Add(new AppInstallEntry { Name = "App1", IsAcknowledged = false });
         vm.Alerts.Add(new AppInstallEntry { Name = "App2", IsAcknowledged = false });
 
@@ -36,7 +36,7 @@ public class AppAlertsViewModelTests
     [Fact]
     public void ClearHistory_RemovesAllAlerts()
     {
-        var vm = new AppAlertsViewModel();
+        var vm = new AppAlertsViewModel(new Services.AppAlertService());
         vm.Alerts.Add(new AppInstallEntry { Name = "App1" });
         vm.Alerts.Add(new AppInstallEntry { Name = "App2" });
 

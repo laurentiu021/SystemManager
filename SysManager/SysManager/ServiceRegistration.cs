@@ -29,6 +29,27 @@ public static class ServiceRegistration
         services.AddSingleton<BatteryService>();
         services.AddSingleton<TuneUpService>();
         services.AddSingleton<HealthScoreService>();
+        services.AddSingleton<AppAlertService>();
+        services.AddSingleton<AppBlockerService>();
+        services.AddSingleton<DeepCleanupService>();
+        services.AddSingleton<DiskAnalyzerService>();
+        services.AddSingleton<DuplicateFileService>();
+        services.AddSingleton<EventLogService>();
+        services.AddSingleton<FixedDriveService>();
+        services.AddSingleton<IconExtractorService>();
+        services.AddSingleton<LargeFileScanner>();
+        services.AddSingleton<MemoryTestService>();
+        services.AddSingleton<NetworkRepairService>();
+        services.AddSingleton<PerformanceService>();
+        services.AddSingleton<PingMonitorService>();
+        services.AddSingleton<ProcessManagerService>();
+        services.AddSingleton<ServiceManagerService>();
+        services.AddSingleton<SpeedTestHistoryService>();
+        services.AddSingleton<SpeedTestService>();
+        services.AddSingleton<StartupService>();
+        services.AddSingleton<TracerouteMonitorService>();
+        services.AddSingleton<TracerouteService>();
+        services.AddSingleton<UninstallerService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();

@@ -29,7 +29,7 @@ public class LogsViewModelTests
     [Fact]
     public void Defaults_ShowCriticalErrorWarning_HideInfoVerbose()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.True(vm.ShowCritical);
         Assert.True(vm.ShowError);
         Assert.True(vm.ShowWarning);
@@ -40,7 +40,7 @@ public class LogsViewModelTests
     [Fact]
     public void Filter_BySeverity_TogglesEntries()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var err = Make(EventSeverity.Error);
         var info = Make(EventSeverity.Info);
 
@@ -57,7 +57,7 @@ public class LogsViewModelTests
     [Fact]
     public void Filter_Search_MatchesMessageProviderAndEventId()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var e = Make(EventSeverity.Error, "Disk I/O timeout at sector 500", "disk", 7);
 
         vm.SearchText = "sector";
@@ -76,7 +76,7 @@ public class LogsViewModelTests
     [Fact]
     public void Filter_EmptySearch_MatchesWhenSeverityAllowed()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var e = Make(EventSeverity.Warning);
         vm.SearchText = "";
         Assert.True(InvokeFilter(vm, e));
@@ -87,7 +87,7 @@ public class LogsViewModelTests
     [Fact]
     public void TimeRanges_DefaultIs24Hours()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Equal("Last 24 hours", vm.SelectedTimeRange);
         Assert.Contains("Last hour", vm.TimeRanges);
         Assert.Contains("All", vm.TimeRanges);
@@ -96,7 +96,7 @@ public class LogsViewModelTests
     [Fact]
     public void AvailableLogs_ContainsStandardWindowsLogs()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Contains("System", vm.AvailableLogs);
         Assert.Contains("Application", vm.AvailableLogs);
         Assert.Contains("Security", vm.AvailableLogs);
@@ -106,7 +106,7 @@ public class LogsViewModelTests
     [Fact]
     public void CopySelected_WithNull_DoesNotThrow()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         vm.SelectedEntry = null;
         var ex = Record.Exception(() => vm.CopySelectedCommand.Execute(null));
         Assert.Null(ex);
@@ -115,7 +115,7 @@ public class LogsViewModelTests
     [Fact]
     public void Counts_StartAtZero()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Equal(0, vm.CriticalCount);
         Assert.Equal(0, vm.ErrorCount);
         Assert.Equal(0, vm.WarningCount);

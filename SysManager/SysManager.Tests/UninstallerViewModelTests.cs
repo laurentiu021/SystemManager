@@ -13,7 +13,7 @@ namespace SysManager.Tests;
 /// </summary>
 public class UninstallerViewModelTests
 {
-    private static UninstallerViewModel CreateVm() => new(new PowerShellRunner());
+    private static UninstallerViewModel CreateVm() => new(new UninstallerService(new PowerShellRunner()));
 
     [Fact]
     public void Constructor_Commands_Exist()

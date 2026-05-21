@@ -26,7 +26,7 @@ public class ServicesViewModelTests
 
     private static ServicesViewModel CreateWithData(List<ServiceEntry>? services = null)
     {
-        var vm = new ServicesViewModel();
+        var vm = new ServicesViewModel(new Services.PowerShellRunner());
         var field = typeof(ServicesViewModel).GetField("_allServices", BindingFlags.NonPublic | BindingFlags.Instance)!;
         field.SetValue(vm, services ?? TestServices);
 
@@ -41,14 +41,14 @@ public class ServicesViewModelTests
     [Fact]
     public void Constructor_Collections_NotNull()
     {
-        var vm = new ServicesViewModel();
+        var vm = new ServicesViewModel(new Services.PowerShellRunner());
         Assert.NotNull(vm.Services);
     }
 
     [Fact]
     public void Constructor_FilterOptions_ContainsExpected()
     {
-        var vm = new ServicesViewModel();
+        var vm = new ServicesViewModel(new Services.PowerShellRunner());
         Assert.Contains("All", vm.FilterOptions);
         Assert.Contains("Running", vm.FilterOptions);
         Assert.Contains("Stopped", vm.FilterOptions);
@@ -59,21 +59,21 @@ public class ServicesViewModelTests
     [Fact]
     public void Constructor_DefaultFilter_Empty()
     {
-        var vm = new ServicesViewModel();
+        var vm = new ServicesViewModel(new Services.PowerShellRunner());
         Assert.Equal("", vm.Filter);
     }
 
     [Fact]
     public void Constructor_DefaultSelectedFilter_All()
     {
-        var vm = new ServicesViewModel();
+        var vm = new ServicesViewModel(new Services.PowerShellRunner());
         Assert.Equal("All", vm.SelectedFilter);
     }
 
     [Fact]
     public void Constructor_Commands_Exist()
     {
-        var vm = new ServicesViewModel();
+        var vm = new ServicesViewModel(new Services.PowerShellRunner());
         Assert.NotNull(vm.RefreshCommand);
         Assert.NotNull(vm.StartServiceCommand);
         Assert.NotNull(vm.StopServiceCommand);

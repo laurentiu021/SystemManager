@@ -34,11 +34,11 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         "#B388FF", "#06D6A0", "#FF6B6B", "#F8961E",
     };
 
-    internal readonly PingMonitorService Pinger = new();
-    internal readonly TracerouteService Tracer = new();
-    internal readonly TracerouteMonitorService TraceMonitor = new();
-    internal readonly SpeedTestService Speed = new();
-    internal readonly NetworkRepairService Repair = new(new PowerShellRunner());
+    internal readonly PingMonitorService Pinger;
+    internal readonly TracerouteService Tracer;
+    internal readonly TracerouteMonitorService TraceMonitor;
+    internal readonly SpeedTestService Speed;
+    internal readonly NetworkRepairService Repair;
     internal readonly Dispatcher? Dispatcher;
     internal readonly DispatcherTimer? FlushTimer;
     internal readonly ConcurrentQueue<PingSample> Pending = new();
@@ -80,8 +80,14 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     [ObservableProperty] private bool _isMonitoring;
 
-    public NetworkSharedState()
+    public NetworkSharedState(PingMonitorService pinger, TracerouteService tracer, TracerouteMonitorService traceMonitor, SpeedTestService speed, NetworkRepairService repair)
     {
+        Pinger = pinger;
+        Tracer = tracer;
+        TraceMonitor = traceMonitor;
+        Speed = speed;
+        Repair = repair;
+
         Dispatcher = Application.Current?.Dispatcher;
         if (Dispatcher != null)
         {

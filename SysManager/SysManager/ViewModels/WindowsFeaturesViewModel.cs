@@ -34,9 +34,9 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
-    public WindowsFeaturesViewModel(PowerShellRunner runner)
+    public WindowsFeaturesViewModel(WindowsFeaturesService service)
     {
-        _service = new WindowsFeaturesService(runner);
+        _service = service;
         IsElevated = AdminHelper.IsElevated();
     }
 

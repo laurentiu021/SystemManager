@@ -62,35 +62,35 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void SelectedLog_DefaultsToSystem()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Equal("System", vm.SelectedLog);
     }
 
     [Fact]
     public void SelectedMaxResults_DefaultsTo500()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Equal("500", vm.SelectedMaxResults);
     }
 
     [Fact]
     public void SearchText_DefaultsEmpty()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Equal("", vm.SearchText);
     }
 
     [Fact]
     public void SelectedEntry_DefaultsNull()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Null(vm.SelectedEntry);
     }
 
     [Fact]
     public void MaxResultOptions_ContainsExpectedValues()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Contains("200", vm.MaxResultOptions);
         Assert.Contains("500", vm.MaxResultOptions);
         Assert.Contains("1000", vm.MaxResultOptions);
@@ -100,21 +100,21 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void LogFolder_IsNonEmpty()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.False(string.IsNullOrWhiteSpace(vm.LogFolder));
     }
 
     [Fact]
     public void Entries_StartsEmpty()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.Empty(vm.Entries);
     }
 
     [Fact]
     public void EntriesView_IsNotNull()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         Assert.NotNull(vm.EntriesView);
     }
 
@@ -130,7 +130,7 @@ public class LogsViewModelExtendedTests
     [InlineData("SearchOnlineCommand")]
     public void Command_IsExposedAndNotNull(string name)
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var prop = vm.GetType().GetProperty(name);
         Assert.NotNull(prop);
         Assert.NotNull(prop!.GetValue(vm));
@@ -141,7 +141,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void CancelCommand_OnIdleVm_DoesNotThrow()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var ex = Record.Exception(() => vm.CancelCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -151,7 +151,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void BuildSeverityFilter_DefaultIncludesCriticalErrorWarning()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var list = BuildSev(vm);
         Assert.Contains(EventSeverity.Critical, list);
         Assert.Contains(EventSeverity.Error, list);
@@ -163,7 +163,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void BuildSeverityFilter_AllOn_ReturnsFive()
     {
-        var vm = new LogsViewModel
+        var vm = new LogsViewModel(new Services.EventLogService())
         {
             ShowCritical = true, ShowError = true, ShowWarning = true,
             ShowInfo = true, ShowVerbose = true
@@ -174,7 +174,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void BuildSeverityFilter_AllOff_ReturnsEmpty()
     {
-        var vm = new LogsViewModel
+        var vm = new LogsViewModel(new Services.EventLogService())
         {
             ShowCritical = false, ShowError = false, ShowWarning = false,
             ShowInfo = false, ShowVerbose = false
@@ -281,7 +281,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Filter_NonFriendlyEventEntry_ReturnsFalse()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var result = (bool)_entryFilter.Invoke(vm, new object[] { "not an entry" })!;
         Assert.False(result);
     }
@@ -289,7 +289,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Filter_AllSeveritiesOff_RejectsEverything()
     {
-        var vm = new LogsViewModel
+        var vm = new LogsViewModel(new Services.EventLogService())
         {
             ShowCritical = false, ShowError = false, ShowWarning = false,
             ShowInfo = false, ShowVerbose = false
@@ -304,7 +304,7 @@ public class LogsViewModelExtendedTests
     [Fact]
     public void Filter_SearchMatchesFullMessage()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var e = new FriendlyEventEntry
         {
             Severity = EventSeverity.Error,
@@ -331,7 +331,7 @@ public class LogsViewModelExtendedTests
     [InlineData(nameof(LogsViewModel.SelectedMaxResults))]
     public void Setter_FiresPropertyChanged(string propName)
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new Services.EventLogService());
         var fired = false;
         vm.PropertyChanged += (_, e) => { if (e.PropertyName == propName) fired = true; };
 

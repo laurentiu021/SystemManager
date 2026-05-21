@@ -25,7 +25,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class LogsViewModel : ViewModelBase
 {
-    private readonly EventLogService _eventLogs = new();
+    private readonly EventLogService _eventLogs;
     private readonly SynchronizationContext? _sync;
     private CancellationTokenSource? _cts;
 
@@ -58,8 +58,9 @@ public sealed partial class LogsViewModel : ViewModelBase
     [ObservableProperty] private int _visibleCount;
     [ObservableProperty] private bool _hasNoResults;
 
-    public LogsViewModel()
+    public LogsViewModel(EventLogService eventLogs)
     {
+        _eventLogs = eventLogs;
         _sync = SynchronizationContext.Current;
         EntriesView = CollectionViewSource.GetDefaultView(Entries);
         EntriesView.Filter = EntryFilter;

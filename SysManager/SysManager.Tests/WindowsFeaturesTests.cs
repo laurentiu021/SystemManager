@@ -122,7 +122,7 @@ public class WindowsFeaturesTests
     [Fact]
     public void ViewModel_InitialState_IsCorrect()
     {
-        var vm = new WindowsFeaturesViewModel(new PowerShellRunner());
+        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(new PowerShellRunner()));
         Assert.Empty(vm.AllFeatures);
         Assert.Empty(vm.FilteredFeatures);
         Assert.Equal("", vm.FilterText);

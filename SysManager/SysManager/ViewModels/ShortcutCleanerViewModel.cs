@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 {
-    private readonly ShortcutCleanerService _service = new();
+    private readonly ShortcutCleanerService _service;
     private CancellationTokenSource? _cts;
 
     public ObservableCollection<BrokenShortcut> BrokenShortcuts { get; } = new();
@@ -29,7 +29,10 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
     [ObservableProperty] private bool _isScanning;
     [ObservableProperty] private bool _moveToRecycleBin = true;
 
-    public ShortcutCleanerViewModel() { }
+    public ShortcutCleanerViewModel(ShortcutCleanerService service)
+    {
+        _service = service;
+    }
 
     [RelayCommand]
     private async Task ScanAsync()

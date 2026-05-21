@@ -2,13 +2,17 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace SysManager.Models;
 
 /// <summary>
 /// Represents a Windows Update entry (available, hidden, or from history).
 /// </summary>
-public sealed class UpdateEntry
+public sealed partial class UpdateEntry : ObservableObject
 {
+    [ObservableProperty] private bool _isSelected = true;
+
     public string Title { get; init; } = "";
     public string KB { get; init; } = "";
     public string Size { get; init; } = "";

@@ -11,6 +11,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with automatic adapter detection and one-click apply/reset.
 - **Hosts File Editor** — visual editor for the Windows hosts file with add/remove/toggle
   entries, IP/hostname validation, and automatic backup before saves.
+- **Context Menu Manager** — scan, enable/disable Windows Explorer right-click entries
+  via LegacyDisable (non-destructive). Covers files, folders, directory background,
+  and desktop with search/filter and registry backup.
 - **Privacy Toggles** — 12 one-click privacy switches (telemetry, advertising ID, Copilot,
   Cortana, web search, widgets, Start suggestions, lock screen tips) with instant apply
   and registry state detection.

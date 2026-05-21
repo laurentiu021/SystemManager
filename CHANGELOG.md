@@ -6,30 +6,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-05-21
+
+### Added
+- **Context Menu Manager** — scan, enable/disable Windows Explorer right-click entries
+  via LegacyDisable (non-destructive). Covers files, folders, directory background,
+  and desktop with search/filter and registry backup.
+
+## [1.6.0] - 2026-05-21
+
 ### Added
 - **DNS Changer** — quick-switch between Google, Cloudflare, Quad9, OpenDNS, or DHCP
   with automatic adapter detection and one-click apply/reset.
 - **Hosts File Editor** — visual editor for the Windows hosts file with add/remove/toggle
   entries, IP/hostname validation, and automatic backup before saves.
-- **Context Menu Manager** — scan, enable/disable Windows Explorer right-click entries
-  via LegacyDisable (non-destructive). Covers files, folders, directory background,
-  and desktop with search/filter and registry backup.
+
+## [1.5.0] - 2026-05-21
+
+### Added
 - **Privacy Toggles** — 12 one-click privacy switches (telemetry, advertising ID, Copilot,
   Cortana, web search, widgets, Start suggestions, lock screen tips) with instant apply
   and registry state detection.
 
-## [1.3.0] - 2026-05-21
+## [1.4.0] - 2026-05-21
 
 ### Added
 - **File Shredder** — secure file deletion with multiple overwrite methods (Quick 1-pass,
   Standard 3-pass, Thorough 7-pass). Protects system paths, uses confirmation dialog,
   supports files and folders.
 
-## [1.2.0] - 2026-05-21
+## [1.3.0] - 2026-05-21
 
 ### Added
 - **System Info Export** — comprehensive system report (OS, CPU, GPU, RAM, storage,
   network, SMART data) exportable to file or clipboard from the About tab.
+
+## [1.2.0] - 2026-05-21
+
+### Added
 - **Bulk App Installer** — install multiple applications via winget with curated list
   of 25 apps across 7 categories, category/text filtering, and per-app progress.
 

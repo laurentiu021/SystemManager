@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **DNS Changer** — quick-switch between Google, Cloudflare, Quad9, OpenDNS, or DHCP
+  with automatic adapter detection and one-click apply/reset.
+- **Hosts File Editor** — visual editor for the Windows hosts file with add/remove/toggle
+  entries, IP/hostname validation, and automatic backup before saves.
 - **Privacy Toggles** — 12 one-click privacy switches (telemetry, advertising ID, Copilot,
   Cortana, web search, widgets, Start suggestions, lock screen tips) with instant apply
   and registry state detection.

@@ -38,7 +38,7 @@ public sealed partial class UninstallerService
         try
         {
             await _runner.RunProcessAsync("winget",
-                "list --accept-source-agreements --disable-interactivity", ct);
+                "list --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 

@@ -256,12 +256,12 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         {
             var msg = $"chkdsk {driveLetter} requires admin privileges. Click 'Grant admin privileges' to elevate.";
             StatusMessage = msg;
-            if (target != null) target.Status = "Needs admin";
+            if (target is not null) target.Status = "Needs admin";
             return;
         }
 
         StatusMessage = $"Running chkdsk {driveLetter} (read-only)...";
-        if (target != null) target.Status = "Running...";
+        if (target is not null) target.Status = "Running...";
         try
         {
             // Capture chkdsk output lines so we can parse the verdict from
@@ -280,23 +280,23 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             finally { _runner.LineReceived -= OnLine; }
 
             var verdict = ParseChkdskVerdict(captured, exit);
-            if (target != null) target.Status = verdict;
+            if (target is not null) target.Status = verdict;
             StatusMessage = $"chkdsk {driveLetter} done — {verdict}.";
             Log.Information("chkdsk completed on {Drive}: exit {ExitCode}, verdict {Verdict}", driveLetter, exit, verdict);
         }
         catch (OperationCanceledException)
         {
-            if (target != null) target.Status = "Cancelled";
+            if (target is not null) target.Status = "Cancelled";
             StatusMessage = $"chkdsk {driveLetter} cancelled.";
         }
         catch (InvalidOperationException ex)
         {
-            if (target != null) target.Status = "Error";
+            if (target is not null) target.Status = "Error";
             StatusMessage = $"Error on {driveLetter}: {ex.Message}";
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            if (target != null) target.Status = "Error";
+            if (target is not null) target.Status = "Error";
             StatusMessage = $"Error on {driveLetter}: {ex.Message}";
         }
     }

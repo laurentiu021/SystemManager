@@ -111,7 +111,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public MainWindowViewModel()
     {
         var sp = App.Services;
-        if (sp != null)
+        if (sp is not null)
         {
             // Runtime path — resolve from DI container (shared singletons)
             Dashboard = sp.GetRequiredService<DashboardViewModel>();
@@ -483,19 +483,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedNavChanged(NavItem? value)
     {
-        if (value == null) return;
+        if (value is null) return;
         Log.Information("Tab navigated: {TabLabel}", value.Label);
 
         // Auto-expand the parent group when a child is selected.
         var parentGroup = NavGroups.FirstOrDefault(g => g.Children.Contains(value));
-        if (parentGroup != null) parentGroup.IsExpanded = true;
+        if (parentGroup is not null) parentGroup.IsExpanded = true;
     }
 
     /// <summary>Select a nav item by its automation id.</summary>
     private void SelectNavById(string id)
     {
         var item = NavItems.FirstOrDefault(n => n.Id == id);
-        if (item != null) SelectedNav = item;
+        if (item is not null) SelectedNav = item;
     }
 
     [RelayCommand]

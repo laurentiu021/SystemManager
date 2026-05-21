@@ -38,7 +38,7 @@ public sealed partial class WingetService
         try
         {
             await _runner.RunProcessAsync("winget",
-                "upgrade --include-unknown --accept-source-agreements --disable-interactivity", ct);
+                "upgrade --include-unknown --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 

@@ -89,7 +89,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         Repair = repair;
 
         Dispatcher = Application.Current?.Dispatcher;
-        if (Dispatcher != null)
+        if (Dispatcher is not null)
         {
             FlushTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
             {
@@ -219,7 +219,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     public void RemoveTarget(PingTarget? target)
     {
-        if (target == null || !target.IsCustom) return;
+        if (target is null || !target.IsCustom) return;
         RemoveTargetInternal(target);
     }
 
@@ -335,7 +335,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         // When Dispatcher is null (unit tests / headless), flush immediately on the
         // calling thread. ObservableCollections are not bound to UI in that scenario,
         // so direct modification is safe.
-        if (Dispatcher == null) FlushPending();
+        if (Dispatcher is null) FlushPending();
     }
 
     internal void FlushPending()
@@ -345,7 +345,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         {
             if (!Buffers.TryGetValue(sample.Host, out var buffer)) continue;
             var target = Targets.FirstOrDefault(t => t.Host == sample.Host);
-            if (target == null) continue;
+            if (target is null) continue;
             if (!target.IsEnabled) continue;
 
             double? shown = sample.LatencyMs;
@@ -368,7 +368,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             var buffer = Buffers[host];
             TrimBuffer(buffer);
             var target = Targets.FirstOrDefault(t => t.Host == host);
-            if (target == null) continue;
+            if (target is null) continue;
             RecomputeStats(target, buffer);
         }
 
@@ -515,7 +515,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     internal void InvokeOnUi(Action action)
     {
-        if (Dispatcher == null || Dispatcher.CheckAccess()) action();
+        if (Dispatcher is null || Dispatcher.CheckAccess()) action();
         else Dispatcher.BeginInvoke(DispatcherPriority.Background, action);
     }
 

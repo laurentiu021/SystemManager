@@ -42,7 +42,7 @@ public sealed class DiskAnalyzerService
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied listing directories in {Root}", rootPath); return []; }
         catch (IOException ex) { Log.Warning(ex, "I/O error listing directories in {Root}", rootPath); return []; }
 
-        var results = new List<DiskUsageEntry>();
+        List<DiskUsageEntry> results = [];
         int scanned = 0;
 
         // Also measure loose files in root

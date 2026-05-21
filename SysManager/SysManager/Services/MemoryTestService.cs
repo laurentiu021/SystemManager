@@ -97,7 +97,7 @@ public sealed class MemoryTestService
     {
         return await Task.Run<IReadOnlyList<MemoryModuleHealth>>(() =>
         {
-            var list = new List<MemoryModuleHealth>();
+            List<MemoryModuleHealth> list = [];
             try
             {
                 using var s = new ManagementObjectSearcher(

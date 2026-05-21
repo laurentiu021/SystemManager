@@ -229,7 +229,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     [RelayCommand]
     private void CopySelected()
     {
-        if (SelectedEntry == null) return;
+        if (SelectedEntry is null) return;
         var e = SelectedEntry;
         var text = new StringBuilder()
             .AppendLine($"[{e.Timestamp:yyyy-MM-dd HH:mm:ss}] {e.SeverityLabel} — {e.ProviderName} (Event {e.EventId})")
@@ -280,7 +280,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     [RelayCommand]
     private void SearchOnline()
     {
-        if (SelectedEntry == null) return;
+        if (SelectedEntry is null) return;
         var q = Uri.EscapeDataString($"Event ID {SelectedEntry.EventId} {SelectedEntry.ProviderName}");
         try { Process.Start(new ProcessStartInfo($"https://www.google.com/search?q={q}") { UseShellExecute = true }); }
         catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
@@ -330,7 +330,7 @@ public sealed partial class LogsViewModel : ViewModelBase
 
     private void Post(Action action)
     {
-        if (_sync == null || SynchronizationContext.Current == _sync) action();
+        if (_sync is null || SynchronizationContext.Current == _sync) action();
         else _sync.Post(_ => action(), null);
     }
 

@@ -36,7 +36,7 @@ public sealed partial class WindowsFeaturesService
             await _runner.RunProcessAsync("powershell",
                 "-NoProfile -Command \"Get-WindowsOptionalFeature -Online | " +
                 "Select-Object FeatureName, State | " +
-                "ForEach-Object { $_.FeatureName + '|' + $_.State }\"", ct);
+                "ForEach-Object { $_.FeatureName + '|' + $_.State }\"", ct).ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 
@@ -67,7 +67,7 @@ public sealed partial class WindowsFeaturesService
             var code = await _runner.RunProcessAsync("powershell",
                 $"-NoProfile -Command \"Enable-WindowsOptionalFeature -Online " +
                 $"-FeatureName '{featureName}' -NoRestart -All | " +
-                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }}\"", ct);
+                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }}\"", ct).ConfigureAwait(false);
 
             var reboot = captured.Any(l =>
                 l.Contains("True", StringComparison.OrdinalIgnoreCase));
@@ -101,7 +101,7 @@ public sealed partial class WindowsFeaturesService
             var code = await _runner.RunProcessAsync("powershell",
                 $"-NoProfile -Command \"Disable-WindowsOptionalFeature -Online " +
                 $"-FeatureName '{featureName}' -NoRestart | " +
-                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }}\"", ct);
+                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }}\"", ct).ConfigureAwait(false);
 
             var reboot = captured.Any(l =>
                 l.Contains("True", StringComparison.OrdinalIgnoreCase));

@@ -47,15 +47,15 @@ public sealed class HealthScoreService
         IReadOnlyList<DiskHealthReport>? disks = null;
         BatteryInfo? battery = null;
 
-        try { snapshot = await sysTask; }
+        try { snapshot = await sysTask.ConfigureAwait(false); }
         catch (System.Management.ManagementException ex) { Log.Warning("HealthScore: system info failed: {Error}", ex.Message); }
         catch (InvalidOperationException ex) { Log.Warning("HealthScore: system info failed: {Error}", ex.Message); }
 
-        try { disks = await diskTask; }
+        try { disks = await diskTask.ConfigureAwait(false); }
         catch (System.Management.ManagementException ex) { Log.Warning("HealthScore: disk health failed: {Error}", ex.Message); }
         catch (InvalidOperationException ex) { Log.Warning("HealthScore: disk health failed: {Error}", ex.Message); }
 
-        try { battery = await batteryTask; }
+        try { battery = await batteryTask.ConfigureAwait(false); }
         catch (System.Management.ManagementException ex) { Log.Warning("HealthScore: battery failed: {Error}", ex.Message); }
         catch (InvalidOperationException ex) { Log.Warning("HealthScore: battery failed: {Error}", ex.Message); }
 

@@ -169,7 +169,7 @@ public sealed partial class PerformanceService : IDisposable
         List<string> lines = [];
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
-        try { await _ps.RunProcessAsync("powercfg.exe", "/getactivescheme", ct, PowerShellRunner.OemEncoding); }
+        try { await _ps.RunProcessAsync("powercfg.exe", "/getactivescheme", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
         return ParseActivePlan(lines);
@@ -217,7 +217,7 @@ public sealed partial class PerformanceService : IDisposable
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         _ps.LineReceived += OnLine;
-        try { await _ps.RunProcessAsync("powercfg.exe", $"-duplicatescheme {UltimatePerfScheme}", ct, PowerShellRunner.OemEncoding); }
+        try { await _ps.RunProcessAsync("powercfg.exe", $"-duplicatescheme {UltimatePerfScheme}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
         // Parse GUID from output: "Power Scheme GUID: <guid>  (Ultimate Performance)"
@@ -240,7 +240,7 @@ public sealed partial class PerformanceService : IDisposable
         List<string> lines = [];
         void OnLine(PowerShellLine l) => lines.Add(l.Text);
         _ps.LineReceived += OnLine;
-        try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct, PowerShellRunner.OemEncoding); }
+        try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
         return ParsePlanGuidByName(lines, nameSubstring);

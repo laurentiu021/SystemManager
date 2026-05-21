@@ -107,7 +107,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     [RelayCommand]
     private void RemoveItem(ShredItem? item)
     {
-        if (item != null)
+        if (item is not null)
             Items.Remove(item);
     }
 

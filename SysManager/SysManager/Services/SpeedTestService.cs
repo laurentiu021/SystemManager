@@ -40,13 +40,13 @@ public sealed class SpeedTestService
         IProgress<(int Percent, string Message)>? progress, CancellationToken ct)
     {
         progress?.Report((0, "Pinging test server…"));
-        var pingMs = await MeasurePingAsync(CfPingHost);
+        var pingMs = await MeasurePingAsync(CfPingHost).ConfigureAwait(false);
 
         progress?.Report((5, "Measuring download…"));
-        var downloadMbps = await MeasureDownloadAsync(progress, ct);
+        var downloadMbps = await MeasureDownloadAsync(progress, ct).ConfigureAwait(false);
 
         progress?.Report((55, "Measuring upload…"));
-        var uploadMbps = await MeasureUploadAsync(progress, ct);
+        var uploadMbps = await MeasureUploadAsync(progress, ct).ConfigureAwait(false);
 
         progress?.Report((100, "Done"));
         return new SpeedTestResult("HTTP", downloadMbps, uploadMbps, pingMs, CfPingHost, DateTime.Now);
@@ -60,7 +60,7 @@ public sealed class SpeedTestService
             List<long> samples = [];
             for (int i = 0; i < 4; i++)
             {
-                var r = await p.SendPingAsync(host, 2000);
+                var r = await p.SendPingAsync(host, 2000).ConfigureAwait(false);
                 if (r.Status == IPStatus.Success) samples.Add(r.RoundtripTime);
             }
             return samples.Count > 0 ? samples.Average() : 0;
@@ -82,12 +82,12 @@ public sealed class SpeedTestService
         var tasks = Enumerable.Range(0, DownloadConnections).Select(async _ =>
         {
             var url = string.Format(CfDownloadUrl, perStream);
-            using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             resp.EnsureSuccessStatusCode();
             var buffer = new byte[81920];
-            using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             int read;
-            while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+            while ((read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
             {
                 Interlocked.Add(ref totalBytes, read);
             }
@@ -115,7 +115,7 @@ public sealed class SpeedTestService
         content.Headers.ContentLength = PayloadBytes;
 
         var sw = Stopwatch.StartNew();
-        using var resp = await _http.PostAsync(CfUploadUrl, content, ct);
+        using var resp = await _http.PostAsync(CfUploadUrl, content, ct).ConfigureAwait(false);
         sw.Stop();
 
         // Some responses are rejected with 4xx on POST size — treat as best-effort.
@@ -177,7 +177,7 @@ public sealed class SpeedTestService
         string exe;
         try
         {
-            exe = await EnsureOoklaAsync(progress, ct);
+            exe = await EnsureOoklaAsync(progress, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -222,7 +222,7 @@ public sealed class SpeedTestService
 
         try
         {
-            await proc.WaitForExitAsync(linked);
+            await proc.WaitForExitAsync(linked).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -317,11 +317,11 @@ public sealed class SpeedTestService
         var zipUrl = $"https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-{arch}.zip";
 
         var zipPath = Path.Join(toolsDir, "ookla.zip");
-        using (var resp = await _http.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+        using (var resp = await _http.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
         {
             resp.EnsureSuccessStatusCode();
             await using var fs = File.Create(zipPath);
-            await resp.Content.CopyToAsync(fs, ct);
+            await resp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
         }
 
         // Log download integrity info for audit (SHA-256 of the zip).

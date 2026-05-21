@@ -88,7 +88,7 @@ public sealed class TracerouteMonitorService : IDisposable
                 if (ct.IsCancellationRequested) return;
                 try
                 {
-                    var hops = await _tracer.RunAsync(target.Host, ct);
+                    var hops = await _tracer.RunAsync(target.Host, ct).ConfigureAwait(false);
                     // Skip reporting if the target was removed/disabled mid-flight.
                     if (Targets.TryGetValue(target.Host, out var live) && live.IsEnabled)
                         RouteCompleted?.Invoke(target.Host, hops);

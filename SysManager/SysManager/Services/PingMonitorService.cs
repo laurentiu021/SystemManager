@@ -98,7 +98,7 @@ public sealed class PingMonitorService : IDisposable
             using var ping = new Ping();
             // A timeout of 0 or negative is illegal for Ping; coerce into a usable floor.
             var effectiveTimeout = TimeoutMs > 0 ? TimeoutMs : 2000;
-            var reply = await ping.SendPingAsync(host, effectiveTimeout).WaitAsync(ct);
+            var reply = await ping.SendPingAsync(host, effectiveTimeout).WaitAsync(ct).ConfigureAwait(false);
             if (reply.Status == IPStatus.Success)
             {
                 latency = reply.RoundtripTime;

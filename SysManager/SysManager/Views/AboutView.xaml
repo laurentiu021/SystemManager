@@ -52,6 +52,16 @@
                             <Button Content="Check for updates" Command="{Binding CheckForUpdatesCommand}"
                                     Style="{StaticResource PrimaryButton}"
                                     IsEnabled="{Binding IsCheckingForUpdates, Converter={StaticResource BoolInvert}}"/>
+                            <Button Content="Export full report"
+                                    Command="{Binding ExportToFileCommand}"
+                                    Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
+                                    IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
+                                    ToolTip="Generate a comprehensive system report and save it to the Desktop."/>
+                            <Button Content="Copy full report"
+                                    Command="{Binding CopyReportCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
+                                    ToolTip="Generate a comprehensive system report and copy it to the clipboard."/>
                             <Button Content="Copy environment info"
                                     Command="{Binding CopyEnvironmentInfoCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"

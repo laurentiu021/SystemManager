@@ -453,7 +453,7 @@ and elevation state in a format ready to paste into a bug report.
 - .NET 10 (WPF, C# 14)
 - CommunityToolkit.Mvvm for MVVM plumbing
 - Microsoft.Extensions.DependencyInjection for IoC
-- ModernWpfUI for the modern title bar
+- WPF-UI (lepoco/wpfui) for Fluent Design theme and controls
 - LiveCharts2 for the real-time latency chart
 - H.NotifyIcon.Wpf for system tray integration
 - Serilog for structured logging

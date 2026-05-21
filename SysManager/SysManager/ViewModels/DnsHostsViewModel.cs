@@ -98,7 +98,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     [RelayCommand]
     private async Task ApplyDnsAsync()
     {
-        if (SelectedPreset == null) return;
+        if (SelectedPreset is null) return;
 
         if (!IsElevated)
         {
@@ -193,7 +193,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     [RelayCommand]
     private void RemoveEntry(HostsEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
         HostEntries.Remove(entry);
         HostsStatus = $"Removed {entry.Hostname}.";
     }

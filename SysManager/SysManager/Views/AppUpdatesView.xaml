@@ -68,7 +68,9 @@
                       GridLinesVisibility="None" CanUserAddRows="False"
                       CanUserSortColumns="True"
                       Background="Transparent" RowBackground="Transparent"
-                      AlternatingRowBackground="#0F141C" BorderThickness="0">
+                      AlternatingRowBackground="#0F141C" BorderThickness="0"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
                     <DataGridCheckBoxColumn Header="" Width="50" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" CanUserSort="False">
                         <DataGridCheckBoxColumn.ElementStyle>

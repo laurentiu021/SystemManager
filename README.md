@@ -37,8 +37,8 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 
 ### Sidebar navigation
 The sidebar organises 56 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 32 tabs are fully
-implemented; 24 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 31 tabs are fully
+implemented; 25 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
@@ -48,7 +48,7 @@ implemented; 24 are work-in-progress placeholders marked with ⚙️:
 | 📊 Monitor | Process Manager · Resource History ⚙️ · App Alerts · Privacy Monitor ⚙️ · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · File Shredder · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
-| 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS Changer · Hosts Editor |
+| 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller · App Blocker |
 | 🛡️ Privacy & Security | Privacy & Telemetry · Debloater & Ads ⚙️ · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables ⚙️ |

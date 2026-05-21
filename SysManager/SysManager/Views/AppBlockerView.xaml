@@ -49,7 +49,9 @@
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                  BorderThickness="1" BorderBrush="{StaticResource Border1}">
+                  BorderThickness="1" BorderBrush="{StaticResource Border1}"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" />
                 <DataGridTextColumn Header="Executable" Binding="{Binding ExecutableName}" Width="*" IsReadOnly="True" />

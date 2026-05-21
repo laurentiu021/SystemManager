@@ -87,7 +87,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         try
         {
             var latest = await _updates.GetLatestAsync();
-            if (latest == null)
+            if (latest is null)
             {
                 var detail = string.IsNullOrWhiteSpace(_updates.LastError) ? "Unknown error." : _updates.LastError;
                 UpdateStatus = $"Couldn't reach GitHub — {detail} Click Retry to try again.";
@@ -143,7 +143,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     [RelayCommand]
     private async Task DownloadAsync()
     {
-        if (_latest == null || IsDownloading) return;
+        if (_latest is null || IsDownloading) return;
         IsDownloading = true;
         AutoDownloadFailed = false;
         DownloadPercent = 0;
@@ -164,7 +164,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             });
 
             var path = await _updates.DownloadAsync(_latest, progress);
-            if (path != null && File.Exists(path))
+            if (path is not null && File.Exists(path))
             {
                 DownloadedPath = path;
                 DownloadStatus = "Download complete. Click Install to restart with the new version.";
@@ -268,7 +268,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                     var threads = mo["NumberOfLogicalProcessors"];
                     var mhz = mo["MaxClockSpeed"];
                     sb.Append("CPU: ").Append(name);
-                    if (cores != null) sb.Append($" ({cores}c/{threads}t)");
+                    if (cores is not null) sb.Append($" ({cores}c/{threads}t)");
                     if (mhz is uint speed) sb.Append($" @ {speed / 1000.0:F1} GHz");
                     sb.AppendLine();
                     break;
@@ -329,10 +329,10 @@ public sealed partial class AboutViewModel : ViewModelBase
                     var w = mo["CurrentHorizontalResolution"];
                     var h = mo["CurrentVerticalResolution"];
                     var hz = mo["CurrentRefreshRate"];
-                    if (w != null && h != null)
+                    if (w is not null && h is not null)
                     {
                         sb.Append($"Display: {w}×{h}");
-                        if (hz != null) sb.Append($" @ {hz} Hz");
+                        if (hz is not null) sb.Append($" @ {hz} Hz");
                         sb.AppendLine();
                         break;
                     }
@@ -451,7 +451,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        if (_latest == null)
+        if (_latest is null)
         {
             DownloadStatus = "No release info available.";
             return;
@@ -462,7 +462,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         var (verified, expected, actual) = await _updates.VerifyHashAsync(_latest, DownloadedPath);
         if (!verified)
         {
-            DownloadStatus = expected != null && actual != null
+            DownloadStatus = expected is not null && actual is not null
                 ? $"SHA256 mismatch — file may be corrupted. Expected: {expected[..12]}… Got: {actual[..12]}…"
                 : "Hash verification failed — file may be corrupted. Try downloading again.";
             return;

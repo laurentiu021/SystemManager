@@ -95,7 +95,9 @@
                                   CanUserResizeRows="False" GridLinesVisibility="None"
                                   Background="Transparent" BorderThickness="0" Margin="0,8,0,0"
                                   MaxHeight="260" VerticalScrollBarVisibility="Auto"
-                                  AutomationProperties.Name="Ookla speed test history">
+                                  AutomationProperties.Name="Ookla speed test history"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110"/>
                                 <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90"/>
@@ -123,7 +125,9 @@
                                   CanUserResizeRows="False" GridLinesVisibility="None"
                                   Background="Transparent" BorderThickness="0" Margin="0,8,0,0"
                                   MaxHeight="260" VerticalScrollBarVisibility="Auto"
-                                  AutomationProperties.Name="HTTP speed test history">
+                                  AutomationProperties.Name="HTTP speed test history"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110"/>
                                 <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90"/>

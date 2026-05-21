@@ -43,7 +43,9 @@
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   Background="Transparent" RowBackground="Transparent"
                                   AlternatingRowBackground="#0F141C" BorderThickness="0"
-                                  Margin="0,10,0,0">
+                                  Margin="0,10,0,0"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Slot" Binding="{Binding BankLabel}" Width="*"/>
                                 <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="*"/>
@@ -94,7 +96,9 @@
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   Background="Transparent" RowBackground="Transparent"
                                   AlternatingRowBackground="#0F141C" BorderThickness="0"
-                                  Margin="0,10,0,0">
+                                  Margin="0,10,0,0"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Drive" Binding="{Binding FriendlyName}" Width="*"/>
                                 <DataGridTextColumn Header="Media" Binding="{Binding MediaType}" Width="70"/>

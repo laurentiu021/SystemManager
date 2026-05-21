@@ -177,7 +177,9 @@
                               RowBackground="Transparent"
                               AlternatingRowBackground="#0F141C"
                               BorderThickness="0"
-                              SelectionMode="Single">
+                              SelectionMode="Single"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
                             <Setter Property="Background" Value="Transparent"/>

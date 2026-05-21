@@ -90,7 +90,9 @@
                               AutoGenerateColumns="False" HeadersVisibility="Column"
                               Background="Transparent" BorderThickness="0"
                               GridLinesVisibility="None" IsReadOnly="True"
-                              RowBackground="Transparent" AlternatingRowBackground="#0F141C">
+                              RowBackground="Transparent" AlternatingRowBackground="#0F141C"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding HopNumber}" Width="36"/>
                             <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*"/>

@@ -356,7 +356,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
 /// A fixed drive shown in the chkdsk selector. Mutable so the UI can reflect
 /// live status ("Running...", "OK", "Error") as scans progress.
 /// </summary>
-public partial class DriveTarget : ObservableObject
+public sealed partial class DriveTarget : ObservableObject
 {
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _status = "Idle";

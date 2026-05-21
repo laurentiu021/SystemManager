@@ -195,7 +195,9 @@
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   Background="Transparent" RowBackground="Transparent"
                                   AlternatingRowBackground="#0F141C" BorderThickness="0"
-                                  MaxHeight="380">
+                                  MaxHeight="380"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="110"/>
                                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>

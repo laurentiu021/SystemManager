@@ -63,7 +63,9 @@
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserSortColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="None"
-                  Margin="28,12,28,0">
+                  Margin="28,12,28,0"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200"/>
                 <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>

@@ -92,7 +92,9 @@
                           AlternatingRowBackground="#111D2E"
                           Foreground="#E2E8F0" FontSize="12"
                           HorizontalGridLinesBrush="#1E293B"
-                          SelectionMode="Single" IsReadOnly="False">
+                          SelectionMode="Single" IsReadOnly="False"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling">
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="40"/>
                         <DataGridTextColumn Header="IP Address" Binding="{Binding IpAddress}" Width="150" IsReadOnly="True"/>

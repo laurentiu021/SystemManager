@@ -235,7 +235,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         {
             _cts.Cancel();
             _cts.Dispose();
-            _dnsService.Dispose();
+            // Do not dispose _dnsService or _hostsService — DI container owns their lifetime
         }
         base.Dispose(disposing);
     }

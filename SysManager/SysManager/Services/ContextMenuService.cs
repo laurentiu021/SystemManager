@@ -34,7 +34,7 @@ public sealed class ContextMenuService
     /// </summary>
     public List<ContextMenuEntry> ScanEntries()
     {
-        var entries = new List<ContextMenuEntry>();
+        List<ContextMenuEntry> entries = [];
 
         foreach (var (subKey, location) in ShellLocations)
         {

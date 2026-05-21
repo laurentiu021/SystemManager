@@ -564,7 +564,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipCpuAffinity?.Dispose();
         WipDisplayProfiles?.Dispose();
         WipScheduledMaintenance?.Dispose();
-        DnsHosts?.Dispose();
         Privacy?.Dispose();
         ContextMenu?.Dispose();
         WipDebloater?.Dispose();

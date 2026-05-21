@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 public sealed partial class ContextMenuViewModel : ViewModelBase
 {
     private readonly ContextMenuService _service;
-    private readonly List<ContextMenuEntry> _allEntries = new();
+    private List<ContextMenuEntry> _allEntries = [];
 
     public BulkObservableCollection<ContextMenuEntry> Entries { get; } = new();
 
@@ -52,13 +52,14 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private Task ScanAsync() => Task.Run(() =>
+    private async Task ScanAsync()
     {
         IsBusy = true;
         StatusMessage = "Scanning context menu entries...";
         try
         {
-            var items = _service.ScanEntries();
+            var items = await Task.Run(() => _service.ScanEntries());
+
             _allEntries.Clear();
             foreach (var item in items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
                 _allEntries.Add(item);
@@ -75,7 +76,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             StatusMessage = $"Scan failed: {ex.Message}";
         }
         finally { IsBusy = false; }
-    });
+    }
 
     [RelayCommand]
     private void ToggleEntry(object? parameter)

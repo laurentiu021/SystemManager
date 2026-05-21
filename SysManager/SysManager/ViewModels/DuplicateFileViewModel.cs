@@ -70,7 +70,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(SelectedFolder)) return;
 
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Duplicate File Scan");
-        if (opLock == null)
+        if (opLock is null)
         {
             ScanSummary = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
@@ -151,7 +151,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     [RelayCommand]
     private static void ShowInExplorer(DuplicateFileEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -168,7 +168,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     [RelayCommand]
     private static void CopyPath(DuplicateFileEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
         try { System.Windows.Clipboard.SetText(entry.Path); }
         catch (System.Runtime.InteropServices.ExternalException ex) { Log.Debug(ex, "Failed to copy path to clipboard"); }
     }

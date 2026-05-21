@@ -30,8 +30,8 @@ public sealed class SystemReportService
     /// </summary>
     public async Task<string> GenerateReportAsync(CancellationToken ct = default)
     {
-        var snapshot = await _sysInfo.CaptureAsync(ct);
-        var diskHealth = await _diskHealth.CollectAsync(ct);
+        var snapshot = await _sysInfo.CaptureAsync(ct).ConfigureAwait(false);
+        var diskHealth = await _diskHealth.CollectAsync(ct).ConfigureAwait(false);
 
         return await Task.Run(() => BuildReport(snapshot, diskHealth), ct);
     }
@@ -207,6 +207,10 @@ public sealed class SystemReportService
             Log.Debug("GPU info unavailable for report: {Error}", ex.Message);
             sb.AppendLine("  (GPU information unavailable)");
         }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            sb.AppendLine("  (GPU information unavailable)");
+        }
         catch (UnauthorizedAccessException ex)
         {
             Log.Debug("GPU info access denied: {Error}", ex.Message);
@@ -242,6 +246,10 @@ public sealed class SystemReportService
         catch (ManagementException ex)
         {
             Log.Debug("Motherboard info unavailable for report: {Error}", ex.Message);
+            sb.AppendLine("  (Motherboard information unavailable)");
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
             sb.AppendLine("  (Motherboard information unavailable)");
         }
         catch (UnauthorizedAccessException ex)
@@ -289,6 +297,10 @@ public sealed class SystemReportService
         catch (ManagementException ex)
         {
             Log.Debug("Network info unavailable for report: {Error}", ex.Message);
+            sb.AppendLine("  (Network information unavailable)");
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
             sb.AppendLine("  (Network information unavailable)");
         }
         catch (UnauthorizedAccessException ex)

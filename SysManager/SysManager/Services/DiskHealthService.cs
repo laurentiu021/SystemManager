@@ -22,7 +22,7 @@ public sealed partial class DiskHealthService
 
     private static IReadOnlyList<DiskHealthReport> Collect()
     {
-        var results = new List<DiskHealthReport>();
+        List<DiskHealthReport> results = [];
         try
         {
             var scope = new ManagementScope(@"\\.\root\Microsoft\Windows\Storage");

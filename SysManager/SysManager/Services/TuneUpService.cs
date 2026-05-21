@@ -48,7 +48,7 @@ public sealed class TuneUpService
     {
         // Step 1: Temp cleanup
         progress?.Report((0, "Cleaning temporary files…"));
-        var (tempFreed, tempDeleted, tempErrors) = await CleanTempFilesAsync(ct);
+        var (tempFreed, tempDeleted, tempErrors) = await CleanTempFilesAsync(ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
 
         // Step 2: Recycle Bin
@@ -57,7 +57,7 @@ public sealed class TuneUpService
         bool binSkipped = !emptyRecycleBin;
         if (emptyRecycleBin)
         {
-            binEmptied = await EmptyRecycleBinAsync(ct);
+            binEmptied = await EmptyRecycleBinAsync(ct).ConfigureAwait(false);
         }
         ct.ThrowIfCancellationRequested();
 
@@ -66,7 +66,7 @@ public sealed class TuneUpService
         int brokenCount = 0;
         try
         {
-            var broken = await _shortcuts.ScanAsync(ct: ct);
+            var broken = await _shortcuts.ScanAsync(ct: ct).ConfigureAwait(false);
             brokenCount = broken.Count;
         }
         catch (IOException ex)
@@ -84,7 +84,7 @@ public sealed class TuneUpService
         List<DiskHealthSummary> diskSummaries = [];
         try
         {
-            var reports = await _diskHealth.CollectAsync(ct);
+            var reports = await _diskHealth.CollectAsync(ct).ConfigureAwait(false);
             foreach (var r in reports)
             {
                 diskSummaries.Add(new DiskHealthSummary
@@ -111,7 +111,7 @@ public sealed class TuneUpService
         double ramUsedPct = 0, ramUsedGB = 0, ramTotalGB = 0;
         try
         {
-            var snapshot = await _sysInfo.CaptureAsync(ct);
+            var snapshot = await _sysInfo.CaptureAsync(ct).ConfigureAwait(false);
             uptime = snapshot.Os.Uptime;
             ramUsedPct = snapshot.Memory.UsedPercent;
             ramUsedGB = snapshot.Memory.UsedGB;

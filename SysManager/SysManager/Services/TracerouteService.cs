@@ -24,7 +24,7 @@ public sealed class TracerouteService
 
     public async Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, CancellationToken ct)
     {
-        var results = new List<TracerouteHop>();
+        List<TracerouteHop> results = [];
         var payload = new byte[32];
 
         for (int ttl = 1; ttl <= MaxHops; ttl++)
@@ -43,7 +43,7 @@ public sealed class TracerouteService
                     using var ping = new Ping();
                     var sw = Stopwatch.StartNew();
                     var effectiveTimeout = TimeoutMs > 0 ? TimeoutMs : 3000;
-                    var reply = await ping.SendPingAsync(host, effectiveTimeout, payload, options).WaitAsync(ct);
+                    var reply = await ping.SendPingAsync(host, effectiveTimeout, payload, options).WaitAsync(ct).ConfigureAwait(false);
                     sw.Stop();
                     lastStatus = reply.Status;
 

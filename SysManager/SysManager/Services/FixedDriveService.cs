@@ -30,7 +30,7 @@ public sealed class FixedDriveService
     public static IReadOnlyList<FixedDrive> Enumerate()
     {
         // Primary source: DriveInfo (fast, always works, no admin).
-        var drives = new List<FixedDrive>();
+        List<FixedDrive> drives = [];
         var fixedReady = DriveInfo.GetDrives()
             .Where(di => di.DriveType == DriveType.Fixed && di.IsReady)
             .Where(di => (di.DriveFormat ?? string.Empty).ToUpperInvariant() is "NTFS" or "REFS");

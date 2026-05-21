@@ -61,7 +61,7 @@ public sealed partial class TracerouteViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(TraceHost)) return;
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Traceroute");
-        if (opLock == null)
+        if (opLock is null)
         {
             TraceStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
             return;

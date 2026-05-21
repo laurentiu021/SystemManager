@@ -69,7 +69,7 @@ public sealed partial class NetworkRepairViewModel : ViewModelBase
         Func<Task<Models.NetworkRepairResult>> operation)
     {
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
-        if (opLock == null)
+        if (opLock is null)
         {
             RepairStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
             return;

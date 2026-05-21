@@ -63,7 +63,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
                 {
                     p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
                     var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name);
-                    if (dbEntry != null)
+                    if (dbEntry is not null)
                     {
                         p.PlainDescription = dbEntry.Description;
                         p.Category = dbEntry.Category;
@@ -102,7 +102,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     [RelayCommand]
     private void KillProcess(ProcessEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
 
         if (!DialogService.Instance.Confirm(
             $"Are you sure you want to kill \"{entry.Name}\" (PID {entry.Pid})?\n\nThis may cause unsaved data loss.",
@@ -127,7 +127,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     [RelayCommand]
     private static void OpenFileLocation(ProcessEntry? entry)
     {
-        if (entry == null || !entry.CanOpenFileLocation) return;
+        if (entry is null || !entry.CanOpenFileLocation) return;
         ProcessManagerService.OpenFileLocation(entry.FilePath);
     }
 

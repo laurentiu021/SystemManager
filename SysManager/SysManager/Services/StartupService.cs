@@ -49,7 +49,7 @@ public sealed class StartupService
 
     private static IReadOnlyList<StartupEntry> Scan()
     {
-        var results = new List<StartupEntry>();
+        List<StartupEntry> results = [];
 
         // HKCU Run keys
         foreach (var (keyPath, source) in RunKeys)

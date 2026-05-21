@@ -20,7 +20,7 @@ public sealed class ProcessManagerService
 
     private static IReadOnlyList<ProcessEntry> Snapshot(CancellationToken ct)
     {
-        var results = new List<ProcessEntry>();
+        List<ProcessEntry> results = [];
         Process[] procs;
         try { procs = Process.GetProcesses(); }
         catch (InvalidOperationException) { return results; }

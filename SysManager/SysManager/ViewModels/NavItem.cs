@@ -55,7 +55,7 @@ public sealed partial class NavItem : ObservableObject, IDisposable
     {
         get
         {
-            if (_view != null) return _view;
+            if (_view is not null) return _view;
             _view = (UserControl)Activator.CreateInstance(ViewType)!;
             _view.DataContext = Content;
             return _view;

@@ -48,11 +48,11 @@ public sealed class SpeedTestHistoryService : IDisposable
         try
         {
             if (!File.Exists(HistoryPath))
-                return new List<SpeedTestResult>();
+                return [];
 
             var json = await File.ReadAllTextAsync(HistoryPath, ct).ConfigureAwait(false);
             var entries = JsonSerializer.Deserialize<List<SpeedTestHistoryEntry>>(json, JsonOpts);
-            if (entries is null) return new List<SpeedTestResult>();
+            if (entries is null) return [];
 
             return entries.Select(e => new SpeedTestResult(
                 e.Engine ?? "HTTP",
@@ -65,12 +65,12 @@ public sealed class SpeedTestHistoryService : IDisposable
         catch (IOException ex)
         {
             Log.Warning(ex, "Failed to load speed test history");
-            return new List<SpeedTestResult>();
+            return [];
         }
         catch (JsonException ex)
         {
             Log.Warning(ex, "Failed to parse speed test history JSON");
-            return new List<SpeedTestResult>();
+            return [];
         }
     }
 

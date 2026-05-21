@@ -129,7 +129,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
         var opLock = OperationLockService.Instance.TryAcquire(
             OperationCategory.Disk, "Quick Tune-Up");
-        if (opLock == null)
+        if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;

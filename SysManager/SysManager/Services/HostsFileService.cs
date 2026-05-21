@@ -29,7 +29,7 @@ public sealed partial class HostsFileService
     /// </summary>
     public List<HostsEntry> ReadHosts()
     {
-        var entries = new List<HostsEntry>();
+        List<HostsEntry> entries = [];
         if (!File.Exists(HostsPath)) return entries;
 
         foreach (string rawLine in File.ReadAllLines(HostsPath))

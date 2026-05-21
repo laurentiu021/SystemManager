@@ -4,6 +4,7 @@
 
 using System.Collections.ObjectModel;
 using System.Management.Automation;
+using System.Net;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -63,18 +64,22 @@ public sealed class DnsService : IDisposable
     }
 
     /// <summary>
-    /// Detects the name of the first active network adapter.
+    /// Detects the interface index of the first active network adapter.
+    /// Uses the integer index to avoid command injection through adapter names.
     /// </summary>
-    private async Task<string> GetActiveInterfaceNameAsync(CancellationToken ct)
+    private async Task<int> GetActiveInterfaceIndexAsync(CancellationToken ct)
     {
         const string script = """
-            Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1 -ExpandProperty Name
+            Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1 -ExpandProperty ifIndex
             """;
 
         Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)
             .ConfigureAwait(false);
 
-        return results.Count > 0 ? results[0]?.ToString() ?? "Ethernet" : "Ethernet";
+        if (results.Count > 0 && int.TryParse(results[0]?.ToString(), out var index))
+            return index;
+
+        throw new InvalidOperationException("No active network adapter found.");
     }
 
     /// <summary>
@@ -82,12 +87,17 @@ public sealed class DnsService : IDisposable
     /// </summary>
     public async Task SetDnsAsync(string primary, string secondary, CancellationToken ct = default)
     {
+        if (!IPAddress.TryParse(primary, out _))
+            throw new ArgumentException($"Invalid primary DNS address: '{primary}'", nameof(primary));
+        if (!IPAddress.TryParse(secondary, out _))
+            throw new ArgumentException($"Invalid secondary DNS address: '{secondary}'", nameof(secondary));
+
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            string iface = await GetActiveInterfaceNameAsync(ct).ConfigureAwait(false);
+            int ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
             string script = $"""
-                Set-DnsClientServerAddress -InterfaceAlias "{iface}" -ServerAddresses @("{primary}","{secondary}")
+                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @("{primary}","{secondary}")
                 """;
 
             await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
@@ -103,9 +113,9 @@ public sealed class DnsService : IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            string iface = await GetActiveInterfaceNameAsync(ct).ConfigureAwait(false);
+            int ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
             string script = $"""
-                Set-DnsClientServerAddress -InterfaceAlias "{iface}" -ResetServerAddresses
+                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ResetServerAddresses
                 """;
 
             await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);

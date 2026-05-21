@@ -22,7 +22,7 @@ public sealed partial class PrivacyViewModel : ViewModelBase
 
     public BulkObservableCollection<PrivacyToggle> Toggles { get; } = new();
 
-    [ObservableProperty] private List<string> _categories = new();
+    [ObservableProperty] private List<string> _categories = [];
     [ObservableProperty] private string _selectedCategory = "All";
     [ObservableProperty] private bool _isElevated;
 
@@ -52,7 +52,7 @@ public sealed partial class PrivacyViewModel : ViewModelBase
                 t.PropertyChanged += OnTogglePropertyChanged;
 
             // Build category list
-            var cats = new List<string> { "All" };
+            List<string> cats = ["All"];
             cats.AddRange(Toggles.Select(t => t.Category).Distinct().OrderBy(c => c));
             Categories = cats;
             SelectedCategory = "All";

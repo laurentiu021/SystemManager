@@ -73,7 +73,7 @@ public sealed class FileShredderService
             var buffer = new byte[BufferSize];
             var pattern = patterns[pass];
 
-            if (pattern == null)
+            if (pattern is null)
             {
                 // Random pass
                 Random.Shared.NextBytes(buffer);
@@ -91,7 +91,7 @@ public sealed class FileShredderService
                 var writeSize = (int)Math.Min(BufferSize, bytesRemaining);
 
                 // Re-randomize buffer each chunk for random passes
-                if (pattern == null)
+                if (pattern is null)
                     Random.Shared.NextBytes(buffer.AsSpan(0, writeSize));
 
                 await stream.WriteAsync(buffer.AsMemory(0, writeSize), ct).ConfigureAwait(false);

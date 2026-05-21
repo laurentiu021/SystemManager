@@ -45,6 +45,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public BulkInstallerViewModel BulkInstaller { get; }
     public FileShredderViewModel FileShredder { get; }
     public PrivacyViewModel Privacy { get; }
+    public DnsHostsViewModel DnsHosts { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -64,9 +65,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     // Cleanup group (File Shredder is now fully implemented)
     public PlaceholderViewModel WipScheduledMaintenance { get; private set; } = null!;
 
-    // Network group
-    public PlaceholderViewModel WipDnsChanger { get; private set; } = null!;
-    public PlaceholderViewModel WipHostsEditor { get; private set; } = null!;
+    // Network group — DNS Changer + Hosts Editor now fully implemented as DnsHosts
 
     // Apps group (Bulk Installer is now fully implemented)
 
@@ -142,6 +141,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             AppBlocker = sp.GetRequiredService<AppBlockerViewModel>();
             BulkInstaller = sp.GetRequiredService<BulkInstallerViewModel>();
             FileShredder = sp.GetRequiredService<FileShredderViewModel>();
+            DnsHosts = sp.GetRequiredService<DnsHostsViewModel>();
             WindowsFeatures = sp.GetRequiredService<WindowsFeaturesViewModel>();
             Privacy = sp.GetRequiredService<PrivacyViewModel>();
         }
@@ -190,6 +190,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             AppBlocker = new AppBlockerViewModel();
             BulkInstaller = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()));
             FileShredder = new FileShredderViewModel(new FileShredderService());
+            DnsHosts = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), new HostsFileService());
             WindowsFeatures = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner));
             Privacy = new PrivacyViewModel(new PrivacyService());
         }
@@ -219,9 +220,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Cleanup group (File Shredder is now fully implemented)
         WipScheduledMaintenance = new PlaceholderViewModel("Scheduled Maintenance", "Automate cleanup, RAM trim, and health checks on schedule or idle trigger.", "#10");
 
-        // Network group
-        WipDnsChanger = new PlaceholderViewModel("DNS Changer", "Quick-switch DNS with benchmark, DNS-over-HTTPS, and TCP/IP optimization.", "#11");
-        WipHostsEditor = new PlaceholderViewModel("Hosts Editor", "GUI hosts file editor with domain toggle, import block lists, and backup/restore.", "#11");
+        // Network group — DNS Changer + Hosts Editor now fully implemented as DnsHosts
 
         // Apps group — Bulk Installer is now fully implemented (no placeholder needed)
 
@@ -364,15 +363,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Id = "grp-network",
             Label = "Network",
             Glyph = "\uE839",
-            Subtitle = "Ping · Traceroute · Speed · Repair · DNS · Hosts",
-            Tooltip = "Ping\nTraceroute\nSpeed Test\nNetwork Repair\nDNS Changer\nHosts Editor",
+            Subtitle = "Ping · Traceroute · Speed · Repair · DNS & Hosts",
+            Tooltip = "Ping\nTraceroute\nSpeed Test\nNetwork Repair\nDNS & Hosts Editor",
             Children = {
             new NavItem { Id = "nav-ping",           Label = "Ping",           Glyph = "\uE839", Content = Ping,           ViewType = typeof(Views.PingView) },
             new NavItem { Id = "nav-traceroute",     Label = "Traceroute",     Glyph = "\uE8B0", Content = Traceroute,     ViewType = typeof(Views.TracerouteView) },
             new NavItem { Id = "nav-speed-test",     Label = "Speed Test",     Glyph = "\uE916", Content = SpeedTest,      ViewType = typeof(Views.SpeedTestView) },
             new NavItem { Id = "nav-network-repair", Label = "Network Repair", Glyph = "\uE90F", Content = NetworkRepair,  ViewType = typeof(Views.NetworkRepairView) },
-            new NavItem { Id = "nav-dns-changer",    Label = "DNS Changer",    Glyph = "\uE968", Content = WipDnsChanger,  ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-hosts-editor",   Label = "Hosts Editor",   Glyph = "\uE8A5", Content = WipHostsEditor, ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-dns-hosts",      Label = "DNS & Hosts",    Glyph = "\uE968", Content = DnsHosts,       ViewType = typeof(Views.DnsHostsView) },
         }
         };
 
@@ -551,6 +549,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         AppBlocker?.Dispose();
         BulkInstaller?.Dispose();
         FileShredder?.Dispose();
+        DnsHosts?.Dispose();
 
         // WIP placeholders
         WipResourceHistory?.Dispose();
@@ -564,8 +563,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipCpuAffinity?.Dispose();
         WipDisplayProfiles?.Dispose();
         WipScheduledMaintenance?.Dispose();
-        WipDnsChanger?.Dispose();
-        WipHostsEditor?.Dispose();
+        DnsHosts?.Dispose();
         Privacy?.Dispose();
         WipDebloater?.Dispose();
         WipBrowserCleaner?.Dispose();

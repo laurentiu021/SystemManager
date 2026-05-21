@@ -1,0 +1,98 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.FileShredderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:svc="clr-namespace:SysManager.Services"
+             d:DataContext="{d:DesignInstance vm:FileShredderViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#070A0F" Offset="0"/>
+            <GradientStop Color="#0B1220" Offset="0.5"/>
+            <GradientStop Color="#090D16" Offset="1"/>
+        </LinearGradientBrush>
+        <ObjectDataProvider x:Key="ShredMethods" MethodName="GetValues" ObjectType="{x:Type svc:ShredMethod}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="svc:ShredMethod"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource PageBg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="28,24,28,0">
+            <TextBlock Text="File Shredder" Style="{StaticResource Display}"/>
+            <TextBlock Text="Securely delete files beyond recovery with multi-pass overwrite."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
+            <WrapPanel>
+                <TextBlock Text="Method:" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{StaticResource TextSecondary}"/>
+                <ComboBox ItemsSource="{Binding Source={StaticResource ShredMethods}}"
+                          SelectedItem="{Binding SelectedMethod}"
+                          Width="120" Margin="0,0,16,0" VerticalAlignment="Center"/>
+                <Button Content="Add Files" Command="{Binding AddFilesCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                <Button Content="Add Folder" Command="{Binding AddFolderCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                <Button Content="Shred All" Command="{Binding ShredAllCommand}"
+                        Style="{StaticResource PrimaryButton}" Foreground="#EF4444" Margin="0,0,8,0"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}"
+                        Style="{StaticResource GhostButton}"
+                        Visibility="{Binding IsShredding, Converter={StaticResource BoolToVis}}"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Items DataGrid -->
+        <DataGrid Grid.Row="2" ItemsSource="{Binding Items}"
+                  AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserAddRows="False" CanUserDeleteRows="False"
+                  CanUserSortColumns="True"
+                  HeadersVisibility="Column" GridLinesVisibility="None"
+                  Margin="28,12,28,0">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200"/>
+                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="90"/>
+                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="160"/>
+                <DataGridTemplateColumn Header="" Width="70">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Content="Remove"
+                                    Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    CommandParameter="{Binding}"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="4,2" FontSize="11"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Footer -->
+        <Border Grid.Row="3" Margin="28,8,28,16" Padding="8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource Subtle}">
+                    <Run Text="{Binding Items.Count, Mode=OneWay}"/>
+                    <Run Text=" item(s) queued"/>
+                </TextBlock>
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"
+                           Margin="16,0,0,0" Opacity="0.8"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

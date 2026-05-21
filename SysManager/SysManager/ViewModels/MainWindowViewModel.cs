@@ -43,6 +43,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public ShortcutCleanerViewModel ShortcutCleaner { get; }
     public AppBlockerViewModel AppBlocker { get; }
     public BulkInstallerViewModel BulkInstaller { get; }
+    public FileShredderViewModel FileShredder { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -59,8 +60,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipCpuAffinity { get; private set; } = null!;
     public PlaceholderViewModel WipDisplayProfiles { get; private set; } = null!;
 
-    // Cleanup group
-    public PlaceholderViewModel WipFileShredder { get; private set; } = null!;
+    // Cleanup group (File Shredder is now fully implemented)
     public PlaceholderViewModel WipScheduledMaintenance { get; private set; } = null!;
 
     // Network group
@@ -141,6 +141,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ShortcutCleaner = sp.GetRequiredService<ShortcutCleanerViewModel>();
             AppBlocker = sp.GetRequiredService<AppBlockerViewModel>();
             BulkInstaller = sp.GetRequiredService<BulkInstallerViewModel>();
+            FileShredder = sp.GetRequiredService<FileShredderViewModel>();
             WindowsFeatures = sp.GetRequiredService<WindowsFeaturesViewModel>();
         }
         else
@@ -187,6 +188,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ShortcutCleaner = new ShortcutCleanerViewModel(shortcuts);
             AppBlocker = new AppBlockerViewModel();
             BulkInstaller = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()));
+            FileShredder = new FileShredderViewModel(new FileShredderService());
             WindowsFeatures = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner));
         }
 
@@ -212,8 +214,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipCpuAffinity = new PlaceholderViewModel("CPU Core Affinity", "Set per-game CPU affinity with P-core/E-core awareness for Intel hybrid CPUs.", "#327");
         WipDisplayProfiles = new PlaceholderViewModel("Display Profiles", "Quick-switch refresh rate, HDR, resolution presets (Gaming/Work/Movie).", "#328");
 
-        // Cleanup group
-        WipFileShredder = new PlaceholderViewModel("File Shredder", "Securely delete files beyond recovery with multi-pass overwrite (DoD/Gutmann).", "#7");
+        // Cleanup group (File Shredder is now fully implemented)
         WipScheduledMaintenance = new PlaceholderViewModel("Scheduled Maintenance", "Automate cleanup, RAM trim, and health checks on schedule or idle trigger.", "#10");
 
         // Network group
@@ -337,7 +338,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             new NavItem { Id = "nav-cleanup",               Label = "Quick Cleanup",         Glyph = "\uE74D", Content = Cleanup,                 ViewType = typeof(Views.CleanupView) },
             new NavItem { Id = "nav-deep-cleanup",          Label = "Deep Cleanup",          Glyph = "\uE81E", Content = DeepCleanup,             ViewType = typeof(Views.DeepCleanupView) },
             new NavItem { Id = "nav-shortcut-cleaner",      Label = "Shortcut Cleaner",      Glyph = "\uE71B", Content = ShortcutCleaner,         ViewType = typeof(Views.ShortcutCleanerView) },
-            new NavItem { Id = "nav-file-shredder",         Label = "File Shredder",         Glyph = "\uE74D", Content = WipFileShredder,         ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-file-shredder",         Label = "File Shredder",         Glyph = "\uE74D", Content = FileShredder,            ViewType = typeof(Views.FileShredderView) },
             new NavItem { Id = "nav-scheduled-maintenance", Label = "Scheduled Maintenance", Glyph = "\uE823", Content = WipScheduledMaintenance, ViewType = typeof(Views.PlaceholderView) },
         }
         };
@@ -548,6 +549,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ShortcutCleaner?.Dispose();
         AppBlocker?.Dispose();
         BulkInstaller?.Dispose();
+        FileShredder?.Dispose();
 
         // WIP placeholders
         WipResourceHistory?.Dispose();
@@ -560,7 +562,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipTimerResolution?.Dispose();
         WipCpuAffinity?.Dispose();
         WipDisplayProfiles?.Dispose();
-        WipFileShredder?.Dispose();
         WipScheduledMaintenance?.Dispose();
         WipDnsChanger?.Dispose();
         WipHostsEditor?.Dispose();

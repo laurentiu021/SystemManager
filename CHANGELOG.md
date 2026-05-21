@@ -7,15 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Privacy Toggles** — 12 one-click privacy switches (telemetry, advertising ID, Copilot,
+  Cortana, web search, widgets, Start suggestions, lock screen tips) with instant apply
+  and registry state detection.
+
+## [1.3.0] - 2026-05-21
+
+### Added
 - **File Shredder** — secure file deletion with multiple overwrite methods (Quick 1-pass,
   Standard 3-pass, Thorough 7-pass). Protects system paths, uses confirmation dialog,
   supports files and folders.
 
-## [1.1.0] - 2026-05-21
+## [1.2.0] - 2026-05-21
 
 ### Added
 - **System Info Export** — comprehensive system report (OS, CPU, GPU, RAM, storage,
   network, SMART data) exportable to file or clipboard from the About tab.
+- **Bulk App Installer** — install multiple applications via winget with curated list
+  of 25 apps across 7 categories, category/text filtering, and per-app progress.
+
+## [1.1.0] - 2026-05-21
+
+### Added
 - **Windows Update** — individual update selection via checkboxes. Users can now
   select/deselect specific updates before installing. Added "Select all" and
   "Deselect all" buttons. KB article IDs validated before passing to PowerShell.

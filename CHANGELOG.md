@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.1.0] - 2026-05-21
 
 ### Added
+- **System Info Export** — comprehensive system report (OS, CPU, GPU, RAM, storage,
+  network, SMART data) exportable to file or clipboard from the About tab.
 - **Windows Update** — individual update selection via checkboxes. Users can now
   select/deselect specific updates before installing. Added "Select all" and
   "Deselect all" buttons. KB article IDs validated before passing to PowerShell.

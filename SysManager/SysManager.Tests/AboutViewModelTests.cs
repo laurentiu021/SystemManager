@@ -20,7 +20,7 @@ public class AboutViewModelTests
     [Fact]
     public void Constructs_WithInjectedService()
     {
-        var vm = new AboutViewModel(new UpdateService());
+        var vm = new AboutViewModel(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()));
         Assert.NotNull(vm);
     }
 

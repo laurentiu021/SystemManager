@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **File Shredder** — secure file deletion with multiple overwrite methods (Quick 1-pass,
+  Standard 3-pass, Thorough 7-pass). Protects system paths, uses confirmation dialog,
+  supports files and folders.
+
 ## [1.1.0] - 2026-05-21
 
 ### Added

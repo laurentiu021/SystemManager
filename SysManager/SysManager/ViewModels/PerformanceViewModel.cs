@@ -303,7 +303,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         {
             await EnsureSnapshotAsync();
             var nvidiaKey = PerformanceService.FindNvidiaSubKey();
-            if (nvidiaKey != null)
+            if (nvidiaKey is not null)
             {
                 var ok = PerformanceService.SetGpuMaxPerformance(nvidiaKey, WantGpuMaxPerformance);
                 if (ok)
@@ -470,13 +470,13 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     [RelayCommand]
     private async Task RestoreAllAsync()
     {
-        if (_snapshot == null)
+        if (_snapshot is null)
         {
             StatusMessage = "Nothing to restore — no changes have been applied yet.";
             return;
         }
 
-        var gpuWasChanged = _snapshot.NvidiaSubKey != null
+        var gpuWasChanged = _snapshot.NvidiaSubKey is not null
             && Profile.GpuMaxPerformance != !_snapshot.GpuDynamicPstate;
 
         if (!DialogService.Instance.Confirm(

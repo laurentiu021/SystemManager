@@ -53,7 +53,9 @@
                   Background="Transparent" BorderThickness="0"
                   GridLinesVisibility="None" IsReadOnly="True"
                   RowBackground="Transparent" AlternatingRowBackground="#0F141C"
-                  SelectionMode="Single" CanUserSortColumns="True">
+                  SelectionMode="Single" CanUserSortColumns="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200" SortMemberPath="DisplayName"/>
                 <DataGridTextColumn Header="Service" Binding="{Binding Name}" Width="160" SortMemberPath="Name"/>

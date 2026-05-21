@@ -43,17 +43,17 @@ implemented; 25 are work-in-progress placeholders marked with ⚙️:
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points ⚙️ · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
-| 📊 Monitor | Process Manager · Resource History ⚙️ · App Alerts · Privacy Monitor ⚙️ · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
-| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · File Shredder · Scheduled Maintenance ⚙️ |
+| 📊 Monitor | Process Manager · Resource History ⚙️ · Privacy Monitor ⚙️ · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
+| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
-| 📦 Apps | App Updates · Bulk Installer · Uninstaller · App Blocker |
-| 🛡️ Privacy & Security | Privacy & Telemetry · Debloater & Ads ⚙️ · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
+| 📦 Apps | App Updates · Bulk Installer · Uninstaller |
+| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads ⚙️ · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables ⚙️ |
-| ℹ️ Info | Drivers · Battery Health · System Logs · About |
-| ⚙️ Advanced | Restore Points ⚙️ · Profile Export/Import ⚙️ · CLI Interface ⚙️ · System Report |
+| ℹ️ Info | Drivers · Battery Health · System Logs · System Report ⚙️ · About |
+| ⚙️ Advanced | Profile Export/Import ⚙️ · CLI Interface ⚙️ |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
 

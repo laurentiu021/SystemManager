@@ -155,7 +155,7 @@ public sealed partial class AppBlockerService
     /// </summary>
     public static IReadOnlyList<BlockedApp> GetBlockedApps()
     {
-        var blocked = new List<BlockedApp>();
+        List<BlockedApp> blocked = [];
 
         try
         {

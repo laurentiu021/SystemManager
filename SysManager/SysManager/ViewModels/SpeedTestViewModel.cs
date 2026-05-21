@@ -65,7 +65,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     {
         if (IsSpeedTesting) return;
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "HTTP Speed Test");
-        if (opLock == null)
+        if (opLock is null)
         {
             HttpStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
             return;
@@ -106,7 +106,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     {
         if (IsSpeedTesting) return;
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Ookla Speed Test");
-        if (opLock == null)
+        if (opLock is null)
         {
             OoklaStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
             return;

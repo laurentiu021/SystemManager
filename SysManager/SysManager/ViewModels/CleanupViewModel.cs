@@ -157,7 +157,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     {
         if (IsTempRunning) return;
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Temp Cleanup");
-        if (opLock == null)
+        if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;

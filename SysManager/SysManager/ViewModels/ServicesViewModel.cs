@@ -82,7 +82,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [RelayCommand]
     private void StartService(ServiceEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Starting services requires admin."; return; }
 
         if (!DialogService.Instance.Confirm(
@@ -103,7 +103,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [RelayCommand]
     private void StopService(ServiceEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Stopping services requires admin."; return; }
 
         if (!DialogService.Instance.Confirm(
@@ -124,7 +124,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [RelayCommand]
     private async Task DisableServiceAsync(ServiceEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
         if (!DialogService.Instance.Confirm(
@@ -144,7 +144,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [RelayCommand]
     private async Task EnableServiceAsync(ServiceEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
         try

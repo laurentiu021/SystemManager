@@ -144,7 +144,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     {
         if (IsScanning) return;
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup Scan");
-        if (opLock == null)
+        if (opLock is null)
         {
             ScanSummary = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
@@ -203,7 +203,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     {
         if (IsCleaning || !Categories.Any(c => c.IsSelected)) return;
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup");
-        if (opLock == null)
+        if (opLock is null)
         {
             CleanSummary = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
@@ -258,12 +258,12 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     {
         if (IsLargeScanning) return;
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Large File Scan");
-        if (opLock == null)
+        if (opLock is null)
         {
             LargeScanStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
         }
-        if (SelectedLocation == null)
+        if (SelectedLocation is null)
         {
             LargeScanStatus = "Pick a location first.";
             return;

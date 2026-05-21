@@ -80,7 +80,7 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanToggle))]
     private async Task ToggleFeatureAsync(WindowsFeature? feature)
     {
-        if (feature == null) return;
+        if (feature is null) return;
 
         if (!IsElevated)
         {

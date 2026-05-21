@@ -40,7 +40,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         if (IsScanning) return;
 
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Shortcut Scan");
-        if (opLock == null)
+        if (opLock is null)
         {
             ScanStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;

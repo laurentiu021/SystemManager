@@ -115,7 +115,7 @@ public sealed class AppAlertService : IDisposable
     /// </summary>
     public static IReadOnlyList<AppInstallEntry> GetRegistryApps()
     {
-        var apps = new List<AppInstallEntry>();
+        List<AppInstallEntry> apps = [];
         var paths = new[]
         {
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",

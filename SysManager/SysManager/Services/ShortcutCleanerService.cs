@@ -27,7 +27,7 @@ public sealed partial class ShortcutCleanerService
     private static IReadOnlyList<BrokenShortcut> Scan(
         IProgress<string>? progress, CancellationToken ct)
     {
-        var results = new List<BrokenShortcut>();
+        List<BrokenShortcut> results = [];
         var locations = GetScanLocations();
 
         foreach (var (label, path) in locations)

@@ -70,7 +70,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(SelectedPath)) return;
 
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Disk Analysis");
-        if (opLock == null)
+        if (opLock is null)
         {
             ScanSummary = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
@@ -151,7 +151,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [RelayCommand]
     private static void ShowInExplorer(DiskUsageEntry? entry)
     {
-        if (entry == null) return;
+        if (entry is null) return;
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -168,7 +168,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [RelayCommand]
     private async Task DrillDown(DiskUsageEntry? entry)
     {
-        if (entry == null || entry.Name == "(files in root)") return;
+        if (entry is null || entry.Name == "(files in root)") return;
         SelectedPath = entry.FullPath;
         if (!PresetPaths.Contains(entry.FullPath))
             PresetPaths.Add(entry.FullPath);
@@ -180,7 +180,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(SelectedPath)) return;
         var parent = Directory.GetParent(SelectedPath);
-        if (parent != null)
+        if (parent is not null)
         {
             SelectedPath = parent.FullName;
             await AnalyzeAsync();

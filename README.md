@@ -36,8 +36,8 @@ an honest "is it my PC, my ISP, or the server?" verdict.
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 56 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 31 tabs are fully
+The sidebar organises 55 feature tabs into 12 collapsible groups so you can
+find what you need without scrolling through a flat list. 30 tabs are fully
 implemented; 25 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
@@ -53,7 +53,7 @@ implemented; 25 are work-in-progress placeholders marked with ⚙️:
 | 🛡️ Privacy & Security | Privacy & Telemetry · Debloater & Ads ⚙️ · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables ⚙️ |
 | ℹ️ Info | Drivers · Battery Health · System Logs · About |
-| ⚙️ Advanced | Restore Points ⚙️ · Profile Export/Import ⚙️ · CLI Interface ⚙️ · System Report |
+| ⚙️ Advanced | Restore Points ⚙️ · Profile Export/Import ⚙️ · CLI Interface ⚙️ · System Report ⚙️ |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
 

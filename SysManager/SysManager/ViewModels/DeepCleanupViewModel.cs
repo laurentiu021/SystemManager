@@ -16,9 +16,9 @@ namespace SysManager.ViewModels;
 
 public sealed partial class DeepCleanupViewModel : ViewModelBase
 {
-    private readonly DeepCleanupService _cleanup = new();
-    private readonly LargeFileScanner _largeFiles = new();
-    private readonly FixedDriveService _drives = new();
+    private readonly DeepCleanupService _cleanup;
+    private readonly LargeFileScanner _largeFiles;
+    private readonly FixedDriveService _drives;
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _cleanCts;
     private CancellationTokenSource? _largeCts;
@@ -58,8 +58,11 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
 
     public string LargeBytesScannedDisplay => FormatHelper.FormatSize(LargeBytesScanned);
 
-    public DeepCleanupViewModel()
+    public DeepCleanupViewModel(DeepCleanupService cleanup, LargeFileScanner largeFiles, FixedDriveService drives)
     {
+        _cleanup = cleanup;
+        _largeFiles = largeFiles;
+        _drives = drives;
         InitializeAsync(InitAsync);
     }
 

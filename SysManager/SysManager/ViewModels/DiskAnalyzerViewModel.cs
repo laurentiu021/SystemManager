@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 {
-    private readonly DiskAnalyzerService _service = new();
+    private readonly DiskAnalyzerService _service;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<DiskUsageEntry> Entries { get; } = new();
@@ -40,8 +40,9 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [ObservableProperty] private double _driveUsedPercent;
     [ObservableProperty] private bool _hasDriveInfo;
 
-    public DiskAnalyzerViewModel()
+    public DiskAnalyzerViewModel(DiskAnalyzerService service)
     {
+        _service = service;
         PopulatePresets();
     }
 

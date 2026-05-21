@@ -13,7 +13,7 @@ namespace SysManager.Tests;
 /// </summary>
 public class PerformanceViewModelTests
 {
-    private static PerformanceViewModel CreateVm() => new(new PowerShellRunner());
+    private static PerformanceViewModel CreateVm() => new(new PerformanceService(new PowerShellRunner()));
 
     // ── Commands exist ──
 

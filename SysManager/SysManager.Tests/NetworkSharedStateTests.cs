@@ -12,14 +12,14 @@ public class NetworkSharedStateTests
     [Fact]
     public void Constructor_SeedsGatewayAndPreset()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         Assert.NotEmpty(state.Targets);
     }
 
     [Fact]
     public void AddTarget_IgnoresDuplicate()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var before = state.Targets.Count;
         state.AddTarget("Dup", state.Targets[0].Host);
         Assert.Equal(before, state.Targets.Count);
@@ -28,7 +28,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void AddCustomTarget_EmptyHost_DoesNothing()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         state.NewTargetHost = "";
         var before = state.Targets.Count;
         state.AddCustomTarget();
@@ -38,7 +38,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void AddCustomTarget_ValidHost_AddsTarget()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         state.NewTargetHost = "10.99.99.99";
         var before = state.Targets.Count;
         state.AddCustomTarget();
@@ -49,7 +49,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void RemoveTarget_NonCustom_DoesNothing()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var first = state.Targets.FirstOrDefault(t => !t.IsCustom);
         if (first == null) return;
         var before = state.Targets.Count;
@@ -60,7 +60,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void RemoveTarget_Null_DoesNothing()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var before = state.Targets.Count;
         state.RemoveTarget(null);
         Assert.Equal(before, state.Targets.Count);
@@ -69,7 +69,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void ClearHistory_ResetsAllTargetStats()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         state.ClearHistory();
         Assert.All(state.Targets, t =>
         {
@@ -84,7 +84,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void ApplyPreset_SwitchesTargets()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         state.ApplyPreset(TargetPresets.All[0]);
         Assert.True(state.Targets.Count > 0);
     }
@@ -92,35 +92,35 @@ public class NetworkSharedStateTests
     [Fact]
     public void Health_IsNotNull()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         Assert.NotNull(state.Health);
     }
 
     [Fact]
     public void LatencySeries_MatchesTargetCount()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         Assert.Equal(state.Targets.Count, state.LatencySeries.Count);
     }
 
     [Fact]
     public void TraceSeries_MatchesTargetCount()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         Assert.Equal(state.Targets.Count, state.TraceSeries.Count);
     }
 
     [Fact]
     public void Presets_NotEmpty()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         Assert.NotEmpty(state.Presets);
     }
 
     [Fact]
     public void DefaultValues_AreCorrect()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         Assert.Equal(1, state.IntervalSeconds);
         Assert.Equal(60, state.WindowSeconds);
         Assert.Equal(60, state.TraceIntervalSeconds);
@@ -130,7 +130,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void TrimBuffer_RemovesExpiredPoints()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var buffer = new System.Collections.ObjectModel.ObservableCollection<LiveChartsCore.Defaults.DateTimePoint>
         {
             new(DateTime.Now.AddSeconds(-120), 10),
@@ -148,7 +148,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void FlushPending_PinsXAxisLimits()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var host = state.Targets[0].Host;
         state.Pending.Enqueue(new Models.PingSample(DateTime.UtcNow, host, 15.0, "OK"));
         state.FlushPending();
@@ -161,7 +161,7 @@ public class NetworkSharedStateTests
     [Fact]
     public void ClearHistory_ResetsAxisLimits()
     {
-        var state = new NetworkSharedState();
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         // Simulate pinned axes
         state.LatencyXAxes[0].MinLimit = DateTime.Now.AddSeconds(-60).Ticks;
         state.LatencyXAxes[0].MaxLimit = DateTime.Now.Ticks;

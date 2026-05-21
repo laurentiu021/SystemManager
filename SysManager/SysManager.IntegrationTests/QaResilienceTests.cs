@@ -125,7 +125,7 @@ public class QaResilienceTests
     [InlineData("?")]
     public void LogsViewModel_SearchSpecialChars_DoesNotCrashFilter(string q)
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.SearchText = q;
         var m = typeof(LogsViewModel).GetMethod("EntryFilter",
             BindingFlags.NonPublic | BindingFlags.Instance)!;

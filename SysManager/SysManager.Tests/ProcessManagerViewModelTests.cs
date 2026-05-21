@@ -15,7 +15,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void Constructor_Commands_Exist()
     {
-        var vm = new ProcessManagerViewModel();
+        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
         Assert.NotNull(vm.RefreshCommand);
         Assert.NotNull(vm.KillProcessCommand);
         Assert.NotNull(vm.OpenFileLocationCommand);
@@ -24,7 +24,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void Constructor_Collections_NotNull()
     {
-        var vm = new ProcessManagerViewModel();
+        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
         Assert.NotNull(vm.Processes);
         Assert.NotNull(vm.FilteredProcesses);
     }
@@ -32,14 +32,14 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void FilterText_DefaultEmpty()
     {
-        var vm = new ProcessManagerViewModel();
+        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
         Assert.Equal("", vm.FilterText);
     }
 
     [Fact]
     public void FilterText_CanBeChanged()
     {
-        var vm = new ProcessManagerViewModel();
+        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
         vm.FilterText = "chrome";
         Assert.Equal("chrome", vm.FilterText);
     }
@@ -47,7 +47,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void Summary_HasDefaultValue()
     {
-        var vm = new ProcessManagerViewModel();
+        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
         Assert.False(string.IsNullOrEmpty(vm.Summary));
     }
 }

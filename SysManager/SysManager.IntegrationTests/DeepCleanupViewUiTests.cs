@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Windows;
+using SysManager.Services;
 using SysManager.ViewModels;
 using SysManager.Views;
 
@@ -28,7 +29,7 @@ public class DeepCleanupViewUiTests
         StaHelper.Run(() =>
         {
             EnsureAppResources();
-            var view = new DeepCleanupView { DataContext = new DeepCleanupViewModel() };
+            var view = new DeepCleanupView { DataContext = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()) };
             Assert.IsType<DeepCleanupViewModel>(view.DataContext);
         });
     }

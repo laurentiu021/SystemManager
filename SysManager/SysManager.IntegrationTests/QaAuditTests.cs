@@ -358,7 +358,7 @@ public class QaAuditTests
     [Fact]
     public async Task LogsViewModel_DoubleRefresh_SecondCancelsFirstCleanly()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.SelectedLog = "Bogus-Log-For-Test";
         // Fire two refreshes near-simultaneously; must not throw ObjectDisposedException.
         var t1 = vm.RefreshCommand.ExecuteAsync(null);
@@ -370,7 +370,7 @@ public class QaAuditTests
     [Fact]
     public async Task LogsViewModel_CancelWhileRefreshing_IsSafe()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.SelectedLog = "System";
         vm.SelectedMaxResults = "5";
         var task = vm.RefreshCommand.ExecuteAsync(null);
@@ -449,7 +449,7 @@ public class QaAuditTests
     [Fact]
     public void LogsViewModel_SetSelectedEntryToNull_IsSafe()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.SelectedEntry = new FriendlyEventEntry { EventId = 1 };
         vm.SelectedEntry = null;
         Assert.Null(vm.SelectedEntry);
@@ -458,7 +458,7 @@ public class QaAuditTests
     [Fact]
     public void LogsViewModel_CopySelected_NullEntry_StatusIsNotCorrupted()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         vm.StatusMessage = "initial";
         vm.CopySelectedCommand.Execute(null);
         Assert.Equal("initial", vm.StatusMessage);

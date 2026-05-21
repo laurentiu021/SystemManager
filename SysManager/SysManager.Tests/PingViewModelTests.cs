@@ -11,7 +11,7 @@ public class PingViewModelTests
     [Fact]
     public void Constructor_SetsShared()
     {
-        var shared = new NetworkSharedState();
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var vm = new PingViewModel(shared);
         Assert.Same(shared, vm.Shared);
     }
@@ -19,7 +19,7 @@ public class PingViewModelTests
     [Fact]
     public void ClearHistoryCommand_ResetsStats()
     {
-        var shared = new NetworkSharedState();
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var vm = new PingViewModel(shared);
         vm.ClearHistoryCommand.Execute(null);
         Assert.All(shared.Targets, t => Assert.Null(t.LastLatencyMs));
@@ -28,7 +28,7 @@ public class PingViewModelTests
     [Fact]
     public void AddCustomTargetCommand_DelegatesToShared()
     {
-        var shared = new NetworkSharedState();
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         shared.NewTargetHost = "10.88.88.88";
         var vm = new PingViewModel(shared);
         var before = shared.Targets.Count;

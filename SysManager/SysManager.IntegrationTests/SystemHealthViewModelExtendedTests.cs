@@ -13,7 +13,7 @@ public class SystemHealthViewModelExtendedTests
     [Fact]
     public void AllCommandsExist()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         Assert.NotNull(vm.ScanCommand);
         Assert.NotNull(vm.CheckDiskHealthCommand);
         Assert.NotNull(vm.CheckMemoryErrorsCommand);
@@ -26,7 +26,7 @@ public class SystemHealthViewModelExtendedTests
     [Fact]
     public void Defaults_AreSafe()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         Assert.Empty(vm.DiskHealth);
         Assert.Equal(0, vm.WheaMemoryErrors);
         Assert.Equal(0, vm.MemoryDiagnosticResults);
@@ -37,7 +37,7 @@ public class SystemHealthViewModelExtendedTests
     [Fact]
     public async Task CheckDiskHealth_PopulatesCollection()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         await vm.CheckDiskHealthCommand.ExecuteAsync(null);
         // Count depends on hardware. Only guarantee: not busy anymore and no crash.
         Assert.False(vm.IsBusy);
@@ -46,7 +46,7 @@ public class SystemHealthViewModelExtendedTests
     [Fact]
     public async Task CheckMemoryErrors_UpdatesVerdict()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         var initialVerdict = vm.MemoryHealthVerdict;
         await vm.CheckMemoryErrorsCommand.ExecuteAsync(null);
         // Verdict should have changed (or at least still be non-empty).
@@ -57,7 +57,7 @@ public class SystemHealthViewModelExtendedTests
     [Fact]
     public void CancelScan_WithoutActive_IsSafe()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         var ex = Record.Exception(() => vm.CancelScanCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -65,7 +65,7 @@ public class SystemHealthViewModelExtendedTests
     [Fact]
     public void IsElevated_MatchesCurrentProcess()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         Assert.Equal(Helpers.AdminHelper.IsElevated(), vm.IsElevated);
     }
 }

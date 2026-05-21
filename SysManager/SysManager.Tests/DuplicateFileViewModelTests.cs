@@ -17,7 +17,7 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void Constructor_InitialState_IsCorrect()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         Assert.False(vm.IsBusy);
         Assert.Equal(0, vm.GroupCount);
         Assert.Equal(0, vm.DuplicateFileCount);
@@ -30,21 +30,21 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void Constructor_PresetFolders_NotEmpty()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         Assert.NotEmpty(vm.PresetFolders);
     }
 
     [Fact]
     public void Constructor_SelectedFolder_IsSet()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         Assert.False(string.IsNullOrWhiteSpace(vm.SelectedFolder));
     }
 
     [Fact]
     public void Constructor_PresetFolders_ContainUserProfile()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         Assert.Contains(vm.PresetFolders, f => f == userProfile);
     }
@@ -52,7 +52,7 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void Constructor_PresetFolders_ContainFixedDrives()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         var drives = DriveInfo.GetDrives()
             .Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
             .Select(d => d.RootDirectory.FullName);
@@ -64,42 +64,42 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void ScanCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         Assert.NotNull(vm.ScanCommand);
     }
 
     [Fact]
     public void CancelScanCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         Assert.NotNull(vm.CancelScanCommand);
     }
 
     [Fact]
     public void ShowInExplorerCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         Assert.NotNull(vm.ShowInExplorerCommand);
     }
 
     [Fact]
     public void CopyPathCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         Assert.NotNull(vm.CopyPathCommand);
     }
 
     [Fact]
     public void BrowseFolderCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         Assert.NotNull(vm.BrowseFolderCommand);
     }
 
     [Fact]
     public void MinSizeKb_CanBeChanged()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         vm.MinSizeKb = 500;
         Assert.Equal(500, vm.MinSizeKb);
     }
@@ -107,7 +107,7 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void SelectedFolder_CanBeChanged()
     {
-        var vm = new DuplicateFileViewModel();
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
         vm.SelectedFolder = @"C:\Test";
         Assert.Equal(@"C:\Test", vm.SelectedFolder);
     }

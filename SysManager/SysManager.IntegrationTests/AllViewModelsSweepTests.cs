@@ -16,19 +16,19 @@ namespace SysManager.IntegrationTests;
 [Collection("Network")]
 public class AllViewModelsSweepTests
 {
-    [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService()));
+    [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService())));
     [Fact] public void AppUpdates_Constructs() => Assert.NotNull(new AppUpdatesViewModel(new WingetService(new PowerShellRunner())));
     [Fact] public void WindowsUpdate_Constructs() => Assert.NotNull(new WindowsUpdateViewModel(new PowerShellRunner()));
-    [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService()));
+    [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner()));
     [Fact] public void Cleanup_Constructs() => Assert.NotNull(new CleanupViewModel(new PowerShellRunner()));
-    [Fact] public void DeepCleanup_Constructs() => Assert.NotNull(new DeepCleanupViewModel());
+    [Fact] public void DeepCleanup_Constructs() => Assert.NotNull(new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()));
     [Fact] public void Drivers_Constructs() => Assert.NotNull(new DriversViewModel(new PowerShellRunner()));
-    [Fact] public void Logs_Constructs() => Assert.NotNull(new LogsViewModel());
+    [Fact] public void Logs_Constructs() => Assert.NotNull(new LogsViewModel(new EventLogService()));
     [Fact] public void About_Constructs() => Assert.NotNull(new AboutViewModel());
     [Fact] public void MainWindow_Constructs() => Assert.NotNull(new MainWindowViewModel());
 
     [Fact] public void Dashboard_HasNonEmptySummaryOrEmpty()
-        => Assert.NotNull(new DashboardViewModel(new SystemInfoService()));
+        => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService())));
 
     [Fact] public void AppUpdates_HasCollections()
     {
@@ -38,7 +38,7 @@ public class AllViewModelsSweepTests
 
     [Fact] public void SystemHealth_HasCollections()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         Assert.NotNull(vm.Modules);
         Assert.NotNull(vm.Disks);
         Assert.NotNull(vm.DiskHealth);
@@ -47,7 +47,7 @@ public class AllViewModelsSweepTests
 
     [Fact] public void Logs_HasCollection()
     {
-        var vm = new LogsViewModel();
+        var vm = new LogsViewModel(new EventLogService());
         Assert.NotNull(vm.Entries);
     }
 
@@ -59,7 +59,7 @@ public class AllViewModelsSweepTests
 
     [Fact] public void DeepCleanup_HasCollections()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.NotNull(vm.Categories);
         Assert.NotNull(vm.LargeFiles);
         Assert.NotNull(vm.ScanLocations);

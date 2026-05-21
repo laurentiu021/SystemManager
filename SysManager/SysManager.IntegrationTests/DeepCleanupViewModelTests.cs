@@ -4,6 +4,7 @@
 
 using System.IO;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.IntegrationTests;
@@ -13,91 +14,91 @@ public class DeepCleanupViewModelTests
     [Fact]
     public void Constructs()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.NotNull(vm);
     }
 
     [Fact]
     public void InitialSummary_IsNonEmpty()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.False(string.IsNullOrWhiteSpace(vm.ScanSummary));
     }
 
     [Fact]
     public void CleanSummary_StartsEmpty()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.Equal(string.Empty, vm.CleanSummary);
     }
 
     [Fact]
     public void LargeScanStatus_StartsEmpty()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.Equal(string.Empty, vm.LargeScanStatus);
     }
 
     [Fact]
     public void Categories_StartsEmpty()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.Empty(vm.Categories);
     }
 
     [Fact]
     public void LargeFiles_StartsEmpty()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.Empty(vm.LargeFiles);
     }
 
     [Fact]
     public void MinSizeMB_DefaultsTo500()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.Equal(500, vm.MinSizeMB);
     }
 
     [Fact]
     public void TopCount_DefaultsTo100()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.Equal(100, vm.TopCount);
     }
 
     [Fact]
     public void IsScanning_DefaultsFalse()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.False(vm.IsScanning);
     }
 
     [Fact]
     public void IsCleaning_DefaultsFalse()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.False(vm.IsCleaning);
     }
 
     [Fact]
     public void IsLargeScanning_DefaultsFalse()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.False(vm.IsLargeScanning);
     }
 
     [Fact]
     public void TotalSelectedBytes_StartsZero()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.Equal(0, vm.TotalSelectedBytes);
     }
 
     [Fact]
     public void TotalSelectedDisplay_StartsWithZeroBytes()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.StartsWith("0", vm.TotalSelectedDisplay);
     }
 
@@ -111,7 +112,7 @@ public class DeepCleanupViewModelTests
     [InlineData("CopyPathCommand")]
     public void CommandExists(string propertyName)
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var prop = vm.GetType().GetProperty(propertyName);
         Assert.NotNull(prop);
         Assert.NotNull(prop!.GetValue(vm));
@@ -120,7 +121,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task ScanCommand_PopulatesCategories()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var task = vm.ScanCommand.ExecuteAsync(null);
         if (task is Task t) await t;
         Assert.True(vm.Categories.Count >= 10);
@@ -129,7 +130,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task ScanCommand_UpdatesScanSummary()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var before = vm.ScanSummary;
         var task = vm.ScanCommand.ExecuteAsync(null);
         if (task is Task t) await t;
@@ -139,7 +140,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task SelectAllCommand_True_SelectsNonDestructive()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var t = vm.ScanCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
 
@@ -155,7 +156,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task SelectAllCommand_False_DeselectsEverything()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var t = vm.ScanCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
         vm.SelectAllCommand.Execute(false);
@@ -165,7 +166,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public void CopyPathCommand_Null_DoesNotThrow()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var ex = Record.Exception(() => vm.CopyPathCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -173,7 +174,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public void ShowInExplorerCommand_NullPath_DoesNotThrow()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -181,7 +182,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public void ShowInExplorerCommand_NonExistent_DoesNotThrow()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(@"C:\no_such_file_" + Guid.NewGuid().ToString("N")));
         Assert.Null(ex);
     }
@@ -189,7 +190,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public void CancelCommand_DoesNotThrow()
     {
-        var vm = new DeepCleanupViewModel();
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         var ex = Record.Exception(() => vm.CancelCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -197,7 +198,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task ScanLargeFiles_NoLocation_ReportsError()
     {
-        var vm = new DeepCleanupViewModel { SelectedLocation = null };
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()) { SelectedLocation = null };
         var t = vm.ScanLargeFilesCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
         Assert.Contains("location", vm.LargeScanStatus, StringComparison.OrdinalIgnoreCase);
@@ -211,7 +212,7 @@ public class DeepCleanupViewModelTests
         File.WriteAllBytes(Path.Combine(root, "x.bin"), new byte[2 * 1024 * 1024]);
         try
         {
-            var vm = new DeepCleanupViewModel
+            var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService())
             {
                 SelectedLocation = new ScanLocation("Test", root),
                 MinSizeMB = 1,
@@ -251,7 +252,7 @@ public class DeepCleanupViewModelTests
     [InlineData(10_000)]
     public void MinSizeMB_Settable(int v)
     {
-        var vm = new DeepCleanupViewModel { MinSizeMB = v };
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()) { MinSizeMB = v };
         Assert.Equal(v, vm.MinSizeMB);
     }
 
@@ -261,7 +262,7 @@ public class DeepCleanupViewModelTests
     [InlineData(500)]
     public void TopCount_Settable(int v)
     {
-        var vm = new DeepCleanupViewModel { TopCount = v };
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()) { TopCount = v };
         Assert.Equal(v, vm.TopCount);
     }
 }

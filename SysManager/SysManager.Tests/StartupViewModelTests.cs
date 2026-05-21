@@ -15,14 +15,14 @@ public class StartupViewModelTests
     [Fact]
     public void Constructor_EntriesCollectionNotNull()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         Assert.NotNull(vm.Entries);
     }
 
     [Fact]
     public void Constructor_CommandsExist()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         Assert.NotNull(vm.ScanCommand);
         Assert.NotNull(vm.ToggleEntryCommand);
         Assert.NotNull(vm.EnableAllCommand);
@@ -32,7 +32,7 @@ public class StartupViewModelTests
     [Fact]
     public void Constructor_DefaultCounts()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         // Before scan completes, counts should be 0
         Assert.Equal(0, vm.EnabledCount);
         Assert.Equal(0, vm.DisabledCount);
@@ -42,14 +42,14 @@ public class StartupViewModelTests
     [Fact]
     public void ScanSummary_HasDefaultValue()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         Assert.False(string.IsNullOrEmpty(vm.ScanSummary));
     }
 
     [Fact]
     public async Task ScanAsync_PopulatesEntries()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         // Constructor fires auto-scan. Poll until it completes (up to 15s).
         for (int i = 0; i < 30; i++)
         {
@@ -64,7 +64,7 @@ public class StartupViewModelTests
     [Fact]
     public async Task ScanAsync_UpdatesScanSummary()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         // Constructor fires auto-scan. Poll until it completes (up to 15s).
         for (int i = 0; i < 30; i++)
         {
@@ -79,7 +79,7 @@ public class StartupViewModelTests
     [Fact]
     public async Task ScanAsync_CountsAreConsistent()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         for (int i = 0; i < 30; i++)
         {
             await Task.Delay(500);
@@ -92,7 +92,7 @@ public class StartupViewModelTests
     [Fact]
     public void ToggleEntry_NullDoesNotThrow()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         var ex = Record.Exception(() => vm.ToggleEntryCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -100,7 +100,7 @@ public class StartupViewModelTests
     [Fact]
     public void ToggleEntry_WrongTypeDoesNotThrow()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         // Simulates WPF DataGrid virtualization passing a non-StartupEntry object
         var ex = Record.Exception(() => vm.ToggleEntryCommand.Execute("not a StartupEntry"));
         Assert.Null(ex);
@@ -109,7 +109,7 @@ public class StartupViewModelTests
     [Fact]
     public void OpenFileLocation_NullDoesNotThrow()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         var ex = Record.Exception(() => vm.OpenFileLocationCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -117,7 +117,7 @@ public class StartupViewModelTests
     [Fact]
     public void OpenFileLocation_WrongTypeDoesNotThrow()
     {
-        var vm = new StartupViewModel();
+        var vm = new StartupViewModel(new Services.StartupService());
         // Simulates WPF DataGrid virtualization passing a non-StartupEntry object
         var ex = Record.Exception(() => vm.OpenFileLocationCommand.Execute(42));
         Assert.Null(ex);

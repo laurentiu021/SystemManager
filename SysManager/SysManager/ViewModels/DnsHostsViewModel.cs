@@ -56,7 +56,10 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     private async Task LoadInitialDataAsync()
     {
         await RefreshDnsAsync();
-        await Application.Current.Dispatcher.InvokeAsync(LoadHosts);
+        if (Application.Current?.Dispatcher is { } d)
+            await d.InvokeAsync(LoadHosts);
+        else
+            LoadHosts();
     }
 
     private async Task RefreshDnsAsync()
@@ -64,13 +67,19 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         try
         {
             string dns = await _dnsService.GetCurrentDnsAsync(_cts.Token).ConfigureAwait(false);
-            Application.Current.Dispatcher.Invoke(() => CurrentDns = dns);
+            if (Application.Current?.Dispatcher is { } dispatcher)
+                dispatcher.Invoke(() => CurrentDns = dns);
+            else
+                CurrentDns = dns;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to read current DNS");
-            Application.Current.Dispatcher.Invoke(() => CurrentDns = "Unable to detect");
+            if (Application.Current?.Dispatcher is { } d)
+                d.Invoke(() => CurrentDns = "Unable to detect");
+            else
+                CurrentDns = "Unable to detect";
         }
     }
 
@@ -121,7 +130,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
                 .ConfigureAwait(false);
 
             await RefreshDnsAsync();
-            Application.Current.Dispatcher.Invoke(() =>
+            Application.Current?.Dispatcher?.Invoke(() =>
                 StatusMessage = $"DNS set to {SelectedPreset.Name} ({SelectedPreset.Primary}, {SelectedPreset.Secondary}).");
             Log.Information("DNS changed to {Preset} ({Primary}, {Secondary})",
                 SelectedPreset.Name, SelectedPreset.Primary, SelectedPreset.Secondary);
@@ -129,13 +138,13 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            Application.Current?.Dispatcher?.Invoke(() =>
                 StatusMessage = $"Failed to set DNS: {ex.Message}");
             Log.Error(ex, "Failed to apply DNS preset {Preset}", SelectedPreset.Name);
         }
         finally
         {
-            Application.Current.Dispatcher.Invoke(() => IsDnsApplying = false);
+            Application.Current?.Dispatcher?.Invoke(() => IsDnsApplying = false);
         }
     }
 
@@ -154,20 +163,20 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         {
             await _dnsService.ResetToDhcpAsync(_cts.Token).ConfigureAwait(false);
             await RefreshDnsAsync();
-            Application.Current.Dispatcher.Invoke(() =>
+            Application.Current?.Dispatcher?.Invoke(() =>
                 StatusMessage = "DNS reset to automatic (DHCP).");
             Log.Information("DNS reset to DHCP");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            Application.Current?.Dispatcher?.Invoke(() =>
                 StatusMessage = $"Failed to reset DNS: {ex.Message}");
             Log.Error(ex, "Failed to reset DNS to DHCP");
         }
         finally
         {
-            Application.Current.Dispatcher.Invoke(() => IsDnsApplying = false);
+            Application.Current?.Dispatcher?.Invoke(() => IsDnsApplying = false);
         }
     }
 

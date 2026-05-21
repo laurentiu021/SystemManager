@@ -44,7 +44,7 @@ public sealed class PrivacyService
         try
         {
             using var key = OpenOrCreateKey(toggle.RegistryPath, writable: true);
-            if (key != null)
+            if (key is not null)
             {
                 key.SetValue(toggle.ValueName, valueToWrite, RegistryValueKind.DWord);
                 Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
@@ -89,10 +89,10 @@ public sealed class PrivacyService
         try
         {
             using var key = OpenOrCreateKey(toggle.RegistryPath, writable: false);
-            if (key == null) return false;
+            if (key is null) return false;
 
             var value = key.GetValue(toggle.ValueName);
-            if (value == null) return false;
+            if (value is null) return false;
 
             if (value is int intVal)
                 return intVal == toggle.EnabledValue;
@@ -133,7 +133,7 @@ public sealed class PrivacyService
             _ => null
         };
 
-        if (hive == null) return null;
+        if (hive is null) return null;
 
         if (writable)
         {

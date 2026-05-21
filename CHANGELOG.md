@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Windows Update** — individual update selection via checkboxes. Users can now
+  select/deselect specific updates before installing. Added "Select all" and
+  "Deselect all" buttons. KB article IDs validated before passing to PowerShell.
+
 ## [1.0.0] - 2026-05-20
 
 ### Changed

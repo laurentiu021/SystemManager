@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Privacy Toggles** — 12 one-click privacy switches (telemetry, advertising ID, Copilot,
+  Cortana, web search, widgets, Start suggestions, lock screen tips) with instant apply
+  and registry state detection.
+
 ## [1.3.0] - 2026-05-21
 
 ### Added

@@ -53,6 +53,7 @@ public static class ServiceRegistration
         services.AddSingleton<UninstallerService>();
         services.AddSingleton<BulkInstallerService>();
         services.AddSingleton<FileShredderService>();
+        services.AddSingleton<PrivacyService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -84,6 +85,7 @@ public static class ServiceRegistration
         services.AddSingleton<AppBlockerViewModel>();
         services.AddSingleton<BulkInstallerViewModel>();
         services.AddSingleton<FileShredderViewModel>();
+        services.AddSingleton<PrivacyViewModel>();
 
         return services;
     }

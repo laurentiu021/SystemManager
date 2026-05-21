@@ -44,6 +44,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public AppBlockerViewModel AppBlocker { get; }
     public BulkInstallerViewModel BulkInstaller { get; }
     public FileShredderViewModel FileShredder { get; }
+    public PrivacyViewModel Privacy { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -69,8 +70,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // Apps group (Bulk Installer is now fully implemented)
 
-    // Privacy & Security group
-    public PlaceholderViewModel WipPrivacySettings { get; private set; } = null!;
+    // Privacy & Security group (Privacy & Telemetry is now fully implemented)
     public PlaceholderViewModel WipDebloater { get; private set; } = null!;
     public PlaceholderViewModel WipBrowserCleaner { get; private set; } = null!;
     public PlaceholderViewModel WipEdgeOneDriveRemover { get; private set; } = null!;
@@ -143,6 +143,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             BulkInstaller = sp.GetRequiredService<BulkInstallerViewModel>();
             FileShredder = sp.GetRequiredService<FileShredderViewModel>();
             WindowsFeatures = sp.GetRequiredService<WindowsFeaturesViewModel>();
+            Privacy = sp.GetRequiredService<PrivacyViewModel>();
         }
         else
         {
@@ -190,6 +191,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             BulkInstaller = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()));
             FileShredder = new FileShredderViewModel(new FileShredderService());
             WindowsFeatures = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner));
+            Privacy = new PrivacyViewModel(new PrivacyService());
         }
 
         InitPlaceholders();
@@ -223,8 +225,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // Apps group — Bulk Installer is now fully implemented (no placeholder needed)
 
-        // Privacy & Security group
-        WipPrivacySettings = new PlaceholderViewModel("Privacy & Telemetry", "80-100+ toggles for telemetry, ads, AI/Copilot, location, diagnostics with presets.", "#9");
+        // Privacy & Security group (Privacy & Telemetry is now fully implemented)
         WipDebloater = new PlaceholderViewModel("Debloater & Ads", "Remove UWP bloatware, disable all Windows ads, remove Copilot/Recall/AI features.", "#9");
         WipBrowserCleaner = new PlaceholderViewModel("Browser Cleaner", "Per-browser cache/cookies/history cleanup with keep-list for important cookies.", "#336");
         WipEdgeOneDriveRemover = new PlaceholderViewModel("Edge/OneDrive Remover", "Safely remove or disable Edge and OneDrive with full restore capability.", "#339");
@@ -400,7 +401,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Subtitle = "Telemetry · Debloat · Browser · Edge/OneDrive · Defender · Notifications",
             Tooltip = "Privacy & Telemetry\nDebloater & Ads\nBrowser Cleaner\nEdge/OneDrive Remover\nDefender Tweaks\nNotification Blocker",
             Children = {
-            new NavItem { Id = "nav-privacy-settings",     Label = "Privacy & Telemetry",   Glyph = "\uE72E", Content = WipPrivacySettings,     ViewType = typeof(Views.PlaceholderView) },
+            new NavItem { Id = "nav-privacy-settings",     Label = "Privacy & Telemetry",   Glyph = "\uE72E", Content = Privacy,                ViewType = typeof(Views.PrivacyView) },
             new NavItem { Id = "nav-debloater",            Label = "Debloater & Ads",       Glyph = "\uE74D", Content = WipDebloater,           ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-browser-cleaner",      Label = "Browser Cleaner",       Glyph = "\uEB41", Content = WipBrowserCleaner,      ViewType = typeof(Views.PlaceholderView) },
             new NavItem { Id = "nav-edge-onedrive",        Label = "Edge/OneDrive Remover", Glyph = "\uE738", Content = WipEdgeOneDriveRemover, ViewType = typeof(Views.PlaceholderView) },
@@ -565,7 +566,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipScheduledMaintenance?.Dispose();
         WipDnsChanger?.Dispose();
         WipHostsEditor?.Dispose();
-        WipPrivacySettings?.Dispose();
+        Privacy?.Dispose();
         WipDebloater?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();

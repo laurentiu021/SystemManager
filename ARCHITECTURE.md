@@ -13,11 +13,12 @@ Built by [laurentiu021](https://github.com/laurentiu021) · MIT licensed.
 ```
 SysManager/
 ├── SysManager/                 # main WPF app
+│   ├── Data/                   # static data files (ProcessDescriptions.json)
 │   ├── Models/                 # POCOs (snapshots, samples, reports, cleanup categories)
 │   ├── Services/               # Windows / PowerShell / CLI wrappers
 │   ├── ViewModels/             # one VM per tab + MainWindowViewModel
 │   ├── Views/                  # XAML views + code-behind
-│   ├── Helpers/                # AdminHelper, converters, gateway lookup
+│   ├── Helpers/                # AdminHelper, converters, collections, parsers
 │   ├── Resources/              # icons and assets
 │   ├── App.xaml(.cs)
 │   ├── MainWindow.xaml(.cs)
@@ -41,14 +42,14 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `PlaceholderViewModel` (Task Scheduler · Boot Analyzer) |
 | Gaming & Profiles | `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles) |
 | Monitor | `ProcessManagerViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Resource History · Privacy Monitor · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
-| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (File Shredder · Scheduled Maintenance) |
+| Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `FileShredderViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
-| Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `PlaceholderViewModel` (DNS Changer · Hosts Editor) |
-| Apps | `AppUpdatesViewModel` · `UninstallerViewModel` · `AppBlockerViewModel` · `PlaceholderViewModel` (Bulk Installer) |
-| Privacy & Security | `PlaceholderViewModel` (Privacy & Telemetry · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
-| Customization | `PlaceholderViewModel` (Context Menu · Dark Mode Scheduler · Volume Control · Environment Variables) |
+| Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
+| Apps | `AppUpdatesViewModel` · `UninstallerViewModel` · `AppBlockerViewModel` · `BulkInstallerViewModel` |
+| Privacy & Security | `PrivacyViewModel` · `PlaceholderViewModel` (Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
+| Customization | `ContextMenuViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control · Environment Variables) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `AboutViewModel` |
-| Advanced | `PlaceholderViewModel` (Restore Points · Profile Export/Import · CLI Interface · System Report) |
+| Advanced | `PlaceholderViewModel` (System Report · Restore Points · Profile Export/Import · CLI Interface) |
 
 - `DashboardViewModel` — OS / CPU / RAM / disk snapshot + live uptime.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
@@ -76,6 +77,11 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry.
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism.
+- `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
+- `BulkInstallerViewModel` — batch app installation via winget with progress tracking.
+- `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
+- `PrivacyViewModel` — Windows privacy and telemetry toggles via registry.
+- `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
 
 ## Services
 
@@ -150,6 +156,39 @@ Key services:
   historical charting and trend analysis.
 - `ShortcutCleanerService` — scans Start Menu and Desktop for broken
   shortcuts (dead targets) and offers safe removal.
+- `BulkInstallerService` — installs apps via winget in batch with
+  per-item progress and error reporting.
+- `FileShredderService` — secure multi-pass file overwrite (DoD 5220.22-M
+  style) and deletion.
+- `PrivacyService` — reads and writes Windows privacy and telemetry
+  registry toggles (activity history, advertising ID, diagnostics, etc.).
+- `DnsService` — manages DNS server configuration via PowerShell
+  `Set-DnsClientServerAddress` with preset support (Google, Cloudflare, etc.).
+- `HostsFileService` — parses and edits the Windows hosts file with
+  add/remove/toggle operations.
+- `ContextMenuService` — scans and toggles Explorer context menu shell
+  extensions via registry enumeration.
+- `SystemReportService` — generates comprehensive system info reports
+  (hardware, OS, network, drivers) for export or clipboard.
+
+## Helpers
+
+Utility classes that don't fit neatly into Services or ViewModels:
+
+- `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch.
+- `BulkObservableCollection<T>` — `ObservableCollection` subclass that
+  suppresses change notifications during bulk add/remove for UI performance
+  (in `ObservableCollectionExtensions.cs`).
+- `WingetTableParser` — parses the fixed-width table output from `winget`
+  CLI commands into structured objects.
+- `FormatHelper` — byte-size formatting, duration humanization, and other
+  display helpers.
+- `GatewayHelper` — default gateway IP lookup for network tabs.
+- `EtaCalculator` — estimates time remaining for long-running operations.
+- `KnownFolders` — resolves Windows Known Folder paths via shell API.
+- `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.
+- Value converters: `EqualityConverter`, `IntGreaterThanZeroConverter`,
+  `ValueConverters` (boolean/visibility/inverse helpers).
 
 ## Dependency Injection
 

@@ -20,6 +20,7 @@ namespace SysManager.ViewModels;
 public sealed partial class AboutViewModel : ViewModelBase
 {
     private readonly UpdateService _updates;
+    private readonly SystemReportService _reportService;
     private UpdateService.ReleaseInfo? _latest;
 
     public ObservableCollection<ReleaseNote> ReleaseHistory { get; } = new();
@@ -42,11 +43,15 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private string? _downloadedPath;
     [ObservableProperty] private bool _autoDownloadFailed;
 
-    public AboutViewModel() : this(new UpdateService()) { }
+    // Report export state
+    [ObservableProperty] private bool _isGeneratingReport;
 
-    public AboutViewModel(UpdateService updates)
+    public AboutViewModel() : this(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService())) { }
+
+    public AboutViewModel(UpdateService updates, SystemReportService reportService)
     {
         _updates = updates;
+        _reportService = reportService;
         InitializeAsync(InitAsync);
     }
 
@@ -378,6 +383,63 @@ public sealed partial class AboutViewModel : ViewModelBase
     {
         try { return AdminHelper.IsElevated(); }
         catch (InvalidOperationException) { return false; }
+    }
+
+    [RelayCommand]
+    private async Task ExportToFileAsync()
+    {
+        if (IsGeneratingReport) return;
+        IsGeneratingReport = true;
+        UpdateStatus = "Generating system report...";
+        try
+        {
+            var report = await _reportService.GenerateReportAsync();
+            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            var fileName = $"SysManager-Report-{DateTime.Now:yyyy-MM-dd-HHmmss}.txt";
+            var filePath = Path.Join(desktop, fileName);
+            await File.WriteAllTextAsync(filePath, report, Encoding.UTF8);
+            UpdateStatus = $"Report saved to Desktop: {fileName}";
+        }
+        catch (IOException ex)
+        {
+            UpdateStatus = $"Failed to save report: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            UpdateStatus = $"Failed to save report (access denied): {ex.Message}";
+        }
+        catch (InvalidOperationException ex)
+        {
+            UpdateStatus = $"Failed to generate report: {ex.Message}";
+        }
+        finally { IsGeneratingReport = false; }
+    }
+
+    [RelayCommand]
+    private async Task CopyReportAsync()
+    {
+        if (IsGeneratingReport) return;
+        IsGeneratingReport = true;
+        UpdateStatus = "Generating system report...";
+        try
+        {
+            var report = await _reportService.GenerateReportAsync();
+            try
+            {
+                Clipboard.SetText(report);
+                UpdateStatus = "Full system report copied to clipboard.";
+            }
+            catch (System.Runtime.InteropServices.ExternalException ex)
+            {
+                Log.Debug("Clipboard locked: {Error}", ex.Message);
+                UpdateStatus = "Couldn't copy to clipboard: it's currently in use by another application.";
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            UpdateStatus = $"Failed to generate report: {ex.Message}";
+        }
+        finally { IsGeneratingReport = false; }
     }
 
     [RelayCommand]

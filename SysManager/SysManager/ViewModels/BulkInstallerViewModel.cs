@@ -28,6 +28,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private string _selectedCategory = "All";
+    [ObservableProperty] private bool _isElevated;
 
     public List<string> Categories { get; } =
     [
@@ -57,11 +58,19 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     public BulkInstallerViewModel(BulkInstallerService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
         Apps.ReplaceWith(BuildCuratedApps());
         ApplyFilter();
 
         GroupedView = CollectionViewSource.GetDefaultView(FilteredApps);
         GroupedView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(InstallableApp.Category)));
+    }
+
+    [RelayCommand]
+    private void RelaunchElevated()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     [RelayCommand]

@@ -73,6 +73,7 @@
         <DataGrid Grid.Row="4" ItemsSource="{Binding BlockedApps}"
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
+                  CanUserResizeColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                   BorderThickness="1" BorderBrush="{StaticResource Border1}"
                   VirtualizingPanel.IsVirtualizing="True"

@@ -111,6 +111,7 @@
                 <DataGrid Grid.Row="1" ItemsSource="{Binding HostEntries}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserDeleteRows="False" HeadersVisibility="Column"
+                          CanUserResizeColumns="True"
                           GridLinesVisibility="Horizontal" BorderThickness="0"
                           Background="Transparent" RowBackground="#0D1B2A"
                           AlternatingRowBackground="#111D2E"

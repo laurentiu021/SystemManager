@@ -173,6 +173,7 @@
                               HeadersVisibility="Column"
                               GridLinesVisibility="None"
                               IsReadOnly="True"
+                              CanUserResizeColumns="True"
                               Background="Transparent"
                               RowBackground="Transparent"
                               AlternatingRowBackground="#0F141C"

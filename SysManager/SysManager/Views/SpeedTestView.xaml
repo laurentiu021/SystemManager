@@ -92,7 +92,7 @@
                         </DockPanel>
                         <DataGrid ItemsSource="{Binding OoklaHistory}" AutoGenerateColumns="False"
                                   IsReadOnly="True" HeadersVisibility="Column" CanUserReorderColumns="False"
-                                  CanUserResizeRows="False" GridLinesVisibility="None"
+                                  CanUserResizeColumns="True" CanUserResizeRows="False" GridLinesVisibility="None"
                                   Background="Transparent" BorderThickness="0" Margin="0,8,0,0"
                                   MaxHeight="260" VerticalScrollBarVisibility="Auto"
                                   AutomationProperties.Name="Ookla speed test history"
@@ -122,7 +122,7 @@
                         </DockPanel>
                         <DataGrid ItemsSource="{Binding HttpHistory}" AutoGenerateColumns="False"
                                   IsReadOnly="True" HeadersVisibility="Column" CanUserReorderColumns="False"
-                                  CanUserResizeRows="False" GridLinesVisibility="None"
+                                  CanUserResizeColumns="True" CanUserResizeRows="False" GridLinesVisibility="None"
                                   Background="Transparent" BorderThickness="0" Margin="0,8,0,0"
                                   MaxHeight="260" VerticalScrollBarVisibility="Auto"
                                   AutomationProperties.Name="HTTP speed test history"

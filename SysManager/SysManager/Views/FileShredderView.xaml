@@ -62,8 +62,10 @@
                   AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserSortColumns="True"
-                      CanUserResizeColumns="True"
+                  CanUserResizeColumns="True"
                   GridLinesVisibility="None"
+                  Background="Transparent" RowBackground="Transparent"
+                  AlternatingRowBackground="#0F141C" BorderThickness="0"
                   Margin="28,12,28,0"
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">

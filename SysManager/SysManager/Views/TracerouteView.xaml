@@ -88,6 +88,7 @@
                     </StackPanel>
                     <DataGrid AutomationProperties.Name="Data table" Grid.Row="2" ItemsSource="{Binding Shared.TracerouteHops}"
                               AutoGenerateColumns="False" HeadersVisibility="Column"
+                              CanUserResizeColumns="True"
                               Background="Transparent" BorderThickness="0"
                               GridLinesVisibility="None" IsReadOnly="True"
                               RowBackground="Transparent" AlternatingRowBackground="#0F141C"

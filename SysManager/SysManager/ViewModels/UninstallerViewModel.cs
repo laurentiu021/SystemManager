@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -27,6 +28,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private int _appCount;
     [ObservableProperty] private string _summary = "Click Scan to list installed applications.";
+    [ObservableProperty] private bool _isElevated;
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
@@ -35,6 +37,14 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         _service = service;
         _lineHandler = line => Console.Append(line);
         _service.LineReceived += _lineHandler;
+        IsElevated = AdminHelper.IsElevated();
+    }
+
+    [RelayCommand]
+    private void RelaunchElevated()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     [RelayCommand]

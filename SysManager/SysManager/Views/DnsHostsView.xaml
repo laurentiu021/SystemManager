@@ -24,20 +24,30 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
-        <!-- Elevation banner -->
+        <!-- Elevation banner: not elevated -->
         <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
-                BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="28,12,28,0"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="28,12,28,0"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchElevatedCommand}"
-                        Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right" Padding="12,6"/>
+                        Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="14" Margin="0,0,8,0" Foreground="{StaticResource TextSecondary}"/>
-                    <TextBlock Text="Administrator privileges required to change DNS and edit the hosts file."
-                               Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="Changing DNS and editing the hosts file requires administrator privileges."
+                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="1" Background="#0D1F12" BorderBrush="#22C55E44" BorderThickness="1"
+                CornerRadius="8" Padding="10,8" Margin="28,12,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="Running as administrator — you can change DNS settings and edit the hosts file." Foreground="#22C55E" FontSize="13" FontWeight="Medium"/>
+            </StackPanel>
         </Border>
 
         <!-- DNS Section -->

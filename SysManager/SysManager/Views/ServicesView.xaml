@@ -13,6 +13,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -46,8 +47,34 @@
             </DockPanel>
         </Border>
 
+        <!-- Elevation banner: not elevated -->
+        <Border Grid.Row="2" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchElevatedCommand}"
+                        Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="Starting and stopping Windows services requires administrator privileges."
+                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="2" Background="#0D1F12" BorderBrush="#22C55E44" BorderThickness="1"
+                CornerRadius="8" Padding="10,8" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="Running as administrator — you can start, stop, and configure services." Foreground="#22C55E" FontSize="13" FontWeight="Medium"/>
+            </StackPanel>
+        </Border>
+
         <!-- Services list -->
-        <DataGrid AutomationProperties.Name="Data table" Grid.Row="2" ItemsSource="{Binding Services}"
+        <DataGrid AutomationProperties.Name="Data table" Grid.Row="3" ItemsSource="{Binding Services}"
                   SelectedItem="{Binding SelectedService}"
                   AutoGenerateColumns="False" HeadersVisibility="Column"
                   Background="Transparent" BorderThickness="0"
@@ -121,7 +148,7 @@
         </DataGrid>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
             <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>

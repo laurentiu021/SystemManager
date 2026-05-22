@@ -25,6 +25,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
     public BulkObservableCollection<ServiceEntry> Services { get; } = new();
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _filter = "";
     [ObservableProperty] private string _selectedFilter = "All";
     [ObservableProperty] private ServiceEntry? _selectedService;
@@ -37,7 +38,15 @@ public sealed partial class ServicesViewModel : ViewModelBase
     public ServicesViewModel(PowerShellRunner ps)
     {
         _ps = ps;
+        IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
+    }
+
+    [RelayCommand]
+    private void RelaunchElevated()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     private async Task InitAsync()

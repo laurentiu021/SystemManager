@@ -55,7 +55,8 @@ public sealed class TrayIconService : IDisposable
         {
             ToolTipText = "SysManager — loading…",
             Icon = LoadAppIcon(),
-            ContextMenu = BuildContextMenu(mainWindow)
+            ContextMenu = BuildContextMenu(mainWindow),
+            Visibility = System.Windows.Visibility.Visible
         };
 
         _trayIcon.TrayLeftMouseDown += (_, _) => ShowWindow(mainWindow);

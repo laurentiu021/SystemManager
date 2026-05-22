@@ -91,13 +91,22 @@ public sealed class TrayIconService : IDisposable
     {
         try
         {
+            // First try: extract from current exe (works reliably in single-file publish)
+            var exePath = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exePath) && System.IO.File.Exists(exePath))
+            {
+                var extracted = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+                if (extracted is not null) return extracted;
+            }
+
+            // Fallback: pack URI resource
             var uri = new Uri("pack://application:,,,/Resources/app.ico", UriKind.Absolute);
             var streamInfo = Application.GetResourceStream(uri);
-            if (streamInfo?.Stream == null) return null;
+            if (streamInfo?.Stream is null) return null;
             using var stream = streamInfo.Stream;
             return new System.Drawing.Icon(stream);
         }
-        catch (System.IO.IOException ex)
+        catch (Exception ex)
         {
             Log.Warning("TrayIcon: failed to load icon: {Error}", ex.Message);
             return null;

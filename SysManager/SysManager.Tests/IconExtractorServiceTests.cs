@@ -11,6 +11,7 @@ namespace SysManager.Tests;
 /// Tests for <see cref="IconExtractorService"/> — path normalization,
 /// caching behavior, and fallback handling.
 /// </summary>
+[Collection("IconCache")]
 public class IconExtractorServiceTests
 {
     // ── NormalizePath ──

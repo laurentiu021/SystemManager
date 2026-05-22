@@ -17,3 +17,9 @@ public class NetworkCollection { }
 /// </summary>
 [CollectionDefinition("OperationLock", DisableParallelization = true)]
 public class OperationLockCollection { }
+
+/// <summary>
+/// Groups tests that use the shared IconExtractorService static cache.
+/// </summary>
+[CollectionDefinition("IconCache", DisableParallelization = true)]
+public class IconCacheCollection { }

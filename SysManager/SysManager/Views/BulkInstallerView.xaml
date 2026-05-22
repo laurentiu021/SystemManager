@@ -188,6 +188,7 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
@@ -197,8 +198,14 @@
                                               IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
                                               Margin="0,0,12,0"/>
 
+                                    <!-- Category icon -->
+                                    <TextBlock Grid.Column="1" Text="{Binding IconGlyph}"
+                                               FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                               FontSize="18" VerticalAlignment="Center" Margin="0,0,12,0"
+                                               Foreground="{StaticResource TextSecondary}"/>
+
                                     <!-- Name + description -->
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}"
                                                    FontWeight="SemiBold" FontSize="13"
                                                    Foreground="{StaticResource TextPrimary}"/>
@@ -209,7 +216,7 @@
                                     </StackPanel>
 
                                     <!-- Status badge -->
-                                    <Border Grid.Column="2" Style="{StaticResource Badge}"
+                                    <Border Grid.Column="3" Style="{StaticResource Badge}"
                                             VerticalAlignment="Center" Margin="12,0,0,0"
                                             Visibility="{Binding Status, Converter={StaticResource FlexVis}}">
                                         <TextBlock Text="{Binding Status}" FontSize="11"

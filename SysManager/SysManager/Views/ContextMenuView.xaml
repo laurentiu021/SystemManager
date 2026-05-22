@@ -20,8 +20,8 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Context Menu Manager" Style="{StaticResource Display}"/>
-            <TextBlock Text="Manage Windows Explorer right-click menu entries. Disabling is non-destructive — entries can be re-enabled anytime."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="These are entries that appear when you right-click files, folders, or the desktop in Windows Explorer. Toggle to show/hide them."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Toolbar -->
@@ -47,6 +47,9 @@
                     </TextBox>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                    <CheckBox Content="Show system entries"
+                              IsChecked="{Binding ShowSystemEntries}"
+                              VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
                            Style="{StaticResource Subtle}">
@@ -81,28 +84,28 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"
-                                        SortMemberPath="Name" IsReadOnly="True">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter Property="FontSize" Value="13"/>
-                                <Setter Property="VerticalAlignment" Value="Center"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
-
-                    <DataGridTextColumn Header="Command" Binding="{Binding Command}" Width="280"
-                                        SortMemberPath="Command" IsReadOnly="True">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-                                <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                                <Setter Property="VerticalAlignment" Value="Center"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+                    <DataGridTemplateColumn Header="Name" Width="*" SortMemberPath="Name" IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4,4" VerticalAlignment="Center">
+                                    <StackPanel.ToolTip>
+                                        <StackPanel MaxWidth="500">
+                                            <TextBlock FontWeight="SemiBold" Text="Registry Name:"/>
+                                            <TextBlock Text="{Binding RawName}" TextWrapping="Wrap" Margin="0,2,0,6"/>
+                                            <TextBlock FontWeight="SemiBold" Text="Full Command:"/>
+                                            <TextBlock Text="{Binding Command}" TextWrapping="Wrap" Margin="0,2,0,4"/>
+                                            <TextBlock FontWeight="SemiBold" Text="Registry Path:"/>
+                                            <TextBlock Text="{Binding RegistryPath}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel.ToolTip>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                    <TextBlock Text="{Binding Command}" Foreground="{StaticResource TextMuted}"
+                                               FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="380"
+                                               HorizontalAlignment="Left" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="140"
                                         SortMemberPath="Location" IsReadOnly="True">

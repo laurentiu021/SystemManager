@@ -41,6 +41,13 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void RelaunchElevated()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
+    }
+
+    [RelayCommand]
     private async Task ScanAsync()
     {
         IsBusy = true;

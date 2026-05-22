@@ -89,6 +89,13 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void RelaunchElevated()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
+    }
+
+    [RelayCommand]
     private void ApplyAll()
     {
         _service.ApplyAll(Toggles);

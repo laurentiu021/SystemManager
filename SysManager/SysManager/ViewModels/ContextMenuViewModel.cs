@@ -25,6 +25,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private string _selectedLocation = "All";
+    [ObservableProperty] private bool _showSystemEntries;
     [ObservableProperty] private int _enabledCount;
     [ObservableProperty] private int _disabledCount;
     [ObservableProperty] private int _totalCount;
@@ -43,6 +44,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
     partial void OnSelectedLocationChanged(string value) => ApplyFilter();
+    partial void OnShowSystemEntriesChanged(bool value) => ApplyFilter();
 
     private async Task InitAsync()
     {
@@ -115,6 +117,10 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     {
         var filtered = _allEntries.AsEnumerable();
 
+        // Hide system/internal entries unless the user opted in
+        if (!ShowSystemEntries)
+            filtered = filtered.Where(e => !e.IsSystemEntry);
+
         // Location filter
         if (!string.Equals(SelectedLocation, "All", StringComparison.OrdinalIgnoreCase))
             filtered = filtered.Where(e => string.Equals(e.Location, SelectedLocation, StringComparison.OrdinalIgnoreCase));
@@ -126,7 +132,8 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             filtered = filtered.Where(e =>
                 e.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
                 e.Command.Contains(text, StringComparison.OrdinalIgnoreCase) ||
-                e.Source.Contains(text, StringComparison.OrdinalIgnoreCase));
+                e.Source.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                e.RawName.Contains(text, StringComparison.OrdinalIgnoreCase));
         }
 
         Entries.ReplaceWith(filtered);

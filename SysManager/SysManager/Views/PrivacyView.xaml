@@ -13,6 +13,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -44,15 +45,27 @@
                         Visibility="{Binding IsElevated, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="Administrator" FontSize="11" Foreground="#4ADE80"/>
                 </Border>
-                <Border Background="#2D1F1F" CornerRadius="4" Padding="6,2" Margin="4,0"
-                        Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
-                    <TextBlock Text="Some toggles need elevation" FontSize="11" Foreground="#F59E0B"/>
-                </Border>
             </WrapPanel>
         </Border>
 
+        <!-- Elevation info strip (shown when not running as admin) -->
+        <Border Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,12"
+                Grid.Row="2" Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchElevatedCommand}"
+                        Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right" Padding="12,6"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="14" Margin="0,0,8,0" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="Some settings require administrator privileges to change."
+                               Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
         <!-- Toggle list grouped by category -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,12">
                 <ItemsControl ItemsSource="{Binding FilteredToggles}">
                     <ItemsControl.GroupStyle>
@@ -103,7 +116,7 @@
         </Border>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
         </DockPanel>
     </Grid>

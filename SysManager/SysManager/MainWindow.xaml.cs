@@ -58,7 +58,7 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
-    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    [System.Runtime.InteropServices.LibraryImport("user32.dll", EntryPoint = "DefWindowProcW")]
     private static partial IntPtr DefWindowProc(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     /// <summary>Click on a single-item group (Dashboard, Network).</summary>

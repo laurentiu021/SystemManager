@@ -30,4 +30,10 @@ public sealed partial class ContextMenuEntry : ObservableObject
 
     /// <summary>Application that added the entry (inferred from command path).</summary>
     public string Source { get; init; } = "";
+
+    /// <summary>Original registry key name before friendly-name resolution.</summary>
+    public string RawName { get; init; } = "";
+
+    /// <summary>Whether this entry is considered a system/internal entry (raw name starts with @ or .).</summary>
+    public bool IsSystemEntry { get; init; }
 }

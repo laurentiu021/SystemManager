@@ -21,7 +21,7 @@ public class BulkInstallerViewModelTests
     public void Constructor_PopulatesAppsWithCuratedList()
     {
         var vm = CreateVm();
-        Assert.Equal(24, vm.Apps.Count);
+        Assert.Equal(46, vm.Apps.Count);
     }
 
     [Fact]
@@ -51,12 +51,16 @@ public class BulkInstallerViewModelTests
 
     [Theory]
     [InlineData("Browsers", 4)]
-    [InlineData("Communication", 4)]
+    [InlineData("Communication", 6)]
     [InlineData("Media", 3)]
     [InlineData("Development", 4)]
-    [InlineData("Utilities", 4)]
+    [InlineData("Utilities", 8)]
     [InlineData("Gaming", 3)]
     [InlineData("Security", 2)]
+    [InlineData("Office & Productivity", 4)]
+    [InlineData("Creativity", 4)]
+    [InlineData("Networking & VPN", 4)]
+    [InlineData("Runtimes & Frameworks", 4)]
     public void FilterByCategory_ShowsOnlyMatchingCategory(string category, int expectedCount)
     {
         var vm = CreateVm();
@@ -87,10 +91,11 @@ public class BulkInstallerViewModelTests
     }
 
     [Fact]
-    public void Categories_ContainsAllAndSevenSpecific()
+    public void Categories_ContainsAllAndElevenSpecificPlusCustom()
     {
         var vm = CreateVm();
         Assert.Contains("All", vm.Categories);
-        Assert.Equal(8, vm.Categories.Count);
+        Assert.Contains("Custom", vm.Categories);
+        Assert.Equal(13, vm.Categories.Count);
     }
 }

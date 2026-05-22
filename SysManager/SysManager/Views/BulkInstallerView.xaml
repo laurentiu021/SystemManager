@@ -13,6 +13,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -53,82 +54,151 @@
             </WrapPanel>
         </Border>
 
-        <!-- App list -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
-            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding FilteredApps}"
-                      AutoGenerateColumns="False" HeadersVisibility="Column"
-                      Background="Transparent" BorderThickness="0"
-                      GridLinesVisibility="None" IsReadOnly="False"
-                      RowBackground="Transparent" AlternatingRowBackground="#0F141C"
-                      SelectionMode="Single" CanUserSortColumns="True"
-                      VirtualizingPanel.IsVirtualizing="True"
-                      VirtualizingPanel.VirtualizationMode="Recycling">
-                <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="" Width="32"
-                                            Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
-                                            CanUserSort="False">
-                        <DataGridCheckBoxColumn.ElementStyle>
-                            <Style TargetType="CheckBox">
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
-                            </Style>
-                        </DataGridCheckBoxColumn.ElementStyle>
-                        <DataGridCheckBoxColumn.EditingElementStyle>
-                            <Style TargetType="CheckBox">
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
-                            </Style>
-                        </DataGridCheckBoxColumn.EditingElementStyle>
-                    </DataGridCheckBoxColumn>
+        <!-- Custom winget search -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <StackPanel>
+                <TextBlock Text="Search winget packages" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{StaticResource TextPrimary}"/>
+                <TextBlock Text="Find and install any app available on winget."
+                           Style="{StaticResource Subtle}" Margin="0,2,0,12"/>
+                <DockPanel>
+                    <Button Content="Search" Command="{Binding SearchWingetCommand}"
+                            Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Margin="8,0,0,0"/>
+                    <Grid>
+                        <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Text="Search apps…" IsHitTestVisible="False"
+                                   Foreground="{StaticResource TextMuted}" Margin="6,0,0,0"
+                                   VerticalAlignment="Center" FontSize="12"
+                                   Visibility="{Binding SearchQuery, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                    </Grid>
+                </DockPanel>
 
-                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"
-                                        SortMemberPath="Name" IsReadOnly="True">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter Property="FontSize" Value="13"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+                <!-- Searching indicator -->
+                <ProgressBar IsIndeterminate="True" Height="2" Margin="0,8,0,0"
+                             Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}"/>
 
-                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120"
-                                        SortMemberPath="Category" IsReadOnly="True">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
-                                <Setter Property="FontSize" Value="12"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+                <!-- Search results -->
+                <ItemsControl ItemsSource="{Binding SearchResults}" Margin="0,8,0,0"
+                              Visibility="{Binding SearchResults.Count, Converter={StaticResource FlexVis}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="8,6" Margin="0,1" CornerRadius="6" Background="Transparent">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                               FontSize="12.5" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding WingetId}"
+                                               FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextMuted}"
+                                               Margin="12,0" TextTrimming="CharacterEllipsis"
+                                               MaxWidth="220"/>
+                                    <Button Grid.Column="2" Content="Add"
+                                            Command="{Binding DataContext.AddToInstallListCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            Style="{StaticResource GhostButton}"
+                                            Padding="10,4" FontSize="11"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
 
-                    <DataGridTextColumn Header="Winget ID" Binding="{Binding WingetId}" Width="220"
-                                        SortMemberPath="WingetId" IsReadOnly="True">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontFamily" Value="Consolas"/>
-                                <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+        <!-- App list (grouped by category) -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0">
+                <ItemsControl ItemsSource="{Binding GroupedView}"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
 
-                    <DataGridTemplateColumn Header="Status" Width="160" SortMemberPath="Status">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Border Style="{StaticResource Badge}"
-                                        VerticalAlignment="Center" Margin="4,0"
-                                        Visibility="{Binding Status, Converter={StaticResource FlexVis}}"
-                                        ToolTip="{Binding Status}">
-                                    <TextBlock Text="{Binding Status}" FontSize="11"
-                                               TextTrimming="CharacterEllipsis" MaxWidth="140"/>
-                                </Border>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
+                    <!-- Category group headers -->
+                    <ItemsControl.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="16,20,16,6">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontWeight="SemiBold" FontSize="14"
+                                                   Foreground="{StaticResource TextPrimary}"/>
+                                        <Rectangle Height="1" Fill="{StaticResource Border1}" Margin="0,8,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ItemsControl.GroupStyle>
+
+                    <!-- Individual app row -->
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="16,10" Margin="4,1"
+                                    CornerRadius="8" Background="Transparent"
+                                    ToolTip="{Binding WingetId}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Checkbox -->
+                                    <CheckBox Grid.Column="0" VerticalAlignment="Center"
+                                              IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                              Margin="0,0,12,0"/>
+
+                                    <!-- Name + description -->
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontWeight="SemiBold" FontSize="13"
+                                                   Foreground="{StaticResource TextPrimary}"/>
+                                        <TextBlock Text="{Binding Description}"
+                                                   FontSize="11.5" Margin="0,2,0,0"
+                                                   Foreground="{StaticResource TextSecondary}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+
+                                    <!-- Status badge -->
+                                    <Border Grid.Column="2" Style="{StaticResource Badge}"
+                                            VerticalAlignment="Center" Margin="12,0,0,0"
+                                            Visibility="{Binding Status, Converter={StaticResource FlexVis}}">
+                                        <TextBlock Text="{Binding Status}" FontSize="11"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="120"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+
+                </ItemsControl>
+            </ScrollViewer>
         </Border>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
             <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Value="{Binding Progress}"

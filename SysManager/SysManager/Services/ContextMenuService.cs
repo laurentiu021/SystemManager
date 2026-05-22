@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Security;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Serilog;
 using SysManager.Models;
@@ -70,14 +71,19 @@ public sealed class ContextMenuService
 
                         var registryPath = $@"HKCR\{subKey}\{entryName}";
 
+                        // Resolve a user-friendly display name
+                        var friendlyName = GetFriendlyName(displayName, command);
+
                         entries.Add(new ContextMenuEntry
                         {
-                            Name = displayName,
+                            Name = friendlyName,
+                            RawName = displayName,
                             Command = command,
                             RegistryPath = registryPath,
                             Location = location,
                             Source = source,
-                            IsEnabled = isEnabled
+                            IsEnabled = isEnabled,
+                            IsSystemEntry = IsSystemEntry(displayName)
                         });
                     }
                     catch (SecurityException ex)
@@ -235,6 +241,197 @@ public sealed class ContextMenuService
             // Backup is best-effort — don't block the actual operation
             Log.Debug("Registry backup failed (non-critical): {Error}", ex.Message);
         }
+    }
+
+    // Well-known registry entry names mapped to user-friendly display names
+    private static readonly Dictionary<string, string> KnownNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["cmd"] = "Command Prompt",
+        ["powershell"] = "PowerShell",
+        ["Windows.ModernShare"] = "Share",
+        ["pintohomefile"] = "Pin to Quick Access",
+        ["PinToStartScreen"] = "Pin to Start",
+        ["removeproperties"] = "Remove Properties",
+        ["EditStickers"] = "Edit Stickers",
+        ["find"] = "Search",
+        ["opennewwindow"] = "Open New Window",
+        ["opennewtab"] = "Open New Tab",
+        ["Troubleshoot compatibility"] = "Troubleshoot Compatibility",
+        ["runas"] = "Run as Administrator",
+        ["runasuser"] = "Run as Different User",
+        ["edit"] = "Edit",
+        ["open"] = "Open",
+        ["print"] = "Print",
+        ["explore"] = "Explore",
+        ["properties"] = "Properties",
+        ["copy"] = "Copy",
+        ["cut"] = "Cut",
+        ["paste"] = "Paste",
+        ["delete"] = "Delete",
+        ["rename"] = "Rename",
+    };
+
+    // Known DLL resource strings mapped to friendly names
+    private static readonly Dictionary<string, string> KnownResourceStrings = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["@shell32.dll,-8506"] = "Open Command Prompt",
+        ["@shell32.dll,-8508"] = "Open PowerShell",
+        ["@shell32.dll,-8517"] = "Open Command Prompt as Administrator",
+        ["@shell32.dll,-8518"] = "Open PowerShell as Administrator",
+        ["@shell32.dll,-31328"] = "Share",
+        ["@shell32.dll,-37400"] = "Pin to Quick Access",
+    };
+
+    // Known executable names mapped to friendly application names
+    private static readonly Dictionary<string, string> KnownExeNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["git-bash"] = "Git Bash",
+        ["git-gui"] = "Git GUI",
+        ["code"] = "Visual Studio Code",
+        ["notepad++"] = "Notepad++",
+        ["notepad"] = "Notepad",
+        ["vlc"] = "VLC Media Player",
+        ["7zFM"] = "7-Zip File Manager",
+        ["WinRAR"] = "WinRAR",
+        ["mspaint"] = "Paint",
+        ["calc"] = "Calculator",
+        ["explorer"] = "Windows Explorer",
+        ["powershell"] = "PowerShell",
+        ["pwsh"] = "PowerShell",
+        ["cmd"] = "Command Prompt",
+        ["wt"] = "Windows Terminal",
+    };
+
+    /// <summary>
+    /// Resolves a raw registry entry name into a user-friendly display name.
+    /// Falls back to CamelCase splitting and cleanup for unknown entries.
+    /// </summary>
+    private static string GetFriendlyName(string rawName, string command)
+    {
+        // 1. Check exact match in known names
+        if (KnownNames.TryGetValue(rawName, out var known))
+            return known;
+
+        // 2. Check if it's a resource string like @shell32.dll,-8506
+        if (rawName.StartsWith('@'))
+        {
+            if (KnownResourceStrings.TryGetValue(rawName, out var resourceName))
+                return resourceName;
+
+            // Try to extract a meaningful name from DLL resource references
+            // Format: @C:\Windows\System32\display.dll,-4
+            var dllMatch = Regex.Match(rawName, @"@.*?\\?([^\\,]+)\.dll", RegexOptions.IgnoreCase);
+            if (dllMatch.Success)
+            {
+                var dllName = dllMatch.Groups[1].Value;
+                return $"{SplitCamelCase(dllName)} (System)";
+            }
+
+            // Unknown resource string — just mark as system
+            return $"{rawName} (System)";
+        }
+
+        // 3. Handle dot-prefixed names like .SpotlightLearnMore
+        if (rawName.StartsWith('.'))
+        {
+            var cleaned = rawName.TrimStart('.');
+            // Insert " — " at boundaries for known patterns
+            if (cleaned.StartsWith("Spotlight", StringComparison.OrdinalIgnoreCase))
+            {
+                var suffix = cleaned["Spotlight".Length..];
+                if (!string.IsNullOrEmpty(suffix))
+                    return $"Spotlight — {SplitCamelCase(suffix)}";
+                return "Spotlight";
+            }
+            return SplitCamelCase(cleaned);
+        }
+
+        // 4. Try to infer from command if the raw name is cryptic
+        if (IsCrypticName(rawName) && !string.IsNullOrWhiteSpace(command))
+        {
+            var inferred = InferNameFromCommand(command);
+            if (!string.IsNullOrEmpty(inferred))
+                return inferred;
+        }
+
+        // 5. Split CamelCase for readable raw names
+        return SplitCamelCase(rawName);
+    }
+
+    /// <summary>
+    /// Determines if an entry is a system/internal entry based on its raw name.
+    /// </summary>
+    private static bool IsSystemEntry(string rawName)
+    {
+        return rawName.StartsWith('@') || rawName.StartsWith('.');
+    }
+
+    /// <summary>
+    /// Determines if a name looks cryptic and not user-friendly.
+    /// </summary>
+    private static bool IsCrypticName(string name)
+    {
+        // Names with only lowercase and no spaces, very short, or contain hyphens/underscores
+        if (name.Length <= 2) return true;
+        if (name.Contains("__") || name.Contains("--")) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Infers a display name from the command executable.
+    /// </summary>
+    private static string InferNameFromCommand(string command)
+    {
+        try
+        {
+            // Try to extract executable name
+            var path = command.Trim('"', ' ');
+            var percentIdx = path.IndexOf('%');
+            if (percentIdx > 0) path = path[..percentIdx].Trim();
+
+            var spaceIdx = path.IndexOf(' ');
+            if (spaceIdx > 0 && !File.Exists(path))
+                path = path[..spaceIdx].Trim('"');
+
+            var exeName = Path.GetFileNameWithoutExtension(path);
+            if (!string.IsNullOrEmpty(exeName) && KnownExeNames.TryGetValue(exeName, out var friendly))
+                return friendly;
+        }
+        catch (ArgumentException)
+        {
+            // Invalid path characters — skip inference
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// Splits a CamelCase or PascalCase string into separate words.
+    /// </summary>
+    private static string SplitCamelCase(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+
+        // Remove leading dots, @ signs
+        input = input.TrimStart('.', '@');
+
+        // Replace underscores and hyphens with spaces
+        input = input.Replace('_', ' ').Replace('-', ' ');
+
+        // Insert space before each uppercase letter that follows a lowercase letter or digit
+        var result = Regex.Replace(input, @"(?<=[a-z0-9])([A-Z])", " $1");
+
+        // Insert space between consecutive uppercase letters followed by lowercase
+        result = Regex.Replace(result, @"(?<=[A-Z])([A-Z])(?=[a-z])", " $1");
+
+        // Collapse multiple spaces
+        result = Regex.Replace(result, @"\s+", " ").Trim();
+
+        // Capitalize first letter
+        if (result.Length > 0)
+            result = char.ToUpper(result[0]) + result[1..];
+
+        return result;
     }
 
     /// <summary>

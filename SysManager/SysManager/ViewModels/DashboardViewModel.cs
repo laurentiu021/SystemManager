@@ -121,11 +121,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRunTuneUp))]
     private async Task RunTuneUpAsync()
     {
-        // Confirm Recycle Bin emptying before starting
-        bool emptyBin = DialogService.Instance.Confirm(
-            "Quick Tune-Up will clean temp files and scan your system.\n\n" +
-            "Do you also want to empty the Recycle Bin?",
-            "Quick Tune-Up");
+        if (!DialogService.Instance.Confirm(
+            "Quick Tune-Up will clean temp files, empty Recycle Bin, and scan your system.\n\nProceed?",
+            "Quick Tune-Up — Confirm"))
+            return;
+
+        bool emptyBin = true;
 
         var opLock = OperationLockService.Instance.TryAcquire(
             OperationCategory.Disk, "Quick Tune-Up");

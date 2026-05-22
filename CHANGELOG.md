@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-05-22
+
+### Fixed
+- **Critical: startup crash** — fixed "Entry point DefWindowProc not found in user32.dll"
+  that prevented the app from launching. P/Invoke declaration now correctly specifies
+  `DefWindowProcW` entry point.
+- **Shutdown crash** — fixed ObjectDisposedException when closing the app
+  (DnsHostsViewModel CTS disposal race condition).
+
 ## [1.7.0] - 2026-05-21
 
 ### Added

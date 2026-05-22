@@ -65,7 +65,8 @@
                       RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                       SelectionMode="Single" CanUserSortColumns="True"
                       VirtualizingPanel.IsVirtualizing="True"
-                      VirtualizingPanel.VirtualizationMode="Recycling">
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      Visibility="{Binding FilteredApps.Count, Converter={StaticResource GreaterThanZero}}">
                 <DataGrid.Columns>
                     <DataGridCheckBoxColumn Header="" Width="32"
                                             Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"

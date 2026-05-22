@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.8] - 2026-05-22
+
+### Fixed
+- **Ping chart flicker** — chart buffers now use BulkObservableCollection with single
+  Reset notification instead of per-item Add/Remove, eliminating visual stutter during
+  live ping monitoring.
+
 ## [1.7.7] - 2026-05-22
 
 ### Fixed

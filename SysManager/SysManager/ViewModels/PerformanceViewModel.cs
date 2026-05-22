@@ -7,6 +7,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -27,6 +28,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     private readonly PerformanceService _service;
     private PerformanceService.OriginalSnapshot? _snapshot;
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private PerformanceProfile _profile = new();
     [ObservableProperty] private string _summary = "Click Refresh to read current performance settings.";
 
@@ -54,6 +56,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     public PerformanceViewModel(PerformanceService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
 
@@ -540,6 +543,13 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         // min state to 100 %. The user cannot override this independently.
         var planKey = GetCurrentPlanKey();
         IsProcessorStateLocked = planKey is "high" or "ultimate";
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            Application.Current?.Shutdown();
     }
 
     // CQ-M4: Override Dispose to clean up the PerformanceService's PowerShellRunner

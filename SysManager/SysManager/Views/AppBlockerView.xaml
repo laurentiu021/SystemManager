@@ -13,6 +13,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -23,12 +24,36 @@
                        Foreground="{StaticResource TextPrimary}" />
             <TextBlock Text="{Binding BlockStatus}" Opacity="0.7" Margin="0,4,0,0"
                        Foreground="{StaticResource TextSecondary}" />
-            <TextBlock Text="Requires administrator privileges." Opacity="0.5" Margin="0,2,0,0"
-                       Foreground="{StaticResource TextSecondary}" />
         </StackPanel>
 
+        <!-- Elevation banner: not elevated -->
+        <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="Blocking applications modifies system registry keys and requires administrator privileges."
+                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="1" Background="#0D1F12" BorderBrush="#22C55E44" BorderThickness="1"
+                CornerRadius="8" Padding="10,8" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="Running as administrator — you can block and unblock applications." Foreground="#22C55E" FontSize="13" FontWeight="Medium"/>
+            </StackPanel>
+        </Border>
+
         <!-- Block input -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,12">
             <TextBox Text="{Binding NewExeName, UpdateSourceTrigger=PropertyChanged}" Width="250" Padding="6,4"
                      VerticalAlignment="Center" Margin="0,0,8,0" />
             <Button Content="Block" Command="{Binding BlockAppCommand}" Padding="12,6" Margin="0,0,8,0" />
@@ -36,7 +61,7 @@
         </StackPanel>
 
         <!-- Toolbar -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,12">
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
             <Button Content="Unblock Selected" Command="{Binding UnblockSelectedCommand}" Padding="12,6" Margin="0,0,8,0" />
             <Button Content="Refresh" Command="{Binding RefreshListCommand}" Padding="8,6" Margin="0,0,16,0" />
             <Separator Margin="0,0,16,0" />
@@ -45,7 +70,7 @@
         </StackPanel>
 
         <!-- Blocked apps list -->
-        <DataGrid Grid.Row="3" ItemsSource="{Binding BlockedApps}"
+        <DataGrid Grid.Row="4" ItemsSource="{Binding BlockedApps}"
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
@@ -59,7 +84,7 @@
         </DataGrid>
 
         <!-- Footer -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,8,0,0">
+        <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,8,0,0">
             <TextBlock Opacity="0.6" VerticalAlignment="Center"
                        Foreground="{StaticResource TextSecondary}">
                 <Run Text="{Binding BlockedCount, Mode=OneWay}" />

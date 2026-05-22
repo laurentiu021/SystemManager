@@ -26,30 +26,30 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
-        <!-- Admin banner — SFC/DISM need it -->
-        <Border Grid.Row="1" Margin="28,16,28,0" Padding="16,14" CornerRadius="10"
-                Background="#2A1E14" BorderBrush="#F59E0B" BorderThickness="1"
+        <!-- Elevation banner: not elevated -->
+        <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="28,12,28,0"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE7EF;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                   FontSize="18" Foreground="#F59E0B" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <TextBlock Text="SFC and DISM need administrator rights"
-                                   FontSize="15" FontWeight="SemiBold" Foreground="#F59E0B" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <TextBlock Text="Temp cleanup and Recycle Bin work without admin. SFC /scannow and DISM /RestoreHealth can only be launched elevated."
-                               Foreground="{StaticResource TextSecondary}" Margin="28,6,0,0" TextWrapping="Wrap"/>
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="Running SFC and DISM system repairs requires administrator privileges."
+                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
-                <Button Grid.Column="1" Content="Run as Administrator"
-                        Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource PrimaryButton}"
-                        Padding="18,10" FontSize="14" VerticalAlignment="Center" Margin="16,0,0,0"/>
-            </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="1" Background="#0D1F12" BorderBrush="#22C55E44" BorderThickness="1"
+                CornerRadius="8" Padding="10,8" Margin="28,12,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="Running as administrator — you can run system file checks and repairs." Foreground="#22C55E" FontSize="13" FontWeight="Medium"/>
+            </StackPanel>
         </Border>
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0">

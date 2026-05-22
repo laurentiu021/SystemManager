@@ -33,6 +33,13 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            Application.Current?.Shutdown();
+    }
+
+    [RelayCommand]
     private void RefreshList()
     {
         BlockedApps.Clear();

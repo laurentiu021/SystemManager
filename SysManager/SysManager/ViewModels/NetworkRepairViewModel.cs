@@ -16,6 +16,7 @@ public sealed partial class NetworkRepairViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _isRepairing;
     [ObservableProperty] private string _repairStatus = "";
     [ObservableProperty] private bool _repairNeedsReboot;
@@ -23,6 +24,14 @@ public sealed partial class NetworkRepairViewModel : ViewModelBase
     public NetworkRepairViewModel(NetworkSharedState shared)
     {
         Shared = shared;
+        IsElevated = AdminHelper.IsElevated();
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            Application.Current?.Shutdown();
     }
 
     [RelayCommand]

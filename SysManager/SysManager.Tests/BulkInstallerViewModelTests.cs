@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 public class BulkInstallerViewModelTests
 {
     private static BulkInstallerViewModel CreateVm() =>
-        new(new BulkInstallerService(new PowerShellRunner()));
+        new(new BulkInstallerService(new PowerShellRunner()), new AppIconService());
 
     [Fact]
     public void Constructor_PopulatesAppsWithCuratedList()

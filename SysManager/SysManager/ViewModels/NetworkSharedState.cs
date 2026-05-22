@@ -44,8 +44,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     internal readonly ConcurrentQueue<PingSample> Pending = new();
     internal int PaletteIndex;
 
-    internal readonly ConcurrentDictionary<string, ObservableCollection<DateTimePoint>> Buffers = new();
-    internal readonly ConcurrentDictionary<string, ObservableCollection<ObservablePoint>> TraceBuffers = new();
+    internal readonly ConcurrentDictionary<string, BulkObservableCollection<DateTimePoint>> Buffers = new();
+    internal readonly ConcurrentDictionary<string, BulkObservableCollection<ObservablePoint>> TraceBuffers = new();
     internal readonly Dictionary<string, IReadOnlyList<TracerouteHop>> LatestRoutes = new();
     private readonly Dictionary<string, PropertyChangedEventHandler> _targetHandlers = new();
 
@@ -151,7 +151,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         var target = new PingTarget(name, host, color, isCustom, role);
         Targets.Add(target);
 
-        var buffer = new ObservableCollection<DateTimePoint>();
+        var buffer = new BulkObservableCollection<DateTimePoint>();
         Buffers[host] = buffer;
 
         var skColor = SKColor.Parse(color.TrimStart('#')).WithAlpha(230);
@@ -169,7 +169,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             AnimationsSpeed = TimeSpan.Zero
         });
 
-        var traceBuffer = new ObservableCollection<ObservablePoint>();
+        var traceBuffer = new BulkObservableCollection<ObservablePoint>();
         TraceBuffers[host] = traceBuffer;
         TraceSeries.Add(new LineSeries<ObservablePoint>
         {
@@ -383,7 +383,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         }
     }
 
-    private void RecomputeStats(PingTarget target, ObservableCollection<DateTimePoint> buffer)
+    private void RecomputeStats(PingTarget target, BulkObservableCollection<DateTimePoint> buffer)
     {
         var total = buffer.Count;
         if (total == 0)
@@ -463,9 +463,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         LatestRoutes[host] = hops;
         if (TraceBuffers.TryGetValue(host, out var buffer))
         {
-            buffer.Clear();
-            foreach (var h in hops)
-                buffer.Add(new ObservablePoint(h.HopNumber, h.LatencyMs ?? 0));
+            buffer.ReplaceWith(hops.Select(h => new ObservablePoint(h.HopNumber, h.LatencyMs ?? 0)));
         }
         RefreshHopTable();
     }
@@ -478,7 +476,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
                 TracerouteHops.Add(h);
     }
 
-    internal void TrimBuffer(ObservableCollection<DateTimePoint> buffer)
+    internal void TrimBuffer(BulkObservableCollection<DateTimePoint> buffer)
     {
         var cutoff = DateTime.Now - TimeSpan.FromSeconds(WindowSeconds);
         int removeCount = 0;
@@ -496,13 +494,10 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             var keep = new DateTimePoint[buffer.Count - removeCount];
             for (int i = 0; i < keep.Length; i++)
                 keep[i] = buffer[removeCount + i];
-            buffer.Clear();
-            foreach (var item in keep)
-                buffer.Add(item);
+            buffer.ReplaceWith(keep);
         }
         else
         {
-            // Small number of removals — RemoveAt(0) is acceptable.
             for (int i = 0; i < removeCount; i++)
                 buffer.RemoveAt(0);
         }

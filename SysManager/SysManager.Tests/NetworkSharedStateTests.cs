@@ -131,7 +131,7 @@ public class NetworkSharedStateTests
     public void TrimBuffer_RemovesExpiredPoints()
     {
         var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
-        var buffer = new System.Collections.ObjectModel.ObservableCollection<LiveChartsCore.Defaults.DateTimePoint>
+        var buffer = new SysManager.Helpers.BulkObservableCollection<LiveChartsCore.Defaults.DateTimePoint>
         {
             new(DateTime.Now.AddSeconds(-120), 10),
             new(DateTime.Now.AddSeconds(-90), 15),

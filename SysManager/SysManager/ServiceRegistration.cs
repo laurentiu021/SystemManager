@@ -52,6 +52,7 @@ public static class ServiceRegistration
         services.AddSingleton<TracerouteService>();
         services.AddSingleton<UninstallerService>();
         services.AddSingleton<BulkInstallerService>();
+        services.AddSingleton<AppIconService>();
         services.AddSingleton<FileShredderService>();
         services.AddSingleton<PrivacyService>();
         services.AddSingleton<DnsService>();

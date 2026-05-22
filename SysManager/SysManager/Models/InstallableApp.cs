@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
@@ -13,6 +14,7 @@ public sealed partial class InstallableApp : ObservableObject
 {
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _status = "";
+    [ObservableProperty] private ImageSource? _icon;
 
     public required string Name { get; init; }
     public required string WingetId { get; init; }

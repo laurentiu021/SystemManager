@@ -198,11 +198,18 @@
                                               IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
                                               Margin="0,0,12,0"/>
 
-                                    <!-- Category icon -->
-                                    <TextBlock Grid.Column="1" Text="{Binding IconGlyph}"
-                                               FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                               FontSize="18" VerticalAlignment="Center" Margin="0,0,12,0"
-                                               Foreground="{StaticResource TextSecondary}"/>
+                                    <!-- App icon (real favicon or category glyph fallback) -->
+                                    <Grid Grid.Column="1" Width="24" Height="24" Margin="0,0,12,0"
+                                          VerticalAlignment="Center">
+                                        <Image Source="{Binding Icon}" Width="24" Height="24"
+                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                               Visibility="{Binding Icon, Converter={StaticResource FlexVis}}"/>
+                                        <TextBlock Text="{Binding IconGlyph}"
+                                                   FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                   FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextSecondary}"
+                                                   Visibility="{Binding Icon, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                    </Grid>
 
                                     <!-- Name + description -->
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">

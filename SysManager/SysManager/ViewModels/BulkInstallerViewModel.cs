@@ -20,6 +20,7 @@ namespace SysManager.ViewModels;
 public sealed partial class BulkInstallerViewModel : ViewModelBase
 {
     private readonly BulkInstallerService _service;
+    private readonly AppIconService _iconService;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<InstallableApp> Apps { get; } = new();
@@ -55,15 +56,28 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     partial void OnFilterTextChanged(string value) => ApplyFilter();
     partial void OnSelectedCategoryChanged(string value) => ApplyFilter();
 
-    public BulkInstallerViewModel(BulkInstallerService service)
+    public BulkInstallerViewModel(BulkInstallerService service, AppIconService iconService)
     {
         _service = service;
+        _iconService = iconService;
         IsElevated = AdminHelper.IsElevated();
         Apps.ReplaceWith(BuildCuratedApps());
         ApplyFilter();
 
         GroupedView = CollectionViewSource.GetDefaultView(FilteredApps);
         GroupedView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(InstallableApp.Category)));
+
+        InitializeAsync(LoadIconsAsync);
+    }
+
+    private async Task LoadIconsAsync()
+    {
+        foreach (var app in Apps.ToList())
+        {
+            var icon = await _iconService.GetIconAsync(app.WingetId).ConfigureAwait(false);
+            if (icon != null)
+                App.Current?.Dispatcher.Invoke(() => app.Icon = icon);
+        }
     }
 
     [RelayCommand]

@@ -67,6 +67,7 @@
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       GridLinesVisibility="None" CanUserAddRows="False"
                       CanUserSortColumns="True"
+                      CanUserResizeColumns="True"
                       Background="Transparent" RowBackground="Transparent"
                       AlternatingRowBackground="#0F141C" BorderThickness="0"
                       VirtualizingPanel.IsVirtualizing="True"

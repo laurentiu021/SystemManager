@@ -126,6 +126,8 @@
                       GridLinesVisibility="None"
                       RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                       SelectionMode="Single" CanUserSortColumns="True"
+                      CanUserResizeColumns="True"
+                      CanUserAddRows="False"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       Visibility="{Binding UpdateCount, Converter={StaticResource GreaterThanZero}}">

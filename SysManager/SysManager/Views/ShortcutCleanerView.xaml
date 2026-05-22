@@ -57,6 +57,7 @@
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserSortColumns="True"
+                      CanUserResizeColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="None"
                   Margin="28,12,28,0"
                   VirtualizingPanel.IsVirtualizing="True"

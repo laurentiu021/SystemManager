@@ -62,10 +62,21 @@
                   AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserSortColumns="True"
-                  HeadersVisibility="Column" GridLinesVisibility="None"
+                      CanUserResizeColumns="True"
+                  GridLinesVisibility="None"
                   Margin="28,12,28,0"
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
+            <DataGrid.Style>
+                <Style TargetType="DataGrid">
+                    <Setter Property="HeadersVisibility" Value="Column"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Items.Count}" Value="0">
+                            <Setter Property="HeadersVisibility" Value="None"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.Style>
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200"/>
                 <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>

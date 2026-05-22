@@ -236,6 +236,13 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     [RelayCommand]
     private void RefreshHosts() => LoadHosts();
 
+    [RelayCommand]
+    private void RelaunchElevated()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
+    }
+
     // ── Cleanup ──────────────────────────────────────────────────────────
 
     protected override void Dispose(bool disposing)

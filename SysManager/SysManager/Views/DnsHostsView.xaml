@@ -23,7 +23,7 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
             <TextBlock Text="Requires administrator." Foreground="#EF4444" FontSize="11"
                        Margin="0,2,0,0"
-                       Visibility="{Binding IsElevated, Converter={StaticResource BoolToVisInv}}"/>
+                       Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
         </StackPanel>
 
         <!-- DNS Section -->

@@ -51,10 +51,11 @@ public sealed class TrayIconService : IDisposable
     /// </summary>
     public void Initialize(Window mainWindow)
     {
+        var icon = LoadAppIcon() ?? System.Drawing.SystemIcons.Application;
         _trayIcon = new TaskbarIcon
         {
             ToolTipText = "SysManager — loading…",
-            Icon = LoadAppIcon(),
+            Icon = icon,
             ContextMenu = BuildContextMenu(mainWindow),
             Visibility = System.Windows.Visibility.Visible
         };

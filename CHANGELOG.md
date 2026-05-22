@@ -6,6 +6,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.7] - 2026-05-22
+
+### Fixed
+- **Uniform elevation banners** — all 10 admin-required pages now show consistent
+  elevation UI with page-specific reasons and "Run as administrator" button.
+
+## [1.7.6] - 2026-05-22
+
+### Fixed
+- **Uniform elevation banners (first 5)** — Windows Update, Windows Features, Privacy,
+  DNS & Hosts, and Services now use identical elevation banner design.
+
+## [1.7.5] - 2026-05-22
+
+### Fixed
+- **Ghost checkboxes** — eliminated phantom empty rows in Windows Update and Uninstaller
+  DataGrids via `CanUserAddRows="False"`.
+- **DNS & Hosts elevation** — added "Run as administrator" banner (was missing).
+- **File Shredder empty state** — hides table headers when no files are added.
+- **Startup column width** — "Open" button no longer cut off.
+- **Resizable columns** — all 18 DataGrid tables now support column resizing.
+
+## [1.7.4] - 2026-05-22
+
+### Fixed
+- **DNS & Hosts page empty** — view referenced non-existent converter causing silent
+  XAML load failure.
+- **Quick Tune-Up ignored No** — now asks explicit confirmation before any action.
+- **Design polish** — Bulk Installer redesigned with categories, descriptions, custom
+  search. Context Menu Manager with friendly names. Elevation badges restyled.
+
 ## [1.7.3] - 2026-05-22
 
 ### Fixed

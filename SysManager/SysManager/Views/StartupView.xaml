@@ -47,6 +47,7 @@
                       GridLinesVisibility="None" IsReadOnly="False"
                       RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                       SelectionMode="Single" CanUserSortColumns="True"
+                      CanUserResizeColumns="True"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
@@ -99,7 +100,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="" Width="40" CanUserSort="False">
+                    <DataGridTemplateColumn Header="" Width="60" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Button Content="Open" ToolTip="Open file location"

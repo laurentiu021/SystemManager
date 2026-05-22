@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.13] - 2026-05-22
+
+### Fixed
+- **Bulk Installer icons** — real application icons (Chrome, Firefox, Steam, etc.)
+  downloaded via Google Favicon API with local cache and offline fallback.
+- **Elevation banners** — App Updates, Uninstaller, Bulk Installer now uniform.
+  Services banner moved above toolbar. All 13 admin pages consistent.
+- **File Shredder** — fixed white page (transparent DataGrid background).
+- **Column resize** — CanUserResizeColumns on all remaining DataGrids.
+- **Tray icon** — shows real app icon from exe (not generic).
+
 ## [1.7.8] - 2026-05-22
 
 ### Fixed

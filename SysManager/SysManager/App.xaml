@@ -55,12 +55,13 @@
             <SolidColorBrush x:Key="TextDisabled" Color="#4A5266"/>
 
             <!-- Accent (primary action) -->
-            <Color x:Key="AccentColor">#5B8DEF</Color>
-            <Color x:Key="AccentHoverColor">#6E9CF6</Color>
-            <Color x:Key="AccentPressedColor">#4979D6</Color>
+            <Color x:Key="AccentColor">#6366F1</Color>
+            <Color x:Key="AccentHoverColor">#818CF8</Color>
+            <Color x:Key="AccentPressedColor">#4F46E5</Color>
             <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}"/>
             <SolidColorBrush x:Key="AccentHover" Color="{StaticResource AccentHoverColor}"/>
             <SolidColorBrush x:Key="AccentPressed" Color="{StaticResource AccentPressedColor}"/>
+            <SolidColorBrush x:Key="AccentSoft" Color="#0F6366F1"/>
 
             <!-- Status colors -->
             <SolidColorBrush x:Key="Success" Color="#22C55E"/>
@@ -141,6 +142,7 @@
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Bd" Property="Opacity" Value="0.88"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderAccent}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
                                     <Setter TargetName="Bd" Property="Opacity" Value="0.75"/>
@@ -172,21 +174,24 @@
                 <Setter Property="BorderThickness" Value="1"/>
             </Style>
 
-            <!-- Ghost: transparent with hover bg -->
+            <!-- Ghost: subtle border, highlighted on hover -->
             <Style x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
                 <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="8"
+                                    Padding="{TemplateBinding Padding}"
+                                    BorderThickness="1" BorderBrush="#1AFFFFFF">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   TextBlock.Foreground="{TemplateBinding Foreground}"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface3}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#33FFFFFF"/>
                                     <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
@@ -194,7 +199,44 @@
                                 </Trigger>
                                 <Trigger Property="IsKeyboardFocused" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface3}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#33FFFFFF"/>
                                     <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Admin: golden glass button for elevation requests -->
+            <Style x:Key="AdminButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+                <Setter Property="Foreground" Value="#FCD34D"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" CornerRadius="10" Padding="{TemplateBinding Padding}"
+                                    Background="#14FBBF24" BorderBrush="#30FBBF24" BorderThickness="1">
+                                <Grid>
+                                    <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                                            Margin="-14,-8,0,-8" x:Name="Bar"/>
+                                    <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                                        <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                                        <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
+                                                          TextBlock.Foreground="#FCD34D" TextBlock.FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#60FBBF24"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="#20FBBF24"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#28FBBF24"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.4"/>
@@ -335,7 +377,7 @@
                                     <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
                                 </Trigger>
                                 <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface3}"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}"/>
                                     <Setter TargetName="ActiveMark" Property="Visibility" Value="Visible"/>
                                     <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
                                     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -462,38 +504,49 @@
 
             <Style TargetType="DataGridColumnHeader">
                 <Setter Property="Background" Value="{StaticResource Surface2}"/>
-                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="FontSize" Value="12"/>
-                <Setter Property="Padding" Value="10,8"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Padding" Value="12,10"/>
                 <Setter Property="BorderBrush" Value="{StaticResource Border1}"/>
                 <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="DataGridColumnHeader">
-                            <Border x:Name="HeaderBorder"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    Padding="{TemplateBinding Padding}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <ContentPresenter Grid.Column="0"
-                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                      VerticalAlignment="Center"
-                                                      Content="{TemplateBinding Content}"
-                                                      ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                    <Path x:Name="SortArrow" Grid.Column="1"
-                                          Visibility="Collapsed"
-                                          Fill="{StaticResource TextSecondary}"
-                                          Margin="6,0,0,0"
-                                          VerticalAlignment="Center"
-                                          RenderTransformOrigin="0.5,0.5"/>
-                                </Grid>
-                            </Border>
+                            <Grid>
+                                <Border x:Name="HeaderBorder"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Padding="{TemplateBinding Padding}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ContentPresenter Grid.Column="0"
+                                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                          VerticalAlignment="Center"
+                                                          Content="{TemplateBinding Content}"
+                                                          ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                        <Path x:Name="SortArrow" Grid.Column="1"
+                                              Visibility="Collapsed"
+                                              Fill="{StaticResource TextSecondary}"
+                                              Margin="6,0,0,0"
+                                              VerticalAlignment="Center"
+                                              RenderTransformOrigin="0.5,0.5"/>
+                                    </Grid>
+                                </Border>
+                                <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right"
+                                       Width="6" Cursor="SizeWE" BorderThickness="0">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border Background="Transparent" Width="6"/>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="HeaderBorder" Property="Background" Value="{StaticResource Surface3}"/>
@@ -520,10 +573,10 @@
                 <Setter Property="BorderThickness" Value="0"/>
                 <Style.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                        <Setter Property="Background" Value="#186366F1"/>
                     </Trigger>
                     <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="{StaticResource Surface3}"/>
+                        <Setter Property="Background" Value="#146366F1"/>
                         <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
                     </Trigger>
                 </Style.Triggers>

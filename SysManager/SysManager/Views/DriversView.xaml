@@ -47,7 +47,6 @@
                           AutoGenerateColumns="False" HeadersVisibility="Column"
                           Background="Transparent" BorderThickness="0"
                           GridLinesVisibility="None" IsReadOnly="True"
-                          RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                           SelectionMode="Single" CanUserSortColumns="True"
                       CanUserResizeColumns="True"
                           VerticalScrollBarVisibility="Auto"

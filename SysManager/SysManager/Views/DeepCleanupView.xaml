@@ -194,8 +194,7 @@
                                   AutoGenerateColumns="False" HeadersVisibility="Column"
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   CanUserResizeColumns="True"
-                                  Background="Transparent" RowBackground="Transparent"
-                                  AlternatingRowBackground="#0F141C" BorderThickness="0"
+                                  Background="Transparent" BorderThickness="0"
                                   MaxHeight="380"
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">

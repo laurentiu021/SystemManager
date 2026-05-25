@@ -32,7 +32,7 @@
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchElevatedCommand}"
-                        Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
@@ -43,13 +43,18 @@
         </Border>
 
         <!-- Elevation banner: elevated -->
-        <Border Grid.Row="1" Background="#0D1F12" BorderBrush="#22C55E44" BorderThickness="1"
-                CornerRadius="8" Padding="10,8" Margin="0,0,0,12"
+        <Border Grid.Row="1" Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
+                CornerRadius="10" Padding="12,8" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <TextBlock Text="Running as administrator — all applications can be installed." Foreground="#22C55E" FontSize="13" FontWeight="Medium"/>
-            </StackPanel>
+            <Grid>
+                <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — all applications can be installed."
+                               Foreground="#FCD34D" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- Toolbar -->
@@ -223,11 +228,17 @@
                                     </StackPanel>
 
                                     <!-- Status badge -->
-                                    <Border Grid.Column="3" Style="{StaticResource Badge}"
+                                    <Border Grid.Column="3" CornerRadius="8" Padding="8,4"
+                                            Background="#14475569" BorderBrush="#0AFFFFFF" BorderThickness="1"
                                             VerticalAlignment="Center" Margin="12,0,0,0"
                                             Visibility="{Binding Status, Converter={StaticResource FlexVis}}">
-                                        <TextBlock Text="{Binding Status}" FontSize="11"
-                                                   TextTrimming="CharacterEllipsis" MaxWidth="120"/>
+                                        <Grid>
+                                            <Border Background="#475569" Width="3" HorizontalAlignment="Left"
+                                                    CornerRadius="2" Margin="-8,-4,0,-4"/>
+                                            <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#94A3B8"
+                                                       FontWeight="SemiBold" Margin="4,0,0,0"
+                                                       TextTrimming="CharacterEllipsis" MaxWidth="120"/>
+                                        </Grid>
                                     </Border>
                                 </Grid>
                             </Border>

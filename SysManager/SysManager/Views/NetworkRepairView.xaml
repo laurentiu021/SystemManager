@@ -27,7 +27,7 @@
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
@@ -38,13 +38,18 @@
         </Border>
 
         <!-- Elevation banner: elevated -->
-        <Border Grid.Row="1" Background="#0D1F12" BorderBrush="#22C55E44" BorderThickness="1"
-                CornerRadius="8" Padding="10,8" Margin="28,12,28,0"
+        <Border Grid.Row="1" Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
+                CornerRadius="10" Padding="12,8" Margin="28,12,28,0"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <TextBlock Text="Running as administrator — you can reset network settings." Foreground="#22C55E" FontSize="13" FontWeight="Medium"/>
-            </StackPanel>
+            <Grid>
+                <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — you can reset network settings."
+                               Foreground="#FCD34D" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,28">
@@ -52,19 +57,43 @@
                 <TextBlock Text="Winsock and TCP/IP resets require admin and a reboot."
                            Style="{StaticResource Subtle}" Margin="0,0,0,16"/>
 
-                <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                <Border Padding="16" Margin="0,0,0,12" CornerRadius="10" BorderThickness="1">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{StaticResource Surface1}"/>
+                            <Setter Property="BorderBrush" Value="{StaticResource Border1}"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#10141D"/>
+                                    <Setter Property="BorderBrush" Value="#2A3244"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <DockPanel>
                         <StackPanel>
                             <TextBlock Text="Flush DNS Cache" FontWeight="SemiBold" FontSize="14"/>
                             <TextBlock Text="Clears the local DNS resolver cache. Fixes stale DNS entries. Safe, instant, no reboot."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600"/>
                         </StackPanel>
-                        <Button Content="Flush DNS" Command="{Binding FlushDnsCommand}" Style="{StaticResource PrimaryButton}"
+                        <Button Content="Flush DNS" Command="{Binding FlushDnsCommand}" Style="{StaticResource SecondaryButton}"
                                 HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
                                 IsEnabled="{Binding IsRepairing, Converter={StaticResource BoolInvert}}"/>
                     </DockPanel>
                 </Border>
-                <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                <Border Padding="16" Margin="0,0,0,12" CornerRadius="10" BorderThickness="1">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{StaticResource Surface1}"/>
+                            <Setter Property="BorderBrush" Value="{StaticResource Border1}"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#10141D"/>
+                                    <Setter Property="BorderBrush" Value="#2A3244"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <DockPanel>
                         <StackPanel>
                             <TextBlock Text="Reset Winsock Catalog" FontWeight="SemiBold" FontSize="14"/>
@@ -76,7 +105,19 @@
                                 IsEnabled="{Binding IsRepairing, Converter={StaticResource BoolInvert}}"/>
                     </DockPanel>
                 </Border>
-                <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                <Border Padding="16" Margin="0,0,0,12" CornerRadius="10" BorderThickness="1">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{StaticResource Surface1}"/>
+                            <Setter Property="BorderBrush" Value="{StaticResource Border1}"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#10141D"/>
+                                    <Setter Property="BorderBrush" Value="#2A3244"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <DockPanel>
                         <StackPanel>
                             <TextBlock Text="Reset TCP/IP Stack" FontWeight="SemiBold" FontSize="14"/>

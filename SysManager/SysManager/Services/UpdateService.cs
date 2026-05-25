@@ -173,6 +173,7 @@ public sealed class UpdateService
             catch (UnauthorizedAccessException) { /* hash file unreadable — re-download */ }
         }
 
+        var tempFile = target + ".tmp";
         try
         {
             using var resp = await Http.GetAsync(rel.AssetUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
@@ -180,7 +181,7 @@ public sealed class UpdateService
             var total = resp.Content.Headers.ContentLength ?? rel.AssetSize;
 
             await using var net = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-            await using var file = File.Create(target);
+            await using var file = File.Create(tempFile);
 
             var buf = new byte[81920];
             long read = 0;
@@ -192,14 +193,23 @@ public sealed class UpdateService
                 progress?.Report((read, total));
             }
 
+            // Flush before hashing.
+            await file.FlushAsync(ct).ConfigureAwait(false);
+            file.Close();
+
+            // Compute SHA-256 on the completed temp file.
+            var downloadedHash = await Task.Run(() =>
+            {
+                using var hashStream = File.OpenRead(tempFile);
+                return Convert.ToHexString(SHA256.HashData(hashStream));
+            }, ct).ConfigureAwait(false);
+
+            // Atomic move: temp → final target.
+            File.Move(tempFile, target, overwrite: true);
+
             // SEC-M2: Store SHA-256 hash of the downloaded binary for cache validation.
             try
             {
-                var downloadedHash = await Task.Run(() =>
-                {
-                    using var hashStream = File.OpenRead(target);
-                    return Convert.ToHexString(SHA256.HashData(hashStream));
-                }, ct).ConfigureAwait(false);
                 await File.WriteAllTextAsync(hashFile, downloadedHash, ct).ConfigureAwait(false);
             }
             catch (IOException) { /* non-fatal — next launch will re-download */ }
@@ -209,25 +219,20 @@ public sealed class UpdateService
         }
         catch (OperationCanceledException)
         {
-            try { if (File.Exists(target)) File.Delete(target); }
-            catch (IOException) { /* best-effort cleanup */ }
-            catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
+            CleanupFile(tempFile);
+            CleanupFile(target);
             return null;
         }
         catch (HttpRequestException ex)
         {
             Serilog.Log.Warning(ex, "Failed to download release asset (network)");
-            try { if (File.Exists(target)) File.Delete(target); }
-            catch (IOException) { /* best-effort cleanup */ }
-            catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
+            CleanupFile(tempFile);
             return null;
         }
         catch (IOException ex)
         {
             Serilog.Log.Warning(ex, "Failed to write release asset to disk");
-            try { if (File.Exists(target)) File.Delete(target); }
-            catch (IOException) { /* best-effort cleanup */ }
-            catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
+            CleanupFile(tempFile);
             return null;
         }
     }
@@ -322,6 +327,13 @@ public sealed class UpdateService
             Serilog.Log.Warning("Update binary has INVALID Authenticode signature — possible tampering: {File}", filePath);
             return false;
         }
+    }
+
+    private static void CleanupFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     // ---------- internals ----------

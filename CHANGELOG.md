@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.17] - 2026-05-25
+
+### Fixed
+- **Task.Delay anti-patterns** — replaced `Task.Delay(1000)` and `Task.Delay(250)` with
+  `Task.Yield()` in AboutViewModel and WindowsUpdateViewModel startup paths.
+- **UpdateService atomic download** — downloads now write to a `.tmp` file first, compute
+  SHA-256 on the temp file, then atomically `File.Move` to the final target. Prevents
+  half-written binaries from being used after interrupted downloads.
+- **ObservableCollection mutation** — AboutViewModel `LoadHistoryAsync()` now builds the
+  full list with LINQ `.Select().ToList()` before clearing/adding to the collection,
+  separating data construction from UI mutation.
+
+### Added
+- **DeepCleanup skipped-file counts** — scan now tracks files that threw IOException,
+  UnauthorizedAccessException, or SecurityException and reports `SkippedCount` in the
+  `CleanupCategory` model. CountDisplay shows "N files - M skipped" when applicable.
+
+### Changed
+- **InitNavigation refactored to data-driven** — sidebar tree construction replaced with
+  `BuildNavGroups()` returning a `NavGroup[]` via `Group()` and `Item()` helper methods.
+  Subtitle and Tooltip are auto-generated from child labels.
+- **Version** aligned to 1.7.17.
+
 ## [1.7.13] - 2026-05-22
 
 ### Fixed

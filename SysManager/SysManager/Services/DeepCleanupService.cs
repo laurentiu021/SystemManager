@@ -201,7 +201,7 @@ public sealed class DeepCleanupService
             var existing = d.Paths.Where(p => !string.IsNullOrEmpty(p) && Directory.Exists(p))
                                   .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
-            long size = 0; var files = 0;
+            long size = 0; var files = 0; var skipped = 0;
             var cutoff = d.OlderThan.HasValue ? DateTime.UtcNow - d.OlderThan.Value : (DateTime?)null;
 
             foreach (var p in existing)
@@ -224,9 +224,9 @@ public sealed class DeepCleanupService
                         }
                         files++;
                     }
-                    catch (IOException) { /* file locked or inaccessible — skip */ }
-                    catch (UnauthorizedAccessException) { /* no permission — skip */ }
-                    catch (System.Security.SecurityException) { /* restricted — skip */ }
+                    catch (IOException) { skipped++; }
+                    catch (UnauthorizedAccessException) { skipped++; }
+                    catch (System.Security.SecurityException) { skipped++; }
                 }
             }
 
@@ -237,6 +237,7 @@ public sealed class DeepCleanupService
                 Paths = existing,
                 TotalSizeBytes = size,
                 FileCount = files,
+                SkippedCount = skipped,
                 OlderThan = d.OlderThan,
                 IsDestructiveHint = d.IsDestructiveHint,
                 IsSelected = size > 0 && !d.IsDestructiveHint

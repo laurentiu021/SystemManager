@@ -20,11 +20,12 @@ public sealed partial class CleanupCategory : ObservableObject
     public required IReadOnlyList<string> Paths { get; init; }
     public long TotalSizeBytes { get; init; }
     public int FileCount { get; init; }
+    public int SkippedCount { get; init; }
     public TimeSpan? OlderThan { get; init; }
     public bool IsDestructiveHint { get; init; }
 
     public string SizeDisplay => FormatHelper.FormatSize(TotalSizeBytes);
-    public string CountDisplay => $"{FileCount:N0} files";
+    public string CountDisplay => SkippedCount > 0 ? $"{FileCount:N0} files · {SkippedCount:N0} skipped" : $"{FileCount:N0} files";
 }
 
 public sealed class CleanupResult

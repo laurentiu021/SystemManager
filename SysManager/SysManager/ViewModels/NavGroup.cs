@@ -35,10 +35,10 @@ public sealed partial class NavGroup : ObservableObject
     /// Short subtitle shown under the group label when collapsed.
     /// Abbreviated child labels joined with " · ".
     /// </summary>
-    public string Subtitle { get; init; } = "";
+    public string Subtitle { get; set; } = "";
 
     /// <summary>
     /// Full tooltip listing all child labels, shown on hover.
     /// </summary>
-    public string Tooltip { get; init; } = "";
+    public string Tooltip { get; set; } = "";
 }

@@ -70,7 +70,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     {
         try
         {
-            await Task.Delay(1000);     // let the UI settle
+            await Task.Yield();     // let the UI settle
             await CheckForUpdatesAsync();
             await LoadHistoryAsync();
         }
@@ -122,19 +122,19 @@ public sealed partial class AboutViewModel : ViewModelBase
         try
         {
             var list = await _updates.GetRecentAsync(10);
-            ReleaseHistory.Clear();
-            foreach (var r in list)
+            var notes = list.Select(r => new ReleaseNote
             {
-                ReleaseHistory.Add(new ReleaseNote
-                {
-                    Version = $"v{r.Version.ToString(3)}",
-                    Title = r.Name,
-                    PublishedAt = r.PublishedAt == DateTimeOffset.MinValue ? "" : r.PublishedAt.LocalDateTime.ToString("dd MMM yyyy"),
-                    Body = r.Body,
-                    Url = r.HtmlUrl,
-                    IsCurrent = r.Version == UpdateService.CurrentVersion
-                });
-            }
+                Version = $"v{r.Version.ToString(3)}",
+                Title = r.Name,
+                PublishedAt = r.PublishedAt == DateTimeOffset.MinValue ? "" : r.PublishedAt.LocalDateTime.ToString("dd MMM yyyy"),
+                Body = r.Body,
+                Url = r.HtmlUrl,
+                IsCurrent = r.Version == UpdateService.CurrentVersion
+            }).ToList();
+
+            ReleaseHistory.Clear();
+            foreach (var note in notes)
+                ReleaseHistory.Add(note);
         }
         catch (HttpRequestException ex) { Log.Debug("Release history load skipped (network): {Error}", ex.Message); }
         catch (TaskCanceledException ex) { Log.Debug("Release history load timed out: {Error}", ex.Message); }

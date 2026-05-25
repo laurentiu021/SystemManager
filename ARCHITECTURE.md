@@ -32,8 +32,10 @@ SysManager/
 ## Tabs (view models)
 
 The sidebar organises tabs into 12 collapsible groups via `NavGroup` →
-`NavItem` hierarchy. Dashboard renders as a flat top-level entry.
-Collapsed groups show a child count badge, subtitle, and tooltip.
+`NavItem` hierarchy built by `BuildNavGroups()` using `Group()` and
+`Item()` helper methods. Dashboard renders as a flat top-level entry.
+Collapsed groups show a child count badge, subtitle (auto-generated
+from child labels joined with " · "), and tooltip.
 Planned features use `PlaceholderViewModel` with a WIP view.
 
 | Group | View Models |

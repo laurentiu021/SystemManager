@@ -256,230 +256,112 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Title = IsElevated ? "SysManager — Administrator" : "SysManager";
         Log.Information("MainWindow initialized. Elevated: {IsElevated}", IsElevated);
 
-        // ── Sidebar tree: 12 groups ────────────────────────────────────
-        // Views are instantiated lazily on first access — lets unit tests
-        // construct the VM on an MTA thread without pulling WPF resources in.
-
-        // 🏠 Dashboard (single-item group — renders flat)
-        var grpDashboard = new NavGroup
+        foreach (var g in BuildNavGroups())
         {
-            Id = "grp-dashboard",
-            Label = "Dashboard",
-            Glyph = "\uE80F",
-            Children = {
-            new NavItem { Id = "nav-dashboard", Label = "Dashboard", Glyph = "\uE80F", Content = Dashboard, ViewType = typeof(Views.DashboardView) },
-        }
-        };
-
-        // 🔧 System (9)
-        var grpSystem = new NavGroup
-        {
-            Id = "grp-system",
-            Label = "System",
-            Glyph = "\uE912",
-            Subtitle = "Health · WinUpdate · Perf · Services · Startup · Features · Restore · Tasks · Boot",
-            Tooltip = "System Health\nWindows Update\nPerformance Mode\nServices\nStartup Manager\nWindows Features\nRestore Points\nTask Scheduler\nBoot Analyzer",
-            Children = {
-            new NavItem { Id = "nav-system-health",     Label = "System Health",     Glyph = "\uE9D9", Content = SystemHealth,     ViewType = typeof(Views.SystemHealthView) },
-            new NavItem { Id = "nav-windows-update",    Label = "Windows Update",    Glyph = "\uE895", Content = WindowsUpdate,    ViewType = typeof(Views.WindowsUpdateView) },
-            new NavItem { Id = "nav-performance",       Label = "Performance Mode",  Glyph = "\uE945", Content = Performance,      ViewType = typeof(Views.PerformanceView) },
-            new NavItem { Id = "nav-services",          Label = "Services",          Glyph = "\uE912", Content = Services,         ViewType = typeof(Views.ServicesView) },
-            new NavItem { Id = "nav-startup",           Label = "Startup Manager",   Glyph = "\uE7B5", Content = Startup,          ViewType = typeof(Views.StartupView) },
-            new NavItem { Id = "nav-windows-features",  Label = "Windows Features",  Glyph = "\uE9CE", Content = WindowsFeatures,  ViewType = typeof(Views.WindowsFeaturesView) },
-            new NavItem { Id = "nav-restore-points",    Label = "Restore Points",    Glyph = "\uE7AD", Content = WipRestorePoints, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-task-scheduler",    Label = "Task Scheduler",    Glyph = "\uE916", Content = WipTaskScheduler, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-boot-analyzer",     Label = "Boot Analyzer",     Glyph = "\uE7F8", Content = WipBootAnalyzer,  ViewType = typeof(Views.PlaceholderView) },
-        }
-        };
-
-        // 🎮 Gaming & Profiles (5) — NEW GROUP
-        var grpGaming = new NavGroup
-        {
-            Id = "grp-gaming",
-            Label = "Gaming & Profiles",
-            Glyph = "\uE7FC",
-            Subtitle = "Game Mode · Standby · Timer · Affinity · Display",
-            Tooltip = "Gaming Profile\nStandby List Cleaner\nTimer Resolution\nCPU Core Affinity\nDisplay Profiles",
-            Children = {
-            new NavItem { Id = "nav-gaming-profile",   Label = "Gaming Profile",       Glyph = "\uE7FC", Content = WipGamingProfile,      ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-standby-cleaner",  Label = "Standby List Cleaner", Glyph = "\uE945", Content = WipStandbyListCleaner, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-timer-resolution", Label = "Timer Resolution",     Glyph = "\uE916", Content = WipTimerResolution,    ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-cpu-affinity",     Label = "CPU Core Affinity",    Glyph = "\uE950", Content = WipCpuAffinity,        ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-display-profiles", Label = "Display Profiles",     Glyph = "\uE7F4", Content = WipDisplayProfiles,    ViewType = typeof(Views.PlaceholderView) },
-        }
-        };
-
-        // 📊 Monitor (6)
-        var grpMonitor = new NavGroup
-        {
-            Id = "grp-monitor",
-            Label = "Monitor",
-            Glyph = "\uE9D9",
-            Subtitle = "Processes · Resources · Privacy · Lock · Watchdog · Bandwidth",
-            Tooltip = "Process Manager\nResource History\nPrivacy Monitor\nFile Lock Detector\nSettings Watchdog\nBandwidth Monitor",
-            Children = {
-            new NavItem { Id = "nav-processes",         Label = "Process Manager",    Glyph = "\uEBC4", Content = ProcessManager,      ViewType = typeof(Views.ProcessManagerView) },
-            new NavItem { Id = "nav-resource-history",  Label = "Resource History",   Glyph = "\uE9D9", Content = WipResourceHistory,  ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-privacy-monitor",   Label = "Privacy Monitor",    Glyph = "\uE727", Content = WipPrivacyMonitor,   ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-file-lock",         Label = "File Lock Detector", Glyph = "\uE72E", Content = WipFileLockDetector, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-settings-watchdog", Label = "Settings Watchdog",  Glyph = "\uE7BA", Content = WipSettingsWatchdog, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-bandwidth-monitor", Label = "Bandwidth Monitor",  Glyph = "\uE839", Content = WipBandwidthMonitor, ViewType = typeof(Views.PlaceholderView) },
-        }
-        };
-
-        // 🧹 Cleanup (4)
-        var grpCleanup = new NavGroup
-        {
-            Id = "grp-cleanup",
-            Label = "Cleanup",
-            Glyph = "\uE74D",
-            Subtitle = "Quick · Deep · Shortcuts · Maintenance",
-            Tooltip = "Quick Cleanup\nDeep Cleanup\nShortcut Cleaner\nScheduled Maintenance",
-            Children = {
-            new NavItem { Id = "nav-cleanup",               Label = "Quick Cleanup",         Glyph = "\uE74D", Content = Cleanup,                 ViewType = typeof(Views.CleanupView) },
-            new NavItem { Id = "nav-deep-cleanup",          Label = "Deep Cleanup",          Glyph = "\uE81E", Content = DeepCleanup,             ViewType = typeof(Views.DeepCleanupView) },
-            new NavItem { Id = "nav-shortcut-cleaner",      Label = "Shortcut Cleaner",      Glyph = "\uE71B", Content = ShortcutCleaner,         ViewType = typeof(Views.ShortcutCleanerView) },
-            new NavItem { Id = "nav-scheduled-maintenance", Label = "Scheduled Maintenance", Glyph = "\uE823", Content = WipScheduledMaintenance, ViewType = typeof(Views.PlaceholderView) },
-        }
-        };
-
-        // 💾 Storage (2)
-        var grpStorage = new NavGroup
-        {
-            Id = "grp-storage",
-            Label = "Storage",
-            Glyph = "\uE958",
-            Subtitle = "Disk Analyzer · Duplicate Finder",
-            Tooltip = "Disk Analyzer\nDuplicate Finder",
-            Children = {
-            new NavItem { Id = "nav-disk-analyzer", Label = "Disk Analyzer",    Glyph = "\uE958", Content = DiskAnalyzer,  ViewType = typeof(Views.DiskAnalyzerView) },
-            new NavItem { Id = "nav-duplicates",    Label = "Duplicate Finder", Glyph = "\uE8C8", Content = DuplicateFile, ViewType = typeof(Views.DuplicateFileView) },
-        }
-        };
-
-        // 🌐 Network (6)
-        var grpNetwork = new NavGroup
-        {
-            Id = "grp-network",
-            Label = "Network",
-            Glyph = "\uE839",
-            Subtitle = "Ping · Traceroute · Speed · Repair · DNS & Hosts",
-            Tooltip = "Ping\nTraceroute\nSpeed Test\nNetwork Repair\nDNS & Hosts Editor",
-            Children = {
-            new NavItem { Id = "nav-ping",           Label = "Ping",           Glyph = "\uE839", Content = Ping,           ViewType = typeof(Views.PingView) },
-            new NavItem { Id = "nav-traceroute",     Label = "Traceroute",     Glyph = "\uE8B0", Content = Traceroute,     ViewType = typeof(Views.TracerouteView) },
-            new NavItem { Id = "nav-speed-test",     Label = "Speed Test",     Glyph = "\uE916", Content = SpeedTest,      ViewType = typeof(Views.SpeedTestView) },
-            new NavItem { Id = "nav-network-repair", Label = "Network Repair", Glyph = "\uE90F", Content = NetworkRepair,  ViewType = typeof(Views.NetworkRepairView) },
-            new NavItem { Id = "nav-dns-hosts",      Label = "DNS & Hosts",    Glyph = "\uE968", Content = DnsHosts,       ViewType = typeof(Views.DnsHostsView) },
-        }
-        };
-
-        // 📦 Apps (3)
-        var grpApps = new NavGroup
-        {
-            Id = "grp-apps",
-            Label = "Apps",
-            Glyph = "\uE7B8",
-            Subtitle = "Updates · Installer · Uninstaller",
-            Tooltip = "App Updates\nBulk Installer\nUninstaller",
-            Children = {
-            new NavItem { Id = "nav-app-updates",    Label = "App Updates",    Glyph = "\uE7B8", Content = AppUpdates,       ViewType = typeof(Views.AppUpdatesView) },
-            new NavItem { Id = "nav-bulk-installer", Label = "Bulk Installer", Glyph = "\uE896", Content = BulkInstaller, ViewType = typeof(Views.BulkInstallerView) },
-            new NavItem { Id = "nav-uninstaller",    Label = "Uninstaller",    Glyph = "\uE738", Content = Uninstaller,      ViewType = typeof(Views.UninstallerView) },
-        }
-        };
-
-        // 🛡️ Privacy & Security (9) — NEW GROUP
-        var grpPrivacy = new NavGroup
-        {
-            Id = "grp-privacy",
-            Label = "Privacy & Security",
-            Glyph = "\uE72E",
-            Subtitle = "Telemetry · Shredder · Blocker · Alerts · Debloat · Browser · Edge/OneDrive · Defender · Notifications",
-            Tooltip = "Privacy & Telemetry\nFile Shredder\nApp Blocker\nApp Alerts\nDebloater & Ads\nBrowser Cleaner\nEdge/OneDrive Remover\nDefender Tweaks\nNotification Blocker",
-            Children = {
-            new NavItem { Id = "nav-privacy-settings",     Label = "Privacy & Telemetry",   Glyph = "\uE72E", Content = Privacy,                ViewType = typeof(Views.PrivacyView) },
-            new NavItem { Id = "nav-file-shredder",        Label = "File Shredder",         Glyph = "\uE74D", Content = FileShredder,           ViewType = typeof(Views.FileShredderView) },
-            new NavItem { Id = "nav-app-blocker",          Label = "App Blocker",           Glyph = "\uE8F8", Content = AppBlocker,             ViewType = typeof(Views.AppBlockerView) },
-            new NavItem { Id = "nav-app-alerts",           Label = "App Alerts",            Glyph = "\uEA8F", Content = AppAlerts,              ViewType = typeof(Views.AppAlertsView) },
-            new NavItem { Id = "nav-debloater",            Label = "Debloater & Ads",       Glyph = "\uE74D", Content = WipDebloater,           ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-browser-cleaner",      Label = "Browser Cleaner",       Glyph = "\uEB41", Content = WipBrowserCleaner,      ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-edge-onedrive",        Label = "Edge/OneDrive Remover", Glyph = "\uE738", Content = WipEdgeOneDriveRemover, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-defender-tweaks",      Label = "Defender Tweaks",       Glyph = "\uE83D", Content = WipDefenderTweaks,      ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-notification-blocker", Label = "Notification Blocker",  Glyph = "\uE7ED", Content = WipNotificationBlocker, ViewType = typeof(Views.PlaceholderView) },
-        }
-        };
-
-        // 🎨 Customization (4) — NEW GROUP
-        var grpCustomization = new NavGroup
-        {
-            Id = "grp-customization",
-            Label = "Customization",
-            Glyph = "\uE771",
-            Subtitle = "Context Menu · Dark Mode · Volume · Env Variables",
-            Tooltip = "Context Menu\nDark Mode Scheduler\nVolume Control\nEnvironment Variables",
-            Children = {
-            new NavItem { Id = "nav-context-menu",   Label = "Context Menu",          Glyph = "\uE700", Content = ContextMenu,          ViewType = typeof(Views.ContextMenuView) },
-            new NavItem { Id = "nav-dark-mode",      Label = "Dark Mode Scheduler",   Glyph = "\uE793", Content = WipDarkModeScheduler, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-volume-control", Label = "Volume Control",        Glyph = "\uE767", Content = WipVolumeControl,     ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-env-variables",  Label = "Environment Variables", Glyph = "\uE943", Content = WipEnvVariableEditor, ViewType = typeof(Views.PlaceholderView) },
-        }
-        };
-
-        // ℹ️ Info (5)
-        var grpInfo = new NavGroup
-        {
-            Id = "grp-info",
-            Label = "Info",
-            Glyph = "\uE946",
-            Subtitle = "Drivers · Battery · Logs · Report · About",
-            Tooltip = "Drivers\nBattery Health\nSystem Logs\nSystem Report\nAbout",
-            Children = {
-            new NavItem { Id = "nav-drivers", Label = "Drivers",        Glyph = "\uE950", Content = Drivers,       ViewType = typeof(Views.DriversView) },
-            new NavItem { Id = "nav-battery", Label = "Battery Health", Glyph = "\uEBA6", Content = BatteryHealth, ViewType = typeof(Views.BatteryHealthView) },
-            new NavItem { Id = "nav-logs",           Label = "System Logs",    Glyph = "\uE9F9", Content = Logs,             ViewType = typeof(Views.LogsView) },
-            new NavItem { Id = "nav-system-report",  Label = "System Report",  Glyph = "\uE9F9", Content = WipSystemReport,  ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-about",          Label = "About",          Glyph = "\uE946", Content = About,            ViewType = typeof(Views.AboutView) },
-        }
-        };
-
-        // ⚙️ Advanced (2) — NEW GROUP
-        var grpAdvanced = new NavGroup
-        {
-            Id = "grp-advanced",
-            Label = "Advanced",
-            Glyph = "\uE713",
-            Subtitle = "Export/Import · CLI",
-            Tooltip = "Profile Export/Import\nCLI Interface",
-            Children = {
-            new NavItem { Id = "nav-profile-export", Label = "Profile Export/Import", Glyph = "\uE8B5", Content = WipProfileExportImport, ViewType = typeof(Views.PlaceholderView) },
-            new NavItem { Id = "nav-cli-interface",  Label = "CLI Interface",         Glyph = "\uE756", Content = WipCliInterface,        ViewType = typeof(Views.PlaceholderView) },
-        }
-        };
-
-        NavGroups.Add(grpDashboard);
-        NavGroups.Add(grpSystem);
-        NavGroups.Add(grpGaming);
-        NavGroups.Add(grpMonitor);
-        NavGroups.Add(grpCleanup);
-        NavGroups.Add(grpStorage);
-        NavGroups.Add(grpNetwork);
-        NavGroups.Add(grpApps);
-        NavGroups.Add(grpPrivacy);
-        NavGroups.Add(grpCustomization);
-        NavGroups.Add(grpInfo);
-        NavGroups.Add(grpAdvanced);
-
-        // Flat index for backward compat (Open*Tab commands, tests, automation).
-        foreach (var g in NavGroups)
+            NavGroups.Add(g);
             foreach (var item in g.Children)
             {
                 item.WireBusy();
                 NavItems.Add(item);
             }
+        }
 
         SelectedNav = NavItems[0];
     }
+
+    private NavGroup[] BuildNavGroups() =>
+    [
+        Group("grp-dashboard", "Dashboard", "",
+            Item("nav-dashboard", "Dashboard", "", Dashboard, typeof(Views.DashboardView))),
+
+        Group("grp-system", "System", "",
+            Item("nav-system-health",    "System Health",    "", SystemHealth,     typeof(Views.SystemHealthView)),
+            Item("nav-windows-update",   "Windows Update",   "", WindowsUpdate,    typeof(Views.WindowsUpdateView)),
+            Item("nav-performance",      "Performance Mode", "", Performance,      typeof(Views.PerformanceView)),
+            Item("nav-services",         "Services",         "", Services,         typeof(Views.ServicesView)),
+            Item("nav-startup",          "Startup Manager",  "", Startup,          typeof(Views.StartupView)),
+            Item("nav-windows-features", "Windows Features", "", WindowsFeatures,  typeof(Views.WindowsFeaturesView)),
+            Item("nav-restore-points",   "Restore Points",   "", WipRestorePoints, typeof(Views.PlaceholderView)),
+            Item("nav-task-scheduler",   "Task Scheduler",   "", WipTaskScheduler, typeof(Views.PlaceholderView)),
+            Item("nav-boot-analyzer",    "Boot Analyzer",    "", WipBootAnalyzer,  typeof(Views.PlaceholderView))),
+
+        Group("grp-gaming", "Gaming & Profiles", "",
+            Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView)),
+            Item("nav-standby-cleaner",  "Standby List Cleaner", "", WipStandbyListCleaner, typeof(Views.PlaceholderView)),
+            Item("nav-timer-resolution", "Timer Resolution",     "", WipTimerResolution,    typeof(Views.PlaceholderView)),
+            Item("nav-cpu-affinity",     "CPU Core Affinity",    "", WipCpuAffinity,        typeof(Views.PlaceholderView)),
+            Item("nav-display-profiles", "Display Profiles",     "", WipDisplayProfiles,    typeof(Views.PlaceholderView))),
+
+        Group("grp-monitor", "Monitor", "",
+            Item("nav-processes",         "Process Manager",    "", ProcessManager,      typeof(Views.ProcessManagerView)),
+            Item("nav-resource-history",  "Resource History",   "", WipResourceHistory,  typeof(Views.PlaceholderView)),
+            Item("nav-privacy-monitor",   "Privacy Monitor",    "", WipPrivacyMonitor,   typeof(Views.PlaceholderView)),
+            Item("nav-file-lock",         "File Lock Detector", "", WipFileLockDetector, typeof(Views.PlaceholderView)),
+            Item("nav-settings-watchdog", "Settings Watchdog",  "", WipSettingsWatchdog, typeof(Views.PlaceholderView)),
+            Item("nav-bandwidth-monitor", "Bandwidth Monitor",  "", WipBandwidthMonitor, typeof(Views.PlaceholderView))),
+
+        Group("grp-cleanup", "Cleanup", "",
+            Item("nav-cleanup",               "Quick Cleanup",         "", Cleanup,                 typeof(Views.CleanupView)),
+            Item("nav-deep-cleanup",          "Deep Cleanup",          "", DeepCleanup,             typeof(Views.DeepCleanupView)),
+            Item("nav-shortcut-cleaner",      "Shortcut Cleaner",      "", ShortcutCleaner,         typeof(Views.ShortcutCleanerView)),
+            Item("nav-scheduled-maintenance", "Scheduled Maintenance", "", WipScheduledMaintenance, typeof(Views.PlaceholderView))),
+
+        Group("grp-storage", "Storage", "",
+            Item("nav-disk-analyzer", "Disk Analyzer",    "", DiskAnalyzer,  typeof(Views.DiskAnalyzerView)),
+            Item("nav-duplicates",    "Duplicate Finder", "", DuplicateFile, typeof(Views.DuplicateFileView))),
+
+        Group("grp-network", "Network", "",
+            Item("nav-ping",           "Ping",           "", Ping,          typeof(Views.PingView)),
+            Item("nav-traceroute",     "Traceroute",     "", Traceroute,    typeof(Views.TracerouteView)),
+            Item("nav-speed-test",     "Speed Test",     "", SpeedTest,     typeof(Views.SpeedTestView)),
+            Item("nav-network-repair", "Network Repair", "", NetworkRepair, typeof(Views.NetworkRepairView)),
+            Item("nav-dns-hosts",      "DNS & Hosts",    "", DnsHosts,      typeof(Views.DnsHostsView))),
+
+        Group("grp-apps", "Apps", "",
+            Item("nav-app-updates",    "App Updates",    "", AppUpdates,    typeof(Views.AppUpdatesView)),
+            Item("nav-bulk-installer", "Bulk Installer", "", BulkInstaller, typeof(Views.BulkInstallerView)),
+            Item("nav-uninstaller",    "Uninstaller",    "", Uninstaller,   typeof(Views.UninstallerView))),
+
+        Group("grp-privacy", "Privacy & Security", "",
+            Item("nav-privacy-settings",     "Privacy & Telemetry",   "", Privacy,                typeof(Views.PrivacyView)),
+            Item("nav-file-shredder",        "File Shredder",         "", FileShredder,           typeof(Views.FileShredderView)),
+            Item("nav-app-blocker",          "App Blocker",           "", AppBlocker,             typeof(Views.AppBlockerView)),
+            Item("nav-app-alerts",           "App Alerts",            "", AppAlerts,              typeof(Views.AppAlertsView)),
+            Item("nav-debloater",            "Debloater & Ads",       "", WipDebloater,           typeof(Views.PlaceholderView)),
+            Item("nav-browser-cleaner",      "Browser Cleaner",       "", WipBrowserCleaner,      typeof(Views.PlaceholderView)),
+            Item("nav-edge-onedrive",        "Edge/OneDrive Remover", "", WipEdgeOneDriveRemover, typeof(Views.PlaceholderView)),
+            Item("nav-defender-tweaks",      "Defender Tweaks",       "", WipDefenderTweaks,      typeof(Views.PlaceholderView)),
+            Item("nav-notification-blocker", "Notification Blocker",  "", WipNotificationBlocker, typeof(Views.PlaceholderView))),
+
+        Group("grp-customization", "Customization", "",
+            Item("nav-context-menu",   "Context Menu",          "", ContextMenu,          typeof(Views.ContextMenuView)),
+            Item("nav-dark-mode",      "Dark Mode Scheduler",   "", WipDarkModeScheduler, typeof(Views.PlaceholderView)),
+            Item("nav-volume-control", "Volume Control",        "", WipVolumeControl,     typeof(Views.PlaceholderView)),
+            Item("nav-env-variables",  "Environment Variables", "", WipEnvVariableEditor, typeof(Views.PlaceholderView))),
+
+        Group("grp-info", "Info", "",
+            Item("nav-drivers",       "Drivers",        "", Drivers,        typeof(Views.DriversView)),
+            Item("nav-battery",       "Battery Health", "", BatteryHealth,  typeof(Views.BatteryHealthView)),
+            Item("nav-logs",          "System Logs",    "", Logs,           typeof(Views.LogsView)),
+            Item("nav-system-report", "System Report",  "", WipSystemReport, typeof(Views.PlaceholderView)),
+            Item("nav-about",         "About",          "", About,          typeof(Views.AboutView))),
+
+        Group("grp-advanced", "Advanced", "",
+            Item("nav-profile-export", "Profile Export/Import", "", WipProfileExportImport, typeof(Views.PlaceholderView)),
+            Item("nav-cli-interface",  "CLI Interface",         "", WipCliInterface,        typeof(Views.PlaceholderView))),
+    ];
+
+    private static NavGroup Group(string id, string label, string glyph, params NavItem[] children)
+    {
+        var g = new NavGroup { Id = id, Label = label, Glyph = glyph };
+        foreach (var c in children) g.Children.Add(c);
+        g.Subtitle = string.Join(" · ", children.Select(c => c.Label));
+        g.Tooltip = string.Join("\n", children.Select(c => c.Label));
+        return g;
+    }
+
+    private static NavItem Item(string id, string label, string glyph, object content, Type viewType)
+        => new() { Id = id, Label = label, Glyph = glyph, Content = content, ViewType = viewType };
 
     partial void OnSelectedNavChanged(NavItem? value)
     {

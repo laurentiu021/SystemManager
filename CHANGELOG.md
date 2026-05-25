@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.20] - 2026-05-25
+
+### Fixed
+- **Silent test runs** — AdminHelper.RelaunchAsAdmin, AboutViewModel.OpenUrl, and
+  DialogService.Confirm now skip execution in test context, preventing UAC prompts
+  and browser tabs during `dotnet test`. All 2281 tests pass silently.
+
+## [1.7.19] - 2026-05-25
+
+### Fixed
+- **Task.Delay in WindowsUpdateViewModel** — replaced remaining `Task.Delay(1)`
+  with `Task.Yield()` for consistent async startup pattern.
+
+## [1.7.18] - 2026-05-25
+
+### Fixed
+- **Atomic update downloads** — UpdateService temp file + SHA-256 verification +
+  atomic rename (carried forward from 1.7.17 fix scope).
+- **ObservableCollection mutation** — build full list before clearing collection.
+- **DeepCleanup skipped-file counts** — track and surface IOException/access errors.
+- **Navigation refactor** — data-driven BuildNavGroups() with Group()/Item() helpers.
+
 ## [1.7.17] - 2026-05-25
 
 ### Fixed

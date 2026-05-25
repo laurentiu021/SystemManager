@@ -23,6 +23,7 @@ public sealed class DialogService : IDialogService
     /// <inheritdoc/>
     public bool Confirm(string message, string title)
     {
+        if (Application.Current == null) return false;
         var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
         return result == MessageBoxResult.Yes;
     }

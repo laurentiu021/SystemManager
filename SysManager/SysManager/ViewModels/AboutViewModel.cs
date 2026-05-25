@@ -564,6 +564,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     private static void OpenUrl(string url)
     {
+        if (System.Windows.Application.Current == null) return;
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
         catch (InvalidOperationException) { /* best-effort */ }
         catch (System.ComponentModel.Win32Exception) { /* best-effort */ }

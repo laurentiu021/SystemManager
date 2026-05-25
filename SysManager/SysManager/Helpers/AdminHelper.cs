@@ -25,6 +25,7 @@ public static class AdminHelper
     /// </summary>
     public static bool RelaunchAsAdmin(string? argumentHint = null)
     {
+        if (System.Windows.Application.Current == null) return false;
         try
         {
             using var currentProc = Process.GetCurrentProcess();

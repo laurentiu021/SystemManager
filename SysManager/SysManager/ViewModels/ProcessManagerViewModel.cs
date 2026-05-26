@@ -19,6 +19,7 @@ namespace SysManager.ViewModels;
 public sealed partial class ProcessManagerViewModel : ViewModelBase
 {
     private readonly ProcessManagerService _service;
+    private CancellationTokenSource? _autoRefreshCts;
 
     public BulkObservableCollection<ProcessEntry> Processes { get; } = new();
     public BulkObservableCollection<ProcessEntry> FilteredProcesses { get; } = new();
@@ -43,6 +44,22 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         try { await RefreshAsync(); }
         catch (InvalidOperationException ex) { Log.Warning("Process list auto-refresh failed: {Error}", ex.Message); }
         catch (System.ComponentModel.Win32Exception ex) { Log.Warning("Process list auto-refresh failed: {Error}", ex.Message); }
+
+        _autoRefreshCts = new CancellationTokenSource();
+        _ = AutoRefreshLoopAsync(_autoRefreshCts.Token);
+    }
+
+    private async Task AutoRefreshLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(1000, ct);
+                await RefreshAsync();
+            }
+        }
+        catch (OperationCanceledException) { /* expected on shutdown */ }
     }
 
     [RelayCommand]
@@ -173,4 +190,14 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
 
     private static bool MatchesPid(ProcessEntry p, string filter) =>
         p.Pid.ToString().Contains(filter);
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _autoRefreshCts?.Cancel();
+            _autoRefreshCts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 }

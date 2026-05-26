@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -232,6 +233,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         }
 
         IsSfcRunning = true;
+        IsProgressIndeterminate = true;
         SfcStatus = "Running — can take 5–15 minutes";
         SfcVerdict = "";
         SfcVerdictColorHex = "#9AA0A6";
@@ -239,7 +241,19 @@ public sealed partial class CleanupViewModel : ViewModelBase
         _sfcCts?.Dispose();
         _sfcCts = new CancellationTokenSource();
         var captured = new System.Collections.Generic.List<string>();
-        void Collect(PowerShellLine l) { if (l.Kind == OutputKind.Output) captured.Add(l.Text); }
+        void Collect(PowerShellLine l)
+        {
+            if (l.Kind == OutputKind.Output) captured.Add(l.Text);
+            if (l.Text.Contains('%') || l.Text.Contains("complete", StringComparison.OrdinalIgnoreCase))
+            {
+                var m = Regex.Match(l.Text, @"(\d+)");
+                if (m.Success && int.TryParse(m.Groups[1].Value, out var pct) && pct is >= 0 and <= 100)
+                {
+                    Progress = pct;
+                    IsProgressIndeterminate = false;
+                }
+            }
+        }
         _runner.LineReceived += Collect;
         try
         {
@@ -305,6 +319,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         }
 
         IsDismRunning = true;
+        IsProgressIndeterminate = true;
         DismStatus = "Running — can take 10–30 minutes";
         DismVerdict = "";
         DismVerdictColorHex = "#9AA0A6";
@@ -312,7 +327,19 @@ public sealed partial class CleanupViewModel : ViewModelBase
         _dismCts?.Dispose();
         _dismCts = new CancellationTokenSource();
         var captured = new System.Collections.Generic.List<string>();
-        void Collect(PowerShellLine l) { if (l.Kind == OutputKind.Output) captured.Add(l.Text); }
+        void Collect(PowerShellLine l)
+        {
+            if (l.Kind == OutputKind.Output) captured.Add(l.Text);
+            if (l.Text.Contains('%'))
+            {
+                var m = Regex.Match(l.Text, @"([\d.]+)%");
+                if (m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pct) && pct is >= 0 and <= 100)
+                {
+                    Progress = (int)pct;
+                    IsProgressIndeterminate = false;
+                }
+            }
+        }
         _runner.LineReceived += Collect;
         try
         {

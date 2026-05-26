@@ -62,7 +62,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="Name" Width="*" MinWidth="200" SortMemberPath="Name">
+                    <DataGridTemplateColumn Header="Name" Width="*" MinWidth="150" SortMemberPath="Name">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
@@ -80,7 +80,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="160"
+                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="140"
                                         SortMemberPath="Publisher" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -90,7 +90,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Header="Status" Width="120" SortMemberPath="StatusText">
+                    <DataGridTemplateColumn Header="Status" Width="100" SortMemberPath="StatusText">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,5" VerticalAlignment="Center" Margin="4,0"

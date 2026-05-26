@@ -187,6 +187,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             var total = cats.Sum(c => c.TotalSizeBytes);
             ScanSummary = $"Found {FormatHelper.FormatSize(total)} across {cats.Count} categories. Untick anything you want to keep.";
             ScanStatusLine = "Scan complete.";
+            ToastService.Instance.Show("Deep cleanup scan complete", $"{FormatHelper.FormatSize(total)} across {cats.Count} categories");
             Log.Information("Deep cleanup scan completed: {Size} across {Count} categories",
                 FormatHelper.FormatSize(total), cats.Count);
             OnPropertyChanged(nameof(TotalSelectedBytes));
@@ -227,6 +228,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             var result = await _cleanup.CleanAsync(Categories, progress, _cleanCts.Token);
             CleanSummary = result.Summary;
             CleanStatusLine = "Clean complete.";
+            ToastService.Instance.Show("Deep cleanup complete", result.Summary);
             Log.Information("Deep cleanup completed");
             await ScanCoreAsync();
         }
@@ -293,6 +295,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
                 ct: _largeCts.Token);
             LargeFiles.ReplaceWith(list);
             LargeScanStatus = $"Found {list.Count} files ≥ {MinSizeMB} MB in {SelectedLocation.Label.Trim()}.";
+            ToastService.Instance.Show("Large file scan complete", $"{list.Count} files found ≥ {MinSizeMB} MB");
             Log.Information("Large file scan completed: {Count} files ≥ {MinSize} MB",
                 list.Count, MinSizeMB);
         }

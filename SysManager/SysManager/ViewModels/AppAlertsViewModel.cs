@@ -2,12 +2,12 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -22,7 +22,7 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     private readonly AppAlertService _service;
     private readonly Dispatcher _dispatcher;
 
-    public ObservableCollection<AppInstallEntry> Alerts { get; } = new();
+    public BulkObservableCollection<AppInstallEntry> Alerts { get; } = new();
 
     [ObservableProperty] private bool _isMonitoring;
     [ObservableProperty] private string _monitorStatus = "Click Start to begin monitoring for new installations.";
@@ -90,13 +90,13 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         try
         {
             var apps = AppAlertService.GetRegistryApps();
-            Alerts.Clear();
-            foreach (var app in apps.OrderBy(a => a.Name))
+            var sorted = apps.OrderBy(a => a.Name).ToList();
+            foreach (var app in sorted)
             {
                 app.DetectedAt = DateTime.Now;
                 app.IsAcknowledged = true;
-                Alerts.Add(app);
             }
+            Alerts.ReplaceWith(sorted);
             AlertCount = Alerts.Count;
             UnacknowledgedCount = 0;
             MonitorStatus = $"Loaded {AlertCount} currently installed applications.";

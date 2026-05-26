@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **DashboardView** — replaced 30+ hardcoded hex colors with StaticResource tokens
+  (Surface1, Surface2, Border1, TextPrimary, TextSecondary, Info).
+- **AppBlockerView** — full structural modernization (Display header, Card wrappers,
+  button styles, DataGrid accessibility, Background, margins).
+- **DnsHostsView** — DataGrid grid-lines removed, accessibility name added, text token.
+- **ObservableCollection → BulkObservableCollection** — AppAlerts, AppBlocker,
+  ShortcutCleaner now use single-notification ReplaceWith() instead of N Add() events.
+- **Missing toast notifications** — added on Drivers, Services, ShortcutCleaner,
+  DeepCleanup (3 operations), NetworkRepair.
+- **Task.Delay(1)** → Task.Yield() in WindowsUpdateViewModel.
+
+### Fixed
 - **UI uniformity audit** — replaced all remaining CheckBoxes with purple ToggleSwitch on:
   Performance (5 toggles), Logs (5 severity filters), Ping targets, Process Manager,
   Deep Cleanup categories.

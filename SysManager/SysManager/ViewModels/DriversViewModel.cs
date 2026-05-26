@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -69,6 +68,7 @@ public sealed partial class DriversViewModel : ViewModelBase
             Summary = $"{_allDrivers.Count} drivers found" +
                       (HideSystemDrivers ? $" ({DriverCount} shown, system drivers hidden)." : ".");
             StatusMessage = "Done";
+            ToastService.Instance.Show("Driver scan complete", $"{_allDrivers.Count} drivers found");
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = ex.Message; }

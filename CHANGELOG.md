@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-05-26
+
 ### Added
 - **SpeedTest server selection** — dropdown to choose Ookla test server (Auto/Bucharest/
   London/Frankfurt/Amsterdam/Paris/New York) instead of always using nearest.

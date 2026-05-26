@@ -172,7 +172,7 @@ public sealed class SpeedTestService
     // ---------------- Ookla ----------------
 
     public async Task<SpeedTestResult> RunOoklaAsync(
-        IProgress<(int Percent, string Message)>? progress, CancellationToken ct)
+        IProgress<(int Percent, string Message)>? progress, CancellationToken ct, int? serverId = null)
     {
         string exe;
         try
@@ -185,8 +185,10 @@ public sealed class SpeedTestService
         }
 
         progress?.Report((20, "Running Ookla speedtest…"));
-        var psi = new ProcessStartInfo(exe,
-            "--accept-license --accept-gdpr --format=json --progress=no")
+        var args = "--accept-license --accept-gdpr --format=json --progress=no";
+        if (serverId is not null)
+            args += $" --server-id={serverId}";
+        var psi = new ProcessStartInfo(exe, args)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,

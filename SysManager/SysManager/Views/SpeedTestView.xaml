@@ -45,6 +45,10 @@
                             <Button Content="Run" Command="{Binding RunOoklaSpeedCommand}" Style="{StaticResource PrimaryButton}"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
                                     IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvert}}"/>
+                            <ComboBox ItemsSource="{Binding OoklaServerOptions}"
+                                      SelectedItem="{Binding SelectedOoklaServer}"
+                                      Width="180" Margin="0,0,8,0" VerticalAlignment="Center"
+                                      DockPanel.Dock="Right"/>
                         </DockPanel>
                         <Grid Margin="0,16,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

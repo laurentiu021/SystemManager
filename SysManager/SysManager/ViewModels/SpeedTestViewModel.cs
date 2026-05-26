@@ -22,6 +22,17 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
 
     [ObservableProperty] private SpeedTestResult? _httpResult;
     [ObservableProperty] private SpeedTestResult? _ooklaResult;
+    [ObservableProperty] private string _selectedOoklaServer = "Auto (nearest)";
+
+    public string[] OoklaServerOptions { get; } = {
+        "Auto (nearest)",
+        "Bucharest, RO (ID: 2616)",
+        "London, UK (ID: 12884)",
+        "Frankfurt, DE (ID: 31120)",
+        "Amsterdam, NL (ID: 28922)",
+        "Paris, FR (ID: 5765)",
+        "New York, US (ID: 10390)",
+    };
     [ObservableProperty] private int _speedProgress;
     [ObservableProperty] private string _speedStatus = "";
     [ObservableProperty] private string _httpStatus = "";
@@ -123,7 +134,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         { SpeedProgress = t.p; OoklaStatus = t.m; EstimatedTime = _eta.Update(t.p); });
         try
         {
-            OoklaResult = await Shared.Speed.RunOoklaAsync(progress, _speedCts.Token);
+            OoklaResult = await Shared.Speed.RunOoklaAsync(progress, _speedCts.Token, ParseServerId(SelectedOoklaServer));
             OoklaStatus = "Ookla done";
             Log.Information("Ookla speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 OoklaResult.DownloadMbps, OoklaResult.UploadMbps);
@@ -158,6 +169,13 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelSpeed() => _speedCts?.Cancel();
+
+    private static int? ParseServerId(string option)
+    {
+        if (option.StartsWith("Auto")) return null;
+        var match = System.Text.RegularExpressions.Regex.Match(option, @"ID:\s*(\d+)");
+        return match.Success ? int.Parse(match.Groups[1].Value) : null;
+    }
 
     protected override void Dispose(bool disposing)
     {

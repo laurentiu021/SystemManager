@@ -6,14 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-- **Process Manager real-time refresh** — 1-second auto-refresh timer matches Task Manager
-  update speed. CPU measurement window reduced to 100ms for faster snapshots.
-- **SFC progress bar** — parses stdout for completion percentage, shows real progress.
-- **DISM progress bar** — parses stdout for percentage (handles decimal formats like 62.3%).
-- **Ping live output** — ConsoleView showing real-time replies per target (time, timeout).
-- **Traceroute live output** — ConsoleView with hop-by-hop results and explanations
-  (gateway detection, ISP backbone, filtered nodes, destination reached).
+## [1.10.3] - 2026-05-26
 
 ### Fixed
 - **DashboardView** — replaced 30+ hardcoded hex colors with StaticResource tokens
@@ -26,6 +19,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Missing toast notifications** — added on Drivers, Services, ShortcutCleaner,
   DeepCleanup (3 operations), NetworkRepair.
 - **UninstallerView** — hardcoded `#6366F1` replaced with `{StaticResource Accent}`.
+
+## [1.10.2] - 2026-05-26
+
+### Added
+- **Process Manager real-time refresh** — 1-second auto-refresh timer matches Task Manager
+  update speed. CPU measurement window reduced to 100ms for faster snapshots.
+- **SFC progress bar** — parses stdout for completion percentage, shows real progress.
+- **DISM progress bar** — parses stdout for percentage (handles decimal formats like 62.3%).
+- **Ping live output** — ConsoleView showing real-time replies per target (time, timeout).
+- **Traceroute live output** — ConsoleView with hop-by-hop results and explanations
+  (gateway detection, ISP backbone, filtered nodes, destination reached).
 
 ## [1.10.1] - 2026-05-26
 

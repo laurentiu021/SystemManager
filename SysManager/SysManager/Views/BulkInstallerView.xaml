@@ -218,9 +218,15 @@
 
                                     <!-- Name + description -->
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}"
-                                                   FontWeight="SemiBold" FontSize="13"
-                                                   Foreground="{StaticResource TextPrimary}"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold" FontSize="13"
+                                                       Foreground="{StaticResource TextPrimary}"/>
+                                            <Border CornerRadius="4" Padding="4,2" Margin="8,0,0,0" Background="#1422C55E" BorderBrush="#3022C55E" BorderThickness="1"
+                                                    Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="Installed" FontSize="9" Foreground="#4ADE80" FontWeight="SemiBold"/>
+                                            </Border>
+                                        </StackPanel>
                                         <TextBlock Text="{Binding Description}"
                                                    FontSize="11.5" Margin="0,2,0,0"
                                                    Foreground="{StaticResource TextSecondary}"

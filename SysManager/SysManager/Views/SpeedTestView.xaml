@@ -27,6 +27,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -82,8 +83,21 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Info: Ookla vs HTTP explanation -->
+                <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#0F1A2E" BorderBrush="#1E3A5F" BorderThickness="1"
+                        CornerRadius="8" Padding="12,10" Margin="0,12,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                   FontSize="14" Foreground="{StaticResource Info}" VerticalAlignment="Top" Margin="0,0,10,0"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="12">
+                            <Run FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}">Ookla</Run><Run> measures raw TCP throughput to a nearby server — most accurate for ISP bandwidth. </Run>
+                            <Run FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}">HTTP</Run><Run> tests download/upload via Cloudflare CDN — reflects real web browsing speed but may show lower results due to HTTP overhead and CDN routing.</Run>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
                 <!-- Ookla History -->
-                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource Card}" Margin="0,16,0,0">
+                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource Card}" Margin="0,16,0,0">
                     <StackPanel>
                         <DockPanel>
                             <TextBlock Text="Ookla History" Style="{StaticResource SectionTitle}"/>
@@ -113,7 +127,7 @@
                 </Border>
 
                 <!-- HTTP History -->
-                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}" Margin="16,16,0,0">
+                <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource Card}" Margin="16,16,0,0">
                     <StackPanel>
                         <DockPanel>
                             <TextBlock Text="HTTP History" Style="{StaticResource SectionTitle}"/>

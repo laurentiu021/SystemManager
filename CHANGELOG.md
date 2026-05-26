@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Bulk Installer "Installed" badge** — apps already on the system show a green "Installed"
+  badge. Detection via `winget list` at startup.
+- **SpeedTest explanation** — info banner explaining Ookla vs HTTP test differences.
+- **Network Repair explanations** — detailed descriptions for each repair action
+  (Flush DNS, Reset Winsock, Reset TCP/IP).
+
+### Fixed
+- **App update failure messages** — more helpful explanations when downloads fail
+  (mentions network issues, firewall, retry suggestions).
+
 ## [1.10.3] - 2026-05-26
 
 ### Fixed

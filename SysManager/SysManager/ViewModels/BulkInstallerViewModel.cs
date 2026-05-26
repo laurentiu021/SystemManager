@@ -67,7 +67,10 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         GroupedView = CollectionViewSource.GetDefaultView(FilteredApps);
         GroupedView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(InstallableApp.Category)));
 
-        InitializeAsync(LoadIconsAsync);
+        InitializeAsync(async () =>
+        {
+            await Task.WhenAll(LoadIconsAsync(), MarkInstalledAppsAsync()).ConfigureAwait(false);
+        });
     }
 
     private async Task LoadIconsAsync()
@@ -77,6 +80,50 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             var icon = await _iconService.GetIconAsync(app.WingetId).ConfigureAwait(false);
             if (icon != null)
                 App.Current?.Dispatcher.Invoke(() => app.Icon = icon);
+        }
+    }
+
+    private async Task MarkInstalledAppsAsync()
+    {
+        try
+        {
+            var output = await Task.Run(() =>
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "winget",
+                    Arguments = "list --disable-interactivity",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = System.Text.Encoding.UTF8,
+                };
+
+                using var proc = System.Diagnostics.Process.Start(psi);
+                if (proc == null) return string.Empty;
+
+                var result = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(30_000);
+                return result;
+            }).ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(output)) return;
+
+            var lines = output.Split('\n');
+
+            App.Current?.Dispatcher.Invoke(() =>
+            {
+                foreach (var app in Apps)
+                {
+                    if (lines.Any(line => line.Contains(app.WingetId, StringComparison.OrdinalIgnoreCase)))
+                        app.IsInstalled = true;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not determine installed apps via winget list");
         }
     }
 

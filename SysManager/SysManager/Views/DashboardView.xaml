@@ -11,7 +11,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Orientation="Horizontal" Grid.Row="0">
-            <TextBlock Text="System overview" FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock Text="System overview" Style="{StaticResource Display}" FontWeight="SemiBold"/>
             <Border CornerRadius="10" Padding="10,5" Margin="16,2,0,0"
                     Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
                     Visibility="{Binding IsElevated, Converter={StaticResource BoolToVis}}">
@@ -88,8 +88,8 @@
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <!-- Health Score card -->
-                <Border CornerRadius="8" Padding="16" Background="#0D1117" Margin="0,0,0,12"
-                        BorderBrush="#30363D" BorderThickness="1"
+                <Border CornerRadius="8" Padding="16" Background="{StaticResource Surface1}" Margin="0,0,0,12"
+                        BorderBrush="{StaticResource Border1}" BorderThickness="1"
                         Visibility="{Binding HasHealthScore, Converter={StaticResource BoolToVis}}">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -104,9 +104,9 @@
                                 BorderBrush="{Binding HealthResult.ColorHex, Converter={StaticResource HexBrush}}">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding HealthResult.Score}" FontSize="32" FontWeight="Bold"
-                                           HorizontalAlignment="Center" Foreground="White"/>
+                                           HorizontalAlignment="Center" Foreground="{StaticResource TextPrimary}"/>
                                 <TextBlock Text="{Binding HealthResult.Label}" FontSize="11"
-                                           HorizontalAlignment="Center" Foreground="#9AA0A6"/>
+                                           HorizontalAlignment="Center" Foreground="{StaticResource TextSecondary}"/>
                             </StackPanel>
                         </Border>
 
@@ -116,22 +116,22 @@
 
                             <!-- Component breakdown -->
                             <WrapPanel Margin="0,0,0,8">
-                                <TextBlock Margin="0,0,12,0" Foreground="#9AA0A6" FontSize="12">
+                                <TextBlock Margin="0,0,12,0" Foreground="{StaticResource TextSecondary}" FontSize="12">
                                     <Run Text="Disk "/>
-                                    <Run Text="{Binding HealthResult.DiskScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="#C9D1D9"/>
+                                    <Run Text="{Binding HealthResult.DiskScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
                                 </TextBlock>
-                                <TextBlock Margin="0,0,12,0" Foreground="#9AA0A6" FontSize="12">
+                                <TextBlock Margin="0,0,12,0" Foreground="{StaticResource TextSecondary}" FontSize="12">
                                     <Run Text="RAM "/>
-                                    <Run Text="{Binding HealthResult.RamScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="#C9D1D9"/>
+                                    <Run Text="{Binding HealthResult.RamScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
                                 </TextBlock>
-                                <TextBlock Margin="0,0,12,0" Foreground="#9AA0A6" FontSize="12">
+                                <TextBlock Margin="0,0,12,0" Foreground="{StaticResource TextSecondary}" FontSize="12">
                                     <Run Text="Uptime "/>
-                                    <Run Text="{Binding HealthResult.UptimeScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="#C9D1D9"/>
+                                    <Run Text="{Binding HealthResult.UptimeScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
                                 </TextBlock>
-                                <TextBlock Foreground="#9AA0A6" FontSize="12"
+                                <TextBlock Foreground="{StaticResource TextSecondary}" FontSize="12"
                                            Visibility="{Binding HealthResult.HasBattery, Converter={StaticResource BoolToVis}}">
                                     <Run Text="Battery "/>
-                                    <Run Text="{Binding HealthResult.BatteryScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="#C9D1D9"/>
+                                    <Run Text="{Binding HealthResult.BatteryScore, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
                                 </TextBlock>
                             </WrapPanel>
 
@@ -154,32 +154,32 @@
                 </Border>
 
                 <!-- Health Score loading indicator -->
-                <Border CornerRadius="8" Padding="14" Background="#0D1117" Margin="0,0,0,8"
-                        BorderBrush="#30363D" BorderThickness="1"
+                <Border CornerRadius="8" Padding="14" Background="{StaticResource Surface1}" Margin="0,0,0,8"
+                        BorderBrush="{StaticResource Border1}" BorderThickness="1"
                         Visibility="{Binding IsHealthScoreLoading, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal">
                         <ProgressBar AutomationProperties.Name="Health score loading" IsIndeterminate="True"
                                      Width="80" Height="4" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="Computing health score…" Foreground="#9AA0A6" FontSize="12"
+                        <TextBlock Text="Computing health score…" Foreground="{StaticResource TextSecondary}" FontSize="12"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
 
                 <!-- Tune-Up progress panel -->
-                <Border CornerRadius="8" Padding="14" Background="#0D1117" Margin="0,0,0,8"
+                <Border CornerRadius="8" Padding="14" Background="{StaticResource Surface1}" Margin="0,0,0,8"
                         BorderBrush="{StaticResource Accent}" BorderThickness="1"
                         Visibility="{Binding IsTuneUpRunning, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="Quick Tune-Up in progress…" FontWeight="SemiBold" FontSize="14"
-                                   Foreground="#58A6FF"/>
-                        <TextBlock Text="{Binding TuneUpStep}" Foreground="#9AA0A6" Margin="0,6,0,6"/>
+                                   Foreground="{StaticResource Info}"/>
+                        <TextBlock Text="{Binding TuneUpStep}" Foreground="{StaticResource TextSecondary}" Margin="0,6,0,6"/>
                         <ProgressBar AutomationProperties.Name="Tune-Up progress" Height="6" Minimum="0" Maximum="100"
                                      Value="{Binding TuneUpProgress}"/>
                     </StackPanel>
                 </Border>
 
                 <!-- Tune-Up result summary card -->
-                <Border CornerRadius="8" Padding="14" Background="#0D1117" Margin="0,0,0,12"
+                <Border CornerRadius="8" Padding="14" Background="{StaticResource Surface1}" Margin="0,0,0,12"
                         BorderBrush="{StaticResource Accent}" BorderThickness="1"
                         Visibility="{Binding HasTuneUpResult, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
@@ -190,7 +190,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal">
                                 <TextBlock Text="&#xE930;" FontFamily="Segoe Fluent Icons" FontSize="18"
-                                           VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#58A6FF"/>
+                                           VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource Info}"/>
                                 <TextBlock Text="Tune-Up Summary" FontWeight="SemiBold" FontSize="15"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
@@ -200,15 +200,15 @@
                                     AutomationProperties.Name="Dismiss tune-up results"/>
                         </Grid>
 
-                        <Separator Margin="0,8" Background="#21262D"/>
+                        <Separator Margin="0,8" Background="{StaticResource Border1}"/>
 
                         <!-- Freed space -->
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                       Margin="0,0,8,0" Foreground="#9AA0A6" VerticalAlignment="Center"/>
-                            <TextBlock Foreground="#C9D1D9" VerticalAlignment="Center">
+                                       Margin="0,0,8,0" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                            <TextBlock Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center">
                                 <Run Text="Freed "/>
-                                <Run Text="{Binding TuneUpResult.FreedDisplay, Mode=OneWay}" FontWeight="SemiBold" Foreground="#58A6FF"/>
+                                <Run Text="{Binding TuneUpResult.FreedDisplay, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource Info}"/>
                                 <Run Text=" ("/>
                                 <Run Text="{Binding TuneUpResult.TempFilesDeleted, Mode=OneWay, StringFormat='{}{0:N0}'}"/>
                                 <Run Text=" files)"/>
@@ -218,8 +218,8 @@
                         <!-- Recycle Bin -->
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                       Margin="0,0,8,0" Foreground="#9AA0A6" VerticalAlignment="Center"/>
-                            <TextBlock Foreground="#C9D1D9" VerticalAlignment="Center">
+                                       Margin="0,0,8,0" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                            <TextBlock Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Text" Value="Recycle Bin emptied"/>
@@ -236,8 +236,8 @@
                         <!-- Broken shortcuts -->
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <TextBlock Text="&#xE71B;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                       Margin="0,0,8,0" Foreground="#9AA0A6" VerticalAlignment="Center"/>
-                            <TextBlock Foreground="#C9D1D9" VerticalAlignment="Center">
+                                       Margin="0,0,8,0" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                            <TextBlock Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center">
                                 <Run Text="{Binding TuneUpResult.BrokenShortcutsFound, Mode=OneWay}"/>
                                 <Run Text=" broken shortcuts found"/>
                             </TextBlock>
@@ -262,8 +262,8 @@
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                         <TextBlock Text="&#xEDA2;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                                   Margin="0,0,8,0" Foreground="#9AA0A6" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Name}" Foreground="#C9D1D9" Margin="0,0,6,0"
+                                                   Margin="0,0,8,0" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" Margin="0,0,6,0"
                                                    VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding Verdict}" FontWeight="SemiBold"
                                                    VerticalAlignment="Center"
@@ -276,8 +276,8 @@
                         <!-- Uptime -->
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <TextBlock Text="&#xE916;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                       Margin="0,0,8,0" Foreground="#9AA0A6" VerticalAlignment="Center"/>
-                            <TextBlock Foreground="#C9D1D9" VerticalAlignment="Center">
+                                       Margin="0,0,8,0" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                            <TextBlock Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center">
                                 <Run Text="Uptime: "/>
                                 <Run Text="{Binding TuneUpResult.Uptime.Days, Mode=OneWay}"/>
                                 <Run Text="d "/>
@@ -294,8 +294,8 @@
                         <!-- RAM -->
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <TextBlock Text="&#xE950;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                       Margin="0,0,8,0" Foreground="#9AA0A6" VerticalAlignment="Center"/>
-                            <TextBlock Foreground="#C9D1D9" VerticalAlignment="Center">
+                                       Margin="0,0,8,0" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                            <TextBlock Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center">
                                 <Run Text="RAM: "/>
                                 <Run Text="{Binding TuneUpResult.RamUsedGB, Mode=OneWay, StringFormat='{}{0:0.0}'}"/>
                                 <Run Text=" / "/>
@@ -310,40 +310,40 @@
                         </StackPanel>
 
                         <!-- Overall verdict -->
-                        <Separator Margin="0,8" Background="#21262D"/>
+                        <Separator Margin="0,8" Background="{StaticResource Border1}"/>
                         <TextBlock Text="{Binding TuneUpResult.OverallVerdict}" FontWeight="SemiBold" FontSize="13"
                                    Foreground="{Binding TuneUpResult.OverallColorHex, Converter={StaticResource HexBrush}}"/>
                     </StackPanel>
                 </Border>
 
                 <!-- Existing system info cards -->
-                <Border CornerRadius="8" Padding="14" Background="#161B22" Margin="0,0,0,8">
+                <Border CornerRadius="8" Padding="14" Background="{StaticResource Surface2}" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="Operating System" Foreground="#9AA0A6" FontSize="12"/>
+                        <TextBlock Text="Operating System" Foreground="{StaticResource TextSecondary}" FontSize="12"/>
                         <TextBlock Text="{Binding OsLine}" FontSize="15" Margin="0,4,0,0"/>
-                        <TextBlock Text="{Binding UptimeLine}" Foreground="#9AA0A6" Margin="0,6,0,0"/>
+                        <TextBlock Text="{Binding UptimeLine}" Foreground="{StaticResource TextSecondary}" Margin="0,6,0,0"/>
                     </StackPanel>
                 </Border>
 
-                <Border CornerRadius="8" Padding="14" Background="#161B22" Margin="0,0,0,8">
+                <Border CornerRadius="8" Padding="14" Background="{StaticResource Surface2}" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="CPU" Foreground="#9AA0A6" FontSize="12"/>
+                        <TextBlock Text="CPU" Foreground="{StaticResource TextSecondary}" FontSize="12"/>
                         <TextBlock Text="{Binding CpuLine}" FontSize="15" Margin="0,4,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
 
-                <Border CornerRadius="8" Padding="14" Background="#161B22" Margin="0,0,0,8">
+                <Border CornerRadius="8" Padding="14" Background="{StaticResource Surface2}" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="Memory" Foreground="#9AA0A6" FontSize="12"/>
+                        <TextBlock Text="Memory" Foreground="{StaticResource TextSecondary}" FontSize="12"/>
                         <TextBlock Text="{Binding MemLine}" FontSize="15" Margin="0,4,0,6"/>
                         <ProgressBar AutomationProperties.Name="Progress" Height="8" Minimum="0" Maximum="100"
                                      Value="{Binding Snapshot.Memory.UsedPercent}"/>
                     </StackPanel>
                 </Border>
 
-                <Border CornerRadius="8" Padding="14" Background="#161B22" Margin="0,0,0,8">
+                <Border CornerRadius="8" Padding="14" Background="{StaticResource Surface2}" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="Storage" Foreground="#9AA0A6" FontSize="12"/>
+                        <TextBlock Text="Storage" Foreground="{StaticResource TextSecondary}" FontSize="12"/>
                         <TextBlock Text="{Binding DiskLine}" FontSize="14" Margin="0,4,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
@@ -358,7 +358,7 @@
             <ProgressBar AutomationProperties.Name="Progress" Grid.Column="0" Height="4"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Grid.Column="1" Margin="12,0,0,0" Text="{Binding StatusMessage}" Foreground="#9AA0A6"/>
+            <TextBlock Grid.Column="1" Margin="12,0,0,0" Text="{Binding StatusMessage}" Foreground="{StaticResource TextSecondary}"/>
         </Grid>
     </Grid>
 </UserControl>

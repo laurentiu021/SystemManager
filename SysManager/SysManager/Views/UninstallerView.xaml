@@ -181,7 +181,7 @@
                                                 Margin="-8,-4,0,-4">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#6366F1"/>
+                                                    <Setter Property="Background" Value="{StaticResource Accent}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Source}" Value="">
                                                             <Setter Property="Background" Value="#FBBF24"/>

@@ -92,7 +92,10 @@ public sealed partial class NetworkRepairViewModel : ViewModelBase
                 ? $"✓ {r.ToolName} completed successfully."
                 : $"✗ {r.ToolName} failed: {r.Output}";
             if (r.Success)
+            {
+                ToastService.Instance.Show("Network repair complete", $"{r.ToolName} completed successfully");
                 Log.Information("Network repair completed: {Tool}", r.ToolName);
+            }
             else
                 Log.Warning("Network repair failed: {Tool}", r.ToolName);
             if (r.NeedsReboot && r.Success)

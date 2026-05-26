@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -19,7 +18,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class AppBlockerViewModel : ViewModelBase
 {
-    public ObservableCollection<BlockedApp> BlockedApps { get; } = new();
+    public BulkObservableCollection<BlockedApp> BlockedApps { get; } = new();
 
     [ObservableProperty] private string _newExeName = "";
     [ObservableProperty] private string _blockStatus = "Enter an executable name and click Block to prevent it from running.";
@@ -42,10 +41,8 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     [RelayCommand]
     private void RefreshList()
     {
-        BlockedApps.Clear();
         var apps = AppBlockerService.GetBlockedApps();
-        foreach (var a in apps)
-            BlockedApps.Add(a);
+        BlockedApps.ReplaceWith(apps);
         BlockedCount = BlockedApps.Count;
         BlockStatus = BlockedCount == 0
             ? "No applications are currently blocked."

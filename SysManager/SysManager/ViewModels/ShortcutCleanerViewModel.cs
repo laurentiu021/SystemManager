@@ -2,11 +2,11 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -20,7 +20,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
     private readonly ShortcutCleanerService _service;
     private CancellationTokenSource? _cts;
 
-    public ObservableCollection<BrokenShortcut> BrokenShortcuts { get; } = new();
+    public BulkObservableCollection<BrokenShortcut> BrokenShortcuts { get; } = new();
 
     [ObservableProperty] private string _scanStatus = "Click Scan to find broken shortcuts.";
     [ObservableProperty] private string _currentLocation = "";
@@ -53,7 +53,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         // PropertyChanged lambda leaks across rescans.
         foreach (var old in BrokenShortcuts)
             old.PropertyChanged -= OnShortcutPropertyChanged;
-        BrokenShortcuts.Clear();
+        BrokenShortcuts.ReplaceWith(Array.Empty<BrokenShortcut>());
         BrokenCount = 0;
         SelectedCount = 0;
         ScanStatus = "Scanning...";
@@ -66,10 +66,8 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
             var results = await _service.ScanAsync(progress, _cts.Token);
 
             foreach (var s in results)
-            {
                 s.PropertyChanged += OnShortcutPropertyChanged;
-                BrokenShortcuts.Add(s);
-            }
+            BrokenShortcuts.ReplaceWith(results);
 
             BrokenCount = BrokenShortcuts.Count;
             SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
@@ -78,6 +76,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
                 : $"Found {BrokenCount} broken shortcut{(BrokenCount == 1 ? "" : "s")}.";
             CurrentLocation = "";
             Log.Information("Shortcut scan completed: {Count} broken shortcuts found", BrokenCount);
+            ToastService.Instance.Show("Shortcut scan complete", $"{BrokenCount} broken shortcut{(BrokenCount == 1 ? "" : "s")} found");
         }
         catch (OperationCanceledException) { ScanStatus = "Scan cancelled."; }
         catch (System.IO.IOException ex) { ScanStatus = $"Scan failed: {ex.Message}"; }
@@ -116,6 +115,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         BrokenCount = BrokenShortcuts.Count;
         SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
         ScanStatus = $"Deleted {deleted} shortcut{(deleted == 1 ? "" : "s")}. {BrokenCount} remaining.";
+        ToastService.Instance.Show("Shortcuts deleted", $"{deleted} shortcut{(deleted == 1 ? "" : "s")} removed");
         Log.Information("Deleted {Count} broken shortcuts (recycle bin: {RecycleBin})", deleted, MoveToRecycleBin);
     }
 

@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **SpeedTest server selection** — dropdown to choose Ookla test server (Auto/Bucharest/
+  London/Frankfurt/Amsterdam/Paris/New York) instead of always using nearest.
+
+## [1.11.0] - 2026-05-26
+
+### Added
 - **Bulk Installer "Installed" badge** — apps already on the system show a green "Installed"
   badge. Detection via `winget list` at startup.
 - **SpeedTest explanation** — info banner explaining Ookla vs HTTP test differences.

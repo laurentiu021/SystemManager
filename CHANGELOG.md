@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Startup Manager columns** — reduced fixed widths to prevent last column overflow.
+- **Startup Manager icons** — use extracted executable path for more accurate icon resolution.
+- **Windows Update live output** — increased MinHeight/MaxHeight for better visibility.
+
 ## [1.9.0] - 2026-05-26
 
 ### Added

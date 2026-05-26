@@ -211,7 +211,7 @@
         <!-- Console output (collapsible — shown only during install/reboot check) -->
         <Border Grid.Row="6" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0"
                 Visibility="{Binding ShowConsole, Converter={StaticResource BoolToVis}}"
-                MaxHeight="200">
+                MinHeight="180" MaxHeight="350">
             <Expander Header="Live output" IsExpanded="True" Padding="8">
                 <v:ConsoleView DataContext="{Binding Console}"/>
             </Expander>

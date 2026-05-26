@@ -54,7 +54,10 @@ public sealed partial class StartupViewModel : ViewModelBase
             var items = await _service.ScanAsync().ConfigureAwait(false);
             var sorted = items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
             foreach (var item in sorted)
-                item.Icon = IconExtractorService.GetIcon(item.Command);
+            {
+                var exePath = ExtractExecutablePath(item.Command);
+                item.Icon = IconExtractorService.GetIcon(exePath ?? item.Command);
+            }
 
             if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
             {

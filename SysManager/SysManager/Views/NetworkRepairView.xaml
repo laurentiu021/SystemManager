@@ -64,7 +64,7 @@
                             <Setter Property="BorderBrush" Value="{StaticResource Border1}"/>
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#10141D"/>
+                                    <Setter Property="Background" Value="#186366F1"/>
                                     <Setter Property="BorderBrush" Value="#2A3244"/>
                                 </Trigger>
                             </Style.Triggers>
@@ -88,7 +88,7 @@
                             <Setter Property="BorderBrush" Value="{StaticResource Border1}"/>
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#10141D"/>
+                                    <Setter Property="Background" Value="#186366F1"/>
                                     <Setter Property="BorderBrush" Value="#2A3244"/>
                                 </Trigger>
                             </Style.Triggers>
@@ -112,7 +112,7 @@
                             <Setter Property="BorderBrush" Value="{StaticResource Border1}"/>
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#10141D"/>
+                                    <Setter Property="Background" Value="#186366F1"/>
                                     <Setter Property="BorderBrush" Value="#2A3244"/>
                                 </Trigger>
                             </Style.Triggers>
@@ -132,7 +132,7 @@
                 <TextBlock Text="{Binding RepairStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
                            Visibility="{Binding RepairStatus, Converter={StaticResource FlexVis}}"/>
                 <TextBlock Text="⚠ A reboot is required for changes to take effect."
-                           Foreground="#EF4444" FontSize="12" Margin="0,8,0,0"
+                           Foreground="{StaticResource Danger}" FontSize="12" Margin="0,8,0,0"
                            Visibility="{Binding RepairNeedsReboot, Converter={StaticResource BoolToVis}}"/>
             </StackPanel>
         </Border>

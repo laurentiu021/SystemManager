@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **UI uniformity audit** — replaced all remaining CheckBoxes with purple ToggleSwitch on:
+  Performance (5 toggles), Logs (5 severity filters), Ping targets, Process Manager,
+  Deep Cleanup categories.
+- **Hover consistency** — all interactive elements now use `#186366F1` purple tint.
+  Fixed: LogsView, DiskAnalyzer, NetworkRepair (3 cards), DuplicateFile (added missing hover).
+- **Dashboard** — replaced green Tune-Up button with PrimaryButton (purple), green borders
+  with Accent.
+- **Ping targets** — green tint background replaced with purple.
+- **Hardcoded colors → StaticResource** — ~30 instances replaced across 8 views
+  (Danger, Success, Warning, Info, Accent tokens).
+
 ## [1.10.0] - 2026-05-26
 
 ### Added

@@ -109,7 +109,7 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border Margin="0,0,10,10" Padding="14,12" CornerRadius="12"
-                                    Background="#0D22C55E" BorderBrush="#0AFFFFFF" BorderThickness="1">
+                                    Background="#0D6366F1" BorderBrush="#0AFFFFFF" BorderThickness="1">
                                 <Grid>
                                     <Border Background="{Binding ColorHex, Converter={StaticResource HexBrush}}"
                                             Width="4" HorizontalAlignment="Left" CornerRadius="2"
@@ -117,7 +117,7 @@
                                     <DockPanel Margin="6,0,0,0">
                                         <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" MinWidth="100">
                                             <StackPanel Orientation="Horizontal">
-                                                <CheckBox IsChecked="{Binding IsEnabled}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Host}" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="22,2,0,0"/>

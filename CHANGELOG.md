@@ -16,6 +16,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (gateway detection, ISP backbone, filtered nodes, destination reached).
 
 ### Fixed
+- **DashboardView** — replaced 30+ hardcoded hex colors with StaticResource tokens
+  (Surface1, Surface2, Border1, TextPrimary, TextSecondary, Info).
+- **AppBlockerView** — full structural modernization (Display header, Card wrappers,
+  button styles, DataGrid accessibility, Background, margins).
+- **DnsHostsView** — DataGrid grid-lines removed, accessibility name added, text token.
+- **ObservableCollection → BulkObservableCollection** — AppAlerts, AppBlocker,
+  ShortcutCleaner now use single-notification ReplaceWith() instead of N Add() events.
+- **Missing toast notifications** — added on Drivers, Services, ShortcutCleaner,
+  DeepCleanup (3 operations), NetworkRepair.
+- **UninstallerView** — hardcoded `#6366F1` replaced with `{StaticResource Accent}`.
+
+## [1.10.1] - 2026-05-26
+
+### Fixed
 - **UI uniformity audit** — replaced all remaining CheckBoxes with purple ToggleSwitch on:
   Performance (5 toggles), Logs (5 severity filters), Ping targets, Process Manager,
   Deep Cleanup categories.
@@ -37,6 +51,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   levels and human-readable explanations.
 - **Startup Manager hide system** — toggle to filter out Windows/Microsoft system entries.
 - **Filter chip styles** — reusable green/amber/red radio pill components.
+
+## [1.9.1] - 2026-05-26
+
+### Fixed
+- **Startup Manager columns** — reduced fixed widths to prevent last column overflow.
+- **Startup Manager icons** — use extracted executable path for more accurate icon resolution.
+- **Windows Update live output** — increased MinHeight/MaxHeight for better visibility.
 
 ## [1.9.0] - 2026-05-26
 

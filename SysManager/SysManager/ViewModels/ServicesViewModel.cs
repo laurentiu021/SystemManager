@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -89,6 +88,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
         RunningCount = _allServices.Count(s => s.Status == "Running");
         ApplyFilter();
         StatusMessage = $"Loaded {TotalCount} services ({RunningCount} running).";
+        ToastService.Instance.Show("Services refreshed", $"{TotalCount} services ({RunningCount} running)");
     }
 
     [RelayCommand]

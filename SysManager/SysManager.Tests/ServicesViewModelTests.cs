@@ -17,11 +17,11 @@ public class ServicesViewModelTests
 {
     private static readonly List<ServiceEntry> TestServices = new()
     {
-        new() { Name = "wuauserv", DisplayName = "Windows Update", Description = "Manages Windows updates", Status = "Running", StartType = "Automatic", Recommendation = "keep-enabled" },
-        new() { Name = "Spooler", DisplayName = "Print Spooler", Description = "Manages print jobs", Status = "Running", StartType = "Automatic", Recommendation = "safe-to-disable" },
-        new() { Name = "XboxGipSvc", DisplayName = "Xbox Accessory Management", Description = "Manages Xbox accessories", Status = "Stopped", StartType = "Manual", Recommendation = "safe-to-disable" },
-        new() { Name = "WSearch", DisplayName = "Windows Search", Description = "Provides content indexing", Status = "Running", StartType = "Automatic", Recommendation = "advanced" },
-        new() { Name = "BITS", DisplayName = "Background Intelligent Transfer", Description = "Transfers files in background", Status = "Stopped", StartType = "Manual", Recommendation = "keep-enabled" },
+        new() { Name = "wuauserv", DisplayName = "Windows Update", Description = "Manages Windows updates", Status = "Running", StartType = "Automatic", Recommendation = "keep-enabled", SafetyLevel = Models.SafetyLevel.Caution },
+        new() { Name = "Spooler", DisplayName = "Print Spooler", Description = "Manages print jobs", Status = "Running", StartType = "Automatic", Recommendation = "safe-to-disable", SafetyLevel = Models.SafetyLevel.Caution },
+        new() { Name = "XboxGipSvc", DisplayName = "Xbox Accessory Management", Description = "Manages Xbox accessories", Status = "Stopped", StartType = "Manual", Recommendation = "safe-to-disable", SafetyLevel = Models.SafetyLevel.Safe },
+        new() { Name = "WSearch", DisplayName = "Windows Search", Description = "Provides content indexing", Status = "Running", StartType = "Automatic", Recommendation = "advanced", SafetyLevel = Models.SafetyLevel.Caution },
+        new() { Name = "BITS", DisplayName = "Background Intelligent Transfer", Description = "Transfers files in background", Status = "Stopped", StartType = "Manual", Recommendation = "keep-enabled", SafetyLevel = Models.SafetyLevel.Critical },
     };
 
     private static ServicesViewModel CreateWithData(List<ServiceEntry>? services = null)
@@ -52,8 +52,9 @@ public class ServicesViewModelTests
         Assert.Contains("All", vm.FilterOptions);
         Assert.Contains("Running", vm.FilterOptions);
         Assert.Contains("Stopped", vm.FilterOptions);
-        Assert.Contains("Safe to disable", vm.FilterOptions);
-        Assert.Contains("Advanced", vm.FilterOptions);
+        Assert.Contains("Safe", vm.FilterOptions);
+        Assert.Contains("Caution", vm.FilterOptions);
+        Assert.Contains("Critical", vm.FilterOptions);
     }
 
     [Fact]
@@ -111,21 +112,20 @@ public class ServicesViewModelTests
     }
 
     [Fact]
-    public void ApplyFilter_SafeToDisable_ShowsOnlySafe()
+    public void ApplyFilter_SafeLevel_ShowsOnlySafe()
     {
         var vm = CreateWithData();
-        vm.SelectedFilter = "Safe to disable";
-        Assert.All(vm.Services, s => Assert.Equal("safe-to-disable", s.Recommendation));
-        Assert.Equal(2, vm.Services.Count);
+        vm.SelectedFilter = "Safe";
+        Assert.All(vm.Services, s => Assert.Equal(Models.SafetyLevel.Safe, s.SafetyLevel));
+        Assert.Single(vm.Services);
     }
 
     [Fact]
-    public void ApplyFilter_Advanced_ShowsOnlyAdvanced()
+    public void ApplyFilter_Safe_ShowsOnlySafe()
     {
         var vm = CreateWithData();
-        vm.SelectedFilter = "Advanced";
-        Assert.All(vm.Services, s => Assert.Equal("advanced", s.Recommendation));
-        Assert.Single(vm.Services);
+        vm.SelectedFilter = "Safe";
+        Assert.All(vm.Services, s => Assert.Equal(Models.SafetyLevel.Safe, s.SafetyLevel));
     }
 
     // ── ApplyFilter: text filter ──

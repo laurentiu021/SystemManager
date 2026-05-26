@@ -145,6 +145,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
             Progress = 100;
             StatusMessage = $"Done. Installed: {installed}, Failed: {failed}.";
+            ToastService.Instance.Show("Bulk Install complete", $"Installed: {installed}, Failed: {failed}");
         }
         catch (OperationCanceledException)
         {

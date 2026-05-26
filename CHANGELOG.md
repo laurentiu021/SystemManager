@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-05-26
+
+### Added
+- **Purple toggle switch** — global ToggleButton component replacing all CheckBoxes and
+  enable/disable buttons. Consistent on/off/locked states across Startup Manager, Privacy,
+  Windows Features, and Context Menu tabs.
+- **Glass toast notifications** — bottom-right overlay appears on operation completion
+  (scan, install, cleanup, shred, etc). Auto-dismisses after 5 seconds.
+- **Inline status bar** — progress state transitions visually from purple (busy) to green (done).
+
+### Changed
+- **Startup Manager** — toggle column uses purple ToggleSwitch instead of checkbox.
+- **Privacy Toggles** — scaled checkbox replaced with ToggleSwitch.
+- **Windows Features** — Enable/Disable button replaced with ToggleSwitch.
+- **Context Menu** — checkbox replaced with ToggleSwitch.
+
 ## [1.8.0] - 2026-05-26
 
 ### Added

@@ -69,6 +69,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
 
             ApplyFilter();
             StatusMessage = $"Found {AllApps.Count} installed applications.";
+            ToastService.Instance.Show("Uninstaller scan complete", $"Found {AllApps.Count} installed applications");
         }
         catch (OperationCanceledException)
         {
@@ -142,6 +143,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
 
             Progress = 100;
             StatusMessage = $"Completed {done}/{toRemove.Count} uninstalls.";
+            ToastService.Instance.Show("Uninstall complete", $"Completed {done}/{toRemove.Count} uninstalls");
             Log.Information("Uninstall batch completed: {Done}/{Total}", done, toRemove.Count);
         }
         finally

@@ -73,6 +73,7 @@ public sealed partial class StartupViewModel : ViewModelBase
             }
 
             StatusMessage = $"Found {_allEntries.Count} startup items.";
+            ToastService.Instance.Show("Scan complete", $"{_allEntries.Count} startup items found");
         }
         catch (InvalidOperationException ex)
         {

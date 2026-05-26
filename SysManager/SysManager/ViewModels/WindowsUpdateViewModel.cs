@@ -198,6 +198,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 ? $"{UpdateCount} updates found."
                 : "No updates available.";
             StatusMessage = "Scan complete";
+            ToastService.Instance.Show("Windows Update scan complete", $"{UpdateCount} updates found");
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -250,6 +251,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             UpdateCount = Updates.Count;
             TableSummary = $"{UpdateCount} history entries.";
             StatusMessage = "Done";
+            ToastService.Instance.Show("Update History complete", $"{UpdateCount} history entries");
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }

@@ -68,6 +68,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
             ApplyFilter();
             StatusMessage = $"Found {_allEntries.Count} context menu entries.";
+            ToastService.Instance.Show("Context Menu scan complete", $"Found {_allEntries.Count} entries");
         }
         catch (InvalidOperationException ex)
         {

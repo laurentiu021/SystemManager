@@ -180,6 +180,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             }
 
             StatusMessage = $"Complete — {completed} shredded, {failed} failed.";
+            ToastService.Instance.Show("File Shredder complete", $"{completed} shredded, {failed} failed");
         }
         catch (OperationCanceledException)
         {

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Process Manager real-time refresh** — 1-second auto-refresh timer matches Task Manager
+  update speed. CPU measurement window reduced to 100ms for faster snapshots.
+- **SFC progress bar** — parses stdout for completion percentage, shows real progress.
+- **DISM progress bar** — parses stdout for percentage (handles decimal formats like 62.3%).
+- **Ping live output** — ConsoleView showing real-time replies per target (time, timeout).
+- **Traceroute live output** — ConsoleView with hop-by-hop results and explanations
+  (gateway detection, ISP backbone, filtered nodes, destination reached).
+
 ### Fixed
 - **UI uniformity audit** — replaced all remaining CheckBoxes with purple ToggleSwitch on:
   Performance (5 toggles), Logs (5 severity filters), Ping targets, Process Manager,

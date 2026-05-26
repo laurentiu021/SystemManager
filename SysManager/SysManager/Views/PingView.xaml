@@ -2,7 +2,8 @@
 <UserControl x:Class="SysManager.Views.PingView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF">
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+             xmlns:v="clr-namespace:SysManager.Views">
     <UserControl.Resources>
         <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#070A0F" Offset="0"/>
@@ -17,6 +18,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -163,7 +165,7 @@
         </Border>
 
         <!-- Latency chart -->
-        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,28">
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -188,6 +190,13 @@
                                     TooltipTextPaint="{Binding Shared.TooltipTextPaint}"
                                     TooltipBackgroundPaint="{Binding Shared.TooltipBackgroundPaint}"/>
             </Grid>
+        </Border>
+
+        <!-- Live output console -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,16,28,28" Padding="0" MaxHeight="200">
+            <Expander Header="Live output" IsExpanded="False" Padding="8">
+                <v:ConsoleView DataContext="{Binding Console}"/>
+            </Expander>
         </Border>
     </Grid>
 </UserControl>

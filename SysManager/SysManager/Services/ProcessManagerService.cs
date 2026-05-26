@@ -38,8 +38,8 @@ public sealed class ProcessManagerService
                 catch (System.ComponentModel.Win32Exception) { /* access denied — skip CPU for this process */ }
             }
 
-            // Brief pause to measure CPU delta
-            Thread.Sleep(250);
+            // Brief pause to measure CPU delta (100ms is sufficient for meaningful readings)
+            Thread.Sleep(100);
 
             int logicalCores = Environment.ProcessorCount;
 

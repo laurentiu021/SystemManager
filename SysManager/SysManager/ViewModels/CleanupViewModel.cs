@@ -206,6 +206,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
                 'Recycle Bin cleared'
             ", cancellationToken: _binCts.Token);
             StatusMessage = "Done";
+            ToastService.Instance.Show("Cleanup complete", "Operation finished successfully");
             await PreScanAsync();
         }
         catch (OperationCanceledException) { StatusMessage = "Recycle Bin cleanup cancelled."; }

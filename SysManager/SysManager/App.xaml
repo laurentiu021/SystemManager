@@ -233,6 +233,46 @@
                 </Setter>
             </Style>
 
+            <!-- ============================================================ -->
+            <!-- ToggleSwitch — purple pill toggle (on/off/locked)             -->
+            <!-- ============================================================ -->
+            <Style x:Key="ToggleSwitch" TargetType="ToggleButton">
+                <Setter Property="Width" Value="40"/>
+                <Setter Property="Height" Value="22"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="SnapsToDevicePixels" Value="True"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToggleButton">
+                            <Grid>
+                                <Border x:Name="Track" CornerRadius="11" Background="#374151"/>
+                                <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9"
+                                        Background="White" HorizontalAlignment="Left" Margin="2,2,0,2"
+                                        VerticalAlignment="Center">
+                                    <Border.Effect>
+                                        <DropShadowEffect ShadowDepth="1" BlurRadius="3" Opacity="0.3" Color="Black"/>
+                                    </Border.Effect>
+                                </Border>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Track" Property="Background" Value="{StaticResource Accent}"/>
+                                    <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
+                                    <Setter TargetName="Thumb" Property="Margin" Value="0,2,2,2"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Track" Property="Opacity" Value="0.88"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- Admin: golden glass button for elevation requests -->
             <Style x:Key="AdminButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
                 <Setter Property="Foreground" Value="#FCD34D"/>

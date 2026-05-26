@@ -68,6 +68,7 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
             ApplyFilter();
             EnabledCount = AllFeatures.Count(f => f.IsEnabled);
             StatusMessage = $"Found {AllFeatures.Count} features ({EnabledCount} enabled).";
+            ToastService.Instance.Show("Windows Features scan complete", $"Found {AllFeatures.Count} features");
         }
         catch (OperationCanceledException)
         {

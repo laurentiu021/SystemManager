@@ -5,6 +5,7 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media.Animation;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -21,6 +22,31 @@ public partial class MainWindow : Window
         // Ensure ViewModel disposal even if OnClosed is not called (e.g. app shutdown)
         if (Application.Current != null)
             Application.Current.Exit += OnApplicationExit;
+
+        ToastService.Instance.ToastRequested += OnToastRequested;
+        ToastService.Instance.DismissRequested += OnToastDismiss;
+    }
+
+    private void OnToastRequested(string title, string detail)
+    {
+        ToastTitle.Text = title;
+        ToastDetail.Text = detail;
+        ToastOverlay.Visibility = Visibility.Visible;
+        ToastOverlay.Opacity = 0;
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
+        ToastOverlay.BeginAnimation(OpacityProperty, fade);
+    }
+
+    private void OnToastDismiss()
+    {
+        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
+        fade.Completed += (_, _) => ToastOverlay.Visibility = Visibility.Collapsed;
+        ToastOverlay.BeginAnimation(OpacityProperty, fade);
+    }
+
+    private void DismissToast_Click(object sender, MouseButtonEventArgs e)
+    {
+        ToastService.Instance.Dismiss();
     }
 
     private void OnApplicationExit(object sender, ExitEventArgs e)

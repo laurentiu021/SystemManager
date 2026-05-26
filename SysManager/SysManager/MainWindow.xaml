@@ -269,5 +269,44 @@
                                 Content="{Binding SelectedNav.View}"/>
             </Grid>
         </Border>
+
+        <!-- Glass toast notification overlay -->
+        <Border x:Name="ToastOverlay" Grid.Column="1"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,20,20" Visibility="Collapsed">
+            <Border Background="#F0141B27" CornerRadius="10"
+                    BorderBrush="#4022C55E" BorderThickness="1"
+                    Padding="14,12,18,12">
+                <Border.Effect>
+                    <DropShadowEffect ShadowDepth="4" BlurRadius="24" Opacity="0.5" Color="Black"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
+                            Background="#2022C55E" Margin="0,0,10,0">
+                        <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                   FontSize="14" Foreground="#22C55E"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="ToastTitle" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimary}"/>
+                        <TextBlock x:Name="ToastDetail" FontSize="11"
+                                   Foreground="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Border Grid.Column="2" Margin="14,0,0,0" Cursor="Hand"
+                            MouseLeftButtonUp="DismissToast_Click"
+                            Background="Transparent" Padding="4">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                   FontSize="12" Foreground="{StaticResource TextMuted}"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+                </Grid>
+            </Border>
+        </Border>
     </Grid>
 </Window>

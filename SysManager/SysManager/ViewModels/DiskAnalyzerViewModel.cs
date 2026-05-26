@@ -113,6 +113,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
                 ? "No subfolders found."
                 : $"{EntryCount} folders · {FormatSize(TotalSize)} total · {TotalFiles:N0} files";
             StatusMessage = "Analysis complete.";
+            ToastService.Instance.Show("Disk Analysis complete", $"{EntryCount} folders, {FormatSize(TotalSize)} total");
             Log.Information("Disk analysis completed: {Folders} folders, {Size} total",
                 EntryCount, FormatSize(TotalSize));
         }

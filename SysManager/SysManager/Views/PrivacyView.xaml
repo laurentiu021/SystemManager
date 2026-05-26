@@ -135,13 +135,10 @@
                                                    Margin="0,2,0,0" Opacity="0.6"/>
                                     </StackPanel>
 
-                                    <CheckBox Grid.Column="1" IsChecked="{Binding IsEnabled}"
-                                              VerticalAlignment="Center" Margin="8,0,0,0"
-                                              ToolTip="Toggle privacy protection on/off">
-                                        <CheckBox.LayoutTransform>
-                                            <ScaleTransform ScaleX="1.3" ScaleY="1.3"/>
-                                        </CheckBox.LayoutTransform>
-                                    </CheckBox>
+                                    <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                                  IsChecked="{Binding IsEnabled}"
+                                                  VerticalAlignment="Center" Margin="8,0,0,0"
+                                                  ToolTip="Toggle privacy protection on/off"/>
                                 </Grid>
                             </Border>
                         </DataTemplate>

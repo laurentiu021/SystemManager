@@ -110,6 +110,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
                 ? "No duplicates found."
                 : $"{GroupCount} groups · {DuplicateFileCount} files · {FormatSize(TotalWasted)} wasted";
             StatusMessage = "Scan complete.";
+            ToastService.Instance.Show("Duplicate Scan complete", $"{GroupCount} groups, {FormatSize(TotalWasted)} wasted");
             Log.Information("Duplicate scan completed: {Groups} groups, {Files} files, {Wasted} wasted",
                 GroupCount, DuplicateFileCount, FormatSize(TotalWasted));
         }

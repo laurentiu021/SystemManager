@@ -156,6 +156,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             TuneUpResult = await _tuneUp.RunAsync(emptyBin, progress, _tuneUpCts.Token);
             HasTuneUpResult = true;
             StatusMessage = $"Tune-Up complete — {TuneUpResult.FreedDisplay} freed, {TuneUpResult.OverallVerdict}";
+            ToastService.Instance.Show("Tune-Up complete", $"{TuneUpResult.FreedDisplay} freed");
             Log.Information("Quick Tune-Up completed: {Freed} freed, {Warnings} warnings",
                 TuneUpResult.FreedDisplay, TuneUpResult.WarningCount);
         }

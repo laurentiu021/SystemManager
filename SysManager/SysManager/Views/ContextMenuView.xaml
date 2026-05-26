@@ -68,7 +68,6 @@
                       CanUserAddRows="False"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="False"
-                      RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                       SelectionMode="Single" CanUserSortColumns="True"
                       CanUserResizeColumns="True"
                       VirtualizingPanel.IsVirtualizing="True"

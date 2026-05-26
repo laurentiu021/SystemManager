@@ -25,8 +25,39 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
+        <!-- Elevation banner: not elevated -->
+        <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchElevatedCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="Some privacy settings write to system-wide registry keys and require administrator privileges."
+                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="1" Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
+                CornerRadius="10" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — all privacy toggles are available."
+                               Foreground="#FCD34D" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Toolbar -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
                 <Button Content="Apply All" Command="{Binding ApplyAllCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
@@ -41,37 +72,20 @@
                           SelectedItem="{Binding SelectedCategory}"
                           Width="140" Margin="0,0,12,0"/>
 
-                <Border Background="#1F2D1F" CornerRadius="4" Padding="6,2" Margin="4,0"
+                <Border CornerRadius="10" Padding="10,4" Margin="4,0"
+                        Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
                         Visibility="{Binding IsElevated, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="Administrator" FontSize="11" Foreground="#4ADE80"/>
+                    <Grid>
+                        <Border Background="#FBBF24" Width="3" HorizontalAlignment="Left" CornerRadius="2"
+                                Margin="-10,-4,0,-4"/>
+                        <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                            <TextBlock Text="&#x1F6E1;" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock Text="Administrator" FontSize="11" Foreground="#FCD34D"
+                                       FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
                 </Border>
             </WrapPanel>
-        </Border>
-
-        <!-- Elevation banner: not elevated -->
-        <Border Grid.Row="2" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
-                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
-            <DockPanel>
-                <Button Content="Run as administrator" Command="{Binding RelaunchElevatedCommand}"
-                        Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Padding="14,8"/>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
-                    <TextBlock Text="Some privacy settings write to system-wide registry keys and require administrator privileges."
-                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <!-- Elevation banner: elevated -->
-        <Border Grid.Row="2" Background="#0D1F12" BorderBrush="#22C55E44" BorderThickness="1"
-                CornerRadius="8" Padding="10,8" Margin="0,0,0,12"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <TextBlock Text="Running as administrator — all privacy toggles are available." Foreground="#22C55E" FontSize="13" FontWeight="Medium"/>
-            </StackPanel>
         </Border>
 
         <!-- Toggle list grouped by category -->
@@ -92,8 +106,19 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border Margin="0,2" Padding="12,10" CornerRadius="6"
-                                    Background="#0A0E14"
-                                    BorderBrush="#1A1F2E" BorderThickness="1">
+                                    BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#0A0E14"/>
+                                        <Setter Property="BorderBrush" Value="#1A1F2E"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#10141D"/>
+                                                <Setter Property="BorderBrush" Value="#2A3244"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>

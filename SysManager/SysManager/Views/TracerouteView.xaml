@@ -91,7 +91,6 @@
                               CanUserResizeColumns="True"
                               Background="Transparent" BorderThickness="0"
                               GridLinesVisibility="None" IsReadOnly="True"
-                              RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling">
                         <DataGrid.Columns>

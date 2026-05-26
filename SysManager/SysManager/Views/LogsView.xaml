@@ -9,13 +9,17 @@
             <GradientStop Color="#090D16" Offset="1"/>
         </LinearGradientBrush>
 
-        <!-- Reusable "severity dot" — a glowing colored ring.
-             Usage: <ContentPresenter Content="…" Resources="{StaticResource SevDotStyle}"/> -->
         <Style x:Key="SevDot" TargetType="Ellipse">
-            <Setter Property="Width" Value="10"/>
-            <Setter Property="Height" Value="10"/>
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="Height" Value="8"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="StrokeThickness" Value="2"/>
+        </Style>
+
+        <Style x:Key="GlassCard" TargetType="Border">
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#0FFFFFFF"/>
         </Style>
     </UserControl.Resources>
 
@@ -42,35 +46,79 @@
             </StackPanel>
         </DockPanel>
 
-        <!-- Severity count pills -->
+        <!-- Severity count glass cards -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="28,16,28,0">
-            <Border Background="#2A1114" BorderBrush="#FF3B30" BorderThickness="1" CornerRadius="999" Padding="14,8" Margin="0,0,10,0">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Style="{StaticResource SevDot}" Fill="#FF3B30" Margin="0,0,8,0"/>
-                    <TextBlock Text="{Binding CriticalCount}" FontSize="14" FontWeight="SemiBold" Foreground="#FF3B30" VerticalAlignment="Center"/>
-                    <TextBlock Text=" Critical" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
+            <!-- Critical -->
+            <Border Style="{StaticResource GlassCard}" Background="#14FF3B30" Margin="0,0,12,0">
+                <Grid>
+                    <Border Background="#FF3B30" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                            Margin="-16,-12,0,-12"/>
+                    <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                        <Ellipse Style="{StaticResource SevDot}" Fill="#FF3B30">
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#FF3B30" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <TextBlock Text="{Binding CriticalCount}" FontSize="20" FontWeight="Bold"
+                                   Foreground="#FF6B6B" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <TextBlock Text="Critical" FontSize="12" Foreground="#64748B"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Grid>
             </Border>
-            <Border Background="#2A1E1E" BorderBrush="#F87171" BorderThickness="1" CornerRadius="999" Padding="14,8" Margin="0,0,10,0">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Style="{StaticResource SevDot}" Fill="#F87171" Margin="0,0,8,0"/>
-                    <TextBlock Text="{Binding ErrorCount}" FontSize="14" FontWeight="SemiBold" Foreground="#F87171" VerticalAlignment="Center"/>
-                    <TextBlock Text=" Errors" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
+            <!-- Errors -->
+            <Border Style="{StaticResource GlassCard}" Background="#14F87171" Margin="0,0,12,0">
+                <Grid>
+                    <Border Background="#F87171" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                            Margin="-16,-12,0,-12"/>
+                    <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                        <Ellipse Style="{StaticResource SevDot}" Fill="#F87171">
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#F87171" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <TextBlock Text="{Binding ErrorCount}" FontSize="20" FontWeight="Bold"
+                                   Foreground="#FCA5A5" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <TextBlock Text="Errors" FontSize="12" Foreground="#64748B"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Grid>
             </Border>
-            <Border Background="#2A2314" BorderBrush="#FBBF24" BorderThickness="1" CornerRadius="999" Padding="14,8" Margin="0,0,10,0">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Style="{StaticResource SevDot}" Fill="#FBBF24" Margin="0,0,8,0"/>
-                    <TextBlock Text="{Binding WarningCount}" FontSize="14" FontWeight="SemiBold" Foreground="#FBBF24" VerticalAlignment="Center"/>
-                    <TextBlock Text=" Warnings" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
+            <!-- Warnings -->
+            <Border Style="{StaticResource GlassCard}" Background="#14FBBF24" Margin="0,0,12,0">
+                <Grid>
+                    <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                            Margin="-16,-12,0,-12"/>
+                    <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                        <Ellipse Style="{StaticResource SevDot}" Fill="#FBBF24">
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#FBBF24" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <TextBlock Text="{Binding WarningCount}" FontSize="20" FontWeight="Bold"
+                                   Foreground="#FDE68A" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <TextBlock Text="Warnings" FontSize="12" Foreground="#64748B"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Grid>
             </Border>
-            <Border Background="#11212A" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="999" Padding="14,8">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Style="{StaticResource SevDot}" Fill="#38BDF8" Margin="0,0,8,0"/>
-                    <TextBlock Text="{Binding InfoCount}" FontSize="14" FontWeight="SemiBold" Foreground="#38BDF8" VerticalAlignment="Center"/>
-                    <TextBlock Text=" Info" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
+            <!-- Info -->
+            <Border Style="{StaticResource GlassCard}" Background="#1438BDF8">
+                <Grid>
+                    <Border Background="#38BDF8" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                            Margin="-16,-12,0,-12"/>
+                    <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                        <Ellipse Style="{StaticResource SevDot}" Fill="#38BDF8">
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#38BDF8" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <TextBlock Text="{Binding InfoCount}" FontSize="20" FontWeight="Bold"
+                                   Foreground="#7DD3FC" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <TextBlock Text="Info" FontSize="12" Foreground="#64748B"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Grid>
             </Border>
         </StackPanel>
 
@@ -175,8 +223,6 @@
                               IsReadOnly="True"
                               CanUserResizeColumns="True"
                               Background="Transparent"
-                              RowBackground="Transparent"
-                              AlternatingRowBackground="#0F141C"
                               BorderThickness="0"
                               SelectionMode="Single"
                               VirtualizingPanel.IsVirtualizing="True"

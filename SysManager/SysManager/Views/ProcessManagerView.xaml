@@ -56,7 +56,6 @@
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="True"
-                      RowBackground="Transparent" AlternatingRowBackground="#0F141C"
                       SelectionMode="Single" CanUserSortColumns="True"
                       CanUserResizeColumns="True"
                       VirtualizingPanel.IsVirtualizing="True"
@@ -91,8 +90,13 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Mem" Binding="{Binding MemoryDisplay}" Width="70"
+                    <DataGridTextColumn Header="Memory" Binding="{Binding MemoryDisplay}" Width="80"
                                         SortMemberPath="MemoryBytes">
+                        <DataGridTextColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.HeaderStyle>
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Right"/>
@@ -102,8 +106,13 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="CPU" Binding="{Binding CpuPercent, StringFormat={}{0:F1}%}" Width="50"
+                    <DataGridTextColumn Header="CPU" Binding="{Binding CpuPercent, StringFormat={}{0:F1}%}" Width="60"
                                         SortMemberPath="CpuPercent">
+                        <DataGridTextColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.HeaderStyle>
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Right"/>
@@ -114,8 +123,13 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Thr" Binding="{Binding ThreadCount}" Width="45"
+                    <DataGridTextColumn Header="Threads" Binding="{Binding ThreadCount}" Width="70"
                                         SortMemberPath="ThreadCount">
+                        <DataGridTextColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.HeaderStyle>
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
@@ -125,21 +139,29 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Header="Status" Width="80" SortMemberPath="Status">
+                    <DataGridTemplateColumn Header="Status" Width="100" SortMemberPath="Status">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0"
-                                             Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
-                                    <TextBlock Text="{Binding Status}" FontSize="11"
-                                               Foreground="{Binding Status, Converter={StaticResource StatusBrush}}"
-                                               VerticalAlignment="Center"/>
-                                </StackPanel>
+                                <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"
+                                        Background="#10FFFFFF" BorderThickness="1" BorderBrush="#0AFFFFFF">
+                                    <Grid>
+                                        <Border Width="3" HorizontalAlignment="Left" CornerRadius="2"
+                                                Margin="-8,-4,0,-4"
+                                                Background="{Binding Status, Converter={StaticResource StatusBrush}}"/>
+                                        <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                                            <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                                     Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
+                                            <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{Binding Status, Converter={StaticResource StatusBrush}}"
+                                                       VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="Actions" Width="70" CanUserSort="False">
+                    <DataGridTemplateColumn Header="Actions" Width="120" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">

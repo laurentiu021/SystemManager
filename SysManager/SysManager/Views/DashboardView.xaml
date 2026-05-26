@@ -12,14 +12,45 @@
 
         <StackPanel Orientation="Horizontal" Grid.Row="0">
             <TextBlock Text="System overview" FontSize="22" FontWeight="SemiBold"/>
-            <Border CornerRadius="10" Padding="10,2" Margin="16,4,0,0"
-                    Background="#1F6FEB" Visibility="{Binding IsElevated, Converter={StaticResource BoolToVis}}">
-                <TextBlock Text="Administrator" Foreground="White" FontSize="12"/>
+            <Border CornerRadius="10" Padding="10,5" Margin="16,2,0,0"
+                    Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
+                    Visibility="{Binding IsElevated, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Border Background="#FBBF24" Width="3" HorizontalAlignment="Left" CornerRadius="2"
+                            Margin="-10,-5,0,-5"/>
+                    <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                        <TextBlock Text="&#x1F6E1;" FontSize="12" VerticalAlignment="Center"/>
+                        <TextBlock Text="Administrator" Foreground="#FCD34D" FontSize="12"
+                                   FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
             </Border>
-            <Button Margin="16,0,0,0" Content="Request admin"
-                    Command="{Binding RequestElevationCommand}">
+            <Button Margin="16,0,0,0"
+                    Command="{Binding RequestElevationCommand}" Cursor="Hand">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="10" Padding="10,5"
+                                Background="#14FBBF24" BorderBrush="#30FBBF24" BorderThickness="1">
+                            <Grid>
+                                <Border Background="#FBBF24" Width="3" HorizontalAlignment="Left" CornerRadius="2"
+                                        Margin="-10,-5,0,-5" Opacity="0.7"/>
+                                <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                                    <TextBlock Text="&#x1F6E1;" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Request admin" Foreground="#FCD34D" FontSize="12"
+                                               FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#60FBBF24"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#20FBBF24"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
                 <Button.Style>
-                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                    <Style TargetType="Button">
                         <Setter Property="Visibility" Value="Visible"/>
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsElevated}" Value="True">

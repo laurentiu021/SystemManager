@@ -53,15 +53,15 @@
                                 <Border x:Name="SingleBd"
                                         Visibility="{Binding IsSingleItem, Converter={StaticResource FlexVis}}"
                                         CornerRadius="8" Padding="14,10" Cursor="Hand"
-                                        Background="Transparent"
                                         MouseLeftButtonUp="SingleGroup_Click"
                                         Tag="{Binding Children[0]}"
                                         AutomationProperties.AutomationId="{Binding Children[0].Id}">
                                     <Border.Style>
                                         <Style TargetType="Border">
+                                            <Setter Property="Background" Value="Transparent"/>
                                             <Style.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                                    <Setter Property="Background" Value="#186366F1"/>
                                                 </Trigger>
                                             </Style.Triggers>
                                         </Style>
@@ -88,8 +88,19 @@
                                           BorderThickness="0"
                                           Foreground="{StaticResource TextSecondary}">
                                     <Expander.Header>
-                                        <StackPanel Margin="4,4,0,4"
-                                                    ToolTip="{Binding Tooltip}">
+                                        <Border CornerRadius="8" Padding="4,4,8,4" Margin="-4,-4,-8,-4"
+                                                ToolTip="{Binding Tooltip}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="#126366F1"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        <StackPanel>
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding Glyph}"
                                                            FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -125,21 +136,23 @@
                                                 </TextBlock.Style>
                                             </TextBlock>
                                         </StackPanel>
+                                        </Border>
                                     </Expander.Header>
                                     <ItemsControl ItemsSource="{Binding Children}" Focusable="False">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border x:Name="ChildBd"
                                                         CornerRadius="8" Padding="28,9,14,9"
-                                                        Cursor="Hand" Background="Transparent"
+                                                        Cursor="Hand"
                                                         MouseLeftButtonUp="NavChild_Click"
                                                         Tag="{Binding}"
                                                         AutomationProperties.AutomationId="{Binding Id}">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="Transparent"/>
                                                             <Style.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                                                    <Setter Property="Background" Value="#186366F1"/>
                                                                 </Trigger>
                                                             </Style.Triggers>
                                                         </Style>

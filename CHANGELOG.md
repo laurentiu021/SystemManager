@@ -6,10 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-- **Startup Manager columns** — reduced fixed widths to prevent last column overflow.
-- **Startup Manager icons** — use extracted executable path for more accurate icon resolution.
-- **Windows Update live output** — increased MinHeight/MaxHeight for better visibility.
+## [1.10.0] - 2026-05-26
+
+### Added
+- **Safety ratings on Services** — each service shows Safe/Caution/Critical badge with
+  description tooltip. Filter chips in toolbar to show only safe-to-disable services.
+- **Safety ratings on Windows Features** — same badge system as Services.
+- **Curated safety database** — 50+ services and 20+ features with researched safety
+  levels and human-readable explanations.
+- **Startup Manager hide system** — toggle to filter out Windows/Microsoft system entries.
+- **Filter chip styles** — reusable green/amber/red radio pill components.
 
 ## [1.9.0] - 2026-05-26
 

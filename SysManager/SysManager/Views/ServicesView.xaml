@@ -58,24 +58,43 @@
 
         <!-- Toolbar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
-            <DockPanel>
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="Refresh" Command="{Binding RefreshCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                    <ComboBox ItemsSource="{Binding FilterOptions}"
-                              SelectedItem="{Binding SelectedFilter}" Width="150" Margin="0,0,8,0"/>
-                    <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
-                             Width="240" VerticalContentAlignment="Center"/>
+            <StackPanel>
+                <DockPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Refresh" Command="{Binding RefreshCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                        <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="240" VerticalContentAlignment="Center"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                        <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center">
+                            <Run Text="{Binding RunningCount, Mode=OneWay}"/>
+                            <Run Text=" running / "/>
+                            <Run Text="{Binding TotalCount, Mode=OneWay}"/>
+                            <Run Text=" total"/>
+                        </TextBlock>
+                    </StackPanel>
+                </DockPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="Filter:" Foreground="{StaticResource TextMuted}" FontSize="11"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <RadioButton Content="{Binding SafeCount, StringFormat='Safe ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,0"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Safe}"
+                                 Style="{StaticResource FilterChip}"/>
+                    <RadioButton Content="{Binding CautionCount, StringFormat='Caution ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,0"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Caution}"
+                                 Style="{StaticResource FilterChipCaution}"/>
+                    <RadioButton Content="{Binding CriticalCount, StringFormat='Critical ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,0"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Critical}"
+                                 Style="{StaticResource FilterChipCritical}"/>
+                    <RadioButton Content="All" GroupName="SafetyFilter" Margin="0,0,6,0"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=All}"
+                                 Style="{StaticResource FilterChip}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
-                    <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center">
-                        <Run Text="{Binding RunningCount, Mode=OneWay}"/>
-                        <Run Text=" running / "/>
-                        <Run Text="{Binding TotalCount, Mode=OneWay}"/>
-                        <Run Text=" total"/>
-                    </TextBlock>
-                </StackPanel>
-            </DockPanel>
+            </StackPanel>
         </Border>
 
         <!-- Services list -->
@@ -101,27 +120,22 @@
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-                <DataGridTemplateColumn Header="Rec." Width="100" SortMemberPath="Recommendation">
+                <DataGridTemplateColumn Header="Safety" Width="90" SortMemberPath="SafetyLevel">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Recommendation}" FontSize="11" VerticalAlignment="Center"
-                                       ToolTip="{Binding RecommendationReason}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Recommendation}" Value="safe-to-disable">
-                                                <Setter Property="Foreground" Value="#22C55E"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Recommendation}" Value="advanced">
-                                                <Setter Property="Foreground" Value="#F59E0B"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Recommendation}" Value="keep-enabled">
-                                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
+                            <Border CornerRadius="6" Padding="6,3"
+                                    Background="{Binding SafetyLevel, Converter={StaticResource SafetyBg}}"
+                                    BorderBrush="{Binding SafetyLevel, Converter={StaticResource SafetyBg}}"
+                                    BorderThickness="1" HorizontalAlignment="Left"
+                                    ToolTip="{Binding SafetyDescription}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
+                                             Fill="{Binding SafetyLevel, Converter={StaticResource SafetyBrush}}"/>
+                                    <TextBlock Text="{Binding SafetyLevel, Converter={StaticResource SafetyText}}"
+                                               FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{Binding SafetyLevel, Converter={StaticResource SafetyBrush}}"/>
+                                </StackPanel>
+                            </Border>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

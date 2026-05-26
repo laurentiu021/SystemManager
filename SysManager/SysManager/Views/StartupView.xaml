@@ -32,6 +32,11 @@
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                     <Button Content="Enable All" Command="{Binding EnableAllCommand}"
                             Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
+                    <ToggleButton Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding HideWindowsEntries}" Margin="12,0,6,0"
+                                  VerticalAlignment="Center" ToolTip="Hide Windows/Microsoft system entries"/>
+                    <TextBlock Text="Hide system" FontSize="11" Foreground="{StaticResource TextMuted}"
+                               VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Text="{Binding ScanSummary}" Style="{StaticResource Subtle}"
                            VerticalAlignment="Center" HorizontalAlignment="Right" DockPanel.Dock="Right"/>

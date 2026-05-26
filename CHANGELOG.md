@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-05-26
+
+### Added
+- **Dark title bar** — forced immersive dark mode via DWM API, no more white chrome.
+- **SSD warning on File Shredder** — info banner explaining wear-leveling limitations.
+- **Download button in updater** — users can now click Download when an update is available.
+- **Windows Features status column** — shows Enabled/Disabled on initial scan.
+
+### Fixed
+- **ProgressBar accent color** — all progress bars now use purple theme globally.
+- **RadioButton/CheckBox accent** — power plan selector and all checkboxes match theme.
+- **Bulk installer hover** — app rows now highlight with visible purple tint on mouseover.
+- **"Install selected" on History tab** — buttons hidden when viewing update history.
+- **Startup Manager refresh** — fixed cross-thread collection update crash.
+- **Startup Manager open folder** — robust path extraction for apps with arguments (lghub etc).
+- **DNS detection** — skips virtual adapters, iterates all active until DNS found.
+- **Release history notifications** — single UI update instead of N individual events.
+
+### Changed
+- **Complete UI redesign** — glass card components, golden admin system, modern severity
+  badges, unified accent color (#6366F1) throughout all views.
+
 ## [1.7.20] - 2026-05-25
 
 ### Fixed

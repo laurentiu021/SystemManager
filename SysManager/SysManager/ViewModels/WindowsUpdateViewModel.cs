@@ -64,7 +64,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     {
         try
         {
-            await Task.Yield();
+            await Task.Delay(1);
             await CheckModuleAsync();
         }
         catch (OperationCanceledException) { /* expected on shutdown — no action needed */ }

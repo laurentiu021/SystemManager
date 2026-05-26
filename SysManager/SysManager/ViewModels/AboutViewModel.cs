@@ -179,18 +179,18 @@ public sealed partial class AboutViewModel : ViewModelBase
             else
             {
                 AutoDownloadFailed = true;
-                DownloadStatus = "Automatic download failed — use Manual download to get it from GitHub.";
+                DownloadStatus = "Automatic download failed — the server may be temporarily unavailable. Click 'Manual download' to get it directly from GitHub, or try again later.";
             }
         }
         catch (HttpRequestException ex)
         {
             AutoDownloadFailed = true;
-            DownloadStatus = $"Automatic download failed: {ex.Message}";
+            DownloadStatus = $"Download failed: {ex.Message}. This usually means a network issue or firewall blocking the connection. Try 'Manual download' as fallback.";
         }
         catch (IOException ex)
         {
             AutoDownloadFailed = true;
-            DownloadStatus = $"Automatic download failed: {ex.Message}";
+            DownloadStatus = $"Download failed: {ex.Message}. This usually means a network issue or firewall blocking the connection. Try 'Manual download' as fallback.";
         }
         catch (TaskCanceledException ex)
         {

@@ -14,6 +14,7 @@ public sealed partial class InstallableApp : ObservableObject
 {
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _status = "";
+    [ObservableProperty] private bool _isInstalled;
     [ObservableProperty] private ImageSource? _icon;
 
     public required string Name { get; init; }

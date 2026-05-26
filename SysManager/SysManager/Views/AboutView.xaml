@@ -96,6 +96,9 @@
                                 <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Download" Command="{Binding DownloadCommand}"
+                                        Style="{StaticResource PrimaryButton}" Padding="18,10" FontSize="14"
+                                        Visibility="{Binding ShowDownloadButton, Converter={StaticResource BoolToVis}}"/>
                                 <Button Content="Install" Command="{Binding InstallUpdateCommand}"
                                         Style="{StaticResource PrimaryButton}" Padding="18,10" FontSize="14"
                                         Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}"/>

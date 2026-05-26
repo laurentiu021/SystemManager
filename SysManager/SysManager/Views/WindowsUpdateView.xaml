@@ -109,9 +109,12 @@
                     <Button Content="Feature upgrades" Command="{Binding ListFeatureUpdatesCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="History" Command="{Binding ShowHistoryCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Pending reboot?" Command="{Binding CheckPendingRebootCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="Install selected" Command="{Binding InstallUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="Select all" Command="{Binding SelectAllCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"/>
-                    <Button Content="Deselect all" Command="{Binding DeselectAllCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"/>
+                    <Button Content="Install selected" Command="{Binding InstallUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
+                            Visibility="{Binding IsShowingHistory, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                    <Button Content="Select all" Command="{Binding SelectAllCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"
+                            Visibility="{Binding IsShowingHistory, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                    <Button Content="Deselect all" Command="{Binding DeselectAllCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"
+                            Visibility="{Binding IsShowingHistory, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"/>
                 </WrapPanel>
             </StackPanel>

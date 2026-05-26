@@ -51,16 +51,27 @@ public sealed partial class StartupViewModel : ViewModelBase
         StatusMessage = "Scanning startup items…";
         try
         {
-            var items = await _service.ScanAsync();
-            _allEntries.Clear();
-            Entries.Clear();
-            foreach (var item in items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
-            {
+            var items = await _service.ScanAsync().ConfigureAwait(false);
+            var sorted = items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            foreach (var item in sorted)
                 item.Icon = IconExtractorService.GetIcon(item.Command);
-                _allEntries.Add(item);
+
+            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
+            {
+                dispatcher.Invoke(() =>
+                {
+                    _allEntries.Clear();
+                    _allEntries.AddRange(sorted);
+                    ApplyFilter();
+                });
+            }
+            else
+            {
+                _allEntries.Clear();
+                _allEntries.AddRange(sorted);
+                ApplyFilter();
             }
 
-            ApplyFilter();
             StatusMessage = $"Found {_allEntries.Count} startup items.";
         }
         catch (InvalidOperationException ex)
@@ -113,12 +124,8 @@ public sealed partial class StartupViewModel : ViewModelBase
         if (parameter is not StartupEntry entry) return;
         try
         {
-            var path = entry.Command.Trim('"', ' ');
-            var spaceIdx = path.IndexOf(' ');
-            if (spaceIdx > 0 && !System.IO.File.Exists(path))
-                path = path[..spaceIdx].Trim('"');
-
-            if (System.IO.File.Exists(path))
+            var path = ExtractExecutablePath(entry.Command);
+            if (path is not null && System.IO.File.Exists(path))
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
@@ -127,9 +134,45 @@ public sealed partial class StartupViewModel : ViewModelBase
                     UseShellExecute = true
                 });
             }
+            else
+            {
+                StatusMessage = "File not found — the application may have been moved or uninstalled.";
+            }
         }
         catch (InvalidOperationException) { StatusMessage = "Could not open file location."; }
         catch (System.ComponentModel.Win32Exception) { StatusMessage = "Could not open file location."; }
+    }
+
+    private static string? ExtractExecutablePath(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return null;
+        var cmd = command.Trim();
+
+        if (cmd.StartsWith('"'))
+        {
+            var endQuote = cmd.IndexOf('"', 1);
+            if (endQuote > 1)
+                return cmd[1..endQuote];
+        }
+
+        if (System.IO.File.Exists(cmd)) return cmd;
+
+        var extensions = new[] { ".exe", ".bat", ".cmd", ".com" };
+        for (var i = 0; i < cmd.Length; i++)
+        {
+            if (cmd[i] != ' ') continue;
+            var candidate = cmd[..i];
+            if (System.IO.File.Exists(candidate)) return candidate;
+            foreach (var ext in extensions)
+            {
+                if (candidate.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                    break;
+                if (System.IO.File.Exists(candidate + ext))
+                    return candidate + ext;
+            }
+        }
+
+        return null;
     }
 
     private void UpdateCounts()

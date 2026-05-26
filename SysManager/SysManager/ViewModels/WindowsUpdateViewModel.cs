@@ -28,6 +28,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [ObservableProperty] private int _updateCount;
     [ObservableProperty] private string _tableSummary = "";
     [ObservableProperty] private bool _showConsole;
+    [ObservableProperty] private bool _isShowingHistory;
 
     public WindowsUpdateViewModel(PowerShellRunner runner)
     {
@@ -141,6 +142,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     {
         IsBusy = true;
         IsProgressIndeterminate = true;
+        IsShowingHistory = false;
         StatusMessage = "Listing available Windows Updates…";
         Updates.Clear();
         ShowConsole = false;
@@ -207,6 +209,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     {
         IsBusy = true;
         IsProgressIndeterminate = true;
+        IsShowingHistory = true;
         StatusMessage = "Loading update history…";
         Updates.Clear();
         ShowConsole = false;
@@ -258,6 +261,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     {
         IsBusy = true;
         IsProgressIndeterminate = true;
+        IsShowingHistory = false;
         StatusMessage = "Checking for feature upgrades…";
         Updates.Clear();
         ShowConsole = false;

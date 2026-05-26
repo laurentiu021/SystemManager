@@ -35,6 +35,15 @@
             <TextBlock Text="File Shredder" Style="{StaticResource Display}"/>
             <TextBlock Text="Securely delete files beyond recovery with multi-pass overwrite."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <Border Background="#1C1A0F" BorderBrush="#3D3A20" BorderThickness="1" CornerRadius="6"
+                    Margin="0,10,0,0" Padding="10,8">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="14" Foreground="#EAB308" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Foreground="#EAB308" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="SSD users: overwrite-based shredding is unreliable on solid-state drives due to wear-leveling. Use full-disk encryption (BitLocker/VeraCrypt) for secure data disposal on SSDs."/>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <!-- Toolbar -->

@@ -42,17 +42,16 @@ public sealed class DnsService : IDisposable
         try
         {
             const string script = """
-                $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
-                if ($adapter) {
+                $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false } | Sort-Object -Property ifIndex
+                if (-not $adapters) { $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Sort-Object -Property ifIndex }
+                foreach ($adapter in $adapters) {
                     $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4
                     if ($dns.ServerAddresses.Count -gt 0) {
                         $dns.ServerAddresses -join ', '
-                    } else {
-                        'Automatic (DHCP)'
+                        return
                     }
-                } else {
-                    'No active adapter'
                 }
+                if ($adapters) { 'Automatic (DHCP)' } else { 'No active adapter' }
                 """;
 
             Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)

@@ -91,6 +91,28 @@
                 <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
             </Style>
 
+            <Style TargetType="ProgressBar">
+                <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+
+            <Style TargetType="RadioButton">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+                <Style.Resources>
+                    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{StaticResource AccentColor}"/>
+                </Style.Resources>
+            </Style>
+
+            <Style TargetType="CheckBox">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+                <Style.Resources>
+                    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{StaticResource AccentColor}"/>
+                </Style.Resources>
+            </Style>
+
             <!-- ============================================================ -->
             <!-- Card — reusable container                                      -->
             <!-- ============================================================ -->

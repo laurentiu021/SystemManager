@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -23,7 +22,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     private readonly SystemReportService _reportService;
     private UpdateService.ReleaseInfo? _latest;
 
-    public ObservableCollection<ReleaseNote> ReleaseHistory { get; } = new();
+    [ObservableProperty] private IReadOnlyList<ReleaseNote> _releaseHistory = [];
 
     [ObservableProperty] private string _currentVersion = UpdateService.CurrentVersion.ToString(3);
     [ObservableProperty] private string _buildDate = BuildStamp();
@@ -37,11 +36,20 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private string _latestNotes = string.Empty;
 
     // Download state
-    [ObservableProperty] private bool _isDownloading;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowDownloadButton))]
+    private bool _isDownloading;
+
     [ObservableProperty] private int _downloadPercent;
     [ObservableProperty] private string _downloadStatus = string.Empty;
-    [ObservableProperty] private string? _downloadedPath;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowDownloadButton))]
+    private string? _downloadedPath;
+
     [ObservableProperty] private bool _autoDownloadFailed;
+
+    public bool ShowDownloadButton => !IsDownloading && string.IsNullOrEmpty(DownloadedPath);
 
     // Report export state
     [ObservableProperty] private bool _isGeneratingReport;
@@ -132,9 +140,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 IsCurrent = r.Version == UpdateService.CurrentVersion
             }).ToList();
 
-            ReleaseHistory.Clear();
-            foreach (var note in notes)
-                ReleaseHistory.Add(note);
+            ReleaseHistory = notes;
         }
         catch (HttpRequestException ex) { Log.Debug("Release history load skipped (network): {Error}", ex.Message); }
         catch (TaskCanceledException ex) { Log.Debug("Release history load timed out: {Error}", ex.Message); }

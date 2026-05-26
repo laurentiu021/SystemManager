@@ -38,12 +38,25 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         if (PresentationSource.FromVisual(this) is HwndSource source)
+        {
             source.AddHook(WndProc);
+            ApplyDarkTitleBar(source.Handle);
+        }
 
         // Initialize tray icon after window handle is available
         if (Application.Current is App app && app.TrayService != null)
             app.TrayService.Initialize(this);
     }
+
+    private static void ApplyDarkTitleBar(IntPtr hwnd)
+    {
+        const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+        int value = 1;
+        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
+    }
+
+    [System.Runtime.InteropServices.LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {

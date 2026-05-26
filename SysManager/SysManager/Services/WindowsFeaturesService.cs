@@ -133,6 +133,7 @@ public sealed partial class WindowsFeaturesService
                     Name = name,
                     DisplayName = HumanizeName(name),
                     IsEnabled = isEnabled,
+                    Status = isEnabled ? "Enabled" : "Disabled",
                     Category = WindowsFeature.CategorizeFeature(name)
                 };
             })

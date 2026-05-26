@@ -258,7 +258,7 @@
                                         <Setter Property="Fill" Value="{StaticResource TextSecondary}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsChkdskRunning}" Value="True">
-                                                <Setter Property="Fill" Value="#22C55E"/>
+                                                <Setter Property="Fill" Value="{StaticResource Success}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -270,7 +270,7 @@
                                         <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsChkdskRunning}" Value="True">
-                                                <Setter Property="Foreground" Value="#22C55E"/>
+                                                <Setter Property="Foreground" Value="{StaticResource Success}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>

@@ -73,10 +73,10 @@
             <StackPanel>
                 <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
                 <TextBlock Text="⚠ GPU changes require a reboot to take effect."
-                           Foreground="#EF4444" FontSize="12" Margin="0,4,0,0"
+                           Foreground="{StaticResource Danger}" FontSize="12" Margin="0,4,0,0"
                            Visibility="{Binding NeedsReboot, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="✓ Original settings snapshot saved — Restore All is available."
-                           Foreground="#22C55E" FontSize="12" Margin="0,4,0,0"
+                           Foreground="{StaticResource Success}" FontSize="12" Margin="0,4,0,0"
                            Visibility="{Binding HasSnapshot, Converter={StaticResource BoolToVis}}"/>
             </StackPanel>
         </Border>
@@ -111,8 +111,10 @@
                     <TextBlock Text="Visual Effects" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
-                            <CheckBox Content="Reduce visual effects (disable animations, fades, shadows)"
-                                      IsChecked="{Binding WantVisualEffectsReduced}" Margin="0,0,0,4"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantVisualEffectsReduced}" VerticalAlignment="Center"/>
+                                <TextBlock Text="Reduce visual effects (disable animations, fades, shadows)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </StackPanel>
                             <TextBlock Text="Uses SystemParametersInfo — takes effect instantly, no logout needed."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,8"/>
                             <Button Content="Apply Visual Effects" Command="{Binding ApplyVisualEffectsCommand}"
@@ -124,8 +126,10 @@
                     <TextBlock Text="Game Mode" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
-                            <CheckBox Content="Disable Game Mode (stop Windows from prioritizing game processes)"
-                                      IsChecked="{Binding WantGameModeOff}" Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGameModeOff}" VerticalAlignment="Center"/>
+                                <TextBlock Text="Disable Game Mode (stop Windows from prioritizing game processes)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </StackPanel>
                             <Button Content="Apply Game Mode" Command="{Binding ApplyGameModeCommand}"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                         </StackPanel>
@@ -135,8 +139,10 @@
                     <TextBlock Text="Overlays" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
-                            <CheckBox Content="Disable Xbox Game Bar / Game DVR overlay"
-                                      IsChecked="{Binding WantXboxGameBarOff}" Margin="0,0,0,4"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantXboxGameBarOff}" VerticalAlignment="Center"/>
+                                <TextBlock Text="Disable Xbox Game Bar / Game DVR overlay" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </StackPanel>
                             <TextBlock Text="Disables AppCaptureEnabled and GameDVR_Enabled via registry. Instant, reversible."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,8"/>
                             <Button Content="Apply Xbox Game Bar" Command="{Binding ApplyXboxGameBarCommand}"
@@ -162,9 +168,10 @@
                     <TextBlock Text="GPU" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
-                            <CheckBox Content="NVIDIA GPU — Prefer Maximum Performance (requires reboot)"
-                                      IsChecked="{Binding WantGpuMaxPerformance}"
-                                      IsEnabled="{Binding HasNvidiaGpu}" Margin="0,0,0,4"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGpuMaxPerformance}" IsEnabled="{Binding HasNvidiaGpu}" VerticalAlignment="Center"/>
+                                <TextBlock Text="NVIDIA GPU — Prefer Maximum Performance (requires reboot)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </StackPanel>
                             <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,4"
                                        Visibility="{Binding HasNvidiaGpu, Converter={StaticResource BoolToVis}}">
                                 <Run Text="Detected:"/>
@@ -184,14 +191,14 @@
                     <TextBlock Text="Processor State" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
-                            <CheckBox Content="Processor min state 100% (force max CPU frequency)"
-                                      IsChecked="{Binding WantProcessorMaxState}"
-                                      IsEnabled="{Binding IsProcessorStateEditable}"
-                                      Margin="0,0,0,4"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantProcessorMaxState}" IsEnabled="{Binding IsProcessorStateEditable}" VerticalAlignment="Center"/>
+                                <TextBlock Text="Processor min state 100% (force max CPU frequency)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </StackPanel>
                             <TextBlock Text="Prevents CPU from downclocking. Increases power consumption."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,4"/>
                             <TextBlock Text="⚠ Locked to 100 % by the current power plan (High / Ultimate). Switch to Balanced to adjust."
-                                       Foreground="#F59E0B" FontSize="11" Margin="20,0,0,4"
+                                       Foreground="{StaticResource Warning}" FontSize="11" Margin="20,0,0,4"
                                        TextWrapping="Wrap"
                                        Visibility="{Binding IsProcessorStateLocked, Converter={StaticResource BoolToVis}}"/>
                             <Button Content="Apply Processor State" Command="{Binding ApplyProcessorStateCommand}"
@@ -222,7 +229,7 @@
                                 Same as "Empty Working Set" in RAMMap. Useful before launching a game.
                             </TextBlock>
                             <TextBlock Text="⚠ Apps may feel briefly slower on next access as pages are faulted back in."
-                                       Foreground="#F59E0B" FontSize="11" Margin="0,0,0,8"/>
+                                       Foreground="{StaticResource Warning}" FontSize="11" Margin="0,0,0,8"/>
                             <Button Content="Trim RAM Now" Command="{Binding TrimRamCommand}"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                         </StackPanel>
@@ -240,10 +247,10 @@
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                 <TextBlock Text="Currently: " Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                                 <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Text="Enabled" Foreground="#22C55E"
+                                           Text="Enabled" Foreground="{StaticResource Success}"
                                            Visibility="{Binding IsHibernationEnabled, Converter={StaticResource BoolToVis}}"/>
                                 <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Text="Disabled" Foreground="#EF4444"
+                                           Text="Disabled" Foreground="{StaticResource Danger}"
                                            Visibility="{Binding IsHibernationEnabled, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                             </StackPanel>
                             <Button Content="Toggle Hibernation" Command="{Binding ToggleHibernationCommand}"

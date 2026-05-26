@@ -39,9 +39,11 @@
                                VerticalAlignment="Center" FontSize="12"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
-                <CheckBox Content="Show only apps" IsChecked="{Binding ShowOnlyApps}"
-                          VerticalAlignment="Center" Margin="4,0,0,0"
-                          ToolTip="Hide system processes and show only applications with a visible window"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0"
+                            ToolTip="Hide system processes and show only applications with a visible window">
+                    <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowOnlyApps}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Show only apps" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
             </WrapPanel>
         </Border>
 
@@ -175,7 +177,7 @@
                                             Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             Style="{StaticResource GhostButton}" Padding="6,2" FontSize="12"
-                                            Foreground="#EF4444"/>
+                                            Foreground="{StaticResource Danger}"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

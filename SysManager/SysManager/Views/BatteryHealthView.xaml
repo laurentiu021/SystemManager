@@ -97,7 +97,7 @@
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Wear" Style="{StaticResource Subtle}" FontSize="12"/>
                                     <TextBlock FontSize="24" FontWeight="Bold" Margin="0,4,0,0"
-                                               Foreground="#EF4444">
+                                               Foreground="{StaticResource Danger}">
                                         <Run Text="{Binding Battery.WearPercent, Mode=OneWay}"/><Run Text="%"/>
                                     </TextBlock>
                                 </StackPanel>

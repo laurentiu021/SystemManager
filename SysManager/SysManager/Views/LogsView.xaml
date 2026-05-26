@@ -153,29 +153,29 @@
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <TextBlock Text="Show" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
-                    <!-- Each checkbox has its own colored dot next to the label -->
+                    <!-- Each toggle has its own colored dot next to the label -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <CheckBox IsChecked="{Binding ShowCritical}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowCritical}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#FF3B30" Margin="8,0,6,0"/>
                         <TextBlock Text="Critical" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <CheckBox IsChecked="{Binding ShowError}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowError}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#F87171" Margin="8,0,6,0"/>
                         <TextBlock Text="Error" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <CheckBox IsChecked="{Binding ShowWarning}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowWarning}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#FBBF24" Margin="8,0,6,0"/>
                         <TextBlock Text="Warning" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <CheckBox IsChecked="{Binding ShowInfo}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowInfo}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#38BDF8" Margin="8,0,6,0"/>
                         <TextBlock Text="Info" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,22,0">
-                        <CheckBox IsChecked="{Binding ShowVerbose}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowVerbose}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#9AA0A6" Margin="8,0,6,0"/>
                         <TextBlock Text="Verbose" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -233,9 +233,6 @@
                             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
                             <Setter Property="BorderThickness" Value="0"/>
                             <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="{StaticResource Surface2}"/>
-                                </Trigger>
                                 <Trigger Property="IsSelected" Value="True">
                                     <Setter Property="Background" Value="{StaticResource Surface3}"/>
                                     <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>

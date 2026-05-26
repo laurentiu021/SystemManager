@@ -70,14 +70,8 @@
 
             <Button Margin="12,0,0,0" Padding="16,8" FontWeight="SemiBold"
                     FontSize="14" Command="{Binding RunTuneUpCommand}"
+                    Style="{StaticResource PrimaryButton}"
                     AutomationProperties.Name="Quick Tune-Up">
-                <Button.Style>
-                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                        <Setter Property="Background" Value="#238636"/>
-                        <Setter Property="Foreground" Value="White"/>
-                        <Setter Property="BorderBrush" Value="#2EA043"/>
-                    </Style>
-                </Button.Style>
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons" FontSize="16"
                                VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -173,7 +167,7 @@
 
                 <!-- Tune-Up progress panel -->
                 <Border CornerRadius="8" Padding="14" Background="#0D1117" Margin="0,0,0,8"
-                        BorderBrush="#238636" BorderThickness="1"
+                        BorderBrush="{StaticResource Accent}" BorderThickness="1"
                         Visibility="{Binding IsTuneUpRunning, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="Quick Tune-Up in progress…" FontWeight="SemiBold" FontSize="14"
@@ -186,7 +180,7 @@
 
                 <!-- Tune-Up result summary card -->
                 <Border CornerRadius="8" Padding="14" Background="#0D1117" Margin="0,0,0,12"
-                        BorderBrush="#238636" BorderThickness="1"
+                        BorderBrush="{StaticResource Accent}" BorderThickness="1"
                         Visibility="{Binding HasTuneUpResult, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <Grid>

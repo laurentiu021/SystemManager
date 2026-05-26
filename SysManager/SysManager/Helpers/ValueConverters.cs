@@ -146,3 +146,76 @@ public sealed class ProcessStatusToBrushConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+public sealed class SafetyLevelToBrushConverter : IValueConverter
+{
+    private static readonly SolidColorBrush SafeBrush = new(Color.FromRgb(0x4A, 0xDE, 0x80));
+    private static readonly SolidColorBrush CautionBrush = new(Color.FromRgb(0xFB, 0xBF, 0x24));
+    private static readonly SolidColorBrush CriticalBrush = new(Color.FromRgb(0xF8, 0x71, 0x71));
+
+    static SafetyLevelToBrushConverter()
+    {
+        SafeBrush.Freeze();
+        CautionBrush.Freeze();
+        CriticalBrush.Freeze();
+    }
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value is SafetyLevel level ? level switch
+        {
+            SafetyLevel.Safe => SafeBrush,
+            SafetyLevel.Caution => CautionBrush,
+            SafetyLevel.Critical => CriticalBrush,
+            _ => CriticalBrush
+        } : CriticalBrush;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+public sealed class SafetyLevelToBackgroundConverter : IValueConverter
+{
+    private static readonly SolidColorBrush SafeBg = new(Color.FromArgb(0x20, 0x22, 0xC5, 0x5E));
+    private static readonly SolidColorBrush CautionBg = new(Color.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
+    private static readonly SolidColorBrush CriticalBg = new(Color.FromArgb(0x20, 0xEF, 0x44, 0x44));
+
+    static SafetyLevelToBackgroundConverter()
+    {
+        SafeBg.Freeze();
+        CautionBg.Freeze();
+        CriticalBg.Freeze();
+    }
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value is SafetyLevel level ? level switch
+        {
+            SafetyLevel.Safe => SafeBg,
+            SafetyLevel.Caution => CautionBg,
+            SafetyLevel.Critical => CriticalBg,
+            _ => CriticalBg
+        } : CriticalBg;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+public sealed class SafetyLevelToTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value is SafetyLevel level ? level switch
+        {
+            SafetyLevel.Safe => "Safe",
+            SafetyLevel.Caution => "Caution",
+            SafetyLevel.Critical => "Critical",
+            _ => "Critical"
+        } : "Critical";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}

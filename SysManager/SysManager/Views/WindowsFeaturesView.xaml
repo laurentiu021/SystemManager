@@ -121,6 +121,25 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
+                    <DataGridTemplateColumn Header="Safety" Width="80" SortMemberPath="SafetyLevel">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="6" Padding="6,3"
+                                        Background="{Binding SafetyLevel, Converter={StaticResource SafetyBg}}"
+                                        HorizontalAlignment="Left"
+                                        ToolTip="{Binding SafetyDescription}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                 Fill="{Binding SafetyLevel, Converter={StaticResource SafetyBrush}}"/>
+                                        <TextBlock Text="{Binding SafetyLevel, Converter={StaticResource SafetyText}}"
+                                                   FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{Binding SafetyLevel, Converter={StaticResource SafetyBrush}}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
                     <DataGridTextColumn Header="Feature" Binding="{Binding DisplayName}" Width="*"
                                         SortMemberPath="DisplayName" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>

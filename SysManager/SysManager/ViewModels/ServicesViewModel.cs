@@ -31,9 +31,12 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [ObservableProperty] private ServiceEntry? _selectedService;
     [ObservableProperty] private int _totalCount;
     [ObservableProperty] private int _runningCount;
+    [ObservableProperty] private int _safeCount;
+    [ObservableProperty] private int _cautionCount;
+    [ObservableProperty] private int _criticalCount;
 
     public string[] FilterOptions { get; } =
-        { "All", "Running", "Stopped", "Safe to disable", "Advanced" };
+        { "All", "Running", "Stopped", "Safe", "Caution", "Critical" };
 
     public ServicesViewModel(PowerShellRunner ps)
     {
@@ -180,13 +183,17 @@ public sealed partial class ServicesViewModel : ViewModelBase
         {
             "Running" => filtered.Where(s => s.Status == "Running"),
             "Stopped" => filtered.Where(s => s.Status == "Stopped"),
-            "Safe to disable" => filtered.Where(s => s.Recommendation == "safe-to-disable"),
-            "Advanced" => filtered.Where(s => s.Recommendation == "advanced"),
+            "Safe" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Safe),
+            "Caution" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Caution),
+            "Critical" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Critical),
             _ => filtered
         };
 
-        // Default order by name; DataGrid column headers handle user sorting.
         Services.ReplaceWith(filtered.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase));
+
+        SafeCount = _allServices.Count(s => s.SafetyLevel == SafetyLevel.Safe);
+        CautionCount = _allServices.Count(s => s.SafetyLevel == SafetyLevel.Caution);
+        CriticalCount = _allServices.Count(s => s.SafetyLevel == SafetyLevel.Critical);
     }
 
     [RelayCommand]

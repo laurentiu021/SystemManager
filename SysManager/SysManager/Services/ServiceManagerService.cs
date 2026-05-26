@@ -64,6 +64,8 @@ public sealed partial class ServiceManagerService
                         ? guide
                         : ("", "");
 
+                    var (safety, safetyDesc) = SafetyDatabase.GetServiceSafety(sc.ServiceName);
+
                     result.Add(new ServiceEntry
                     {
                         Name = sc.ServiceName,
@@ -73,6 +75,8 @@ public sealed partial class ServiceManagerService
                         StartType = sc.StartType.ToString(),
                         Recommendation = rec,
                         RecommendationReason = reason,
+                        SafetyLevel = safety,
+                        SafetyDescription = safetyDesc,
                     });
                 }
                 catch (InvalidOperationException) { /* service disappeared — skip */ }

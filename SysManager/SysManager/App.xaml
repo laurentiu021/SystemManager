@@ -21,6 +21,9 @@
             <h:HexToBrushConverter x:Key="HexBrush"/>
             <h:OutputKindToBrushConverter x:Key="KindBrush"/>
             <h:ProcessStatusToBrushConverter x:Key="StatusBrush"/>
+            <h:SafetyLevelToBrushConverter x:Key="SafetyBrush"/>
+            <h:SafetyLevelToBackgroundConverter x:Key="SafetyBg"/>
+            <h:SafetyLevelToTextConverter x:Key="SafetyText"/>
             <h:IntGreaterThanZeroConverter x:Key="GreaterThanZero"/>
             <h:EqualityConverter x:Key="IsEqual"/>
 
@@ -266,6 +269,92 @@
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.4"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ============================================================ -->
+            <!-- Filter Chips — safety level radio buttons                    -->
+            <!-- ============================================================ -->
+            <Style x:Key="FilterChip" TargetType="RadioButton">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
+                                    Background="#1522C55E" BorderBrush="#3022C55E" BorderThickness="1"
+                                    Cursor="Hand">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="#22C55E" Margin="0,0,5,0"/>
+                                    <ContentPresenter VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#3022C55E"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#6022C55E"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#186366F1"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="Foreground" Value="#4ADE80"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+            </Style>
+
+            <Style x:Key="FilterChipCaution" TargetType="RadioButton" BasedOn="{StaticResource FilterChip}">
+                <Setter Property="Foreground" Value="#FBBF24"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
+                                    Background="#15F59E0B" BorderBrush="#30F59E0B" BorderThickness="1"
+                                    Cursor="Hand">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="#F59E0B" Margin="0,0,5,0"/>
+                                    <ContentPresenter VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#30F59E0B"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#60F59E0B"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#186366F1"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="FilterChipCritical" TargetType="RadioButton" BasedOn="{StaticResource FilterChip}">
+                <Setter Property="Foreground" Value="#F87171"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
+                                    Background="#15EF4444" BorderBrush="#30EF4444" BorderThickness="1"
+                                    Cursor="Hand">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="#EF4444" Margin="0,0,5,0"/>
+                                    <ContentPresenter VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#30EF4444"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#60EF4444"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#186366F1"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

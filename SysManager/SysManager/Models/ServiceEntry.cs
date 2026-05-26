@@ -24,4 +24,7 @@ public sealed partial class ServiceEntry : ObservableObject
 
     /// <summary>Short explanation of what this service does and why the recommendation.</summary>
     public string RecommendationReason { get; init; } = "";
+
+    public SafetyLevel SafetyLevel { get; init; } = SafetyLevel.Critical;
+    public string SafetyDescription { get; init; } = "";
 }

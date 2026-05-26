@@ -128,13 +128,17 @@ public sealed partial class WindowsFeaturesService
 
                 var isEnabled = state.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
 
+                var (safety, safetyDesc) = SafetyDatabase.GetFeatureSafety(name);
+
                 return new WindowsFeature
                 {
                     Name = name,
                     DisplayName = HumanizeName(name),
                     IsEnabled = isEnabled,
                     Status = isEnabled ? "Enabled" : "Disabled",
-                    Category = WindowsFeature.CategorizeFeature(name)
+                    Category = WindowsFeature.CategorizeFeature(name),
+                    SafetyLevel = safety,
+                    SafetyDescription = safetyDesc,
                 };
             })
             .Where(f => f is not null)

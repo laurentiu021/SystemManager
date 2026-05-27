@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-05-27
+
+### Fixed
+- **Startup crash** — duplicate implicit CheckBox style in App.xaml caused
+  `XamlParseException` ("Item has already been added") preventing the app from launching.
+
 ## [1.12.0] - 2026-05-26
 
 ### Added

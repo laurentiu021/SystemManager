@@ -133,4 +133,11 @@ public partial class MainWindow : Window
         (DataContext as MainWindowViewModel)?.Dispose();
         base.OnClosed(e);
     }
+
+    private void ThemeBtn_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (ThemePopupHost.Child is null)
+            ThemePopupHost.Child = new Views.ThemePopup();
+        ThemePopupHost.IsOpen = !ThemePopupHost.IsOpen;
+    }
 }

@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
@@ -100,7 +100,7 @@
                                         </StackPanel>
                                     </StackPanel.ToolTip>
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                                    <TextBlock Text="{Binding Command}" Foreground="{StaticResource TextMuted}"
+                                    <TextBlock Text="{Binding Command}" Foreground="{DynamicResource TextMuted}"
                                                FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="380"
                                                HorizontalAlignment="Left" Margin="0,2,0,0"/>
                                 </StackPanel>
@@ -112,7 +112,7 @@
                                         SortMemberPath="Location" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
                             </Style>
@@ -123,7 +123,7 @@
                                         SortMemberPath="Source" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>

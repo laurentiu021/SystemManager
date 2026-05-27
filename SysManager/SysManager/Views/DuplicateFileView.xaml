@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
@@ -75,18 +75,18 @@
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Border BorderBrush="{StaticResource Border1}" BorderThickness="0,0,0,1"
+                        <Border BorderBrush="{DynamicResource Border1}" BorderThickness="0,0,0,1"
                                 Padding="12,10" Margin="0">
                             <StackPanel>
                                 <!-- Group header -->
                                 <DockPanel Margin="0,0,0,6">
                                     <TextBlock DockPanel.Dock="Left" FontWeight="SemiBold" FontSize="13">
                                         <Run Text="{Binding Count, Mode=OneWay, StringFormat='{}{0} files'}"/>
-                                        <Run Text=" · " Foreground="{StaticResource TextDisabled}"/>
+                                        <Run Text=" · " Foreground="{DynamicResource TextDisabled}"/>
                                         <Run Text="{Binding FileSize, Mode=OneWay, StringFormat='{}{0:N0} bytes each'}"/>
                                     </TextBlock>
                                     <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                               Foreground="{StaticResource Accent}" FontSize="12">
+                                               Foreground="{DynamicResource Accent}" FontSize="12">
                                         <Run Text="Hash: "/>
                                         <Run Text="{Binding Hash, Mode=OneWay}" FontFamily="Consolas" FontSize="11"/>
                                     </TextBlock>
@@ -113,8 +113,8 @@
                                                            TextTrimming="CharacterEllipsis"
                                                            ToolTip="{Binding Path}">
                                                     <Run Text="{Binding Name, Mode=OneWay}" FontWeight="Medium"/>
-                                                    <Run Text=" — " Foreground="{StaticResource TextDisabled}"/>
-                                                    <Run Text="{Binding Path, Mode=OneWay}" Foreground="{StaticResource TextMuted}"/>
+                                                    <Run Text=" — " Foreground="{DynamicResource TextDisabled}"/>
+                                                    <Run Text="{Binding Path, Mode=OneWay}" Foreground="{DynamicResource TextMuted}"/>
                                                 </TextBlock>
                                             </DockPanel>
                                         </DataTemplate>

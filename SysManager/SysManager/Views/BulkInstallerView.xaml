@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
@@ -27,7 +27,7 @@
         </StackPanel>
 
         <!-- Elevation banner: not elevated -->
-        <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
                 BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
@@ -35,9 +35,9 @@
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
                     <TextBlock Text="Some applications install system-wide and require administrator privileges."
-                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -70,7 +70,7 @@
                 <Grid Width="200" Margin="0,0,12,0">
                     <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
                     <TextBlock Text="Search apps…" IsHitTestVisible="False"
-                               Foreground="{StaticResource TextMuted}" Margin="6,0,0,0"
+                               Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
                                VerticalAlignment="Center" FontSize="12"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
@@ -90,7 +90,7 @@
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <StackPanel>
                 <TextBlock Text="Search winget packages" FontWeight="SemiBold" FontSize="14"
-                           Foreground="{StaticResource TextPrimary}"/>
+                           Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock Text="Find and install any app available on winget."
                            Style="{StaticResource Subtle}" Margin="0,2,0,12"/>
                 <DockPanel>
@@ -99,7 +99,7 @@
                     <Grid>
                         <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"/>
                         <TextBlock Text="Search apps…" IsHitTestVisible="False"
-                                   Foreground="{StaticResource TextMuted}" Margin="6,0,0,0"
+                                   Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
                                    VerticalAlignment="Center" FontSize="12"
                                    Visibility="{Binding SearchQuery, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </Grid>
@@ -119,7 +119,7 @@
                                     <Style TargetType="Border">
                                         <Style.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                                <Setter Property="Background" Value="{DynamicResource Surface2}"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
@@ -132,11 +132,11 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{Binding Name}"
                                                FontSize="12.5" VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextPrimary}"
+                                               Foreground="{DynamicResource TextPrimary}"
                                                TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="1" Text="{Binding WingetId}"
                                                FontSize="11" VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextMuted}"
+                                               Foreground="{DynamicResource TextMuted}"
                                                Margin="12,0" TextTrimming="CharacterEllipsis"
                                                MaxWidth="220"/>
                                     <Button Grid.Column="2" Content="Add"
@@ -167,8 +167,8 @@
                                     <StackPanel Margin="16,20,16,6">
                                         <TextBlock Text="{Binding Name}"
                                                    FontWeight="SemiBold" FontSize="14"
-                                                   Foreground="{StaticResource TextPrimary}"/>
-                                        <Rectangle Height="1" Fill="{StaticResource Border1}" Margin="0,8,0,0"/>
+                                                   Foreground="{DynamicResource TextPrimary}"/>
+                                        <Rectangle Height="1" Fill="{DynamicResource Border1}" Margin="0,8,0,0"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </GroupStyle.HeaderTemplate>
@@ -212,7 +212,7 @@
                                         <TextBlock Text="{Binding IconGlyph}"
                                                    FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                    FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   Foreground="{StaticResource TextSecondary}"
+                                                   Foreground="{DynamicResource TextSecondary}"
                                                    Visibility="{Binding Icon, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                                     </Grid>
 
@@ -221,7 +221,7 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}"
                                                        FontWeight="SemiBold" FontSize="13"
-                                                       Foreground="{StaticResource TextPrimary}"/>
+                                                       Foreground="{DynamicResource TextPrimary}"/>
                                             <Border CornerRadius="4" Padding="4,2" Margin="8,0,0,0" Background="#1422C55E" BorderBrush="#3022C55E" BorderThickness="1"
                                                     Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVis}}">
                                                 <TextBlock Text="Installed" FontSize="9" Foreground="#4ADE80" FontWeight="SemiBold"/>
@@ -229,7 +229,7 @@
                                         </StackPanel>
                                         <TextBlock Text="{Binding Description}"
                                                    FontSize="11.5" Margin="0,2,0,0"
-                                                   Foreground="{StaticResource TextSecondary}"
+                                                   Foreground="{DynamicResource TextSecondary}"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
 

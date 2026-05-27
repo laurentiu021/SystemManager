@@ -76,6 +76,8 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += OnTask;
         base.OnStartup(e);
 
+        ThemeService.Instance.Initialize();
+
         // Start listening for activation requests from subsequent instances
         StartPipeListener();
     }

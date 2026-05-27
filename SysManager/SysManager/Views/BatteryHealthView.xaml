@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
@@ -44,7 +44,7 @@
                 <StackPanel>
                     <!-- No battery message -->
                     <TextBlock Text="No battery detected on this device."
-                               FontSize="14" Foreground="{StaticResource TextMuted}"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
                                Margin="0,0,0,16"
                                Visibility="{Binding Battery.HasBattery, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
 
@@ -97,7 +97,7 @@
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Wear" Style="{StaticResource Subtle}" FontSize="12"/>
                                     <TextBlock FontSize="24" FontWeight="Bold" Margin="0,4,0,0"
-                                               Foreground="{StaticResource Danger}">
+                                               Foreground="{DynamicResource Danger}">
                                         <Run Text="{Binding Battery.WearPercent, Mode=OneWay}"/><Run Text="%"/>
                                     </TextBlock>
                                 </StackPanel>

@@ -31,7 +31,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="SysManager" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="SysManager" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                                 <Border Style="{StaticResource BadgeAccent}" Margin="12,0,0,0" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding CurrentVersion, StringFormat=v{0}}" Foreground="White" FontWeight="SemiBold" FontSize="12"/>
                                 </Border>
@@ -39,12 +39,12 @@
                             <TextBlock Text="Local Windows system monitoring toolkit." Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                 <TextBlock Text="BUILD" Style="{StaticResource Caption}"/>
-                                <TextBlock Text="{Binding BuildDate}" Margin="8,0,24,0" Foreground="{StaticResource TextSecondary}" FontSize="12"/>
+                                <TextBlock Text="{Binding BuildDate}" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
                                 <TextBlock Text="LICENSE" Style="{StaticResource Caption}"/>
-                                <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{StaticResource TextSecondary}" FontSize="12"/>
+                                <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
                                 <TextBlock Text="SOURCE" Style="{StaticResource Caption}"/>
                                 <TextBlock Margin="8,0,0,0" FontSize="12">
-                                    <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{StaticResource Accent}">github.com/laurentiu021/SystemManager</Hyperlink>
+                                    <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{DynamicResource Accent}">github.com/laurentiu021/SystemManager</Hyperlink>
                                 </TextBlock>
                             </StackPanel>
                         </StackPanel>
@@ -74,7 +74,7 @@
 
                 <!-- Update available card -->
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0"
-                        BorderBrush="{StaticResource Accent}" BorderThickness="1"
+                        BorderBrush="{DynamicResource Accent}" BorderThickness="1"
                         Visibility="{Binding UpdateAvailable, Converter={StaticResource FlexVis}}">
                     <StackPanel>
                         <Grid>
@@ -85,13 +85,13 @@
                             <StackPanel Grid.Column="0">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                               FontSize="18" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                               FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <TextBlock Text="Update available" FontSize="16" FontWeight="SemiBold"
-                                               Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding LatestVersionLabel}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding LatestPublishedLabel}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                                               Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LatestVersionLabel}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LatestPublishedLabel}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
@@ -120,9 +120,9 @@
                                     Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}">
                             <Ellipse Width="10" Height="10" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBlock Text="{Binding DownloadStatus}" Foreground="#22C55E" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                            <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
+                            <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <TextBlock VerticalAlignment="Center">
-                                <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{StaticResource Accent}">Show file</Hyperlink>
+                                <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
                             </TextBlock>
                         </StackPanel>
                     </StackPanel>
@@ -138,7 +138,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Ellipse Grid.Column="0" Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="#22C55E"/>
-                        <TextBlock Grid.Column="1" Text="{Binding UpdateStatus}" Foreground="{StaticResource TextSecondary}"
+                        <TextBlock Grid.Column="1" Text="{Binding UpdateStatus}" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" TextWrapping="Wrap"/>
                         <Button Grid.Column="2" Content="Retry" Command="{Binding CheckForUpdatesCommand}"
                                 Style="{StaticResource SecondaryButton}" Padding="14,6" Margin="12,0,0,0"
@@ -163,18 +163,18 @@
                                     <Border Style="{StaticResource CardInner}" Margin="0,0,0,10">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Version}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
+                                                <TextBlock Text="{Binding Version}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                                                 <Border Margin="10,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}"
                                                         Style="{StaticResource BadgeAccent}">
                                                     <TextBlock Text="Current" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
                                                 </Border>
-                                                <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                                <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding PublishedAt}" Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding PublishedAt}" Foreground="{DynamicResource TextMuted}" FontSize="12" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock helpers:MarkdownTextBlock.Markdown="{Binding Body}" Foreground="{StaticResource TextSecondary}"
+                                            <TextBlock helpers:MarkdownTextBlock.Markdown="{Binding Body}" Foreground="{DynamicResource TextSecondary}"
                                                        TextWrapping="Wrap" Margin="0,8,0,0" FontFamily="{StaticResource UiFont}"/>
                                         </StackPanel>
                                     </Border>
@@ -188,7 +188,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                     <StackPanel>
                         <TextBlock Text="Legal" Style="{StaticResource SectionTitle}"/>
-                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{StaticResource TextSecondary}" FontSize="12">
+                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}" FontSize="12">
                             SysManager is released under the MIT License. The software is provided "AS IS", without warranty of any kind.
                             All operations are local to your machine — no telemetry, no accounts. Updates are fetched from the public
                             GitHub Releases API and downloaded directly from GitHub.

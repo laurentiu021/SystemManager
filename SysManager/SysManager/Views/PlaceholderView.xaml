@@ -14,28 +14,28 @@
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="500">
             <!-- WIP Icon -->
             <TextBlock Text="&#xE9F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                       FontSize="48" Foreground="{StaticResource Accent}"
+                       FontSize="48" Foreground="{DynamicResource Accent}"
                        HorizontalAlignment="Center" Margin="0,0,0,16"/>
 
             <!-- Feature name -->
             <TextBlock Text="{Binding FeatureName}" FontSize="28" FontWeight="SemiBold"
-                       Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center"
                        TextWrapping="Wrap" TextAlignment="Center"/>
 
             <!-- WIP badge -->
             <Border Background="#2A1A3A" CornerRadius="4" Padding="12,6"
                     HorizontalAlignment="Center" Margin="0,12,0,0">
                 <TextBlock Text="Work in Progress" FontSize="14" FontWeight="SemiBold"
-                           Foreground="{StaticResource Accent}"/>
+                           Foreground="{DynamicResource Accent}"/>
             </Border>
 
             <!-- Description -->
             <TextBlock Text="{Binding Description}" FontSize="14"
-                       Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"
                        TextWrapping="Wrap" TextAlignment="Center" Margin="0,16,0,0"/>
 
             <!-- Issue reference -->
-            <TextBlock FontSize="12" Foreground="{StaticResource TextMuted}"
+            <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
                        HorizontalAlignment="Center" Margin="0,12,0,0">
                 <Run Text="Tracked in issue #"/><Run Text="{Binding IssueNumber, Mode=OneTime}"/>
             </TextBlock>

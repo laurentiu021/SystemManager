@@ -50,7 +50,7 @@
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
             <WrapPanel>
                 <TextBlock Text="Method:" VerticalAlignment="Center" Margin="0,0,8,0"
-                           Foreground="{StaticResource TextSecondary}"/>
+                           Foreground="{DynamicResource TextSecondary}"/>
                 <ComboBox ItemsSource="{Binding Source={StaticResource ShredMethods}}"
                           SelectedItem="{Binding SelectedMethod}"
                           Width="120" Margin="0,0,16,0" VerticalAlignment="Center"/>

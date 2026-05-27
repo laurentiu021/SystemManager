@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="32,24">
@@ -69,7 +69,7 @@
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="FontSize" Value="12"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                     <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
@@ -81,7 +81,7 @@
                                 <Style TargetType="TextBlock">
                                     <Setter Property="FontFamily" Value="Consolas"/>
                                     <Setter Property="FontSize" Value="12"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
@@ -92,7 +92,7 @@
                                 <Style TargetType="TextBlock">
                                     <Setter Property="FontFamily" Value="Consolas"/>
                                     <Setter Property="FontSize" Value="12"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>

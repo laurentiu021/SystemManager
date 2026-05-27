@@ -60,7 +60,7 @@
                         <TextBlock Text="{Binding Shared.Health.Headline}" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{Binding Shared.Health.ColorHex, Converter={StaticResource HexBrush}}"/>
                     </StackPanel>
-                    <TextBlock Text="{Binding Shared.Health.Detail}" Foreground="{StaticResource TextSecondary}"
+                    <TextBlock Text="{Binding Shared.Health.Detail}" Foreground="{DynamicResource TextSecondary}"
                                Margin="22,6,0,0" TextWrapping="Wrap" MaxWidth="820"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -122,7 +122,7 @@
                                                 <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Host}" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="22,2,0,0"/>
+                                            <TextBlock Text="{Binding Host}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="22,2,0,0"/>
                                         </StackPanel>
                                         <Button Content="&#x2715;" DockPanel.Dock="Right" Padding="6,2" FontSize="10"
                                                 VerticalAlignment="Center" Style="{StaticResource GhostButton}"
@@ -137,7 +137,7 @@
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding AverageMs, StringFormat={}{0:F1}, FallbackValue=—}"
-                                                           Foreground="{StaticResource TextSecondary}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource TextSecondary}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="AVG" Foreground="#475569" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">

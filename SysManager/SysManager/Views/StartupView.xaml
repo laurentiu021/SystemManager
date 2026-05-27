@@ -115,7 +115,7 @@
                                                 Margin="-8,-5,0,-5">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#22C55E"/>
+                                                    <Setter Property="Background" Value="{DynamicResource Success}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsEnabled}" Value="False">
                                                             <Setter Property="Background" Value="#475569"/>
@@ -128,7 +128,7 @@
                                             <Ellipse Width="6" Height="6" VerticalAlignment="Center">
                                                 <Ellipse.Style>
                                                     <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="#22C55E"/>
+                                                        <Setter Property="Fill" Value="{DynamicResource Success}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsEnabled}" Value="False">
                                                                 <Setter Property="Fill" Value="#475569"/>

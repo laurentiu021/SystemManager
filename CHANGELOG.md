@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.3] - 2026-05-27
+
+### Fixed
+- **Theme compliance** — replaced hardcoded hex colors with DynamicResource tokens so all
+  UI elements follow the active theme. ConsoleView, nav hover, DataGrid hover, and semantic
+  status colors (Success, Warning, Danger, Info) now update live on theme switch.
+- **AccentSoft opacity** — unified hover/selected background opacity to 9.4% across all
+  views (was inconsistent between 6%–9.4%).
+
 ## [1.13.2] - 2026-05-27
 
 ### Fixed

@@ -185,7 +185,7 @@
                                     <Style TargetType="Border">
                                         <Style.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#186366F1"/>
+                                                <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>

@@ -241,7 +241,7 @@
                                 <Run Text="{Binding TuneUpResult.BrokenShortcutsFound, Mode=OneWay}"/>
                                 <Run Text=" broken shortcuts found"/>
                             </TextBlock>
-                            <TextBlock Text=" — open Shortcut Cleaner to review" Foreground="#F59E0B"
+                            <TextBlock Text=" — open Shortcut Cleaner to review" Foreground="{DynamicResource Warning}"
                                        VerticalAlignment="Center">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -286,7 +286,7 @@
                                 <Run Text="{Binding TuneUpResult.Uptime.Minutes, Mode=OneWay}"/>
                                 <Run Text="m"/>
                             </TextBlock>
-                            <TextBlock Text=" — consider restarting" Foreground="#F59E0B" FontWeight="SemiBold"
+                            <TextBlock Text=" — consider restarting" Foreground="{DynamicResource Warning}" FontWeight="SemiBold"
                                        VerticalAlignment="Center"
                                        Visibility="{Binding TuneUpResult.UptimeWarning, Converter={StaticResource BoolToVis}}"/>
                         </StackPanel>
@@ -304,7 +304,7 @@
                                 <Run Text="{Binding TuneUpResult.RamUsedPercent, Mode=OneWay, StringFormat='{}{0:0}'}"/>
                                 <Run Text="%)"/>
                             </TextBlock>
-                            <TextBlock Text=" — high usage" Foreground="#F59E0B" FontWeight="SemiBold"
+                            <TextBlock Text=" — high usage" Foreground="{DynamicResource Warning}" FontWeight="SemiBold"
                                        VerticalAlignment="Center"
                                        Visibility="{Binding TuneUpResult.RamWarning, Converter={StaticResource BoolToVis}}"/>
                         </StackPanel>

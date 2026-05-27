@@ -59,7 +59,7 @@
                 <Button Content="Add Folder" Command="{Binding AddFolderCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                 <Button Content="Shred All" Command="{Binding ShredAllCommand}"
-                        Style="{StaticResource PrimaryButton}" Foreground="#EF4444" Margin="0,0,8,0"/>
+                        Style="{StaticResource PrimaryButton}" Foreground="{DynamicResource Danger}" Margin="0,0,8,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}"
                         Style="{StaticResource GhostButton}"
                         Visibility="{Binding IsShredding, Converter={StaticResource BoolToVis}}"/>

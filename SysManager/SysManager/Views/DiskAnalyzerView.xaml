@@ -85,7 +85,7 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="#186366F1"/>
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>

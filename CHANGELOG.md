@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-05-27
+
+### Added
+- **Sidebar smooth animation** — expand/collapse groups now slide with a 150ms animation
+  instead of instant jump.
+- **Chevron indicator** — rotating arrow on sidebar group headers showing expand/collapse state.
+- **Full-width hitbox** — entire sidebar group header row is clickable, not just the text.
+
+### Changed
+- **Theme button relocated** — moved from content area top-right (caused overlaps) to sidebar
+  footer bottom-right, next to version info. Always accessible, no overlapping.
+
 ## [1.13.3] - 2026-05-27
 
 ### Fixed

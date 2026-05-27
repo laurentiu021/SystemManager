@@ -255,6 +255,8 @@
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Value="{Binding Progress}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding UninstallEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,0,8,0" VerticalAlignment="Center"
+                       Visibility="{Binding UninstallEtaText, Converter={StaticResource FlexVis}}" DockPanel.Dock="Left"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
         </DockPanel>
     </Grid>

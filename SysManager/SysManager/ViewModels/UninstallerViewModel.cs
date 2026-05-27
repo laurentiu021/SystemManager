@@ -18,6 +18,7 @@ namespace SysManager.ViewModels;
 public sealed partial class UninstallerViewModel : ViewModelBase
 {
     private readonly UninstallerService _service;
+    private readonly EtaCalculator _uninstallEta = new();
     private readonly Action<PowerShellLine> _lineHandler;
     private CancellationTokenSource? _cts;
 
@@ -28,6 +29,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private int _appCount;
     [ObservableProperty] private string _summary = "Click Scan to list installed applications.";
+    [ObservableProperty] private string _uninstallEtaText = string.Empty;
     [ObservableProperty] private bool _isElevated;
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
@@ -108,6 +110,8 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         int done = 0;
+        UninstallEtaText = string.Empty;
+        _uninstallEta.Reset();
 
         try
         {
@@ -117,6 +121,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 app.Status = "Uninstalling…";
                 StatusMessage = $"Uninstalling {app.Name} ({done + 1}/{toRemove.Count})…";
                 Progress = (int)(done * 100.0 / toRemove.Count);
+                UninstallEtaText = _uninstallEta.Update(Progress);
 
                 try
                 {
@@ -142,6 +147,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
             }
 
             Progress = 100;
+            UninstallEtaText = string.Empty;
             StatusMessage = $"Completed {done}/{toRemove.Count} uninstalls.";
             ToastService.Instance.Show("Uninstall complete", $"Completed {done}/{toRemove.Count} uninstalls");
             Log.Information("Uninstall batch completed: {Done}/{Total}", done, toRemove.Count);
@@ -149,6 +155,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
+            UninstallEtaText = string.Empty;
             ApplyFilter();
         }
     }

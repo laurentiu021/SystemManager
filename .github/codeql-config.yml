@@ -5,6 +5,11 @@ paths-ignore:
   - '**/bin/**'
 
 query-filters:
+  # WPF XAML compiler generates .g.cs with useless-assignment patterns —
+  # these are false positives in auto-generated InitializeComponent code.
+  - exclude:
+      id: cs/useless-assignment-to-local
+      path: '**/obj/**'
   # Intentional use of CreateFromSignedFile for Authenticode verification —
   # no modern .NET replacement exists without P/Invoke. Already suppressed
   # with #pragma warning disable SYSLIB0057.

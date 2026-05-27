@@ -118,6 +118,14 @@ jobs:
             publish/SysManager-v${{ steps.version.outputs.version }}.exe
             publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256
 
+      - name: Update winget package
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: laurentiu021.SysManager
+          installers-regex: '\.exe$'
+          release-tag: ${{ steps.version.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
       - name: Post announcement to Discussions
         uses: actions/github-script@v9
         with:

@@ -118,8 +118,8 @@
                         <!-- Download completed -->
                         <StackPanel Margin="0,14,0,0" Orientation="Horizontal"
                                     Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}">
-                            <Ellipse Width="10" Height="10" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding DownloadStatus}" Foreground="#22C55E" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <TextBlock VerticalAlignment="Center">
                                 <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
@@ -137,7 +137,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Ellipse Grid.Column="0" Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="#22C55E"/>
+                        <Ellipse Grid.Column="0" Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource Success}"/>
                         <TextBlock Grid.Column="1" Text="{Binding UpdateStatus}" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" TextWrapping="Wrap"/>
                         <Button Grid.Column="2" Content="Retry" Command="{Binding CheckForUpdatesCommand}"

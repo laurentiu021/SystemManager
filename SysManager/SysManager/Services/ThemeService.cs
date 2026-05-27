@@ -146,7 +146,7 @@ public sealed class ThemeService
         SetBrush(res, "Accent", theme.Accent);
         SetBrush(res, "AccentHover", Lighten(theme.Accent, 0.15));
         SetBrush(res, "AccentPressed", Darken(theme.Accent, 0.12));
-        SetBrush(res, "AccentSoft", Color.FromArgb(15, theme.Accent.R, theme.Accent.G, theme.Accent.B));
+        SetBrush(res, "AccentSoft", Color.FromArgb(24, theme.Accent.R, theme.Accent.G, theme.Accent.B));
 
         SetColor(res, "Surface0Color", theme.Background);
         SetColor(res, "Surface1Color", theme.Surface);

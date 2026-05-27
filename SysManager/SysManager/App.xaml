@@ -64,7 +64,7 @@
             <SolidColorBrush x:Key="Accent" Color="{DynamicResource AccentColor}"/>
             <SolidColorBrush x:Key="AccentHover" Color="{DynamicResource AccentHoverColor}"/>
             <SolidColorBrush x:Key="AccentPressed" Color="{DynamicResource AccentPressedColor}"/>
-            <SolidColorBrush x:Key="AccentSoft" Color="#0F6366F1"/>
+            <SolidColorBrush x:Key="AccentSoft" Color="#186366F1"/>
 
             <!-- Status colors -->
             <SolidColorBrush x:Key="Success" Color="#22C55E"/>
@@ -319,7 +319,7 @@
                                     <Setter TargetName="Bd" Property="BorderBrush" Value="#6022C55E"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#186366F1"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -349,7 +349,7 @@
                                     <Setter TargetName="Bd" Property="BorderBrush" Value="#60F59E0B"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#186366F1"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -376,7 +376,7 @@
                                     <Setter TargetName="Bd" Property="BorderBrush" Value="#60EF4444"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#186366F1"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -746,10 +746,10 @@
                 <Setter Property="BorderThickness" Value="0"/>
                 <Style.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="#186366F1"/>
+                        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
                     </Trigger>
                     <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="#146366F1"/>
+                        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
                         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                     </Trigger>
                 </Style.Triggers>

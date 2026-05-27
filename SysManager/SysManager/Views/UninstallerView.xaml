@@ -168,7 +168,7 @@
                                         HorizontalAlignment="Center">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#146366F1"/>
+                                            <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Source}" Value="">
                                                     <Setter Property="Background" Value="#14FBBF24"/>

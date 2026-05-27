@@ -68,7 +68,7 @@
 
         <!-- Module status: missing -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
-                BorderBrush="#F59E0B" BorderThickness="1"
+                BorderBrush="{DynamicResource Warning}" BorderThickness="1"
                 Visibility="{Binding ModuleAvailable, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -78,9 +78,9 @@
                 <StackPanel Grid.Column="0">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                   FontSize="18" Foreground="#F59E0B" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                   FontSize="18" Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <TextBlock Text="PSWindowsUpdate module is required" FontSize="15" FontWeight="SemiBold"
-                                   Foreground="#F59E0B" VerticalAlignment="Center"/>
+                                   Foreground="{DynamicResource Warning}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="{Binding ModuleStatus}" Style="{StaticResource Subtle}" Margin="28,6,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
@@ -95,8 +95,8 @@
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
                 Visibility="{Binding ModuleAvailable, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal">
-                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="#22C55E"/>
-                <TextBlock Text="PSWindowsUpdate is available" FontWeight="SemiBold" Foreground="#22C55E" VerticalAlignment="Center"/>
+                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource Success}"/>
+                <TextBlock Text="PSWindowsUpdate is available" FontWeight="SemiBold" Foreground="{DynamicResource Success}" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 

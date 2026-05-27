@@ -45,7 +45,7 @@
                 </Grid>
                 <Border Background="#2D1F1F" CornerRadius="4" Padding="6,2" Margin="4,0"
                         Visibility="{Binding PendingReboot, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="⚠ Reboot pending" FontSize="11" Foreground="#F59E0B"/>
+                    <TextBlock Text="⚠ Reboot pending" FontSize="11" Foreground="{DynamicResource Warning}"/>
                 </Border>
                 <Border CornerRadius="10" Padding="10,5" Margin="4,0"
                         Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
@@ -215,13 +215,13 @@
                                                     <Setter Property="Background" Value="#475569"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Status}" Value="Done">
-                                                            <Setter Property="Background" Value="#22C55E"/>
+                                                            <Setter Property="Background" Value="{DynamicResource Success}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                                            <Setter Property="Background" Value="#EF4444"/>
+                                                            <Setter Property="Background" Value="{DynamicResource Danger}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Status}" Value="Reboot required">
-                                                            <Setter Property="Background" Value="#F59E0B"/>
+                                                            <Setter Property="Background" Value="{DynamicResource Warning}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -234,13 +234,13 @@
                                                         <Setter Property="Fill" Value="#475569"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Status}" Value="Done">
-                                                                <Setter Property="Fill" Value="#22C55E"/>
+                                                                <Setter Property="Fill" Value="{DynamicResource Success}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                                                <Setter Property="Fill" Value="#EF4444"/>
+                                                                <Setter Property="Fill" Value="{DynamicResource Danger}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Status}" Value="Reboot required">
-                                                                <Setter Property="Fill" Value="#F59E0B"/>
+                                                                <Setter Property="Fill" Value="{DynamicResource Warning}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>

@@ -105,10 +105,10 @@
             <!-- Info -->
             <Border Style="{StaticResource GlassCard}" Background="#1438BDF8">
                 <Grid>
-                    <Border Background="#38BDF8" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                    <Border Background="{DynamicResource Info}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
                     <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#38BDF8">
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Info}">
                             <Ellipse.Effect>
                                 <DropShadowEffect Color="#38BDF8" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
@@ -171,7 +171,7 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowInfo}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#38BDF8" Margin="8,0,6,0"/>
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Info}" Margin="8,0,6,0"/>
                         <TextBlock Text="Info" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,22,0">

@@ -49,12 +49,32 @@ public partial class ThemePopup : UserControl
     private Border CreatePresetCard(string id, ThemePreset preset)
     {
         var mini = new StackPanel { Orientation = Orientation.Horizontal };
-        mini.Children.Add(new Rectangle { Width = 12, Height = 12, RadiusX = 3, RadiusY = 3,
-            Fill = new SolidColorBrush(preset.Background), Margin = new Thickness(0,0,3,0) });
-        mini.Children.Add(new Rectangle { Width = 12, Height = 12, RadiusX = 3, RadiusY = 3,
-            Fill = new SolidColorBrush(preset.Accent), Margin = new Thickness(0,0,3,0) });
-        mini.Children.Add(new Rectangle { Width = 12, Height = 12, RadiusX = 3, RadiusY = 3,
-            Fill = new SolidColorBrush(preset.TextPrimary) });
+        mini.Children.Add(new Rectangle
+        {
+            Width = 12,
+            Height = 12,
+            RadiusX = 3,
+            RadiusY = 3,
+            Fill = new SolidColorBrush(preset.Background),
+            Margin = new Thickness(0, 0, 3, 0)
+        });
+        mini.Children.Add(new Rectangle
+        {
+            Width = 12,
+            Height = 12,
+            RadiusX = 3,
+            RadiusY = 3,
+            Fill = new SolidColorBrush(preset.Accent),
+            Margin = new Thickness(0, 0, 3, 0)
+        });
+        mini.Children.Add(new Rectangle
+        {
+            Width = 12,
+            Height = 12,
+            RadiusX = 3,
+            RadiusY = 3,
+            Fill = new SolidColorBrush(preset.TextPrimary)
+        });
 
         var textBrush = TryFindResource("TextPrimary") as Brush ?? new SolidColorBrush(Colors.White);
         var borderBrush = TryFindResource("Border1") as Brush ?? new SolidColorBrush(Colors.DarkGray);
@@ -62,8 +82,11 @@ public partial class ThemePopup : UserControl
 
         var name = new TextBlock
         {
-            Text = preset.Name, FontSize = 11, FontWeight = FontWeights.SemiBold,
-            Foreground = textBrush, VerticalAlignment = VerticalAlignment.Center
+            Text = preset.Name,
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = textBrush,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         var content = new StackPanel { Orientation = Orientation.Horizontal };

@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
@@ -35,7 +35,7 @@
                 <Grid Width="200" Margin="0,0,12,0">
                     <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
                     <TextBlock Text="Search processes…" IsHitTestVisible="False"
-                               Foreground="{StaticResource TextMuted}" Margin="6,0,0,0"
+                               Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
                                VerticalAlignment="Center" FontSize="12"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
@@ -69,7 +69,7 @@
                             <Style TargetType="TextBlock">
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -84,7 +84,7 @@
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
                                         <TextBlock Text="{Binding Description}" FontSize="11"
-                                                   Foreground="{StaticResource TextMuted}"
+                                                   Foreground="{DynamicResource TextMuted}"
                                                    TextTrimming="CharacterEllipsis" MaxWidth="400"/>
                                     </StackPanel>
                                 </StackPanel>
@@ -120,7 +120,7 @@
                                 <Setter Property="HorizontalAlignment" Value="Right"/>
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -136,7 +136,7 @@
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
                                 <Setter Property="FontSize" Value="11"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -177,7 +177,7 @@
                                             Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             Style="{StaticResource GhostButton}" Padding="6,2" FontSize="12"
-                                            Foreground="{StaticResource Danger}"/>
+                                            Foreground="{DynamicResource Danger}"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

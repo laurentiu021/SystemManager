@@ -6,7 +6,7 @@
         Title="{Binding Title}"
         Width="1280" Height="820"
         MinWidth="960" MinHeight="640"
-        Background="{StaticResource Surface0}"
+        Background="{DynamicResource Surface0}"
         Icon="Resources/app.ico"
         AutomationProperties.AutomationId="MainWindow">
     <Window.DataContext>
@@ -21,8 +21,8 @@
 
         <!-- ================= Left nav ================= -->
         <Border Grid.Column="0"
-                Background="{StaticResource Surface1}"
-                BorderBrush="{StaticResource Border1}"
+                Background="{DynamicResource Surface1}"
+                BorderBrush="{DynamicResource Border1}"
                 BorderThickness="0,0,1,0">
             <Grid>
                 <Grid.RowDefinitions>
@@ -34,7 +34,7 @@
                 <!-- Header -->
                 <StackPanel Grid.Row="0" Margin="20,20,20,16">
                     <TextBlock Text="SysManager" FontSize="20" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimary}"
+                               Foreground="{DynamicResource TextPrimary}"
                                FontFamily="{StaticResource UiFont}"/>
                     <TextBlock Text="System toolkit" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                 </StackPanel>
@@ -71,12 +71,12 @@
                                                    FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                    FontSize="14" Margin="0,0,12,0"
                                                    VerticalAlignment="Center"
-                                                   Foreground="{StaticResource TextSecondary}"/>
+                                                   Foreground="{DynamicResource TextSecondary}"/>
                                         <TextBlock Text="{Binding Label}"
                                                    VerticalAlignment="Center"
                                                    FontFamily="{StaticResource UiFont}"
                                                    FontSize="13" FontWeight="Medium"
-                                                   Foreground="{StaticResource TextSecondary}"/>
+                                                   Foreground="{DynamicResource TextSecondary}"/>
                                     </StackPanel>
                                 </Border>
 
@@ -86,7 +86,7 @@
                                           Padding="0" Margin="0"
                                           Background="Transparent"
                                           BorderThickness="0"
-                                          Foreground="{StaticResource TextSecondary}">
+                                          Foreground="{DynamicResource TextSecondary}">
                                     <Expander.Header>
                                         <Border CornerRadius="8" Padding="4,4,8,4" Margin="-4,-4,-8,-4"
                                                 ToolTip="{Binding Tooltip}">
@@ -106,22 +106,22 @@
                                                            FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                            FontSize="13" Margin="0,0,10,0"
                                                            VerticalAlignment="Center"
-                                                           Foreground="{StaticResource TextSecondary}"/>
+                                                           Foreground="{DynamicResource TextSecondary}"/>
                                                 <TextBlock Text="{Binding Label}"
                                                            VerticalAlignment="Center"
                                                            FontFamily="{StaticResource UiFont}"
                                                            FontSize="12" FontWeight="SemiBold"
-                                                           Foreground="{StaticResource TextSecondary}"/>
+                                                           Foreground="{DynamicResource TextSecondary}"/>
                                                 <TextBlock Text="{Binding ChildCount, StringFormat=' ({0})'}"
                                                            VerticalAlignment="Center"
                                                            FontFamily="{StaticResource UiFont}"
-                                                           FontSize="10" Foreground="{StaticResource TextSecondary}"
+                                                           FontSize="10" Foreground="{DynamicResource TextSecondary}"
                                                            Opacity="0.7" Margin="2,0,0,0"/>
                                             </StackPanel>
                                             <!-- Subtitle: visible only when collapsed -->
                                             <TextBlock Text="{Binding Subtitle}"
                                                        FontFamily="{StaticResource UiFont}"
-                                                       FontSize="11" Foreground="{StaticResource TextSecondary}"
+                                                       FontSize="11" Foreground="{DynamicResource TextSecondary}"
                                                        Opacity="0.65" Margin="23,2,0,0"
                                                        TextTrimming="CharacterEllipsis">
                                                 <TextBlock.Style>
@@ -161,7 +161,7 @@
                                                         <Rectangle x:Name="ActiveMark"
                                                                    HorizontalAlignment="Left"
                                                                    Width="3" Height="18"
-                                                                   Fill="{StaticResource Accent}"
+                                                                   Fill="{DynamicResource Accent}"
                                                                    RadiusX="2" RadiusY="2"
                                                                    Margin="-28,0,0,0"
                                                                    Visibility="Collapsed"/>
@@ -170,12 +170,12 @@
                                                                        FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                                        FontSize="13" Margin="0,0,10,0"
                                                                        VerticalAlignment="Center"
-                                                                       Foreground="{StaticResource TextSecondary}"/>
+                                                                       Foreground="{DynamicResource TextSecondary}"/>
                                                             <StackPanel VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding Label}"
                                                                            FontFamily="{StaticResource UiFont}"
                                                                            FontSize="13" FontWeight="Medium"
-                                                                           Foreground="{StaticResource TextSecondary}"/>
+                                                                           Foreground="{DynamicResource TextSecondary}"/>
                                                                 <ProgressBar Height="2" Margin="0,3,0,0"
                                                                              IsIndeterminate="True"
                                                                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
@@ -195,7 +195,7 @@
 
                 <!-- Footer -->
                 <StackPanel Grid.Row="2" Margin="20,10,20,16">
-                    <Border Background="{StaticResource Surface3}" CornerRadius="999"
+                    <Border Background="{DynamicResource Surface3}" CornerRadius="999"
                             Padding="10,3" HorizontalAlignment="Left"
                             AutomationProperties.AutomationId="ElevationBadge">
                         <StackPanel Orientation="Horizontal">
@@ -204,10 +204,10 @@
                                        FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
-                                        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsElevated}" Value="True">
-                                                <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -215,7 +215,7 @@
                             </TextBlock>
                             <TextBlock Text="{Binding ElevationBadge}"
                                        FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextSecondary}"
+                                       Foreground="{DynamicResource TextSecondary}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
@@ -228,7 +228,7 @@
 
         <!-- ================= Content ================= -->
         <Border Grid.Column="1"
-                Background="{StaticResource Surface0}"
+                Background="{DynamicResource Surface0}"
                 AutomationProperties.AutomationId="ContentHost"
                 AutomationProperties.Name="ContentHost">
             <Grid>
@@ -239,7 +239,7 @@
 
                 <!-- Update banner — only when a newer release is available. -->
                 <Border Grid.Row="0" Margin="24,16,24,0" Padding="14,10" CornerRadius="10"
-                        Background="#0F1A2E" BorderBrush="{StaticResource Accent}" BorderThickness="1"
+                        Background="#0F1A2E" BorderBrush="{DynamicResource Accent}" BorderThickness="1"
                         Visibility="{Binding About.UpdateAvailable, Converter={StaticResource FlexVis}}">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -248,25 +248,49 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                       FontSize="16" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Text="Update available" FontWeight="SemiBold" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
-                            <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding About.LatestVersionLabel}" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                            <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding About.LatestPublishedLabel}" Foreground="{StaticResource TextSecondary}" FontSize="12" VerticalAlignment="Center"/>
+                                       FontSize="16" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="Update available" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                            <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding About.LatestVersionLabel}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                            <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding About.LatestPublishedLabel}" Foreground="{DynamicResource TextSecondary}" FontSize="12" VerticalAlignment="Center"/>
                         </StackPanel>
                         <Button Grid.Column="1" Content="View details" Command="{Binding OpenAboutTabCommand}"
                                 Style="{StaticResource PrimaryButton}" Padding="14,6"/>
                     </Grid>
                 </Border>
 
-                <!-- Background task banner — deep cleanup scan / large files scan -->
-                <!-- (moved to sidebar footer — see left nav bottom section) -->
-
-                <!-- (update banner continues below) -->
-
                 <ContentControl Grid.Row="1" x:Name="ContentHost"
                                 Content="{Binding SelectedNav.View}"/>
+
+                <!-- Theme button — top right, persistent -->
+                <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,16,28,0">
+                    <Grid>
+                        <Border x:Name="ThemeBtn" Width="36" Height="36" CornerRadius="10"
+                                Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                                BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="ThemeBtn_Click"
+                                ToolTip="Appearance">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                       FontSize="16" Foreground="{DynamicResource TextSecondary}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+
+                        <!-- Theme popup (created on demand in code-behind) -->
+                        <Popup x:Name="ThemePopupHost" Placement="Bottom" PlacementTarget="{Binding ElementName=ThemeBtn}"
+                               StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+                               HorizontalOffset="-304" VerticalOffset="4"/>
+                    </Grid>
+                </Border>
             </Grid>
         </Border>
 
@@ -294,15 +318,15 @@
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="ToastTitle" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextPrimary}"/>
+                                   Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock x:Name="ToastDetail" FontSize="11"
-                                   Foreground="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                   Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"/>
                     </StackPanel>
                     <Border Grid.Column="2" Margin="14,0,0,0" Cursor="Hand"
                             MouseLeftButtonUp="DismissToast_Click"
                             Background="Transparent" Padding="4">
                         <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                   FontSize="12" Foreground="{StaticResource TextMuted}"
+                                   FontSize="12" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center"/>
                     </Border>
                 </Grid>

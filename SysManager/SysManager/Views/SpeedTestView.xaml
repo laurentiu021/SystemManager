@@ -52,9 +52,9 @@
                         </DockPanel>
                         <Grid Margin="0,16,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0"><StackPanel><TextBlock Text="DOWNLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.DownloadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{StaticResource Info}"/></StackPanel></Border>
-                            <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{StaticResource Success}"/></StackPanel></Border>
-                            <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="{StaticResource Warning}"/></StackPanel></Border>
+                            <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0"><StackPanel><TextBlock Text="DOWNLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.DownloadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Info}"/></StackPanel></Border>
+                            <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Success}"/></StackPanel></Border>
+                            <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OoklaResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/></StackPanel></Border>
                         </Grid>
                         <TextBlock Text="{Binding OoklaResult.Server}" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}"/>
                         <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
@@ -77,9 +77,9 @@
                         </DockPanel>
                         <Grid Margin="0,16,0,0" Visibility="{Binding HttpResult, Converter={StaticResource FlexVis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0"><StackPanel><TextBlock Text="DOWNLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.DownloadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{StaticResource Info}"/></StackPanel></Border>
-                            <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{StaticResource Success}"/></StackPanel></Border>
-                            <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="{StaticResource Warning}"/></StackPanel></Border>
+                            <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0"><StackPanel><TextBlock Text="DOWNLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.DownloadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Info}"/></StackPanel></Border>
+                            <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Success}"/></StackPanel></Border>
+                            <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource Caption}"/><TextBlock Text="{Binding HttpResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/></StackPanel></Border>
                         </Grid>
                         <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding HttpStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
@@ -92,10 +92,10 @@
                         CornerRadius="8" Padding="12,10" Margin="0,12,0,0">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                   FontSize="14" Foreground="{StaticResource Info}" VerticalAlignment="Top" Margin="0,0,10,0"/>
-                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="12">
-                            <Run FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}">Ookla</Run><Run> measures raw TCP throughput to a nearby server — most accurate for ISP bandwidth. </Run>
-                            <Run FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}">HTTP</Run><Run> tests download/upload via Cloudflare CDN — reflects real web browsing speed but may show lower results due to HTTP overhead and CDN routing.</Run>
+                                   FontSize="14" Foreground="{DynamicResource Info}" VerticalAlignment="Top" Margin="0,0,10,0"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" FontSize="12">
+                            <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">Ookla</Run><Run> measures raw TCP throughput to a nearby server — most accurate for ISP bandwidth. </Run>
+                            <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">HTTP</Run><Run> tests download/upload via Cloudflare CDN — reflects real web browsing speed but may show lower results due to HTTP overhead and CDN routing.</Run>
                         </TextBlock>
                     </StackPanel>
                 </Border>

@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-05-27
+
+### Added
+- **Theme customization** — persistent appearance settings with Dark/Light/Custom modes.
+  Choose from 12 curated presets (6 dark, 6 light) or fully customize accent, background,
+  surface, and text colors. Settings saved between sessions.
+- **Theme button** — palette icon in top-right corner, accessible from every page.
+- **Background shade slider** — fine-tune lightness/darkness within any preset.
+- **Auto companion preset** — switching Dark↔Light automatically selects the matching
+  color family (e.g. Midnight Indigo ↔ Clean Indigo).
+
+### Changed
+- All color resources converted from `StaticResource` to `DynamicResource` for live
+  theme switching without restart.
+
 ## [1.12.1] - 2026-05-27
 
 ### Fixed

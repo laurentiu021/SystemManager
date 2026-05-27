@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="28,24,28,0">
         <Grid.RowDefinitions>
@@ -26,7 +26,7 @@
         </StackPanel>
 
         <!-- Elevation banner: not elevated -->
-        <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
                 BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
@@ -34,9 +34,9 @@
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
                     <TextBlock Text="Blocking applications modifies system registry keys and requires administrator privileges."
-                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -79,7 +79,7 @@
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserResizeColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="None"
-                  BorderThickness="1" BorderBrush="{StaticResource Border1}"
+                  BorderThickness="1" BorderBrush="{DynamicResource Border1}"
                   Background="Transparent"
                   AutomationProperties.Name="Data table"
                   VirtualizingPanel.IsVirtualizing="True"
@@ -93,7 +93,7 @@
         <!-- Footer -->
         <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,8,0,0">
             <TextBlock Opacity="0.6" VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondary}">
+                       Foreground="{DynamicResource TextSecondary}">
                 <Run Text="{Binding BlockedCount, Mode=OneWay}" />
                 <Run Text=" blocked" />
             </TextBlock>

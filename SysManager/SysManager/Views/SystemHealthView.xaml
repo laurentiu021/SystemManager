@@ -27,7 +27,7 @@
                 </DockPanel>
 
                 <!-- Elevation banner: not elevated -->
-                <Border Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+                <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
                         BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,12,0,0"
                         Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
                     <DockPanel>
@@ -35,9 +35,9 @@
                                 Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                       FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                                       FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
                             <TextBlock Text="Running disk checks (chkdsk) requires administrator privileges."
-                                       Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                                       Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -164,12 +164,12 @@
                                                 <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,10,0"
                                                          Fill="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"/>
                                                 <TextBlock Text="{Binding FriendlyName}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding MediaType}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding BusType}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding MediaType}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding BusType}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Verdict}"
                                                        Foreground="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"
@@ -213,15 +213,15 @@
                                                 </StackPanel>
                                                 <StackPanel Margin="0,0,24,6">
                                                     <TextBlock Text="POWER-ON" Style="{StaticResource Caption}"/>
-                                                    <TextBlock Text="{Binding PowerOnDisplay}" FontSize="14" Foreground="{StaticResource TextPrimary}" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding PowerOnDisplay}" FontSize="14" Foreground="{DynamicResource TextPrimary}" Margin="0,4,0,0"/>
                                                 </StackPanel>
                                                 <StackPanel Margin="0,0,24,6">
                                                     <TextBlock Text="READ ERRORS" Style="{StaticResource Caption}"/>
-                                                    <TextBlock Text="{Binding ReadErrors, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding ReadErrors, FallbackValue=—}" FontSize="14" Foreground="{DynamicResource TextPrimary}" Margin="0,4,0,0"/>
                                                 </StackPanel>
                                                 <StackPanel Margin="0,0,0,6">
                                                     <TextBlock Text="WRITE ERRORS" Style="{StaticResource Caption}"/>
-                                                    <TextBlock Text="{Binding WriteErrors, FallbackValue=—}" FontSize="14" Foreground="{StaticResource TextPrimary}" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding WriteErrors, FallbackValue=—}" FontSize="14" Foreground="{DynamicResource TextPrimary}" Margin="0,4,0,0"/>
                                                 </StackPanel>
                                             </WrapPanel>
                                         </StackPanel>
@@ -255,10 +255,10 @@
                             <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0">
                                 <Ellipse.Style>
                                     <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="{StaticResource TextSecondary}"/>
+                                        <Setter Property="Fill" Value="{DynamicResource TextSecondary}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsChkdskRunning}" Value="True">
-                                                <Setter Property="Fill" Value="{StaticResource Success}"/>
+                                                <Setter Property="Fill" Value="{DynamicResource Success}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -267,10 +267,10 @@
                             <TextBlock Text="{Binding ChkdskStatus}" FontWeight="SemiBold" VerticalAlignment="Center">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
-                                        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsChkdskRunning}" Value="True">
-                                                <Setter Property="Foreground" Value="{StaticResource Success}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource Success}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -292,22 +292,22 @@
                                             <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding Letter}" FontWeight="Bold" FontSize="15" Foreground="{StaticResource TextPrimary}"/>
-                                                    <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}"/>
-                                                    <TextBlock Text="{Binding Label}" Foreground="{StaticResource TextSecondary}"/>
+                                                    <TextBlock Text="{Binding Letter}" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource TextPrimary}"/>
+                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}"/>
+                                                    <TextBlock Text="{Binding Label}" Foreground="{DynamicResource TextSecondary}"/>
                                                 </StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                    <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{StaticResource TextMuted}" FontSize="12"/>
-                                                    <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" FontSize="12"/>
-                                                    <TextBlock Text="{Binding FileSystem}" Foreground="{StaticResource TextMuted}" FontSize="12"/>
-                                                    <TextBlock Text="  ·  " Foreground="{StaticResource TextMuted}" FontSize="12"
+                                                    <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="{Binding FileSystem}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" FontSize="12"
                                                                Visibility="{Binding MediaType, Converter={StaticResource FlexVis}}"/>
-                                                    <TextBlock Text="{Binding MediaType}" Foreground="{StaticResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="{Binding MediaType}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                                                     <TextBlock Text="  "/>
-                                                    <TextBlock Text="{Binding BusType}" Foreground="{StaticResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="{Binding BusType}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                                                 </StackPanel>
                                             </StackPanel>
-                                            <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{StaticResource TextSecondary}"
+                                            <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{DynamicResource TextSecondary}"
                                                        VerticalAlignment="Center" Margin="10,0,10,0"/>
                                             <Button Grid.Column="3" Content="Scan"
                                                     Command="{Binding DataContext.RunChkdskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"

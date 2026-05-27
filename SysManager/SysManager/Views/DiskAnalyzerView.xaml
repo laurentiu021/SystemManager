@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
@@ -58,7 +58,7 @@
                     <ProgressBar AutomationProperties.Name="Progress" Grid.Column="0" Height="8" Minimum="0" Maximum="100"
                                  Value="{Binding DriveUsedPercent, Mode=OneWay}"/>
                     <TextBlock Grid.Column="1" Margin="12,0,0,0" FontSize="12"
-                               Foreground="{StaticResource TextMuted}">
+                               Foreground="{DynamicResource TextMuted}">
                         <Run Text="{Binding DriveUsedPercent, Mode=OneWay, StringFormat='{}{0:F1}%'}"/>
                         <Run Text=" used"/>
                     </TextBlock>
@@ -80,7 +80,7 @@
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListViewItem">
                                     <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}"
-                                            BorderBrush="{StaticResource Border1}" BorderThickness="0,0,0,1">
+                                            BorderBrush="{DynamicResource Border1}" BorderThickness="0,0,0,1">
                                         <ContentPresenter/>
                                     </Border>
                                     <ControlTemplate.Triggers>
@@ -114,9 +114,9 @@
                             <!-- Name + file count -->
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                                <TextBlock FontSize="11" Foreground="{StaticResource TextMuted}">
+                                <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
                                     <Run Text="{Binding FileCount, Mode=OneWay, StringFormat='{}{0:N0} files'}"/>
-                                    <Run Text=" · " Foreground="{StaticResource TextDisabled}"/>
+                                    <Run Text=" · " Foreground="{DynamicResource TextDisabled}"/>
                                     <Run Text="{Binding FolderCount, Mode=OneWay, StringFormat='{}{0:N0} folders'}"/>
                                 </TextBlock>
                             </StackPanel>

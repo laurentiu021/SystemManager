@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
@@ -26,7 +26,7 @@
         </StackPanel>
 
         <!-- Elevation banner: not elevated -->
-        <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
                 BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
@@ -34,9 +34,9 @@
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
                     <TextBlock Text="Starting and stopping Windows services requires administrator privileges."
-                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -76,7 +76,7 @@
                     </StackPanel>
                 </DockPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                    <TextBlock Text="Filter:" Foreground="{StaticResource TextMuted}" FontSize="11"
+                    <TextBlock Text="Filter:" Foreground="{DynamicResource TextMuted}" FontSize="11"
                                VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <RadioButton Content="{Binding SafeCount, StringFormat='Safe ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,0"

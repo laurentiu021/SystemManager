@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface0}">
+             Background="{DynamicResource Surface0}">
 
     <Grid Margin="32,24">
         <Grid.RowDefinitions>
@@ -27,7 +27,7 @@
         </StackPanel>
 
         <!-- Elevation banner: not elevated -->
-        <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
                 BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
@@ -35,9 +35,9 @@
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
                     <TextBlock Text="Modifying system performance settings and creating restore points requires administrator privileges."
-                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -73,10 +73,10 @@
             <StackPanel>
                 <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
                 <TextBlock Text="⚠ GPU changes require a reboot to take effect."
-                           Foreground="{StaticResource Danger}" FontSize="12" Margin="0,4,0,0"
+                           Foreground="{DynamicResource Danger}" FontSize="12" Margin="0,4,0,0"
                            Visibility="{Binding NeedsReboot, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="✓ Original settings snapshot saved — Restore All is available."
-                           Foreground="{StaticResource Success}" FontSize="12" Margin="0,4,0,0"
+                           Foreground="{DynamicResource Success}" FontSize="12" Margin="0,4,0,0"
                            Visibility="{Binding HasSnapshot, Converter={StaticResource BoolToVis}}"/>
             </StackPanel>
         </Border>
@@ -198,7 +198,7 @@
                             <TextBlock Text="Prevents CPU from downclocking. Increases power consumption."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,4"/>
                             <TextBlock Text="⚠ Locked to 100 % by the current power plan (High / Ultimate). Switch to Balanced to adjust."
-                                       Foreground="{StaticResource Warning}" FontSize="11" Margin="20,0,0,4"
+                                       Foreground="{DynamicResource Warning}" FontSize="11" Margin="20,0,0,4"
                                        TextWrapping="Wrap"
                                        Visibility="{Binding IsProcessorStateLocked, Converter={StaticResource BoolToVis}}"/>
                             <Button Content="Apply Processor State" Command="{Binding ApplyProcessorStateCommand}"
@@ -229,7 +229,7 @@
                                 Same as "Empty Working Set" in RAMMap. Useful before launching a game.
                             </TextBlock>
                             <TextBlock Text="⚠ Apps may feel briefly slower on next access as pages are faulted back in."
-                                       Foreground="{StaticResource Warning}" FontSize="11" Margin="0,0,0,8"/>
+                                       Foreground="{DynamicResource Warning}" FontSize="11" Margin="0,0,0,8"/>
                             <Button Content="Trim RAM Now" Command="{Binding TrimRamCommand}"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                         </StackPanel>
@@ -247,10 +247,10 @@
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                 <TextBlock Text="Currently: " Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                                 <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Text="Enabled" Foreground="{StaticResource Success}"
+                                           Text="Enabled" Foreground="{DynamicResource Success}"
                                            Visibility="{Binding IsHibernationEnabled, Converter={StaticResource BoolToVis}}"/>
                                 <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Text="Disabled" Foreground="{StaticResource Danger}"
+                                           Text="Disabled" Foreground="{DynamicResource Danger}"
                                            Visibility="{Binding IsHibernationEnabled, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                             </StackPanel>
                             <Button Content="Toggle Hibernation" Command="{Binding ToggleHibernationCommand}"

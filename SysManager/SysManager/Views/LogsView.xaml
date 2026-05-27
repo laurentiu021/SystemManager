@@ -157,27 +157,27 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowCritical}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#FF3B30" Margin="8,0,6,0"/>
-                        <TextBlock Text="Critical" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Critical" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowError}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#F87171" Margin="8,0,6,0"/>
-                        <TextBlock Text="Error" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Error" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowWarning}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#FBBF24" Margin="8,0,6,0"/>
-                        <TextBlock Text="Warning" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Warning" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowInfo}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#38BDF8" Margin="8,0,6,0"/>
-                        <TextBlock Text="Info" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Info" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,22,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowVerbose}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#9AA0A6" Margin="8,0,6,0"/>
-                        <TextBlock Text="Verbose" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Verbose" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <TextBlock Text="Search" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -185,7 +185,7 @@
                         <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                  ToolTip="Filters by message, provider, or event ID"/>
                         <TextBlock Text="Filter by message, source, or event ID…"
-                                   Foreground="{StaticResource TextMuted}" FontSize="12"
+                                   Foreground="{DynamicResource TextMuted}" FontSize="12"
                                    VerticalAlignment="Center" Margin="8,0,0,0"
                                    IsHitTestVisible="False">
                             <TextBlock.Style>
@@ -230,12 +230,12 @@
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
                             <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                             <Setter Property="BorderThickness" Value="0"/>
                             <Style.Triggers>
                                 <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="{StaticResource Surface3}"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                    <Setter Property="Background" Value="{DynamicResource Surface3}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>
@@ -268,14 +268,14 @@
                                 Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}">
                         <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,8"/>
                         <TextBlock Text="No events match your filters" FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"/>
+                                   Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
                         <TextBlock Text="Try adjusting severity checkboxes or clearing the search"
                                    Style="{StaticResource Subtle}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="{StaticResource Border1}"/>
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="{DynamicResource Border1}"/>
 
             <!-- Detail -->
             <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0">
@@ -297,8 +297,8 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding SelectedEntry.SeverityLabel}" FontSize="18" FontWeight="SemiBold"
                                                    Foreground="{Binding SelectedEntry.SeverityColor, Converter={StaticResource HexBrush}}"/>
-                                        <TextBlock Text=" — Event " FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
-                                        <TextBlock Text="{Binding SelectedEntry.EventId}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
+                                        <TextBlock Text=" — Event " FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                                        <TextBlock Text="{Binding SelectedEntry.EventId}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                                     </StackPanel>
                                     <TextBlock Text="{Binding SelectedEntry.ProviderName}" Style="{StaticResource Subtle}"/>
                                 </StackPanel>
@@ -320,8 +320,8 @@
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="When" Style="{StaticResource Subtle}"/>
                                     <TextBlock Grid.Row="0" Grid.Column="1">
                                         <Run Text="{Binding SelectedEntry.RelativeTime, Mode=OneWay}"/>
-                                        <Run Text=" · " Foreground="{StaticResource TextMuted}"/>
-                                        <Run Text="{Binding SelectedEntry.FullTimestamp, Mode=OneWay}" Foreground="{StaticResource TextSecondary}"/>
+                                        <Run Text=" · " Foreground="{DynamicResource TextMuted}"/>
+                                        <Run Text="{Binding SelectedEntry.FullTimestamp, Mode=OneWay}" Foreground="{DynamicResource TextSecondary}"/>
                                     </TextBlock>
                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Log" Style="{StaticResource Subtle}"/>
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.LogName}"/>
@@ -334,12 +334,12 @@
 
                             <TextBlock Text="What this means" Style="{StaticResource SectionTitle}" Margin="0,18,0,6"/>
                             <Border Padding="12" CornerRadius="8" Background="#102028" BorderBrush="#1E3A4A" BorderThickness="1">
-                                <TextBlock Text="{Binding SelectedEntry.Explanation}" TextWrapping="Wrap" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="{Binding SelectedEntry.Explanation}" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"/>
                             </Border>
 
                             <TextBlock Text="What to try" Style="{StaticResource SectionTitle}" Margin="0,14,0,6"/>
                             <Border Padding="12" CornerRadius="8" Background="#141B14" BorderBrush="#2D4A2D" BorderThickness="1">
-                                <TextBlock Text="{Binding SelectedEntry.Recommendation}" TextWrapping="Wrap" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="{Binding SelectedEntry.Recommendation}" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"/>
                             </Border>
 
                             <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
@@ -347,9 +347,9 @@
                                 <Button Content="Search online" Command="{Binding SearchOnlineCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                             </StackPanel>
 
-                            <Expander Header="Full system message" Margin="0,16,0,0" Foreground="{StaticResource TextSecondary}">
-                                <Border Padding="10" CornerRadius="8" Background="{StaticResource Surface0}"
-                                        BorderBrush="{StaticResource Border1}" BorderThickness="1">
+                            <Expander Header="Full system message" Margin="0,16,0,0" Foreground="{DynamicResource TextSecondary}">
+                                <Border Padding="10" CornerRadius="8" Background="{DynamicResource Surface0}"
+                                        BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                     <TextBox Text="{Binding SelectedEntry.FullMessage, Mode=OneWay}"
                                              IsReadOnly="True" TextWrapping="Wrap"
                                              Background="Transparent" BorderThickness="0"
@@ -360,9 +360,9 @@
                                 </Border>
                             </Expander>
 
-                            <Expander Header="Raw XML (for power users)" Margin="0,8,0,0" Foreground="{StaticResource TextSecondary}">
-                                <Border Padding="10" CornerRadius="8" Background="{StaticResource Surface0}"
-                                        BorderBrush="{StaticResource Border1}" BorderThickness="1">
+                            <Expander Header="Raw XML (for power users)" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}">
+                                <Border Padding="10" CornerRadius="8" Background="{DynamicResource Surface0}"
+                                        BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                     <TextBox Text="{Binding SelectedEntry.Xml, Mode=OneWay}"
                                              IsReadOnly="True" TextWrapping="NoWrap"
                                              Background="Transparent" BorderThickness="0"

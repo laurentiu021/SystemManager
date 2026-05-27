@@ -19,9 +19,9 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="App Installation Alerts" FontSize="20" FontWeight="SemiBold"
-                       Foreground="{StaticResource TextPrimary}" />
+                       Foreground="{DynamicResource TextPrimary}" />
             <TextBlock Text="{Binding MonitorStatus}" Opacity="0.7" Margin="0,4,0,0"
-                       Foreground="{StaticResource TextSecondary}" />
+                       Foreground="{DynamicResource TextSecondary}" />
         </StackPanel>
 
         <!-- Toolbar -->
@@ -40,7 +40,7 @@
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserResizeColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                  BorderThickness="1" BorderBrush="{StaticResource Border1}"
+                  BorderThickness="1" BorderBrush="{DynamicResource Border1}"
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
@@ -55,7 +55,7 @@
         <!-- Footer -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
             <TextBlock Opacity="0.6" VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondary}">
+                       Foreground="{DynamicResource TextSecondary}">
                 <Run Text="{Binding AlertCount, Mode=OneWay}" />
                 <Run Text=" total · " />
                 <Run Text="{Binding UnacknowledgedCount, Mode=OneWay}" />

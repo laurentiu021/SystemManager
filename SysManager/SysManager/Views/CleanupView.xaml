@@ -27,7 +27,7 @@
         </StackPanel>
 
         <!-- Elevation banner: not elevated -->
-        <Border Grid.Row="1" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border1}"
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
                 BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="28,12,28,0"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
@@ -35,9 +35,9 @@
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{StaticResource TextSecondary}"/>
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
                     <TextBlock Text="Running SFC and DISM system repairs requires administrator privileges."
-                               Foreground="{StaticResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -69,7 +69,7 @@
                         <StackPanel>
                             <TextBlock Text="TEMP FOLDERS" Style="{StaticResource Caption}"/>
                             <TextBlock Text="{Binding TempSizeLabel}" FontSize="16" FontWeight="SemiBold"
-                                       Foreground="{StaticResource Info}" Margin="0,4,0,0"/>
+                                       Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0,0,0">
@@ -99,9 +99,9 @@
                      are running so the user can navigate away freely. -->
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
                             Visibility="{Binding IsSfcRunning, Converter={StaticResource FlexVis}}">
-                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{StaticResource Success}"/>
-                    <TextBlock Text="SFC /scannow is running in background — " Foreground="{StaticResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding SfcStatus}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Success}"/>
+                    <TextBlock Text="SFC /scannow is running in background — " Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding SfcStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <!-- SFC verdict (shown after completion) -->
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
@@ -110,7 +110,7 @@
                         <SolidColorBrush Color="#0D1117" Opacity="0.8"/>
                     </Border.Background>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="SFC result:" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"
+                        <TextBlock Text="SFC result:" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="{Binding SfcVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    Foreground="{Binding SfcVerdictColorHex, Converter={StaticResource HexBrush}}"/>
@@ -118,9 +118,9 @@
                 </Border>
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
                             Visibility="{Binding IsDismRunning, Converter={StaticResource FlexVis}}">
-                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{StaticResource Info}"/>
-                    <TextBlock Text="DISM is running in background — " Foreground="{StaticResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding DismStatus}" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Info}"/>
+                    <TextBlock Text="DISM is running in background — " Foreground="{DynamicResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding DismStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <!-- DISM verdict (shown after completion) -->
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
@@ -129,7 +129,7 @@
                         <SolidColorBrush Color="#0D1117" Opacity="0.8"/>
                     </Border.Background>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="DISM result:" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"
+                        <TextBlock Text="DISM result:" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="{Binding DismVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>

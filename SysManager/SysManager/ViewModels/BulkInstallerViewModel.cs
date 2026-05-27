@@ -21,6 +21,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 {
     private readonly BulkInstallerService _service;
     private readonly AppIconService _iconService;
+    private readonly EtaCalculator _installEta = new();
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<InstallableApp> Apps { get; } = new();
@@ -47,6 +48,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         "Runtimes & Frameworks",
         "Custom"
     ];
+
+    [ObservableProperty] private string _installEtaText = string.Empty;
 
     // Custom winget search
     [ObservableProperty] private string _searchQuery = "";
@@ -151,6 +154,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
         var installed = 0;
         var failed = 0;
+        InstallEtaText = string.Empty;
+        _installEta.Reset();
 
         try
         {
@@ -161,6 +166,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                 var app = selected[i];
                 app.Status = "Installing...";
                 Progress = (int)((double)i / selected.Count * 100);
+                InstallEtaText = _installEta.Update(Progress);
                 StatusMessage = $"Installing {app.Name} ({i + 1}/{selected.Count})…";
 
                 try
@@ -191,6 +197,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             }
 
             Progress = 100;
+            InstallEtaText = string.Empty;
             StatusMessage = $"Done. Installed: {installed}, Failed: {failed}.";
             ToastService.Instance.Show("Bulk Install complete", $"Installed: {installed}, Failed: {failed}");
         }
@@ -201,6 +208,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
+            InstallEtaText = string.Empty;
         }
     }
 

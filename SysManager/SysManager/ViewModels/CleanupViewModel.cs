@@ -17,6 +17,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
 {
     private readonly PowerShellRunner _runner;
 
+    private readonly EtaCalculator _sfcEta = new();
+    private readonly EtaCalculator _dismEta = new();
+
     private CancellationTokenSource? _tempCts;
     private CancellationTokenSource? _binCts;
     private CancellationTokenSource? _sfcCts;
@@ -39,6 +42,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
     [ObservableProperty] private string _dismStatus = "Idle";
     [ObservableProperty] private string _dismVerdict = "";
     [ObservableProperty] private string _dismVerdictColorHex = "#9AA0A6";
+
+    [ObservableProperty] private string _sfcEtaText = string.Empty;
+    [ObservableProperty] private string _dismEtaText = string.Empty;
 
     // Pre-scan info so the tab doesn't look empty on first load
     [ObservableProperty] private string _tempSizeLabel = "Scanning…";
@@ -237,6 +243,8 @@ public sealed partial class CleanupViewModel : ViewModelBase
         SfcStatus = "Running — can take 5–15 minutes";
         SfcVerdict = "";
         SfcVerdictColorHex = "#9AA0A6";
+        SfcEtaText = string.Empty;
+        _sfcEta.Reset();
         StatusMessage = "SFC running in background. You can keep using the app.";
         _sfcCts?.Dispose();
         _sfcCts = new CancellationTokenSource();
@@ -250,6 +258,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
                 if (m.Success && int.TryParse(m.Groups[1].Value, out var pct) && pct is >= 0 and <= 100)
                 {
                     Progress = pct;
+                    SfcEtaText = _sfcEta.Update(pct);
                     IsProgressIndeterminate = false;
                 }
             }
@@ -267,7 +276,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (OperationCanceledException) { SfcStatus = "Cancelled."; SfcVerdict = "Scan was cancelled."; SfcVerdictColorHex = "#9AA0A6"; StatusMessage = SfcStatus; }
         catch (InvalidOperationException ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
         catch (System.ComponentModel.Win32Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
-        finally { _runner.LineReceived -= Collect; IsSfcRunning = false; }
+        finally { _runner.LineReceived -= Collect; IsSfcRunning = false; SfcEtaText = string.Empty; }
     }
 
     /// <summary>
@@ -323,6 +332,8 @@ public sealed partial class CleanupViewModel : ViewModelBase
         DismStatus = "Running — can take 10–30 minutes";
         DismVerdict = "";
         DismVerdictColorHex = "#9AA0A6";
+        DismEtaText = string.Empty;
+        _dismEta.Reset();
         StatusMessage = "DISM running in background. You can keep using the app.";
         _dismCts?.Dispose();
         _dismCts = new CancellationTokenSource();
@@ -336,6 +347,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
                 if (m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pct) && pct is >= 0 and <= 100)
                 {
                     Progress = (int)pct;
+                    DismEtaText = _dismEta.Update((int)pct);
                     IsProgressIndeterminate = false;
                 }
             }
@@ -353,7 +365,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (OperationCanceledException) { DismStatus = "Cancelled."; DismVerdict = "Repair was cancelled."; DismVerdictColorHex = "#9AA0A6"; StatusMessage = DismStatus; }
         catch (InvalidOperationException ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
         catch (System.ComponentModel.Win32Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
-        finally { _runner.LineReceived -= Collect; IsDismRunning = false; }
+        finally { _runner.LineReceived -= Collect; IsDismRunning = false; DismEtaText = string.Empty; }
     }
 
     /// <summary>

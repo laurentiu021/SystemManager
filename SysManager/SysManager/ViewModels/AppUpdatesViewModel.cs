@@ -15,6 +15,7 @@ namespace SysManager.ViewModels;
 public sealed partial class AppUpdatesViewModel : ViewModelBase
 {
     private readonly WingetService _winget;
+    private readonly EtaCalculator _upgradeEta = new();
     private CancellationTokenSource? _cts;
     private readonly Action<PowerShellLine> _lineHandler;
 
@@ -22,6 +23,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private bool _selectAll = true;
+    [ObservableProperty] private string _upgradeEtaText = string.Empty;
     [ObservableProperty] private bool _isElevated;
 
     public AppUpdatesViewModel(WingetService winget)
@@ -75,6 +77,8 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         int done = 0;
+        UpgradeEtaText = string.Empty;
+        _upgradeEta.Reset();
         try
         {
             foreach (var pkg in toUpgrade)
@@ -83,6 +87,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
                 pkg.Status = "Upgrading...";
                 StatusMessage = $"Upgrading {pkg.Name} ({done + 1}/{toUpgrade.Count})";
                 Progress = (int)((done / (double)toUpgrade.Count) * 100);
+                UpgradeEtaText = _upgradeEta.Update(Progress);
                 try
                 {
                     var code = await _winget.UpgradeAsync(pkg.Id, _cts.Token);
@@ -93,10 +98,11 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
                 done++;
             }
             Progress = 100;
+            UpgradeEtaText = string.Empty;
             StatusMessage = $"Completed {done}/{toUpgrade.Count}";
             Log.Information("App upgrade batch completed: {Done}/{Total}", done, toUpgrade.Count);
         }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; UpgradeEtaText = string.Empty; }
     }
 
     [RelayCommand]

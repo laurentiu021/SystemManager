@@ -102,6 +102,8 @@
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Success}"/>
                     <TextBlock Text="SFC /scannow is running in background — " Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding SfcStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding SfcEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                               Visibility="{Binding SfcEtaText, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
                 <!-- SFC verdict (shown after completion) -->
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
@@ -121,6 +123,8 @@
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Info}"/>
                     <TextBlock Text="DISM is running in background — " Foreground="{DynamicResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding DismStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding DismEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                               Visibility="{Binding DismEtaText, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
                 <!-- DISM verdict (shown after completion) -->
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"

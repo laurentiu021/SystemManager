@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-05-27
+
+### Added
+- **ETA on long operations** — estimated time remaining now shown on:
+  SFC scan, DISM restore, Bulk Installer, Uninstaller, and App Updates.
+  Uses linear extrapolation from elapsed time and current progress percentage.
+
 ## [1.14.0] - 2026-05-27
 
 ### Added

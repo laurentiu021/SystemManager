@@ -63,8 +63,8 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="55"
-                                        SortMemberPath="Pid">
+                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="55" MinWidth="55"
+                                        SortMemberPath="Pid" CanUserResize="False">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="FontFamily" Value="Consolas"/>
@@ -92,7 +92,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Memory" Binding="{Binding MemoryDisplay}" Width="80"
+                    <DataGridTextColumn Header="Memory" Binding="{Binding MemoryDisplay}" Width="80" MinWidth="70"
                                         SortMemberPath="MemoryBytes">
                         <DataGridTextColumn.HeaderStyle>
                             <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
@@ -108,7 +108,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="CPU" Binding="{Binding CpuPercent, StringFormat={}{0:F1}%}" Width="60"
+                    <DataGridTextColumn Header="CPU" Binding="{Binding CpuPercent, StringFormat={}{0:F1}%}" Width="60" MinWidth="55"
                                         SortMemberPath="CpuPercent">
                         <DataGridTextColumn.HeaderStyle>
                             <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
@@ -125,7 +125,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Threads" Binding="{Binding ThreadCount}" Width="70"
+                    <DataGridTextColumn Header="Threads" Binding="{Binding ThreadCount}" Width="70" MinWidth="60"
                                         SortMemberPath="ThreadCount">
                         <DataGridTextColumn.HeaderStyle>
                             <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
@@ -141,7 +141,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Header="Status" Width="100" SortMemberPath="Status">
+                    <DataGridTemplateColumn Header="Status" Width="100" MinWidth="90" SortMemberPath="Status">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"
@@ -163,7 +163,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="Actions" Width="120" CanUserSort="False">
+                    <DataGridTemplateColumn Header="Actions" Width="120" MinWidth="120" CanUserSort="False" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">

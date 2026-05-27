@@ -100,7 +100,7 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="" Width="32"
+                    <DataGridCheckBoxColumn Header="" Width="32" MinWidth="32" CanUserResize="False"
                                             Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
                                             CanUserSort="False">
                         <DataGridCheckBoxColumn.ElementStyle>
@@ -115,7 +115,7 @@
                         </DataGridCheckBoxColumn.EditingElementStyle>
                     </DataGridCheckBoxColumn>
 
-                    <DataGridTemplateColumn Header="Name" Width="*" SortMemberPath="Name">
+                    <DataGridTemplateColumn Header="Name" Width="*" MinWidth="150" SortMemberPath="Name">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
@@ -133,7 +133,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="80"
+                    <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="80" MinWidth="60"
                                         SortMemberPath="SizeBytes" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -145,7 +145,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="120"
+                    <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="120" MinWidth="80"
                                         SortMemberPath="Version" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -157,10 +157,10 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="180"
+                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="180" MinWidth="80"
                                         SortMemberPath="Publisher" IsReadOnly="True"/>
 
-                    <DataGridTemplateColumn Header="Source" Width="90" SortMemberPath="Source">
+                    <DataGridTemplateColumn Header="Source" Width="90" MinWidth="70" SortMemberPath="Source">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"
@@ -226,7 +226,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="Status" Width="180" SortMemberPath="Status">
+                    <DataGridTemplateColumn Header="Status" Width="180" MinWidth="80" SortMemberPath="Status">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,4"

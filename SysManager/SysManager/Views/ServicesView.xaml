@@ -109,18 +109,18 @@
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200" SortMemberPath="DisplayName"/>
-                <DataGridTextColumn Header="Service" Binding="{Binding Name}" Width="160" SortMemberPath="Name"/>
-                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80" SortMemberPath="Status"/>
-                <DataGridTextColumn Header="Startup" Binding="{Binding StartType}" Width="90" SortMemberPath="StartType"/>
-                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" SortMemberPath="Description">
+                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200" MinWidth="120" SortMemberPath="DisplayName"/>
+                <DataGridTextColumn Header="Service" Binding="{Binding Name}" Width="160" MinWidth="100" SortMemberPath="Name"/>
+                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80" MinWidth="70" SortMemberPath="Status"/>
+                <DataGridTextColumn Header="Startup" Binding="{Binding StartType}" Width="90" MinWidth="80" SortMemberPath="StartType"/>
+                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" MinWidth="100" SortMemberPath="Description">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-                <DataGridTemplateColumn Header="Safety" Width="90" SortMemberPath="SafetyLevel">
+                <DataGridTemplateColumn Header="Safety" Width="90" MinWidth="80" SortMemberPath="SafetyLevel">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Border CornerRadius="6" Padding="6,3"
@@ -139,7 +139,7 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Actions" Width="280">
+                <DataGridTemplateColumn Header="Actions" Width="280" MinWidth="280" CanUserResize="False">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">

@@ -139,9 +139,9 @@
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       Visibility="{Binding UpdateCount, Converter={StaticResource GreaterThanZero}}">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="✓" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="36"/>
+                    <DataGridCheckBoxColumn Header="✓" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="36" MinWidth="36" CanUserResize="False"/>
 
-                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" IsReadOnly="True"
+                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" MinWidth="150" IsReadOnly="True"
                                         SortMemberPath="Title">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -152,7 +152,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="KB" Binding="{Binding KB}" Width="100"
+                    <DataGridTextColumn Header="KB" Binding="{Binding KB}" Width="100" MinWidth="70"
                                         SortMemberPath="KB">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -163,7 +163,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="80"
+                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="80" MinWidth="60"
                                         SortMemberPath="Size">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -174,7 +174,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90"
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" MinWidth="70"
                                         SortMemberPath="Status">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -184,7 +184,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Date" Binding="{Binding DateDisplay}" Width="100"
+                    <DataGridTextColumn Header="Date" Binding="{Binding DateDisplay}" Width="100" MinWidth="80"
                                         SortMemberPath="Date">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -195,7 +195,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="110"
+                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="110" MinWidth="70"
                                         SortMemberPath="Category">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">

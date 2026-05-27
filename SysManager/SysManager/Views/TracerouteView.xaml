@@ -96,9 +96,9 @@
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="#" Binding="{Binding HopNumber}" Width="36"/>
-                            <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*"/>
-                            <DataGridTextColumn Header="ms" Binding="{Binding LatencyMs, StringFormat={}{0:F0}}" Width="60"/>
+                            <DataGridTextColumn Header="#" Binding="{Binding HopNumber}" Width="36" MinWidth="36"/>
+                            <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*" MinWidth="80"/>
+                            <DataGridTextColumn Header="ms" Binding="{Binding LatencyMs, StringFormat={}{0:F0}}" Width="60" MinWidth="40"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>

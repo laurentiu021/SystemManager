@@ -110,7 +110,7 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120"
+                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120" MinWidth="80"
                                         SortMemberPath="Category" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -121,7 +121,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Header="Safety" Width="80" SortMemberPath="SafetyLevel">
+                    <DataGridTemplateColumn Header="Safety" Width="80" MinWidth="80" SortMemberPath="SafetyLevel">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="6" Padding="6,3"
@@ -140,7 +140,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Feature" Binding="{Binding DisplayName}" Width="*"
+                    <DataGridTextColumn Header="Feature" Binding="{Binding DisplayName}" Width="*" MinWidth="120"
                                         SortMemberPath="DisplayName" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -151,7 +151,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Header="State" Width="90" SortMemberPath="IsEnabled">
+                    <DataGridTemplateColumn Header="State" Width="90" MinWidth="70" SortMemberPath="IsEnabled">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11">
@@ -172,7 +172,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="Toggle" Width="60">
+                    <DataGridTemplateColumn Header="Toggle" Width="62" MinWidth="62" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <ToggleButton Style="{StaticResource ToggleSwitch}"
@@ -184,7 +184,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="Status" Width="130" SortMemberPath="Status">
+                    <DataGridTemplateColumn Header="Status" Width="130" MinWidth="80" SortMemberPath="Status">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"

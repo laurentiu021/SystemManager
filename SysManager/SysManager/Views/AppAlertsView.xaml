@@ -44,11 +44,11 @@
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Detected" Binding="{Binding DetectedAt, StringFormat='{}{0:HH:mm:ss dd-MMM}'}" Width="120" />
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" />
-                <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="150" />
-                <DataGridTextColumn Header="Path" Binding="{Binding InstallPath}" Width="*" />
-                <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="80" />
+                <DataGridTextColumn Header="Detected" Binding="{Binding DetectedAt, StringFormat='{}{0:HH:mm:ss dd-MMM}'}" Width="120" MinWidth="80" />
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100" />
+                <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="150" MinWidth="80" />
+                <DataGridTextColumn Header="Path" Binding="{Binding InstallPath}" Width="*" MinWidth="120" />
+                <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="80" MinWidth="60" />
             </DataGrid.Columns>
         </DataGrid>
 

@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-05-27
+
+### Fixed
+- **DataGrid column resize** — all 19 DataGrids across 16 views now have `MinWidth` on every
+  column preventing content from being compressed to invisible on resize.
+- **Startup Manager "Open" button clipped** — column widened from 60→80px.
+- **Toggle switch clipping** — toggle columns (Startup, Context Menu, Windows Features) widened
+  to 62px to prevent pill shape from being cut off.
+- **Action columns no longer resizable** — buttons/toggles/checkboxes columns locked with
+  `CanUserResize="False"` so users cannot accidentally shrink them.
+
 ## [1.13.1] - 2026-05-27
 
 ### Fixed

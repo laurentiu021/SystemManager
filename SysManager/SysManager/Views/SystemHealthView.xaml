@@ -78,11 +78,11 @@
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Slot" Binding="{Binding BankLabel}" Width="*"/>
-                                <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="*"/>
-                                <DataGridTextColumn Header="Capacity (GB)" Binding="{Binding CapacityGB, StringFormat={}{0:F1}}" Width="110"/>
-                                <DataGridTextColumn Header="Speed (MHz)" Binding="{Binding SpeedMHz}" Width="110"/>
-                                <DataGridTextColumn Header="Part #" Binding="{Binding PartNumber}" Width="1.5*"/>
+                                <DataGridTextColumn Header="Slot" Binding="{Binding BankLabel}" Width="*" MinWidth="80"/>
+                                <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="*" MinWidth="80"/>
+                                <DataGridTextColumn Header="Capacity (GB)" Binding="{Binding CapacityGB, StringFormat={}{0:F1}}" Width="110" MinWidth="80"/>
+                                <DataGridTextColumn Header="Speed (MHz)" Binding="{Binding SpeedMHz}" Width="110" MinWidth="80"/>
+                                <DataGridTextColumn Header="Part #" Binding="{Binding PartNumber}" Width="1.5*" MinWidth="100"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </StackPanel>
@@ -131,11 +131,11 @@
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Drive" Binding="{Binding FriendlyName}" Width="*"/>
-                                <DataGridTextColumn Header="Media" Binding="{Binding MediaType}" Width="70"/>
-                                <DataGridTextColumn Header="Bus" Binding="{Binding BusType}" Width="70"/>
-                                <DataGridTextColumn Header="Size (GB)" Binding="{Binding SizeGB, StringFormat={}{0:F0}}" Width="90"/>
-                                <DataGridTextColumn Header="Windows Health" Binding="{Binding HealthStatus}" Width="130"/>
+                                <DataGridTextColumn Header="Drive" Binding="{Binding FriendlyName}" Width="*" MinWidth="100"/>
+                                <DataGridTextColumn Header="Media" Binding="{Binding MediaType}" Width="70" MinWidth="60"/>
+                                <DataGridTextColumn Header="Bus" Binding="{Binding BusType}" Width="70" MinWidth="60"/>
+                                <DataGridTextColumn Header="Size (GB)" Binding="{Binding SizeGB, StringFormat={}{0:F0}}" Width="90" MinWidth="70"/>
+                                <DataGridTextColumn Header="Windows Health" Binding="{Binding HealthStatus}" Width="130" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </StackPanel>

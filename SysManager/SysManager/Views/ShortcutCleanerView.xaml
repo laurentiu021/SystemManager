@@ -63,10 +63,10 @@
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
-                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40"/>
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="150" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Target (missing)" Binding="{Binding TargetPath}" Width="*" IsReadOnly="True"/>
+                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False"/>
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="150" MinWidth="80" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Target (missing)" Binding="{Binding TargetPath}" Width="*" MinWidth="120" IsReadOnly="True"/>
             </DataGrid.Columns>
         </DataGrid>
 

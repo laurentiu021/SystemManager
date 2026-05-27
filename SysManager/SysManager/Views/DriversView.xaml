@@ -53,7 +53,7 @@
                           VirtualizingPanel.IsVirtualizing="True"
                           VirtualizingPanel.VirtualizationMode="Recycling">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Device Name" Binding="{Binding DeviceName}" Width="*"
+                        <DataGridTextColumn Header="Device Name" Binding="{Binding DeviceName}" Width="*" MinWidth="120"
                                             SortMemberPath="DeviceName" SortDirection="Ascending">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
@@ -64,7 +64,7 @@
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
 
-                        <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="180"
+                        <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="180" MinWidth="80"
                                             SortMemberPath="Manufacturer">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
@@ -75,7 +75,7 @@
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
 
-                        <DataGridTextColumn Header="Version" Binding="{Binding DriverVersion}" Width="140"
+                        <DataGridTextColumn Header="Version" Binding="{Binding DriverVersion}" Width="140" MinWidth="80"
                                             SortMemberPath="DriverVersion">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
@@ -86,7 +86,7 @@
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
 
-                        <DataGridTextColumn Header="Date" Binding="{Binding DriverDateDisplay}" Width="100"
+                        <DataGridTextColumn Header="Date" Binding="{Binding DriverDateDisplay}" Width="100" MinWidth="80"
                                             SortMemberPath="DriverDate">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">

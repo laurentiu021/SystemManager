@@ -199,11 +199,11 @@
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="110"/>
-                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>
-                                <DataGridTextColumn Header="Modified" Binding="{Binding LastModifiedDisplay}" Width="110"/>
-                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*"/>
-                                <DataGridTemplateColumn Header="Actions" Width="210">
+                                <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="110" MinWidth="70"/>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="100"/>
+                                <DataGridTextColumn Header="Modified" Binding="{Binding LastModifiedDisplay}" Width="110" MinWidth="80"/>
+                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*" MinWidth="120"/>
+                                <DataGridTemplateColumn Header="Actions" Width="210" MinWidth="210" CanUserResize="False">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal">

@@ -55,7 +55,7 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="" Width="50" CanUserSort="False">
+                    <DataGridTemplateColumn Header="" Width="62" MinWidth="62" CanUserSort="False" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <ToggleButton Style="{StaticResource ToggleSwitch}"
@@ -85,7 +85,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="140"
+                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="140" MinWidth="100"
                                         SortMemberPath="Publisher" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -95,7 +95,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTemplateColumn Header="Status" Width="100" SortMemberPath="StatusText">
+                    <DataGridTemplateColumn Header="Status" Width="100" MinWidth="90" SortMemberPath="StatusText">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,5" VerticalAlignment="Center" Margin="4,0"
@@ -157,7 +157,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="" Width="60" CanUserSort="False">
+                    <DataGridTemplateColumn Header="" Width="80" MinWidth="80" CanUserSort="False" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Button Content="Open" ToolTip="Open file location"

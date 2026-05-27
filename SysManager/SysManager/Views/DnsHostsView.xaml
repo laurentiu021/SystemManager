@@ -126,11 +126,11 @@
                           VirtualizingPanel.IsVirtualizing="True"
                           VirtualizingPanel.VirtualizationMode="Recycling">
                     <DataGrid.Columns>
-                        <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="40"/>
-                        <DataGridTextColumn Header="IP Address" Binding="{Binding IpAddress}" Width="150" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Hostname" Binding="{Binding Hostname}" Width="*" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Comment" Binding="{Binding Comment}" Width="150" IsReadOnly="True"/>
-                        <DataGridTemplateColumn Header="" Width="60">
+                        <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False"/>
+                        <DataGridTextColumn Header="IP Address" Binding="{Binding IpAddress}" Width="150" MinWidth="80" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Hostname" Binding="{Binding Hostname}" Width="*" MinWidth="120" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Comment" Binding="{Binding Comment}" Width="150" MinWidth="80" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Header="" Width="60" MinWidth="60" CanUserResize="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button Content="X" Command="{Binding DataContext.RemoveEntryCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"

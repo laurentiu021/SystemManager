@@ -73,7 +73,7 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="" Width="50" CanUserSort="False">
+                    <DataGridTemplateColumn Header="" Width="62" MinWidth="62" CanUserResize="False" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <ToggleButton Style="{StaticResource ToggleSwitch}"
@@ -85,7 +85,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="Name" Width="*" SortMemberPath="Name" IsReadOnly="True">
+                    <DataGridTemplateColumn Header="Name" Width="*" MinWidth="150" SortMemberPath="Name" IsReadOnly="True">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="4,4" VerticalAlignment="Center">
@@ -108,7 +108,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="140"
+                    <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="140" MinWidth="80"
                                         SortMemberPath="Location" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -119,7 +119,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="140"
+                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="140" MinWidth="80"
                                         SortMemberPath="Source" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">

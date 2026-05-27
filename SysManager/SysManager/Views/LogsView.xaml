@@ -242,7 +242,7 @@
                     </DataGrid.RowStyle>
                     <DataGrid.Columns>
                         <!-- Severity column: colored dot instead of emoji -->
-                        <DataGridTemplateColumn Header="" Width="40">
+                        <DataGridTemplateColumn Header="" Width="40" MinWidth="40" CanUserResize="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Ellipse Width="10" Height="10" VerticalAlignment="Center" HorizontalAlignment="Center"
@@ -250,16 +250,16 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Time" Width="150" SortMemberPath="Timestamp">
+                        <DataGridTemplateColumn Header="Time" Width="150" MinWidth="80" SortMemberPath="Timestamp">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding RelativeTime}" ToolTip="{Binding FullTimestamp}" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Source" Binding="{Binding ProviderName}" Width="170"/>
-                        <DataGridTextColumn Header="ID" Binding="{Binding EventId}" Width="60"/>
-                        <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
+                        <DataGridTextColumn Header="Source" Binding="{Binding ProviderName}" Width="170" MinWidth="80"/>
+                        <DataGridTextColumn Header="ID" Binding="{Binding EventId}" Width="60" MinWidth="40"/>
+                        <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" MinWidth="120"/>
                     </DataGrid.Columns>
                 </DataGrid>
 

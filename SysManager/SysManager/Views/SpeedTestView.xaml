@@ -117,11 +117,11 @@
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110"/>
-                                <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90"/>
-                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbps, StringFormat={}{0:F1}}" Width="80"/>
-                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMs, StringFormat={}{0:F0}}" Width="70"/>
-                                <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*"/>
+                                <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110" MinWidth="80"/>
+                                <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90" MinWidth="70"/>
+                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbps, StringFormat={}{0:F1}}" Width="80" MinWidth="60"/>
+                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMs, StringFormat={}{0:F0}}" Width="70" MinWidth="60"/>
+                                <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>
                         <TextBlock Text="No history yet — run a test to start tracking."
@@ -147,11 +147,11 @@
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110"/>
-                                <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90"/>
-                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbps, StringFormat={}{0:F1}}" Width="80"/>
-                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMs, StringFormat={}{0:F0}}" Width="70"/>
-                                <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*"/>
+                                <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110" MinWidth="80"/>
+                                <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90" MinWidth="70"/>
+                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbps, StringFormat={}{0:F1}}" Width="80" MinWidth="60"/>
+                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMs, StringFormat={}{0:F0}}" Width="70" MinWidth="60"/>
+                                <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>
                         <TextBlock Text="No history yet — run a test to start tracking."

@@ -63,6 +63,14 @@ list. Dashboard renders as a flat top-level entry without an expander arrow.
 Each tab shows a slim progress bar under its name when performing a
 long-running operation, so you always know which tab is working.
 
+### Theme customization
+A palette button in the top-right corner opens an appearance popup with:
+- **Dark mode** — 6 curated presets (Midnight Indigo, Deep Ocean, Dark Forest, Neon Rose, Violet Night, Warm Ember)
+- **Light mode** — 6 curated presets (Clean Indigo, Sky Breeze, Warm Sand, Mint Fresh, Soft Blossom, Lavender)
+- **Custom mode** — free hex input for accent, background, surface, and text colors
+- Background shade slider for fine-tuning lightness/darkness
+- Settings persist between sessions
+
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart
 - Auto-verdict that tells you in plain English whether packet loss is local,

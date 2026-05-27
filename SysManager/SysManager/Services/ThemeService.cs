@@ -162,7 +162,9 @@ public sealed class ThemeService
 
     private static void SetBrush(ResourceDictionary res, string key, Color color)
     {
-        res[key] = new SolidColorBrush(color);
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        res[key] = brush;
     }
 
     private static void SetColor(ResourceDictionary res, string key, Color color)

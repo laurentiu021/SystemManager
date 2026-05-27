@@ -15,6 +15,7 @@ public partial class ThemePopup : UserControl
 {
     private bool _suppressShadeEvent;
     private bool _isApplyingShade;
+    private bool _initialized;
 
     public ThemePopup()
     {
@@ -24,6 +25,9 @@ public partial class ThemePopup : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (_initialized) return;
+        _initialized = true;
+
         BuildPresetCards();
         SyncUiToService();
 

@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-05-27
+
+### Fixed
+- **Theme performance** — freeze all runtime-created brushes for reduced GC pressure
+  and improved WPF rendering throughput.
+- **Theme popup duplicate handlers** — prevent event subscriptions from stacking on
+  repeated popup opens, which caused redundant theme re-applies.
+
 ## [1.13.0] - 2026-05-27
 
 ### Added

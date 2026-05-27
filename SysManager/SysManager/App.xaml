@@ -85,6 +85,80 @@
             <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI, Inter, Arial</FontFamily>
 
             <!-- ============================================================ -->
+            <!-- Sidebar Expander — smooth slide animation                      -->
+            <!-- ============================================================ -->
+            <Style x:Key="SidebarExpander" TargetType="Expander">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Expander">
+                            <DockPanel LastChildFill="True">
+                                <ToggleButton x:Name="HeaderSite" DockPanel.Dock="Top"
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                              Content="{TemplateBinding Header}"
+                                              ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                              Background="Transparent" BorderThickness="0"
+                                              HorizontalAlignment="Stretch"
+                                              HorizontalContentAlignment="Stretch"
+                                              Cursor="Hand" Padding="0" Margin="0"
+                                              Focusable="False">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <ContentPresenter HorizontalAlignment="Stretch"/>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <Border x:Name="ContentPanel" ClipToBounds="True">
+                                    <ContentPresenter x:Name="ExpanderContent"
+                                                      ContentSource="Content"
+                                                      Margin="{TemplateBinding Padding}"/>
+                                    <Border.RenderTransform>
+                                        <ScaleTransform ScaleY="0"/>
+                                    </Border.RenderTransform>
+                                    <Border.LayoutTransform>
+                                        <ScaleTransform ScaleY="0"/>
+                                    </Border.LayoutTransform>
+                                </Border>
+                            </DockPanel>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsExpanded" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ContentPanel"
+                                                                 Storyboard.TargetProperty="(Border.LayoutTransform).(ScaleTransform.ScaleY)"
+                                                                 From="0" To="1" Duration="0:0:0.15"
+                                                                 EasingFunction="{x:Null}"/>
+                                                <DoubleAnimation Storyboard.TargetName="ContentPanel"
+                                                                 Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                                 From="0" To="1" Duration="0:0:0.15"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ContentPanel"
+                                                                 Storyboard.TargetProperty="(Border.LayoutTransform).(ScaleTransform.ScaleY)"
+                                                                 From="1" To="0" Duration="0:0:0.12"/>
+                                                <DoubleAnimation Storyboard.TargetName="ContentPanel"
+                                                                 Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                                 From="1" To="0" Duration="0:0:0.12"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ============================================================ -->
             <!-- Theme popup styles                                             -->
             <!-- ============================================================ -->
             <Style x:Key="ModePill" TargetType="RadioButton">

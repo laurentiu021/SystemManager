@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <Resource Include="Resources\app.ico" />
+    <Resource Include="Resources\ctx-win10-classic.png" />
+    <Resource Include="Resources\ctx-win11-modern.png" />
   </ItemGroup>
 
   <ItemGroup>

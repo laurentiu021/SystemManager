@@ -49,10 +49,28 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </DockPanel>
-                <!-- Preset description -->
+                <!-- Preset description + preview images -->
                 <TextBlock Text="{Binding PresetDescription}" Foreground="{DynamicResource TextMuted}"
                            FontSize="11" TextWrapping="Wrap"
                            Visibility="{Binding PresetDescription, Converter={StaticResource FlexVis}}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Left">
+                    <Border CornerRadius="6" BorderBrush="{DynamicResource Border1}" BorderThickness="1"
+                            Margin="0,0,12,0" MaxHeight="140" ClipToBounds="True">
+                        <StackPanel>
+                            <TextBlock Text="Win10 Classic" FontSize="9" Foreground="{DynamicResource TextMuted}"
+                                       HorizontalAlignment="Center" Margin="0,3,0,2"/>
+                            <Image Source="/Resources/ctx-win10-classic.png" MaxHeight="120" Stretch="Uniform"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="6" BorderBrush="{DynamicResource Border1}" BorderThickness="1"
+                            MaxHeight="140" ClipToBounds="True">
+                        <StackPanel>
+                            <TextBlock Text="Win11 Modern" FontSize="9" Foreground="{DynamicResource TextMuted}"
+                                       HorizontalAlignment="Center" Margin="0,3,0,2"/>
+                            <Image Source="/Resources/ctx-win11-modern.png" MaxHeight="120" Stretch="Uniform"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </StackPanel>
         </Border>
 

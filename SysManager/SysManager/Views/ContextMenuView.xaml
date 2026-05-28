@@ -68,12 +68,22 @@
                             Command="{Binding ApplyPresetCommand}" CommandParameter="win10"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12">
                         <Button.ToolTip>
-                            <ToolTip Placement="Bottom" MaxWidth="300">
+                            <ToolTip Placement="Bottom" MaxWidth="520">
                                 <StackPanel>
-                                    <TextBlock Text="Classic full context menu" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                    <Image Source="/Resources/ctx-win10-classic.png" MaxHeight="250" Stretch="Uniform"/>
-                                    <TextBlock Text="All entries visible on first right-click — no extra clicks needed."
-                                               Foreground="Gray" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Classic Full Context Menu (Win10 Style)" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="This is actually the Win11 menu after clicking &quot;Show more options&quot; — but applied permanently. All entries visible on first right-click, no extra clicks needed."
+                                               Foreground="Gray" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Default (clean)" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win10-default.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Custom (all entries ON)" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win10-custom-max.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Text="ⓘ Hover for preview" FontSize="10" Foreground="DimGray" Margin="0,6,0,0" FontStyle="Italic"/>
                                 </StackPanel>
                             </ToolTip>
                         </Button.ToolTip>
@@ -83,12 +93,26 @@
                             Command="{Binding ApplyPresetCommand}" CommandParameter="win11"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12">
                         <Button.ToolTip>
-                            <ToolTip Placement="Bottom" MaxWidth="300">
+                            <ToolTip Placement="Bottom" MaxWidth="520">
                                 <StackPanel>
-                                    <TextBlock Text="Modern compact menu" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                    <Image Source="/Resources/ctx-win11-modern.png" MaxHeight="250" Stretch="Uniform"/>
-                                    <TextBlock Text="Compact menu with &quot;Show more options&quot; at the bottom for full list."
-                                               Foreground="Gray" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Modern Compact Context Menu (Win11 Style)" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Compact menu with icons. Custom entries appear only after clicking &quot;Show more options&quot; at the bottom. The expanded view is identical to Win10 Default."
+                                               Foreground="Gray" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Default (compact)" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-default.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Custom (compact)" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-custom-max.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="After &quot;Show more options&quot;" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-show-more.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Text="ⓘ Hover for preview" FontSize="10" Foreground="DimGray" Margin="0,6,0,0" FontStyle="Italic"/>
                                 </StackPanel>
                             </ToolTip>
                         </Button.ToolTip>
@@ -97,8 +121,10 @@
                     <Button Content="Custom" Margin="0,0,8,0"
                             Command="{Binding ApplyPresetCommand}" CommandParameter="custom"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12"
-                            ToolTip="Currently active style + your manual entry toggles below."/>
+                            ToolTip="Active menu style + your manual entry toggles from the list below. Toggle any entry to switch to Custom mode."/>
                 </StackPanel>
+                <TextBlock Text="ⓘ Hover over Win10/Win11 buttons for a visual preview of each menu style."
+                           FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,8,0,0" FontStyle="Italic"/>
                 <TextBlock Text="{Binding PresetDescription}" Foreground="{DynamicResource TextMuted}"
                            FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
                            Visibility="{Binding PresetDescription, Converter={StaticResource FlexVis}}"/>

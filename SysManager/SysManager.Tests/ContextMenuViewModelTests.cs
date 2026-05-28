@@ -82,28 +82,9 @@ public class ContextMenuViewModelTests
     }
 
     [Fact]
-    public void Presets_ContainsFiveEntries()
+    public void Constructor_ActivePresetId_DefaultsToMenuStyle()
     {
         var vm = CreateVm();
-        Assert.Equal(5, vm.Presets.Count);
-    }
-
-    [Fact]
-    public void Presets_AllHaveIdAndName()
-    {
-        var vm = CreateVm();
-        foreach (var preset in vm.Presets)
-        {
-            Assert.False(string.IsNullOrWhiteSpace(preset.Id));
-            Assert.False(string.IsNullOrWhiteSpace(preset.Name));
-            Assert.False(string.IsNullOrWhiteSpace(preset.Description));
-        }
-    }
-
-    [Fact]
-    public void Constructor_ActivePresetId_DefaultsEmpty()
-    {
-        var vm = CreateVm();
-        Assert.Equal("", vm.ActivePresetId);
+        Assert.Contains(vm.ActivePresetId, new[] { "win10", "win11" });
     }
 }

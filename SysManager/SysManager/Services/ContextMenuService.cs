@@ -121,7 +121,8 @@ public sealed class ContextMenuService
     /// <summary>
     /// Disables a context menu entry by adding the <c>LegacyDisable</c>
     /// empty string value to the shell subkey. Windows hides the entry
-    /// without deleting any data.
+    /// without deleting any data. Falls back to HKCU override if HKCR
+    /// is not writable (system-owned entries protected by TrustedInstaller).
     /// </summary>
     public bool DisableEntry(ContextMenuEntry entry)
     {
@@ -130,17 +131,16 @@ public sealed class ContextMenuService
             BackupRegistry(entry.RegistryPath);
 
             var relativePath = entry.RegistryPath.Replace(@"HKCR\", "", StringComparison.OrdinalIgnoreCase);
-            using var key = Registry.ClassesRoot.OpenSubKey(relativePath, writable: true);
-            if (key is null)
+
+            if (TrySetLegacyDisable(relativePath, set: true))
             {
-                Log.Warning("Cannot disable context menu entry — key not found: {Path}", entry.RegistryPath);
-                return false;
+                entry.IsEnabled = false;
+                Log.Information("Context menu entry disabled: {Name} at {Path}", entry.Name, entry.RegistryPath);
+                return true;
             }
 
-            key.SetValue("LegacyDisable", "", RegistryValueKind.String);
-            entry.IsEnabled = false;
-            Log.Information("Context menu entry disabled: {Name} at {Path}", entry.Name, entry.RegistryPath);
-            return true;
+            Log.Warning("Cannot disable context menu entry — key not found: {Path}", entry.RegistryPath);
+            return false;
         }
         catch (SecurityException ex)
         {
@@ -161,7 +161,8 @@ public sealed class ContextMenuService
 
     /// <summary>
     /// Enables a context menu entry by removing the <c>LegacyDisable</c>
-    /// value from the shell subkey.
+    /// value from the shell subkey. Falls back to HKCU override if HKCR
+    /// is not writable.
     /// </summary>
     public bool EnableEntry(ContextMenuEntry entry)
     {
@@ -170,17 +171,16 @@ public sealed class ContextMenuService
             BackupRegistry(entry.RegistryPath);
 
             var relativePath = entry.RegistryPath.Replace(@"HKCR\", "", StringComparison.OrdinalIgnoreCase);
-            using var key = Registry.ClassesRoot.OpenSubKey(relativePath, writable: true);
-            if (key is null)
+
+            if (TrySetLegacyDisable(relativePath, set: false))
             {
-                Log.Warning("Cannot enable context menu entry — key not found: {Path}", entry.RegistryPath);
-                return false;
+                entry.IsEnabled = true;
+                Log.Information("Context menu entry enabled: {Name} at {Path}", entry.Name, entry.RegistryPath);
+                return true;
             }
 
-            key.DeleteValue("LegacyDisable", throwOnMissingValue: false);
-            entry.IsEnabled = true;
-            Log.Information("Context menu entry enabled: {Name} at {Path}", entry.Name, entry.RegistryPath);
-            return true;
+            Log.Warning("Cannot enable context menu entry — key not found: {Path}", entry.RegistryPath);
+            return false;
         }
         catch (SecurityException ex)
         {
@@ -197,6 +197,45 @@ public sealed class ContextMenuService
             Log.Warning("Cannot enable context menu entry — I/O error: {Error}", ex.Message);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Attempts to set or remove LegacyDisable on the entry.
+    /// First tries HKCR (works for user-installed entries). If that fails
+    /// with access denied (system-owned/TrustedInstaller), falls back to
+    /// creating an override in HKCU\Software\Classes which Windows merges
+    /// into HKCR at runtime.
+    /// </summary>
+    private static bool TrySetLegacyDisable(string relativePath, bool set)
+    {
+        // Attempt 1: write directly to HKCR (works for user/app entries)
+        try
+        {
+            using var key = Registry.ClassesRoot.OpenSubKey(relativePath, writable: true);
+            if (key is not null)
+            {
+                if (set)
+                    key.SetValue("LegacyDisable", "", RegistryValueKind.String);
+                else
+                    key.DeleteValue("LegacyDisable", throwOnMissingValue: false);
+                return true;
+            }
+        }
+        catch (SecurityException) { }
+        catch (UnauthorizedAccessException) { }
+
+        // Attempt 2: HKCU override (for system-owned entries in HKLM)
+        var hkcuPath = @"Software\Classes\" + relativePath;
+        using var hkcuKey = Registry.CurrentUser.CreateSubKey(hkcuPath);
+        if (hkcuKey is null) return false;
+
+        if (set)
+            hkcuKey.SetValue("LegacyDisable", "", RegistryValueKind.String);
+        else
+            hkcuKey.DeleteValue("LegacyDisable", throwOnMissingValue: false);
+
+        Log.Debug("Used HKCU override for {Path}", relativePath);
+        return true;
     }
 
     /// <summary>

@@ -9,17 +9,15 @@ namespace SysManager.Tests;
 public class ContextMenuPresetTests
 {
     [Fact]
-    public void All_ContainsFivePresets()
+    public void All_ContainsThreePresets()
     {
-        Assert.Equal(5, ContextMenuPreset.All.Count);
+        Assert.Equal(3, ContextMenuPreset.All.Count);
     }
 
     [Theory]
     [InlineData("win10")]
     [InlineData("win11")]
-    [InlineData("minimal")]
-    [InlineData("developer")]
-    [InlineData("power")]
+    [InlineData("custom")]
     public void All_ContainsExpectedIds(string id)
     {
         Assert.True(ContextMenuPreset.All.ContainsKey(id));
@@ -38,77 +36,18 @@ public class ContextMenuPresetTests
     }
 
     [Fact]
-    public void Power_EnablesAll()
+    public void Custom_DoesNotForceClassicMenu()
     {
-        var preset = ContextMenuPreset.All["power"];
-        var entry = new ContextMenuEntry
-        {
-            Name = "SomeRandomEntry",
-            Command = "whatever.exe",
-            RegistryPath = @"HKCR\*\shell\test",
-            Location = "Files",
-            RawName = "SomeRandomEntry"
-        };
-        Assert.True(preset.ShouldEnable(entry));
+        Assert.False(ContextMenuPreset.All["custom"].ForcesClassicMenu);
     }
 
     [Fact]
-    public void Minimal_EnablesOpen()
+    public void AllPresets_HaveDescription()
     {
-        var preset = ContextMenuPreset.All["minimal"];
-        var entry = new ContextMenuEntry
+        foreach (var preset in ContextMenuPreset.All.Values)
         {
-            Name = "Open",
-            Command = "\"%1\"",
-            RegistryPath = @"HKCR\*\shell\open",
-            Location = "Files",
-            RawName = "open"
-        };
-        Assert.True(preset.ShouldEnable(entry));
-    }
-
-    [Fact]
-    public void Minimal_DisablesGitBash()
-    {
-        var preset = ContextMenuPreset.All["minimal"];
-        var entry = new ContextMenuEntry
-        {
-            Name = "Git Bash Here",
-            Command = "git-bash.exe",
-            RegistryPath = @"HKCR\Directory\Background\shell\git_bash",
-            Location = "Directory Background",
-            RawName = "git_bash"
-        };
-        Assert.False(preset.ShouldEnable(entry));
-    }
-
-    [Fact]
-    public void Developer_EnablesGitBash()
-    {
-        var preset = ContextMenuPreset.All["developer"];
-        var entry = new ContextMenuEntry
-        {
-            Name = "Git Bash Here",
-            Command = "git-bash.exe",
-            RegistryPath = @"HKCR\Directory\Background\shell\git_bash",
-            Location = "Directory Background",
-            RawName = "git_bash"
-        };
-        Assert.True(preset.ShouldEnable(entry));
-    }
-
-    [Fact]
-    public void Developer_DisablesShare()
-    {
-        var preset = ContextMenuPreset.All["developer"];
-        var entry = new ContextMenuEntry
-        {
-            Name = "Share",
-            Command = "shell32.dll",
-            RegistryPath = @"HKCR\*\shell\Windows.ModernShare",
-            Location = "Files",
-            RawName = "Windows.ModernShare"
-        };
-        Assert.False(preset.ShouldEnable(entry));
+            Assert.False(string.IsNullOrWhiteSpace(preset.Description));
+            Assert.False(string.IsNullOrWhiteSpace(preset.Name));
+        }
     }
 }

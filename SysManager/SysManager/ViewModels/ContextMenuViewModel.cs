@@ -15,9 +15,9 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// Context Menu Manager tab — lists all shell context menu entries and
-/// lets the user enable/disable them non-destructively using LegacyDisable.
-/// Supports presets for quick configuration.
+/// Context Menu Manager tab — lists all shell context menu entries grouped
+/// by location, lets the user toggle them, switch between Win10/Win11 style,
+/// and customize which entries appear on right-click.
 /// </summary>
 public sealed partial class ContextMenuViewModel : ViewModelBase
 {
@@ -43,14 +43,15 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         "All", "Files", "Folders", "Directory Background", "Desktop"
     };
 
-    /// <summary>Available presets for the preset bar.</summary>
-    public IReadOnlyList<ContextMenuPreset> Presets { get; } = [.. ContextMenuPreset.All.Values];
-
     public ContextMenuViewModel(ContextMenuService service)
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();
         IsClassicMenuEnabled = ContextMenuService.IsClassicMenuEnabled();
+        ActivePresetId = IsClassicMenuEnabled ? "win10" : "win11";
+        PresetDescription = IsClassicMenuEnabled
+            ? ContextMenuPreset.All["win10"].Description
+            : ContextMenuPreset.All["win11"].Description;
         InitializeAsync(InitAsync);
     }
 
@@ -75,7 +76,8 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             var items = await Task.Run(() => _service.ScanEntries());
 
             _allEntries.Clear();
-            foreach (var item in items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
+            foreach (var item in items.OrderBy(e => e.Location, StringComparer.OrdinalIgnoreCase)
+                                      .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
                 _allEntries.Add(item);
 
             IsClassicMenuEnabled = ContextMenuService.IsClassicMenuEnabled();
@@ -116,8 +118,8 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
         if (success)
         {
-            ActivePresetId = "";
-            PresetDescription = "";
+            ActivePresetId = "custom";
+            PresetDescription = ContextMenuPreset.All["custom"].Description;
             UpdateCounts();
             StatusMessage = $"{entry.Name} {(desiredState ? "enabled" : "disabled")}.";
             Log.Information("Context menu entry toggled: {Name} -> {State}", entry.Name, desiredState ? "enabled" : "disabled");
@@ -136,7 +138,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             }
             else
             {
-                StatusMessage = $"Could not toggle {entry.Name} — access denied.";
+                StatusMessage = $"Could not toggle {entry.Name} — protected by Windows (owned by TrustedInstaller).";
             }
         }
     }
@@ -145,86 +147,49 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     private void ApplyPreset(object? parameter)
     {
         if (parameter is not string presetId) return;
-        if (!ContextMenuPreset.All.TryGetValue(presetId, out var preset)) return;
-
-        var enableCount = 0;
-        var disableCount = 0;
-        foreach (var entry in _allEntries)
+        if (presetId == "custom")
         {
-            if (entry.IsSystemEntry) continue;
-            if (preset.ShouldEnable(entry)) enableCount++;
-            else disableCount++;
+            ActivePresetId = "custom";
+            PresetDescription = ContextMenuPreset.All["custom"].Description;
+            return;
         }
 
-        var needsRestart = preset.ForcesClassicMenu != IsClassicMenuEnabled;
-        var message = $"This will enable {enableCount} entries and disable {disableCount} entries.";
-        if (needsRestart)
-            message += "\n\nThis also requires restarting Explorer — all open File Explorer windows will close.";
-        message += "\n\nContinue?";
+        if (!ContextMenuPreset.All.TryGetValue(presetId, out var preset)) return;
 
-        if (!DialogService.Instance.Confirm(message, $"Apply \"{preset.Name}\" Preset"))
+        var needsRestart = preset.ForcesClassicMenu != IsClassicMenuEnabled;
+        if (!needsRestart)
+        {
+            ActivePresetId = presetId;
+            PresetDescription = preset.Description;
+            StatusMessage = $"\"{preset.Name}\" is already active.";
+            return;
+        }
+
+        var message = $"Switch to {preset.Name} context menu style?\n\nThis requires restarting Explorer — all open File Explorer windows will close.";
+        if (!DialogService.Instance.Confirm(message, $"Apply \"{preset.Name}\""))
             return;
 
-        ApplyPresetInternal(preset);
-    }
-
-    private void ApplyPresetInternal(ContextMenuPreset preset)
-    {
         IsBusy = true;
-        StatusMessage = $"Applying \"{preset.Name}\" preset...";
+        StatusMessage = $"Switching to \"{preset.Name}\"...";
 
         try
         {
-            // Apply menu style
-            if (preset.ForcesClassicMenu && !IsClassicMenuEnabled)
-            {
+            if (preset.ForcesClassicMenu)
                 ContextMenuService.EnableClassicMenu();
-                IsClassicMenuEnabled = true;
-            }
-            else if (!preset.ForcesClassicMenu && IsClassicMenuEnabled)
-            {
+            else
                 ContextMenuService.DisableClassicMenu();
-                IsClassicMenuEnabled = false;
-            }
 
-            // Apply entry states
-            var changed = 0;
-            foreach (var entry in _allEntries)
-            {
-                if (entry.IsSystemEntry) continue;
-
-                var shouldEnable = preset.ShouldEnable(entry);
-                if (shouldEnable == entry.IsEnabled) continue;
-
-                bool success;
-                if (shouldEnable)
-                    success = _service.EnableEntry(entry);
-                else
-                    success = _service.DisableEntry(entry);
-
-                if (success) changed++;
-            }
-
-            // Restart Explorer if menu style changed
-            if (preset.ForcesClassicMenu != ContextMenuService.IsClassicMenuEnabled())
-            {
-                // Style was already set above, just need the restart
-            }
-
-            var needsRestart = preset.ForcesClassicMenu != ContextMenuService.IsClassicMenuEnabled();
-            if (preset.Id is "win10" or "win11")
-                ContextMenuService.RestartExplorer();
-
-            ActivePresetId = preset.Id;
+            ContextMenuService.RestartExplorer();
+            IsClassicMenuEnabled = preset.ForcesClassicMenu;
+            ActivePresetId = presetId;
             PresetDescription = preset.Description;
-            ApplyFilter();
-            StatusMessage = $"\"{preset.Name}\" applied — {changed} entries changed.";
-            ToastService.Instance.Show("Preset Applied", $"\"{preset.Name}\" — {changed} entries changed");
-            Log.Information("Context menu preset applied: {Preset}, {Changed} entries changed", preset.Name, changed);
+            StatusMessage = $"\"{preset.Name}\" applied — Explorer restarted.";
+            ToastService.Instance.Show("Menu Style Changed", $"\"{preset.Name}\" applied");
+            Log.Information("Context menu style changed to: {Preset}", preset.Name);
         }
         catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
         {
-            StatusMessage = $"Preset failed: {ex.Message}";
+            StatusMessage = $"Failed: {ex.Message}";
         }
         finally { IsBusy = false; }
     }

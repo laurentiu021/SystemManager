@@ -78,5 +78,32 @@ public class ContextMenuViewModelTests
         Assert.NotNull(vm.ScanCommand);
         Assert.NotNull(vm.ToggleEntryCommand);
         Assert.NotNull(vm.RefreshCommand);
+        Assert.NotNull(vm.ApplyPresetCommand);
+    }
+
+    [Fact]
+    public void Presets_ContainsFiveEntries()
+    {
+        var vm = CreateVm();
+        Assert.Equal(5, vm.Presets.Count);
+    }
+
+    [Fact]
+    public void Presets_AllHaveIdAndName()
+    {
+        var vm = CreateVm();
+        foreach (var preset in vm.Presets)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(preset.Id));
+            Assert.False(string.IsNullOrWhiteSpace(preset.Name));
+            Assert.False(string.IsNullOrWhiteSpace(preset.Description));
+        }
+    }
+
+    [Fact]
+    public void Constructor_ActivePresetId_DefaultsEmpty()
+    {
+        var vm = CreateVm();
+        Assert.Equal("", vm.ActivePresetId);
     }
 }

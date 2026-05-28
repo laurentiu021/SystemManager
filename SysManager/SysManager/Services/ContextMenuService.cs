@@ -83,7 +83,8 @@ public sealed class ContextMenuService
                             Location = location,
                             Source = source,
                             IsEnabled = isEnabled,
-                            IsSystemEntry = IsSystemEntry(displayName)
+                            IsSystemEntry = IsSystemEntry(displayName),
+                            Explanation = GetExplanation(entryName, command)
                         });
                     }
                     catch (SecurityException ex)
@@ -241,6 +242,168 @@ public sealed class ContextMenuService
             // Backup is best-effort — don't block the actual operation
             Log.Debug("Registry backup failed (non-critical): {Error}", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// The registry key that controls whether Windows 11 shows the classic
+    /// full context menu or the modern compact menu.
+    /// </summary>
+    private const string ClassicMenuClsid = @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32";
+
+    /// <summary>
+    /// Checks whether the classic (Win10-style) context menu is currently forced.
+    /// </summary>
+    public static bool IsClassicMenuEnabled()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(ClassicMenuClsid, writable: false);
+            return key is not null;
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Enables the classic (Win10-style) full context menu by creating the
+    /// InprocServer32 key with an empty default value.
+    /// </summary>
+    public static bool EnableClassicMenu()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(ClassicMenuClsid);
+            key.SetValue("", "", Microsoft.Win32.RegistryValueKind.String);
+            Log.Information("Classic context menu enabled via registry");
+            return true;
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            Log.Warning("Failed to enable classic context menu: {Error}", ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Disables the classic context menu, restoring Win11's modern menu.
+    /// </summary>
+    public static bool DisableClassicMenu()
+    {
+        try
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(
+                @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}", throwOnMissingSubKey: false);
+            Log.Information("Classic context menu disabled — restored Win11 modern menu");
+            return true;
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            Log.Warning("Failed to disable classic context menu: {Error}", ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Restarts Windows Explorer to apply context menu style changes.
+    /// </summary>
+    public static void RestartExplorer()
+    {
+        try
+        {
+            foreach (var proc in Process.GetProcessesByName("explorer"))
+            {
+                proc.Kill();
+                proc.WaitForExit(3000);
+                proc.Dispose();
+            }
+
+            Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true });
+            Log.Information("Explorer restarted to apply context menu changes");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Log.Warning("Failed to restart Explorer: {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Human-readable explanations for common context menu entries.
+    /// Keyed by raw registry name (case-insensitive).
+    /// </summary>
+    private static readonly Dictionary<string, string> KnownExplanations = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["open"] = "Opens the file with its default associated application",
+        ["edit"] = "Opens the file in the default text editor (Notepad)",
+        ["print"] = "Sends the file directly to the default printer",
+        ["runas"] = "Runs the executable with elevated (admin) privileges",
+        ["runasuser"] = "Runs the executable as a different Windows user account",
+        ["find"] = "Opens Windows Search in the selected folder",
+        ["explore"] = "Opens the folder in a new File Explorer window",
+        ["cmd"] = "Opens a Command Prompt (cmd.exe) in the current folder",
+        ["powershell"] = "Opens a PowerShell window in the current folder",
+        ["properties"] = "Shows the file/folder properties dialog (size, attributes, security)",
+        ["copy"] = "Copies the selected file(s) to the clipboard",
+        ["cut"] = "Cuts the selected file(s) — moves them when pasted elsewhere",
+        ["paste"] = "Pastes previously copied/cut files into the current folder",
+        ["delete"] = "Moves the selected file(s) to the Recycle Bin",
+        ["rename"] = "Allows you to change the file or folder name",
+        ["pintohomefile"] = "Adds the folder to the Quick Access section in File Explorer sidebar",
+        ["PinToStartScreen"] = "Pins the application to the Windows Start menu",
+        ["Windows.ModernShare"] = "Opens the Windows sharing panel to send via email, Bluetooth, or nearby devices",
+        ["opennewwindow"] = "Opens the folder in a separate File Explorer window",
+        ["opennewtab"] = "Opens the folder in a new File Explorer tab",
+        ["EditStickers"] = "Opens the desktop stickers editor (Windows 11 feature)",
+        ["removeproperties"] = "Opens a dialog to remove file metadata and personal information",
+        ["Troubleshoot compatibility"] = "Runs the Program Compatibility Troubleshooter for older apps",
+        ["git_bash"] = "Opens a Git Bash terminal in the current directory",
+        ["git_gui"] = "Opens Git GUI for visual staging, committing and history browsing",
+    };
+
+    /// <summary>
+    /// Explanations keyed by executable name (for entries resolved via command path).
+    /// </summary>
+    private static readonly Dictionary<string, string> KnownExeExplanations = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["code"] = "Opens the file or folder in Visual Studio Code editor",
+        ["notepad++"] = "Opens the file in Notepad++ text editor",
+        ["notepad"] = "Opens the file in Windows Notepad",
+        ["vlc"] = "Opens the media file in VLC Media Player",
+        ["7zFM"] = "Opens the archive in 7-Zip File Manager",
+        ["WinRAR"] = "Opens the archive in WinRAR",
+        ["mspaint"] = "Opens the image in Microsoft Paint",
+        ["wt"] = "Launches Windows Terminal in the selected folder",
+        ["pwsh"] = "Opens PowerShell 7 in the current folder",
+        ["git-bash"] = "Opens a Git Bash terminal in the current directory",
+        ["git-gui"] = "Opens Git GUI for visual staging and committing",
+    };
+
+    /// <summary>
+    /// Gets the human-readable explanation for an entry based on its raw name and command.
+    /// </summary>
+    public static string GetExplanation(string rawName, string command)
+    {
+        if (KnownExplanations.TryGetValue(rawName, out var explanation))
+            return explanation;
+
+        // Try to match by exe name from command
+        if (!string.IsNullOrWhiteSpace(command))
+        {
+            try
+            {
+                var path = command.Trim('"', ' ');
+                var spaceIdx = path.IndexOf(' ');
+                if (spaceIdx > 0 && !System.IO.File.Exists(path))
+                    path = path[..spaceIdx].Trim('"');
+                var exeName = System.IO.Path.GetFileNameWithoutExtension(path);
+                if (!string.IsNullOrEmpty(exeName) && KnownExeExplanations.TryGetValue(exeName, out var exeExplanation))
+                    return exeExplanation;
+            }
+            catch (ArgumentException) { }
+        }
+
+        return "";
     }
 
     // Well-known registry entry names mapped to user-friendly display names

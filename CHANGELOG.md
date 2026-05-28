@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Context Menu presets** — one-click configurations: Win10 Default (classic full menu),
+  Win11 Default (modern compact menu), Minimal (7 essentials), Developer (+ Git, Terminal,
+  VS Code, PowerShell), Power User (everything enabled). Presets apply batch enable/disable
+  with confirmation dialog.
+- **Win10/Win11 menu style toggle** — switch between classic full context menu and modern
+  Win11 "Show more options" menu via registry. Automatically restarts Explorer after change.
+- **Entry explanations** — every context menu entry now shows a human-readable description
+  of what it does (e.g. "Opens a Git Bash terminal in the current directory").
+
 ## [1.15.0] - 2026-05-27
 
 ### Added

@@ -36,4 +36,7 @@ public sealed partial class ContextMenuEntry : ObservableObject
 
     /// <summary>Whether this entry is considered a system/internal entry (raw name starts with @ or .).</summary>
     public bool IsSystemEntry { get; init; }
+
+    /// <summary>Human-readable explanation of what this entry does when clicked.</summary>
+    public string Explanation { get; init; } = "";
 }

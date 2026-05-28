@@ -97,7 +97,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RelaunchElevated()
+    private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current?.Shutdown();
@@ -133,7 +133,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
                     $"Could not toggle \"{entry.Name}\" — this requires administrator privileges.\n\nRestart SysManager as administrator?",
                     "Admin Required"))
                 {
-                    RelaunchElevated();
+                    RelaunchAsAdmin();
                 }
             }
             else

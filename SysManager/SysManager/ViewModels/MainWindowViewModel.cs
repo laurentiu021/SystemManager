@@ -371,6 +371,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Auto-expand the parent group when a child is selected.
         var parentGroup = NavGroups.FirstOrDefault(g => g.Children.Contains(value));
         if (parentGroup is not null) parentGroup.IsExpanded = true;
+
+        // Pause/resume the process manager auto-refresh loop based on tab visibility.
+        ProcessManager.IsActive = value.Content == ProcessManager;
     }
 
     /// <summary>Select a nav item by its automation id.</summary>

@@ -26,6 +26,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
 
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private bool _showOnlyApps;
+    [ObservableProperty] private bool _isActive = true;
     [ObservableProperty] private int _processCount;
     [ObservableProperty] private long _totalMemory;
     [ObservableProperty] private string _summary = "Click Refresh to list running processes.";
@@ -56,6 +57,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(1000, ct);
+                if (!IsActive) continue;
                 await RefreshAsync();
             }
         }

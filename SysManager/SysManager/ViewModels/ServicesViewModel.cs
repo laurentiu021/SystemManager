@@ -92,7 +92,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void StartService(ServiceEntry? entry)
+    private async Task StartServiceAsync(ServiceEntry? entry)
     {
         if (entry is null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Starting services requires admin."; return; }
@@ -103,7 +103,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
         try
         {
-            ServiceManagerService.StartService(entry.Name);
+            await ServiceManagerService.StartServiceAsync(entry.Name).ConfigureAwait(false);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} started.";
             Log.Information("Service started: {ServiceName}", entry.Name);
@@ -113,7 +113,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void StopService(ServiceEntry? entry)
+    private async Task StopServiceAsync(ServiceEntry? entry)
     {
         if (entry is null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Stopping services requires admin."; return; }
@@ -124,7 +124,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
         try
         {
-            ServiceManagerService.StopService(entry.Name);
+            await ServiceManagerService.StopServiceAsync(entry.Name).ConfigureAwait(false);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} stopped.";
             Log.Information("Service stopped: {ServiceName}", entry.Name);

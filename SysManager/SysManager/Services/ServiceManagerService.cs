@@ -87,7 +87,7 @@ public sealed partial class ServiceManagerService
     }
 
     /// <summary>Start a service. Requires admin.</summary>
-    public static void StartService(string serviceName)
+    public static async Task StartServiceAsync(string serviceName)
     {
         using var sc = new ServiceController(serviceName);
         if (sc.Status == ServiceControllerStatus.Running ||
@@ -97,7 +97,7 @@ public sealed partial class ServiceManagerService
         sc.Start();
         try
         {
-            sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+            await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30))).ConfigureAwait(false);
         }
         catch (System.ServiceProcess.TimeoutException)
         {
@@ -107,7 +107,7 @@ public sealed partial class ServiceManagerService
     }
 
     /// <summary>Stop a service. Requires admin.</summary>
-    public static void StopService(string serviceName)
+    public static async Task StopServiceAsync(string serviceName)
     {
         using var sc = new ServiceController(serviceName);
         if (sc.CanStop && sc.Status != ServiceControllerStatus.Stopped)
@@ -115,7 +115,7 @@ public sealed partial class ServiceManagerService
             sc.Stop();
             try
             {
-                sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+                await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30))).ConfigureAwait(false);
             }
             catch (System.ServiceProcess.TimeoutException)
             {

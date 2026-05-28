@@ -90,7 +90,7 @@ public sealed partial class StartupViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ToggleEntry(object? parameter)
+    private async Task ToggleEntryAsync(object? parameter)
     {
         if (parameter is not StartupEntry entry) return;
 
@@ -98,7 +98,7 @@ public sealed partial class StartupViewModel : ViewModelBase
         // this command runs. We use the current (already-flipped) value as
         // the desired new state.
         var desiredState = entry.IsEnabled;
-        var success = StartupService.SetEnabled(entry, desiredState);
+        var success = await StartupService.SetEnabledAsync(entry, desiredState).ConfigureAwait(false);
         if (success)
         {
             UpdateCounts();
@@ -114,10 +114,10 @@ public sealed partial class StartupViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void EnableAll()
+    private async Task EnableAllAsync()
     {
         foreach (var entry in Entries.Where(e => !e.IsEnabled))
-            StartupService.SetEnabled(entry, true);
+            await StartupService.SetEnabledAsync(entry, true).ConfigureAwait(false);
         UpdateCounts();
         StatusMessage = "All items enabled.";
     }

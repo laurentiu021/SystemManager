@@ -121,6 +121,16 @@ public sealed partial class AboutViewModel : ViewModelBase
                 UpdateStatus = $"You're up to date. Running v{UpdateService.CurrentVersion.ToString(3)}.";
             }
         }
+        catch (HttpRequestException ex)
+        {
+            UpdateStatus = $"Network error — could not reach GitHub: {ex.Message}. Click Retry to try again.";
+            UpdateAvailable = false;
+        }
+        catch (TaskCanceledException ex)
+        {
+            UpdateStatus = $"Request timed out: {ex.Message}. Click Retry to try again.";
+            UpdateAvailable = false;
+        }
         finally { IsCheckingForUpdates = false; }
     }
 

@@ -254,7 +254,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);
             if (l.Text.Contains('%') || l.Text.Contains("complete", StringComparison.OrdinalIgnoreCase))
             {
-                var m = Regex.Match(l.Text, @"(\d+)");
+                var m = Regex.Match(l.Text, @"(\d+)\s*%");
                 if (m.Success && int.TryParse(m.Groups[1].Value, out var pct) && pct is >= 0 and <= 100)
                 {
                     Progress = pct;
@@ -276,7 +276,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (OperationCanceledException) { SfcStatus = "Cancelled."; SfcVerdict = "Scan was cancelled."; SfcVerdictColorHex = "#9AA0A6"; StatusMessage = SfcStatus; }
         catch (InvalidOperationException ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
         catch (System.ComponentModel.Win32Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
-        finally { _runner.LineReceived -= Collect; IsSfcRunning = false; SfcEtaText = string.Empty; }
+        finally { _runner.LineReceived -= Collect; IsSfcRunning = false; IsProgressIndeterminate = false; SfcEtaText = string.Empty; }
     }
 
     /// <summary>
@@ -365,7 +365,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (OperationCanceledException) { DismStatus = "Cancelled."; DismVerdict = "Repair was cancelled."; DismVerdictColorHex = "#9AA0A6"; StatusMessage = DismStatus; }
         catch (InvalidOperationException ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
         catch (System.ComponentModel.Win32Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
-        finally { _runner.LineReceived -= Collect; IsDismRunning = false; DismEtaText = string.Empty; }
+        finally { _runner.LineReceived -= Collect; IsDismRunning = false; IsProgressIndeterminate = false; DismEtaText = string.Empty; }
     }
 
     /// <summary>

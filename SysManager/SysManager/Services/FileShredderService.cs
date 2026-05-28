@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Security;
+using System.Security.Cryptography;
 using Serilog;
 
 namespace SysManager.Services;
@@ -75,8 +76,8 @@ public sealed class FileShredderService
 
             if (pattern is null)
             {
-                // Random pass
-                Random.Shared.NextBytes(buffer);
+                // Random pass — use cryptographic PRNG for secure overwrite
+                RandomNumberGenerator.Fill(buffer);
             }
             else
             {
@@ -92,7 +93,7 @@ public sealed class FileShredderService
 
                 // Re-randomize buffer each chunk for random passes
                 if (pattern is null)
-                    Random.Shared.NextBytes(buffer.AsSpan(0, writeSize));
+                    RandomNumberGenerator.Fill(buffer.AsSpan(0, writeSize));
 
                 await stream.WriteAsync(buffer.AsMemory(0, writeSize), ct).ConfigureAwait(false);
                 bytesRemaining -= writeSize;
@@ -117,6 +118,7 @@ public sealed class FileShredderService
 
     /// <summary>
     /// Securely shreds all files in a folder recursively, then removes the folder.
+    /// Skips junctions and symlinks to prevent shredding outside the target directory.
     /// </summary>
     public async Task ShredFolderAsync(string folderPath, ShredMethod method, IProgress<int>? progress, CancellationToken ct)
     {
@@ -126,8 +128,8 @@ public sealed class FileShredderService
         if (!Directory.Exists(folderPath))
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
-        var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
-        var totalFiles = files.Length;
+        var files = EnumerateFilesSafe(folderPath);
+        var totalFiles = files.Count;
 
         for (var i = 0; i < totalFiles; i++)
         {
@@ -166,6 +168,44 @@ public sealed class FileShredderService
         }
 
         Log.Information("Folder shredded successfully: {Path} ({Method})", folderPath, method);
+    }
+
+    /// <summary>
+    /// Recursively enumerates files while skipping directories that are
+    /// junctions or symlinks (reparse points) to prevent traversal attacks.
+    /// </summary>
+    private static List<string> EnumerateFilesSafe(string rootPath)
+    {
+        var results = new List<string>();
+        var stack = new Stack<DirectoryInfo>();
+        stack.Push(new DirectoryInfo(rootPath));
+
+        while (stack.Count > 0)
+        {
+            var dir = stack.Pop();
+
+            FileInfo[] files;
+            try { files = dir.GetFiles(); }
+            catch (UnauthorizedAccessException) { continue; }
+            catch (IOException) { continue; }
+
+            foreach (var file in files)
+                results.Add(file.FullName);
+
+            DirectoryInfo[] subDirs;
+            try { subDirs = dir.GetDirectories(); }
+            catch (UnauthorizedAccessException) { continue; }
+            catch (IOException) { continue; }
+
+            foreach (var sub in subDirs)
+            {
+                if ((sub.Attributes & FileAttributes.ReparsePoint) != 0)
+                    continue; // skip junctions/symlinks
+                stack.Push(sub);
+            }
+        }
+
+        return results;
     }
 
     private static void ValidatePath(string path)

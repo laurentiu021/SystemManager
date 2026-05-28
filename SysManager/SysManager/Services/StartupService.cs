@@ -306,17 +306,24 @@ public sealed class StartupService
     }
 
     /// <summary>
+    /// Synchronous overload — delegates to <see cref="SetEnabledAsync"/> for
+    /// backward compatibility with existing callers and tests.
+    /// </summary>
+    public static bool SetEnabled(StartupEntry entry, bool enabled)
+        => SetEnabledAsync(entry, enabled).GetAwaiter().GetResult();
+
+    /// <summary>
     /// Toggle a startup entry on or off by writing to the StartupApproved
     /// registry key. This is the same mechanism Task Manager uses.
     /// Non-destructive — the Run key value is never deleted.
     /// </summary>
-    public static bool SetEnabled(StartupEntry entry, bool enabled)
+    public static async Task<bool> SetEnabledAsync(StartupEntry entry, bool enabled)
     {
         try
         {
             if (entry.Source == StartupSource.TaskScheduler)
             {
-                return SetTaskSchedulerEnabled(entry, enabled);
+                return await SetTaskSchedulerEnabledAsync(entry, enabled).ConfigureAwait(false);
             }
 
             var (root, approvedPath) = entry.Source switch
@@ -380,7 +387,7 @@ public sealed class StartupService
     /// <summary>
     /// Enable or disable a Task Scheduler logon task via schtasks.exe.
     /// </summary>
-    private static bool SetTaskSchedulerEnabled(StartupEntry entry, bool enabled)
+    private static async Task<bool> SetTaskSchedulerEnabledAsync(StartupEntry entry, bool enabled)
     {
         try
         {
@@ -419,12 +426,17 @@ public sealed class StartupService
                 return false;
             }
 
-            // Read streams BEFORE WaitForExit to avoid deadlock when the
+            // Read streams BEFORE WaitForExitAsync to avoid deadlock when the
             // pipe buffer fills up and the child process blocks on write.
             var stderrTask = proc.StandardError.ReadToEndAsync();
             _ = proc.StandardOutput.ReadToEndAsync(); // drain stdout to prevent deadlock
 
-            if (!proc.WaitForExit(10_000))
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            try
+            {
+                await proc.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
             {
                 try { proc.Kill(); }
                 catch (InvalidOperationException ex) { Log.Debug(ex, "Process already exited before Kill"); }

@@ -48,7 +48,7 @@ follows, and what to expect when you open a pull request.
 
 ```powershell
 git clone https://github.com/laurentiu021/SystemManager.git
-cd SysManager
+cd SystemManager
 dotnet build -c Debug
 ```
 
@@ -69,6 +69,7 @@ dotnet test -c Release
 ```
 SysManager/
 ├── SysManager/                # main WPF app
+│   ├── Data/                   # static data (ProcessDescriptions.json)
 │   ├── Models/                # POCOs (no logic)
 │   ├── Services/              # Windows / PowerShell / CLI wrappers
 │   ├── ViewModels/            # MVVM, one per tab

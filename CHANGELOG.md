@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-05-28
+
+### Fixed
+- **Security hardening** — version bump for security and performance fixes.
+
+## [1.16.0] - 2026-05-28
+
 ### Added
 - **Context Menu redesign** — complete overhaul of the Context Menu Manager tab:
   - **Presets:** Win10 Default (classic full menu), Win11 Default (modern compact), Custom

@@ -72,7 +72,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `NetworkRepairViewModel` — DNS flush, Winsock reset, TCP/IP reset.
 - `NetworkSharedState` — shared targets, buffers, pinger, tracer, health for all network VMs.
 - `ServicesViewModel` — Windows services management with gaming recommendations.
-- `DriversViewModel` — driver inventory + Windows Update driver scan.
+- `DriversViewModel` — driver inventory via Win32_PnPSignedDriver.
 - `LogsViewModel` — friendly Event Log viewer.
 - `AboutViewModel` — version info, auto-update, release history.
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features.
@@ -140,8 +140,8 @@ Key services:
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming
   recommendations, start/stop/disable with admin checks.
-- `AppAlertService` — monitors installed apps for available updates and
-  surfaces alerts on the dashboard.
+- `AppAlertService` — monitors for new application installations via
+  FileSystemWatcher and registry polling.
 - `AppBlockerService` — blocks/unblocks app execution via Image File
   Execution Options (IFEO) debugger redirect.
 - `BatteryService` — battery health, charge cycles, wear level, and
@@ -172,6 +172,10 @@ Key services:
   extensions via registry enumeration.
 - `SystemReportService` — generates comprehensive system info reports
   (hardware, OS, network, drivers) for export or clipboard.
+- `AppIconService` — downloads and caches application favicons for UI display.
+- `SafetyDatabase` — curated safety ratings for Windows services.
+- `ThemeService` — runtime theme switching with 12 presets and persistence.
+- `ToastService` — global glass-style toast notifications.
 
 ## Helpers
 

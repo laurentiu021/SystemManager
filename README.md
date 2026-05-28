@@ -174,7 +174,7 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - Requires administrator privileges for modifications
 
 ### Duplicate File Finder
-- Two-pass scan: group by size, then SHA-256 hash only size-matched files
+- Three-pass scan: group by size, partial-hash pre-filter, then full SHA-256
 - Duplicate groups sorted by wasted space (descending)
 - Preset folders or custom folder selection
 - Configurable minimum file size filter
@@ -191,7 +191,7 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - Lists running Windows processes with PID, memory, threads, and status
 - Real-time filter by name, description, category, or PID
 - Sort by memory, CPU usage, name, or PID via clickable column headers
-- **Built-in description database** — 107 common Windows processes and popular
+- **Built-in description database** — 108 common Windows processes and popular
   applications with plain-language descriptions, categories (System, Browser,
   Development, Communication, Media, Gaming, etc.), and safety indicators
   (System, Trusted, Unknown)
@@ -203,8 +203,8 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - Operations grouped by category (Disk, Network, SystemModification)
 - If a conflicting operation is already running, the UI shows which operation
   is blocking and refuses to start the new one
-- Integrated into: Deep Cleanup, Disk Analyzer, Duplicate Finder, Quick
-  Cleanup, Speed Test, Traceroute, Network Repair, Shortcut Cleaner
+- Integrated into: Dashboard, Deep Cleanup, Disk Analyzer, Duplicate Finder,
+  Quick Cleanup, Speed Test, Traceroute, Network Repair, Shortcut Cleaner
 
 ### Shortcut Cleaner
 - Scans Desktop, Start Menu, Quick Launch, and Recent Items for broken .lnk
@@ -407,7 +407,7 @@ Prerequisites: Windows 10 or newer and the [.NET 10 SDK](https://dotnet.microsof
 
 ```powershell
 git clone https://github.com/laurentiu021/SystemManager.git
-cd SysManager
+cd SystemManager
 dotnet run --project SysManager/SysManager/SysManager.csproj
 ```
 

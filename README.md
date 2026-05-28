@@ -1,11 +1,13 @@
 # SysManager
 
-A modern Windows system monitoring toolkit: live network monitoring with
-gamer-friendly presets, Windows updates, disk and memory health, gaming
-launcher cache cleanup, app updates via winget, performance tuning,
+A modern Windows system monitoring and management toolkit: live network
+diagnostics with gamer-friendly presets, Windows updates, disk and memory
+health, gaming launcher cache cleanup, app updates and bulk install via
+winget, performance tuning, privacy and telemetry controls, context menu
+management, secure file shredding, DNS & hosts editor, duplicate finder,
 battery health, process management with built-in descriptions, startup
-control, shortcut cleanup, app blocking, install alerts, and a friendly
-Event Log viewer — all in one WPF desktop app.
+control, shortcut cleanup, app blocking, install alerts, Windows features
+toggle, and a friendly Event Log viewer — all in one WPF desktop app.
 
 [![CI](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml)
@@ -23,9 +25,10 @@ Event Log viewer — all in one WPF desktop app.
 ## What it is
 
 SysManager is a local-first desktop tool for keeping an eye on a Windows PC.
-It rolls network diagnostics, system health, Windows Update, app updates,
-driver inventory, safe deep cleanup, and a readable Event Log viewer into a
-single tabbed WPF app.
+It rolls network diagnostics, system health, Windows Update, app management
+(updates, bulk install, uninstall), privacy controls, context menu management,
+secure file shredding, driver inventory, safe deep cleanup, and a readable
+Event Log viewer into a single tabbed WPF app.
 
 Everything runs on the machine itself. No cloud, no telemetry, no account.
 
@@ -213,6 +216,46 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - Select all / deselect individual items
 - Move to Recycle Bin or permanent delete, with confirmation dialog
 - COM-based IShellLink resolution for accurate target validation
+
+### Privacy & Telemetry
+- 12 registry-based toggles across 3 categories (Telemetry, UI Declutter, Features)
+- **Telemetry**: disable diagnostic data, activity history, advertising ID, feedback prompts
+- **UI Declutter**: disable Start suggestions, tips, lock screen tips, Spotlight ads
+- **Features**: disable Copilot, Cortana, web search in Start, widgets
+- Instant apply — toggles take effect immediately via registry writes
+- Category filter and search
+- Requires admin for HKLM-backed toggles
+- Fully reversible — re-enable any toggle with one click
+
+### File Shredder
+- Secure multi-pass file and folder deletion beyond recovery
+- Three shred methods: Quick (1 pass, zero fill), Standard (3 passes), Thorough (7 passes)
+- Cryptographically random overwrite data (RandomNumberGenerator)
+- Add files or entire folders via file picker dialogs
+- Progress tracking per-item with cancel support
+- Skips junction points and symbolic links (prevents symlink attacks)
+- Confirmation dialog before irreversible shred
+
+### DNS & Hosts
+- **DNS Preset Switching** — one-click DNS change: Google, Cloudflare, Quad9,
+  OpenDNS, or reset to automatic (DHCP). Shows current active DNS.
+- **Hosts File Editor** — view, add, and remove entries from the Windows
+  hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
+  or remove them. Backs up hosts file before modifications.
+- Requires administrator privileges for both DNS and hosts operations
+- Admin elevation banner with one-click restart
+
+### Bulk Installer
+- Curated catalog of popular applications grouped by category: Browsers,
+  Communication, Media, Development, Utilities, Gaming, Security,
+  Office & Productivity, Creativity, Networking & VPN, Runtimes & Frameworks
+- Select multiple apps and install all via winget in one batch operation
+- **Custom winget search** — search the entire winget repository and add
+  any package to your install queue
+- Category filter and text search across the catalog
+- Per-package install status tracking with ETA
+- Live console output showing winget progress
+- GroupedView with visual category headers
 
 ### App Alerts
 - Monitors Program Files, AppData\Programs, and registry uninstall keys for

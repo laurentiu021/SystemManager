@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -22,8 +21,8 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _toggleCts;
 
-    public ObservableCollection<WindowsFeature> AllFeatures { get; } = new();
-    public ObservableCollection<WindowsFeature> FilteredFeatures { get; } = new();
+    public BulkObservableCollection<WindowsFeature> AllFeatures { get; } = new();
+    public BulkObservableCollection<WindowsFeature> FilteredFeatures { get; } = new();
 
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private int _featureCount;
@@ -53,7 +52,6 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Querying Windows optional features…";
-        AllFeatures.Clear();
         FilteredFeatures.Clear();
         _scanCts?.Cancel();
         _scanCts?.Dispose();
@@ -62,8 +60,7 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         try
         {
             var list = await _service.ListFeaturesAsync(_scanCts.Token);
-            foreach (var feature in list)
-                AllFeatures.Add(feature);
+            AllFeatures.ReplaceWith(list);
 
             ApplyFilter();
             EnabledCount = AllFeatures.Count(f => f.IsEnabled);
@@ -175,7 +172,6 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
     private void ApplyFilter()
     {
-        FilteredFeatures.Clear();
         IEnumerable<WindowsFeature> source = AllFeatures;
 
         if (!string.IsNullOrWhiteSpace(FilterText))
@@ -187,9 +183,7 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
                 feat.Category.Contains(f, StringComparison.OrdinalIgnoreCase));
         }
 
-        foreach (var feat in source)
-            FilteredFeatures.Add(feat);
-
+        FilteredFeatures.ReplaceWith(source);
         FeatureCount = FilteredFeatures.Count;
         Summary = $"{FeatureCount} features{(AllFeatures.Count != FeatureCount ? $" (of {AllFeatures.Count} total)" : "")}";
     }

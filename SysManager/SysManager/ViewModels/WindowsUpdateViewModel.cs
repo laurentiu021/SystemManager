@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -19,7 +18,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     private readonly PowerShellRunner _runner;
     private CancellationTokenSource? _cts;
 
-    public ObservableCollection<UpdateEntry> Updates { get; } = new();
+    public BulkObservableCollection<UpdateEntry> Updates { get; } = new();
     public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private bool _moduleAvailable;

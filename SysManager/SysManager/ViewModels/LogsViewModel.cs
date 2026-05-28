@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -13,6 +12,7 @@ using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -29,7 +29,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     private readonly SynchronizationContext? _sync;
     private CancellationTokenSource? _cts;
 
-    public ObservableCollection<FriendlyEventEntry> Entries { get; } = new();
+    public BulkObservableCollection<FriendlyEventEntry> Entries { get; } = new();
     public ICollectionView EntriesView { get; }
 
     public string[] AvailableLogs { get; } = { "System", "Application", "Security", "Setup" };

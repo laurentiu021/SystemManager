@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -22,8 +21,8 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     private readonly Action<PowerShellLine> _lineHandler;
     private CancellationTokenSource? _cts;
 
-    public ObservableCollection<InstalledApp> AllApps { get; } = new();
-    public ObservableCollection<InstalledApp> FilteredApps { get; } = new();
+    public BulkObservableCollection<InstalledApp> AllApps { get; } = new();
+    public BulkObservableCollection<InstalledApp> FilteredApps { get; } = new();
     public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private string _filterText = "";
@@ -55,7 +54,6 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Querying winget list…";
-        AllApps.Clear();
         FilteredApps.Clear();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -64,10 +62,8 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         {
             var list = await _service.ListInstalledAsync(_cts.Token);
             foreach (var app in list)
-            {
                 app.Icon ??= IconExtractorService.FallbackIcon;
-                AllApps.Add(app);
-            }
+            AllApps.ReplaceWith(list);
 
             ApplyFilter();
             StatusMessage = $"Found {AllApps.Count} installed applications.";
@@ -196,7 +192,6 @@ public sealed partial class UninstallerViewModel : ViewModelBase
 
     private void ApplyFilter()
     {
-        FilteredApps.Clear();
         IEnumerable<InstalledApp> source = AllApps;
 
         if (!string.IsNullOrWhiteSpace(FilterText))
@@ -207,11 +202,8 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 a.Id.Contains(f, StringComparison.OrdinalIgnoreCase));
         }
 
-        // Default order by name; DataGrid column headers handle user sorting.
         source = source.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var app in source)
-            FilteredApps.Add(app);
+        FilteredApps.ReplaceWith(source);
 
         AppCount = FilteredApps.Count;
         Summary = $"{AppCount} apps{(AllApps.Count != AppCount ? $" (of {AllApps.Count} total)" : "")}";

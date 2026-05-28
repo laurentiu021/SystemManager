@@ -71,6 +71,18 @@ A palette button in the top-right corner opens an appearance popup with:
 - Background shade slider for fine-tuning lightness/darkness
 - Settings persist between sessions
 
+### Context Menu Manager
+Manage Windows Explorer right-click entries — toggle them on or off without
+deleting anything (uses the standard `LegacyDisable` registry mechanism):
+- **Presets:** Win10 Default (classic full menu), Win11 Default (modern compact), Custom
+- Selecting a preset resets to clean defaults, disabling third-party entries — re-enable individually
+- **Win10/Win11 style toggle** — switch between classic and modern menu (restarts Explorer)
+- **Visual preview on hover** — real screenshots of each menu style
+- **Entry explanations** — human-readable descriptions for common entries
+- **"Applies to" column** — shows whether entry affects Files, Folders, Desktop, or Directory Background
+- **HKCU fallback** — system-protected entries can be toggled via user-level registry override
+- Admin elevation banner with one-click restart as administrator
+
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart
 - Auto-verdict that tells you in plain English whether packet loss is local,

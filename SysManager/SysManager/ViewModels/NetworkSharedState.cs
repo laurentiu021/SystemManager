@@ -559,6 +559,15 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         TraceMonitor.Dispose();
         FlushTimer?.Stop();
 
+        // Unsubscribe target PropertyChanged handlers to prevent memory leaks
+        foreach (var (host, handler) in _targetHandlers)
+        {
+            var target = Targets.FirstOrDefault(t => t.Host == host);
+            if (target is not null)
+                target.PropertyChanged -= handler;
+        }
+        _targetHandlers.Clear();
+
         // Dispose series paint objects (unmanaged SkiaSharp handles)
         foreach (var series in LatencySeries) DisposeSeries(series);
         foreach (var series in TraceSeries) DisposeSeries(series);

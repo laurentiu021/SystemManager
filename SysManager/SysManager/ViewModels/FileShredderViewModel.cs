@@ -29,6 +29,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     public FileShredderViewModel(FileShredderService service)
     {
         _service = service;
+        Items.CollectionChanged += (_, _) => ShredAllCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]

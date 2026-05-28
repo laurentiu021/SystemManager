@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Security;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -13,8 +15,9 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// Context Menu Manager tab — lists all shell context menu entries and
-/// lets the user enable/disable them non-destructively using LegacyDisable.
+/// Context Menu Manager tab — lists all shell context menu entries grouped
+/// by location, lets the user toggle them, switch between Win10/Win11 style,
+/// and customize which entries appear on right-click.
 /// </summary>
 public sealed partial class ContextMenuViewModel : ViewModelBase
 {
@@ -29,6 +32,10 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     [ObservableProperty] private int _enabledCount;
     [ObservableProperty] private int _disabledCount;
     [ObservableProperty] private int _totalCount;
+    [ObservableProperty] private bool _isClassicMenuEnabled;
+    [ObservableProperty] private bool _isElevated;
+    [ObservableProperty] private string _activePresetId = "";
+    [ObservableProperty] private string _presetDescription = "";
 
     /// <summary>Available location filters for the ComboBox.</summary>
     public ObservableCollection<string> LocationFilters { get; } = new()
@@ -39,6 +46,12 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     public ContextMenuViewModel(ContextMenuService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
+        IsClassicMenuEnabled = ContextMenuService.IsClassicMenuEnabled();
+        ActivePresetId = IsClassicMenuEnabled ? "win10" : "win11";
+        PresetDescription = IsClassicMenuEnabled
+            ? ContextMenuPreset.All["win10"].Description
+            : ContextMenuPreset.All["win11"].Description;
         InitializeAsync(InitAsync);
     }
 
@@ -63,9 +76,11 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             var items = await Task.Run(() => _service.ScanEntries());
 
             _allEntries.Clear();
-            foreach (var item in items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
+            foreach (var item in items.OrderBy(e => e.Location, StringComparer.OrdinalIgnoreCase)
+                                      .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
                 _allEntries.Add(item);
 
+            IsClassicMenuEnabled = ContextMenuService.IsClassicMenuEnabled();
             ApplyFilter();
             StatusMessage = $"Found {_allEntries.Count} context menu entries.";
             ToastService.Instance.Show("Context Menu scan complete", $"Found {_allEntries.Count} entries");
@@ -82,13 +97,17 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
+    }
+
+    [RelayCommand]
     private void ToggleEntry(object? parameter)
     {
         if (parameter is not ContextMenuEntry entry) return;
 
-        // The CheckBox two-way binding has already flipped IsEnabled before
-        // this command runs. We use the current (already-flipped) value as
-        // the desired new state.
         var desiredState = entry.IsEnabled;
         bool success;
 
@@ -99,16 +118,113 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
         if (success)
         {
+            ActivePresetId = "custom";
+            PresetDescription = ContextMenuPreset.All["custom"].Description;
             UpdateCounts();
             StatusMessage = $"{entry.Name} {(desiredState ? "enabled" : "disabled")}.";
             Log.Information("Context menu entry toggled: {Name} -> {State}", entry.Name, desiredState ? "enabled" : "disabled");
         }
         else
         {
-            // Revert the CheckBox state since the operation failed
             entry.IsEnabled = !desiredState;
-            StatusMessage = $"Could not toggle {entry.Name} — requires administrator privileges.";
+            if (!IsElevated)
+            {
+                if (DialogService.Instance.Confirm(
+                    $"Could not toggle \"{entry.Name}\" — this requires administrator privileges.\n\nRestart SysManager as administrator?",
+                    "Admin Required"))
+                {
+                    RelaunchAsAdmin();
+                }
+            }
+            else
+            {
+                StatusMessage = $"Could not toggle {entry.Name} — protected by Windows (owned by TrustedInstaller).";
+            }
         }
+    }
+
+    [RelayCommand]
+    private void ApplyPreset(object? parameter)
+    {
+        if (parameter is not string presetId) return;
+        if (presetId == "custom")
+        {
+            ActivePresetId = "custom";
+            PresetDescription = ContextMenuPreset.All["custom"].Description;
+            return;
+        }
+
+        if (!ContextMenuPreset.All.TryGetValue(presetId, out var preset)) return;
+
+        var needsRestart = preset.ForcesClassicMenu != IsClassicMenuEnabled;
+        var thirdPartyEnabled = _allEntries.Count(e => !e.IsSystemEntry && e.IsEnabled && !IsDefaultWindowsEntry(e));
+
+        var message = $"Apply {preset.Name}?";
+        if (needsRestart)
+            message += "\n\nThis requires restarting Explorer — all open File Explorer windows will close.";
+        if (thirdPartyEnabled > 0)
+            message += $"\n\n{thirdPartyEnabled} third-party entries (Git, NVIDIA, etc.) will be disabled to restore the clean default menu. You can re-enable any of them individually afterwards.";
+
+        if (!DialogService.Instance.Confirm(message, $"Apply \"{preset.Name}\""))
+            return;
+
+        IsBusy = true;
+        StatusMessage = $"Applying \"{preset.Name}\"...";
+
+        try
+        {
+            if (needsRestart)
+            {
+                if (preset.ForcesClassicMenu)
+                    ContextMenuService.EnableClassicMenu();
+                else
+                    ContextMenuService.DisableClassicMenu();
+            }
+
+            // Disable all third-party entries to restore clean default
+            var disabled = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (entry.IsSystemEntry) continue;
+                if (!entry.IsEnabled) continue;
+                if (IsDefaultWindowsEntry(entry)) continue;
+
+                if (_service.DisableEntry(entry))
+                    disabled++;
+            }
+
+            // Enable any default Windows entries that were previously disabled
+            var enabled = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (entry.IsSystemEntry) continue;
+                if (entry.IsEnabled) continue;
+                if (!IsDefaultWindowsEntry(entry)) continue;
+
+                if (_service.EnableEntry(entry))
+                    enabled++;
+            }
+
+            if (needsRestart)
+                ContextMenuService.RestartExplorer();
+
+            IsClassicMenuEnabled = preset.ForcesClassicMenu;
+            ActivePresetId = presetId;
+            PresetDescription = preset.Description;
+            ApplyFilter();
+
+            var changes = disabled + enabled;
+            StatusMessage = changes > 0
+                ? $"\"{preset.Name}\" applied — {disabled} disabled, {enabled} re-enabled."
+                : $"\"{preset.Name}\" applied.";
+            ToastService.Instance.Show("Preset Applied", $"\"{preset.Name}\" — clean default restored");
+            Log.Information("Context menu preset applied: {Preset}, {Disabled} disabled, {Enabled} enabled", preset.Name, disabled, enabled);
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            StatusMessage = $"Failed: {ex.Message}";
+        }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]
@@ -118,15 +234,12 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     {
         var filtered = _allEntries.AsEnumerable();
 
-        // Hide system/internal entries unless the user opted in
         if (!ShowSystemEntries)
             filtered = filtered.Where(e => !e.IsSystemEntry);
 
-        // Location filter
         if (!string.Equals(SelectedLocation, "All", StringComparison.OrdinalIgnoreCase))
             filtered = filtered.Where(e => string.Equals(e.Location, SelectedLocation, StringComparison.OrdinalIgnoreCase));
 
-        // Text filter
         if (!string.IsNullOrWhiteSpace(FilterText))
         {
             var text = FilterText;
@@ -134,7 +247,8 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
                 e.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
                 e.Command.Contains(text, StringComparison.OrdinalIgnoreCase) ||
                 e.Source.Contains(text, StringComparison.OrdinalIgnoreCase) ||
-                e.RawName.Contains(text, StringComparison.OrdinalIgnoreCase));
+                e.RawName.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                e.Explanation.Contains(text, StringComparison.OrdinalIgnoreCase));
         }
 
         Entries.ReplaceWith(filtered);
@@ -146,5 +260,28 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         EnabledCount = Entries.Count(e => e.IsEnabled);
         DisabledCount = Entries.Count(e => !e.IsEnabled);
         TotalCount = Entries.Count;
+    }
+
+    private static readonly HashSet<string> DefaultWindowsRawNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "open", "edit", "print", "runas", "runasuser", "find", "explore",
+        "cmd", "powershell", "properties", "copy", "cut", "paste", "delete",
+        "rename", "pintohomefile", "PinToStartScreen", "Windows.ModernShare",
+        "opennewwindow", "opennewtab", "removeproperties", "EditStickers",
+        "Troubleshoot compatibility"
+    };
+
+    private static readonly HashSet<string> DefaultWindowsSources = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Windows", "Microsoft Windows", "Microsoft Corporation", "Windows Terminal"
+    };
+
+    private static bool IsDefaultWindowsEntry(ContextMenuEntry entry)
+    {
+        if (DefaultWindowsRawNames.Contains(entry.RawName))
+            return true;
+        if (!string.IsNullOrEmpty(entry.Source) && DefaultWindowsSources.Contains(entry.Source))
+            return true;
+        return false;
     }
 }

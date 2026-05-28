@@ -78,5 +78,13 @@ public class ContextMenuViewModelTests
         Assert.NotNull(vm.ScanCommand);
         Assert.NotNull(vm.ToggleEntryCommand);
         Assert.NotNull(vm.RefreshCommand);
+        Assert.NotNull(vm.ApplyPresetCommand);
+    }
+
+    [Fact]
+    public void Constructor_ActivePresetId_DefaultsToMenuStyle()
+    {
+        var vm = CreateVm();
+        Assert.Contains(vm.ActivePresetId, new[] { "win10", "win11" });
     }
 }

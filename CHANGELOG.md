@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Context Menu redesign** — complete overhaul of the Context Menu Manager tab:
+  - **Presets:** Win10 Default (classic full menu), Win11 Default (modern compact), Custom
+    (manual toggles). Selecting Win10/Win11 resets to clean default by disabling all
+    third-party entries (Git, NVIDIA, etc.) — user can re-enable individually.
+  - **Win10/Win11 style toggle** — switch between classic full context menu and modern
+    Win11 "Show more options" via registry. Automatically restarts Explorer.
+  - **Visual preview on hover** — real screenshots showing exactly what each menu style
+    looks like (default + custom + "Show more options" expanded).
+  - **Entry explanations** — human-readable descriptions for ~40 common entries shown
+    inline (e.g. "Opens a Git Bash terminal in the current directory").
+  - **"Applies to" column** — clearly shows whether an entry affects Files, Folders,
+    Directory Background, or Desktop.
+  - **HKCU fallback** — system-protected entries (TrustedInstaller) can now be toggled
+    via HKCU registry override instead of failing with "access denied".
+
+### Fixed
+- **Crash on admin relaunch** — `CancellationTokenSource disposed` error no longer shown
+  when restarting the app with elevated privileges.
+- **Admin elevation banner** — Context Menu tab now shows the standard admin banner
+  (matching all other tabs) with "Run as administrator" button.
+
 ## [1.15.0] - 2026-05-27
 
 ### Added

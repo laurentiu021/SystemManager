@@ -87,7 +87,8 @@ public partial class App : Application
         _pipeCts?.Cancel();
         _pipeCts?.Dispose();
         _trayService?.Dispose();
-        (Services as IDisposable)?.Dispose();
+        try { (Services as IDisposable)?.Dispose(); }
+        catch (ObjectDisposedException) { }
         LogService.Shutdown();
         try { _instanceMutex?.ReleaseMutex(); }
         catch (ApplicationException) { /* mutex not owned by this thread */ }
@@ -160,6 +161,17 @@ public partial class App : Application
     {
         LogService.Logger?.Error(e.Exception, "UI thread exception");
         e.Handled = true;
+
+        // Swallow disposed/cancelled exceptions during shutdown — CTS/services
+        // being disposed while async operations are still in flight is expected.
+        if (e.Exception is ObjectDisposedException)
+            return;
+        if (e.Exception is InvalidOperationException && e.Exception.Message.Contains("disposed", StringComparison.OrdinalIgnoreCase))
+            return;
+        if (e.Exception.InnerException is ObjectDisposedException)
+            return;
+        if (e.Exception is OperationCanceledException)
+            return;
 
         // Prevent cascading dialogs: if one is already showing, swallow silently.
         if (System.Threading.Interlocked.CompareExchange(ref _errorDialogActive, 1, 0) != 0)

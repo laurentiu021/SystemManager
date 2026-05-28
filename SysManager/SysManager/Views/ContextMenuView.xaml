@@ -13,6 +13,8 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -20,12 +22,117 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Context Menu Manager" Style="{StaticResource Display}"/>
-            <TextBlock Text="These are entries that appear when you right-click files, folders, or the desktop in Windows Explorer. Toggle to show/hide them."
+            <TextBlock Text="Manage entries that appear when you right-click files, folders, or the desktop in Windows Explorer. Toggle entries to show or hide them — changes are non-destructive and reversible."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
+        <!-- Elevation banner: not elevated -->
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                    <TextBlock Text="Some entries require administrator privileges to toggle."
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="1" Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
+                CornerRadius="10" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — full access to all context menu entries."
+                               Foreground="#FCD34D" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Menu Style (Presets) -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14">
+            <StackPanel>
+                <TextBlock Text="MENU STYLE" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextMuted}" Margin="0,0,0,10"/>
+                <StackPanel Orientation="Horizontal">
+                    <!-- Win10 button with hover preview -->
+                    <Button Content="Win10 Default" Margin="0,0,8,0"
+                            Command="{Binding ApplyPresetCommand}" CommandParameter="win10"
+                            Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12">
+                        <Button.ToolTip>
+                            <ToolTip Placement="Bottom" MaxWidth="520">
+                                <StackPanel>
+                                    <TextBlock Text="Classic Full Context Menu (Win10 Style)" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="This is actually the Win11 menu after clicking &quot;Show more options&quot; — but applied permanently. All entries visible on first right-click, no extra clicks needed."
+                                               Foreground="Gray" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Default (clean)" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win10-default.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Custom (all entries ON)" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win10-custom-max.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Text="ⓘ Hover for preview" FontSize="10" Foreground="DimGray" Margin="0,6,0,0" FontStyle="Italic"/>
+                                </StackPanel>
+                            </ToolTip>
+                        </Button.ToolTip>
+                    </Button>
+                    <!-- Win11 button with hover preview -->
+                    <Button Content="Win11 Default" Margin="0,0,8,0"
+                            Command="{Binding ApplyPresetCommand}" CommandParameter="win11"
+                            Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12">
+                        <Button.ToolTip>
+                            <ToolTip Placement="Bottom" MaxWidth="520">
+                                <StackPanel>
+                                    <TextBlock Text="Modern Compact Context Menu (Win11 Style)" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Compact menu with icons. Custom entries appear only after clicking &quot;Show more options&quot; at the bottom. The expanded view is identical to Win10 Default."
+                                               Foreground="Gray" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Default (compact)" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-default.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Custom (compact)" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-custom-max.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="After &quot;Show more options&quot;" FontSize="10" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-show-more.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Text="ⓘ Hover for preview" FontSize="10" Foreground="DimGray" Margin="0,6,0,0" FontStyle="Italic"/>
+                                </StackPanel>
+                            </ToolTip>
+                        </Button.ToolTip>
+                    </Button>
+                    <!-- Custom indicator -->
+                    <Button Content="Custom" Margin="0,0,8,0"
+                            Command="{Binding ApplyPresetCommand}" CommandParameter="custom"
+                            Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12"
+                            ToolTip="Active menu style + your manual entry toggles from the list below. Toggle any entry to switch to Custom mode."/>
+                </StackPanel>
+                <TextBlock Text="ⓘ Hover over Win10/Win11 buttons for a visual preview of each menu style."
+                           FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,8,0,0" FontStyle="Italic"/>
+                <TextBlock Text="{Binding PresetDescription}" Foreground="{DynamicResource TextMuted}"
+                           FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding PresetDescription, Converter={StaticResource FlexVis}}"/>
+            </StackPanel>
+        </Border>
+
         <!-- Toolbar -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <DockPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <ComboBox ItemsSource="{Binding LocationFilters}"
@@ -61,7 +168,7 @@
         </Border>
 
         <!-- Context menu entries list -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
             <DataGrid AutomationProperties.Name="Context menu entries"
                       ItemsSource="{Binding Entries}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
@@ -100,15 +207,16 @@
                                         </StackPanel>
                                     </StackPanel.ToolTip>
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                                    <TextBlock Text="{Binding Command}" Foreground="{DynamicResource TextMuted}"
-                                               FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="380"
-                                               HorizontalAlignment="Left" Margin="0,2,0,0"/>
+                                    <TextBlock Text="{Binding Explanation}" Foreground="{DynamicResource TextMuted}"
+                                               FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               MaxWidth="450" HorizontalAlignment="Left" Margin="0,1,0,0"
+                                               Visibility="{Binding Explanation, Converter={StaticResource FlexVis}}"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="140" MinWidth="80"
+                    <DataGridTextColumn Header="Applies to" Binding="{Binding Location}" Width="150" MinWidth="100"
                                         SortMemberPath="Location" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -119,7 +227,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="140" MinWidth="80"
+                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="130" MinWidth="80"
                                         SortMemberPath="Source" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -135,6 +243,6 @@
         </Border>
 
         <!-- Status bar -->
-        <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Style="{StaticResource Caption}" Margin="0,8,0,0"/>
+        <TextBlock Grid.Row="5" Text="{Binding StatusMessage}" Style="{StaticResource Caption}" Margin="0,8,0,0"/>
     </Grid>
 </UserControl>

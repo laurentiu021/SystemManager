@@ -6,61 +6,115 @@
              d:DataContext="{d:DesignInstance vm:AppAlertsViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d">
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface0}">
 
-    <Grid Margin="24">
+    <Grid Margin="28,24,28,16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="App Installation Alerts" FontSize="20" FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimary}" />
-            <TextBlock Text="{Binding MonitorStatus}" Opacity="0.7" Margin="0,4,0,0"
-                       Foreground="{DynamicResource TextSecondary}" />
+            <TextBlock Text="App Installation Alerts" Style="{StaticResource Display}"/>
+            <TextBlock Text="{Binding MonitorStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
         <!-- Toolbar -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
-            <Button Content="Start Monitoring" Command="{Binding StartMonitoringCommand}" Padding="12,6" Margin="0,0,8,0" />
-            <Button Content="Stop" Command="{Binding StopMonitoringCommand}" Padding="12,6" Margin="0,0,8,0" />
-            <Separator Margin="0,0,8,0" />
-            <Button Content="Show Installed" Command="{Binding RefreshInstalledAppsCommand}" Padding="12,6" Margin="0,0,8,0" />
-            <Button Content="Acknowledge All" Command="{Binding AcknowledgeAllCommand}" Padding="12,6" Margin="0,0,8,0" />
-            <Button Content="Clear History" Command="{Binding ClearHistoryCommand}" Padding="8,6" />
-        </StackPanel>
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Button Content="Start Monitoring" Command="{Binding StartMonitoringCommand}"
+                            Style="{StaticResource PrimaryButton}" Padding="14,8" Margin="0,0,8,0"/>
+                    <Button Content="Stop" Command="{Binding StopMonitoringCommand}"
+                            Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
+                    <Button Content="Show Installed" Command="{Binding RefreshInstalledAppsCommand}"
+                            Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
+                    <Button Content="Acknowledge All" Command="{Binding AcknowledgeAllCommand}"
+                            Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
+                    <Button Content="Clear History" Command="{Binding ClearHistoryCommand}"
+                            Style="{StaticResource DangerButton}" Padding="12,8"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
+                           Style="{StaticResource Subtle}">
+                    <Run Text="{Binding AlertCount, Mode=OneWay}"/> total ·
+                    <Run Text="{Binding UnacknowledgedCount, Mode=OneWay}"/> new
+                </TextBlock>
+            </DockPanel>
+        </Border>
 
         <!-- Alerts list -->
-        <DataGrid Grid.Row="2" ItemsSource="{Binding Alerts}"
-                  AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserAddRows="False" CanUserDeleteRows="False"
-                  CanUserResizeColumns="True"
-                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                  BorderThickness="1" BorderBrush="{DynamicResource Border1}"
-                  VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Detected" Binding="{Binding DetectedAt, StringFormat='{}{0:HH:mm:ss dd-MMM}'}" Width="120" MinWidth="80" />
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100" />
-                <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="150" MinWidth="80" />
-                <DataGridTextColumn Header="Path" Binding="{Binding InstallPath}" Width="*" MinWidth="120" />
-                <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="80" MinWidth="60" />
-            </DataGrid.Columns>
-        </DataGrid>
+        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+            <DataGrid AutomationProperties.Name="App installation alerts"
+                      ItemsSource="{Binding Alerts}"
+                      AutoGenerateColumns="False" IsReadOnly="True"
+                      CanUserAddRows="False" CanUserDeleteRows="False"
+                      CanUserResizeColumns="True" CanUserSortColumns="True"
+                      HeadersVisibility="Column" GridLinesVisibility="None"
+                      Background="Transparent" BorderThickness="0"
+                      SelectionMode="Single"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Detected" Binding="{Binding DetectedAt, StringFormat='{}{0:HH:mm:ss dd-MMM}'}"
+                                        Width="140" MinWidth="100" SortMemberPath="DetectedAt">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="150"
+                                        SortMemberPath="Name">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="160" MinWidth="80"
+                                        SortMemberPath="Publisher">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Path" Binding="{Binding InstallPath}" Width="*" MinWidth="120"
+                                        SortMemberPath="InstallPath">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="90" MinWidth="60"
+                                        SortMemberPath="Source">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
 
-        <!-- Footer -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
-            <TextBlock Opacity="0.6" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextSecondary}">
-                <Run Text="{Binding AlertCount, Mode=OneWay}" />
-                <Run Text=" total · " />
-                <Run Text="{Binding UnacknowledgedCount, Mode=OneWay}" />
-                <Run Text=" new" />
-            </TextBlock>
-        </StackPanel>
+        <!-- Status bar -->
+        <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Style="{StaticResource Caption}" Margin="0,8,0,0"/>
     </Grid>
 </UserControl>

@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.16.2] - 2026-05-28
+
+### Fixed
+- **UI uniformity** — AppAlertsView fully reworked: proper Card wrappers, styled buttons (Primary/Secondary/Danger), removed DataGrid gridlines, standardized header using Display style, consistent column styling.
+- **DashboardView consistency** — standardized margins (28px), replaced inline admin button template with app-wide AdminButton/elevation banner pattern, added proper button styles to all actions.
+- **Performance** — replaced `ObservableCollection` with `BulkObservableCollection` in UninstallerViewModel, WindowsFeaturesViewModel, WindowsUpdateViewModel, and LogsViewModel (eliminates UI flicker from Clear+Add loops).
+
 ## [1.16.1] - 2026-05-28
 
 ### Fixed

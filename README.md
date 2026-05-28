@@ -18,7 +18,7 @@ toggle, and a friendly Event Log viewer — all in one WPF desktop app.
 [![Issues](https://img.shields.io/github/issues/laurentiu021/SystemManager)](https://github.com/laurentiu021/SystemManager/issues)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
-[![winget](https://img.shields.io/badge/winget-laurentiu021.SysManager-0078D4?logo=windows)](https://winstall.app/apps/laurentiu021.SysManager)
+[![winget](https://img.shields.io/badge/winget-laurentiu021.SysManager-0078D4?logo=windows)](https://github.com/laurentiu021/SystemManager/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---

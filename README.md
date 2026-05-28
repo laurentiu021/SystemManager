@@ -18,6 +18,7 @@ toggle, and a friendly Event Log viewer — all in one WPF desktop app.
 [![Issues](https://img.shields.io/github/issues/laurentiu021/SystemManager)](https://github.com/laurentiu021/SystemManager/issues)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
+[![winget](https://img.shields.io/badge/winget-laurentiu021.SysManager-0078D4?logo=windows)](https://winstall.app/apps/laurentiu021.SysManager)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
@@ -425,7 +426,21 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 </p>
 </details>
 
-## Download
+## Install
+
+### Via winget (recommended)
+
+SysManager is published to the [Windows Package Manager](https://learn.microsoft.com/windows/package-manager/)
+community repository. Install or update with a single command:
+
+```powershell
+winget install laurentiu021.SysManager
+```
+
+Updates are delivered automatically with each release — run `winget upgrade`
+to stay on the latest version.
+
+### Direct download
 
 Grab `SysManager.exe` from the [latest release](https://github.com/laurentiu021/SystemManager/releases/latest)
 and double-click it. The executable is self-contained — no installer, no .NET

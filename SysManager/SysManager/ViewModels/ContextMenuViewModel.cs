@@ -33,6 +33,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     [ObservableProperty] private int _disabledCount;
     [ObservableProperty] private int _totalCount;
     [ObservableProperty] private bool _isClassicMenuEnabled;
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _activePresetId = "";
     [ObservableProperty] private string _presetDescription = "";
 
@@ -48,6 +49,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     public ContextMenuViewModel(ContextMenuService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
         IsClassicMenuEnabled = ContextMenuService.IsClassicMenuEnabled();
         InitializeAsync(InitAsync);
     }
@@ -93,6 +95,13 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void RelaunchElevated()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
+    }
+
+    [RelayCommand]
     private void ToggleEntry(object? parameter)
     {
         if (parameter is not ContextMenuEntry entry) return;
@@ -116,7 +125,19 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         else
         {
             entry.IsEnabled = !desiredState;
-            StatusMessage = $"Could not toggle {entry.Name} — requires administrator privileges.";
+            if (!IsElevated)
+            {
+                if (DialogService.Instance.Confirm(
+                    $"Could not toggle \"{entry.Name}\" — this requires administrator privileges.\n\nRestart SysManager as administrator?",
+                    "Admin Required"))
+                {
+                    RelaunchElevated();
+                }
+            }
+            else
+            {
+                StatusMessage = $"Could not toggle {entry.Name} — access denied.";
+            }
         }
     }
 

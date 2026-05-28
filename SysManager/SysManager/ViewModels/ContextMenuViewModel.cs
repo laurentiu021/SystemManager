@@ -157,35 +157,68 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         if (!ContextMenuPreset.All.TryGetValue(presetId, out var preset)) return;
 
         var needsRestart = preset.ForcesClassicMenu != IsClassicMenuEnabled;
-        if (!needsRestart)
-        {
-            ActivePresetId = presetId;
-            PresetDescription = preset.Description;
-            StatusMessage = $"\"{preset.Name}\" is already active.";
-            return;
-        }
+        var thirdPartyEnabled = _allEntries.Count(e => !e.IsSystemEntry && e.IsEnabled && !IsDefaultWindowsEntry(e));
 
-        var message = $"Switch to {preset.Name} context menu style?\n\nThis requires restarting Explorer — all open File Explorer windows will close.";
+        var message = $"Apply {preset.Name}?";
+        if (needsRestart)
+            message += "\n\nThis requires restarting Explorer — all open File Explorer windows will close.";
+        if (thirdPartyEnabled > 0)
+            message += $"\n\n{thirdPartyEnabled} third-party entries (Git, NVIDIA, etc.) will be disabled to restore the clean default menu. You can re-enable any of them individually afterwards.";
+
         if (!DialogService.Instance.Confirm(message, $"Apply \"{preset.Name}\""))
             return;
 
         IsBusy = true;
-        StatusMessage = $"Switching to \"{preset.Name}\"...";
+        StatusMessage = $"Applying \"{preset.Name}\"...";
 
         try
         {
-            if (preset.ForcesClassicMenu)
-                ContextMenuService.EnableClassicMenu();
-            else
-                ContextMenuService.DisableClassicMenu();
+            if (needsRestart)
+            {
+                if (preset.ForcesClassicMenu)
+                    ContextMenuService.EnableClassicMenu();
+                else
+                    ContextMenuService.DisableClassicMenu();
+            }
 
-            ContextMenuService.RestartExplorer();
+            // Disable all third-party entries to restore clean default
+            var disabled = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (entry.IsSystemEntry) continue;
+                if (!entry.IsEnabled) continue;
+                if (IsDefaultWindowsEntry(entry)) continue;
+
+                if (_service.DisableEntry(entry))
+                    disabled++;
+            }
+
+            // Enable any default Windows entries that were previously disabled
+            var enabled = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (entry.IsSystemEntry) continue;
+                if (entry.IsEnabled) continue;
+                if (!IsDefaultWindowsEntry(entry)) continue;
+
+                if (_service.EnableEntry(entry))
+                    enabled++;
+            }
+
+            if (needsRestart)
+                ContextMenuService.RestartExplorer();
+
             IsClassicMenuEnabled = preset.ForcesClassicMenu;
             ActivePresetId = presetId;
             PresetDescription = preset.Description;
-            StatusMessage = $"\"{preset.Name}\" applied — Explorer restarted.";
-            ToastService.Instance.Show("Menu Style Changed", $"\"{preset.Name}\" applied");
-            Log.Information("Context menu style changed to: {Preset}", preset.Name);
+            ApplyFilter();
+
+            var changes = disabled + enabled;
+            StatusMessage = changes > 0
+                ? $"\"{preset.Name}\" applied — {disabled} disabled, {enabled} re-enabled."
+                : $"\"{preset.Name}\" applied.";
+            ToastService.Instance.Show("Preset Applied", $"\"{preset.Name}\" — clean default restored");
+            Log.Information("Context menu preset applied: {Preset}, {Disabled} disabled, {Enabled} enabled", preset.Name, disabled, enabled);
         }
         catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
         {
@@ -227,5 +260,28 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         EnabledCount = Entries.Count(e => e.IsEnabled);
         DisabledCount = Entries.Count(e => !e.IsEnabled);
         TotalCount = Entries.Count;
+    }
+
+    private static readonly HashSet<string> DefaultWindowsRawNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "open", "edit", "print", "runas", "runasuser", "find", "explore",
+        "cmd", "powershell", "properties", "copy", "cut", "paste", "delete",
+        "rename", "pintohomefile", "PinToStartScreen", "Windows.ModernShare",
+        "opennewwindow", "opennewtab", "removeproperties", "EditStickers",
+        "Troubleshoot compatibility"
+    };
+
+    private static readonly HashSet<string> DefaultWindowsSources = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Windows", "Microsoft Windows", "Microsoft Corporation", "Windows Terminal"
+    };
+
+    private static bool IsDefaultWindowsEntry(ContextMenuEntry entry)
+    {
+        if (DefaultWindowsRawNames.Contains(entry.RawName))
+            return true;
+        if (!string.IsNullOrEmpty(entry.Source) && DefaultWindowsSources.Contains(entry.Source))
+            return true;
+        return false;
     }
 }

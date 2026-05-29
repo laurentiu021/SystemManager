@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.3] - 2026-05-29
+
+### Fixed
+- **Performance** — NetworkSharedState TracerouteHops converted to BulkObservableCollection with ReplaceWith() (eliminates per-hop UI notifications during route updates).
+- **Performance** — ServicesViewModel safety level counts now computed in a single pass instead of 3 separate LINQ queries.
+- **Consistency** — DnsHostsView removed stale `HorizontalGridLinesBrush` property (no visual impact, code cleanliness).
+- **Consistency** — AppBlockerView DataGrid BorderThickness set to 0 matching all other views.
+
 ## [1.17.2] - 2026-05-29
 
 ### Fixed

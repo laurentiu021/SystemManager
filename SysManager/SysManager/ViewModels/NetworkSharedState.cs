@@ -50,7 +50,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     private readonly Dictionary<string, PropertyChangedEventHandler> _targetHandlers = new();
 
     public ObservableCollection<PingTarget> Targets { get; } = new();
-    public ObservableCollection<TracerouteHop> TracerouteHops { get; } = new();
+    public BulkObservableCollection<TracerouteHop> TracerouteHops { get; } = new();
 
     // ── Chart infrastructure ──
     public ObservableCollection<ISeries> LatencySeries { get; } = new();
@@ -470,10 +470,10 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     internal void RefreshHopTable()
     {
-        TracerouteHops.Clear();
-        foreach (var target in Targets.Where(t => LatestRoutes.ContainsKey(t.Host)))
-            foreach (var h in LatestRoutes[target.Host])
-                TracerouteHops.Add(h);
+        var hops = Targets
+            .Where(t => LatestRoutes.ContainsKey(t.Host))
+            .SelectMany(t => LatestRoutes[t.Host]);
+        TracerouteHops.ReplaceWith(hops);
     }
 
     internal void TrimBuffer(BulkObservableCollection<DateTimePoint> buffer)

@@ -191,9 +191,19 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
         Services.ReplaceWith(filtered.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase));
 
-        SafeCount = _allServices.Count(s => s.SafetyLevel == SafetyLevel.Safe);
-        CautionCount = _allServices.Count(s => s.SafetyLevel == SafetyLevel.Caution);
-        CriticalCount = _allServices.Count(s => s.SafetyLevel == SafetyLevel.Critical);
+        int safe = 0, caution = 0, critical = 0;
+        foreach (var s in _allServices)
+        {
+            switch (s.SafetyLevel)
+            {
+                case SafetyLevel.Safe: safe++; break;
+                case SafetyLevel.Caution: caution++; break;
+                case SafetyLevel.Critical: critical++; break;
+            }
+        }
+        SafeCount = safe;
+        CautionCount = caution;
+        CriticalCount = critical;
     }
 
     [RelayCommand]

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.1] - 2026-05-29
+
+### Fixed
+- **Documentation** — ARCHITECTURE.md updated with new TemperatureService, ActivityLogService, and rewritten DashboardViewModel description to reflect v1.17.0 redesign.
+
 ## [1.17.0] - 2026-05-29
 
 ### Added

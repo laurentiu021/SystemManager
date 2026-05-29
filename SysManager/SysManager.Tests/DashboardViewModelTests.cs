@@ -67,7 +67,7 @@ public class DashboardViewModelTests
 
     [Theory]
     [InlineData("RefreshCommand")]
-    [InlineData("RequestElevationCommand")]
+    [InlineData("RelaunchAsAdminCommand")]
     public void Command_IsExposedAndNotNull(string name)
     {
         var vm = NewVm();

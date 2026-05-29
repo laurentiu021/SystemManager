@@ -121,7 +121,6 @@
                           Background="Transparent"
                           AutomationProperties.Name="Data table"
                           Foreground="{DynamicResource TextPrimary}" FontSize="12"
-                          HorizontalGridLinesBrush="#1E293B"
                           SelectionMode="Single" IsReadOnly="False"
                           VirtualizingPanel.IsVirtualizing="True"
                           VirtualizingPanel.VirtualizationMode="Recycling">

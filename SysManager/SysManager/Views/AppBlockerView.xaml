@@ -79,7 +79,7 @@
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserResizeColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="None"
-                  BorderThickness="1" BorderBrush="{DynamicResource Border1}"
+                  BorderThickness="0"
                   Background="Transparent"
                   AutomationProperties.Name="Data table"
                   VirtualizingPanel.IsVirtualizing="True"

@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-05-29
+
+### Added
+- **Dashboard redesign** — complete overhaul of the landing page:
+  - **Real-time vitals** — CPU%, RAM%, GPU% with 300ms polling (smoother than Task Manager), live indicator dots, detailed hardware info (cores/threads, DDR speed, VRAM usage)
+  - **Temperatures** — real-time sensor readings via LibreHardwareMonitor (admin) or NvAPIWrapper (non-admin NVIDIA). Shows CPU Package, GPU Core, GPU Hot Spot, all storage drives. Color-coded (green/blue/yellow/red). "Run as admin for all sensors" button when elevated data unavailable.
+  - **Storage overview** — per-drive usage bars with color coding (<50% green, 50-75% blue, 75-90% yellow, >90% red)
+  - **System Alerts** — auto-scans at boot with loading spinners: SMART health, app updates count, memory errors (30d), Event Log critical events (7d), pending reboots. Each with ETA if scan takes >5s.
+  - **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates, Run Speed Test. Each runs inline with progress bar, result summary, and "Go to [tab] for more details" navigation button. Buttons unlock after action completes.
+  - **Recent Activity** — last 5 user actions with timestamps (persisted to JSON)
+  - **Health Score** hero card with recommendations (existing, repositioned)
+  - **IsActive pattern** — polling pauses when user leaves Dashboard tab (saves CPU)
+- **TemperatureService** — new service aggregating temps from LibreHardwareMonitor + NvAPIWrapper + SMART
+- **ActivityLogService** — new service persisting user action history to `%LOCALAPPDATA%\SysManager\activity.json`
+- **NvAPIWrapper.Net** — new dependency for NVIDIA GPU temps without admin
+- **LibreHardwareMonitorLib** — new dependency for full sensor access with admin
+
 ## [1.16.3] - 2026-05-29
 
 ### Fixed

@@ -164,7 +164,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             var speedTest = new SpeedTestService();
             var netRepair = new NetworkRepairService(runner);
 
-            Dashboard = new DashboardViewModel(sysInfo, tuneUp, healthScore);
+            Dashboard = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth));
             AppUpdates = new AppUpdatesViewModel(winget);
             WindowsUpdate = new WindowsUpdateViewModel(runner);
             SystemHealth = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner);
@@ -374,6 +374,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // Pause/resume the process manager auto-refresh loop based on tab visibility.
         ProcessManager.IsActive = value.Content == ProcessManager;
+        Dashboard.IsActive = value.Content == Dashboard;
     }
 
     /// <summary>Select a nav item by its automation id.</summary>

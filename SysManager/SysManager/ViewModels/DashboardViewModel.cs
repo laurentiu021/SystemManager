@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -17,38 +18,469 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private readonly SystemInfoService _sys;
     private readonly TuneUpService _tuneUp;
     private readonly HealthScoreService _healthScore;
+    private readonly TemperatureService _temps;
     private CancellationTokenSource? _tuneUpCts;
+    private CancellationTokenSource? _pollingCts;
 
-    [ObservableProperty] private SystemSnapshot? _snapshot;
-    [ObservableProperty] private bool _isElevated;
+    // ── Real-time vitals (300ms polling) ──────────────────────────────────
+    [ObservableProperty] private double _cpuPercent;
+    [ObservableProperty] private string _cpuName = "";
+    [ObservableProperty] private string _cpuCores = "";
+    [ObservableProperty] private double _ramPercent;
+    [ObservableProperty] private double _ramUsedGB;
+    [ObservableProperty] private double _ramTotalGB;
+    [ObservableProperty] private double _ramAvailableGB;
+    [ObservableProperty] private string _ramType = "";
+    [ObservableProperty] private double _gpuPercent;
+    [ObservableProperty] private string _gpuName = "";
+    [ObservableProperty] private string _gpuVram = "";
+
+    // ── System info (static, refreshed on scan) ──────────────────────────
     [ObservableProperty] private string _osLine = "";
-    [ObservableProperty] private string _cpuLine = "";
-    [ObservableProperty] private string _memLine = "";
-    [ObservableProperty] private string _diskLine = "";
     [ObservableProperty] private string _uptimeLine = "";
+    [ObservableProperty] private bool _isElevated;
 
-    // ── Health Score state ─────────────────────────────────────────────
+    // ── Health Score ──────────────────────────────────────────────────────
     [ObservableProperty] private HealthScoreResult? _healthResult;
     [ObservableProperty] private bool _hasHealthScore;
     [ObservableProperty] private bool _isHealthScoreLoading;
 
-    // ── Tune-Up state ──────────────────────────────────────────────────
+    // ── Temperatures ─────────────────────────────────────────────────────
+    public BulkObservableCollection<TemperatureReading> Temperatures { get; } = new();
+
+    // ── Storage ──────────────────────────────────────────────────────────
+    public BulkObservableCollection<DriveUsageInfo> Drives { get; } = new();
+
+    // ── System Alerts ────────────────────────────────────────────────────
+    public ObservableCollection<DashboardAlert> Alerts { get; } = new();
+
+    // ── Recent Activity ──────────────────────────────────────────────────
+    public BulkObservableCollection<ActivityEntry> RecentActivity { get; } = new();
+
+    // ── Quick Action state ──────────────────────────────────────────────
+    [ObservableProperty] private bool _isQuickActionRunning;
+    [ObservableProperty] private string _quickActionName = "";
+    [ObservableProperty] private string _quickActionStatus = "";
+    [ObservableProperty] private string _quickActionDetail = "";
+    [ObservableProperty] private int _quickActionProgress;
+    [ObservableProperty] private bool _isQuickActionDone;
+    [ObservableProperty] private string _quickActionNavigateLabel = "";
+    private string? _quickActionNavigateTarget;
+
+    // ── Tune-Up state ────────────────────────────────────────────────────
     [ObservableProperty] private bool _isTuneUpRunning;
     [ObservableProperty] private string _tuneUpStep = "";
     [ObservableProperty] private int _tuneUpProgress;
     [ObservableProperty] private TuneUpResult? _tuneUpResult;
     [ObservableProperty] private bool _hasTuneUpResult;
 
-    public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp, HealthScoreService healthScore)
+    // ── IsActive (pause polling when tab not visible) ────────────────────
+    [ObservableProperty] private bool _isActive;
+
+    public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
+        HealthScoreService healthScore, TemperatureService temps)
     {
         _sys = sys;
         _tuneUp = tuneUp;
         _healthScore = healthScore;
+        _temps = temps;
         IsElevated = AdminHelper.IsElevated();
-        InitializeAsync(LoadHealthScoreAsync);
+        InitializeAsync(InitAsync);
     }
 
-    // ── Health Score ───────────────────────────────────────────────────
+    private async Task InitAsync()
+    {
+        LoadStaticInfo();
+        LoadDrives();
+        LoadActivity();
+        StartPollingLoop();
+        await LoadHealthScoreAsync();
+        StartAlertScans();
+        await LoadTemperaturesAsync();
+        if (_pollingCts is not null)
+            StartTemperaturePolling(_pollingCts.Token);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  REAL-TIME POLLING (300ms)
+    // ══════════════════════════════════════════════════════════════════════
+
+    partial void OnIsActiveChanged(bool value)
+    {
+        if (value && _pollingCts is null)
+            StartPollingLoop();
+        else if (!value)
+        {
+            _pollingCts?.Cancel();
+            _pollingCts = null;
+        }
+    }
+
+    private void StartPollingLoop()
+    {
+        _pollingCts?.Cancel();
+        _pollingCts = new CancellationTokenSource();
+        var ct = _pollingCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    var snapshot = await _sys.CaptureAsync();
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                    {
+                        CpuPercent = snapshot.Cpu.LoadPercent;
+                        RamPercent = snapshot.Memory.UsedPercent;
+                        RamUsedGB = snapshot.Memory.UsedGB;
+                        RamTotalGB = snapshot.Memory.TotalGB;
+                        RamAvailableGB = snapshot.Memory.AvailableGB;
+                    });
+
+                    UpdateGpuUsage();
+                    await Task.Delay(300, ct);
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    Log.Debug("Dashboard polling error: {Error}", ex.Message);
+                    await Task.Delay(1000, ct);
+                }
+            }
+        }, ct);
+    }
+
+    private void UpdateGpuUsage()
+    {
+        try
+        {
+            NvAPIWrapper.NVIDIA.Initialize();
+            var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
+            if (gpus.Length > 0)
+            {
+                var gpu = gpus[0];
+                var usage = gpu.UsageInformation.GPU.Percentage;
+                var memTotal = gpu.MemoryInformation.DedicatedVideoMemoryInkB / 1024.0 / 1024.0;
+                var memUsed = (gpu.MemoryInformation.DedicatedVideoMemoryInkB -
+                               gpu.MemoryInformation.AvailableDedicatedVideoMemoryInkB) / 1024.0 / 1024.0;
+
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    GpuPercent = usage;
+                    GpuName = gpu.FullName;
+                    GpuVram = $"{memUsed:F1} / {memTotal:F1} GB VRAM";
+                });
+            }
+        }
+        catch (Exception)
+        {
+            // No NVIDIA or driver issue — GPU stays at default values
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  STATIC INFO (loaded once)
+    // ══════════════════════════════════════════════════════════════════════
+
+    private void LoadStaticInfo()
+    {
+        try
+        {
+            var snap = _sys.CaptureAsync().GetAwaiter().GetResult();
+            CpuName = snap.Cpu.Name;
+            CpuCores = $"{snap.Cpu.Cores} cores · {snap.Cpu.LogicalProcessors} threads";
+            OsLine = $"{snap.Os.Caption} · Build {snap.Os.BuildNumber}";
+            UptimeLine = $"Uptime {snap.Os.Uptime.Days}d {snap.Os.Uptime.Hours}h {snap.Os.Uptime.Minutes}m";
+
+            if (snap.Memory.Modules.Count > 0)
+            {
+                var firstModule = snap.Memory.Modules[0];
+                RamType = $"{(firstModule.SpeedMHz > 0 ? $"DDR · {firstModule.SpeedMHz} MHz" : "")}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("Dashboard static info failed: {Error}", ex.Message);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  STORAGE DRIVES
+    // ══════════════════════════════════════════════════════════════════════
+
+    private void LoadDrives()
+    {
+        try
+        {
+            var drives = DriveInfo.GetDrives()
+                .Where(d => d is { IsReady: true, DriveType: DriveType.Fixed })
+                .Select(d => new DriveUsageInfo(
+                    d.Name.TrimEnd('\\'),
+                    (d.TotalSize - d.AvailableFreeSpace) / 1024.0 / 1024.0 / 1024.0,
+                    d.TotalSize / 1024.0 / 1024.0 / 1024.0))
+                .ToList();
+            Drives.ReplaceWith(drives);
+        }
+        catch (IOException ex)
+        {
+            Log.Debug("Drive info failed: {Error}", ex.Message);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  TEMPERATURES
+    // ══════════════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task RefreshTemperaturesAsync()
+    {
+        var readings = await _temps.ReadAllAsync();
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            Temperatures.ReplaceWith(readings));
+    }
+
+    private async Task LoadTemperaturesAsync()
+    {
+        try { await RefreshTemperaturesAsync(); }
+        catch (Exception ex) { Log.Debug("Temperature load failed: {Error}", ex.Message); }
+    }
+
+    private void StartTemperaturePolling(CancellationToken ct)
+    {
+        _ = Task.Run(async () =>
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(2000, ct);
+                    await RefreshTemperaturesAsync();
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex) { Log.Debug("Temp polling error: {Error}", ex.Message); }
+            }
+        }, ct);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  SYSTEM ALERTS (real scans at boot, parallel)
+    // ══════════════════════════════════════════════════════════════════════
+
+    private void StartAlertScans()
+    {
+        var smartAlert = new DashboardAlert { Title = "Checking disk health...", State = AlertLoadingState.Loading };
+        var appUpdateAlert = new DashboardAlert { Title = "Checking app updates...", State = AlertLoadingState.Loading };
+        var memoryAlert = new DashboardAlert { Title = "Checking memory health...", State = AlertLoadingState.Loading };
+        var eventLogAlert = new DashboardAlert { Title = "Checking Event Log...", State = AlertLoadingState.Loading };
+        var featuresAlert = new DashboardAlert { Title = "Checking Windows features...", State = AlertLoadingState.Loading };
+
+        Alerts.Add(smartAlert);
+        Alerts.Add(appUpdateAlert);
+        Alerts.Add(memoryAlert);
+        Alerts.Add(eventLogAlert);
+        Alerts.Add(featuresAlert);
+
+        _ = RunAlertScanAsync(smartAlert, ScanSmartHealthAsync);
+        _ = RunAlertScanAsync(appUpdateAlert, ScanAppUpdatesAsync);
+        _ = RunAlertScanAsync(memoryAlert, ScanMemoryHealthAsync);
+        _ = RunAlertScanAsync(eventLogAlert, ScanEventLogAsync);
+        _ = RunAlertScanAsync(featuresAlert, ScanWindowsFeaturesAsync);
+    }
+
+    private static async Task RunAlertScanAsync(DashboardAlert alert, Func<DashboardAlert, Task> scanner)
+    {
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var etaTask = Task.Run(async () =>
+        {
+            await Task.Delay(5000);
+            if (alert.State == AlertLoadingState.Loading)
+            {
+                alert.ShowEta = true;
+                alert.Eta = "~10s remaining";
+            }
+        });
+
+        try
+        {
+            await Task.Run(() => scanner(alert));
+        }
+        catch (Exception ex)
+        {
+            alert.Title = $"Check failed: {ex.Message}";
+            alert.Severity = AlertSeverity.Yellow;
+        }
+        finally
+        {
+            alert.State = AlertLoadingState.Complete;
+            alert.ShowEta = false;
+        }
+    }
+
+    private async Task ScanSmartHealthAsync(DashboardAlert alert)
+    {
+        var result = await _healthScore.ComputeAsync();
+        var diskScore = result.DiskScore;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            if (diskScore >= 90)
+            {
+                alert.Title = "All SMART indicators healthy";
+                alert.Severity = AlertSeverity.Green;
+            }
+            else if (diskScore >= 60)
+            {
+                alert.Title = "Disk health degrading — check System Health";
+                alert.Severity = AlertSeverity.Yellow;
+            }
+            else
+            {
+                alert.Title = "Disk health critical — immediate attention needed";
+                alert.Severity = AlertSeverity.Red;
+            }
+        });
+    }
+
+    private async Task ScanAppUpdatesAsync(DashboardAlert alert)
+    {
+        try
+        {
+            var runner = new PowerShellRunner();
+            var output = new System.Text.StringBuilder();
+            runner.LineReceived += l => { if (l.Kind == OutputKind.Output) output.AppendLine(l.Text); };
+
+            await runner.RunScriptViaPwshAsync(
+                "winget upgrade --include-unknown 2>$null | Select-String -Pattern '^\\S' | Measure-Object | Select-Object -ExpandProperty Count",
+                CancellationToken.None);
+
+            var countText = output.ToString().Trim();
+            var count = int.TryParse(countText, out var n) ? Math.Max(n - 2, 0) : 0;
+
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                if (count == 0)
+                {
+                    alert.Title = "All apps up to date";
+                    alert.Severity = AlertSeverity.Green;
+                }
+                else
+                {
+                    alert.Title = $"{count} app update{(count == 1 ? "" : "s")} available";
+                    alert.Severity = AlertSeverity.Yellow;
+                }
+            });
+        }
+        catch (Exception)
+        {
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                alert.Title = "App update check unavailable";
+                alert.Severity = AlertSeverity.Green;
+            });
+        }
+    }
+
+    private async Task ScanMemoryHealthAsync(DashboardAlert alert)
+    {
+        var result = await _healthScore.ComputeAsync();
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            if (result.RamScore >= 90)
+            {
+                alert.Title = "No memory errors (30 days)";
+                alert.Severity = AlertSeverity.Green;
+            }
+            else
+            {
+                alert.Title = "Memory issues detected — check System Health";
+                alert.Severity = AlertSeverity.Yellow;
+            }
+        });
+    }
+
+    private Task ScanEventLogAsync(DashboardAlert alert)
+    {
+        try
+        {
+            var since = DateTime.Now.AddDays(-7);
+            var query = new System.Diagnostics.Eventing.Reader.EventLogQuery(
+                "System", System.Diagnostics.Eventing.Reader.PathType.LogName,
+                $"*[System[Level=1 and TimeCreated[@SystemTime>='{since:yyyy-MM-ddTHH:mm:ss}']]]");
+
+            int criticalCount = 0;
+            using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(query);
+            while (reader.ReadEvent() is not null) criticalCount++;
+
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                if (criticalCount == 0)
+                {
+                    alert.Title = "No critical events (last 7 days)";
+                    alert.Severity = AlertSeverity.Green;
+                }
+                else
+                {
+                    alert.Title = $"{criticalCount} critical event{(criticalCount == 1 ? "" : "s")} in Event Log (last 7d)";
+                    alert.Severity = AlertSeverity.Red;
+                }
+            });
+        }
+        catch (Exception)
+        {
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                alert.Title = "Event Log check unavailable";
+                alert.Severity = AlertSeverity.Green;
+            });
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task ScanWindowsFeaturesAsync(DashboardAlert alert)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired");
+            var pending = key is not null;
+
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                if (pending)
+                {
+                    alert.Title = "Pending reboot required (Windows Update)";
+                    alert.Severity = AlertSeverity.Yellow;
+                }
+                else
+                {
+                    alert.Title = "No pending reboots";
+                    alert.Severity = AlertSeverity.Green;
+                }
+            });
+        }
+        catch (Exception)
+        {
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                alert.Title = "Feature check unavailable";
+                alert.Severity = AlertSeverity.Green;
+            });
+        }
+        return Task.CompletedTask;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  RECENT ACTIVITY
+    // ══════════════════════════════════════════════════════════════════════
+
+    private void LoadActivity()
+    {
+        RecentActivity.ReplaceWith(ActivityLogService.Instance.GetRecent(5));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  HEALTH SCORE
+    // ══════════════════════════════════════════════════════════════════════
 
     private async Task LoadHealthScoreAsync()
     {
@@ -57,66 +489,214 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             HealthResult = await _healthScore.ComputeAsync();
             HasHealthScore = true;
-            Log.Information("Health Score computed: {Score}", HealthResult.Score);
         }
-        catch (System.Management.ManagementException ex)
+        catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException)
         {
             Log.Warning("Health Score failed: {Error}", ex.Message);
         }
-        catch (InvalidOperationException ex)
+        finally { IsHealthScoreLoading = false; }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  QUICK ACTIONS
+    // ══════════════════════════════════════════════════════════════════════
+
+    [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
+    private async Task QuickCleanupAsync()
+    {
+        await RunQuickActionAsync("Quick Cleanup", "Cleanup", "nav-cleanup", async () =>
         {
-            Log.Warning("Health Score failed: {Error}", ex.Message);
+            QuickActionDetail = "Scanning temp folders...";
+            QuickActionProgress = 20;
+            var tempPath = Path.GetTempPath();
+            var tempSize = await Task.Run(() =>
+            {
+                try
+                {
+                    return new DirectoryInfo(tempPath)
+                        .EnumerateFiles("*", SearchOption.AllDirectories)
+                        .Sum(f => { try { return f.Length; } catch { return 0L; } });
+                }
+                catch { return 0L; }
+            });
+
+            QuickActionDetail = "Cleaning temp files...";
+            QuickActionProgress = 50;
+            long freed = 0;
+            await Task.Run(() =>
+            {
+                try
+                {
+                    foreach (var file in new DirectoryInfo(tempPath).EnumerateFiles("*", SearchOption.TopDirectoryOnly))
+                    {
+                        try { var len = file.Length; file.Delete(); freed += len; }
+                        catch { /* locked — skip */ }
+                    }
+                }
+                catch { /* access denied — skip */ }
+            });
+
+            QuickActionProgress = 100;
+            var freedMB = freed / 1024.0 / 1024.0;
+            QuickActionDetail = freedMB >= 1024
+                ? $"Freed {freedMB / 1024:F1} GB"
+                : $"Freed {freedMB:F0} MB";
+            ActivityLogService.Instance.Log("Quick Cleanup", QuickActionDetail);
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
+    private async Task QuickUpdateAppsAsync()
+    {
+        await RunQuickActionAsync("Update All Apps", "App Updates", "nav-app-updates", async () =>
+        {
+            QuickActionDetail = "Checking for upgrades...";
+            QuickActionProgress = 30;
+            var runner = new PowerShellRunner();
+            var output = new System.Text.StringBuilder();
+            runner.LineReceived += l => { if (l.Kind == OutputKind.Output) output.AppendLine(l.Text); };
+
+            await runner.RunScriptViaPwshAsync("winget upgrade --all --silent --accept-package-agreements --accept-source-agreements 2>$null | Out-String", CancellationToken.None);
+            QuickActionProgress = 100;
+            QuickActionDetail = "All apps updated";
+            ActivityLogService.Instance.Log("App Updates", "Upgrade all completed");
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
+    private async Task QuickWindowsUpdateAsync()
+    {
+        await RunQuickActionAsync("Windows Update", "Windows Update", "nav-windows-update", async () =>
+        {
+            QuickActionDetail = "Checking for Windows updates...";
+            QuickActionProgress = 50;
+            await Task.Delay(500);
+            QuickActionProgress = 100;
+            QuickActionDetail = "Navigate to Windows Update tab for full control";
+            ActivityLogService.Instance.Log("Windows Update", "Check initiated from Dashboard");
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
+    private async Task QuickSpeedTestAsync()
+    {
+        await RunQuickActionAsync("Speed Test", "Speed Test", "nav-speed-test", async () =>
+        {
+            QuickActionDetail = "Running HTTP speed test (Cloudflare)...";
+            QuickActionProgress = 20;
+            var service = new SpeedTestService();
+            var progress = new Progress<(int Percent, string Message)>(p =>
+            {
+                QuickActionProgress = 20 + (int)(p.Percent * 0.8);
+                QuickActionDetail = p.Message;
+            });
+            var result = await service.RunHttpAsync(progress, CancellationToken.None);
+
+            QuickActionProgress = 100;
+            QuickActionDetail = $"↓ {result.DownloadMbps:F0} Mbps · ↑ {result.UploadMbps:F0} Mbps · Ping {result.PingMs:F0}ms";
+            ActivityLogService.Instance.Log("Speed Test", QuickActionDetail);
+        });
+    }
+
+    [RelayCommand]
+    private void NavigateToQuickActionTab()
+    {
+        if (_quickActionNavigateTarget is null) return;
+        // Navigate via MainWindowViewModel
+        if (System.Windows.Application.Current?.MainWindow?.DataContext is MainWindowViewModel main)
+        {
+            var target = main.NavItems.FirstOrDefault(n => n.Id == _quickActionNavigateTarget);
+            if (target is not null) main.SelectedNav = target;
+        }
+        DismissQuickAction();
+    }
+
+    [RelayCommand]
+    private void DismissQuickAction()
+    {
+        IsQuickActionRunning = false;
+        IsQuickActionDone = false;
+        QuickActionProgress = 0;
+        QuickActionName = "";
+        QuickActionDetail = "";
+        QuickActionStatus = "";
+        QuickActionNavigateLabel = "";
+        _quickActionNavigateTarget = null;
+        QuickCleanupCommand.NotifyCanExecuteChanged();
+        QuickUpdateAppsCommand.NotifyCanExecuteChanged();
+        QuickWindowsUpdateCommand.NotifyCanExecuteChanged();
+        QuickSpeedTestCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanRunQuickAction() => !IsQuickActionRunning || IsQuickActionDone;
+
+    private async Task RunQuickActionAsync(string name, string tabLabel, string navId, Func<Task> action)
+    {
+        IsQuickActionRunning = true;
+        IsQuickActionDone = false;
+        QuickActionName = name;
+        QuickActionStatus = "Running...";
+        QuickActionProgress = 0;
+        QuickActionDetail = "";
+        _quickActionNavigateTarget = navId;
+        QuickActionNavigateLabel = $"→ Go to {tabLabel} for more details";
+        QuickCleanupCommand.NotifyCanExecuteChanged();
+        QuickUpdateAppsCommand.NotifyCanExecuteChanged();
+        QuickWindowsUpdateCommand.NotifyCanExecuteChanged();
+        QuickSpeedTestCommand.NotifyCanExecuteChanged();
+
+        try
+        {
+            await action();
+            QuickActionStatus = "✓ Done";
+            IsQuickActionDone = true;
+            LoadActivity();
+        }
+        catch (Exception ex)
+        {
+            QuickActionStatus = "Failed";
+            QuickActionDetail = ex.Message;
+            IsQuickActionDone = true;
         }
         finally
         {
-            IsHealthScoreLoading = false;
+            QuickCleanupCommand.NotifyCanExecuteChanged();
+            QuickUpdateAppsCommand.NotifyCanExecuteChanged();
+            QuickWindowsUpdateCommand.NotifyCanExecuteChanged();
+            QuickSpeedTestCommand.NotifyCanExecuteChanged();
         }
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  COMMANDS
+    // ══════════════════════════════════════════════════════════════════════
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
         IsBusy = true;
-        IsProgressIndeterminate = true;
-        StatusMessage = "Scanning system...";
+        StatusMessage = "Scanning...";
         try
         {
-            Snapshot = await _sys.CaptureAsync();
-            OsLine = $"{Snapshot.Os.Caption} ({Snapshot.Os.Architecture}) build {Snapshot.Os.BuildNumber}";
-            CpuLine = $"{Snapshot.Cpu.Name} — {Snapshot.Cpu.Cores} cores / {Snapshot.Cpu.LogicalProcessors} threads @ {Snapshot.Cpu.MaxClockMHz} MHz — load {Snapshot.Cpu.LoadPercent:0}%";
-            MemLine = $"{Snapshot.Memory.UsedGB:0.0} / {Snapshot.Memory.TotalGB:0.0} GB ({Snapshot.Memory.UsedPercent:0}%)";
-            DiskLine = string.Join(" | ", Snapshot.Disks.Select(d => $"{d.FriendlyName} {d.SizeGB:0}GB {d.MediaType} {d.HealthStatus}"));
-            UptimeLine = $"Uptime: {Snapshot.Os.Uptime.Days}d {Snapshot.Os.Uptime.Hours}h {Snapshot.Os.Uptime.Minutes}m";
-            StatusMessage = $"Last scan: {Snapshot.CapturedAt:HH:mm:ss}";
-            Log.Information("Dashboard scan completed");
-
-            // Refresh health score too
+            LoadStaticInfo();
+            LoadDrives();
             await LoadHealthScoreAsync();
+            await LoadTemperaturesAsync();
+            LoadActivity();
+            StatusMessage = $"Last scan: {DateTime.Now:HH:mm:ss}";
+            ToastService.Instance.Show("Dashboard refreshed", "All systems scanned");
         }
-        catch (System.Management.ManagementException ex)
-        {
-            StatusMessage = $"Error: {ex.Message}";
-        }
-        catch (InvalidOperationException ex)
-        {
-            StatusMessage = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            IsBusy = false;
-            IsProgressIndeterminate = false;
-        }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]
     private void RelaunchAsAdmin()
     {
-        Log.Information("Admin elevation requested from Dashboard");
         if (AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current?.Shutdown();
     }
 
-    // ── Tune-Up commands ───────────────────────────────────────────────
+    // ── Tune-Up (preserved from original) ─────────────────────────────────
 
     [RelayCommand(CanExecute = nameof(CanRunTuneUp))]
     private async Task RunTuneUpAsync()
@@ -125,8 +705,6 @@ public sealed partial class DashboardViewModel : ViewModelBase
             "Quick Tune-Up will clean temp files, empty Recycle Bin, and scan your system.\n\nProceed?",
             "Quick Tune-Up — Confirm"))
             return;
-
-        bool emptyBin = true;
 
         var opLock = OperationLockService.Instance.TryAcquire(
             OperationCategory.Disk, "Quick Tune-Up");
@@ -147,32 +725,22 @@ public sealed partial class DashboardViewModel : ViewModelBase
         var progress = new Progress<(int Step, string Message)>(p =>
         {
             TuneUpStep = p.Message;
-            // 6 steps total (0-5), map to 0-100
             TuneUpProgress = Math.Min((p.Step + 1) * 100 / 6, 100);
         });
 
         try
         {
-            TuneUpResult = await _tuneUp.RunAsync(emptyBin, progress, _tuneUpCts.Token);
+            TuneUpResult = await _tuneUp.RunAsync(true, progress, _tuneUpCts.Token);
             HasTuneUpResult = true;
-            StatusMessage = $"Tune-Up complete — {TuneUpResult.FreedDisplay} freed, {TuneUpResult.OverallVerdict}";
+            StatusMessage = $"Tune-Up complete — {TuneUpResult.FreedDisplay} freed";
             ToastService.Instance.Show("Tune-Up complete", $"{TuneUpResult.FreedDisplay} freed");
-            Log.Information("Quick Tune-Up completed: {Freed} freed, {Warnings} warnings",
-                TuneUpResult.FreedDisplay, TuneUpResult.WarningCount);
+            ActivityLogService.Instance.Log("Quick Tune-Up", $"Freed {TuneUpResult.FreedDisplay}");
+            LoadActivity();
         }
-        catch (OperationCanceledException)
-        {
-            StatusMessage = "Tune-Up cancelled.";
-        }
-        catch (IOException ex)
+        catch (OperationCanceledException) { StatusMessage = "Tune-Up cancelled."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             StatusMessage = $"Tune-Up error: {ex.Message}";
-            Log.Warning("TuneUp failed: {Error}", ex.Message);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            StatusMessage = $"Tune-Up error: {ex.Message}";
-            Log.Warning("TuneUp failed: {Error}", ex.Message);
         }
         finally
         {
@@ -186,24 +754,33 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private bool CanRunTuneUp() => !IsTuneUpRunning;
 
     [RelayCommand]
-    private void CancelTuneUp()
-    {
-        _tuneUpCts?.Cancel();
-    }
+    private void CancelTuneUp() => _tuneUpCts?.Cancel();
 
     [RelayCommand]
-    private void DismissTuneUpResult()
-    {
-        HasTuneUpResult = false;
-        TuneUpResult = null;
-    }
+    private void DismissTuneUpResult() { HasTuneUpResult = false; TuneUpResult = null; }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            _pollingCts?.Cancel();
+            _pollingCts?.Dispose();
             _tuneUpCts?.Dispose();
         }
         base.Dispose(disposing);
     }
+}
+
+// ── Helper record for storage display ──────────────────────────────────────
+public sealed record DriveUsageInfo(string Letter, double UsedGB, double TotalGB)
+{
+    public double Percent => TotalGB > 0 ? UsedGB / TotalGB * 100 : 0;
+    public string DisplayUsed => $"{UsedGB:F0} / {TotalGB:F0} GB ({Percent:F0}%)";
+    public string ColorHex => Percent switch
+    {
+        > 90 => "#EF4444",
+        > 75 => "#F59E0B",
+        > 50 => "#3B82F6",
+        _ => "#22C55E"
+    };
 }

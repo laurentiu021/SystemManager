@@ -26,6 +26,7 @@ public static class ServiceRegistration
         services.AddSingleton<UpdateService>();
         services.AddSingleton<ShortcutCleanerService>();
         services.AddSingleton<DiskHealthService>();
+        services.AddSingleton<TemperatureService>();
         services.AddSingleton<SystemReportService>();
         services.AddSingleton<BatteryService>();
         services.AddSingleton<TuneUpService>();

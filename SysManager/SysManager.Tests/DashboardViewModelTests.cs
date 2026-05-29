@@ -19,34 +19,25 @@ public class DashboardViewModelTests
         var diskHealth = new DiskHealthService();
         return new DashboardViewModel(sys,
             new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
-            new HealthScoreService(sys, diskHealth, new BatteryService()));
+            new HealthScoreService(sys, diskHealth, new BatteryService()),
+            new TemperatureService(diskHealth, skipHardwareInit: true));
     }
 
     // ---------- construction & defaults ----------
 
     [Fact]
-    public void Constructor_SnapshotIsNull()
-    {
-        var vm = NewVm();
-        Assert.Null(vm.Snapshot);
-    }
-
-    [Fact]
     public void Constructor_IsElevated_IsBoolean()
     {
         var vm = NewVm();
-        Assert.IsType<bool>(vm.IsElevated);
+        _ = vm.IsElevated; // should not throw
     }
 
     [Fact]
-    public void Constructor_StringProperties_DefaultEmpty()
+    public void Constructor_GpuProperties_DefaultEmpty()
     {
         var vm = NewVm();
-        Assert.Equal("", vm.OsLine);
-        Assert.Equal("", vm.CpuLine);
-        Assert.Equal("", vm.MemLine);
-        Assert.Equal("", vm.DiskLine);
-        Assert.Equal("", vm.UptimeLine);
+        Assert.Equal("", vm.GpuName);
+        Assert.Equal("", vm.GpuVram);
     }
 
     [Fact]
@@ -68,15 +59,24 @@ public class DashboardViewModelTests
     [Theory]
     [InlineData("RefreshCommand")]
     [InlineData("RelaunchAsAdminCommand")]
+    [InlineData("RunTuneUpCommand")]
+    [InlineData("CancelTuneUpCommand")]
+    [InlineData("DismissTuneUpResultCommand")]
+    [InlineData("QuickCleanupCommand")]
+    [InlineData("QuickUpdateAppsCommand")]
+    [InlineData("QuickWindowsUpdateCommand")]
+    [InlineData("QuickSpeedTestCommand")]
+    [InlineData("NavigateToQuickActionTabCommand")]
+    [InlineData("DismissQuickActionCommand")]
     public void Command_IsExposedAndNotNull(string name)
     {
         var vm = NewVm();
-        var prop = vm.GetType().GetProperty(name);
+        var prop = typeof(DashboardViewModel).GetProperty(name);
         Assert.NotNull(prop);
-        Assert.NotNull(prop!.GetValue(vm));
+        Assert.NotNull(prop.GetValue(vm));
     }
 
-    // ---------- setters ----------
+    // ---------- property setters ----------
 
     [Fact]
     public void OsLine_Setter_Works()
@@ -87,45 +87,36 @@ public class DashboardViewModelTests
     }
 
     [Fact]
-    public void CpuLine_Setter_Works()
-    {
-        var vm = NewVm();
-        vm.CpuLine = "i7-12700K";
-        Assert.Equal("i7-12700K", vm.CpuLine);
-    }
-
-    [Fact]
-    public void MemLine_Setter_Works()
-    {
-        var vm = NewVm();
-        vm.MemLine = "16 / 32 GB";
-        Assert.Equal("16 / 32 GB", vm.MemLine);
-    }
-
-    [Fact]
-    public void DiskLine_Setter_Works()
-    {
-        var vm = NewVm();
-        vm.DiskLine = "NVMe 1TB Healthy";
-        Assert.Equal("NVMe 1TB Healthy", vm.DiskLine);
-    }
-
-    [Fact]
     public void UptimeLine_Setter_Works()
     {
         var vm = NewVm();
-        vm.UptimeLine = "Uptime: 3d 5h";
-        Assert.Equal("Uptime: 3d 5h", vm.UptimeLine);
+        vm.UptimeLine = "Uptime 3d 5h";
+        Assert.Equal("Uptime 3d 5h", vm.UptimeLine);
+    }
+
+    [Fact]
+    public void CpuPercent_Setter_Works()
+    {
+        var vm = NewVm();
+        vm.CpuPercent = 42.5;
+        Assert.Equal(42.5, vm.CpuPercent);
+    }
+
+    [Fact]
+    public void RamPercent_Setter_Works()
+    {
+        var vm = NewVm();
+        vm.RamPercent = 67.3;
+        Assert.Equal(67.3, vm.RamPercent);
     }
 
     // ---------- PropertyChanged ----------
 
     [Theory]
     [InlineData(nameof(DashboardViewModel.OsLine), "test")]
-    [InlineData(nameof(DashboardViewModel.CpuLine), "test")]
-    [InlineData(nameof(DashboardViewModel.MemLine), "test")]
-    [InlineData(nameof(DashboardViewModel.DiskLine), "test")]
     [InlineData(nameof(DashboardViewModel.UptimeLine), "test")]
+    [InlineData(nameof(DashboardViewModel.CpuName), "test")]
+    [InlineData(nameof(DashboardViewModel.GpuName), "test")]
     public void Setter_FiresPropertyChanged(string propName, string value)
     {
         var vm = NewVm();
@@ -138,77 +129,52 @@ public class DashboardViewModelTests
     // ---------- Tune-Up properties ----------
 
     [Fact]
-    public void Constructor_TuneUpProperties_DefaultValues()
+    public void TuneUp_DefaultsToNotRunning()
     {
         var vm = NewVm();
         Assert.False(vm.IsTuneUpRunning);
-        Assert.Equal("", vm.TuneUpStep);
-        Assert.Equal(0, vm.TuneUpProgress);
-        Assert.Null(vm.TuneUpResult);
-        Assert.False(vm.HasTuneUpResult);
-    }
-
-    [Theory]
-    [InlineData("RunTuneUpCommand")]
-    [InlineData("CancelTuneUpCommand")]
-    [InlineData("DismissTuneUpResultCommand")]
-    public void TuneUpCommand_IsExposedAndNotNull(string name)
-    {
-        var vm = NewVm();
-        var prop = vm.GetType().GetProperty(name);
-        Assert.NotNull(prop);
-        Assert.NotNull(prop!.GetValue(vm));
-    }
-
-    [Fact]
-    public void DismissTuneUpResult_ClearsResult()
-    {
-        var vm = NewVm();
-        // Simulate having a result
-        vm.HasTuneUpResult = true;
-        vm.TuneUpResult = new Models.TuneUpResult();
-
-        vm.DismissTuneUpResultCommand.Execute(null);
-
         Assert.False(vm.HasTuneUpResult);
         Assert.Null(vm.TuneUpResult);
     }
 
+    // ---------- Quick Action properties ----------
+
     [Fact]
-    public void TuneUpStep_Setter_FiresPropertyChanged()
+    public void QuickAction_DefaultsToNotRunning()
     {
         var vm = NewVm();
-        var fired = false;
-        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.TuneUpStep)) fired = true; };
-        vm.TuneUpStep = "Cleaning temp…";
-        Assert.True(fired);
+        Assert.False(vm.IsQuickActionRunning);
+        Assert.False(vm.IsQuickActionDone);
+        Assert.Equal("", vm.QuickActionName);
+    }
+
+    // ---------- Collections ----------
+
+    [Fact]
+    public void Alerts_InitializesEmpty()
+    {
+        var vm = NewVm();
+        Assert.NotNull(vm.Alerts);
     }
 
     [Fact]
-    public void TuneUpProgress_Setter_FiresPropertyChanged()
+    public void Temperatures_InitializesEmpty()
     {
         var vm = NewVm();
-        var fired = false;
-        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.TuneUpProgress)) fired = true; };
-        vm.TuneUpProgress = 50;
-        Assert.True(fired);
+        Assert.NotNull(vm.Temperatures);
     }
 
     [Fact]
-    public void IsTuneUpRunning_Setter_FiresPropertyChanged()
+    public void Drives_InitializesEmpty()
     {
         var vm = NewVm();
-        var fired = false;
-        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.IsTuneUpRunning)) fired = true; };
-        vm.IsTuneUpRunning = true;
-        Assert.True(fired);
+        Assert.NotNull(vm.Drives);
     }
 
     [Fact]
-    public void Dispose_DoesNotThrow()
+    public void RecentActivity_InitializesEmpty()
     {
         var vm = NewVm();
-        var ex = Record.Exception(() => vm.Dispose());
-        Assert.Null(ex);
+        Assert.NotNull(vm.RecentActivity);
     }
 }

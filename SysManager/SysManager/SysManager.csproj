@@ -10,9 +10,9 @@
     <RootNamespace>SysManager</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>NU1603;NU1701</NoWarn>
-    <Version>1.16.3</Version>
-    <FileVersion>1.16.3.0</FileVersion>
-    <AssemblyVersion>1.16.3.0</AssemblyVersion>
+    <Version>1.17.0</Version>
+    <FileVersion>1.17.0.0</FileVersion>
+    <AssemblyVersion>1.17.0.0</AssemblyVersion>
     <Product>SysManager</Product>
     <Description>SysManager — Windows system monitoring toolkit by laurentiu021. Network, updates, health, logs, safe deep cleanup.</Description>
     <PackageProjectUrl>https://github.com/laurentiu021/SystemManager</PackageProjectUrl>
@@ -34,8 +34,10 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.4" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
+    <PackageReference Include="NvAPIWrapper.Net" Version="0.8.1.101" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />

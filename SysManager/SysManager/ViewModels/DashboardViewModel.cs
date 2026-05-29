@@ -173,9 +173,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 });
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // No NVIDIA or driver issue — GPU stays at default values
+            Log.Debug("GPU polling unavailable: {Error}", ex.Message);
         }
     }
 
@@ -370,7 +370,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 }
             });
         }
-        catch (Exception)
+        catch (Exception ex) { Log.Debug("Alert scan failed: {Error}", ex.Message); }//
         {
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
@@ -425,7 +425,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 }
             });
         }
-        catch (Exception)
+        catch (Exception ex) { Log.Debug("Alert scan failed: {Error}", ex.Message); }//
         {
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
@@ -458,7 +458,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 }
             });
         }
-        catch (Exception)
+        catch (Exception ex) { Log.Debug("Alert scan failed: {Error}", ex.Message); }//
         {
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {

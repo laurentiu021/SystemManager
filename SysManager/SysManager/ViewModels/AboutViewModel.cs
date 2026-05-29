@@ -278,17 +278,18 @@ public sealed partial class AboutViewModel : ViewModelBase
                 using var cpuSearch = new System.Management.ManagementObjectSearcher(
                     "SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
                 foreach (System.Management.ManagementObject mo in cpuSearch.Get())
-                {
-                    var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
-                    var cores = mo["NumberOfCores"];
-                    var threads = mo["NumberOfLogicalProcessors"];
-                    var mhz = mo["MaxClockSpeed"];
-                    sb.Append("CPU: ").Append(name);
-                    if (cores is not null) sb.Append($" ({cores}c/{threads}t)");
-                    if (mhz is uint speed) sb.Append($" @ {speed / 1000.0:F1} GHz");
-                    sb.AppendLine();
-                    break;
-                }
+                    using (mo)
+                    {
+                        var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
+                        var cores = mo["NumberOfCores"];
+                        var threads = mo["NumberOfLogicalProcessors"];
+                        var mhz = mo["MaxClockSpeed"];
+                        sb.Append("CPU: ").Append(name);
+                        if (cores is not null) sb.Append($" ({cores}c/{threads}t)");
+                        if (mhz is uint speed) sb.Append($" @ {speed / 1000.0:F1} GHz");
+                        sb.AppendLine();
+                        break;
+                    }
             }
             catch (System.Management.ManagementException ex) { Log.Debug("CPU info unavailable: {Error}", ex.Message); }
 
@@ -298,13 +299,14 @@ public sealed partial class AboutViewModel : ViewModelBase
                 using var memSearch = new System.Management.ManagementObjectSearcher(
                     "SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem");
                 foreach (System.Management.ManagementObject mo in memSearch.Get())
-                {
-                    var totalKb = mo["TotalVisibleMemorySize"] as ulong? ?? 0;
-                    var freeKb = mo["FreePhysicalMemory"] as ulong? ?? 0;
-                    if (totalKb > 0)
-                        sb.AppendLine($"RAM: {totalKb / 1024.0 / 1024.0:F1} GB total, {freeKb / 1024.0 / 1024.0:F1} GB free");
-                    break;
-                }
+                    using (mo)
+                    {
+                        var totalKb = mo["TotalVisibleMemorySize"] as ulong? ?? 0;
+                        var freeKb = mo["FreePhysicalMemory"] as ulong? ?? 0;
+                        if (totalKb > 0)
+                            sb.AppendLine($"RAM: {totalKb / 1024.0 / 1024.0:F1} GB total, {freeKb / 1024.0 / 1024.0:F1} GB free");
+                        break;
+                    }
             }
             catch (System.Management.ManagementException ex) { Log.Debug("RAM info unavailable: {Error}", ex.Message); }
 
@@ -314,15 +316,16 @@ public sealed partial class AboutViewModel : ViewModelBase
                 using var gpuSearch = new System.Management.ManagementObjectSearcher(
                     "SELECT Name,DriverVersion,AdapterRAM FROM Win32_VideoController");
                 foreach (System.Management.ManagementObject mo in gpuSearch.Get())
-                {
-                    var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
-                    var driver = mo["DriverVersion"]?.ToString() ?? "";
-                    var vram = mo["AdapterRAM"] as uint? ?? 0;
-                    sb.Append("GPU: ").Append(name);
-                    if (vram > 0) sb.Append($" ({vram / 1024.0 / 1024.0 / 1024.0:F1} GB VRAM)");
-                    if (!string.IsNullOrEmpty(driver)) sb.Append($" driver {driver}");
-                    sb.AppendLine();
-                }
+                    using (mo)
+                    {
+                        var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
+                        var driver = mo["DriverVersion"]?.ToString() ?? "";
+                        var vram = mo["AdapterRAM"] as uint? ?? 0;
+                        sb.Append("GPU: ").Append(name);
+                        if (vram > 0) sb.Append($" ({vram / 1024.0 / 1024.0 / 1024.0:F1} GB VRAM)");
+                        if (!string.IsNullOrEmpty(driver)) sb.Append($" driver {driver}");
+                        sb.AppendLine();
+                    }
             }
             catch (System.Management.ManagementException ex) { Log.Debug("GPU info unavailable: {Error}", ex.Message); }
 
@@ -341,18 +344,19 @@ public sealed partial class AboutViewModel : ViewModelBase
                 using var dispSearch = new System.Management.ManagementObjectSearcher(
                     "SELECT CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate FROM Win32_VideoController");
                 foreach (System.Management.ManagementObject mo in dispSearch.Get())
-                {
-                    var w = mo["CurrentHorizontalResolution"];
-                    var h = mo["CurrentVerticalResolution"];
-                    var hz = mo["CurrentRefreshRate"];
-                    if (w is not null && h is not null)
+                    using (mo)
                     {
-                        sb.Append($"Display: {w}×{h}");
-                        if (hz is not null) sb.Append($" @ {hz} Hz");
-                        sb.AppendLine();
-                        break;
+                        var w = mo["CurrentHorizontalResolution"];
+                        var h = mo["CurrentVerticalResolution"];
+                        var hz = mo["CurrentRefreshRate"];
+                        if (w is not null && h is not null)
+                        {
+                            sb.Append($"Display: {w}×{h}");
+                            if (hz is not null) sb.Append($" @ {hz} Hz");
+                            sb.AppendLine();
+                            break;
+                        }
                     }
-                }
             }
             catch (System.Management.ManagementException ex) { Log.Debug("Display info unavailable: {Error}", ex.Message); }
 
@@ -377,12 +381,13 @@ public sealed partial class AboutViewModel : ViewModelBase
             using var searcher = new System.Management.ManagementObjectSearcher(
                 "SELECT Caption,BuildNumber FROM Win32_OperatingSystem");
             foreach (System.Management.ManagementObject mo in searcher.Get())
-            {
-                var caption = mo["Caption"]?.ToString()?.Trim() ?? "";
-                var build = mo["BuildNumber"]?.ToString() ?? "";
-                if (!string.IsNullOrEmpty(caption))
-                    return $"{caption} (build {build})";
-            }
+                using (mo)
+                {
+                    var caption = mo["Caption"]?.ToString()?.Trim() ?? "";
+                    var build = mo["BuildNumber"]?.ToString() ?? "";
+                    if (!string.IsNullOrEmpty(caption))
+                        return $"{caption} (build {build})";
+                }
         }
         catch (System.Management.ManagementException ex) { Log.Debug("WMI OS info unavailable: {Error}", ex.Message); }
 

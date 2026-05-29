@@ -6,6 +6,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
+using Serilog;
 
 namespace SysManager.Services;
 
@@ -216,7 +217,7 @@ public sealed class ThemeService
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(SettingsPath, json);
         }
-        catch { }
+        catch (Exception ex) { Log.Debug("Theme save failed: {Error}", ex.Message); }
     }
 
     private void Load()
@@ -247,7 +248,7 @@ public sealed class ThemeService
                 ApplyShade();
             }
         }
-        catch { }
+        catch (Exception ex) { Log.Debug("Theme load failed: {Error}", ex.Message); }
     }
 
     private sealed record ThemeSettings(

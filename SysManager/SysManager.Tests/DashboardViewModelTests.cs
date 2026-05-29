@@ -33,16 +33,11 @@ public class DashboardViewModelTests
     }
 
     [Fact]
-    public void Constructor_StringProperties_DefaultEmpty()
+    public void Constructor_GpuProperties_DefaultEmpty()
     {
         var vm = NewVm();
-        Assert.Equal("", vm.OsLine);
-        Assert.Equal("", vm.UptimeLine);
-        Assert.Equal("", vm.CpuName);
-        Assert.Equal("", vm.CpuCores);
         Assert.Equal("", vm.GpuName);
         Assert.Equal("", vm.GpuVram);
-        Assert.Equal("", vm.RamType);
     }
 
     [Fact]

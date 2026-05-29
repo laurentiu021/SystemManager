@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.16.3] - 2026-05-29
+
+### Fixed
+- **Code quality** — ContextMenuService uses `[GeneratedRegex]` for compile-time regex (performance + AOT-ready).
+- **Naming standardization** — all admin relaunch methods now consistently named `RelaunchAsAdmin` across all 12 ViewModels (was mixed: `RelaunchElevated`, `RequestElevation`).
+- **Naming standardization** — filter properties unified to `FilterText` everywhere (LogsViewModel was `SearchText`, ServicesViewModel was `Filter`).
+- **ConsoleViewModel** — removed dead optimization branch (clear-and-rebuild path was unreachable).
+- **Missing toasts** — added completion notifications to System Health scan and App Alerts "Show Installed".
+
 ## [1.16.2] - 2026-05-28
 
 ### Fixed

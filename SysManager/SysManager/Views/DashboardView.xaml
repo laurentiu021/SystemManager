@@ -20,7 +20,7 @@
                 BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,48,0,0"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
-                <Button Content="Run as administrator" Command="{Binding RequestElevationCommand}"
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"

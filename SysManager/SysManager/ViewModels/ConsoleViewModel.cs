@@ -36,26 +36,8 @@ public sealed partial class ConsoleViewModel : ObservableObject
         lock (_gate)
         {
             Lines.Add(line);
-            if (Lines.Count > MaxLines)
-            {
-                // PERF: When excess is large relative to buffer, clear-and-rebuild
-                // is O(n) vs O(n*excess) for repeated RemoveAt(0).
-                var excess = Lines.Count - MaxLines;
-                if (excess > Lines.Count / 4)
-                {
-                    var keep = new PowerShellLine[MaxLines];
-                    for (int i = 0; i < MaxLines; i++)
-                        keep[i] = Lines[excess + i];
-                    Lines.Clear();
-                    foreach (var item in keep)
-                        Lines.Add(item);
-                }
-                else
-                {
-                    for (int i = 0; i < excess; i++)
-                        Lines.RemoveAt(0);
-                }
-            }
+            while (Lines.Count > MaxLines)
+                Lines.RemoveAt(0);
         }
     }
 

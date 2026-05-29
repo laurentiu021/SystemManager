@@ -131,7 +131,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RelaunchElevated()
+    private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current?.Shutdown();

@@ -42,7 +42,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RelaunchElevated()
+    private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current?.Shutdown();

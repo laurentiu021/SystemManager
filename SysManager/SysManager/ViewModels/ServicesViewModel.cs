@@ -25,7 +25,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     public BulkObservableCollection<ServiceEntry> Services { get; } = new();
 
     [ObservableProperty] private bool _isElevated;
-    [ObservableProperty] private string _filter = "";
+    [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private string _selectedFilter = "All";
     [ObservableProperty] private ServiceEntry? _selectedService;
     [ObservableProperty] private int _totalCount;
@@ -45,7 +45,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RelaunchElevated()
+    private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
             System.Windows.Application.Current?.Shutdown();
@@ -58,7 +58,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
         catch (System.ComponentModel.Win32Exception ex) { Log.Warning("Services auto-refresh failed: {Error}", ex.Message); }
     }
 
-    partial void OnFilterChanged(string value) => ApplyFilter();
+    partial void OnFilterTextChanged(string value) => ApplyFilter();
     partial void OnSelectedFilterChanged(string value) => ApplyFilter();
 
     [RelayCommand]
@@ -173,11 +173,11 @@ public sealed partial class ServicesViewModel : ViewModelBase
     {
         var filtered = _allServices.AsEnumerable();
 
-        if (!string.IsNullOrWhiteSpace(Filter))
+        if (!string.IsNullOrWhiteSpace(FilterText))
             filtered = filtered.Where(s =>
-                s.DisplayName.Contains(Filter, StringComparison.OrdinalIgnoreCase) ||
-                s.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase) ||
-                s.Description.Contains(Filter, StringComparison.OrdinalIgnoreCase));
+                s.DisplayName.Contains(FilterText, StringComparison.OrdinalIgnoreCase) ||
+                s.Name.Contains(FilterText, StringComparison.OrdinalIgnoreCase) ||
+                s.Description.Contains(FilterText, StringComparison.OrdinalIgnoreCase));
 
         filtered = SelectedFilter switch
         {

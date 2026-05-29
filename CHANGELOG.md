@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.2] - 2026-05-29
+
+### Fixed
+- **Memory leaks** — AboutViewModel now properly disposes ManagementObject instances in all 5 WMI foreach loops (CPU, RAM, GPU, Display, OS detection).
+- **Silent failures** — ThemeService Save/Load empty catch blocks now log errors via Serilog instead of swallowing silently.
+- **Dashboard error handling** — replaced 4 bare `catch (Exception)` in alert scanners with logged exceptions for diagnostics.
+- **UI flicker** — BulkInstallerViewModel.FilteredApps converted from ObservableCollection to BulkObservableCollection with ReplaceWith().
+- **Visual consistency** — ShortcutCleanerView DataGrid now has `Background="Transparent"` and `BorderThickness="0"` matching all other views.
+
 ## [1.17.1] - 2026-05-29
 
 ### Fixed

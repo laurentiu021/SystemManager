@@ -278,6 +278,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 using var cpuSearch = new System.Management.ManagementObjectSearcher(
                     "SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
                 foreach (System.Management.ManagementObject mo in cpuSearch.Get())
+                using (mo)
                 {
                     var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
                     var cores = mo["NumberOfCores"];
@@ -298,6 +299,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 using var memSearch = new System.Management.ManagementObjectSearcher(
                     "SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem");
                 foreach (System.Management.ManagementObject mo in memSearch.Get())
+                using (mo)
                 {
                     var totalKb = mo["TotalVisibleMemorySize"] as ulong? ?? 0;
                     var freeKb = mo["FreePhysicalMemory"] as ulong? ?? 0;
@@ -314,6 +316,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 using var gpuSearch = new System.Management.ManagementObjectSearcher(
                     "SELECT Name,DriverVersion,AdapterRAM FROM Win32_VideoController");
                 foreach (System.Management.ManagementObject mo in gpuSearch.Get())
+                using (mo)
                 {
                     var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
                     var driver = mo["DriverVersion"]?.ToString() ?? "";
@@ -341,6 +344,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 using var dispSearch = new System.Management.ManagementObjectSearcher(
                     "SELECT CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate FROM Win32_VideoController");
                 foreach (System.Management.ManagementObject mo in dispSearch.Get())
+                using (mo)
                 {
                     var w = mo["CurrentHorizontalResolution"];
                     var h = mo["CurrentVerticalResolution"];
@@ -377,6 +381,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             using var searcher = new System.Management.ManagementObjectSearcher(
                 "SELECT Caption,BuildNumber FROM Win32_OperatingSystem");
             foreach (System.Management.ManagementObject mo in searcher.Get())
+            using (mo)
             {
                 var caption = mo["Caption"]?.ToString()?.Trim() ?? "";
                 var build = mo["BuildNumber"]?.ToString() ?? "";

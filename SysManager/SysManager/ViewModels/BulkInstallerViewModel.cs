@@ -25,7 +25,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<InstallableApp> Apps { get; } = new();
-    public ObservableCollection<InstallableApp> FilteredApps { get; } = new();
+    public BulkObservableCollection<InstallableApp> FilteredApps { get; } = new();
     public ICollectionView GroupedView { get; }
 
     [ObservableProperty] private string _filterText = "";
@@ -344,9 +344,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             filtered = filtered.Where(a =>
                 a.Name.Contains(FilterText, StringComparison.OrdinalIgnoreCase));
 
-        FilteredApps.Clear();
-        foreach (var app in filtered)
-            FilteredApps.Add(app);
+        FilteredApps.ReplaceWith(filtered);
     }
 
     private static string GlyphForCategory(string category) => category switch

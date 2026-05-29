@@ -56,9 +56,9 @@
         <DataGrid Grid.Row="2" ItemsSource="{Binding BrokenShortcuts}"
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
-                  CanUserSortColumns="True"
-                      CanUserResizeColumns="True"
+                  CanUserSortColumns="True" CanUserResizeColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="None"
+                  Background="Transparent" BorderThickness="0"
                   Margin="28,12,28,0"
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">

@@ -53,7 +53,10 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `PlaceholderViewModel` (System Report) · `AboutViewModel` |
 | Advanced | `PlaceholderViewModel` (Profile Export/Import · CLI Interface) |
 
-- `DashboardViewModel` — OS / CPU / RAM / disk snapshot + live uptime.
+- `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),
+  temperatures (LibreHardwareMonitor + NvAPIWrapper), storage overview, system
+  alerts (auto-scan at boot), quick actions with inline progress, health score,
+  and recent activity log. IsActive pattern pauses polling when tab not visible.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
 - `WindowsUpdateViewModel` — PSWindowsUpdate wrapper with auto-check.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk.
@@ -173,6 +176,11 @@ Key services:
 - `SystemReportService` — generates comprehensive system info reports
   (hardware, OS, network, drivers) for export or clipboard.
 - `AppIconService` — downloads and caches application favicons for UI display.
+- `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
+  LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time
+  polling with 2s interval.
+- `ActivityLogService` — persists last 20 user actions to JSON file for
+  Dashboard recent activity display.
 - `SafetyDatabase` — curated safety ratings for Windows services.
 - `ThemeService` — runtime theme switching with 12 presets and persistence.
 - `ToastService` — global glass-style toast notifications.

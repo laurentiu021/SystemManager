@@ -18,7 +18,7 @@ namespace SysManager.Services;
 /// Windows Explorer respects this value to hide the menu entry without
 /// removing the registration — safe and fully reversible.
 /// </summary>
-public sealed class ContextMenuService
+public sealed partial class ContextMenuService
 {
     // Registry locations that define context menu entries
     private static readonly (string SubKey, string Location)[] ShellLocations =
@@ -522,7 +522,7 @@ public sealed class ContextMenuService
 
             // Try to extract a meaningful name from DLL resource references
             // Format: @C:\Windows\System32\display.dll,-4
-            var dllMatch = Regex.Match(rawName, @"@.*?\\?([^\\,]+)\.dll", RegexOptions.IgnoreCase);
+            var dllMatch = DllResourcePattern().Match(rawName);
             if (dllMatch.Success)
             {
                 var dllName = dllMatch.Groups[1].Value;
@@ -620,14 +620,9 @@ public sealed class ContextMenuService
         // Replace underscores and hyphens with spaces
         input = input.Replace('_', ' ').Replace('-', ' ');
 
-        // Insert space before each uppercase letter that follows a lowercase letter or digit
-        var result = Regex.Replace(input, @"(?<=[a-z0-9])([A-Z])", " $1");
-
-        // Insert space between consecutive uppercase letters followed by lowercase
-        result = Regex.Replace(result, @"(?<=[A-Z])([A-Z])(?=[a-z])", " $1");
-
-        // Collapse multiple spaces
-        result = Regex.Replace(result, @"\s+", " ").Trim();
+        var result = CamelCaseSplitPattern().Replace(input, " $1");
+        result = ConsecutiveUpperPattern().Replace(result, " $1");
+        result = MultiSpacePattern().Replace(result, " ").Trim();
 
         // Capitalize first letter
         if (result.Length > 0)
@@ -673,4 +668,16 @@ public sealed class ContextMenuService
             return "";
         }
     }
+
+    [GeneratedRegex(@"@.*?\\?([^\\,]+)\.dll", RegexOptions.IgnoreCase)]
+    private static partial Regex DllResourcePattern();
+
+    [GeneratedRegex(@"(?<=[a-z0-9])([A-Z])")]
+    private static partial Regex CamelCaseSplitPattern();
+
+    [GeneratedRegex(@"(?<=[A-Z])([A-Z])(?=[a-z])")]
+    private static partial Regex ConsecutiveUpperPattern();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex MultiSpacePattern();
 }

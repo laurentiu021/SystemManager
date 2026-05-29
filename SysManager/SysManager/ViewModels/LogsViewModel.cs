@@ -46,7 +46,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     [ObservableProperty] private bool _showInfo;
     [ObservableProperty] private bool _showVerbose;
 
-    [ObservableProperty] private string _searchText = "";
+    [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private FriendlyEventEntry? _selectedEntry;
 
     [ObservableProperty] private int _criticalCount;
@@ -81,7 +81,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     partial void OnShowWarningChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
     partial void OnShowInfoChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
     partial void OnShowVerboseChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
-    partial void OnSearchTextChanged(string value) { EntriesView.Refresh(); UpdateVisibleCount(); }
+    partial void OnFilterTextChanged(string value) { EntriesView.Refresh(); UpdateVisibleCount(); }
 
     private bool EntryFilter(object o)
     {
@@ -98,8 +98,8 @@ public sealed partial class LogsViewModel : ViewModelBase
         };
         if (!sevOk) return false;
 
-        if (string.IsNullOrWhiteSpace(SearchText)) return true;
-        var q = SearchText.Trim();
+        if (string.IsNullOrWhiteSpace(FilterText)) return true;
+        var q = FilterText.Trim();
         return ContainsCi(e.Message, q)
             || ContainsCi(e.ProviderName, q)
             || ContainsCi(e.FullMessage, q)

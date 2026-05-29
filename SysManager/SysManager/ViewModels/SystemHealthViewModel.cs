@@ -94,6 +94,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             Disks.ReplaceWith(snap.Disks);
             Summary = $"OS {snap.Os.Caption}  —  CPU {snap.Cpu.Name} ({snap.Cpu.Cores}c/{snap.Cpu.LogicalProcessors}t)  —  RAM {snap.Memory.UsedGB:0.0}/{snap.Memory.TotalGB:0.0} GB  —  Disks {snap.Disks.Count}";
             StatusMessage = $"Scan at {snap.CapturedAt:HH:mm:ss}";
+            ToastService.Instance.Show("System Health scan complete", $"{snap.Disks.Count} disks, {snap.Memory.Modules.Count} RAM modules");
             Log.Information("System health scan completed");
             await RefreshDrivesAsync();
         }

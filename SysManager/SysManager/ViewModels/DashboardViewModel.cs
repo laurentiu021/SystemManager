@@ -109,7 +109,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RequestElevation()
+    private void RelaunchAsAdmin()
     {
         Log.Information("Admin elevation requested from Dashboard");
         if (AdminHelper.RelaunchAsAdmin())

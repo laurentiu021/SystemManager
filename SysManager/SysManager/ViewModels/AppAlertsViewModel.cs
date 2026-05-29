@@ -101,6 +101,7 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
             UnacknowledgedCount = 0;
             MonitorStatus = $"Loaded {AlertCount} currently installed applications.";
             StatusMessage = "Done.";
+            ToastService.Instance.Show("Installed apps loaded", $"{AlertCount} applications found");
         }
         catch (System.Security.SecurityException ex)
         {

@@ -60,16 +60,16 @@ public class LogsViewModelTests
         var vm = new LogsViewModel(new Services.EventLogService());
         var e = Make(EventSeverity.Error, "Disk I/O timeout at sector 500", "disk", 7);
 
-        vm.SearchText = "sector";
+        vm.FilterText = "sector";
         Assert.True(InvokeFilter(vm, e));
 
-        vm.SearchText = "DISK"; // case-insensitive by provider
+        vm.FilterText = "DISK"; // case-insensitive by provider
         Assert.True(InvokeFilter(vm, e));
 
-        vm.SearchText = "7"; // by event id
+        vm.FilterText = "7"; // by event id
         Assert.True(InvokeFilter(vm, e));
 
-        vm.SearchText = "nothing-matches-this";
+        vm.FilterText = "nothing-matches-this";
         Assert.False(InvokeFilter(vm, e));
     }
 
@@ -78,9 +78,9 @@ public class LogsViewModelTests
     {
         var vm = new LogsViewModel(new Services.EventLogService());
         var e = Make(EventSeverity.Warning);
-        vm.SearchText = "";
+        vm.FilterText = "";
         Assert.True(InvokeFilter(vm, e));
-        vm.SearchText = "   ";
+        vm.FilterText = "   ";
         Assert.True(InvokeFilter(vm, e));
     }
 

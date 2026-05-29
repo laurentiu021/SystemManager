@@ -61,7 +61,7 @@ public class ServicesViewModelTests
     public void Constructor_DefaultFilter_Empty()
     {
         var vm = new ServicesViewModel(new Services.PowerShellRunner());
-        Assert.Equal("", vm.Filter);
+        Assert.Equal("", vm.FilterText);
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class ServicesViewModelTests
     public void ApplyFilter_TextFilter_MatchesDisplayName()
     {
         var vm = CreateWithData();
-        vm.Filter = "Print";
+        vm.FilterText = "Print";
         Assert.Single(vm.Services);
         Assert.Equal("Print Spooler", vm.Services[0].DisplayName);
     }
@@ -143,7 +143,7 @@ public class ServicesViewModelTests
     public void ApplyFilter_TextFilter_MatchesServiceName()
     {
         var vm = CreateWithData();
-        vm.Filter = "wuauserv";
+        vm.FilterText = "wuauserv";
         Assert.Single(vm.Services);
         Assert.Equal("Windows Update", vm.Services[0].DisplayName);
     }
@@ -152,7 +152,7 @@ public class ServicesViewModelTests
     public void ApplyFilter_TextFilter_MatchesDescription()
     {
         var vm = CreateWithData();
-        vm.Filter = "indexing";
+        vm.FilterText = "indexing";
         Assert.Single(vm.Services);
         Assert.Equal("Windows Search", vm.Services[0].DisplayName);
     }
@@ -161,7 +161,7 @@ public class ServicesViewModelTests
     public void ApplyFilter_TextFilter_CaseInsensitive()
     {
         var vm = CreateWithData();
-        vm.Filter = "XBOX";
+        vm.FilterText = "XBOX";
         Assert.Single(vm.Services);
         Assert.Equal("Xbox Accessory Management", vm.Services[0].DisplayName);
     }
@@ -170,7 +170,7 @@ public class ServicesViewModelTests
     public void ApplyFilter_TextFilter_NoMatch_ReturnsEmpty()
     {
         var vm = CreateWithData();
-        vm.Filter = "zzz_nonexistent_zzz";
+        vm.FilterText = "zzz_nonexistent_zzz";
         Assert.Empty(vm.Services);
     }
 
@@ -181,7 +181,7 @@ public class ServicesViewModelTests
     {
         var vm = CreateWithData();
         vm.SelectedFilter = "Running";
-        vm.Filter = "Update";
+        vm.FilterText = "Update";
         Assert.Single(vm.Services);
         Assert.Equal("Windows Update", vm.Services[0].DisplayName);
     }
@@ -191,7 +191,7 @@ public class ServicesViewModelTests
     {
         var vm = CreateWithData();
         vm.SelectedFilter = "Stopped";
-        vm.Filter = "Windows Update";
+        vm.FilterText = "Windows Update";
         Assert.Empty(vm.Services);
     }
 
@@ -235,7 +235,7 @@ public class ServicesViewModelTests
         var vm = CreateWithData();
         vm.SelectedFilter = "All";
         Assert.Equal(5, vm.Services.Count);
-        vm.Filter = "Xbox";
+        vm.FilterText = "Xbox";
         Assert.Single(vm.Services);
     }
 }

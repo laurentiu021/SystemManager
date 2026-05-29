@@ -74,10 +74,10 @@ public class LogsViewModelExtendedTests
     }
 
     [Fact]
-    public void SearchText_DefaultsEmpty()
+    public void FilterText_DefaultsEmpty()
     {
         var vm = new LogsViewModel(new Services.EventLogService());
-        Assert.Equal("", vm.SearchText);
+        Assert.Equal("", vm.FilterText);
     }
 
     [Fact]
@@ -313,7 +313,7 @@ public class LogsViewModelExtendedTests
             ProviderName = "P",
             EventId = 1
         };
-        vm.SearchText = "keyword";
+        vm.FilterText = "keyword";
         Assert.True(Filter(vm, e));
     }
 
@@ -325,7 +325,7 @@ public class LogsViewModelExtendedTests
     [InlineData(nameof(LogsViewModel.ShowWarning))]
     [InlineData(nameof(LogsViewModel.ShowInfo))]
     [InlineData(nameof(LogsViewModel.ShowVerbose))]
-    [InlineData(nameof(LogsViewModel.SearchText))]
+    [InlineData(nameof(LogsViewModel.FilterText))]
     [InlineData(nameof(LogsViewModel.SelectedLog))]
     [InlineData(nameof(LogsViewModel.SelectedTimeRange))]
     [InlineData(nameof(LogsViewModel.SelectedMaxResults))]

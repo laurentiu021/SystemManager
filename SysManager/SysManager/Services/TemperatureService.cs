@@ -18,14 +18,18 @@ namespace SysManager.Services;
 public sealed class TemperatureService
 {
     private readonly DiskHealthService _diskHealth;
+    private readonly bool _skipHardwareInit;
 
-    public TemperatureService(DiskHealthService diskHealth)
+    public TemperatureService(DiskHealthService diskHealth, bool skipHardwareInit = false)
     {
         _diskHealth = diskHealth;
+        _skipHardwareInit = skipHardwareInit;
     }
 
     public async Task<List<TemperatureReading>> ReadAllAsync()
     {
+        if (_skipHardwareInit) return [];
+
         var readings = new List<TemperatureReading>();
         var isAdmin = AdminHelper.IsElevated();
 

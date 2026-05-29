@@ -20,7 +20,7 @@ public class DashboardViewModelTests
         return new DashboardViewModel(sys,
             new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
-            new TemperatureService(diskHealth));
+            new TemperatureService(diskHealth, skipHardwareInit: true));
     }
 
     // ---------- construction & defaults ----------

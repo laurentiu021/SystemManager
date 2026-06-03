@@ -38,21 +38,17 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         _runner.ProgressChanged += OnRunnerProgressChanged;
         _wu.Log += OnWuLog;
         IsElevated = AdminHelper.IsElevated();
-        // Module is needed only for History; mark it available optimistically
-        // and run the real check in the background.
-        InitializeAsync(InitAsync);
+        // PSWindowsUpdate is only needed for the History view, so we don't
+        // probe for it at startup — the History command checks itself if
+        // the module is missing. This keeps the constructor side-effect-free
+        // and IsBusy stays false until the user triggers an action.
+        ModuleAvailable = true;
+        ModuleStatus = "PSWindowsUpdate is used for the History view only.";
     }
 
     private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);
     private void OnRunnerProgressChanged(int p) => Progress = p;
     private void OnWuLog(string text) => Console.Append(PowerShellLine.Output(text));
-
-    private async Task InitAsync()
-    {
-        try { await CheckModuleAsync(); }
-        catch (InvalidOperationException ex) { Log.Warning("Windows Update module check failed: {Error}", ex.Message); }
-        catch (OperationCanceledException) { /* expected on shutdown */ }
-    }
 
     protected override void Dispose(bool disposing)
     {

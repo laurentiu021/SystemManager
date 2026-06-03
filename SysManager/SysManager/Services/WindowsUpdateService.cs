@@ -222,7 +222,8 @@ public sealed class WindowsUpdateService
         var kbList = ExtractKbIds(u);
         var kb = kbList.Count > 0 ? "KB" + string.Join(",", kbList) : string.Empty;
         long size = 0;
-        try { size = (long)(decimal)u.MaxDownloadSize; } catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
+        try { size = (long)(decimal)u.MaxDownloadSize; }
+        catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
         catch (COMException) { }
         return new UpdateEntry
         {

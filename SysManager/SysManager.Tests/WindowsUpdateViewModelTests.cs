@@ -59,7 +59,6 @@ public class WindowsUpdateViewModelTests
     [Theory]
     [InlineData("ListUpdatesCommand")]
     [InlineData("ShowHistoryCommand")]
-    [InlineData("ListFeatureUpdatesCommand")]
     [InlineData("CheckPendingRebootCommand")]
     [InlineData("InstallUpdatesCommand")]
     [InlineData("InstallModuleCommand")]
@@ -204,6 +203,94 @@ public class WindowsUpdateViewModelTests
         var result = (string)method.Invoke(null, new object[] { json.RootElement })!;
 
         Assert.Equal("50 MB", result);
+    }
+
+    // ---------- ParseInstallResults ----------
+
+    [Fact]
+    public void ParseInstallResults_EmptyString_ReturnsZeros()
+    {
+        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults("");
+        Assert.Equal(0, installed);
+        Assert.Equal(0, failed);
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void ParseInstallResults_EmptyArray_ReturnsZeros()
+    {
+        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults("[]");
+        Assert.Equal(0, installed);
+        Assert.Equal(0, failed);
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void ParseInstallResults_AllInstalled_CountsCorrectly()
+    {
+        var json = """
+        [
+            {"Title":"Cumulative Update for Windows","Result":"Installed"},
+            {"Title":"Defender Definition Update","Result":"Installed"}
+        ]
+        """;
+        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults(json);
+        Assert.Equal(2, installed);
+        Assert.Equal(0, failed);
+        Assert.Equal(2, results.Count);
+        Assert.Equal("Installed", results["Cumulative Update for Windows"]);
+    }
+
+    [Fact]
+    public void ParseInstallResults_MixedResults_SeparatesInstalledAndFailed()
+    {
+        var json = """
+        [
+            {"Title":"Update A","Result":"Installed"},
+            {"Title":"Update B","Result":"Failed"},
+            {"Title":"Update C","Result":"Downloaded"}
+        ]
+        """;
+        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults(json);
+        Assert.Equal(1, installed);
+        Assert.Equal(1, failed);
+        Assert.Equal(3, results.Count);
+        Assert.Equal("Downloaded", results["Update C"]);
+    }
+
+    [Fact]
+    public void ParseInstallResults_Succeeded_CountsAsInstalled()
+    {
+        var json = """[{"Title":"Update X","Result":"Succeeded"}]""";
+        var (installed, _, _) = WindowsUpdateViewModel.ParseInstallResults(json);
+        Assert.Equal(1, installed);
+    }
+
+    [Fact]
+    public void ParseInstallResults_ErrorString_CountsAsFailed()
+    {
+        var json = """[{"Title":"Update Y","Result":"Error: 0x80240020"}]""";
+        var (_, failed, _) = WindowsUpdateViewModel.ParseInstallResults(json);
+        Assert.Equal(1, failed);
+    }
+
+    [Fact]
+    public void ParseInstallResults_InvalidJson_ReturnsZeros()
+    {
+        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults("not json");
+        Assert.Equal(0, installed);
+        Assert.Equal(0, failed);
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void ParseInstallResults_SingleObject_PopulatesOneResult()
+    {
+        var json = """{"Title":"Solo Update","Result":"Installed"}""";
+        var (installed, _, results) = WindowsUpdateViewModel.ParseInstallResults(json);
+        Assert.Equal(1, installed);
+        Assert.Single(results);
+        Assert.Equal("Installed", results["Solo Update"]);
     }
 }
 

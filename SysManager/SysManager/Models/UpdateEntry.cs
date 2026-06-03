@@ -12,11 +12,11 @@ namespace SysManager.Models;
 public sealed partial class UpdateEntry : ObservableObject
 {
     [ObservableProperty] private bool _isSelected = true;
+    [ObservableProperty] private string _status = "";
 
     public string Title { get; init; } = "";
     public string KB { get; init; } = "";
     public string Size { get; init; } = "";
-    public string Status { get; init; } = "";
     public DateTime? Date { get; init; }
     public bool IsHidden { get; init; }
     public string Category { get; init; } = "";

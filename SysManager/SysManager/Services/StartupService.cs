@@ -306,13 +306,6 @@ public sealed class StartupService
     }
 
     /// <summary>
-    /// Synchronous overload — delegates to <see cref="SetEnabledAsync"/> for
-    /// backward compatibility with existing callers and tests.
-    /// </summary>
-    public static bool SetEnabled(StartupEntry entry, bool enabled)
-        => SetEnabledAsync(entry, enabled).GetAwaiter().GetResult();
-
-    /// <summary>
     /// Toggle a startup entry on or off by writing to the StartupApproved
     /// registry key. This is the same mechanism Task Manager uses.
     /// Non-destructive — the Run key value is never deleted.
@@ -444,9 +437,15 @@ public sealed class StartupService
                 return false;
             }
 
-            var stderr = stderrTask.Wait(TimeSpan.FromSeconds(5))
-                ? stderrTask.GetAwaiter().GetResult().Trim()
-                : string.Empty;
+            string stderr;
+            try
+            {
+                stderr = (await stderrTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false)).Trim();
+            }
+            catch (TimeoutException)
+            {
+                stderr = string.Empty;
+            }
 
             if (proc.ExitCode == 0)
             {

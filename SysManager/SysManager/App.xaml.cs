@@ -78,8 +78,10 @@ public partial class App : Application
 
         ThemeService.Instance.Initialize();
 
-        // Start listening for activation requests from subsequent instances
-        StartPipeListener();
+        // Start listening for activation requests from subsequent instances.
+        // Fire-and-forget is intentional — the listener loop runs for the app
+        // lifetime and is cancelled via _pipeCts on OnExit.
+        _ = StartPipeListenerAsync();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -127,9 +129,11 @@ public partial class App : Application
 
     /// <summary>
     /// Listens for named pipe connections from subsequent instances and
-    /// activates the main window when one connects.
+    /// activates the main window when one connects. Returns a Task so the
+    /// caller can fire-and-forget without using the async-void anti-pattern;
+    /// any exception escaping the loop is logged via OnTask (UnobservedTaskException).
     /// </summary>
-    private async void StartPipeListener()
+    private async Task StartPipeListenerAsync()
     {
         _pipeCts = new CancellationTokenSource();
         var ct = _pipeCts.Token;

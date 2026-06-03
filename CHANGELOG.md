@@ -6,7 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.18.1] - 2026-06-03
+## [1.18.2] - 2026-06-03
+
+### Fixed
+- **Pipe listener no longer fire-and-forgets via `async void`.** `App.StartPipeListener` was an async-void method, meaning any exception escaping the loop would crash the process via the AppDomain handler. Renamed to `StartPipeListenerAsync` returning `Task`; `OnStartup` calls it as `_ = StartPipeListenerAsync()` so a stray exception flows through `TaskScheduler.UnobservedTaskException` (logged) instead of terminating the app.
+- **StartupService — removed sync wrapper over async.** `SetEnabled` (sync) was a thin wrapper around `SetEnabledAsync` using `.GetAwaiter().GetResult()`. The wrapper is gone; tests now call `SetEnabledAsync` directly via xUnit `Task` test methods.
+- **Schtasks stderr read** — replaced `stderrTask.Wait(timeout) ? .GetAwaiter().GetResult() : ""` with `await stderrTask.WaitAsync(timeout)` so the read is fully async with a clean timeout fallback.
 
 ### Fixed
 - **Privacy Toggles no longer write to the registry on every click.** Toggling a switch now updates local state only; the user must press **Apply** to write pending changes. A live counter shows how many changes are pending, and **Discard** reverts them without touching the registry. Prevents accidental system changes when scrolling through the toggle list.

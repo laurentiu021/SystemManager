@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.5] - 2026-06-03
+
+### Fixed
+- **Windows Update install actually works** — replaced PSWindowsUpdate's `Install-WindowsUpdate` with direct calls to the Windows Update Agent COM API (`Microsoft.Update.Session`). PSWindowsUpdate filters out optional driver updates client-side even when the COM API can install them; the new code installs everything WUA reports as available, including drivers, firmware, Defender Definitions, cumulative updates, and feature upgrades.
+- **Honest per-update progress** — live console now streams real per-update events (Connecting → Downloading → Installing → ✓ Installed) instead of a 16-times-repeated PSWindowsUpdate pre/post search noise that resulted in "Installed 0".
+- **Per-row Status reflects reality** — each row's Status column is updated as the install progresses (`Pending…` → `Downloading…` → `Installing…` → `Installed` / `Installed (reboot required)` / `Failed (download)` / `Failed (install code N)` / `Not applied`).
+- **Status column wider with tooltip** — fits longer messages like "Installed (reboot required)" without truncation; full text always visible on hover.
+- **Live output panel no longer auto-resizes** — fixed height of 240px so the DataGrid above keeps its space when many log lines arrive.
+
+### Changed
+- **Removed live output from Ping and Traceroute** — those tabs already display their data graphically (latency chart, hops grid). The console panel was redundant and stole vertical space.
+- **Single-header live output panel** — removed the redundant "Live output" Card+Expander wrapper; the ConsoleView toolbar (Live output / Clear / Copy / Auto-scroll) now sits directly on the panel border, matching CleanupView and AppUpdatesView.
+- **KB column header tooltip** — explains "KB = Microsoft Knowledge Base article ID" since not all updates have one (drivers, firmware, Defender).
+
+### Added
+- **WindowsUpdateService** — new service wrapping `Microsoft.Update.Session` COM API directly. Supports scan (`IsInstalled=0`), download, EULA acceptance, install, and reboot detection. Exposes a `Log` event for live console streaming.
+- **Title-based category classifier** — Defender / Driver / Cumulative / Security / Servicing / .NET / Feature upgrade / Update, with COM `Categories` collection lookup as the primary signal and title heuristics as fallback. Unit-tested.
+
 ## [1.17.4] - 2026-06-03
 
 ### Fixed

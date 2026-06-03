@@ -20,6 +20,7 @@ public sealed partial class UpdateEntry : ObservableObject
     public DateTime? Date { get; init; }
     public bool IsHidden { get; init; }
     public string Category { get; init; } = "";
+    public string UpdateId { get; init; } = "";
 
     /// <summary>Formatted date for display (yyyy-MM-dd or empty).</summary>
     public string DateDisplay => Date?.ToString("yyyy-MM-dd") ?? "";

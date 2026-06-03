@@ -31,8 +31,8 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Windows Update" Style="{StaticResource Display}"/>
-            <TextBlock Text="Check, list and install Windows updates — click column headers to sort."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="Check, list and install Windows updates — click column headers to sort. KB = Microsoft Knowledge Base article ID; some updates (Defender, drivers, feature upgrades) have no KB."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner: not elevated -->
@@ -151,8 +151,12 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="KB" Binding="{Binding KB}" Width="100" MinWidth="70"
+                    <DataGridTextColumn Binding="{Binding KB}" Width="100" MinWidth="70"
                                         SortMemberPath="KB">
+                        <DataGridTextColumn.Header>
+                            <TextBlock Text="KB"
+                                       ToolTip="KB = Microsoft Knowledge Base article ID — the unique identifier Microsoft assigns to each update. Defender Definitions, drivers, and feature upgrades may have no KB."/>
+                        </DataGridTextColumn.Header>
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="FontFamily" Value="Consolas"/>
@@ -173,12 +177,14 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" MinWidth="70"
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="200" MinWidth="120"
                                         SortMemberPath="Status">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="FontWeight" Value="Medium"/>
                                 <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                <Setter Property="ToolTip" Value="{Binding Status}"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -194,26 +200,98 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="110" MinWidth="70"
-                                        SortMemberPath="Category">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontSize" Value="11"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+                    <DataGridTemplateColumn Header="Category" Width="130" MinWidth="100" SortMemberPath="Category">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="6" Padding="8,3" HorizontalAlignment="Left"
+                                        BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#14475569"/>
+                                            <Setter Property="BorderBrush" Value="#28475569"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Category}" Value="Security">
+                                                    <Setter Property="Background" Value="#14EF4444"/>
+                                                    <Setter Property="BorderBrush" Value="#28EF4444"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Category}" Value="Cumulative">
+                                                    <Setter Property="Background" Value="#14F59E0B"/>
+                                                    <Setter Property="BorderBrush" Value="#28F59E0B"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Category}" Value="Defender">
+                                                    <Setter Property="Background" Value="#1422C55E"/>
+                                                    <Setter Property="BorderBrush" Value="#2822C55E"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Category}" Value="Driver">
+                                                    <Setter Property="Background" Value="#146366F1"/>
+                                                    <Setter Property="BorderBrush" Value="#286366F1"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Category}" Value="Servicing">
+                                                    <Setter Property="Background" Value="#1438BDF8"/>
+                                                    <Setter Property="BorderBrush" Value="#2838BDF8"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Category}" Value=".NET">
+                                                    <Setter Property="Background" Value="#14A855F7"/>
+                                                    <Setter Property="BorderBrush" Value="#28A855F7"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Category}" Value="Feature upgrade">
+                                                    <Setter Property="Background" Value="#14EC4899"/>
+                                                    <Setter Property="BorderBrush" Value="#28EC4899"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Category}" Value="Hidden">
+                                                    <Setter Property="Background" Value="#1494A3B8"/>
+                                                    <Setter Property="BorderBrush" Value="#2894A3B8"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Category}" Value="History">
+                                                    <Setter Property="Background" Value="#1494A3B8"/>
+                                                    <Setter Property="BorderBrush" Value="#2894A3B8"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding Category}" FontSize="11" FontWeight="SemiBold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#94A3B8"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Category}" Value="Security">
+                                                        <Setter Property="Foreground" Value="#FCA5A5"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Category}" Value="Cumulative">
+                                                        <Setter Property="Foreground" Value="#FCD34D"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Category}" Value="Defender">
+                                                        <Setter Property="Foreground" Value="#86EFAC"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Category}" Value="Driver">
+                                                        <Setter Property="Foreground" Value="#A5B4FC"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Category}" Value="Servicing">
+                                                        <Setter Property="Foreground" Value="#7DD3FC"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Category}" Value=".NET">
+                                                        <Setter Property="Foreground" Value="#D8B4FE"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Category}" Value="Feature upgrade">
+                                                        <Setter Property="Foreground" Value="#F9A8D4"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>
 
-        <!-- Console output (collapsible — shown only during install/reboot check) -->
+        <!-- Console output (shown during install/reboot check) -->
         <Border Grid.Row="6" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0"
                 Visibility="{Binding ShowConsole, Converter={StaticResource BoolToVis}}"
-                MinHeight="180" MaxHeight="350">
-            <Expander Header="Live output" IsExpanded="True" Padding="8">
-                <v:ConsoleView DataContext="{Binding Console}"/>
-            </Expander>
+                Height="240">
+            <v:ConsoleView DataContext="{Binding Console}"/>
         </Border>
 
         <!-- Footer: progress + status -->

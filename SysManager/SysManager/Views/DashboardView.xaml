@@ -215,7 +215,7 @@
                                 </Button.Template>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="🛡️" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Run as admin for all sensors" Foreground="#FCD34D"
+                                    <TextBlock Text="Run as admin for all sensors" Foreground="{DynamicResource WarningText}"
                                                FontSize="10" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>

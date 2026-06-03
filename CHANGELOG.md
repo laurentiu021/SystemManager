@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-06-05
+
+### Changed
+- **Uniform outer margins across 13 views.** BatteryHealth, BulkInstaller, ContextMenu, DiskAnalyzer, Drivers, DuplicateFile, Performance, Privacy, ProcessManager, Services, Startup, Uninstaller, WindowsFeatures all migrated from `Margin="32,24"` to the canonical `Margin="28,24,28,16"` already used by Dashboard and AppAlerts. Layout is now consistent across the whole nav.
+- **Page background — theme-aware.** 15 views were defining a hardcoded `LinearGradientBrush PageBg` (`#070A0F`/`#0B1220`/`#090D16`) and using `{StaticResource PageBg}` for their root `Grid.Background`. Replaced with `{DynamicResource Surface0}`. The gradient resource definitions are gone, the views are smaller, and a future light-theme switch will work without per-view edits.
+- **Admin elevation banner colors — theme-aware.** Replaced 4 hardcoded amber hex values (`#1AFBBF24`, `#40FBBF24`, `#FBBF24`, `#FCD34D`) used by elevation banners and warning pills across 17 views with new theme brushes: `WarningBgSubtle`, `WarningBg`, `WarningStripe`, `WarningText`. Defined once in `App.xaml`, used everywhere.
+
 ## [1.18.2] - 2026-06-03
 
 ### Fixed

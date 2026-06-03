@@ -3,12 +3,6 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
-        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#070A0F" Offset="0"/>
-            <GradientStop Color="#0B1220" Offset="0.5"/>
-            <GradientStop Color="#090D16" Offset="1"/>
-        </LinearGradientBrush>
-
         <Style x:Key="SevDot" TargetType="Ellipse">
             <Setter Property="Width" Value="8"/>
             <Setter Property="Height" Value="8"/>
@@ -23,7 +17,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Background="{StaticResource PageBg}">
+    <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -87,12 +81,12 @@
             <!-- Warnings -->
             <Border Style="{StaticResource GlassCard}" Background="#14FBBF24" Margin="0,0,12,0">
                 <Grid>
-                    <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                    <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
                     <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#FBBF24">
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource WarningStripe}">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="#FBBF24" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                                <DropShadowEffect Color="{DynamicResource WarningStripe}" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding WarningCount}" FontSize="20" FontWeight="Bold"
@@ -166,7 +160,7 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowWarning}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#FBBF24" Margin="8,0,6,0"/>
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource WarningStripe}" Margin="8,0,6,0"/>
                         <TextBlock Text="Warning" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">

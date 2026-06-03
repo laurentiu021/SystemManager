@@ -235,7 +235,9 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - **Telemetry**: disable diagnostic data, activity history, advertising ID, feedback prompts
 - **UI Declutter**: disable Start suggestions, tips, lock screen tips, Spotlight ads
 - **Features**: disable Copilot, Cortana, web search in Start, widgets
-- Instant apply — toggles take effect immediately via registry writes
+- Explicit apply — flip toggles to stage changes, press **Apply** to write to the
+  registry, or **Discard** to revert pending changes. A live counter shows how
+  many changes are queued, so accidental clicks never modify the system silently.
 - Category filter and search
 - Requires admin for HKLM-backed toggles
 - Fully reversible — re-enable any toggle with one click

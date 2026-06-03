@@ -219,8 +219,8 @@ public sealed class SpeedTestService
         var stdoutTask = proc.StandardOutput.ReadToEndAsync(linked);
         var stderrTask = proc.StandardError.ReadToEndAsync(linked);
         await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-        var stdout = stdoutTask.Result;
-        var stderr = stderrTask.Result;
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
 
         try
         {

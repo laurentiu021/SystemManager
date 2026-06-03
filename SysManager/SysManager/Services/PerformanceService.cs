@@ -77,7 +77,14 @@ public sealed partial class PerformanceService : IDisposable
         int ProcessorMinPercentAc,
         string? NvidiaSubKey);       // null = no NVIDIA GPU
 
-    /// <summary>Take a snapshot of the current system state.</summary>
+    /// <summary>
+    /// Take a snapshot of the current system state.
+    /// IMPORTANT: callers MUST invoke this BEFORE applying any change, otherwise
+    /// the snapshot will capture already-modified state and Restore will not be
+    /// able to revert to the original baseline. The recommended pattern is to
+    /// guard every Apply through a wrapper that lazy-initializes the snapshot
+    /// (see PerformanceViewModel.EnsureSnapshotAsync).
+    /// </summary>
     public async Task<OriginalSnapshot> TakeSnapshotAsync(CancellationToken ct = default)
     {
         var (name, guid) = await GetActivePlanAsync(ct).ConfigureAwait(false);
@@ -517,8 +524,10 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     public async Task<bool> CreateRestorePointAsync(string description, CancellationToken ct = default)
     {
-        // BUG-003: Embed description directly in the script with single-quote
-        // escaping. AddParameter doesn't create script-scope variables.
+        // NOTE: PowerShell AddParameter binds runtime arguments but does NOT
+        // create script-scope variables, so the description has to be embedded
+        // directly in the script body — with single-quote escaping to avoid
+        // injection via the user-supplied string.
         var safeDesc = (description ?? "SysManager Restore Point").Replace("'", "''");
         var script = $"Checkpoint-Computer -Description '{safeDesc}' -RestorePointType 'MODIFY_SETTINGS'";
         await _ps.RunAsync(script, null, ct).ConfigureAwait(false);

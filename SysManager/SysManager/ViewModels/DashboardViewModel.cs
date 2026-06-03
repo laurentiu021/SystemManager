@@ -90,7 +90,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private async Task InitAsync()
     {
-        LoadStaticInfo();
+        await LoadStaticInfoAsync();
         LoadDrives();
         LoadActivity();
         StartPollingLoop();
@@ -183,11 +183,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
     //  STATIC INFO (loaded once)
     // ══════════════════════════════════════════════════════════════════════
 
-    private void LoadStaticInfo()
+    private async Task LoadStaticInfoAsync()
     {
         try
         {
-            var snap = _sys.CaptureAsync().GetAwaiter().GetResult();
+            var snap = await _sys.CaptureAsync().ConfigureAwait(true);
             CpuName = snap.Cpu.Name;
             CpuCores = $"{snap.Cpu.Cores} cores · {snap.Cpu.LogicalProcessors} threads";
             OsLine = $"{snap.Os.Caption} · Build {snap.Os.BuildNumber}";
@@ -678,7 +678,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         StatusMessage = "Scanning...";
         try
         {
-            LoadStaticInfo();
+            await LoadStaticInfoAsync();
             LoadDrives();
             await LoadHealthScoreAsync();
             await LoadTemperaturesAsync();

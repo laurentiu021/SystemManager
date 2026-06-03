@@ -56,10 +56,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     private async Task LoadInitialDataAsync()
     {
         await RefreshDnsAsync();
-        if (Application.Current?.Dispatcher is { } d)
-            await d.InvokeAsync(LoadHosts);
-        else
-            LoadHosts();
+        await LoadHostsAsync();
     }
 
     private async Task RefreshDnsAsync()
@@ -83,14 +80,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         }
     }
 
-    private void LoadHosts()
+    private async Task LoadHostsAsync()
     {
         try
         {
-            var entries = _hostsService.ReadHosts();
+            var entries = await _hostsService.ReadHostsAsync(_cts.Token).ConfigureAwait(true);
             HostEntries.ReplaceWith(entries);
             HostsStatus = $"Loaded {entries.Count} entries.";
         }
+        catch (OperationCanceledException) { }
         catch (UnauthorizedAccessException)
         {
             HostsStatus = "Access denied — run as administrator to read hosts file.";
@@ -234,7 +232,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RefreshHosts() => LoadHosts();
+    private Task RefreshHostsAsync() => LoadHostsAsync();
 
     [RelayCommand]
     private void RelaunchAsAdmin()

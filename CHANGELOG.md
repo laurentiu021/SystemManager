@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.1] - 2026-06-03
+
+### Fixed
+- **Privacy Toggles no longer write to the registry on every click.** Toggling a switch now updates local state only; the user must press **Apply** to write pending changes. A live counter shows how many changes are pending, and **Discard** reverts them without touching the registry. Prevents accidental system changes when scrolling through the toggle list.
+- **Dashboard no longer freezes on first load.** Static system info (CPU, OS, RAM modules) is now loaded asynchronously instead of blocking the UI thread on a synchronous WMI capture. The Dashboard tab is responsive immediately on startup.
+- **DNS / Hosts tab loads asynchronously.** Reading the hosts file is now async (`File.ReadAllLinesAsync`); Refresh no longer freezes the UI on slow disks.
+- **Icon cache eviction is now true FIFO.** The icon cache previously evicted random entries because `ConcurrentDictionary.Keys` has no insertion-order guarantee. Frequently-used icons could be dropped while stale ones survived. The cache now tracks insertion order via a queue and evicts the oldest entries first when the size limit is reached.
+- **SpeedTest output read** — replaced `Task.Result` access after `Task.WhenAll` with proper `await` to remove the deadlock-prone pattern (the awaited tasks were already complete, but the style is now safe under all call paths).
+- **Silent exception swallowing** — empty `catch { }` blocks now log at Debug level so failures are diagnosable: ThemePopup custom-color parser, TemperatureService LibreHardwareMonitor close, WindowsUpdateService COM/RuntimeBinder catches in `ExtractKbIds` and `ClassifyCategory`.
+- **Deep Cleanup** — file/directory cleanup errors are now logged in addition to being added to the per-run error list, so unexpected I/O issues surface in the SysManager log.
+- **Admin relaunch** — `RelaunchAsAdmin` now distinguishes the user's UAC decline (Win32 error 1223 → Information) from real Win32 failures (Warning) and logs `InvalidOperationException` instead of swallowing it silently.
+- **`SHGetFileInfo` P/Invoke** — added `SetLastError = true` so callers can inspect the Win32 error code on failure.
+
+### Changed
+- **PrivacyView toolbar** — the **Apply All** button is replaced by **Apply** (writes only pending changes) and **Discard** (reverts to last-applied state). Both are disabled when no changes are pending. The Apply button uses the primary style to highlight the action.
+- **PerformanceService.TakeSnapshotAsync** XML doc now warns callers that the method must run before any state-modifying call; the recommended lazy-initialization pattern is documented inline.
+- **PerformanceService.CreateRestorePointAsync** comment reworded — the previous `// BUG-003:` marker was a design note, not an open bug; replaced with an explanation of why PowerShell `AddParameter` cannot be used here.
+- **App.xaml.cs unhandled-exception dialog** — added inline note explaining why `MessageBox.Show` is used instead of `DialogService` (the dispatcher exception may originate from DialogService itself).
+- **`.gitignore`** — added entries for local developer notes (`.session-notes/`, `notes-local.md`, `scratch.md`) so scratch files can never be tracked accidentally.
+
 ## [1.18.0] - 2026-06-03
 
 ### Fixed

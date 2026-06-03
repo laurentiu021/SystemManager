@@ -250,8 +250,8 @@ public sealed class WindowsUpdateService
                 if (!string.IsNullOrWhiteSpace(id)) list.Add(id);
             }
         }
-        catch (COMException) { }
-        catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
+        catch (COMException ex) { Serilog.Log.Debug(ex, "ExtractKbIds: COM error"); }
+        catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "ExtractKbIds: dynamic binding error"); }
         return list;
     }
 
@@ -286,8 +286,8 @@ public sealed class WindowsUpdateService
                 }
                 Marshal.FinalReleaseComObject(cats);
             }
-            catch (COMException) { }
-            catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
+            catch (COMException ex) { Serilog.Log.Debug(ex, "ClassifyCategory: COM error reading Categories"); }
+            catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "ClassifyCategory: dynamic binding error"); }
         }
 
         if (title.Contains("Driver", StringComparison.OrdinalIgnoreCase) ||

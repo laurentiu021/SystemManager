@@ -179,6 +179,10 @@ public partial class App : Application
 
         try
         {
+            // MessageBox is the safe last-resort dialog here: the unhandled
+            // dispatcher exception may itself originate from DialogService or
+            // any of its dependencies, so we cannot rely on the app's own
+            // dialog stack at this point. Direct WPF MessageBox always works.
             MessageBox.Show(e.Exception.Message, "SysManager error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -352,14 +353,22 @@ public sealed class DeepCleanupService
                             freed += len;
                             filesDeleted++;
                         }
-                        catch (Exception ex) { errors.Add($"{file}: {ex.Message}"); }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"{file}: {ex.Message}");
+                            Log.Debug(ex, "Deep cleanup: failed to delete file {File}", file);
+                        }
                     }
                     foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct))
                     {
                         try { Directory.Delete(dir, recursive: false); } catch (IOException) { } catch (UnauthorizedAccessException) { }
                     }
                 }
-                catch (Exception ex) { errors.Add($"{path}: {ex.Message}"); }
+                catch (Exception ex)
+                {
+                    errors.Add($"{path}: {ex.Message}");
+                    Log.Debug(ex, "Deep cleanup: failed to enumerate path {Path}", path);
+                }
             }
         }
 

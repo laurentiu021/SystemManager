@@ -186,7 +186,7 @@ public sealed class TemperatureService
         finally
         {
             try { computer?.Close(); }
-            catch { /* dispose errors — ignore */ }
+            catch (Exception ex) { Log.Debug(ex, "LibreHardwareMonitor close failed"); }
         }
     }
 

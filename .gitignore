@@ -15,6 +15,11 @@ publish/
 *.pidb
 *.booproj
 
+# Local developer notes (never tracked)
+.session-notes/
+notes-local.md
+scratch.md
+
 # NuGet
 *.nupkg
 *.snupkg

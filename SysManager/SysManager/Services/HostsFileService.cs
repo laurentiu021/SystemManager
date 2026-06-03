@@ -27,12 +27,13 @@ public sealed partial class HostsFileService
     /// Reads and parses the hosts file. Skips pure comment lines (starting with #
     /// that don't have an IP pattern). Detects commented-out entries as disabled.
     /// </summary>
-    public List<HostsEntry> ReadHosts()
+    public async Task<List<HostsEntry>> ReadHostsAsync(CancellationToken ct = default)
     {
         List<HostsEntry> entries = [];
         if (!File.Exists(HostsPath)) return entries;
 
-        foreach (string rawLine in File.ReadAllLines(HostsPath))
+        var lines = await File.ReadAllLinesAsync(HostsPath, ct).ConfigureAwait(false);
+        foreach (string rawLine in lines)
         {
             string line = rawLine.Trim();
             if (string.IsNullOrEmpty(line)) continue;

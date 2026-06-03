@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// </summary>
 public class WindowsUpdateViewModelTests
 {
-    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner());
+    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService());
 
     // ---------- construction & defaults ----------
 
@@ -205,92 +205,36 @@ public class WindowsUpdateViewModelTests
         Assert.Equal("50 MB", result);
     }
 
-    // ---------- ParseInstallResults ----------
+    // ---------- WindowsUpdateService.ClassifyCategory (title-based path) ----------
 
-    [Fact]
-    public void ParseInstallResults_EmptyString_ReturnsZeros()
+    [Theory]
+    [InlineData("Microsoft Defender Antivirus Definition Update - KB2267602", "Defender")]
+    [InlineData("Security Intelligence Update for Microsoft Defender Antivirus", "Defender")]
+    [InlineData("Antimalware Platform Update", "Defender")]
+    [InlineData("Intel Corporation - Display - 31.0.101.5522", "Driver")]
+    [InlineData("HP - Firmware - 3.5.1.0", "Driver")]
+    [InlineData("2026-05 Cumulative Update for Windows 11", "Cumulative")]
+    [InlineData("2026-05 Security Update for Windows 11", "Security")]
+    [InlineData("2026-05 Servicing Stack Update for Windows 11", "Servicing")]
+    [InlineData(".NET 10.0.5 Update", ".NET")]
+    [InlineData("Random unmatched title", "Update")]
+    [InlineData("", "Update")]
+    public void ClassifyCategory_TitleBased_ReturnsExpected(string title, string expected)
     {
-        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults("");
-        Assert.Equal(0, installed);
-        Assert.Equal(0, failed);
-        Assert.Empty(results);
+        Assert.Equal(expected, WindowsUpdateService.ClassifyCategory(title, u: null));
     }
 
-    [Fact]
-    public void ParseInstallResults_EmptyArray_ReturnsZeros()
-    {
-        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults("[]");
-        Assert.Equal(0, installed);
-        Assert.Equal(0, failed);
-        Assert.Empty(results);
-    }
+    // ---------- WindowsUpdateService.FormatSize ----------
 
-    [Fact]
-    public void ParseInstallResults_AllInstalled_CountsCorrectly()
+    [Theory]
+    [InlineData(0L, "")]
+    [InlineData(512L, "512 B")]
+    [InlineData(1024L, "1.0 KB")]
+    [InlineData(1048576L, "1.0 MB")]
+    [InlineData(1073741824L, "1.0 GB")]
+    public void FormatSize_VariousValues_FormatsCorrectly(long bytes, string expected)
     {
-        var json = """
-        [
-            {"Title":"Cumulative Update for Windows","Result":"Installed"},
-            {"Title":"Defender Definition Update","Result":"Installed"}
-        ]
-        """;
-        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults(json);
-        Assert.Equal(2, installed);
-        Assert.Equal(0, failed);
-        Assert.Equal(2, results.Count);
-        Assert.Equal("Installed", results["Cumulative Update for Windows"]);
-    }
-
-    [Fact]
-    public void ParseInstallResults_MixedResults_SeparatesInstalledAndFailed()
-    {
-        var json = """
-        [
-            {"Title":"Update A","Result":"Installed"},
-            {"Title":"Update B","Result":"Failed"},
-            {"Title":"Update C","Result":"Downloaded"}
-        ]
-        """;
-        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults(json);
-        Assert.Equal(1, installed);
-        Assert.Equal(1, failed);
-        Assert.Equal(3, results.Count);
-        Assert.Equal("Downloaded", results["Update C"]);
-    }
-
-    [Fact]
-    public void ParseInstallResults_Succeeded_CountsAsInstalled()
-    {
-        var json = """[{"Title":"Update X","Result":"Succeeded"}]""";
-        var (installed, _, _) = WindowsUpdateViewModel.ParseInstallResults(json);
-        Assert.Equal(1, installed);
-    }
-
-    [Fact]
-    public void ParseInstallResults_ErrorString_CountsAsFailed()
-    {
-        var json = """[{"Title":"Update Y","Result":"Error: 0x80240020"}]""";
-        var (_, failed, _) = WindowsUpdateViewModel.ParseInstallResults(json);
-        Assert.Equal(1, failed);
-    }
-
-    [Fact]
-    public void ParseInstallResults_InvalidJson_ReturnsZeros()
-    {
-        var (installed, failed, results) = WindowsUpdateViewModel.ParseInstallResults("not json");
-        Assert.Equal(0, installed);
-        Assert.Equal(0, failed);
-        Assert.Empty(results);
-    }
-
-    [Fact]
-    public void ParseInstallResults_SingleObject_PopulatesOneResult()
-    {
-        var json = """{"Title":"Solo Update","Result":"Installed"}""";
-        var (installed, _, results) = WindowsUpdateViewModel.ParseInstallResults(json);
-        Assert.Equal(1, installed);
-        Assert.Single(results);
-        Assert.Equal("Installed", results["Solo Update"]);
+        Assert.Equal(expected, WindowsUpdateService.FormatSize(bytes));
     }
 }
 

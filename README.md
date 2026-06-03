@@ -119,23 +119,27 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - Schedule the Windows Memory Diagnostic at next boot
 - Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select
 
-### Windows Update (via PSWindowsUpdate)
-- Auto-check for the PSWindowsUpdate module on tab open, with a one-click
-  install card if it's missing
+### Windows Update (Windows Update Agent COM API)
+- Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —
+  installs everything WUA can offer, including optional drivers and firmware
+  that PSWindowsUpdate filters out client-side
 - Unified DataGrid for **everything** in one scan — standard, feature
-  upgrades, hidden updates, and history
-- Categorized: Security, Cumulative, Defender, Driver, Servicing, .NET,
-  Feature upgrade, Hidden — click headers to sort
+  upgrades, optional drivers, and hidden updates
+- Categorized with colored pills: Security, Cumulative, Defender, Driver,
+  Servicing, .NET, Feature upgrade, Hidden — click headers to sort
 - Per-update checkbox selection with Select all / Deselect all — install
   exactly what you want, skip what you don't
-- Title-based install pipeline that works for **all** updates including
-  Defender Definitions and drivers (which have no KB)
-- Honest install reporting — captures Install-WindowsUpdate's actual
-  result and shows real counts (`Installed X/Y. Failed: Z. Not applied: W.`)
-- Per-row Status column updated with each update's outcome after install
-- Live console output in a collapsible panel during install operations
-- Pending-reboot check, update history (last 30)
+- Live progress per update: `Connecting → Downloading → Installing → ✓ Installed`
+  streamed to the console as it happens
+- Per-row Status column updated in real time
+  (`Pending…` → `Downloading…` → `Installing…` → `Installed` /
+  `Installed (reboot required)` / `Failed` / `Not applied`)
+- Honest aggregate reporting:
+  `Installed X/Y. Failed: Z. Not applied: W.`
+- Reboot detection — toast notification if any update requires reboot
+- Pending-reboot check, update history (last 30 — via PSWindowsUpdate)
 - Admin banner with a one-click "Run as Administrator" relaunch
+- PSWindowsUpdate is optional now (used only for the History view)
 
 ### App updates (winget)
 - Scan for upgradable packages

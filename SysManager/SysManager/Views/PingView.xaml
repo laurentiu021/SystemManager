@@ -18,7 +18,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -192,11 +191,5 @@
             </Grid>
         </Border>
 
-        <!-- Live output console -->
-        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,16,28,28" Padding="0" MaxHeight="200">
-            <Expander Header="Live output" IsExpanded="False" Padding="8">
-                <v:ConsoleView DataContext="{Binding Console}"/>
-            </Expander>
-        </Border>
     </Grid>
 </UserControl>

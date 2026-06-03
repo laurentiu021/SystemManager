@@ -106,7 +106,6 @@
                 <TextBlock Text="Actions" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
                 <WrapPanel Orientation="Horizontal">
                     <Button Content="List updates" Command="{Binding ListUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="Feature upgrades" Command="{Binding ListFeatureUpdatesCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="History" Command="{Binding ShowHistoryCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Pending reboot?" Command="{Binding CheckPendingRebootCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Install selected" Command="{Binding InstallUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"

@@ -122,11 +122,19 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 ### Windows Update (via PSWindowsUpdate)
 - Auto-check for the PSWindowsUpdate module on tab open, with a one-click
   install card if it's missing
-- Sortable DataGrid table for available updates, hidden updates, and history
-- Columns: Title, KB, Size, Status, Date, Category — click headers to sort
-- Check for standard and feature updates
-- Install selected updates, list history, check pending-reboot state
+- Unified DataGrid for **everything** in one scan — standard, feature
+  upgrades, hidden updates, and history
+- Categorized: Security, Cumulative, Defender, Driver, Servicing, .NET,
+  Feature upgrade, Hidden — click headers to sort
+- Per-update checkbox selection with Select all / Deselect all — install
+  exactly what you want, skip what you don't
+- Title-based install pipeline that works for **all** updates including
+  Defender Definitions and drivers (which have no KB)
+- Honest install reporting — captures Install-WindowsUpdate's actual
+  result and shows real counts (`Installed X/Y. Failed: Z. Not applied: W.`)
+- Per-row Status column updated with each update's outcome after install
 - Live console output in a collapsible panel during install operations
+- Pending-reboot check, update history (last 30)
 - Admin banner with a one-click "Run as Administrator" relaunch
 
 ### App updates (winget)

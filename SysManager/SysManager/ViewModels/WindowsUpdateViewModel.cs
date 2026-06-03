@@ -163,6 +163,17 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 await _runner.RunScriptViaPwshAsync(@"
                     Import-Module PSWindowsUpdate -ErrorAction Stop
                     $updates = @()
+
+                    $catExpr = {
+                        if     ($_.Title -match 'Defender|Definition Update|Antimalware') { 'Defender' }
+                        elseif ($_.Title -match 'Driver')                                 { 'Driver' }
+                        elseif ($_.Title -match 'Cumulative Update')                      { 'Cumulative' }
+                        elseif ($_.Title -match 'Security Update')                        { 'Security' }
+                        elseif ($_.Title -match 'Servicing Stack')                        { 'Servicing' }
+                        elseif ($_.Title -match '\.NET')                                  { '.NET' }
+                        else                                                              { 'Update' }
+                    }
+
                     $std = Get-WindowsUpdate -MicrosoftUpdate -ErrorAction SilentlyContinue
                     if ($std) {
                         $updates += $std | Select-Object @{N='Title';E={$_.Title}},
@@ -171,8 +182,22 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                             @{N='Status';E={'Available'}},
                             @{N='Date';E={$null}},
                             @{N='IsHidden';E={$false}},
-                            @{N='Category';E={'Standard'}}
+                            @{N='Category';E=$catExpr}
                     }
+
+                    try {
+                        $up = Get-WindowsUpdate -MicrosoftUpdate -UpdateType Software -Category 'Upgrades' -ErrorAction SilentlyContinue
+                        if ($up) {
+                            $updates += $up | Select-Object @{N='Title';E={$_.Title}},
+                                @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
+                                @{N='Size';E={$_.Size}},
+                                @{N='Status';E={'Available'}},
+                                @{N='Date';E={$null}},
+                                @{N='IsHidden';E={$false}},
+                                @{N='Category';E={'Feature upgrade'}}
+                        }
+                    } catch {}
+
                     try {
                         $hidden = Get-WindowsUpdate -MicrosoftUpdate -IsHidden -ErrorAction SilentlyContinue
                         if ($hidden) {
@@ -185,8 +210,10 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                                 @{N='Category';E={'Hidden'}}
                         }
                     } catch {}
-                    if ($updates.Count -eq 0) { '[]' }
-                    else { $updates | ConvertTo-Json -Compress }
+
+                    $updates = $updates | Sort-Object Title -Unique
+                    if (-not $updates -or @($updates).Count -eq 0) { '[]' }
+                    else { @($updates) | ConvertTo-Json -Compress -Depth 3 }
                 ", cancellationToken: _cts.Token);
             }
             finally { _runner.LineReceived -= Capture; }
@@ -258,60 +285,6 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task ListFeatureUpdatesAsync()
-    {
-        IsBusy = true;
-        IsProgressIndeterminate = true;
-        IsShowingHistory = false;
-        StatusMessage = "Checking for feature upgrades…";
-        Updates.Clear();
-        ShowConsole = false;
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
-
-        try
-        {
-            var json = new System.Text.StringBuilder();
-            void Capture(PowerShellLine l)
-            {
-                if (l.Kind == OutputKind.Output)
-                    json.AppendLine(l.Text);
-            }
-
-            _runner.LineReceived += Capture;
-            try
-            {
-                await _runner.RunScriptViaPwshAsync(@"
-                    Import-Module PSWindowsUpdate -ErrorAction Stop
-                    $f = Get-WindowsUpdate -MicrosoftUpdate -UpdateType Software -Category 'Upgrades' -ErrorAction SilentlyContinue
-                    if (-not $f -or $f.Count -eq 0) { '[]' }
-                    else {
-                        $f | Select-Object @{N='Title';E={$_.Title}},
-                            @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
-                            @{N='Size';E={$_.Size}},
-                            @{N='Status';E={'Available'}},
-                            @{N='Date';E={$null}},
-                            @{N='IsHidden';E={$false}},
-                            @{N='Category';E={'Feature upgrade'}} |
-                        ConvertTo-Json -Compress
-                    }
-                ", cancellationToken: _cts.Token);
-            }
-            finally { _runner.LineReceived -= Capture; }
-
-            ParseUpdateJson(json.ToString());
-            UpdateCount = Updates.Count;
-            TableSummary = UpdateCount > 0
-                ? $"{UpdateCount} feature upgrades available."
-                : "No feature upgrades available.";
-            StatusMessage = "Done";
-        }
-        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
-    }
-
-    [RelayCommand]
     private async Task CheckPendingRebootAsync()
     {
         IsBusy = true;
@@ -349,9 +322,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [RelayCommand]
     private async Task InstallUpdatesAsync()
     {
-        var selected = Updates
-            .Where(u => u.IsSelected && !string.IsNullOrWhiteSpace(u.KB) && u.KB.All(c => char.IsLetterOrDigit(c)))
-            .ToList();
+        var selected = Updates.Where(u => u.IsSelected).ToList();
         if (selected.Count == 0)
         {
             StatusMessage = "No updates selected.";
@@ -364,25 +335,145 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current?.Shutdown();
             return;
         }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = $"Installing {selected.Count} update(s) (do not reboot)…";
         ShowConsole = true;
         Console.ClearCommand.Execute(null);
+        foreach (var u in selected) u.Status = "Installing…";
+
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
+
+        var resultJson = new System.Text.StringBuilder();
+        void Capture(PowerShellLine l)
+        {
+            if (l.Kind == OutputKind.Output && l.Text.StartsWith("__RESULT__:", StringComparison.Ordinal))
+                resultJson.AppendLine(l.Text.Substring("__RESULT__:".Length));
+        }
+
         try
         {
-            var kbFilter = string.Join("','", selected.Select(u => u.KB));
-            await _runner.RunScriptViaPwshAsync($@"
-                Import-Module PSWindowsUpdate -ErrorAction Stop
-                Install-WindowsUpdate -MicrosoftUpdate -KBArticleID '{kbFilter}' -AcceptAll -IgnoreReboot -Verbose
-            ", cancellationToken: _cts.Token);
-            StatusMessage = $"Installed {selected.Count} update(s).";
+            // PowerShell single-quoted strings escape ' as ''. Build a literal array of titles.
+            var titleArray = string.Join(",", selected.Select(u => "'" + u.Title.Replace("'", "''") + "'"));
+
+            _runner.LineReceived += Capture;
+            try
+            {
+                await _runner.RunScriptViaPwshAsync($@"
+                    Import-Module PSWindowsUpdate -ErrorAction Stop
+                    $titles = @({titleArray})
+                    $matched = Get-WindowsUpdate -MicrosoftUpdate -ErrorAction SilentlyContinue |
+                               Where-Object {{ $titles -contains $_.Title }}
+                    if (-not $matched -or @($matched).Count -eq 0) {{
+                        $up = Get-WindowsUpdate -MicrosoftUpdate -UpdateType Software -Category 'Upgrades' -ErrorAction SilentlyContinue |
+                              Where-Object {{ $titles -contains $_.Title }}
+                        if ($up) {{ $matched = $up }}
+                    }}
+                    if (-not $matched -or @($matched).Count -eq 0) {{
+                        Write-Host 'No matching updates found in the live update feed. They may already be installed or no longer offered.'
+                        '__RESULT__:[]'
+                        return
+                    }}
+                    $installed = $matched | Install-WindowsUpdate -AcceptAll -IgnoreReboot -Verbose
+                    $report = $installed | Select-Object @{{N='Title';E={{$_.Title}}}},
+                        @{{N='Result';E={{
+                            if ($_.Result) {{ $_.Result.ToString() }}
+                            elseif ($_.Status) {{ $_.Status.ToString() }}
+                            else {{ 'Unknown' }}
+                        }}}}
+                    if (-not $report) {{ '__RESULT__:[]' }}
+                    else {{ '__RESULT__:' + (@($report) | ConvertTo-Json -Compress -Depth 3) }}
+                ", cancellationToken: _cts.Token);
+            }
+            finally { _runner.LineReceived -= Capture; }
+
+            var (installed, failed, results) = ParseInstallResults(resultJson.ToString());
+            ApplyInstallResults(selected, results);
+
+            var notInstalled = selected.Count - installed - failed;
+            StatusMessage = failed > 0 || notInstalled > 0
+                ? $"Installed {installed}/{selected.Count}. Failed: {failed}. Not applied: {notInstalled}."
+                : $"Installed {installed}/{selected.Count}.";
+
+            if (installed > 0)
+                ToastService.Instance.Show("Windows Update", $"Installed {installed} update(s)");
         }
-        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Cancelled.";
+            foreach (var u in selected.Where(s => s.Status == "Installing…")) u.Status = "Cancelled";
+        }
+        catch (InvalidOperationException ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+            foreach (var u in selected.Where(s => s.Status == "Installing…")) u.Status = "Error";
+        }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>
+    /// Parse the JSON report emitted by Install-WindowsUpdate
+    /// (array of {Title, Result}). Returns counts and per-title results.
+    /// </summary>
+    internal static (int Installed, int Failed, IReadOnlyDictionary<string, string> Results)
+        ParseInstallResults(string raw)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(raw)) return (0, 0, map);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            var root = doc.RootElement;
+            var items = root.ValueKind == JsonValueKind.Array
+                ? root.EnumerateArray()
+                : new[] { root }.AsEnumerable();
+
+            foreach (var el in items)
+            {
+                var title = el.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "";
+                var result = el.TryGetProperty("Result", out var r) ? r.GetString() ?? "" : "";
+                if (!string.IsNullOrWhiteSpace(title))
+                    map[title] = result;
+            }
+        }
+        catch (JsonException ex)
+        {
+            Log.Warning("Failed to parse install result JSON: {Error}", ex.Message);
+            return (0, 0, map);
+        }
+
+        var installed = map.Values.Count(IsInstalledResult);
+        var failed = map.Values.Count(IsFailedResult);
+        return (installed, failed, map);
+    }
+
+    private static bool IsInstalledResult(string result) =>
+        result.Contains("Installed", StringComparison.OrdinalIgnoreCase) ||
+        result.Equals("Succeeded", StringComparison.OrdinalIgnoreCase) ||
+        result.Equals("Success", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsFailedResult(string result) =>
+        result.Contains("Failed", StringComparison.OrdinalIgnoreCase) ||
+        result.Contains("Error", StringComparison.OrdinalIgnoreCase);
+
+    private void ApplyInstallResults(IReadOnlyList<UpdateEntry> attempted, IReadOnlyDictionary<string, string> results)
+    {
+        foreach (var entry in attempted)
+        {
+            if (results.TryGetValue(entry.Title, out var result) && !string.IsNullOrWhiteSpace(result))
+            {
+                entry.Status = IsInstalledResult(result) ? "Installed"
+                             : IsFailedResult(result) ? "Failed"
+                             : result;
+            }
+            else
+            {
+                entry.Status = "Not applied";
+            }
+        }
     }
 
     [RelayCommand]

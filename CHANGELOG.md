@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.4] - 2026-06-03
+
+### Fixed
+- **Windows Update install never applied updates** — install command sent KB numbers prefixed with `KB` (e.g. `KB5034441`) to PSWindowsUpdate's `-KBArticleID` parameter, which expects bare digits; the cmdlet matched zero updates and exited silently. Updates without a KB (Defender Definitions, drivers) and updates with multiple KBs were also excluded by the selection filter. The status bar reported a fabricated "Installed N update(s)" message based on the selection count rather than the cmdlet's actual result.
+- **Honest install reporting** — Install-WindowsUpdate output is now captured and parsed; the status bar shows real counts (`Installed X/Y. Failed: Z. Not applied: W.`) and each row's Status column reflects per-update outcome (`Installed`, `Failed`, `Not applied`).
+
+### Changed
+- **Unified update list** — "List updates" now returns Standard, Feature upgrades, and Hidden updates in a single grouped table; the separate "Feature upgrades" button has been removed. Category column distinguishes Security, Cumulative, Defender, Driver, Servicing, .NET, Feature upgrade, and Hidden entries.
+- **Title-based install pipeline** — selected updates are matched against the live PSWindowsUpdate feed by Title rather than KB, so updates without a KB (Defender, drivers) and updates with multiple KBs install correctly.
+
 ## [1.17.3] - 2026-05-29
 
 ### Fixed

@@ -8,15 +8,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
-    <UserControl.Resources>
-        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#070A0F" Offset="0"/>
-            <GradientStop Color="#0B1220" Offset="0.5"/>
-            <GradientStop Color="#090D16" Offset="1"/>
-        </LinearGradientBrush>
-    </UserControl.Resources>
 
-    <Grid Background="{StaticResource PageBg}">
+    <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -52,16 +45,16 @@
         </Border>
 
         <!-- Elevation banner: elevated -->
-        <Border Grid.Row="1" Background="#1AFBBF24" BorderBrush="#40FBBF24" BorderThickness="1"
+        <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
                 CornerRadius="10" Padding="12,8" Margin="28,12,28,0"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
             <Grid>
-                <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                         Margin="-12,-8,0,-8"/>
                 <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
                     <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
                     <TextBlock Text="Running as administrator — you can list and install updates."
-                               Foreground="#FCD34D" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -258,7 +251,7 @@
                                                         <Setter Property="Foreground" Value="#FCA5A5"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Category}" Value="Cumulative">
-                                                        <Setter Property="Foreground" Value="#FCD34D"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Category}" Value="Defender">
                                                         <Setter Property="Foreground" Value="#86EFAC"/>

@@ -4,15 +4,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:v="clr-namespace:SysManager.Views">
-    <UserControl.Resources>
-        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#070A0F" Offset="0"/>
-            <GradientStop Color="#0B1220" Offset="0.5"/>
-            <GradientStop Color="#090D16" Offset="1"/>
-        </LinearGradientBrush>
-    </UserControl.Resources>
 
-    <Grid Background="{StaticResource PageBg}">
+    <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -74,7 +67,7 @@
                         <StackPanel>
                             <TextBlock Text="WORST LOSS" Style="{StaticResource Caption}"/>
                             <TextBlock Text="{Binding Shared.Health.WorstLossPercent, StringFormat={}{0:F1}%}"
-                                       Style="{StaticResource Metric}" Foreground="#FBBF24"/>
+                                       Style="{StaticResource Metric}" Foreground="{DynamicResource WarningStripe}"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource CardInner}" Margin="8,0" Padding="16,8" MinWidth="110">
@@ -146,7 +139,7 @@
                                             </StackPanel>
                                             <StackPanel HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding LossPercent, StringFormat={}{0:F0}%}"
-                                                           Foreground="#FBBF24" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource WarningStripe}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="LOSS" Foreground="#475569" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                         </StackPanel>

@@ -90,12 +90,18 @@ jobs:
           $pattern = "(?ms)^## \[$([regex]::Escape($version))\].*?(?=^## \[|\z)"
           $match = [regex]::Match($changelog, $pattern)
           $notesPath = "release-notes.md"
-          if ($match.Success) {
-              $match.Value.Trim() | Out-File -FilePath $notesPath -Encoding utf8
-          } else {
-              "Release $version. See [CHANGELOG.md](CHANGELOG.md) for details." |
-                  Out-File -FilePath $notesPath -Encoding utf8
+          if (-not $match.Success) {
+              # Fail loud: a release with no CHANGELOG entry would otherwise ship a
+              # generic "see CHANGELOG" placeholder. Stop here so the missing entry
+              # is added before the release is published.
+              throw "No CHANGELOG.md entry found for version $version. Add a '## [$version] - <date>' section before releasing."
           }
+          $body = $match.Value.Trim()
+          if ($body -match "(?m)^## \[$([regex]::Escape($version))\].*$\s*\z") {
+              # Header exists but the section is empty (no notes beneath it).
+              throw "CHANGELOG.md entry for version $version is empty. Add release notes under the '## [$version]' header before releasing."
+          }
+          $body | Out-File -FilePath $notesPath -Encoding utf8
           "path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Append verification instructions to release notes

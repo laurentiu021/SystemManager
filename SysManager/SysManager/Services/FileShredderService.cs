@@ -197,10 +197,9 @@ public sealed class FileShredderService
             catch (UnauthorizedAccessException) { continue; }
             catch (IOException) { continue; }
 
-            foreach (var sub in subDirs)
+            // Skip junctions/symlinks to avoid following reparse points out of the tree.
+            foreach (var sub in subDirs.Where(s => (s.Attributes & FileAttributes.ReparsePoint) == 0))
             {
-                if ((sub.Attributes & FileAttributes.ReparsePoint) != 0)
-                    continue; // skip junctions/symlinks
                 stack.Push(sub);
             }
         }

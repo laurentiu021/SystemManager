@@ -183,24 +183,18 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
             // Disable all third-party entries to restore clean default
             var disabled = 0;
-            foreach (var entry in _allEntries)
+            foreach (var entry in _allEntries.Where(e =>
+                         !e.IsSystemEntry && e.IsEnabled && !IsDefaultWindowsEntry(e)))
             {
-                if (entry.IsSystemEntry) continue;
-                if (!entry.IsEnabled) continue;
-                if (IsDefaultWindowsEntry(entry)) continue;
-
                 if (_service.DisableEntry(entry))
                     disabled++;
             }
 
             // Enable any default Windows entries that were previously disabled
             var enabled = 0;
-            foreach (var entry in _allEntries)
+            foreach (var entry in _allEntries.Where(e =>
+                         !e.IsSystemEntry && !e.IsEnabled && IsDefaultWindowsEntry(e)))
             {
-                if (entry.IsSystemEntry) continue;
-                if (entry.IsEnabled) continue;
-                if (!IsDefaultWindowsEntry(entry)) continue;
-
                 if (_service.EnableEntry(entry))
                     enabled++;
             }

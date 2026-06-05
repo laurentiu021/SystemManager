@@ -290,8 +290,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private static async Task RunAlertScanAsync(DashboardAlert alert, Func<DashboardAlert, Task> scanner)
     {
-        var timer = System.Diagnostics.Stopwatch.StartNew();
-        var etaTask = Task.Run(async () =>
+        // Fire-and-forget ETA hint: after 5s of loading, surface a "remaining" note.
+        _ = Task.Run(async () =>
         {
             await Task.Delay(5000);
             if (alert.State == AlertLoadingState.Loading)
@@ -509,7 +509,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             QuickActionDetail = "Scanning temp folders...";
             QuickActionProgress = 20;
             var tempPath = Path.GetTempPath();
-            var tempSize = await Task.Run(() =>
+            await Task.Run(() =>
             {
                 try
                 {

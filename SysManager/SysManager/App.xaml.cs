@@ -90,7 +90,7 @@ public partial class App : Application
         _pipeCts?.Dispose();
         _trayService?.Dispose();
         try { (Services as IDisposable)?.Dispose(); }
-        catch (ObjectDisposedException) { }
+        catch (ObjectDisposedException ex) { LogService.Logger?.Debug(ex, "Service provider already disposed at exit"); }
         LogService.Shutdown();
         try { _instanceMutex?.ReleaseMutex(); }
         catch (ApplicationException) { /* mutex not owned by this thread */ }

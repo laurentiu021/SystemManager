@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.1] - 2026-06-05
+
+### Fixed
+- **Code-scanning cleanup (mechanical, no behavior change).** Resolved a batch of low-risk CodeQL quality alerts in hand-written code:
+  - Empty `catch` blocks now log at Debug level (`ContextMenuService` registry-write fallbacks and command-path parse, `App.OnExit` service-provider disposal) or carry an explanatory comment where the caught exception is expected (`DnsHostsViewModel` cancellation on teardown).
+  - `Path.Combine` → `Path.Join` in `ActivityLogService` to avoid silently dropping earlier path segments.
+  - Object `==`/`!=` comparisons made explicit with `ReferenceEquals` where reference identity is intended (`MainWindowViewModel` tab activation, `TemperatureService` core-vs-package sensor check).
+  - Implicit `foreach` filtering/mapping replaced with explicit LINQ (`Where`/`Select`/`FirstOrDefault`) in `TemperatureService`, `FileShredderService`, `HostsFileService`, and `ContextMenuViewModel`.
+  - Removed useless local assignments in `DashboardViewModel` (an unused `Stopwatch`, an unread temp-scan size) while preserving the scans' side effects.
+
 ## [1.19.0] - 2026-06-05
 
 ### Changed

@@ -33,9 +33,8 @@ public sealed partial class HostsFileService
         if (!File.Exists(HostsPath)) return entries;
 
         var lines = await File.ReadAllLinesAsync(HostsPath, ct).ConfigureAwait(false);
-        foreach (string rawLine in lines)
+        foreach (string line in lines.Select(l => l.Trim()))
         {
-            string line = rawLine.Trim();
             if (string.IsNullOrEmpty(line)) continue;
 
             bool isDisabled = false;

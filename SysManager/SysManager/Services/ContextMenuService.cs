@@ -221,8 +221,8 @@ public sealed partial class ContextMenuService
                 return true;
             }
         }
-        catch (SecurityException) { }
-        catch (UnauthorizedAccessException) { }
+        catch (SecurityException ex) { Log.Debug(ex, "Context menu HKLM write blocked (security) — falling back to HKCU"); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Context menu HKLM write denied — falling back to HKCU"); }
 
         // Attempt 2: HKCU override (for system-owned entries in HKLM)
         var hkcuPath = @"Software\Classes\" + relativePath;
@@ -439,7 +439,7 @@ public sealed partial class ContextMenuService
                 if (!string.IsNullOrEmpty(exeName) && KnownExeExplanations.TryGetValue(exeName, out var exeExplanation))
                     return exeExplanation;
             }
-            catch (ArgumentException) { }
+            catch (ArgumentException ex) { Log.Debug(ex, "Context menu command path parse failed: {Command}", command); }
         }
 
         return "";

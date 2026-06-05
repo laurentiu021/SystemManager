@@ -12,7 +12,7 @@ namespace SysManager.Services;
 public sealed class ActivityLogService
 {
     private const int MaxEntries = 20;
-    private static readonly string FilePath = Path.Combine(
+    private static readonly string FilePath = Path.Join(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SysManager", "activity.json");
 

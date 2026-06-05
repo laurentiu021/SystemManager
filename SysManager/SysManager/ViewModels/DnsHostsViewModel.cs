@@ -88,7 +88,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             HostEntries.ReplaceWith(entries);
             HostsStatus = $"Loaded {entries.Count} entries.";
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { /* expected on view teardown — nothing to report */ }
         catch (UnauthorizedAccessException)
         {
             HostsStatus = "Access denied — run as administrator to read hosts file.";

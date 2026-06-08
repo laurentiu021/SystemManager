@@ -163,6 +163,13 @@ public sealed partial class CleanupViewModel : ViewModelBase
     private async Task CleanTempAsync()
     {
         if (IsTempRunning) return;
+        if (!DialogService.Instance.Confirm(
+                "Delete temporary files from your user and Windows Temp folders?\n\n" +
+                "Files in use may be skipped. This cannot be undone.",
+                "Confirm Temp Cleanup"))
+        {
+            return;
+        }
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Temp Cleanup");
         if (opLock is null)
         {
@@ -202,6 +209,12 @@ public sealed partial class CleanupViewModel : ViewModelBase
     private async Task EmptyRecycleBinAsync()
     {
         if (IsBinRunning) return;
+        if (!DialogService.Instance.Confirm(
+                "Permanently empty the Recycle Bin? Its contents cannot be recovered.",
+                "Confirm Empty Recycle Bin"))
+        {
+            return;
+        }
         IsBinRunning = true;
         StatusMessage = "Emptying Recycle Bin...";
         _binCts?.Dispose();

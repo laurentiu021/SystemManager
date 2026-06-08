@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.4] - 2026-06-08
+
+### Fixed
+- **Destructive cleanup actions now require confirmation.** Three deletion paths ran immediately with no prompt: Deep Cleanup (`CleanAsync`), Temp Cleanup, and Empty Recycle Bin. Each now shows a `DialogService.Confirm` dialog first — Deep Cleanup states the file count and total size and warns the files bypass the Recycle Bin. Declining cancels with no changes. Adds regression tests covering both the decline (nothing deleted) and confirm (files deleted) paths.
+
 ## [1.19.3] - 2026-06-08
 
 ### Fixed

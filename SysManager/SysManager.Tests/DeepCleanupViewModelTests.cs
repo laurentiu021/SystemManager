@@ -2,8 +2,11 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Reflection;
+using NSubstitute;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -515,5 +518,73 @@ public class DeepCleanupViewModelTests
         vm.IsCleaning = true;
         vm.IsScanning = false;
         Assert.True(vm.IsBusy); // IsCleaning still true
+    }
+
+    // ---------- deletion confirmation gate (Round 2a) ----------
+
+    [Fact]
+    public async Task Clean_WhenUserDeclinesConfirm_DeletesNothing()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_no_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "keep.dat");
+        File.WriteAllText(file, "x");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = NewVm();
+            vm.Categories.Add(new CleanupCategory
+            {
+                Name = "Temp", Description = "test", Paths = new[] { dir },
+                TotalSizeBytes = 1, FileCount = 1, IsSelected = true
+            });
+
+            await vm.CleanCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.True(File.Exists(file), "Files were deleted even though the user declined the confirmation");
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Clean_WhenUserConfirms_DeletesSelectedFiles()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_yes_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "delete.dat");
+        File.WriteAllText(file, "x");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user clicks "Yes"
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = NewVm();
+            vm.Categories.Add(new CleanupCategory
+            {
+                Name = "Temp", Description = "test", Paths = new[] { dir },
+                TotalSizeBytes = 1, FileCount = 1, IsSelected = true
+            });
+
+            await vm.CleanCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.False(File.Exists(file), "File survived even though the user confirmed deletion");
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
     }
 }

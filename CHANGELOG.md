@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.3] - 2026-06-08
+
+### Fixed
+- **Deep Cleanup no longer follows junctions / symbolic links (data-loss fix).** The cleanup traversal descended into reparse points, so a junction inside a cache folder could lead `File.Delete` to remove files **outside** the target tree — for example real user data behind a junction. Traversal now detects reparse points (`FileAttributes.ReparsePoint`) and skips them entirely, never entering or deleting through a link.
+- **Dashboard alerts no longer always show "unavailable".** The App Updates, Event Log, and Pending Reboot scanners each had a free code block after their `catch` that ran unconditionally and overwrote the real scan result with an "unavailable / green" status. The Dashboard therefore reported false-OK for these three checks regardless of the actual system state. The decision logic is now extracted into pure, unit-tested methods and the overwrite is gone, so real results surface.
+
 ## [1.19.2] - 2026-06-08
 
 ### Fixed

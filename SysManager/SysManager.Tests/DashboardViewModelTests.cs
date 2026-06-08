@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -176,5 +177,62 @@ public class DashboardViewModelTests
     {
         var vm = NewVm();
         Assert.NotNull(vm.RecentActivity);
+    }
+
+    // ---------- alert classification (regression for the dead-block-after-catch bug) ----------
+    // Before the fix, a free block after each scanner's catch ran unconditionally and
+    // overwrote the real result with an "unavailable / Green" alert. These assert the
+    // real scan outcome is what surfaces.
+
+    [Fact]
+    public void ClassifyAppUpdates_Zero_IsGreenUpToDate()
+    {
+        var (title, severity) = DashboardViewModel.ClassifyAppUpdates(0);
+        Assert.Equal("All apps up to date", title);
+        Assert.Equal(AlertSeverity.Green, severity);
+    }
+
+    [Theory]
+    [InlineData(1, "1 app update available")]
+    [InlineData(5, "5 app updates available")]
+    public void ClassifyAppUpdates_Positive_IsYellowWithCount(int count, string expectedTitle)
+    {
+        var (title, severity) = DashboardViewModel.ClassifyAppUpdates(count);
+        Assert.Equal(expectedTitle, title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
+    }
+
+    [Fact]
+    public void ClassifyEventLog_Zero_IsGreenNoCriticalEvents()
+    {
+        var (title, severity) = DashboardViewModel.ClassifyEventLog(0);
+        Assert.Equal("No critical events (last 7 days)", title);
+        Assert.Equal(AlertSeverity.Green, severity);
+    }
+
+    [Theory]
+    [InlineData(1, "1 critical event in Event Log (last 7d)")]
+    [InlineData(3, "3 critical events in Event Log (last 7d)")]
+    public void ClassifyEventLog_Positive_IsRedWithCount(int count, string expectedTitle)
+    {
+        var (title, severity) = DashboardViewModel.ClassifyEventLog(count);
+        Assert.Equal(expectedTitle, title);
+        Assert.Equal(AlertSeverity.Red, severity);
+    }
+
+    [Fact]
+    public void ClassifyPendingReboot_True_IsYellow()
+    {
+        var (title, severity) = DashboardViewModel.ClassifyPendingReboot(true);
+        Assert.Equal("Pending reboot required (Windows Update)", title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
+    }
+
+    [Fact]
+    public void ClassifyPendingReboot_False_IsGreen()
+    {
+        var (title, severity) = DashboardViewModel.ClassifyPendingReboot(false);
+        Assert.Equal("No pending reboots", title);
+        Assert.Equal(AlertSeverity.Green, severity);
     }
 }

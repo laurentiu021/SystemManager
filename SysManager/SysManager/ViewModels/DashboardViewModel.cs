@@ -356,22 +356,16 @@ public sealed partial class DashboardViewModel : ViewModelBase
             var countText = output.ToString().Trim();
             var count = int.TryParse(countText, out var n) ? Math.Max(n - 2, 0) : 0;
 
+            var (title, severity) = ClassifyAppUpdates(count);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                if (count == 0)
-                {
-                    alert.Title = "All apps up to date";
-                    alert.Severity = AlertSeverity.Green;
-                }
-                else
-                {
-                    alert.Title = $"{count} app update{(count == 1 ? "" : "s")} available";
-                    alert.Severity = AlertSeverity.Yellow;
-                }
+                alert.Title = title;
+                alert.Severity = severity;
             });
         }
-        catch (Exception ex) { Log.Debug("Alert scan failed: {Error}", ex.Message); }//
+        catch (Exception ex)
         {
+            Log.Debug("Alert scan failed: {Error}", ex.Message);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 alert.Title = "App update check unavailable";
@@ -379,6 +373,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
             });
         }
     }
+
+    /// <summary>Pure decision for the App Updates alert. Testable without WPF.</summary>
+    internal static (string Title, AlertSeverity Severity) ClassifyAppUpdates(int count) =>
+        count == 0
+            ? ("All apps up to date", AlertSeverity.Green)
+            : ($"{count} app update{(count == 1 ? "" : "s")} available", AlertSeverity.Yellow);
 
     private async Task ScanMemoryHealthAsync(DashboardAlert alert)
     {
@@ -411,22 +411,16 @@ public sealed partial class DashboardViewModel : ViewModelBase
             using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(query);
             while (reader.ReadEvent() is not null) criticalCount++;
 
+            var (title, severity) = ClassifyEventLog(criticalCount);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                if (criticalCount == 0)
-                {
-                    alert.Title = "No critical events (last 7 days)";
-                    alert.Severity = AlertSeverity.Green;
-                }
-                else
-                {
-                    alert.Title = $"{criticalCount} critical event{(criticalCount == 1 ? "" : "s")} in Event Log (last 7d)";
-                    alert.Severity = AlertSeverity.Red;
-                }
+                alert.Title = title;
+                alert.Severity = severity;
             });
         }
-        catch (Exception ex) { Log.Debug("Alert scan failed: {Error}", ex.Message); }//
+        catch (Exception ex)
         {
+            Log.Debug("Alert scan failed: {Error}", ex.Message);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 alert.Title = "Event Log check unavailable";
@@ -436,6 +430,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
         return Task.CompletedTask;
     }
 
+    /// <summary>Pure decision for the Event Log alert. Testable without WPF.</summary>
+    internal static (string Title, AlertSeverity Severity) ClassifyEventLog(int criticalCount) =>
+        criticalCount == 0
+            ? ("No critical events (last 7 days)", AlertSeverity.Green)
+            : ($"{criticalCount} critical event{(criticalCount == 1 ? "" : "s")} in Event Log (last 7d)", AlertSeverity.Red);
+
     private Task ScanWindowsFeaturesAsync(DashboardAlert alert)
     {
         try
@@ -444,22 +444,16 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired");
             var pending = key is not null;
 
+            var (title, severity) = ClassifyPendingReboot(pending);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                if (pending)
-                {
-                    alert.Title = "Pending reboot required (Windows Update)";
-                    alert.Severity = AlertSeverity.Yellow;
-                }
-                else
-                {
-                    alert.Title = "No pending reboots";
-                    alert.Severity = AlertSeverity.Green;
-                }
+                alert.Title = title;
+                alert.Severity = severity;
             });
         }
-        catch (Exception ex) { Log.Debug("Alert scan failed: {Error}", ex.Message); }//
+        catch (Exception ex)
         {
+            Log.Debug("Alert scan failed: {Error}", ex.Message);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 alert.Title = "Feature check unavailable";
@@ -468,6 +462,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
         return Task.CompletedTask;
     }
+
+    /// <summary>Pure decision for the pending-reboot alert. Testable without WPF.</summary>
+    internal static (string Title, AlertSeverity Severity) ClassifyPendingReboot(bool pending) =>
+        pending
+            ? ("Pending reboot required (Windows Update)", AlertSeverity.Yellow)
+            : ("No pending reboots", AlertSeverity.Green);
 
     // ══════════════════════════════════════════════════════════════════════
     //  RECENT ACTIVITY

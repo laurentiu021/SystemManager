@@ -78,8 +78,10 @@ public partial class App : Application
 
         ThemeService.Instance.Initialize();
 
-        // Start listening for activation requests from subsequent instances
-        StartPipeListener();
+        // Start listening for activation requests from subsequent instances.
+        // Fire-and-forget is intentional — the listener loop runs for the app
+        // lifetime and is cancelled via _pipeCts on OnExit.
+        _ = StartPipeListenerAsync();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -88,7 +90,7 @@ public partial class App : Application
         _pipeCts?.Dispose();
         _trayService?.Dispose();
         try { (Services as IDisposable)?.Dispose(); }
-        catch (ObjectDisposedException) { }
+        catch (ObjectDisposedException ex) { LogService.Logger?.Debug(ex, "Service provider already disposed at exit"); }
         LogService.Shutdown();
         try { _instanceMutex?.ReleaseMutex(); }
         catch (ApplicationException) { /* mutex not owned by this thread */ }
@@ -127,9 +129,11 @@ public partial class App : Application
 
     /// <summary>
     /// Listens for named pipe connections from subsequent instances and
-    /// activates the main window when one connects.
+    /// activates the main window when one connects. Returns a Task so the
+    /// caller can fire-and-forget without using the async-void anti-pattern;
+    /// any exception escaping the loop is logged via OnTask (UnobservedTaskException).
     /// </summary>
-    private async void StartPipeListener()
+    private async Task StartPipeListenerAsync()
     {
         _pipeCts = new CancellationTokenSource();
         var ct = _pipeCts.Token;
@@ -179,6 +183,10 @@ public partial class App : Application
 
         try
         {
+            // MessageBox is the safe last-resort dialog here: the unhandled
+            // dispatcher exception may itself originate from DialogService or
+            // any of its dependencies, so we cannot rely on the app's own
+            // dialog stack at this point. Direct WPF MessageBox always works.
             MessageBox.Show(e.Exception.Message, "SysManager error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }

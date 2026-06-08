@@ -117,7 +117,7 @@ public sealed class TemperatureService
                     var maxCore = tempSensors
                         .Where(s => s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase))
                         .MaxBy(s => s.Value);
-                    if (maxCore is not null && maxCore != packageSensor)
+                    if (maxCore is not null && !ReferenceEquals(maxCore, packageSensor))
                     {
                         readings.Add(new TemperatureReading("CPU", $"Hottest Core ({maxCore.Name})",
                             maxCore.Value));
@@ -186,7 +186,7 @@ public sealed class TemperatureService
         finally
         {
             try { computer?.Close(); }
-            catch { /* dispose errors — ignore */ }
+            catch (Exception ex) { Log.Debug(ex, "LibreHardwareMonitor close failed"); }
         }
     }
 
@@ -251,15 +251,12 @@ public sealed class TemperatureService
 
             foreach (var gpu in gpus)
             {
-                var sensors = gpu.ThermalInformation.ThermalSensors;
-                foreach (var sensor in sensors)
+                var sensor = gpu.ThermalInformation.ThermalSensors
+                    .FirstOrDefault(s => s.CurrentTemperature > 0);
+                if (sensor is not null)
                 {
-                    if (sensor.CurrentTemperature > 0)
-                    {
-                        readings.Add(new TemperatureReading("GPU", gpu.FullName,
-                            sensor.CurrentTemperature));
-                        break;
-                    }
+                    readings.Add(new TemperatureReading("GPU", gpu.FullName,
+                        sensor.CurrentTemperature));
                 }
             }
         }
@@ -276,12 +273,9 @@ public sealed class TemperatureService
         try
         {
             var disks = await _diskHealth.CollectAsync();
-            foreach (var disk in disks)
+            foreach (var disk in disks.Where(d => d.TemperatureC.HasValue))
             {
-                if (disk.TemperatureC.HasValue)
-                {
-                    readings.Add(new TemperatureReading("Storage", disk.FriendlyName, disk.TemperatureC));
-                }
+                readings.Add(new TemperatureReading("Storage", disk.FriendlyName, disk.TemperatureC));
             }
         }
         catch (ManagementException ex) { Log.Debug("Disk temp unavailable: {Error}", ex.Message); }

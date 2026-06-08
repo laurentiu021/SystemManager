@@ -72,6 +72,12 @@
             <SolidColorBrush x:Key="Danger" Color="#EF4444"/>
             <SolidColorBrush x:Key="Info" Color="#38BDF8"/>
 
+            <!-- Warning category surface (admin elevation banner, etc.) -->
+            <SolidColorBrush x:Key="WarningBgSubtle" Color="#1AFBBF24"/>
+            <SolidColorBrush x:Key="WarningBg" Color="#40FBBF24"/>
+            <SolidColorBrush x:Key="WarningStripe" Color="#FBBF24"/>
+            <SolidColorBrush x:Key="WarningText" Color="#FCD34D"/>
+
             <!-- Console output coloring (legacy) -->
             <SolidColorBrush x:Key="OutErrorBrush"   Color="#F87171" />
             <SolidColorBrush x:Key="OutWarnBrush"    Color="#FBBF24" />

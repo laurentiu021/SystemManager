@@ -9,7 +9,7 @@
              mc:Ignorable="d"
              Background="{DynamicResource Surface0}">
 
-    <Grid Margin="32,24">
+    <Grid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>

@@ -4,13 +4,13 @@
 
 using SysManager.Services;
 using SysManager.ViewModels;
-using SysManager.Helpers;
 
 namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="PrivacyViewModel"/>. Verifies toggle population,
-/// category filtering, and reset behavior without writing to the registry.
+/// category filtering, pending-change tracking, and discard behavior
+/// without writing to the registry.
 /// </summary>
 public class PrivacyViewModelTests
 {
@@ -63,19 +63,6 @@ public class PrivacyViewModelTests
     }
 
     [Fact]
-    public void ResetAll_SetsAllIsEnabledToFalse()
-    {
-        var vm = CreateVm();
-        // Some toggles may be enabled from registry reads — force some on
-        foreach (var toggle in vm.Toggles)
-            toggle.IsEnabled = true;
-
-        vm.ResetAllCommand.Execute(null);
-
-        Assert.All(vm.Toggles, t => Assert.False(t.IsEnabled));
-    }
-
-    [Fact]
     public void FilteredToggles_InitiallyMatchesAll()
     {
         var vm = CreateVm();
@@ -83,10 +70,69 @@ public class PrivacyViewModelTests
     }
 
     [Fact]
-    public void StatusMessage_UpdatesAfterReset()
+    public void Constructor_NoPendingChanges_AfterLoad()
     {
         var vm = CreateVm();
-        vm.ResetAllCommand.Execute(null);
-        Assert.Contains("reset", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, vm.PendingChangeCount);
+        Assert.False(vm.HasPendingChanges);
+    }
+
+    [Fact]
+    public void TogglingValue_IncrementsPendingChangeCount()
+    {
+        var vm = CreateVm();
+        var first = vm.Toggles[0];
+        first.IsEnabled = !first.IsEnabled;
+
+        Assert.Equal(1, vm.PendingChangeCount);
+        Assert.True(vm.HasPendingChanges);
+    }
+
+    [Fact]
+    public void TogglingValueBackToBaseline_ResetsPendingCount()
+    {
+        var vm = CreateVm();
+        var first = vm.Toggles[0];
+        var original = first.IsEnabled;
+
+        first.IsEnabled = !original;
+        first.IsEnabled = original;
+
+        Assert.Equal(0, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public void DiscardChanges_RestoresAllTogglesToBaseline()
+    {
+        var vm = CreateVm();
+        var baseline = vm.Toggles.Select(t => t.IsEnabled).ToList();
+
+        // Flip every toggle.
+        foreach (var t in vm.Toggles)
+            t.IsEnabled = !t.IsEnabled;
+
+        vm.DiscardChangesCommand.Execute(null);
+
+        for (int i = 0; i < vm.Toggles.Count; i++)
+            Assert.Equal(baseline[i], vm.Toggles[i].IsEnabled);
+        Assert.Equal(0, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public void StatusMessage_MentionsPending_WhenChangesQueued()
+    {
+        var vm = CreateVm();
+        vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled;
+
+        Assert.Contains("pending", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ApplyChanges_WithNoPending_SetsNoChangesMessage()
+    {
+        var vm = CreateVm();
+        vm.ApplyChangesCommand.Execute(null);
+
+        Assert.Contains("no changes", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 }

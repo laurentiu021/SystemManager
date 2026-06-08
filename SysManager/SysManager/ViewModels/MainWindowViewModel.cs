@@ -166,7 +166,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
             Dashboard = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth));
             AppUpdates = new AppUpdatesViewModel(winget);
-            WindowsUpdate = new WindowsUpdateViewModel(runner);
+            WindowsUpdate = new WindowsUpdateViewModel(runner, new WindowsUpdateService());
             SystemHealth = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner);
             Cleanup = new CleanupViewModel(runner);
             DeepCleanup = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), fixedDrives);
@@ -373,8 +373,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (parentGroup is not null) parentGroup.IsExpanded = true;
 
         // Pause/resume the process manager auto-refresh loop based on tab visibility.
-        ProcessManager.IsActive = value.Content == ProcessManager;
-        Dashboard.IsActive = value.Content == Dashboard;
+        ProcessManager.IsActive = ReferenceEquals(value.Content, ProcessManager);
+        Dashboard.IsActive = ReferenceEquals(value.Content, Dashboard);
     }
 
     /// <summary>Select a nav item by its automation id.</summary>

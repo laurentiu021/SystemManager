@@ -4,6 +4,7 @@
 
 using System.Diagnostics;
 using System.Security.Principal;
+using Serilog;
 
 namespace SysManager.Helpers;
 
@@ -42,14 +43,19 @@ public static class AdminHelper
             Process.Start(psi);
             return true;
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            // User declined UAC or process path unavailable
+            // Process path unavailable or app shutting down.
+            Log.Debug(ex, "RelaunchAsAdmin: process path unavailable");
             return false;
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (System.ComponentModel.Win32Exception ex)
         {
-            // UAC declined or another Win32 error
+            // 1223 = ERROR_CANCELLED (user declined UAC); other codes = real Win32 error.
+            if (ex.NativeErrorCode == 1223)
+                Log.Information("RelaunchAsAdmin: user declined UAC prompt");
+            else
+                Log.Warning(ex, "RelaunchAsAdmin: Win32 error {Code}", ex.NativeErrorCode);
             return false;
         }
     }

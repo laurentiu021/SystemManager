@@ -23,6 +23,7 @@ namespace SysManager.Services;
 public sealed partial class IconExtractorService
 {
     private static readonly ConcurrentDictionary<string, ImageSource?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Queue<string> _insertionOrder = new();
     private static readonly object _evictionLock = new();
 
     /// <summary>Maximum number of cached icons before eviction kicks in.</summary>
@@ -46,23 +47,21 @@ public sealed partial class IconExtractorService
         if (string.IsNullOrEmpty(normalized))
             return _appFallback.Value;
 
-        // Evict oldest entries when cache exceeds the limit.
-        // ConcurrentDictionary has no insertion order, so we clear half
-        // the cache to amortize the cost of eviction.
-        if (_cache.Count >= MaxCacheSize)
+        if (_cache.TryGetValue(normalized, out var cached))
+            return cached;
+
+        var icon = ExtractIcon(normalized);
+
+        lock (_evictionLock)
         {
-            lock (_evictionLock)
-            {
-                // Double-check inside lock to avoid redundant eviction.
-                if (_cache.Count >= MaxCacheSize)
-                {
-                    var keys = _cache.Keys.Take(_cache.Count / 2).ToList();
-                    foreach (var k in keys) _cache.TryRemove(k, out _);
-                }
-            }
+            if (_cache.TryAdd(normalized, icon))
+                _insertionOrder.Enqueue(normalized);
+
+            while (_cache.Count > MaxCacheSize && _insertionOrder.TryDequeue(out var oldest))
+                _cache.TryRemove(oldest, out _);
         }
 
-        return _cache.GetOrAdd(normalized, static path => ExtractIcon(path));
+        return icon;
     }
 
     /// <summary>
@@ -470,7 +469,7 @@ public sealed partial class IconExtractorService
         public string szTypeName;
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr SHGetFileInfo(
         string pszPath, uint dwFileAttributes,
         ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);

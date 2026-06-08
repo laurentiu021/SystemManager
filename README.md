@@ -93,10 +93,10 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
   at your ISP, or at the far-end service
 - **Presets for gamers & streamers**:
   - Global (Google, Cloudflare, your router)
-  - **CS2 Europe** — Valve Frankfurt, Vienna, Stockholm relays
-  - **FACEIT Europe** — competitive CS2 servers in DE, UK, FR, NL, SE
-  - **PUBG Europe** — Krafton EU matchmaking endpoints
-  - **Streaming** — YouTube and Twitch ingest
+  - **CS2 Europe** — Valve matchmaking relays (Vienna, Luxembourg, Warsaw, EU West/Central/East)
+  - **FACEIT Europe** — competitive CS2 servers in DE, NL, UK
+  - **PUBG Europe** — EU matchmaking cloud regions (Frankfurt, Ireland, London)
+  - **Streaming** — YouTube, Twitch, Cloudflare
 - Auto-traceroute on a configurable interval (30 s – 10 min)
 - Speed tests: HTTP (Cloudflare) and the official Ookla CLI (auto-downloaded)
   with persistent history (last 20 results per engine) for tracking service
@@ -119,15 +119,27 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - Schedule the Windows Memory Diagnostic at next boot
 - Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select
 
-### Windows Update (via PSWindowsUpdate)
-- Auto-check for the PSWindowsUpdate module on tab open, with a one-click
-  install card if it's missing
-- Sortable DataGrid table for available updates, hidden updates, and history
-- Columns: Title, KB, Size, Status, Date, Category — click headers to sort
-- Check for standard and feature updates
-- Install selected updates, list history, check pending-reboot state
-- Live console output in a collapsible panel during install operations
+### Windows Update (Windows Update Agent COM API)
+- Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —
+  installs everything WUA can offer, including optional drivers and firmware
+  that PSWindowsUpdate filters out client-side
+- Unified DataGrid for **everything** in one scan — standard, feature
+  upgrades, optional drivers, and hidden updates
+- Categorized with colored pills: Security, Cumulative, Defender, Driver,
+  Servicing, .NET, Feature upgrade, Hidden — click headers to sort
+- Per-update checkbox selection with Select all / Deselect all — install
+  exactly what you want, skip what you don't
+- Live progress per update: `Connecting → Downloading → Installing → ✓ Installed`
+  streamed to the console as it happens
+- Per-row Status column updated in real time
+  (`Pending…` → `Downloading…` → `Installing…` → `Installed` /
+  `Installed (reboot required)` / `Failed` / `Not applied`)
+- Honest aggregate reporting:
+  `Installed X/Y. Failed: Z. Not applied: W.`
+- Reboot detection — toast notification if any update requires reboot
+- Pending-reboot check, update history (last 30 — via PSWindowsUpdate)
 - Admin banner with a one-click "Run as Administrator" relaunch
+- PSWindowsUpdate is optional now (used only for the History view)
 
 ### App updates (winget)
 - Scan for upgradable packages
@@ -223,7 +235,9 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - **Telemetry**: disable diagnostic data, activity history, advertising ID, feedback prompts
 - **UI Declutter**: disable Start suggestions, tips, lock screen tips, Spotlight ads
 - **Features**: disable Copilot, Cortana, web search in Start, widgets
-- Instant apply — toggles take effect immediately via registry writes
+- Explicit apply — flip toggles to stage changes, press **Apply** to write to the
+  registry, or **Discard** to revert pending changes. A live counter shows how
+  many changes are queued, so accidental clicks never modify the system silently.
 - Category filter and search
 - Requires admin for HKLM-backed toggles
 - Fully reversible — re-enable any toggle with one click
@@ -442,17 +456,18 @@ to stay on the latest version.
 
 ### Direct download
 
-Grab `SysManager.exe` from the [latest release](https://github.com/laurentiu021/SystemManager/releases/latest)
+Grab `SysManager-v<version>.exe` (e.g. `SysManager-v1.19.2.exe`) from the
+[latest release](https://github.com/laurentiu021/SystemManager/releases/latest)
 and double-click it. The executable is self-contained — no installer, no .NET
 runtime required.
 
 ### Verifying the download
 
-Each release ships a matching `SysManager.exe.sha256`. Verify before running:
+Each release ships a matching `SysManager-v<version>.exe.sha256`. Verify before running:
 
 ```powershell
-Get-FileHash .\SysManager.exe -Algorithm SHA256
-# Compare the output to the contents of SysManager.exe.sha256.
+Get-FileHash .\SysManager-v1.19.2.exe -Algorithm SHA256
+# Compare the output to the contents of SysManager-v1.19.2.exe.sha256.
 ```
 
 The build is not currently code-signed, so Windows SmartScreen may warn on

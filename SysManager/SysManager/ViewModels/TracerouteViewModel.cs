@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Net;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -18,7 +17,6 @@ namespace SysManager.ViewModels;
 public sealed partial class TracerouteViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
-    public ConsoleViewModel Console { get; } = new();
     private CancellationTokenSource? _traceCts;
     private int _totalHops;
 
@@ -71,7 +69,6 @@ public sealed partial class TracerouteViewModel : ViewModelBase
         }
         IsTracing = true;
         TraceStatus = $"Tracing {TraceHost}…";
-        Console.Append(PowerShellLine.Info($"Traceroute to {TraceHost} started…"));
 
         _traceCts?.Dispose();
         _traceCts = new CancellationTokenSource();
@@ -84,7 +81,6 @@ public sealed partial class TracerouteViewModel : ViewModelBase
             Shared.InvokeOnUi(() =>
             {
                 TraceStatus = $"Tracing {TraceHost}… hop {hop.HopNumber}";
-                AppendHopLine(hop, isLast: false);
             });
         }
 
@@ -96,13 +92,6 @@ public sealed partial class TracerouteViewModel : ViewModelBase
             {
                 Shared.ApplyRoute(TraceHost, collected);
                 TraceStatus = $"Done — {collected.Count} hops";
-                // Re-append the last hop with destination-reached explanation
-                if (collected.Count > 0)
-                {
-                    var last = collected[^1];
-                    AppendHopLine(last, isLast: true);
-                }
-                Console.Append(PowerShellLine.Info($"Traceroute complete — {collected.Count} hops."));
             });
         }
         catch (OperationCanceledException) { TraceStatus = "Cancelled"; }
@@ -119,63 +108,6 @@ public sealed partial class TracerouteViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelTrace() => _traceCts?.Cancel();
-
-    private void AppendHopLine(TracerouteHop hop, bool isLast)
-    {
-        var explanation = GetHopExplanation(hop, isLast);
-        string line;
-        if (hop.LatencyMs.HasValue)
-        {
-            var hostPart = !string.IsNullOrEmpty(hop.HostName) && hop.HostName != hop.Address
-                ? $"{hop.Address} ({hop.HostName})"
-                : hop.Address;
-            line = $"Hop {hop.HopNumber}: {hostPart} — {hop.LatencyMs.Value:F1} ms [{explanation}]";
-            Console.Append(PowerShellLine.Output(line));
-        }
-        else
-        {
-            line = $"Hop {hop.HopNumber}: * — Request timed out [{explanation}]";
-            Console.Append(PowerShellLine.Warn(line));
-        }
-    }
-
-    /// <summary>
-    /// Returns a human-readable explanation of a hop's role in the route.
-    /// </summary>
-    private static string GetHopExplanation(TracerouteHop hop, bool isLast)
-    {
-        if (isLast && hop.LatencyMs.HasValue)
-            return "Destination reached";
-
-        if (!hop.LatencyMs.HasValue)
-            return "Filtered node — does not respond to ICMP";
-
-        if (hop.HopNumber == 1 && IsPrivateAddress(hop.Address))
-            return "Your local router/gateway";
-
-        if (IsPrivateAddress(hop.Address))
-            return "Local network node";
-
-        return "Transit node";
-    }
-
-    /// <summary>
-    /// Checks whether the given IP address is in a private range
-    /// (10.x.x.x, 192.168.x.x, 172.16-31.x.x).
-    /// </summary>
-    private static bool IsPrivateAddress(string address)
-    {
-        if (!IPAddress.TryParse(address, out var ip)) return false;
-        var bytes = ip.GetAddressBytes();
-        if (bytes.Length != 4) return false;
-        // 10.0.0.0/8
-        if (bytes[0] == 10) return true;
-        // 192.168.0.0/16
-        if (bytes[0] == 192 && bytes[1] == 168) return true;
-        // 172.16.0.0/12
-        if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true;
-        return false;
-    }
 
     protected override void Dispose(bool disposing)
     {

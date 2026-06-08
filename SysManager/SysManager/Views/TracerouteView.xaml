@@ -4,19 +4,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:v="clr-namespace:SysManager.Views">
-    <UserControl.Resources>
-        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#070A0F" Offset="0"/>
-            <GradientStop Color="#0B1220" Offset="0.5"/>
-            <GradientStop Color="#090D16" Offset="1"/>
-        </LinearGradientBrush>
-    </UserControl.Resources>
 
-    <Grid Background="{StaticResource PageBg}">
+    <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header with own Start/Stop -->
@@ -105,15 +97,5 @@
             </Border>
         </Grid>
 
-        <!-- Live output console -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,28" Padding="0" MaxHeight="200">
-            <Expander Header="Live output" IsExpanded="False" Padding="8">
-                <StackPanel>
-                    <TextBlock Text="Each hop represents a network node between you and the destination. Timeouts are normal — many routers filter ICMP packets. High latency on a specific hop may indicate a bottleneck."
-                               Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                    <v:ConsoleView DataContext="{Binding Console}"/>
-                </StackPanel>
-            </Expander>
-        </Border>
     </Grid>
 </UserControl>

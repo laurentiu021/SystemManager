@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// </summary>
 public class WindowsUpdateViewModelTests
 {
-    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner());
+    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService());
 
     // ---------- construction & defaults ----------
 
@@ -59,7 +59,6 @@ public class WindowsUpdateViewModelTests
     [Theory]
     [InlineData("ListUpdatesCommand")]
     [InlineData("ShowHistoryCommand")]
-    [InlineData("ListFeatureUpdatesCommand")]
     [InlineData("CheckPendingRebootCommand")]
     [InlineData("InstallUpdatesCommand")]
     [InlineData("InstallModuleCommand")]
@@ -204,6 +203,38 @@ public class WindowsUpdateViewModelTests
         var result = (string)method.Invoke(null, new object[] { json.RootElement })!;
 
         Assert.Equal("50 MB", result);
+    }
+
+    // ---------- WindowsUpdateService.ClassifyCategory (title-based path) ----------
+
+    [Theory]
+    [InlineData("Microsoft Defender Antivirus Definition Update - KB2267602", "Defender")]
+    [InlineData("Security Intelligence Update for Microsoft Defender Antivirus", "Defender")]
+    [InlineData("Antimalware Platform Update", "Defender")]
+    [InlineData("HP - Firmware - 3.5.1.0", "Driver")]
+    [InlineData("HP Firmware Driver Update (3.5.5.0)", "Driver")]
+    [InlineData("2026-05 Cumulative Update for Windows 11", "Cumulative")]
+    [InlineData("2026-05 Security Update for Windows 11", "Security")]
+    [InlineData("2026-05 Servicing Stack Update for Windows 11", "Servicing")]
+    [InlineData(".NET 10.0.5 Update", ".NET")]
+    [InlineData("Random unmatched title", "Update")]
+    [InlineData("", "Update")]
+    public void ClassifyCategory_TitleBased_ReturnsExpected(string title, string expected)
+    {
+        Assert.Equal(expected, WindowsUpdateService.ClassifyCategory(title, u: null));
+    }
+
+    // ---------- WindowsUpdateService.FormatSize ----------
+
+    [Theory]
+    [InlineData(0L, "")]
+    [InlineData(512L, "512 B")]
+    [InlineData(1024L, "1.0 KB")]
+    [InlineData(1048576L, "1.0 MB")]
+    [InlineData(1073741824L, "1.0 GB")]
+    public void FormatSize_VariousValues_FormatsCorrectly(long bytes, string expected)
+    {
+        Assert.Equal(expected, WindowsUpdateService.FormatSize(bytes));
     }
 }
 

@@ -6,6 +6,79 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.2] - 2026-06-08
+
+### Fixed
+- **UI test harness could never locate the app executable.** `AppFixture` hardcoded a `net8.0-windows` output path while the project targets `net10.0-windows`, so `FindExecutable()` always threw `FileNotFoundException` when running the UI automation tests locally. The path is now resolved dynamically from the `net*-windows` build folder, so it survives future framework bumps.
+
+## [1.19.1] - 2026-06-05
+
+### Fixed
+- **Code-scanning cleanup (mechanical, no behavior change).** Resolved a batch of low-risk CodeQL quality alerts in hand-written code:
+  - Empty `catch` blocks now log at Debug level (`ContextMenuService` registry-write fallbacks and command-path parse, `App.OnExit` service-provider disposal) or carry an explanatory comment where the caught exception is expected (`DnsHostsViewModel` cancellation on teardown).
+  - `Path.Combine` → `Path.Join` in `ActivityLogService` to avoid silently dropping earlier path segments.
+  - Object `==`/`!=` comparisons made explicit with `ReferenceEquals` where reference identity is intended (`MainWindowViewModel` tab activation, `TemperatureService` core-vs-package sensor check).
+  - Implicit `foreach` filtering/mapping replaced with explicit LINQ (`Where`/`Select`/`FirstOrDefault`) in `TemperatureService`, `FileShredderService`, `HostsFileService`, and `ContextMenuViewModel`.
+  - Removed useless local assignments in `DashboardViewModel` (an unused `Stopwatch`, an unread temp-scan size) while preserving the scans' side effects.
+
+## [1.19.0] - 2026-06-05
+
+### Changed
+- **Uniform outer margins across 13 views.** BatteryHealth, BulkInstaller, ContextMenu, DiskAnalyzer, Drivers, DuplicateFile, Performance, Privacy, ProcessManager, Services, Startup, Uninstaller, WindowsFeatures all migrated from `Margin="32,24"` to the canonical `Margin="28,24,28,16"` already used by Dashboard and AppAlerts. Layout is now consistent across the whole nav.
+- **Page background — theme-aware.** 15 views were defining a hardcoded `LinearGradientBrush PageBg` (`#070A0F`/`#0B1220`/`#090D16`) and using `{StaticResource PageBg}` for their root `Grid.Background`. Replaced with `{DynamicResource Surface0}`. The gradient resource definitions are gone, the views are smaller, and a future light-theme switch will work without per-view edits.
+- **Admin elevation banner colors — theme-aware.** Replaced 4 hardcoded amber hex values (`#1AFBBF24`, `#40FBBF24`, `#FBBF24`, `#FCD34D`) used by elevation banners and warning pills across 17 views with new theme brushes: `WarningBgSubtle`, `WarningBg`, `WarningStripe`, `WarningText`. Defined once in `App.xaml`, used everywhere.
+
+## [1.18.2] - 2026-06-03
+
+### Fixed
+- **Pipe listener no longer fire-and-forgets via `async void`.** `App.StartPipeListener` was an async-void method, meaning any exception escaping the loop would crash the process via the AppDomain handler. Renamed to `StartPipeListenerAsync` returning `Task`; `OnStartup` calls it as `_ = StartPipeListenerAsync()` so a stray exception flows through `TaskScheduler.UnobservedTaskException` (logged) instead of terminating the app.
+- **StartupService — removed sync wrapper over async.** `SetEnabled` (sync) was a thin wrapper around `SetEnabledAsync` using `.GetAwaiter().GetResult()`. The wrapper is gone; tests now call `SetEnabledAsync` directly via xUnit `Task` test methods.
+- **Schtasks stderr read** — replaced `stderrTask.Wait(timeout) ? .GetAwaiter().GetResult() : ""` with `await stderrTask.WaitAsync(timeout)` so the read is fully async with a clean timeout fallback.
+- **Privacy Toggles no longer write to the registry on every click.** Toggling a switch now updates local state only; the user must press **Apply** to write pending changes. A live counter shows how many changes are pending, and **Discard** reverts them without touching the registry. Prevents accidental system changes when scrolling through the toggle list.
+- **Dashboard no longer freezes on first load.** Static system info (CPU, OS, RAM modules) is now loaded asynchronously instead of blocking the UI thread on a synchronous WMI capture. The Dashboard tab is responsive immediately on startup.
+- **DNS / Hosts tab loads asynchronously.** Reading the hosts file is now async (`File.ReadAllLinesAsync`); Refresh no longer freezes the UI on slow disks.
+- **Icon cache eviction is now true FIFO.** The icon cache previously evicted random entries because `ConcurrentDictionary.Keys` has no insertion-order guarantee. Frequently-used icons could be dropped while stale ones survived. The cache now tracks insertion order via a queue and evicts the oldest entries first when the size limit is reached.
+- **SpeedTest output read** — replaced `Task.Result` access after `Task.WhenAll` with proper `await` to remove the deadlock-prone pattern (the awaited tasks were already complete, but the style is now safe under all call paths).
+- **Silent exception swallowing** — empty `catch { }` blocks now log at Debug level so failures are diagnosable: ThemePopup custom-color parser, TemperatureService LibreHardwareMonitor close, WindowsUpdateService COM/RuntimeBinder catches in `ExtractKbIds` and `ClassifyCategory`.
+- **Deep Cleanup** — file/directory cleanup errors are now logged in addition to being added to the per-run error list, so unexpected I/O issues surface in the SysManager log.
+- **Admin relaunch** — `RelaunchAsAdmin` now distinguishes the user's UAC decline (Win32 error 1223 → Information) from real Win32 failures (Warning) and logs `InvalidOperationException` instead of swallowing it silently.
+- **`SHGetFileInfo` P/Invoke** — added `SetLastError = true` so callers can inspect the Win32 error code on failure.
+
+### Changed
+- **PrivacyView toolbar** — the **Apply All** button is replaced by **Apply** (writes only pending changes) and **Discard** (reverts to last-applied state). Both are disabled when no changes are pending. The Apply button uses the primary style to highlight the action.
+- **PerformanceService.TakeSnapshotAsync** XML doc now warns callers that the method must run before any state-modifying call; the recommended lazy-initialization pattern is documented inline.
+- **PerformanceService.CreateRestorePointAsync** comment reworded — the previous `// BUG-003:` marker was a design note, not an open bug; replaced with an explanation of why PowerShell `AddParameter` cannot be used here.
+- **App.xaml.cs unhandled-exception dialog** — added inline note explaining why `MessageBox.Show` is used instead of `DialogService` (the dispatcher exception may originate from DialogService itself).
+- **`.gitignore`** — added entries for local developer notes (`.session-notes/`, `notes-local.md`, `scratch.md`) so scratch files can never be tracked accidentally.
+
+## [1.18.0] - 2026-06-03
+
+### Fixed
+- **Windows Update install actually works** — replaced PSWindowsUpdate's `Install-WindowsUpdate` with direct calls to the Windows Update Agent COM API (`Microsoft.Update.Session`). PSWindowsUpdate filters out optional driver updates client-side even when the COM API can install them; the new code installs everything WUA reports as available, including drivers, firmware, Defender Definitions, cumulative updates, and feature upgrades.
+- **Honest per-update progress** — live console now streams real per-update events (Connecting → Downloading → Installing → ✓ Installed) instead of a 16-times-repeated PSWindowsUpdate pre/post search noise that resulted in "Installed 0".
+- **Per-row Status reflects reality** — each row's Status column is updated as the install progresses (`Pending…` → `Downloading…` → `Installing…` → `Installed` / `Installed (reboot required)` / `Failed (download)` / `Failed (install code N)` / `Not applied`).
+- **Status column wider with tooltip** — fits longer messages like "Installed (reboot required)" without truncation; full text always visible on hover.
+- **Live output panel no longer auto-resizes** — fixed height of 240px so the DataGrid above keeps its space when many log lines arrive.
+
+### Changed
+- **Removed live output from Ping and Traceroute** — those tabs already display their data graphically (latency chart, hops grid). The console panel was redundant and stole vertical space.
+- **Single-header live output panel** — removed the redundant "Live output" Card+Expander wrapper; the ConsoleView toolbar (Live output / Clear / Copy / Auto-scroll) now sits directly on the panel border, matching CleanupView and AppUpdatesView.
+- **KB column header tooltip** — explains "KB = Microsoft Knowledge Base article ID" since not all updates have one (drivers, firmware, Defender).
+
+### Added
+- **WindowsUpdateService** — new service wrapping `Microsoft.Update.Session` COM API directly. Supports scan (`IsInstalled=0`), download, EULA acceptance, install, and reboot detection. Exposes a `Log` event for live console streaming.
+- **Title-based category classifier** — Defender / Driver / Cumulative / Security / Servicing / .NET / Feature upgrade / Update, with COM `Categories` collection lookup as the primary signal and title heuristics as fallback. Unit-tested.
+
+## [1.17.4] - 2026-06-03
+
+### Fixed
+- **Windows Update install never applied updates** — install command sent KB numbers prefixed with `KB` (e.g. `KB5034441`) to PSWindowsUpdate's `-KBArticleID` parameter, which expects bare digits; the cmdlet matched zero updates and exited silently. Updates without a KB (Defender Definitions, drivers) and updates with multiple KBs were also excluded by the selection filter. The status bar reported a fabricated "Installed N update(s)" message based on the selection count rather than the cmdlet's actual result.
+- **Honest install reporting** — Install-WindowsUpdate output is now captured and parsed; the status bar shows real counts (`Installed X/Y. Failed: Z. Not applied: W.`) and each row's Status column reflects per-update outcome (`Installed`, `Failed`, `Not applied`).
+
+### Changed
+- **Unified update list** — "List updates" now returns Standard, Feature upgrades, and Hidden updates in a single grouped table; the separate "Feature upgrades" button has been removed. Category column distinguishes Security, Cumulative, Defender, Driver, Servicing, .NET, Feature upgrade, and Hidden entries.
+- **Title-based install pipeline** — selected updates are matched against the live PSWindowsUpdate feed by Title rather than KB, so updates without a KB (Defender, drivers) and updates with multiple KBs install correctly.
+
 ## [1.17.3] - 2026-05-29
 
 ### Fixed
@@ -317,6 +390,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Subtitle and Tooltip are auto-generated from child labels.
 - **Version** aligned to 1.7.17.
 
+## [1.7.16] - 2026-05-22
+
+### Fixed
+- **Tray icon creation is now forced**, ensuring the system-tray icon appears even when the platform delays its initial creation.
+
+### Changed
+- **Upgraded H.NotifyIcon to 2.3.0** for more reliable tray-icon handling.
+
+## [1.7.15] - 2026-05-22
+
+### Fixed
+- **Tray icon reliability** — follow-up adjustments to ensure the system-tray icon initializes correctly during startup.
+
+## [1.7.14] - 2026-05-22
+
+### Added
+- **Real app icons in Bulk Installer** — app icons are fetched via the Google Favicon service and cached locally, so the catalog shows recognizable icons instead of placeholders.
+
+### Fixed
+- **Tray icon always visible** — falls back to a system icon when an app icon fails to load, so the tray icon is never missing.
+
 ## [1.7.13] - 2026-05-22
 
 ### Fixed
@@ -327,6 +421,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **File Shredder** — fixed white page (transparent DataGrid background).
 - **Column resize** — CanUserResizeColumns on all remaining DataGrids.
 - **Tray icon** — shows real app icon from exe (not generic).
+
+## [1.7.12] - 2026-05-22
+
+### Fixed
+- **Tray icon loads from the executable**, which is reliable under single-file publishing, with a pack-URI fallback if the embedded icon cannot be read.
+
+## [1.7.11] - 2026-05-22
+
+### Fixed
+- **Tray icon visibility** is now set explicitly, so the system-tray icon shows reliably.
+
+## [1.7.10] - 2026-05-22
+
+### Fixed
+- **Uniform elevation banners** across App Updates, Uninstaller, and Bulk Installer, so every tab presents the admin-elevation prompt the same way.
+- **File Shredder no longer shows a blank page** when the tab is opened.
+
+### Changed
+- **Resizable grid columns everywhere** — `CanUserResizeColumns` is now enabled on all data grids for consistent behavior.
+
+## [1.7.9] - 2026-05-22
+
+### Fixed
+- **Services tab — consistent banner ordering.** The admin elevation banner now sits above the toolbar, matching the layout used by the other tabs.
 
 ## [1.7.8] - 2026-05-22
 
@@ -374,6 +492,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `DefWindowProcW` entry point.
 - **Shutdown crash** — fixed ObjectDisposedException when closing the app
   (DnsHostsViewModel CTS disposal race condition).
+
+## [1.7.2] - 2026-05-22
+
+### Fixed
+- **Shutdown crash** — prevented `ObjectDisposedException` in `DnsHostsViewModel` when the app is closed while a refresh is in flight.
+
+## [1.7.1] - 2026-05-21
+
+### Fixed
+- **Code review findings** — addressed security, thread-safety, and disposal issues surfaced during review (#487).
 
 ## [1.7.0] - 2026-05-21
 
@@ -2704,7 +2832,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - One-click "Install" button that launches the downloaded build and
   closes the current instance so the new version takes over.
 
-### Safety
+### Security
 - Deep cleanup **never** touches: browser caches / cookies / passwords,
   launcher login tokens, the registry, active drivers, Program Files,
   `AppData\Roaming` (live app settings), `ProgramData\NVIDIA` root, or

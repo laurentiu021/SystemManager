@@ -90,7 +90,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private async Task InitAsync()
     {
-        LoadStaticInfo();
+        await LoadStaticInfoAsync();
         LoadDrives();
         LoadActivity();
         StartPollingLoop();
@@ -183,11 +183,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
     //  STATIC INFO (loaded once)
     // ══════════════════════════════════════════════════════════════════════
 
-    private void LoadStaticInfo()
+    private async Task LoadStaticInfoAsync()
     {
         try
         {
-            var snap = _sys.CaptureAsync().GetAwaiter().GetResult();
+            var snap = await _sys.CaptureAsync().ConfigureAwait(true);
             CpuName = snap.Cpu.Name;
             CpuCores = $"{snap.Cpu.Cores} cores · {snap.Cpu.LogicalProcessors} threads";
             OsLine = $"{snap.Os.Caption} · Build {snap.Os.BuildNumber}";
@@ -290,8 +290,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private static async Task RunAlertScanAsync(DashboardAlert alert, Func<DashboardAlert, Task> scanner)
     {
-        var timer = System.Diagnostics.Stopwatch.StartNew();
-        var etaTask = Task.Run(async () =>
+        // Fire-and-forget ETA hint: after 5s of loading, surface a "remaining" note.
+        _ = Task.Run(async () =>
         {
             await Task.Delay(5000);
             if (alert.State == AlertLoadingState.Loading)
@@ -509,7 +509,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             QuickActionDetail = "Scanning temp folders...";
             QuickActionProgress = 20;
             var tempPath = Path.GetTempPath();
-            var tempSize = await Task.Run(() =>
+            await Task.Run(() =>
             {
                 try
                 {
@@ -678,7 +678,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         StatusMessage = "Scanning...";
         try
         {
-            LoadStaticInfo();
+            await LoadStaticInfoAsync();
             LoadDrives();
             await LoadHealthScoreAsync();
             await LoadTemperaturesAsync();

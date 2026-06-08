@@ -212,6 +212,9 @@ public partial class ThemePopup : UserControl
 
             ThemeService.Instance.SetCustom(accent, bg, surface, text);
         }
-        catch { }
+        catch (FormatException ex)
+        {
+            Serilog.Log.Debug(ex, "Theme custom hex parse failed");
+        }
     }
 }

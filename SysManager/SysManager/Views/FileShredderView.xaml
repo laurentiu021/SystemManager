@@ -10,11 +10,6 @@
              mc:Ignorable="d">
 
     <UserControl.Resources>
-        <LinearGradientBrush x:Key="PageBg" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#070A0F" Offset="0"/>
-            <GradientStop Color="#0B1220" Offset="0.5"/>
-            <GradientStop Color="#090D16" Offset="1"/>
-        </LinearGradientBrush>
         <ObjectDataProvider x:Key="ShredMethods" MethodName="GetValues" ObjectType="{x:Type svc:ShredMethod}">
             <ObjectDataProvider.MethodParameters>
                 <x:Type TypeName="svc:ShredMethod"/>
@@ -22,7 +17,7 @@
         </ObjectDataProvider>
     </UserControl.Resources>
 
-    <Grid Background="{StaticResource PageBg}">
+    <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>

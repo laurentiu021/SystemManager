@@ -12,19 +12,25 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// ViewModel for the Privacy Toggles tab. Loads registry-backed toggles,
-/// groups them by category, and applies changes immediately on toggle flip.
+/// ViewModel for the Privacy Toggles tab. Loads registry-backed toggles
+/// and groups them by category. Toggle flips update local state only;
+/// the user must explicitly press "Apply" to write changes to the registry.
 /// </summary>
 public sealed partial class PrivacyViewModel : ViewModelBase
 {
     private readonly PrivacyService _service;
-    private bool _suppressApply;
+    private readonly Dictionary<PrivacyToggle, bool> _baselineStates = [];
 
     public BulkObservableCollection<PrivacyToggle> Toggles { get; } = new();
 
     [ObservableProperty] private List<string> _categories = [];
     [ObservableProperty] private string _selectedCategory = "All";
     [ObservableProperty] private bool _isElevated;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingChanges))]
+    private int _pendingChangeCount;
+
+    public bool HasPendingChanges => PendingChangeCount > 0;
 
     public BulkObservableCollection<PrivacyToggle> FilteredToggles { get; } = new();
 
@@ -37,33 +43,30 @@ public sealed partial class PrivacyViewModel : ViewModelBase
 
     private void LoadToggles()
     {
-        _suppressApply = true;
-        try
+        // Unsubscribe from old toggles
+        foreach (var t in Toggles)
+            t.PropertyChanged -= OnTogglePropertyChanged;
+
+        var loaded = _service.LoadToggles();
+        Toggles.ReplaceWith(loaded);
+
+        // Capture baseline so we can compute the pending-change count.
+        _baselineStates.Clear();
+        foreach (var t in Toggles)
         {
-            // Unsubscribe from old toggles
-            foreach (var t in Toggles)
-                t.PropertyChanged -= OnTogglePropertyChanged;
-
-            var loaded = _service.LoadToggles();
-            Toggles.ReplaceWith(loaded);
-
-            // Subscribe to property changes for immediate apply
-            foreach (var t in Toggles)
-                t.PropertyChanged += OnTogglePropertyChanged;
-
-            // Build category list
-            List<string> cats = ["All"];
-            cats.AddRange(Toggles.Select(t => t.Category).Distinct().OrderBy(c => c));
-            Categories = cats;
-            SelectedCategory = "All";
-
-            ApplyFilter();
-            UpdateStatus();
+            _baselineStates[t] = t.IsEnabled;
+            t.PropertyChanged += OnTogglePropertyChanged;
         }
-        finally
-        {
-            _suppressApply = false;
-        }
+
+        // Build category list
+        List<string> cats = ["All"];
+        cats.AddRange(Toggles.Select(t => t.Category).Distinct().OrderBy(c => c));
+        Categories = cats;
+        SelectedCategory = "All";
+
+        ApplyFilter();
+        RecomputePendingChanges();
+        UpdateStatus();
     }
 
     partial void OnSelectedCategoryChanged(string value) => ApplyFilter();
@@ -80,12 +83,18 @@ public sealed partial class PrivacyViewModel : ViewModelBase
 
     private void OnTogglePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (_suppressApply) return;
         if (e.PropertyName != nameof(PrivacyToggle.IsEnabled)) return;
-        if (sender is not PrivacyToggle toggle) return;
-
-        _service.ApplyToggle(toggle);
+        RecomputePendingChanges();
         UpdateStatus();
+    }
+
+    private void RecomputePendingChanges()
+    {
+        var pending = 0;
+        foreach (var t in Toggles)
+            if (_baselineStates.TryGetValue(t, out var baseline) && baseline != t.IsEnabled)
+                pending++;
+        PendingChangeCount = pending;
     }
 
     [RelayCommand]
@@ -96,32 +105,37 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ApplyAll()
+    private void ApplyChanges()
     {
-        _service.ApplyAll(Toggles);
-        StatusMessage = $"All {Toggles.Count} toggles applied.";
-        Log.Information("Privacy: applied all {Count} toggles", Toggles.Count);
+        if (PendingChangeCount == 0)
+        {
+            StatusMessage = "No changes to apply.";
+            return;
+        }
+
+        var changed = Toggles
+            .Where(t => _baselineStates.TryGetValue(t, out var baseline) && baseline != t.IsEnabled)
+            .ToList();
+
+        _service.ApplyAll(changed);
+
+        // Refresh baseline to the just-applied state.
+        foreach (var t in changed)
+            _baselineStates[t] = t.IsEnabled;
+        RecomputePendingChanges();
+
+        StatusMessage = $"Applied {changed.Count} change{(changed.Count == 1 ? "" : "s")}.";
+        Log.Information("Privacy: applied {Count} pending changes", changed.Count);
     }
 
     [RelayCommand]
-    private void ResetAll()
+    private void DiscardChanges()
     {
-        _suppressApply = true;
-        try
-        {
-            foreach (var toggle in Toggles)
-                toggle.IsEnabled = false;
-        }
-        finally
-        {
-            _suppressApply = false;
-        }
-
-        // Write defaults to registry in batch
-        _service.ApplyAll(Toggles);
-        UpdateStatus();
-        StatusMessage = "All toggles reset to Windows defaults.";
-        Log.Information("Privacy: reset all toggles to defaults");
+        foreach (var t in Toggles)
+            if (_baselineStates.TryGetValue(t, out var baseline))
+                t.IsEnabled = baseline;
+        RecomputePendingChanges();
+        StatusMessage = "Pending changes discarded.";
     }
 
     [RelayCommand]
@@ -135,7 +149,10 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     private void UpdateStatus()
     {
         var enabledCount = Toggles.Count(t => t.IsEnabled);
-        StatusMessage = $"{enabledCount} of {Toggles.Count} privacy protections active.";
+        var summary = $"{enabledCount} of {Toggles.Count} privacy protections active.";
+        if (PendingChangeCount > 0)
+            summary += $" {PendingChangeCount} pending change{(PendingChangeCount == 1 ? "" : "s")} — press Apply.";
+        StatusMessage = summary;
     }
 
     protected override void Dispose(bool disposing)

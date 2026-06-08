@@ -80,10 +80,21 @@ public sealed class AppFixture : IDisposable
     {
         var repoRoot = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var candidate = Path.Combine(repoRoot, "SysManager", "bin", "Debug", "net8.0-windows", "SysManager.exe");
-        if (File.Exists(candidate)) return candidate;
+        var binDir = Path.Combine(repoRoot, "SysManager", "bin", "Debug");
+
+        // Resolve the target-framework folder dynamically (e.g. net10.0-windows)
+        // so the path survives .NET version bumps instead of hardcoding one.
+        if (Directory.Exists(binDir))
+        {
+            var candidate = Directory
+                .EnumerateDirectories(binDir, "net*-windows")
+                .Select(tfm => Path.Combine(tfm, "SysManager.exe"))
+                .FirstOrDefault(File.Exists);
+            if (candidate is not null) return candidate;
+        }
+
         throw new FileNotFoundException(
-            $"Expected SysManager.exe at {candidate}. Build SysManager in Debug before running UI tests.");
+            $"Expected SysManager.exe under {binDir}\\net*-windows. Build SysManager in Debug before running UI tests.");
     }
 
     public void Dispose()

@@ -5,11 +5,16 @@ paths-ignore:
   - '**/bin/**'
 
 query-filters:
-  # WPF XAML compiler generates .g.cs with useless-assignment patterns —
-  # these are false positives in auto-generated InitializeComponent code.
+  # cs/useless-assignment-to-local fires only on build-generated code for this
+  # project: WPF XAML-compiler output (*.g.cs) and the [GeneratedRegex] source
+  # generator, all under obj/. Because the CodeQL database is built (manual build
+  # mode), it traces those generated files into analysis and neither paths-ignore
+  # nor a query-filter "path" key suppresses them for compiled C#. There are zero
+  # hand-written occurrences of this pattern, so excluding the query by id removes
+  # the false positives without losing real coverage. Re-enable this rule (drop the
+  # exclude) if a genuine useless-assignment is ever introduced in source.
   - exclude:
       id: cs/useless-assignment-to-local
-      path: '**/obj/**'
   # Intentional use of CreateFromSignedFile for Authenticode verification —
   # no modern .NET replacement exists without P/Invoke. Already suppressed
   # with #pragma warning disable SYSLIB0057.

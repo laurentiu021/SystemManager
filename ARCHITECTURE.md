@@ -103,6 +103,8 @@ Key services:
   and stream output line-by-line. Always launches spawned processes from
   `System32` so `Access is denied` never bites on `chkdsk` etc.
 - `WingetService` — shells out to `winget` and parses its table output.
+- `WindowsUpdateService` — drives Windows Update through the WUA COM API
+  (scan, select, install) with progress reporting; backs `WindowsUpdateViewModel`.
 - `DiskHealthService` — pulls SMART data through WMI.
 - `MemoryTestService` — scans WHEA / MemoryDiagnostics events.
 - `EventLogService` + `EventExplainer` — read Windows Event Log and attach

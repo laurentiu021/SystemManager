@@ -64,8 +64,8 @@ public sealed class FixedDriveService
                 {
                     var id = mo["DeviceId"]?.ToString() ?? "";
                     media[id] = (
-                        MapMedia(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
-                        MapBus(Convert.ToUInt32(mo["BusType"] ?? 0u)));
+                        MapMedia(ToUInt32Safe(mo["MediaType"])),
+                        MapBus(ToUInt32Safe(mo["BusType"])));
                 }
             }
 
@@ -112,6 +112,21 @@ public sealed class FixedDriveService
         }
 
         return drives;
+    }
+
+    /// <summary>
+    /// Converts a WMI property value to uint, treating both null and
+    /// <see cref="DBNull"/> as 0. WMI returns <c>DBNull.Value</c> (not null) for
+    /// absent properties, and <c>Convert.ToUInt32(DBNull.Value)</c> throws —
+    /// which previously crashed drive enumeration on common hardware.
+    /// </summary>
+    internal static uint ToUInt32Safe(object? value)
+    {
+        if (value is null || value is DBNull) return 0u;
+        try { return Convert.ToUInt32(value); }
+        catch (InvalidCastException) { return 0u; }
+        catch (FormatException) { return 0u; }
+        catch (OverflowException) { return 0u; }
     }
 
     private static string MapMedia(uint v) => v switch

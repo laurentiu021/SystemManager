@@ -13,6 +13,28 @@ namespace SysManager.Tests;
 /// </summary>
 public class UninstallerServiceTests
 {
+    // ── IsUnderTrustedDirectory (regression: prefix-boundary bypass) ──
+
+    [Fact]
+    public void IsUnderTrustedDirectory_PathInsideProgramFiles_IsTrusted()
+    {
+        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        Assert.True(UninstallerService.IsUnderTrustedDirectory(System.IO.Path.Combine(pf, "Vendor", "app.exe")));
+    }
+
+    [Fact]
+    public void IsUnderTrustedDirectory_SiblingWithSharedPrefix_IsNotTrusted()
+    {
+        // "C:\Program Files Evil\..." must NOT pass the "C:\Program Files" check.
+        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var evil = pf + " Evil\\malware.exe";
+        Assert.False(UninstallerService.IsUnderTrustedDirectory(evil));
+    }
+
+    [Fact]
+    public void IsUnderTrustedDirectory_UntrustedLocation_IsNotTrusted()
+        => Assert.False(UninstallerService.IsUnderTrustedDirectory(@"C:\Temp\random\app.exe"));
+
     // ── ParseListTable ──
 
     [Fact]

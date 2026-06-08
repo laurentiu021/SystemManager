@@ -14,10 +14,10 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class DnsService : IDisposable
 {
-    private readonly PowerShellRunner _ps;
+    private readonly IPowerShellRunner _ps;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public DnsService(PowerShellRunner ps) => _ps = ps;
+    public DnsService(IPowerShellRunner ps) => _ps = ps;
 
     public void Dispose() => _gate.Dispose();
 

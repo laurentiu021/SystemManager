@@ -12,10 +12,10 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class NetworkRepairService : IDisposable
 {
-    private readonly PowerShellRunner _ps;
+    private readonly IPowerShellRunner _ps;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public NetworkRepairService(PowerShellRunner ps) => _ps = ps;
+    public NetworkRepairService(IPowerShellRunner ps) => _ps = ps;
 
     /// <inheritdoc />
     public void Dispose() => _gate.Dispose();

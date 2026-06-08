@@ -12,9 +12,9 @@ namespace SysManager.Services;
 /// </summary>
 public sealed partial class BulkInstallerService
 {
-    private readonly PowerShellRunner _runner;
+    private readonly IPowerShellRunner _runner;
 
-    public BulkInstallerService(PowerShellRunner runner) => _runner = runner;
+    public BulkInstallerService(IPowerShellRunner runner) => _runner = runner;
 
     public event Action<PowerShellLine>? LineReceived
     {

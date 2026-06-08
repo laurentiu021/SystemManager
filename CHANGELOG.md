@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-06-08
+
+### Added
+- **Restore original hosts file.** A new "Restore original" button on the DNS & Hosts tab reverts the system hosts file to the pristine backup taken before SysManager first modified it.
+
+### Fixed
+- **Hosts file backup no longer destroys the pristine original.** `SaveHosts` previously copied the current hosts file over `hosts.bak` on **every** save with `overwrite: true`, so after the first save the backup already held SysManager's own output — the real original was lost and restore was impossible. The backup is now written only once (when none exists), preserving the true pre-SysManager file.
+- **DNS and hosts changes now require confirmation.** Applying a DNS preset and overwriting the system hosts file each prompt with `DialogService.Confirm` first, stating exactly what will change and how to revert. Declining makes no system change.
+
+### Changed
+- `HostsFileService` gained a path-injection constructor (used only for testing) and `HasBackup` / `RestoreBackup` members backing the new restore flow.
+
 ## [1.19.4] - 2026-06-08
 
 ### Fixed

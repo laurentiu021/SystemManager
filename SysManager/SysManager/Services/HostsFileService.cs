@@ -14,11 +14,23 @@ namespace SysManager.Services;
 /// </summary>
 public sealed partial class HostsFileService
 {
-    private static readonly string HostsPath = Path.Combine(
+    private static readonly string DefaultHostsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.System),
         "drivers", "etc", "hosts");
 
-    private static readonly string BackupPath = HostsPath + ".bak";
+    private readonly string HostsPath;
+    private readonly string BackupPath;
+
+    /// <summary>
+    /// Creates the service against the real system hosts file. The optional
+    /// <paramref name="hostsPath"/> override exists for testing so the backup /
+    /// restore logic can be exercised without touching System32 or needing admin.
+    /// </summary>
+    public HostsFileService(string? hostsPath = null)
+    {
+        HostsPath = hostsPath ?? DefaultHostsPath;
+        BackupPath = HostsPath + ".bak";
+    }
 
     [GeneratedRegex(@"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$")]
     private static partial Regex HostnameRegex();
@@ -75,15 +87,24 @@ public sealed partial class HostsFileService
         return entries;
     }
 
+    /// <summary>True if a pristine pre-SysManager backup of the hosts file exists.</summary>
+    public bool HasBackup => File.Exists(BackupPath);
+
     /// <summary>
     /// Saves entries back to the hosts file. Disabled entries are written as commented lines.
-    /// Creates a backup before writing.
     /// </summary>
+    /// <remarks>
+    /// The backup is created ONLY the first time (when no backup yet exists), so it
+    /// preserves the original pre-SysManager hosts file. Previously the backup was
+    /// overwritten on every save, which meant that after the first save the ".bak"
+    /// already contained SysManager's own output — losing the pristine original and
+    /// defeating <see cref="RestoreBackup"/>.
+    /// </remarks>
     public void SaveHosts(List<HostsEntry> entries)
     {
-        // Backup existing file
-        if (File.Exists(HostsPath))
-            File.Copy(HostsPath, BackupPath, overwrite: true);
+        // Preserve the pristine original: back up only if we have never backed up before.
+        if (File.Exists(HostsPath) && !File.Exists(BackupPath))
+            File.Copy(HostsPath, BackupPath, overwrite: false);
 
         var lines = new List<string>
         {
@@ -102,6 +123,17 @@ public sealed partial class HostsFileService
         }
 
         File.WriteAllLines(HostsPath, lines);
+    }
+
+    /// <summary>
+    /// Restores the hosts file from the pristine backup created before SysManager
+    /// first modified it. Returns false if there is no backup to restore from.
+    /// </summary>
+    public bool RestoreBackup()
+    {
+        if (!File.Exists(BackupPath)) return false;
+        File.Copy(BackupPath, HostsPath, overwrite: true);
+        return true;
     }
 
     /// <summary>

@@ -79,7 +79,9 @@ public class FileShredderServiceTests
     public async Task ShredFileAsync_NullOrWhitespace_ThrowsArgumentException(string? path)
     {
         var svc = NewService();
-        await Assert.ThrowsAsync<ArgumentException>(
+        // ThrowIfNullOrWhiteSpace throws ArgumentNullException for null and
+        // ArgumentException for empty/whitespace — ThrowsAny accepts both.
+        await Assert.ThrowsAnyAsync<ArgumentException>(
             () => svc.ShredFileAsync(path!, ShredMethod.Quick, null, CancellationToken.None));
     }
 
@@ -90,7 +92,7 @@ public class FileShredderServiceTests
     public async Task ShredFolderAsync_NullOrWhitespace_ThrowsArgumentException(string? path)
     {
         var svc = NewService();
-        await Assert.ThrowsAsync<ArgumentException>(
+        await Assert.ThrowsAnyAsync<ArgumentException>(
             () => svc.ShredFolderAsync(path!, ShredMethod.Quick, null, CancellationToken.None));
     }
 

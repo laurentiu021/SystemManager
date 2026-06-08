@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.2] - 2026-06-08
+
+### Fixed
+- **UI test harness could never locate the app executable.** `AppFixture` hardcoded a `net8.0-windows` output path while the project targets `net10.0-windows`, so `FindExecutable()` always threw `FileNotFoundException` when running the UI automation tests locally. The path is now resolved dynamically from the `net*-windows` build folder, so it survives future framework bumps.
+
 ## [1.19.1] - 2026-06-05
 
 ### Fixed

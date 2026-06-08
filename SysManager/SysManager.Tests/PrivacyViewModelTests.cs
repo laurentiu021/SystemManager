@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -134,5 +135,31 @@ public class PrivacyViewModelTests
         vm.ApplyChangesCommand.Execute(null);
 
         Assert.Contains("no changes", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ApplyChanges_WhenUserDeclinesConfirm_DoesNotApply_AndKeepsPending()
+    {
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = CreateVm();
+            vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled; // create a pending change
+            var pendingBefore = vm.PendingChangeCount;
+
+            vm.ApplyChangesCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            // Declining must NOT write to the registry: the change is still pending.
+            Assert.Equal(pendingBefore, vm.PendingChangeCount);
+            Assert.Contains("cancelled", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
     }
 }

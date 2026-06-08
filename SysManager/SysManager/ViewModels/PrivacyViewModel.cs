@@ -117,6 +117,15 @@ public sealed partial class PrivacyViewModel : ViewModelBase
             .Where(t => _baselineStates.TryGetValue(t, out var baseline) && baseline != t.IsEnabled)
             .ToList();
 
+        if (!DialogService.Instance.Confirm(
+                $"Apply {changed.Count} privacy change{(changed.Count == 1 ? "" : "s")} to the Windows registry?\n\n" +
+                "Each toggle can be reverted by switching it back and pressing Apply again.",
+                "Confirm Privacy Changes"))
+        {
+            StatusMessage = "Apply cancelled.";
+            return;
+        }
+
         _service.ApplyAll(changed);
 
         // Refresh baseline to the just-applied state.

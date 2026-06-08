@@ -82,6 +82,73 @@ public sealed class DnsService : IDisposable
     }
 
     /// <summary>
+    /// Captures the current IPv4 DNS server addresses of the active adapter so a
+    /// change can be reverted to the exact previous configuration. Returns an empty
+    /// list when the adapter is on automatic (DHCP) — restoring that snapshot resets
+    /// to DHCP rather than re-applying static servers.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> CaptureCurrentServersAsync(CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            const string script = """
+                $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Sort-Object -Property ifIndex | Select-Object -First 1
+                if ($adapter) {
+                    $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4
+                    $dns.ServerAddresses
+                }
+                """;
+
+            Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)
+                .ConfigureAwait(false);
+
+            return results
+                .Select(r => r?.ToString())
+                .Where(s => !string.IsNullOrWhiteSpace(s) && IPAddress.TryParse(s, out _))
+                .Select(s => s!)
+                .ToList();
+        }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>
+    /// Restores DNS to a previously captured set of server addresses. An empty
+    /// snapshot means the adapter was on DHCP, so this resets to automatic.
+    /// </summary>
+    public async Task RestoreServersAsync(IReadOnlyList<string> servers, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(servers);
+
+        if (servers.Count == 0)
+        {
+            await ResetToDhcpAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        // Validate every captured address before applying — the snapshot should
+        // already be clean, but never interpolate an unvalidated value into a script.
+        foreach (var server in servers)
+        {
+            if (!IPAddress.TryParse(server, out _))
+                throw new ArgumentException($"Invalid DNS address in snapshot: '{server}'", nameof(servers));
+        }
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            int ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
+            string joined = string.Join(",", servers.Select(s => $"\"{s}\""));
+            string script = $"""
+                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @({joined})
+                """;
+
+            await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
+        }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>
     /// Sets the DNS server addresses on the active network adapter.
     /// </summary>
     public async Task SetDnsAsync(string primary, string secondary, CancellationToken ct = default)

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.4] - 2026-06-08
+
+### Fixed
+- **Ping monitor no longer leaks its CancellationTokenSource.** When `Stop()` was called while the ping loop was still winding down (the 1.5s wait timed out), the CTS reference was dropped and never disposed. It is now disposed once the loop actually finishes — immediately if already complete, otherwise via a continuation.
+- **System Logs no longer block the UI thread while reading the Event Log.** `EventLogService.ReadAsync` ran the blocking `EventLogReader.ReadEvent()` COM call on the caller's (UI) thread, freezing the app while large logs were enumerated. Each read now runs on the thread pool via `Task.Run`.
+
+### Changed
+- **Dashboard GPU name now works for AMD/Intel, not just NVIDIA.** When no NVIDIA GPU is present, the Dashboard falls back to `Win32_VideoController` (WMI) to show the adapter name. Live usage % remains NVIDIA-only (it requires vendor-specific APIs).
+
 ## [1.20.3] - 2026-06-08
 
 ### Fixed

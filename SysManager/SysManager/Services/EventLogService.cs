@@ -43,11 +43,17 @@ public sealed class EventLogService
         int emitted = 0;
         using (reader)
         {
+            var localReader = reader;
             while (!ct.IsCancellationRequested && emitted < opt.MaxResults)
             {
-                EventRecord? rec = null;
-                try { rec = reader.ReadEvent(); }
+                // ReadEvent() is a blocking COM/IO call. Run it on a thread-pool
+                // thread so enumerating large logs never blocks the UI thread the
+                // caller awaits on. (await Task.Yield() alone did not move the work
+                // off the UI thread — it only released it momentarily per 200 rows.)
+                EventRecord? rec;
+                try { rec = await Task.Run(() => localReader.ReadEvent(), ct).ConfigureAwait(false); }
                 catch (EventLogException) { continue; }
+                catch (OperationCanceledException) { yield break; }
                 if (rec is null) yield break;
 
                 FriendlyEventEntry? entry = null;
@@ -61,9 +67,6 @@ public sealed class EventLogService
 
                 emitted++;
                 yield return entry;
-
-                // Yield occasionally to keep the UI responsive on huge logs.
-                if (emitted % 200 == 0) await Task.Yield();
             }
         }
     }

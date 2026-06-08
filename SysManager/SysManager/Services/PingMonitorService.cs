@@ -52,17 +52,25 @@ public sealed class PingMonitorService : IDisposable
     {
         lock (_stateLock)
         {
-            _cts?.Cancel();
-            try { _loop?.Wait(1500); }
-            catch (AggregateException) { /* task cancellation or faulted — expected during stop */ }
-            catch (ObjectDisposedException) { /* task already cleaned up */ }
-            // Only dispose CTS if the loop actually completed; otherwise the
-            // background task still holds a reference to the token and would
-            // throw ObjectDisposedException on next cancellation check.
-            if (_loop is { IsCompleted: true })
-                _cts?.Dispose();
+            var cts = _cts;
+            var loop = _loop;
             _cts = null;
             _loop = null;
+            if (cts is null) return;
+
+            cts.Cancel();
+            try { loop?.Wait(1500); }
+            catch (AggregateException) { /* task cancellation or faulted — expected during stop */ }
+            catch (ObjectDisposedException) { /* task already cleaned up */ }
+
+            // Dispose the CTS once the loop has actually finished. If Wait timed out
+            // (the loop is still winding down), defer disposal to a continuation so the
+            // CTS is never leaked — the previous code dropped the reference and never
+            // disposed it in that case.
+            if (loop is null || loop.IsCompleted)
+                cts.Dispose();
+            else
+                loop.ContinueWith(_ => cts.Dispose(), TaskScheduler.Default);
         }
     }
 

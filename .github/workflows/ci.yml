@@ -40,6 +40,7 @@ jobs:
         run: |
           dotnet restore SysManager/SysManager/SysManager.csproj
           dotnet restore SysManager/SysManager.Tests/SysManager.Tests.csproj
+          dotnet restore SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj
           dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
 
       - name: Check formatting
@@ -50,6 +51,12 @@ jobs:
 
       - name: Build tests
         run: dotnet build SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release --no-restore
+
+      # Compile-check the integration tests so ViewModel/service signature drift is
+      # caught in CI. They are NOT run here (they touch the live system); compilation
+      # alone catches the constructor/property mismatches that previously slipped by.
+      - name: Build integration tests (compile check)
+        run: dotnet build SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release --no-restore
 
       - name: Run unit tests
         run: >

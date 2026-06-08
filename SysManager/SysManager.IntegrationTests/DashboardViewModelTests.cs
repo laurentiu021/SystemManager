@@ -10,10 +10,21 @@ namespace SysManager.IntegrationTests;
 [Collection("Network")]
 public class DashboardViewModelTests
 {
+    private static DashboardViewModel NewVm()
+    {
+        var sys = new SystemInfoService();
+        var diskHealth = new DiskHealthService();
+        return new DashboardViewModel(
+            sys,
+            new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
+            new HealthScoreService(sys, diskHealth, new BatteryService()),
+            new TemperatureService(diskHealth, skipHardwareInit: true));
+    }
+
     [Fact]
     public void Ctor_SetsElevationFlag()
     {
-        var vm = new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()));
+        var vm = NewVm();
         // Just ensures IsElevated is true/false (no throw).
         _ = vm.IsElevated;
     }
@@ -21,19 +32,18 @@ public class DashboardViewModelTests
     [Fact]
     public async Task RefreshCommand_CompletesAndPopulatesFields()
     {
-        var vm = new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()));
+        var vm = NewVm();
         await vm.RefreshCommand.ExecuteAsync(null);
-        Assert.NotNull(vm.Snapshot);
         Assert.False(string.IsNullOrWhiteSpace(vm.OsLine));
-        Assert.False(string.IsNullOrWhiteSpace(vm.CpuLine));
-        Assert.False(string.IsNullOrWhiteSpace(vm.MemLine));
         Assert.False(string.IsNullOrWhiteSpace(vm.UptimeLine));
+        Assert.False(string.IsNullOrWhiteSpace(vm.CpuName));
+        Assert.True(vm.RamTotalGB >= 0);
     }
 
     [Fact]
     public async Task RefreshCommand_ResetsBusyFlag_WhenDone()
     {
-        var vm = new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()));
+        var vm = NewVm();
         await vm.RefreshCommand.ExecuteAsync(null);
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
@@ -42,18 +52,18 @@ public class DashboardViewModelTests
     [Fact]
     public async Task RefreshCommand_SetsStatusMessage()
     {
-        var vm = new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()));
+        var vm = NewVm();
         await vm.RefreshCommand.ExecuteAsync(null);
         Assert.False(string.IsNullOrWhiteSpace(vm.StatusMessage));
     }
 
     [Fact]
-    public void RequestElevationCommand_WhenAlreadyElevated_DoesNotShutdown()
+    public void RelaunchAsAdminCommand_Exists()
     {
-        // We cannot realistically call RequestElevation in a test because it
-        // would try to spawn a process and shut the test host down. We only
-        // verify the command exists and is invokable.
-        var vm = new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()));
-        Assert.NotNull(vm.RequestElevationCommand);
+        // We cannot realistically invoke RelaunchAsAdmin in a test because it
+        // would try to spawn an elevated process and shut the test host down.
+        // We only verify the command exists.
+        var vm = NewVm();
+        Assert.NotNull(vm.RelaunchAsAdminCommand);
     }
 }

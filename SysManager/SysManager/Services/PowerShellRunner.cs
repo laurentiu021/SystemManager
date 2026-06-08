@@ -23,7 +23,7 @@ namespace SysManager.Services;
 /// Violation of this contract creates a code injection vulnerability. The Bypass policy
 /// is safe ONLY because the script content is fully controlled by SysManager's source code.</para>
 /// </summary>
-public sealed class PowerShellRunner
+public sealed class PowerShellRunner : IPowerShellRunner
 {
     /// <summary>
     /// Raised for each line of output from any stream (stdout, stderr, information,

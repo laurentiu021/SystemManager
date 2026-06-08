@@ -15,8 +15,40 @@ permissions:
   discussions: write
 
 jobs:
+  guard:
+    name: Skip if release already exists (tag move / re-push)
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - name: Check for an existing release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Manual dispatch is an explicit, intentional request — always allow it.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch — proceeding."
+            exit 0
+          fi
+          tag="${{ github.ref_name }}"
+          # A push event fires both for brand-new tags AND for moved/re-pushed tags.
+          # A brand-new release has no GitHub Release yet; a moved tag already does.
+          # Only release when none exists, so moving old tags can't re-trigger a
+          # full release (which would hijack the "Latest" flag and flood Discussions).
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Release for $tag already exists — skipping (tag move or re-push)."
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "No release for $tag yet — proceeding."
+          fi
+
   build-and-release:
     name: Build single-file exe & publish release
+    needs: guard
+    if: needs.guard.outputs.should_release == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
 

@@ -32,33 +32,43 @@ public sealed class WindowsUpdateService
         {
             ct.ThrowIfCancellationRequested();
             Emit("Connecting to Windows Update…");
-            var session = CreateSession();
-            var searcher = session.CreateUpdateSearcher();
-            searcher.IncludePotentiallySupersededUpdates = false;
 
-            // "IsInstalled=0" returns everything not yet installed,
-            // including optional drivers and feature upgrades.
-            var result = searcher.Search("IsInstalled=0");
-            ct.ThrowIfCancellationRequested();
-
-            var updates = result.Updates;
-            var count = (int)updates.Count;
-            Emit($"Found {count} update(s).");
-
-            var list = new List<UpdateEntry>(count);
-            for (int i = 0; i < count; i++)
+            // Declared outside the try so the finally can release every COM object
+            // even when cancellation or MapToEntry throws mid-scan (previously these
+            // releases sat on the happy path only, leaking COM objects on any throw).
+            dynamic? session = null, searcher = null, result = null, updates = null;
+            try
             {
-                ct.ThrowIfCancellationRequested();
-                var u = updates.Item(i);
-                list.Add(MapToEntry(u));
-                Marshal.FinalReleaseComObject(u);
-            }
+                session = CreateSession();
+                searcher = session.CreateUpdateSearcher();
+                searcher.IncludePotentiallySupersededUpdates = false;
 
-            Marshal.FinalReleaseComObject(updates);
-            Marshal.FinalReleaseComObject(result);
-            Marshal.FinalReleaseComObject(searcher);
-            Marshal.FinalReleaseComObject(session);
-            return list;
+                // "IsInstalled=0" returns everything not yet installed,
+                // including optional drivers and feature upgrades.
+                result = searcher.Search("IsInstalled=0");
+                ct.ThrowIfCancellationRequested();
+
+                updates = result.Updates;
+                var count = (int)updates.Count;
+                Emit($"Found {count} update(s).");
+
+                var list = new List<UpdateEntry>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var u = updates.Item(i);
+                    list.Add(MapToEntry(u));
+                    Marshal.FinalReleaseComObject(u);
+                }
+                return list;
+            }
+            finally
+            {
+                if (updates is not null) Marshal.FinalReleaseComObject(updates);
+                if (result is not null) Marshal.FinalReleaseComObject(result);
+                if (searcher is not null) Marshal.FinalReleaseComObject(searcher);
+                if (session is not null) Marshal.FinalReleaseComObject(session);
+            }
         }, ct);
 
     /// <summary>

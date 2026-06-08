@@ -45,6 +45,19 @@ public sealed partial class AppBlockerService
             if (ifeo is null) return false;
 
             using var appKey = ifeo.CreateSubKey(exeName, writable: true);
+
+            // Never clobber a pre-existing Debugger value we did not set: it could
+            // belong to a legitimately-debugged app, and overwriting it would both
+            // break that setup and be unrecoverable (Unblock only removes OUR value).
+            var existingDebugger = appKey.GetValue("Debugger") as string;
+            if (!string.IsNullOrEmpty(existingDebugger) &&
+                !existingDebugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning("Refusing to block {ExeName}: an external Debugger value is already set ({Debugger})",
+                    exeName, existingDebugger);
+                return false;
+            }
+
             appKey.SetValue("Debugger", BlockerDebugger, RegistryValueKind.String);
 
             Log.Information("Blocked application: {ExeName}", exeName);

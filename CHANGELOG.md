@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.1] - 2026-06-08
+
+### Fixed
+- **App Blocker no longer clobbers a pre-existing debugger.** `BlockApp` wrote its IFEO `Debugger` value unconditionally, overwriting any value already present — which could break a legitimately-debugged application and was unrecoverable (Unblock only removes SysManager's own value). It now refuses to block an executable that already has an external `Debugger` set, leaving the existing configuration intact.
+- **Privacy changes now require confirmation.** Applying pending privacy toggles to the registry now prompts with `DialogService.Confirm` first, stating how many changes will be written and how to revert. Declining keeps the changes pending and writes nothing.
+
 ## [1.20.0] - 2026-06-08
 
 ### Added

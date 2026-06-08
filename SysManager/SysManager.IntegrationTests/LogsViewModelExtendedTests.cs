@@ -66,7 +66,7 @@ public class LogsViewModelExtendedTests
     public void Defaults_SearchTextIsEmpty()
     {
         var vm = new LogsViewModel(new EventLogService());
-        Assert.Equal("", vm.SearchText);
+        Assert.Equal("", vm.FilterText);
     }
 
     [Fact]
@@ -115,11 +115,11 @@ public class LogsViewModelExtendedTests
     {
         var vm = new LogsViewModel(new EventLogService());
         var e = Make(EventSeverity.Error, "Disk controller timeout");
-        vm.SearchText = "DISK";
+        vm.FilterText = "DISK";
         Assert.True(InvokeFilter(vm, e));
-        vm.SearchText = "disk";
+        vm.FilterText = "disk";
         Assert.True(InvokeFilter(vm, e));
-        vm.SearchText = "Disk";
+        vm.FilterText = "Disk";
         Assert.True(InvokeFilter(vm, e));
     }
 
@@ -128,7 +128,7 @@ public class LogsViewModelExtendedTests
     {
         var vm = new LogsViewModel(new EventLogService());
         var e = Make(EventSeverity.Error, "m", "Microsoft-Windows-Kernel-Power", 41);
-        vm.SearchText = "Kernel";
+        vm.FilterText = "Kernel";
         Assert.True(InvokeFilter(vm, e));
     }
 
@@ -137,7 +137,7 @@ public class LogsViewModelExtendedTests
     {
         var vm = new LogsViewModel(new EventLogService());
         var e = Make(EventSeverity.Error, "m", "x", 41);
-        vm.SearchText = "41";
+        vm.FilterText = "41";
         Assert.True(InvokeFilter(vm, e));
     }
 
@@ -146,7 +146,7 @@ public class LogsViewModelExtendedTests
     {
         var vm = new LogsViewModel(new EventLogService());
         var e = Make(EventSeverity.Error, "simple message");
-        vm.SearchText = "nowhere-to-be-found";
+        vm.FilterText = "nowhere-to-be-found";
         Assert.False(InvokeFilter(vm, e));
     }
 
@@ -244,7 +244,7 @@ public class LogsViewModelExtendedTests
         var vm = new LogsViewModel(new EventLogService());
         var ex = Record.Exception(() =>
         {
-            for (int i = 0; i < 20; i++) vm.SearchText = $"query{i}";
+            for (int i = 0; i < 20; i++) vm.FilterText = $"query{i}";
         });
         Assert.Null(ex);
     }

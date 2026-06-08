@@ -9,7 +9,7 @@ namespace SysManager.IntegrationTests;
 
 public class WindowsUpdateAutoCheckTests
 {
-    private static WindowsUpdateViewModel Build() => new(new PowerShellRunner());
+    private static WindowsUpdateViewModel Build() => new(new PowerShellRunner(), new WindowsUpdateService());
 
     [Fact]
     public void ModuleStatus_HasInitialMessage()

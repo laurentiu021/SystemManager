@@ -10,7 +10,7 @@ namespace SysManager.IntegrationTests;
 
 public class WindowsUpdateViewModelTests
 {
-    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner());
+    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService());
 
     // ---------- construction ----------
 
@@ -117,7 +117,7 @@ public class WindowsUpdateViewModelTests
     public void RunnerLineReceived_AppendsToConsole()
     {
         var runner = new PowerShellRunner();
-        var vm = new WindowsUpdateViewModel(runner);
+        var vm = new WindowsUpdateViewModel(runner, new WindowsUpdateService());
 
         var ev = typeof(PowerShellRunner)
             .GetField(nameof(PowerShellRunner.LineReceived),
@@ -134,7 +134,7 @@ public class WindowsUpdateViewModelTests
     public void RunnerProgressChanged_UpdatesProgress()
     {
         var runner = new PowerShellRunner();
-        var vm = new WindowsUpdateViewModel(runner);
+        var vm = new WindowsUpdateViewModel(runner, new WindowsUpdateService());
 
         var ev = typeof(PowerShellRunner)
             .GetField(nameof(PowerShellRunner.ProgressChanged),

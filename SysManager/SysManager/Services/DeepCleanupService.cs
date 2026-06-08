@@ -405,7 +405,13 @@ public sealed class DeepCleanupService
                 yield return item;
             }
 
-            foreach (var d in dirs) stack.Push(d);
+            // Never descend into reparse points (junctions / symbolic links):
+            // following one could enumerate — and the caller could then delete —
+            // files that live outside the cleanup target tree (data-loss risk).
+            foreach (var d in dirs)
+            {
+                if (!IsReparsePoint(d)) stack.Push(d);
+            }
         }
     }
 
@@ -419,10 +425,30 @@ public sealed class DeepCleanupService
             var cur = stack.Pop();
             IEnumerable<string> dirs;
             try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
-            foreach (var d in dirs) stack.Push(d);
+            // Skip reparse points: deleting the target's contents (or even the
+            // link recursively) could reach outside the cleanup tree.
+            foreach (var d in dirs)
+            {
+                if (!IsReparsePoint(d)) stack.Push(d);
+            }
             if (!string.Equals(cur, root, StringComparison.OrdinalIgnoreCase)) all.Add(cur);
         }
         all.Sort((a, b) => b.Length.CompareTo(a.Length));
         return all;
+    }
+
+    /// <summary>
+    /// True when the directory is a reparse point (junction or symbolic link).
+    /// Such entries are skipped during traversal so cleanup can never follow a
+    /// link out of the target tree and delete unrelated user data.
+    /// </summary>
+    private static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint;
+        }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 }

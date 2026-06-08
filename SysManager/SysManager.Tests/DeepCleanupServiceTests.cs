@@ -386,4 +386,67 @@ public class DeepCleanupServiceTests
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
+
+    [Fact]
+    public async Task CleanAsync_DoesNotFollowJunctionOutsideTarget()
+    {
+        // Regression: cleanup traversal must NOT descend into reparse points
+        // (junctions / symlinks). Following one would let CleanAsync delete files
+        // that live outside the cleanup target tree — a data-loss bug.
+        var baseDir = Path.Combine(Path.GetTempPath(), "smtest_junc_" + Guid.NewGuid().ToString("N"));
+        var target = Path.Combine(baseDir, "outside");   // simulates real user data
+        var cleanRoot = Path.Combine(baseDir, "cache");   // the folder being cleaned
+        Directory.CreateDirectory(target);
+        Directory.CreateDirectory(cleanRoot);
+
+        var precious = Path.Combine(target, "precious.dat");
+        File.WriteAllText(precious, "do not delete me");
+
+        var link = Path.Combine(cleanRoot, "link");
+        // mklink /J creates a directory junction; no admin rights required.
+        var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        try
+        {
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !IsReparse(link))
+                {
+                    // Environment can't create junctions (rare) — nothing to assert.
+                    return;
+                }
+            }
+
+            var cat = new CleanupCategory
+            {
+                Name = "Cache",
+                Description = "Cleanup root containing a junction",
+                Paths = new[] { cleanRoot },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true
+            };
+            var s = new DeepCleanupService();
+            await s.CleanAsync(new[] { cat });
+
+            // The file behind the junction must survive: traversal never entered it.
+            Assert.True(File.Exists(precious), "Cleanup followed a junction and deleted data outside the target tree");
+        }
+        finally
+        {
+            try { Directory.Delete(baseDir, recursive: true); } catch { }
+        }
+
+        static bool IsReparse(string p)
+        {
+            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
+            catch { return false; }
+        }
+    }
 }

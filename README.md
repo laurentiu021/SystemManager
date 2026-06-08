@@ -564,6 +564,17 @@ PRs welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the build
 setup, coding conventions, and pull-request workflow. New contributors are
 expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Support
+
+SysManager is free and open source, built by one person in their spare time.
+If it saved you a reinstall or a clean-up headache, you can back its development:
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-laurentiu021-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/laurentiu021)
+
+Sponsorships go toward a code-signing certificate, so Windows stops warning on
+first launch, plus the build pipeline and time to fix bugs and finish the tools
+that are still half-built. The app stays free either way.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

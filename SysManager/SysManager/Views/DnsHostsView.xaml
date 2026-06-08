@@ -69,6 +69,12 @@
                             Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right"
                             Padding="18,8" Margin="8,0,0,0"
                             IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"/>
+                    <Button Content="Undo" Command="{Binding RestorePreviousDnsCommand}"
+                            Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right"
+                            Padding="14,8" Margin="8,0,0,0"
+                            Visibility="{Binding CanRestorePreviousDns, Converter={StaticResource BoolToVis}}"
+                            IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"
+                            AutomationProperties.Name="Undo DNS change, restore previous DNS servers"/>
                     <ComboBox ItemsSource="{Binding Presets}"
                               SelectedItem="{Binding SelectedPreset}"
                               DisplayMemberPath="Name"

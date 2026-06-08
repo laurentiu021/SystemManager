@@ -31,6 +31,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     [ObservableProperty] private string _currentDns = "Loading...";
     [ObservableProperty] private bool _isDnsApplying;
 
+    /// <summary>
+    /// The DNS servers in effect immediately before the last SysManager-applied
+    /// change, captured so the change can be reverted to the exact previous state.
+    /// Null until a change is applied this session.
+    /// </summary>
+    private IReadOnlyList<string>? _previousServers;
+
+    [ObservableProperty] private bool _canRestorePreviousDns;
+
     // ── Hosts section ────────────────────────────────────────────────────
 
     public BulkObservableCollection<HostsEntry> HostEntries { get; } = new();
@@ -134,8 +143,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         StatusMessage = $"Applying {SelectedPreset.Name} DNS...";
         try
         {
+            // Snapshot the servers in effect now so the change is reversible to the
+            // exact previous configuration, not just a generic DHCP reset.
+            var snapshot = await _dnsService.CaptureCurrentServersAsync(_cts.Token).ConfigureAwait(false);
+
             await _dnsService.SetDnsAsync(SelectedPreset.Primary, SelectedPreset.Secondary, _cts.Token)
                 .ConfigureAwait(false);
+
+            _previousServers = snapshot;
+            Application.Current?.Dispatcher?.Invoke(() => CanRestorePreviousDns = true);
 
             await RefreshDnsAsync();
             Application.Current?.Dispatcher?.Invoke(() =>
@@ -181,6 +197,61 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             Application.Current?.Dispatcher?.Invoke(() =>
                 StatusMessage = $"Failed to reset DNS: {ex.Message}");
             Log.Error(ex, "Failed to reset DNS to DHCP");
+        }
+        finally
+        {
+            Application.Current?.Dispatcher?.Invoke(() => IsDnsApplying = false);
+        }
+    }
+
+    [RelayCommand]
+    private async Task RestorePreviousDnsAsync()
+    {
+        if (!IsElevated)
+        {
+            StatusMessage = "Restoring DNS requires administrator privileges.";
+            return;
+        }
+
+        if (_previousServers is null)
+        {
+            StatusMessage = "No previous DNS to restore.";
+            return;
+        }
+
+        var label = _previousServers.Count == 0
+            ? "automatic (DHCP)"
+            : string.Join(", ", _previousServers);
+
+        if (!DialogService.Instance.Confirm(
+                $"Restore this PC's DNS to its previous setting ({label})?",
+                "Confirm DNS Restore"))
+        {
+            StatusMessage = "DNS restore cancelled.";
+            return;
+        }
+
+        IsDnsApplying = true;
+        StatusMessage = "Restoring previous DNS...";
+        try
+        {
+            await _dnsService.RestoreServersAsync(_previousServers, _cts.Token).ConfigureAwait(false);
+
+            _previousServers = null;
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                CanRestorePreviousDns = false;
+                StatusMessage = $"DNS restored to previous setting ({label}).";
+            });
+            await RefreshDnsAsync();
+            Log.Information("DNS restored to previous setting ({Label})", label);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+                StatusMessage = $"Failed to restore DNS: {ex.Message}");
+            Log.Error(ex, "Failed to restore previous DNS");
         }
         finally
         {

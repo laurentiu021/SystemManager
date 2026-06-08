@@ -156,4 +156,110 @@ public class DnsServiceTests
         Assert.Equal("8.8.8.8", google.Primary);
         Assert.Equal("8.8.4.4", google.Secondary);
     }
+
+    // ---------- snapshot / restore (reversibility, #3) ----------
+
+    [Fact]
+    public async Task CaptureCurrentServersAsync_ReturnsParsedAddresses()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>
+              {
+                  PSObject.AsPSObject("8.8.8.8"),
+                  PSObject.AsPSObject("8.8.4.4"),
+              });
+        using var svc = new DnsService(runner);
+
+        var snapshot = await svc.CaptureCurrentServersAsync();
+
+        Assert.Equal(["8.8.8.8", "8.8.4.4"], snapshot);
+    }
+
+    [Fact]
+    public async Task CaptureCurrentServersAsync_FiltersNonIpNoise()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>
+              {
+                  PSObject.AsPSObject("1.1.1.1"),
+                  PSObject.AsPSObject(""),       // blank line
+                  PSObject.AsPSObject("garbage"),// non-IP noise
+              });
+        using var svc = new DnsService(runner);
+
+        var snapshot = await svc.CaptureCurrentServersAsync();
+
+        Assert.Equal(["1.1.1.1"], snapshot);
+    }
+
+    [Fact]
+    public async Task CaptureCurrentServersAsync_Dhcp_ReturnsEmpty()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+        using var svc = new DnsService(runner);
+
+        var snapshot = await svc.CaptureCurrentServersAsync();
+
+        Assert.Empty(snapshot);
+    }
+
+    [Fact]
+    public async Task RestoreServersAsync_WithAddresses_ReAppliesThem()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("7")); // interface index lookup
+        using var svc = new DnsService(runner);
+
+        await svc.RestoreServersAsync(["9.9.9.9", "149.112.112.112"]);
+
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s =>
+                s.Contains("Set-DnsClientServerAddress") &&
+                s.Contains("-InterfaceIndex 7") &&
+                s.Contains("9.9.9.9") &&
+                s.Contains("149.112.112.112")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RestoreServersAsync_EmptySnapshot_ResetsToDhcp()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("7"));
+        using var svc = new DnsService(runner);
+
+        await svc.RestoreServersAsync([]);
+
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s => s.Contains("-ResetServerAddresses")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RestoreServersAsync_NullSnapshot_Throws()
+    {
+        using var svc = new DnsService(Substitute.For<IPowerShellRunner>());
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => svc.RestoreServersAsync(null!));
+    }
+
+    [Fact]
+    public async Task RestoreServersAsync_InvalidAddressInSnapshot_Throws()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        using var svc = new DnsService(runner);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.RestoreServersAsync(["8.8.8.8", "not-an-ip"]));
+
+        // Validation happens before any interface lookup or Set script runs.
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
 }

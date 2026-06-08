@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.5] - 2026-06-08
+
+### Added
+- **Undo a DNS change.** Applying a DNS preset now snapshots the servers in effect beforehand, and a new "Undo" button on the DNS & Hosts tab restores that exact previous configuration (re-applying the prior static servers, or resetting to DHCP if that was the prior state). Previously the only way back was "Reset to DHCP", which silently discarded any manually-configured DNS.
+
 ## [1.20.4] - 2026-06-08
 
 ### Fixed

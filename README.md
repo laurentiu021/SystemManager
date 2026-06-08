@@ -252,7 +252,8 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 
 ### DNS & Hosts
 - **DNS Preset Switching** — one-click DNS change: Google, Cloudflare, Quad9,
-  OpenDNS, or reset to automatic (DHCP). Shows current active DNS.
+  OpenDNS, or reset to automatic (DHCP). Shows current active DNS. An **Undo**
+  button restores the exact DNS configuration in effect before the last change.
 - **Hosts File Editor** — view, add, and remove entries from the Windows
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
   or remove them. Backs up hosts file before modifications.

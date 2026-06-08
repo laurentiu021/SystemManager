@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.2] - 2026-06-08
+
+### Fixed
+- **UI test harness could never locate the app executable.** `AppFixture` hardcoded a `net8.0-windows` output path while the project targets `net10.0-windows`, so `FindExecutable()` always threw `FileNotFoundException` when running the UI automation tests locally. The path is now resolved dynamically from the `net*-windows` build folder, so it survives future framework bumps.
+
 ## [1.19.1] - 2026-06-05
 
 ### Fixed
@@ -29,8 +34,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Pipe listener no longer fire-and-forgets via `async void`.** `App.StartPipeListener` was an async-void method, meaning any exception escaping the loop would crash the process via the AppDomain handler. Renamed to `StartPipeListenerAsync` returning `Task`; `OnStartup` calls it as `_ = StartPipeListenerAsync()` so a stray exception flows through `TaskScheduler.UnobservedTaskException` (logged) instead of terminating the app.
 - **StartupService — removed sync wrapper over async.** `SetEnabled` (sync) was a thin wrapper around `SetEnabledAsync` using `.GetAwaiter().GetResult()`. The wrapper is gone; tests now call `SetEnabledAsync` directly via xUnit `Task` test methods.
 - **Schtasks stderr read** — replaced `stderrTask.Wait(timeout) ? .GetAwaiter().GetResult() : ""` with `await stderrTask.WaitAsync(timeout)` so the read is fully async with a clean timeout fallback.
-
-### Fixed
 - **Privacy Toggles no longer write to the registry on every click.** Toggling a switch now updates local state only; the user must press **Apply** to write pending changes. A live counter shows how many changes are pending, and **Discard** reverts them without touching the registry. Prevents accidental system changes when scrolling through the toggle list.
 - **Dashboard no longer freezes on first load.** Static system info (CPU, OS, RAM modules) is now loaded asynchronously instead of blocking the UI thread on a synchronous WMI capture. The Dashboard tab is responsive immediately on startup.
 - **DNS / Hosts tab loads asynchronously.** Reading the hosts file is now async (`File.ReadAllLinesAsync`); Refresh no longer freezes the UI on slow disks.
@@ -387,6 +390,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Subtitle and Tooltip are auto-generated from child labels.
 - **Version** aligned to 1.7.17.
 
+## [1.7.16] - 2026-05-22
+
+### Fixed
+- **Tray icon creation is now forced**, ensuring the system-tray icon appears even when the platform delays its initial creation.
+
+### Changed
+- **Upgraded H.NotifyIcon to 2.3.0** for more reliable tray-icon handling.
+
+## [1.7.15] - 2026-05-22
+
+### Fixed
+- **Tray icon reliability** — follow-up adjustments to ensure the system-tray icon initializes correctly during startup.
+
+## [1.7.14] - 2026-05-22
+
+### Added
+- **Real app icons in Bulk Installer** — app icons are fetched via the Google Favicon service and cached locally, so the catalog shows recognizable icons instead of placeholders.
+
+### Fixed
+- **Tray icon always visible** — falls back to a system icon when an app icon fails to load, so the tray icon is never missing.
+
 ## [1.7.13] - 2026-05-22
 
 ### Fixed
@@ -397,6 +421,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **File Shredder** — fixed white page (transparent DataGrid background).
 - **Column resize** — CanUserResizeColumns on all remaining DataGrids.
 - **Tray icon** — shows real app icon from exe (not generic).
+
+## [1.7.12] - 2026-05-22
+
+### Fixed
+- **Tray icon loads from the executable**, which is reliable under single-file publishing, with a pack-URI fallback if the embedded icon cannot be read.
+
+## [1.7.11] - 2026-05-22
+
+### Fixed
+- **Tray icon visibility** is now set explicitly, so the system-tray icon shows reliably.
+
+## [1.7.10] - 2026-05-22
+
+### Fixed
+- **Uniform elevation banners** across App Updates, Uninstaller, and Bulk Installer, so every tab presents the admin-elevation prompt the same way.
+- **File Shredder no longer shows a blank page** when the tab is opened.
+
+### Changed
+- **Resizable grid columns everywhere** — `CanUserResizeColumns` is now enabled on all data grids for consistent behavior.
+
+## [1.7.9] - 2026-05-22
+
+### Fixed
+- **Services tab — consistent banner ordering.** The admin elevation banner now sits above the toolbar, matching the layout used by the other tabs.
 
 ## [1.7.8] - 2026-05-22
 
@@ -444,6 +492,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `DefWindowProcW` entry point.
 - **Shutdown crash** — fixed ObjectDisposedException when closing the app
   (DnsHostsViewModel CTS disposal race condition).
+
+## [1.7.2] - 2026-05-22
+
+### Fixed
+- **Shutdown crash** — prevented `ObjectDisposedException` in `DnsHostsViewModel` when the app is closed while a refresh is in flight.
+
+## [1.7.1] - 2026-05-21
+
+### Fixed
+- **Code review findings** — addressed security, thread-safety, and disposal issues surfaced during review (#487).
 
 ## [1.7.0] - 2026-05-21
 
@@ -2774,7 +2832,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - One-click "Install" button that launches the downloaded build and
   closes the current instance so the new version takes over.
 
-### Safety
+### Security
 - Deep cleanup **never** touches: browser caches / cookies / passwords,
   launcher login tokens, the registry, active drivers, Program Files,
   `AppData\Roaming` (live app settings), `ProgramData\NVIDIA` root, or

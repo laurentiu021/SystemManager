@@ -93,10 +93,10 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
   at your ISP, or at the far-end service
 - **Presets for gamers & streamers**:
   - Global (Google, Cloudflare, your router)
-  - **CS2 Europe** — Valve Frankfurt, Vienna, Stockholm relays
-  - **FACEIT Europe** — competitive CS2 servers in DE, UK, FR, NL, SE
-  - **PUBG Europe** — Krafton EU matchmaking endpoints
-  - **Streaming** — YouTube and Twitch ingest
+  - **CS2 Europe** — Valve matchmaking relays (Vienna, Luxembourg, Warsaw, EU West/Central/East)
+  - **FACEIT Europe** — competitive CS2 servers in DE, NL, UK
+  - **PUBG Europe** — EU matchmaking cloud regions (Frankfurt, Ireland, London)
+  - **Streaming** — YouTube, Twitch, Cloudflare
 - Auto-traceroute on a configurable interval (30 s – 10 min)
 - Speed tests: HTTP (Cloudflare) and the official Ookla CLI (auto-downloaded)
   with persistent history (last 20 results per engine) for tracking service
@@ -456,17 +456,18 @@ to stay on the latest version.
 
 ### Direct download
 
-Grab `SysManager.exe` from the [latest release](https://github.com/laurentiu021/SystemManager/releases/latest)
+Grab `SysManager-v<version>.exe` (e.g. `SysManager-v1.19.2.exe`) from the
+[latest release](https://github.com/laurentiu021/SystemManager/releases/latest)
 and double-click it. The executable is self-contained — no installer, no .NET
 runtime required.
 
 ### Verifying the download
 
-Each release ships a matching `SysManager.exe.sha256`. Verify before running:
+Each release ships a matching `SysManager-v<version>.exe.sha256`. Verify before running:
 
 ```powershell
-Get-FileHash .\SysManager.exe -Algorithm SHA256
-# Compare the output to the contents of SysManager.exe.sha256.
+Get-FileHash .\SysManager-v1.19.2.exe -Algorithm SHA256
+# Compare the output to the contents of SysManager-v1.19.2.exe.sha256.
 ```
 
 The build is not currently code-signed, so Windows SmartScreen may warn on

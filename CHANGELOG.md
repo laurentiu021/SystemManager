@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.2] - 2026-06-08
+
+### Fixed
+- **Restore point creation no longer reports false success.** `CreateRestorePointAsync` returned `true` whenever the PowerShell call didn't throw, but `Checkpoint-Computer` fails *non-terminating* in common cases (notably the once-per-24h rate limit), so failures were reported as success — undermining the "everything is reversible" guarantee. It now forces the error to terminate and only returns `true` when an explicit success sentinel is emitted.
+- **In-app updater can now find its download asset.** The release-asset matcher looked for a fixed `SysManager.exe`, but releases publish `SysManager-v<version>.exe`, so `AssetUrl`/`AssetSize` were always null. Replaced with `IsMainExeAsset`, which matches the versioned executable and excludes the `.sha256` companion.
+- **Windows Update scan no longer leaks COM objects on failure.** `WindowsUpdateService.ScanAsync` released its COM objects only on the success path, so a cancellation or mapping error mid-scan leaked them. The releases now run in a `finally` block.
+
 ## [1.20.1] - 2026-06-08
 
 ### Fixed

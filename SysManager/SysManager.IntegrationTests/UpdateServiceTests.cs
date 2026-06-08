@@ -80,7 +80,15 @@ public class UpdateServiceTests
     {
         Assert.Equal("laurentiu021", UpdateService.Owner);
         Assert.Equal("SystemManager", UpdateService.Repo);
-        Assert.Equal("SysManager.exe", UpdateService.AssetName);
+    }
+
+    [Fact]
+    public void IsMainExeAsset_MatchesVersionedReleaseExe()
+    {
+        // Release assets are SysManager-v<version>.exe, not a fixed SysManager.exe.
+        Assert.True(UpdateService.IsMainExeAsset("SysManager-v1.20.1.exe"));
+        Assert.False(UpdateService.IsMainExeAsset("SysManager-v1.20.1.exe.sha256"));
+        Assert.False(UpdateService.IsMainExeAsset("SysManager.exe"));
     }
 
     [Fact]

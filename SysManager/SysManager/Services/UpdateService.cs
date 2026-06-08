@@ -22,7 +22,17 @@ public sealed class UpdateService
 {
     public const string Owner = "laurentiu021";
     public const string Repo = "SystemManager";
-    public const string AssetName = "SysManager.exe";
+
+    /// <summary>
+    /// True for the release's main executable asset. Release assets are named
+    /// <c>SysManager-v&lt;version&gt;.exe</c> (e.g. <c>SysManager-v1.20.1.exe</c>),
+    /// not a fixed <c>SysManager.exe</c>, so match by pattern and exclude the
+    /// companion <c>.sha256</c> checksum file.
+    /// </summary>
+    public static bool IsMainExeAsset(string? assetName) =>
+        !string.IsNullOrEmpty(assetName) &&
+        assetName.StartsWith("SysManager-", StringComparison.OrdinalIgnoreCase) &&
+        assetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
 
     private static readonly HttpClient Http = CreateClient();
 
@@ -345,8 +355,7 @@ public sealed class UpdateService
         var version = ParseVersion(dto.TagName);
         if (version is null) return null;
 
-        var asset = dto.Assets?.FirstOrDefault(a =>
-            string.Equals(a.Name, AssetName, StringComparison.OrdinalIgnoreCase));
+        var asset = dto.Assets?.FirstOrDefault(a => IsMainExeAsset(a.Name));
 
         return new ReleaseInfo(
             Version: version,

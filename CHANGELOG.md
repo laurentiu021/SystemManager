@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.3] - 2026-06-08
+
+### Fixed
+- **Drive enumeration no longer crashes on missing WMI properties.** `FixedDriveService` read `MediaType`/`BusType` with `Convert.ToUInt32(value ?? 0u)`, but WMI returns `DBNull.Value` (not null) for absent properties, so `Convert.ToUInt32(DBNull.Value)` threw and aborted the whole scan on some hardware. Reads now go through a `ToUInt32Safe` helper that treats null and `DBNull` as 0.
+- **Uninstaller trusted-directory check no longer accepts sibling folders.** `IsUnderTrustedDirectory` used a bare `StartsWith`, so `C:\Program Files Evil\…` passed the `C:\Program Files` check. It now compares on a normalized directory boundary (trailing separator) so only true sub-paths of a trusted directory are accepted.
+
 ## [1.20.2] - 2026-06-08
 
 ### Fixed

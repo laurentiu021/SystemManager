@@ -76,4 +76,25 @@ public class FixedDriveServiceTests
         Assert.Equal("NVMe", b.BusType);
         Assert.Equal("", a.MediaType); // original unchanged
     }
+
+    // Regression: WMI returns DBNull.Value (not null) for absent properties, and
+    // Convert.ToUInt32(DBNull.Value) throws — which crashed drive enumeration.
+    [Fact]
+    public void ToUInt32Safe_DBNull_ReturnsZero()
+        => Assert.Equal(0u, FixedDriveService.ToUInt32Safe(DBNull.Value));
+
+    [Fact]
+    public void ToUInt32Safe_Null_ReturnsZero()
+        => Assert.Equal(0u, FixedDriveService.ToUInt32Safe(null));
+
+    [Theory]
+    [InlineData(4, 4u)]
+    [InlineData((uint)17, 17u)]
+    [InlineData("11", 11u)]
+    public void ToUInt32Safe_ConvertibleValue_ReturnsValue(object input, uint expected)
+        => Assert.Equal(expected, FixedDriveService.ToUInt32Safe(input));
+
+    [Fact]
+    public void ToUInt32Safe_Unconvertible_ReturnsZero()
+        => Assert.Equal(0u, FixedDriveService.ToUInt32Safe("not-a-number"));
 }

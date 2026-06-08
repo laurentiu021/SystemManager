@@ -364,7 +364,7 @@ public sealed partial class UninstallerService
     /// Checks whether the given absolute path resides under a trusted system directory
     /// (Program Files, Windows, ProgramData, or LocalApplicationData).
     /// </summary>
-    private static bool IsUnderTrustedDirectory(string fullPath)
+    internal static bool IsUnderTrustedDirectory(string fullPath)
     {
         var trustedDirs = new[]
         {
@@ -375,8 +375,15 @@ public sealed partial class UninstallerService
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         };
 
+        // Compare on a directory boundary, not a raw prefix. A bare StartsWith lets
+        // "C:\Program Files Evil\x.exe" pass the "C:\Program Files" check — so append
+        // a trailing separator to both sides before comparing.
+        static string WithSep(string p) =>
+            p.EndsWith(System.IO.Path.DirectorySeparatorChar) ? p : p + System.IO.Path.DirectorySeparatorChar;
+
+        var candidate = WithSep(System.IO.Path.GetFullPath(fullPath));
         return trustedDirs.Any(dir =>
             !string.IsNullOrEmpty(dir) &&
-            fullPath.StartsWith(dir, StringComparison.OrdinalIgnoreCase));
+            candidate.StartsWith(WithSep(System.IO.Path.GetFullPath(dir)), StringComparison.OrdinalIgnoreCase));
     }
 }

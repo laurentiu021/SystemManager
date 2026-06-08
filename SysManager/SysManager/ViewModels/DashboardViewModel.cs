@@ -171,11 +171,49 @@ public sealed partial class DashboardViewModel : ViewModelBase
                     GpuName = gpu.FullName;
                     GpuVram = $"{memUsed:F1} / {memTotal:F1} GB VRAM";
                 });
+                return;
             }
         }
         catch (Exception ex)
         {
-            Log.Debug("GPU polling unavailable: {Error}", ex.Message);
+            Log.Debug("NVIDIA GPU polling unavailable: {Error}", ex.Message);
+        }
+
+        // No NVIDIA GPU (NvAPI only covers NVIDIA). Fall back to WMI so AMD/Intel
+        // GPUs at least show the adapter name. Live usage % is NVIDIA-only because
+        // it requires vendor-specific APIs.
+        UpdateGpuNameFromWmi();
+    }
+
+    private void UpdateGpuNameFromWmi()
+    {
+        try
+        {
+            using var searcher = new System.Management.ManagementObjectSearcher(
+                "SELECT Name FROM Win32_VideoController");
+            using var collection = searcher.Get();
+            foreach (System.Management.ManagementObject mo in collection)
+            {
+                using (mo)
+                {
+                    var name = mo["Name"]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(name)) continue;
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                    {
+                        GpuName = name;
+                        GpuVram = "";
+                    });
+                    return; // first adapter is enough
+                }
+            }
+        }
+        catch (System.Management.ManagementException ex)
+        {
+            Log.Debug("WMI GPU name lookup unavailable: {Error}", ex.Message);
+        }
+        catch (System.Runtime.InteropServices.COMException ex)
+        {
+            Log.Debug("WMI GPU name lookup failed: {Error}", ex.Message);
         }
     }
 

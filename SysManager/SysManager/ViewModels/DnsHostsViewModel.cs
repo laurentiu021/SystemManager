@@ -120,6 +120,16 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
+        if (!DialogService.Instance.Confirm(
+                $"Change this PC's DNS servers to {SelectedPreset.Name} " +
+                $"({SelectedPreset.Primary}, {SelectedPreset.Secondary})?\n\n" +
+                "You can revert any time with \"Reset to automatic (DHCP)\".",
+                "Confirm DNS Change"))
+        {
+            StatusMessage = "DNS change cancelled.";
+            return;
+        }
+
         IsDnsApplying = true;
         StatusMessage = $"Applying {SelectedPreset.Name} DNS...";
         try
@@ -214,10 +224,20 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
+        if (!DialogService.Instance.Confirm(
+                $"Overwrite the system hosts file with these {HostEntries.Count} entries?\n\n" +
+                "The original hosts file is preserved as hosts.bak (only the first time) " +
+                "and can be restored with \"Restore original\".",
+                "Confirm Hosts File Change"))
+        {
+            HostsStatus = "Save cancelled.";
+            return;
+        }
+
         try
         {
             _hostsService.SaveHosts(HostEntries.ToList());
-            HostsStatus = $"Saved {HostEntries.Count} entries. Backup created at hosts.bak.";
+            HostsStatus = $"Saved {HostEntries.Count} entries. Original preserved at hosts.bak.";
             Log.Information("Hosts file saved with {Count} entries", HostEntries.Count);
         }
         catch (UnauthorizedAccessException)
@@ -228,6 +248,54 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         {
             HostsStatus = $"Error saving hosts file: {ex.Message}";
             Log.Error(ex, "Failed to save hosts file");
+        }
+    }
+
+    [RelayCommand]
+    private async Task RestoreHostsAsync()
+    {
+        if (!IsElevated)
+        {
+            HostsStatus = "Restoring the hosts file requires administrator privileges.";
+            return;
+        }
+
+        if (!_hostsService.HasBackup)
+        {
+            HostsStatus = "No backup found — nothing to restore.";
+            return;
+        }
+
+        if (!DialogService.Instance.Confirm(
+                "Restore the original hosts file from backup? Your current SysManager " +
+                "changes to the hosts file will be discarded.",
+                "Confirm Restore Hosts File"))
+        {
+            HostsStatus = "Restore cancelled.";
+            return;
+        }
+
+        try
+        {
+            if (_hostsService.RestoreBackup())
+            {
+                await LoadHostsAsync();
+                HostsStatus = "Original hosts file restored from backup.";
+                Log.Information("Hosts file restored from backup");
+            }
+            else
+            {
+                HostsStatus = "No backup found — nothing to restore.";
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            HostsStatus = "Access denied — run as administrator to restore hosts file.";
+        }
+        catch (IOException ex)
+        {
+            HostsStatus = $"Error restoring hosts file: {ex.Message}";
+            Log.Error(ex, "Failed to restore hosts file");
         }
     }
 

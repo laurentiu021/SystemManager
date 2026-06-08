@@ -172,7 +172,8 @@ Key services:
 - `DnsService` — manages DNS server configuration via PowerShell
   `Set-DnsClientServerAddress` with preset support (Google, Cloudflare, etc.).
 - `HostsFileService` — parses and edits the Windows hosts file with
-  add/remove/toggle operations.
+  add/remove/toggle operations; keeps a one-time pristine backup and can
+  restore it (`HasBackup` / `RestoreBackup`).
 - `ContextMenuService` — scans and toggles Explorer context menu shell
   extensions via registry enumeration.
 - `SystemReportService` — generates comprehensive system info reports

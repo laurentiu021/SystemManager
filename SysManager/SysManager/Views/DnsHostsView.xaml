@@ -100,6 +100,9 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                         <Button Content="Refresh" Command="{Binding RefreshHostsCommand}"
                                 Style="{StaticResource SecondaryButton}" Padding="12,6" Margin="0,0,8,0"/>
+                        <Button Content="Restore original" Command="{Binding RestoreHostsCommand}"
+                                Style="{StaticResource SecondaryButton}" Padding="12,6" Margin="0,0,8,0"
+                                AutomationProperties.Name="Restore original hosts file from backup"/>
                         <Button Content="Save" Command="{Binding SaveHostsCommand}"
                                 Style="{StaticResource PrimaryButton}" Padding="18,6"/>
                     </StackPanel>

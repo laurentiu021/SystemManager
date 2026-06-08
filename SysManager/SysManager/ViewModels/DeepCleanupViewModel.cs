@@ -203,6 +203,21 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     private async Task CleanAsync()
     {
         if (IsCleaning || !Categories.Any(c => c.IsSelected)) return;
+
+        // Deletion is permanent (files are not sent to the Recycle Bin). Confirm
+        // first, showing how much will be removed so the choice is informed.
+        var selected = Categories.Where(c => c.IsSelected).ToList();
+        var totalBytes = selected.Sum(c => c.TotalSizeBytes);
+        var fileCount = selected.Sum(c => c.FileCount);
+        if (!DialogService.Instance.Confirm(
+                $"Permanently delete {fileCount:N0} files (~{FormatHelper.FormatSize(totalBytes)}) " +
+                $"across {selected.Count} categor{(selected.Count == 1 ? "y" : "ies")}?\n\n" +
+                "These files are removed directly, not sent to the Recycle Bin.",
+                "Confirm Deep Cleanup"))
+        {
+            return;
+        }
+
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup");
         if (opLock is null)
         {

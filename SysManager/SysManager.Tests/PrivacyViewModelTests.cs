@@ -13,6 +13,7 @@ namespace SysManager.Tests;
 /// category filtering, pending-change tracking, and discard behavior
 /// without writing to the registry.
 /// </summary>
+[Collection("DialogService")]
 public class PrivacyViewModelTests
 {
     private static PrivacyViewModel CreateVm() => new(new PrivacyService());

@@ -139,22 +139,33 @@ public class FileShredderServiceTests
         }
     }
 
+    /// <summary>
+    /// Synchronous <see cref="IProgress{T}"/> that records reports on the calling
+    /// thread. Unlike <see cref="Progress{T}"/> (which marshals callbacks via the
+    /// captured SynchronizationContext asynchronously), this captures every report
+    /// deterministically by the time the awaited call returns — no timing race.
+    /// </summary>
+    private sealed class SyncProgress : IProgress<int>
+    {
+        public List<int> Reports { get; } = [];
+        public void Report(int value) => Reports.Add(value);
+    }
+
     [Fact]
     public async Task ShredFileAsync_ReportsProgressToCompletion()
     {
         var svc = NewService();
         var file = Path.Combine(Path.GetTempPath(), "smtest_progress_" + Guid.NewGuid().ToString("N") + ".dat");
         await File.WriteAllTextAsync(file, "some bytes");
-        var reports = new List<int>();
-        var progress = new Progress<int>(reports.Add);
+        var progress = new SyncProgress();
 
         try
         {
             await svc.ShredFileAsync(file, ShredMethod.Standard, progress, CancellationToken.None);
 
-            // Progress is marshaled via the captured SynchronizationContext; give it a beat.
-            await Task.Delay(50);
-            Assert.Contains(100, reports);
+            // The service reports synchronously during the awaited shred, so the
+            // final 100% report is guaranteed present once the call completes.
+            Assert.Contains(100, progress.Reports);
         }
         finally
         {

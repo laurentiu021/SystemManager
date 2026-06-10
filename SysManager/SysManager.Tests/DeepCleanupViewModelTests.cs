@@ -15,6 +15,7 @@ namespace SysManager.Tests;
 /// Pure unit tests for <see cref="DeepCleanupViewModel"/>.
 /// Heavier scan/clean tests that hit the real filesystem live in IntegrationTests.
 /// </summary>
+[Collection("DialogService")]
 public class DeepCleanupViewModelTests
 {
     private static DeepCleanupViewModel NewVm() => new(new Services.DeepCleanupService(), new Services.LargeFileScanner(), new Services.FixedDriveService());

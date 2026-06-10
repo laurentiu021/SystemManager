@@ -168,12 +168,14 @@
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Open" ToolTip="Open file location"
+                                            AutomationProperties.Name="{Binding Name, StringFormat='Open file location for {0}'}"
                                             Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             IsEnabled="{Binding CanOpenFileLocation}"
                                             Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
                                             Margin="0,0,4,0"/>
                                     <Button Content="X" ToolTip="Kill process"
+                                            AutomationProperties.Name="{Binding Name, StringFormat='Kill {0}'}"
                                             Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             Style="{StaticResource GhostButton}" Padding="6,2" FontSize="12"

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.6] - 2026-06-10
+
+### Fixed
+- **Screen readers now announce row actions and the App Blocker input by name.** Several icon-only and unlabeled controls had no accessible name, so assistive technology announced them generically (e.g. "X button"). Added `AutomationProperties.Name` to the Process Manager Kill/Open buttons (with the process name), the Ping remove-target button (with the target name), the File Shredder row Remove button (with the file name), and the App Blocker executable-name input.
+
 ## [1.20.5] - 2026-06-08
 
 ### Added

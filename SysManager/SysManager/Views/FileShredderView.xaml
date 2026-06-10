@@ -91,6 +91,7 @@
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Button Content="Remove"
+                                    AutomationProperties.Name="{Binding Name, StringFormat='Remove {0} from shred queue'}"
                                     Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                     CommandParameter="{Binding}"
                                     Style="{StaticResource GhostButton}"

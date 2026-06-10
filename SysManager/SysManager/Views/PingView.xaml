@@ -118,6 +118,8 @@
                                         </StackPanel>
                                         <Button Content="&#x2715;" DockPanel.Dock="Right" Padding="6,2" FontSize="10"
                                                 VerticalAlignment="Center" Style="{StaticResource GhostButton}"
+                                                ToolTip="Remove target"
+                                                AutomationProperties.Name="{Binding Name, StringFormat='Remove {0}'}"
                                                 Command="{Binding DataContext.RemoveTargetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"
                                                 Visibility="{Binding IsCustom, Converter={StaticResource FlexVis}}"/>

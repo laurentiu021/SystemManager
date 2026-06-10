@@ -35,7 +35,7 @@ public static class ServiceRegistration
         services.AddSingleton<TuneUpService>();
         services.AddSingleton<HealthScoreService>();
         services.AddSingleton<AppAlertService>();
-        services.AddSingleton<AppBlockerService>();
+        services.AddSingleton<IAppBlockerService, AppBlockerService>();
         services.AddSingleton<DeepCleanupService>();
         services.AddSingleton<DiskAnalyzerService>();
         services.AddSingleton<DuplicateFileService>();

@@ -16,16 +16,31 @@ namespace SysManager.Services;
 /// to launch the debugger (a non-existent path) instead of the target app,
 /// effectively preventing it from running. Fully reversible by removing the key.
 /// Requires administrator privileges.
+///
+/// <para>The registry root is injectable (defaulting to
+/// <see cref="Registry.LocalMachine"/>) so the IFEO writes can be unit-tested
+/// against a redirected hive (e.g. a key under HKCU) without admin or touching
+/// the machine's real configuration.</para>
 /// </summary>
-public sealed partial class AppBlockerService
+public sealed partial class AppBlockerService : IAppBlockerService
 {
     private const string IfeoPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
     private const string BlockerDebugger = @"C:\Windows\System32\SysManager_Blocked.exe";
 
+    private readonly RegistryKey _baseKey;
+
+    /// <summary>
+    /// Creates the service over a registry root. Defaults to
+    /// <see cref="Registry.LocalMachine"/> (the real IFEO hive); tests pass a
+    /// redirected root (e.g. an HKCU subkey) to avoid admin and machine writes.
+    /// </summary>
+    public AppBlockerService(RegistryKey? baseKey = null)
+        => _baseKey = baseKey ?? Registry.LocalMachine;
+
     /// <summary>
     /// Blocks an executable from running.
     /// </summary>
-    public static bool BlockApp(string exeName)
+    public bool BlockApp(string exeName)
     {
         if (string.IsNullOrWhiteSpace(exeName)) return false;
 
@@ -41,7 +56,7 @@ public sealed partial class AppBlockerService
 
         try
         {
-            using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath, writable: true);
+            using var ifeo = _baseKey.OpenSubKey(IfeoPath, writable: true);
             if (ifeo is null) return false;
 
             using var appKey = ifeo.CreateSubKey(exeName, writable: true);
@@ -83,7 +98,7 @@ public sealed partial class AppBlockerService
     /// <summary>
     /// Unblocks an executable, allowing it to run again.
     /// </summary>
-    public static bool UnblockApp(string exeName)
+    public bool UnblockApp(string exeName)
     {
         if (string.IsNullOrWhiteSpace(exeName)) return false;
 
@@ -99,7 +114,7 @@ public sealed partial class AppBlockerService
 
         try
         {
-            using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath, writable: true);
+            using var ifeo = _baseKey.OpenSubKey(IfeoPath, writable: true);
             if (ifeo is null) return false;
 
             using var appKey = ifeo.OpenSubKey(exeName, writable: true);
@@ -140,7 +155,7 @@ public sealed partial class AppBlockerService
     /// <summary>
     /// Checks if an executable is currently blocked by SysManager.
     /// </summary>
-    public static bool IsBlocked(string exeName)
+    public bool IsBlocked(string exeName)
     {
         if (string.IsNullOrWhiteSpace(exeName)) return false;
 
@@ -149,7 +164,7 @@ public sealed partial class AppBlockerService
 
         try
         {
-            using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath);
+            using var ifeo = _baseKey.OpenSubKey(IfeoPath);
             if (ifeo is null) return false;
 
             using var appKey = ifeo.OpenSubKey(exeName);
@@ -166,13 +181,13 @@ public sealed partial class AppBlockerService
     /// <summary>
     /// Gets all currently blocked applications (blocked by SysManager).
     /// </summary>
-    public static IReadOnlyList<BlockedApp> GetBlockedApps()
+    public IReadOnlyList<BlockedApp> GetBlockedApps()
     {
         List<BlockedApp> blocked = [];
 
         try
         {
-            using var ifeo = Registry.LocalMachine.OpenSubKey(IfeoPath);
+            using var ifeo = _baseKey.OpenSubKey(IfeoPath);
             if (ifeo is null) return blocked;
 
             foreach (var subKeyName in ifeo.GetSubKeyNames())

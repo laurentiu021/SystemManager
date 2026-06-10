@@ -25,8 +25,11 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     [ObservableProperty] private int _blockedCount;
     [ObservableProperty] private bool _isElevated;
 
-    public AppBlockerViewModel()
+    private readonly IAppBlockerService _blocker;
+
+    public AppBlockerViewModel(IAppBlockerService blocker)
     {
+        _blocker = blocker;
         IsElevated = AdminHelper.IsElevated();
         RefreshList();
     }
@@ -41,7 +44,7 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     [RelayCommand]
     private void RefreshList()
     {
-        var apps = AppBlockerService.GetBlockedApps();
+        var apps = _blocker.GetBlockedApps();
         BlockedApps.ReplaceWith(apps);
         BlockedCount = BlockedApps.Count;
         BlockStatus = BlockedCount == 0
@@ -68,7 +71,7 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
 
-        if (AppBlockerService.IsBlocked(exeName))
+        if (_blocker.IsBlocked(exeName))
         {
             BlockStatus = $"{exeName} is already blocked.";
             return;
@@ -78,7 +81,7 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
             $"Block \"{exeName}\" from running?\n\nThis will prevent the application from launching until you unblock it.",
             "Block Application — Confirm")) return;
 
-        var success = AppBlockerService.BlockApp(exeName);
+        var success = _blocker.BlockApp(exeName);
         if (success)
         {
             NewExeName = "";
@@ -109,7 +112,7 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
         int unblocked = 0;
         foreach (var app in selected)
         {
-            if (AppBlockerService.UnblockApp(app.ExecutableName))
+            if (_blocker.UnblockApp(app.ExecutableName))
                 unblocked++;
         }
 

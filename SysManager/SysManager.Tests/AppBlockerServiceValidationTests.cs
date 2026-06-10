@@ -5,13 +5,15 @@ namespace SysManager.Tests;
 
 public class AppBlockerServiceValidationTests
 {
+    private static AppBlockerService NewService() => new();
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     public void BlockApp_NullOrWhitespace_ReturnsFalse(string? exeName)
     {
-        Assert.False(AppBlockerService.BlockApp(exeName!));
+        Assert.False(NewService().BlockApp(exeName!));
     }
 
     [Theory]
@@ -25,7 +27,7 @@ public class AppBlockerServiceValidationTests
     [InlineData(@"app"".exe")]
     public void BlockApp_InvalidCharsInName_ReturnsFalse(string exeName)
     {
-        Assert.False(AppBlockerService.BlockApp(exeName));
+        Assert.False(NewService().BlockApp(exeName));
     }
 
     [Theory]
@@ -42,7 +44,7 @@ public class AppBlockerServiceValidationTests
         // not because of invalid input. We can't distinguish in the return value,
         // but we verify the format is accepted by checking IsBlocked (which also
         // requires registry access and will return false gracefully).
-        var result = AppBlockerService.IsBlocked(exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? exeName : exeName + ".exe");
+        var result = NewService().IsBlocked(exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? exeName : exeName + ".exe");
         // IsBlocked reads registry - will return false if no access, but won't throw
         Assert.False(result); // expected since nothing is actually blocked
     }
@@ -51,20 +53,20 @@ public class AppBlockerServiceValidationTests
     public void GetBlockedApps_ReturnsListWithoutThrowing()
     {
         // Should not throw even without admin
-        var result = AppBlockerService.GetBlockedApps();
+        var result = NewService().GetBlockedApps();
         Assert.NotNull(result);
     }
 
     [Fact]
     public void IsBlocked_EmptyName_ReturnsFalse()
     {
-        Assert.False(AppBlockerService.IsBlocked(""));
+        Assert.False(NewService().IsBlocked(""));
     }
 
     [Fact]
     public void IsBlocked_NormalExeName_DoesNotThrow()
     {
-        var ex = Record.Exception(() => AppBlockerService.IsBlocked("notepad.exe"));
+        var ex = Record.Exception(() => NewService().IsBlocked("notepad.exe"));
         Assert.Null(ex);
     }
 }

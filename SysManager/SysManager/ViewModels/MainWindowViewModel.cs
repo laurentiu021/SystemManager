@@ -188,7 +188,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Services = new ServicesViewModel(runner);
             AppAlerts = new AppAlertsViewModel(new AppAlertService());
             ShortcutCleaner = new ShortcutCleanerViewModel(shortcuts);
-            AppBlocker = new AppBlockerViewModel();
+            AppBlocker = new AppBlockerViewModel(new AppBlockerService());
             BulkInstaller = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()), new AppIconService());
             FileShredder = new FileShredderViewModel(new FileShredderService());
             DnsHosts = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), new HostsFileService());

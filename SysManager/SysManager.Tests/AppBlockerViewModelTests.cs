@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 using Xunit;
 
@@ -10,10 +12,19 @@ namespace SysManager.Tests;
 
 public class AppBlockerViewModelTests
 {
+    // A blocker that reports nothing blocked — keeps the VM ctor's RefreshList()
+    // a no-op so these tests exercise pure VM logic without registry access.
+    private static AppBlockerViewModel NewVm()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.GetBlockedApps().Returns([]);
+        return new AppBlockerViewModel(blocker);
+    }
+
     [Fact]
     public void InitialState_IsCorrect()
     {
-        var vm = new AppBlockerViewModel();
+        var vm = NewVm();
         Assert.Equal("", vm.NewExeName);
         Assert.NotNull(vm.BlockedApps);
     }
@@ -21,7 +32,7 @@ public class AppBlockerViewModelTests
     [Fact]
     public void SelectAll_SetsAllSelected()
     {
-        var vm = new AppBlockerViewModel();
+        var vm = NewVm();
         vm.BlockedApps.Add(new BlockedApp { ExecutableName = "a.exe", IsSelected = false });
         vm.BlockedApps.Add(new BlockedApp { ExecutableName = "b.exe", IsSelected = false });
 
@@ -33,7 +44,7 @@ public class AppBlockerViewModelTests
     [Fact]
     public void DeselectAll_ClearsAllSelected()
     {
-        var vm = new AppBlockerViewModel();
+        var vm = NewVm();
         vm.BlockedApps.Add(new BlockedApp { ExecutableName = "a.exe", IsSelected = true });
         vm.BlockedApps.Add(new BlockedApp { ExecutableName = "b.exe", IsSelected = true });
 

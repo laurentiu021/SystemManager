@@ -45,6 +45,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     internal int PaletteIndex;
 
     internal readonly ConcurrentDictionary<string, BulkObservableCollection<DateTimePoint>> Buffers = new();
+
+    private bool _disposed;
     internal readonly ConcurrentDictionary<string, BulkObservableCollection<ObservablePoint>> TraceBuffers = new();
     internal readonly Dictionary<string, IReadOnlyList<TracerouteHop>> LatestRoutes = new();
     private readonly Dictionary<string, PropertyChangedEventHandler> _targetHandlers = new();
@@ -551,12 +553,16 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
+
         Pinger.SampleReceived -= OnSample;
         TraceMonitor.RouteCompleted -= OnRouteCompleted;
+        // Stop, do not Dispose: Pinger / TraceMonitor are DI singletons the container
+        // owns and disposes on teardown. Stopping halts their monitoring loops without
+        // double-freeing a dependency this type does not own.
         Pinger.Stop();
-        Pinger.Dispose();
         TraceMonitor.Stop();
-        TraceMonitor.Dispose();
         FlushTimer?.Stop();
 
         // Unsubscribe target PropertyChanged handlers to prevent memory leaks

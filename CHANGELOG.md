@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.14] - 2026-06-11
+
+### Fixed
+- **No more hidden shutdown errors when closing the app.** Cleanup ran more than once on exit (it is triggered by both the window-close and the application-exit events), which double-released the network charts' underlying graphics resources — an error that was caught and hidden but still occurred on every exit. Cleanup is now guarded so it runs exactly once, and the shared network monitors are stopped rather than disposed twice, so the app shuts down cleanly.
+
 ## [1.20.13] - 2026-06-11
 
 ### Fixed

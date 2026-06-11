@@ -154,6 +154,11 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 Updates.Add(u);
 
             UpdateCount = Updates.Count;
+            // Newly listed updates default to selected, so reflect that on the
+            // header checkbox without re-applying to rows.
+            _suppressAllSelected = true;
+            AllSelected = UpdateCount > 0;
+            _suppressAllSelected = false;
             TableSummary = UpdateCount > 0
                 ? $"{UpdateCount} updates found."
                 : "No updates available.";
@@ -322,15 +327,22 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     private void DeselectAll() => SetAllSelected(false);
 
     /// <summary>
-    /// Applies a selection state to every row and keeps the header checkbox
-    /// (<see cref="AllSelected"/>) in sync without re-triggering its handler.
+    /// Applies a selection state to every row and reflects it on the header
+    /// checkbox (<see cref="AllSelected"/>). Used by both the toolbar buttons
+    /// and the header checkbox toggle. The <c>_suppressAllSelected</c> guard
+    /// prevents the header sync from re-entering the change handler, and the
+    /// row loop always runs (even when <see cref="AllSelected"/> doesn't change
+    /// value), so a header toggle is never a no-op against pre-set rows.
     /// </summary>
     private void SetAllSelected(bool value)
     {
         foreach (var u in Updates) u.IsSelected = value;
-        _suppressAllSelected = true;
-        AllSelected = value;
-        _suppressAllSelected = false;
+        if (AllSelected != value)
+        {
+            _suppressAllSelected = true;
+            AllSelected = value;
+            _suppressAllSelected = false;
+        }
     }
 
     partial void OnAllSelectedChanged(bool value)
@@ -338,7 +350,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         // Ignore programmatic syncs from SetAllSelected; only react to the
         // header checkbox being toggled directly by the user.
         if (_suppressAllSelected) return;
-        foreach (var u in Updates) u.IsSelected = value;
+        SetAllSelected(value);
     }
 
     [RelayCommand]

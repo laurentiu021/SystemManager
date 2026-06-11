@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.9] - 2026-06-10
+
+### Fixed
+- **System Logs time-range chips now show which range is active and are keyboard-navigable.** The 1h / 24h / 7d / 30d / All chips were unlabeled buttons with no selected state, so you couldn't tell which range was applied. They are now a proper radio-button group (matching the Services tab filter chips): the active range is highlighted, the group is arrow-key navigable, and each chip is named for screen readers.
+
 ## [1.20.8] - 2026-06-10
 
 ### Fixed

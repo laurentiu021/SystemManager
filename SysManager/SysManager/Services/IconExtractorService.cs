@@ -24,7 +24,7 @@ public sealed partial class IconExtractorService
 {
     private static readonly ConcurrentDictionary<string, ImageSource?> _cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Queue<string> _insertionOrder = new();
-    private static readonly object _evictionLock = new();
+    private static readonly Lock _evictionLock = new();
 
     /// <summary>Maximum number of cached icons before eviction kicks in.</summary>
     public static int MaxCacheSize { get; set; } = 500;

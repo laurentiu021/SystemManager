@@ -32,7 +32,7 @@ public sealed class TracerouteMonitorService : IDisposable
 
     private CancellationTokenSource? _cts;
     private Task? _loop;
-    private readonly object _stateLock = new();
+    private readonly Lock _stateLock = new();
 
     public bool IsRunning => _loop is { IsCompleted: false };
 

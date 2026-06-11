@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 public sealed partial class ConsoleViewModel : ObservableObject
 {
     private const int MaxLines = 5000;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     public ObservableCollection<PowerShellLine> Lines { get; } = new();
 

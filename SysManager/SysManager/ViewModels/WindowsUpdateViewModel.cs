@@ -30,6 +30,13 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [ObservableProperty] private bool _showConsole;
     [ObservableProperty] private bool _isShowingHistory;
 
+    /// <summary>
+    /// Backs the grid's select-all header checkbox. Setting it selects or
+    /// deselects every row; a guard prevents re-entrancy with row toggles.
+    /// </summary>
+    [ObservableProperty] private bool _allSelected;
+    private bool _suppressAllSelected;
+
     public WindowsUpdateViewModel(PowerShellRunner runner, WindowsUpdateService wu)
     {
         _runner = runner;
@@ -147,6 +154,11 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 Updates.Add(u);
 
             UpdateCount = Updates.Count;
+            // Newly listed updates default to selected, so reflect that on the
+            // header checkbox without re-applying to rows.
+            _suppressAllSelected = true;
+            AllSelected = UpdateCount > 0;
+            _suppressAllSelected = false;
             TableSummary = UpdateCount > 0
                 ? $"{UpdateCount} updates found."
                 : "No updates available.";
@@ -309,15 +321,36 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SelectAll()
-    {
-        foreach (var u in Updates) u.IsSelected = true;
-    }
+    private void SelectAll() => SetAllSelected(true);
 
     [RelayCommand]
-    private void DeselectAll()
+    private void DeselectAll() => SetAllSelected(false);
+
+    /// <summary>
+    /// Applies a selection state to every row and reflects it on the header
+    /// checkbox (<see cref="AllSelected"/>). Used by both the toolbar buttons
+    /// and the header checkbox toggle. The <c>_suppressAllSelected</c> guard
+    /// prevents the header sync from re-entering the change handler, and the
+    /// row loop always runs (even when <see cref="AllSelected"/> doesn't change
+    /// value), so a header toggle is never a no-op against pre-set rows.
+    /// </summary>
+    private void SetAllSelected(bool value)
     {
-        foreach (var u in Updates) u.IsSelected = false;
+        foreach (var u in Updates) u.IsSelected = value;
+        if (AllSelected != value)
+        {
+            _suppressAllSelected = true;
+            AllSelected = value;
+            _suppressAllSelected = false;
+        }
+    }
+
+    partial void OnAllSelectedChanged(bool value)
+    {
+        // Ignore programmatic syncs from SetAllSelected; only react to the
+        // header checkbox being toggled directly by the user.
+        if (_suppressAllSelected) return;
+        SetAllSelected(value);
     }
 
     [RelayCommand]

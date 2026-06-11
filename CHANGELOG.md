@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.10] - 2026-06-10
+
+### Fixed
+- **Console output toolbar is now consistent and screen-reader friendly.** The Clear and Copy buttons on the live-output console (shown on App Updates, Cleanup, System Health, and Windows Update) used the implicit default button style; they now use the standard `SecondaryButton` style like the rest of the app. The output list also gained an accessible name ("Live output").
+
 ## [1.20.9] - 2026-06-10
 
 ### Fixed

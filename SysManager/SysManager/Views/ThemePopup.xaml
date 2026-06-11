@@ -79,6 +79,7 @@
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"
                                          Foreground="{DynamicResource TextPrimary}"
+                                         AutomationProperties.Name="Accent color hex value"
                                          LostFocus="CustomHex_LostFocus" Tag="accent"/>
                             </Grid>
                         </Border>
@@ -103,6 +104,7 @@
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"
                                          Foreground="{DynamicResource TextPrimary}"
+                                         AutomationProperties.Name="Background color hex value"
                                          LostFocus="CustomHex_LostFocus" Tag="bg"/>
                             </Grid>
                         </Border>
@@ -127,6 +129,7 @@
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"
                                          Foreground="{DynamicResource TextPrimary}"
+                                         AutomationProperties.Name="Surface color hex value"
                                          LostFocus="CustomHex_LostFocus" Tag="surface"/>
                             </Grid>
                         </Border>
@@ -151,6 +154,7 @@
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"
                                          Foreground="{DynamicResource TextPrimary}"
+                                         AutomationProperties.Name="Text color hex value"
                                          LostFocus="CustomHex_LostFocus" Tag="text"/>
                             </Grid>
                         </Border>

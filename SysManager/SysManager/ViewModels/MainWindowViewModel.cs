@@ -103,6 +103,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _elevationBadge = "";
 
+    private bool _disposed;
+
     /// <summary>
     /// Parameterless constructor — used by XAML designer and tests.
     /// When DI container is available (runtime), resolves child VMs from it.
@@ -404,6 +406,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        // Idempotency guard: Dispose is wired to two shutdown paths (OnClosed and
+        // Application.Exit), so it can run more than once. Disposing the SkiaSharp
+        // paint handles (via NetworkShared) twice is undefined behavior.
+        if (_disposed) return;
+        _disposed = true;
+
         // Dispose NavItems to unsubscribe PropertyChanged handlers
         foreach (var item in NavItems)
             item.Dispose();

@@ -171,4 +171,18 @@ public class NetworkSharedStateTests
         Assert.Null(state.LatencyXAxes[0].MinLimit);
         Assert.Null(state.LatencyXAxes[0].MaxLimit);
     }
+
+    [Fact]
+    public void Dispose_CalledTwice_DoesNotThrow()
+    {
+        // Regression: Dispose is wired to two shutdown paths (OnClosed + Application.Exit)
+        // and the provider disposes this singleton again on teardown, so it runs 2-3 times.
+        // Without the _disposed guard, the second pass double-freed the unmanaged SkiaSharp
+        // paint/typeface handles — undefined behavior. The guard must make it a no-op.
+        var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+
+        state.Dispose();
+        var ex = Record.Exception(() => state.Dispose());
+        Assert.Null(ex);
+    }
 }

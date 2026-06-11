@@ -19,7 +19,7 @@ namespace SysManager.Services;
 ///
 /// No admin required. No registry edits. No service changes.
 /// </summary>
-public sealed class TuneUpService
+public sealed partial class TuneUpService
 {
     private readonly ShortcutCleanerService _shortcuts;
     private readonly DiskHealthService _diskHealth;
@@ -232,9 +232,9 @@ public sealed class TuneUpService
         }
     }
 
-    private static class NativeMethods
+    private static partial class NativeMethods
     {
-        [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-        internal static extern int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
+        [System.Runtime.InteropServices.LibraryImport("shell32.dll", StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf16, EntryPoint = "SHEmptyRecycleBinW")]
+        internal static partial int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
     }
 }

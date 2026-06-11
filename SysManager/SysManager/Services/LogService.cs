@@ -9,7 +9,7 @@ using Serilog.Core;
 
 namespace SysManager.Services;
 
-public static class LogService
+public static partial class LogService
 {
     public static Logger? Logger { get; private set; }
 
@@ -33,9 +33,13 @@ public static class LogService
                 return new Regex($@"(?i)({escaped})[^\\]+", RegexOptions.Compiled);
             }
         }
-        // Fallback: match any drive letter followed by \Users\<username>
-        return new Regex(@"(?i)([A-Z]:\\Users\\)[^\\]+", RegexOptions.Compiled);
+        // Fallback: match any drive letter followed by \Users\<username>.
+        // This branch is a constant pattern, so it is source-generated.
+        return FallbackUserPathRegex();
     }
+
+    [GeneratedRegex(@"(?i)([A-Z]:\\Users\\)[^\\]+")]
+    private static partial Regex FallbackUserPathRegex();
 
     public static void Init()
     {

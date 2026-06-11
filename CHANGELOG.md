@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.13] - 2026-06-11
+
+### Fixed
+- **The live-output console now matches the app's card styling.** Its container used a one-off border with a smaller corner radius than every other card; it now uses the shared `Card` style (same surface, border, and 10px radius) while keeping its zero inner padding, so the console looks consistent on the App Updates, Cleanup, System Health, and Windows Update tabs.
+
 ## [1.20.12] - 2026-06-10
 
 ### Fixed

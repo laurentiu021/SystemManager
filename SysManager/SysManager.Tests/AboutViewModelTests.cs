@@ -10,6 +10,15 @@ namespace SysManager.Tests;
 
 public class AboutViewModelTests
 {
+    /// <summary>
+    /// Builds an AboutViewModel WITHOUT the startup update-check, so default-state
+    /// assertions don't race the constructor's async network fetch (which populates
+    /// UpdateStatus / LatestNotes / LatestVersionLabel / LatestPublishedLabel /
+    /// UpdateAvailable).
+    /// </summary>
+    private static AboutViewModel NewVmNoAutoCheck() =>
+        new(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()), autoCheck: false);
+
     [Fact]
     public void Constructs_WithDefaultService()
     {
@@ -50,14 +59,14 @@ public class AboutViewModelTests
     [Fact]
     public void UpdateStatus_HasInitialMessage()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVmNoAutoCheck();
         Assert.False(string.IsNullOrWhiteSpace(vm.UpdateStatus));
     }
 
     [Fact]
     public void UpdateAvailable_DefaultsFalse()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVmNoAutoCheck();
         Assert.False(vm.UpdateAvailable);
     }
 
@@ -192,21 +201,21 @@ public class AboutViewModelTests
     [Fact]
     public void LatestVersionLabel_DefaultsEmpty()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVmNoAutoCheck();
         Assert.Equal(string.Empty, vm.LatestVersionLabel);
     }
 
     [Fact]
     public void LatestPublishedLabel_DefaultsEmpty()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVmNoAutoCheck();
         Assert.Equal(string.Empty, vm.LatestPublishedLabel);
     }
 
     [Fact]
     public void LatestNotes_DefaultsEmpty()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVmNoAutoCheck();
         Assert.Equal(string.Empty, vm.LatestNotes);
     }
 

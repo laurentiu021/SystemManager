@@ -57,10 +57,20 @@ public sealed partial class AboutViewModel : ViewModelBase
     public AboutViewModel() : this(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService())) { }
 
     public AboutViewModel(UpdateService updates, SystemReportService reportService)
+        : this(updates, reportService, autoCheck: true) { }
+
+    /// <summary>
+    /// Core constructor. <paramref name="autoCheck"/> controls whether the
+    /// startup update-check (a live network call that populates the update
+    /// properties) runs. Production always passes true; tests pass false to
+    /// assert the constructor's default state without racing the async fetch.
+    /// </summary>
+    internal AboutViewModel(UpdateService updates, SystemReportService reportService, bool autoCheck)
     {
         _updates = updates;
         _reportService = reportService;
-        InitializeAsync(InitAsync);
+        if (autoCheck)
+            InitializeAsync(InitAsync);
     }
 
     private async Task InitAsync()

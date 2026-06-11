@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.11] - 2026-06-10
+
+### Fixed
+- **System Logs severity tiles are now screen-reader friendly and colorblind-safe.** The Critical / Errors / Warnings / Info count tiles conveyed their value only through color and an unlabeled number. Each tile now exposes an accessible name with its count (e.g. "Critical events: 3"), and the Critical and Errors tiles — both previously red and indistinguishable to colorblind users — are now told apart by a leading glyph (▲ vs ●) and weight, not hue alone.
+
 ## [1.20.10] - 2026-06-10
 
 ### Fixed

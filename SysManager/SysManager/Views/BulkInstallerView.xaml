@@ -64,11 +64,13 @@
                            Style="{StaticResource Subtle}"/>
                 <ComboBox ItemsSource="{Binding Categories}"
                           SelectedItem="{Binding SelectedCategory}"
-                          Width="140" Margin="0,0,12,0"/>
+                          Width="140" Margin="0,0,12,0"
+                          AutomationProperties.Name="Filter apps by category"/>
                 <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,8,0"
                            Style="{StaticResource Subtle}"/>
                 <Grid Width="200" Margin="0,0,12,0">
-                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Filter catalog apps"/>
                     <TextBlock Text="Search apps…" IsHitTestVisible="False"
                                Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
                                VerticalAlignment="Center" FontSize="12"
@@ -97,7 +99,8 @@
                     <Button Content="Search" Command="{Binding SearchWingetCommand}"
                             Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Margin="8,0,0,0"/>
                     <Grid>
-                        <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Search winget packages"/>
                         <TextBlock Text="Search apps…" IsHitTestVisible="False"
                                    Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
                                    VerticalAlignment="Center" FontSize="12"

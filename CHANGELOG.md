@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.7] - 2026-06-10
+
+### Fixed
+- **Search and filter boxes now have accessible names.** The category/filter/search inputs on Apps (Bulk Installer), Uninstaller, Process Manager, Services, and Windows Features had no `AutomationProperties.Name`, so screen readers announced them as anonymous edit fields. Each now states what it filters (e.g. "Filter installed apps", "Search winget packages", "Filter Windows features").
+
 ## [1.20.6] - 2026-06-10
 
 ### Fixed

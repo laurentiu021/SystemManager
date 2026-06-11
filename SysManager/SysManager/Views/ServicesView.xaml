@@ -64,7 +64,8 @@
                         <Button Content="Refresh" Command="{Binding RefreshCommand}"
                                 Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                         <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="240" VerticalContentAlignment="Center"/>
+                                 Width="240" VerticalContentAlignment="Center"
+                                 AutomationProperties.Name="Filter services"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                         <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center">

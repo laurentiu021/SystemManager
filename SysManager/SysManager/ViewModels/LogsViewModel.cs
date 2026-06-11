@@ -195,13 +195,6 @@ public sealed partial class LogsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SetTimeRange(string? range)
-    {
-        if (!string.IsNullOrEmpty(range))
-            SelectedTimeRange = range;
-    }
-
-    [RelayCommand]
     private void OpenLogFolder()
     {
         try

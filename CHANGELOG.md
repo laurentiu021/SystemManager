@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.8] - 2026-06-10
+
+### Fixed
+- **Theme presets are now keyboard-accessible.** The preset cards in the appearance popup were mouse-only — not reachable by Tab, not activatable from the keyboard, and unnamed to screen readers. They are now focusable, activate with Enter or Space, and announce their preset name. The custom-color hex inputs (accent, background, surface, text) also gained accessible names.
+
 ## [1.20.7] - 2026-06-10
 
 ### Fixed

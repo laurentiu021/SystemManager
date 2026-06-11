@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -108,10 +109,16 @@ public partial class ThemePopup : UserControl
             Margin = new Thickness(0, 0, 6, 8),
             Width = 140,
             Tag = id,
-            Child = content
+            Child = content,
+            // Keyboard accessibility: make the card Tab-reachable, activatable with
+            // Enter/Space, and announced by its preset name to assistive technology.
+            Focusable = true
         };
+        AutomationProperties.SetName(card, $"{preset.Name} theme");
+        KeyboardNavigation.SetIsTabStop(card, true);
 
         card.MouseLeftButtonUp += Preset_Click;
+        card.KeyDown += Preset_KeyDown;
         return card;
     }
 
@@ -133,8 +140,20 @@ public partial class ThemePopup : UserControl
 
 
     private void Preset_Click(object sender, MouseButtonEventArgs e)
+        => SelectPreset((Border)sender);
+
+    private void Preset_KeyDown(object sender, KeyEventArgs e)
     {
-        var card = (Border)sender;
+        // Enter/Space activate the focused preset card, matching standard button semantics.
+        if (e.Key is Key.Enter or Key.Space)
+        {
+            SelectPreset((Border)sender);
+            e.Handled = true;
+        }
+    }
+
+    private void SelectPreset(Border card)
+    {
         var id = (string)card.Tag;
         ThemeService.Instance.SetPreset(id);
 

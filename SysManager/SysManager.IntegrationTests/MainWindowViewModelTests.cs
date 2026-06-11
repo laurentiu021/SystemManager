@@ -75,22 +75,23 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavItems_ContainAll56()
+    public void NavItems_ContainAll55()
     {
         var vm = new MainWindowViewModel();
-        Assert.Equal(56, vm.NavItems.Count);
+        Assert.Equal(55, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
 
         // Dashboard
         Assert.Contains("nav-dashboard", ids);
 
-        // System (8)
+        // System (9)
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-performance", ids);
         Assert.Contains("nav-services", ids);
         Assert.Contains("nav-startup", ids);
         Assert.Contains("nav-windows-features", ids);
+        Assert.Contains("nav-restore-points", ids);
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
 
@@ -101,42 +102,41 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-cpu-affinity", ids);
         Assert.Contains("nav-display-profiles", ids);
 
-        // Monitor (7)
+        // Monitor (6)
         Assert.Contains("nav-processes", ids);
         Assert.Contains("nav-resource-history", ids);
-        Assert.Contains("nav-app-alerts", ids);
         Assert.Contains("nav-privacy-monitor", ids);
         Assert.Contains("nav-file-lock", ids);
         Assert.Contains("nav-settings-watchdog", ids);
         Assert.Contains("nav-bandwidth-monitor", ids);
 
-        // Cleanup (5)
+        // Cleanup (4)
         Assert.Contains("nav-cleanup", ids);
         Assert.Contains("nav-deep-cleanup", ids);
         Assert.Contains("nav-shortcut-cleaner", ids);
-        Assert.Contains("nav-file-shredder", ids);
         Assert.Contains("nav-scheduled-maintenance", ids);
 
         // Storage (2)
         Assert.Contains("nav-disk-analyzer", ids);
         Assert.Contains("nav-duplicates", ids);
 
-        // Network (6)
+        // Network (5) — DNS changer + hosts editor merged into one DNS & Hosts tab
         Assert.Contains("nav-ping", ids);
         Assert.Contains("nav-traceroute", ids);
         Assert.Contains("nav-speed-test", ids);
         Assert.Contains("nav-network-repair", ids);
-        Assert.Contains("nav-dns-changer", ids);
-        Assert.Contains("nav-hosts-editor", ids);
+        Assert.Contains("nav-dns-hosts", ids);
 
-        // Apps (4)
+        // Apps (3)
         Assert.Contains("nav-app-updates", ids);
         Assert.Contains("nav-bulk-installer", ids);
         Assert.Contains("nav-uninstaller", ids);
-        Assert.Contains("nav-app-blocker", ids);
 
-        // Privacy & Security (6)
+        // Privacy & Security (9)
         Assert.Contains("nav-privacy-settings", ids);
+        Assert.Contains("nav-file-shredder", ids);
+        Assert.Contains("nav-app-blocker", ids);
+        Assert.Contains("nav-app-alerts", ids);
         Assert.Contains("nav-debloater", ids);
         Assert.Contains("nav-browser-cleaner", ids);
         Assert.Contains("nav-edge-onedrive", ids);
@@ -149,17 +149,16 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-volume-control", ids);
         Assert.Contains("nav-env-variables", ids);
 
-        // Info (4)
+        // Info (5)
         Assert.Contains("nav-drivers", ids);
         Assert.Contains("nav-battery", ids);
         Assert.Contains("nav-logs", ids);
+        Assert.Contains("nav-system-report", ids);
         Assert.Contains("nav-about", ids);
 
-        // Advanced (4)
-        Assert.Contains("nav-restore-points", ids);
+        // Advanced (2)
         Assert.Contains("nav-profile-export", ids);
         Assert.Contains("nav-cli-interface", ids);
-        Assert.Contains("nav-system-report", ids);
     }
 
     [Fact]
@@ -239,11 +238,11 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_SystemGroup_Contains8Items()
+    public void NavGroups_SystemGroup_Contains9Items()
     {
         var vm = new MainWindowViewModel();
         var sys = vm.NavGroups.First(g => g.Id == "grp-system");
-        Assert.Equal(8, sys.Children.Count);
+        Assert.Equal(9, sys.Children.Count);
         var ids = sys.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
@@ -251,6 +250,7 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-services", ids);
         Assert.Contains("nav-startup", ids);
         Assert.Contains("nav-windows-features", ids);
+        Assert.Contains("nav-restore-points", ids);
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
     }
@@ -266,12 +266,13 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_CleanupGroup_Has5Items()
+    public void NavGroups_CleanupGroup_Has4Items()
     {
-        // Cleanup now has: Quick, Deep, Shortcut Cleaner, File Shredder, Scheduled Maintenance
+        // Cleanup has: Quick, Deep, Shortcut Cleaner, Scheduled Maintenance.
+        // File Shredder lives under Privacy & Security, not Cleanup.
         var vm = new MainWindowViewModel();
         var cleanup = vm.NavGroups.First(g => g.Id == "grp-cleanup");
-        Assert.Equal(5, cleanup.Children.Count);
+        Assert.Equal(4, cleanup.Children.Count);
     }
 
     [Fact]
@@ -289,5 +290,36 @@ public class MainWindowViewModelTests
     {
         var vm = new MainWindowViewModel();
         Assert.All(vm.NavGroups, g => Assert.True(g.IsExpanded));
+    }
+
+    // ── Data-driven contract: every leaf in the live graph is well-formed ──
+    // Enumerates the real nav tree instead of hard-coding ids, so a future
+    // nav/wiring change that leaves a leaf without content or a view fails
+    // automatically rather than being silently re-baselined.
+
+    [Fact]
+    public void NavLeaf_EveryItemHasContentAndResolvableView()
+    {
+        var vm = new MainWindowViewModel();
+        Assert.All(vm.NavItems, item =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(item.Id));
+            Assert.NotNull(item.Content);
+            Assert.NotNull(item.ViewType);
+            // ViewType must be a UserControl subclass the lazy View getter can instantiate.
+            Assert.True(typeof(System.Windows.Controls.UserControl).IsAssignableFrom(item.ViewType),
+                $"{item.Id}: ViewType {item.ViewType.Name} is not a UserControl");
+        });
+    }
+
+    [Fact]
+    public void NavGroups_EveryLeafBelongsToExactlyOneGroup()
+    {
+        var vm = new MainWindowViewModel();
+        foreach (var item in vm.NavItems)
+        {
+            var owners = vm.NavGroups.Count(g => g.Children.Contains(item));
+            Assert.Equal(1, owners);
+        }
     }
 }

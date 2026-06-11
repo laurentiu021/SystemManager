@@ -11,14 +11,17 @@
 
             <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="8,6" >
                 <TextBlock Text="Live output" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                <Button Margin="12,0,0,0" Padding="8,2" Content="Clear" Command="{Binding ClearCommand}"/>
-                <Button Margin="6,0,0,0" Padding="8,2" Content="Copy" Command="{Binding CopyAllCommand}"/>
+                <Button Margin="12,0,0,0" Padding="8,2" Content="Clear" Command="{Binding ClearCommand}"
+                        Style="{StaticResource SecondaryButton}"/>
+                <Button Margin="6,0,0,0" Padding="8,2" Content="Copy" Command="{Binding CopyAllCommand}"
+                        Style="{StaticResource SecondaryButton}"/>
                 <CheckBox Margin="12,0,0,0" Content="Auto-scroll" IsChecked="{Binding AutoScroll}" Foreground="{DynamicResource TextPrimary}"/>
             </StackPanel>
 
             <ListBox x:Name="ListBox_Output"
                      Grid.Row="1"
                      ItemsSource="{Binding Lines}"
+                     AutomationProperties.Name="Live output"
                      Background="Transparent"
                      BorderThickness="0"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto"

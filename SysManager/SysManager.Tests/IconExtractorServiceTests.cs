@@ -105,24 +105,33 @@ public class IconExtractorServiceTests
     // ── Cache ──
 
     [Fact]
-    public void ClearCache_ResetsCount()
+    public void ClearCache_RemovesEntries()
     {
+        // Per-key assertion: ClearCache must drop a key we just added. Asserting the
+        // global CacheCount == 0 would be racy — tests in other collections touch the
+        // shared static cache in parallel and can re-add entries after the clear.
+        var bogus = @"C:\NonExistent\ClearTest_" + Guid.NewGuid().ToString("N") + ".exe";
+        _ = IconExtractorService.GetIcon(bogus);
+        Assert.True(IconExtractorService.IsCached(bogus));
+
         IconExtractorService.ClearCache();
-        Assert.Equal(0, IconExtractorService.CacheCount);
+        Assert.False(IconExtractorService.IsCached(bogus));
     }
 
     [Fact]
-    public void GetIcon_SamePath_UsesCachedResult()
+    public void GetIcon_SamePath_CachesByKey()
     {
-        IconExtractorService.ClearCache();
-        // Use a GUID-based path to avoid interference from parallel tests.
+        // Use a GUID-based path and assert this specific key's caching, not the global
+        // count (which parallel tests can change by touching the shared static cache).
         var bogus = @"C:\NonExistent\CacheTest_" + Guid.NewGuid().ToString("N") + ".exe";
+
+        Assert.False(IconExtractorService.IsCached(bogus)); // not cached before first call
         _ = IconExtractorService.GetIcon(bogus);
-        var countAfterFirst = IconExtractorService.CacheCount;
+        Assert.True(IconExtractorService.IsCached(bogus));  // cached after first call
+
+        // A second call for the same key returns the cached value (no exception, still cached).
         _ = IconExtractorService.GetIcon(bogus);
-        var countAfterSecond = IconExtractorService.CacheCount;
-        // Second call to the same path must not increase the cache count.
-        Assert.Equal(countAfterFirst, countAfterSecond);
+        Assert.True(IconExtractorService.IsCached(bogus));
     }
 
     // ── Model Icon property defaults ──

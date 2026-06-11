@@ -159,6 +159,19 @@ public sealed partial class IconExtractorService
     /// <summary>Number of cached icons (for diagnostics/testing).</summary>
     public static int CacheCount => _cache.Count;
 
+    /// <summary>
+    /// Whether a specific path is currently cached (keyed by its normalized form).
+    /// For testing: lets a test assert one key's caching deterministically, without
+    /// depending on the global <see cref="CacheCount"/>, which other parallel tests
+    /// may change by touching the shared cache.
+    /// </summary>
+    internal static bool IsCached(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath)) return false;
+        var normalized = NormalizePath(filePath);
+        return !string.IsNullOrEmpty(normalized) && _cache.ContainsKey(normalized);
+    }
+
     // ── Core extraction ──
 
     private static ImageSource? ExtractIcon(string path)

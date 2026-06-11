@@ -249,7 +249,7 @@ public sealed class WindowsUpdateService
 
     private static List<string> ExtractKbIds(dynamic u)
     {
-        var list = new List<string>();
+        List<string> list = [];
         try
         {
             var ids = u.KBArticleIDs;

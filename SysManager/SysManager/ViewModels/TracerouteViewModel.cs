@@ -72,7 +72,7 @@ public sealed partial class TracerouteViewModel : ViewModelBase
 
         _traceCts?.Dispose();
         _traceCts = new CancellationTokenSource();
-        var collected = new List<TracerouteHop>();
+        List<TracerouteHop> collected = [];
         _totalHops = 0;
         void OnHop(TracerouteHop hop)
         {

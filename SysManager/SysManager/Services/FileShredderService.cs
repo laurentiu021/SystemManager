@@ -176,7 +176,7 @@ public sealed class FileShredderService
     /// </summary>
     private static List<string> EnumerateFilesSafe(string rootPath)
     {
-        var results = new List<string>();
+        List<string> results = [];
         var stack = new Stack<DirectoryInfo>();
         stack.Push(new DirectoryInfo(rootPath));
 

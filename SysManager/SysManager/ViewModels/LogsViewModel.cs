@@ -284,7 +284,7 @@ public sealed partial class LogsViewModel : ViewModelBase
 
     private List<EventSeverity> BuildSeverityFilter()
     {
-        var list = new List<EventSeverity>();
+        List<EventSeverity> list = [];
         if (ShowCritical) list.Add(EventSeverity.Critical);
         if (ShowError) list.Add(EventSeverity.Error);
         if (ShowWarning) list.Add(EventSeverity.Warning);

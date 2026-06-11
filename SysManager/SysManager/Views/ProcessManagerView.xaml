@@ -33,7 +33,8 @@
                 <TextBlock Text="Search:" VerticalAlignment="Center" Margin="8,0,8,0"
                            Style="{StaticResource Subtle}"/>
                 <Grid Width="200" Margin="0,0,12,0">
-                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Filter processes"/>
                     <TextBlock Text="Search processes…" IsHitTestVisible="False"
                                Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
                                VerticalAlignment="Center" FontSize="12"

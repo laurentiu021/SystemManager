@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Buffers;
 using System.Diagnostics.Eventing.Reader;
 using SysManager.Models;
 
@@ -113,10 +114,14 @@ public sealed class EventLogService
         catch (InvalidOperationException) { return "(message not available)"; }
     }
 
+    // Hoisted so the newline scan in FirstLine — run once per projected event
+    // record, potentially thousands per query — doesn't allocate a char[] per call.
+    private static readonly SearchValues<char> Newlines = SearchValues.Create("\r\n");
+
     private static string FirstLine(string s)
     {
         if (string.IsNullOrEmpty(s)) return "";
-        var i = s.IndexOfAny(new[] { '\r', '\n' });
+        var i = s.AsSpan().IndexOfAny(Newlines);
         return (i < 0 ? s : s[..i]).Trim();
     }
 

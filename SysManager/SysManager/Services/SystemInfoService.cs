@@ -18,7 +18,7 @@ public sealed class SystemInfoService
     private OsInfo? _cachedOs;
     private CpuInfo? _cachedCpuStatic;
     private List<DiskInfo>? _cachedDisks;
-    private readonly object _cacheLock = new();
+    private readonly Lock _cacheLock = new();
 
     public Task<SystemSnapshot> CaptureAsync(CancellationToken ct = default)
         => Task.Run(() => Capture(), ct);

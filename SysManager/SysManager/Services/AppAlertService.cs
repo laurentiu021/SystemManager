@@ -17,7 +17,7 @@ namespace SysManager.Services;
 public sealed class AppAlertService : IDisposable
 {
     private readonly List<FileSystemWatcher> _watchers = new();
-    private readonly object _watcherLock = new();
+    private readonly Lock _watcherLock = new();
     private readonly ConcurrentDictionary<string, bool> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _knownRegistryApps = new(StringComparer.OrdinalIgnoreCase);
     private readonly SynchronizationContext? _syncContext;

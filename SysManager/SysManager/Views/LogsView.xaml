@@ -43,7 +43,8 @@
         <!-- Severity count glass cards -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="28,16,28,0">
             <!-- Critical -->
-            <Border Style="{StaticResource GlassCard}" Background="#14FF3B30" Margin="0,0,12,0">
+            <Border Style="{StaticResource GlassCard}" Background="#14FF3B30" Margin="0,0,12,0"
+                    AutomationProperties.Name="{Binding CriticalCount, StringFormat='Critical events: {0}'}">
                 <Grid>
                     <Border Background="#FF3B30" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
@@ -55,13 +56,18 @@
                         </Ellipse>
                         <TextBlock Text="{Binding CriticalCount}" FontSize="20" FontWeight="Bold"
                                    Foreground="#FF6B6B" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock Text="Critical" FontSize="12" Foreground="#64748B"
-                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <!-- Bold + ▲ glyph distinguish Critical from Error without relying on hue
+                             (both are reds — a colorblind-safe, non-color cue). -->
+                        <TextBlock FontSize="12" Foreground="#64748B" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="10,0,0,0">
+                            <Run Text="&#x25B2; Critical"/>
+                        </TextBlock>
                     </StackPanel>
                 </Grid>
             </Border>
             <!-- Errors -->
-            <Border Style="{StaticResource GlassCard}" Background="#14F87171" Margin="0,0,12,0">
+            <Border Style="{StaticResource GlassCard}" Background="#14F87171" Margin="0,0,12,0"
+                    AutomationProperties.Name="{Binding ErrorCount, StringFormat='Errors: {0}'}">
                 <Grid>
                     <Border Background="#F87171" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
@@ -73,13 +79,16 @@
                         </Ellipse>
                         <TextBlock Text="{Binding ErrorCount}" FontSize="20" FontWeight="Bold"
                                    Foreground="#FCA5A5" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock Text="Errors" FontSize="12" Foreground="#64748B"
-                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <TextBlock FontSize="12" Foreground="#64748B"
+                                   VerticalAlignment="Center" Margin="10,0,0,0">
+                            <Run Text="&#x25CF; Errors"/>
+                        </TextBlock>
                     </StackPanel>
                 </Grid>
             </Border>
             <!-- Warnings -->
-            <Border Style="{StaticResource GlassCard}" Background="#14FBBF24" Margin="0,0,12,0">
+            <Border Style="{StaticResource GlassCard}" Background="#14FBBF24" Margin="0,0,12,0"
+                    AutomationProperties.Name="{Binding WarningCount, StringFormat='Warnings: {0}'}">
                 <Grid>
                     <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
@@ -97,7 +106,8 @@
                 </Grid>
             </Border>
             <!-- Info -->
-            <Border Style="{StaticResource GlassCard}" Background="#1438BDF8">
+            <Border Style="{StaticResource GlassCard}" Background="#1438BDF8"
+                    AutomationProperties.Name="{Binding InfoCount, StringFormat='Info events: {0}'}">
                 <Grid>
                     <Border Background="{DynamicResource Info}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>

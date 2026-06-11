@@ -131,7 +131,14 @@
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       Visibility="{Binding UpdateCount, Converter={StaticResource GreaterThanZero}}">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="✓" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="36" MinWidth="36" CanUserResize="False"/>
+                    <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="36" MinWidth="36" CanUserResize="False">
+                        <DataGridCheckBoxColumn.Header>
+                            <CheckBox IsChecked="{Binding DataContext.AllSelected, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                      AutomationProperties.Name="Select all updates"
+                                      ToolTip="Select all updates"
+                                      HorizontalAlignment="Center"/>
+                        </DataGridCheckBoxColumn.Header>
+                    </DataGridCheckBoxColumn>
 
                     <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" MinWidth="150" IsReadOnly="True"
                                         SortMemberPath="Title">

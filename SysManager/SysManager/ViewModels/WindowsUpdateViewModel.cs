@@ -30,6 +30,13 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [ObservableProperty] private bool _showConsole;
     [ObservableProperty] private bool _isShowingHistory;
 
+    /// <summary>
+    /// Backs the grid's select-all header checkbox. Setting it selects or
+    /// deselects every row; a guard prevents re-entrancy with row toggles.
+    /// </summary>
+    [ObservableProperty] private bool _allSelected;
+    private bool _suppressAllSelected;
+
     public WindowsUpdateViewModel(PowerShellRunner runner, WindowsUpdateService wu)
     {
         _runner = runner;
@@ -309,15 +316,29 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SelectAll()
-    {
-        foreach (var u in Updates) u.IsSelected = true;
-    }
+    private void SelectAll() => SetAllSelected(true);
 
     [RelayCommand]
-    private void DeselectAll()
+    private void DeselectAll() => SetAllSelected(false);
+
+    /// <summary>
+    /// Applies a selection state to every row and keeps the header checkbox
+    /// (<see cref="AllSelected"/>) in sync without re-triggering its handler.
+    /// </summary>
+    private void SetAllSelected(bool value)
     {
-        foreach (var u in Updates) u.IsSelected = false;
+        foreach (var u in Updates) u.IsSelected = value;
+        _suppressAllSelected = true;
+        AllSelected = value;
+        _suppressAllSelected = false;
+    }
+
+    partial void OnAllSelectedChanged(bool value)
+    {
+        // Ignore programmatic syncs from SetAllSelected; only react to the
+        // header checkbox being toggled directly by the user.
+        if (_suppressAllSelected) return;
+        foreach (var u in Updates) u.IsSelected = value;
     }
 
     [RelayCommand]

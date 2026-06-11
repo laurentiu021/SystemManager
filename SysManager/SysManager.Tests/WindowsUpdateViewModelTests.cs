@@ -236,6 +236,58 @@ public class WindowsUpdateViewModelTests
     {
         Assert.Equal(expected, WindowsUpdateService.FormatSize(bytes));
     }
+
+    // ---------- select-all header checkbox (audit #66) ----------
+
+    private static WindowsUpdateViewModel VmWithUpdates(params bool[] selectedStates)
+    {
+        var vm = NewVm();
+        foreach (var sel in selectedStates)
+            vm.Updates.Add(new UpdateEntry { Title = "U", IsSelected = sel });
+        return vm;
+    }
+
+    [Fact]
+    public void AllSelected_SetTrue_SelectsEveryRow()
+    {
+        var vm = VmWithUpdates(false, false, false);
+
+        vm.AllSelected = true;
+
+        Assert.All(vm.Updates, u => Assert.True(u.IsSelected));
+    }
+
+    [Fact]
+    public void AllSelected_SetFalse_DeselectsEveryRow()
+    {
+        var vm = VmWithUpdates(true, true, true);
+
+        vm.AllSelected = false;
+
+        Assert.All(vm.Updates, u => Assert.False(u.IsSelected));
+    }
+
+    [Fact]
+    public void SelectAllCommand_SyncsHeaderCheckbox()
+    {
+        var vm = VmWithUpdates(false, false);
+
+        vm.SelectAllCommand.Execute(null);
+
+        Assert.True(vm.AllSelected);
+        Assert.All(vm.Updates, u => Assert.True(u.IsSelected));
+    }
+
+    [Fact]
+    public void DeselectAllCommand_SyncsHeaderCheckbox()
+    {
+        var vm = VmWithUpdates(true, true);
+
+        vm.DeselectAllCommand.Execute(null);
+
+        Assert.False(vm.AllSelected);
+        Assert.All(vm.Updates, u => Assert.False(u.IsSelected));
+    }
 }
 
 // ---------- UpdateEntry model ----------

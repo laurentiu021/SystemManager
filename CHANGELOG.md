@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.12] - 2026-06-10
+
+### Fixed
+- **Windows Update list has a real select-all checkbox.** The updates grid's checkbox column used a decorative `✓` header that did nothing and had no accessible name. It is now a working select-all checkbox ("Select all updates") that toggles every row, and it stays in sync with the existing Select all / Deselect all buttons.
+
 ## [1.20.11] - 2026-06-10
 
 ### Fixed

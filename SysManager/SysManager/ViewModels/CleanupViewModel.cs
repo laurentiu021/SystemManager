@@ -267,7 +267,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);
             if (l.Text.Contains('%') || l.Text.Contains("complete", StringComparison.OrdinalIgnoreCase))
             {
-                var m = Regex.Match(l.Text, @"(\d+)\s*%");
+                var m = SfcPercentRegex().Match(l.Text);
                 if (m.Success && int.TryParse(m.Groups[1].Value, out var pct) && pct is >= 0 and <= 100)
                 {
                     Progress = pct;
@@ -356,7 +356,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);
             if (l.Text.Contains('%'))
             {
-                var m = Regex.Match(l.Text, @"([\d.]+)%");
+                var m = DismPercentRegex().Match(l.Text);
                 if (m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pct) && pct is >= 0 and <= 100)
                 {
                     Progress = (int)pct;
@@ -410,4 +410,12 @@ public sealed partial class CleanupViewModel : ViewModelBase
         _sfcCts?.Cancel();
         _dismCts?.Cancel();
     }
+
+    // SFC reports progress as a whole-number percentage, e.g. "50 %".
+    [GeneratedRegex(@"(\d+)\s*%")]
+    private static partial Regex SfcPercentRegex();
+
+    // DISM reports progress as a decimal percentage, e.g. "50.0%".
+    [GeneratedRegex(@"([\d.]+)%")]
+    private static partial Regex DismPercentRegex();
 }

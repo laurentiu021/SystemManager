@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -173,9 +174,13 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     private static int? ParseServerId(string option)
     {
         if (option.StartsWith("Auto")) return null;
-        var match = System.Text.RegularExpressions.Regex.Match(option, @"ID:\s*(\d+)");
+        var match = ServerIdRegex().Match(option);
         return match.Success ? int.Parse(match.Groups[1].Value) : null;
     }
+
+    // Speedtest server options are formatted "Name (ID: 1234)".
+    [GeneratedRegex(@"ID:\s*(\d+)")]
+    private static partial Regex ServerIdRegex();
 
     protected override void Dispose(bool disposing)
     {

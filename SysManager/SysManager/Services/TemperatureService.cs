@@ -30,7 +30,7 @@ public sealed class TemperatureService
     {
         if (_skipHardwareInit) return [];
 
-        var readings = new List<TemperatureReading>();
+        List<TemperatureReading> readings = [];
         var isAdmin = AdminHelper.IsElevated();
 
         if (isAdmin)
@@ -219,7 +219,7 @@ public sealed class TemperatureService
 
     private static List<string> GetDiskNamesFromWmi()
     {
-        var names = new List<string>();
+        List<string> names = [];
         try
         {
             using var searcher = new ManagementObjectSearcher(

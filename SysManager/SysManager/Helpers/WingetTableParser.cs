@@ -46,7 +46,7 @@ internal static partial class WingetTableParser
         Regex headerPattern,
         Regex summaryPattern)
     {
-        var rows = new List<RawRow>();
+        List<RawRow> rows = [];
 
         int headerIdx = lines.FindIndex(l => headerPattern.IsMatch(l));
         if (headerIdx < 0) return rows;

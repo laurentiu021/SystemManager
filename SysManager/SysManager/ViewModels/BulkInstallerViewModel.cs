@@ -265,7 +265,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
     private List<InstallableApp> SearchWingetPackages(string query)
     {
-        var results = new List<InstallableApp>();
+        List<InstallableApp> results = [];
 
         var psi = new System.Diagnostics.ProcessStartInfo
         {

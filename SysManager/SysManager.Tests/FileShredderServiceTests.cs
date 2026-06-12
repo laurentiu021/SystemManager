@@ -217,4 +217,57 @@ public class FileShredderServiceTests
             if (File.Exists(file)) File.Delete(file);
         }
     }
+
+    // ---------- symlink bypass regression (P0) ----------
+
+    [Fact]
+    public async Task ShredFileAsync_SymlinkToProtectedFile_ThrowsSecurityException()
+    {
+        // Regression: ValidatePath used Path.GetFullPath, which does NOT resolve
+        // symlinks. A link sitting at an unprotected path but pointing into System32
+        // previously passed validation and the real protected file was shredded
+        // through the link. The guard must resolve the link target and block it.
+        var svc = NewService();
+        var sys32 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32");
+        // A file that reliably exists under System32; the link's *target* is what matters.
+        var protectedTarget = Path.Combine(sys32, "drivers", "etc", "hosts");
+        if (!File.Exists(protectedTarget))
+            protectedTarget = Path.Combine(sys32, "notepad.exe");
+
+        var link = Path.Combine(Path.GetTempPath(), "smtest_symlink_" + Guid.NewGuid().ToString("N") + ".dat");
+
+        try
+        {
+            // Creating a file symlink needs privilege/developer-mode. If unavailable,
+            // skip the assertion rather than fail on an environment limitation.
+            try { File.CreateSymbolicLink(link, protectedTarget); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            await Assert.ThrowsAsync<SecurityException>(
+                () => svc.ShredFileAsync(link, ShredMethod.Quick, null, CancellationToken.None));
+        }
+        finally
+        {
+            // Delete only the link, never its target. File.Delete on a symlink removes
+            // the link itself.
+            if (File.Exists(link)) File.Delete(link);
+        }
+    }
+
+    [Fact]
+    public async Task ValidatePath_SiblingOfProtectedRoot_IsAllowed()
+    {
+        // Boundary regression: the guard now matches on a directory boundary, so a
+        // sibling whose name merely shares the protected prefix (e.g. a "<Windows>Apps"
+        // style sibling) must NOT be blocked. Use a path that starts with the Windows
+        // root string but is not under it.
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var sibling = windows + "Sibling_smtest"; // e.g. C:\WindowsSibling_smtest — shares prefix, not under root
+        var svc = NewService();
+        // Not a protected path → ShredFileAsync should fail on FileNotFound, NOT SecurityException.
+        var ex = await Record.ExceptionAsync(
+            () => svc.ShredFileAsync(Path.Combine(sibling, "x.dat"), ShredMethod.Quick, null, CancellationToken.None));
+        Assert.IsNotType<SecurityException>(ex);
+    }
 }

@@ -112,7 +112,25 @@ public sealed class FileShredderService
             await finalStream.FlushAsync(ct).ConfigureAwait(false);
         }
 
-        File.Delete(filePath);
+        // The file contents are already securely overwritten and truncated to zero at
+        // this point, so the shred guarantee holds even if the directory-entry removal
+        // fails. Surface a delete failure as a clear IOException rather than letting a
+        // raw one escape — the caller can report "overwritten but not removed".
+        try
+        {
+            File.Delete(filePath);
+        }
+        catch (IOException ex)
+        {
+            throw new IOException(
+                $"File contents were securely overwritten, but the file could not be removed: {ex.Message}", ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new IOException(
+                $"File contents were securely overwritten, but removal was denied: {ex.Message}", ex);
+        }
+
         Log.Information("File shredded successfully: {Path} ({Method})", filePath, method);
     }
 
@@ -211,9 +229,29 @@ public sealed class FileShredderService
     {
         var fullPath = Path.GetFullPath(path);
 
+        // Resolve symlinks/junctions before validating. Path.GetFullPath only
+        // canonicalizes '.'/'..' — it does NOT follow reparse points, so a symlink
+        // at an unprotected location (e.g. C:\temp\link -> C:\Windows\System32\...)
+        // would otherwise pass this check and be shredded through. Validate the real
+        // target instead. ResolveLinkTarget(true) walks the full chain to the final
+        // target; it returns null when the path is not a link.
+        try
+        {
+            var info = new FileInfo(fullPath);
+            var finalTarget = info.ResolveLinkTarget(returnFinalTarget: true);
+            if (finalTarget is not null)
+                fullPath = Path.GetFullPath(finalTarget.FullName);
+        }
+        catch (IOException) { /* not a link or cannot resolve — validate the literal path */ }
+        catch (UnauthorizedAccessException) { /* cannot probe — validate the literal path */ }
+
         foreach (var prefix in ProtectedPrefixes)
         {
-            if (fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            // Match on a directory boundary, not a raw prefix: the path must equal the
+            // protected root or sit beneath it (prefix + separator). Without this,
+            // "C:\Windows" would also block an unrelated sibling like "C:\WindowsApps".
+            if (fullPath.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
+                fullPath.StartsWith(prefix + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new SecurityException(
                     $"Shredding system-protected paths is not allowed: {fullPath}");

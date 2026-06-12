@@ -6,7 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.20.14] - 2026-06-11
+## [1.20.15] - 2026-06-12
+
+### Fixed
+- **File Shredder can no longer be tricked into destroying a protected system file.** The safety check that blocks shredding inside Windows, System32, and Program Files compared the path you gave it without first following symbolic links — so a link placed in an allowed folder but pointing at a protected system file slipped past the check, and the real file was overwritten. The check now resolves link targets before validating and matches protected folders on an exact directory boundary (so an unrelated folder that merely starts with the same name is no longer falsely blocked). If a file's contents are securely overwritten but the entry can't be removed, the app now reports that clearly instead of surfacing a raw error.
 
 ### Fixed
 - **No more hidden shutdown errors when closing the app.** Cleanup ran more than once on exit (it is triggered by both the window-close and the application-exit events), which double-released the network charts' underlying graphics resources — an error that was caught and hidden but still occurred on every exit. Cleanup is now guarded so it runs exactly once, and the shared network monitors are stopped rather than disposed twice, so the app shuts down cleanly.

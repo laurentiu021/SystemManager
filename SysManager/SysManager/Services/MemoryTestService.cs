@@ -122,6 +122,11 @@ public sealed class MemoryTestService
             }
             catch (ManagementException) { /* WMI class not available */ }
             catch (UnauthorizedAccessException) { /* WMI access denied */ }
+            // Convert.To* on an unexpected WMI value can throw these; a malformed module
+            // entry shouldn't abort the whole memory scan.
+            catch (InvalidCastException) { /* malformed WMI value */ }
+            catch (FormatException) { /* malformed WMI value */ }
+            catch (OverflowException) { /* WMI value out of range */ }
             return list;
         });
     }

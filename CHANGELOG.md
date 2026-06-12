@@ -6,7 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.20.22] - 2026-06-12
+## [1.20.23] - 2026-06-12
+
+### Fixed
+- **No more leaked process handles when opening Explorer / links.** Ten places that launch Explorer ("show in folder"/"open file location"), Event Viewer, the browser, or the updater left the returned process handle undisposed. Each now releases it. The launched program is unaffected; only the orphaned handle is cleaned up. Covers Deep Cleanup, Disk Analyzer, Duplicate Finder, Startup Manager, Logs, About, and the Context Menu refresh.
 
 ### Fixed
 - **Drive/disk health reads survive systems without the Storage WMI namespace.** Disk Health and System Info could throw an unhandled COM error on older or headless Windows where the `root\Microsoft\Windows\Storage` namespace isn't present; both now handle that case and fall back gracefully (mirrors the earlier Fixed Drives fix).

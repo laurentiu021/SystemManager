@@ -160,7 +160,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
                 FileName = "explorer.exe",
                 Arguments = $"\"{entry.FullPath}\"",
                 UseShellExecute = true
-            });
+            })?.Dispose();
         }
         catch (InvalidOperationException ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.FullPath); }
         catch (System.ComponentModel.Win32Exception ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.FullPath); }

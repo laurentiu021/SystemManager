@@ -358,7 +358,7 @@ public sealed partial class ContextMenuService
                 proc.Dispose();
             }
 
-            Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true })?.Dispose();
             Log.Information("Explorer restarted to apply context menu changes");
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)

@@ -160,7 +160,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
                 FileName = "explorer.exe",
                 Arguments = $"/select,\"{entry.Path}\"",
                 UseShellExecute = true
-            });
+            })?.Dispose();
         }
         catch (InvalidOperationException ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.Path); }
         catch (System.ComponentModel.Win32Exception ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.Path); }

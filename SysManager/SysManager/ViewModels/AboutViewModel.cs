@@ -514,13 +514,24 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
+        // The updater script is written next to the downloaded binary. Resolve that
+        // directory up front: Path.GetDirectoryName returns null for a rooted/invalid
+        // path, which would otherwise NRE inside Path.Join below.
+        var downloadDir = string.IsNullOrWhiteSpace(DownloadedPath)
+            ? null : Path.GetDirectoryName(DownloadedPath);
+        if (string.IsNullOrEmpty(downloadDir))
+        {
+            DownloadStatus = "Cannot determine the downloaded update's location.";
+            return;
+        }
+
         // Step 3: Write an updater script that waits for this process to exit,
         // copies the new exe over the old one, then launches the new version.
         try
         {
             var pid = Environment.ProcessId;
             var scriptPath = Path.Join(
-                Path.GetDirectoryName(DownloadedPath)!,
+                downloadDir,
                 $"update-{Guid.NewGuid():N}.cmd");
 
             var script = $"""

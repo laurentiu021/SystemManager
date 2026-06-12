@@ -70,18 +70,23 @@ public sealed partial class HostsFileService
             if (tokens.Length < 2) continue;
 
             string ip = tokens[0];
-            string hostname = tokens[1];
 
             // Validate IP
             if (!IPAddress.TryParse(ip, out _)) continue;
 
-            entries.Add(new HostsEntry
+            // A single hosts line can map one IP to several hostnames
+            // (e.g. "127.0.0.1  a  b  c"). Emit one entry per hostname so none are
+            // silently dropped on a read→save round trip.
+            for (int t = 1; t < tokens.Length; t++)
             {
-                IpAddress = ip,
-                Hostname = hostname,
-                Comment = comment,
-                IsEnabled = !isDisabled
-            });
+                entries.Add(new HostsEntry
+                {
+                    IpAddress = ip,
+                    Hostname = tokens[t],
+                    Comment = comment,
+                    IsEnabled = !isDisabled
+                });
+            }
         }
 
         return entries;
@@ -122,7 +127,24 @@ public sealed partial class HostsFileService
             lines.Add(line);
         }
 
-        File.WriteAllLines(HostsPath, lines);
+        // Write atomically: a crash midway through File.WriteAllLines would otherwise
+        // leave the hosts file truncated or empty. Write to a temp file in the same
+        // directory, then replace the target in one move.
+        var tempPath = HostsPath + ".sysmanager.tmp";
+        try
+        {
+            File.WriteAllLines(tempPath, lines);
+            File.Move(tempPath, HostsPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); }
+                catch (IOException) { /* best-effort temp cleanup */ }
+                catch (UnauthorizedAccessException) { /* best-effort temp cleanup */ }
+            }
+        }
     }
 
     /// <summary>

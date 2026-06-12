@@ -6,7 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.20.23] - 2026-06-12
+## [1.20.24] - 2026-06-12
+
+### Fixed
+- **Hosts entries with multiple hostnames per IP are no longer silently lost.** A line like `127.0.0.1 a b c` was read keeping only the first hostname, so editing and saving dropped the rest. Each hostname is now read as its own entry and survives a round trip.
+- **The hosts file is now written atomically.** Saving wrote directly over the file, so a crash mid-write could leave it empty or truncated. It now writes to a temporary file and atomically replaces the target, cleaning up the temp file afterward.
 
 ### Fixed
 - **No more leaked process handles when opening Explorer / links.** Ten places that launch Explorer ("show in folder"/"open file location"), Event Viewer, the browser, or the updater left the returned process handle undisposed. Each now releases it. The launched program is unaffected; only the orphaned handle is cleaned up. Covers Deep Cleanup, Disk Analyzer, Duplicate Finder, Startup Manager, Logs, About, and the Context Menu refresh.

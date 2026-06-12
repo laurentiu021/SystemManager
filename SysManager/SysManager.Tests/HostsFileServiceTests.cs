@@ -93,4 +93,48 @@ public class HostsFileServiceTests
             try { Directory.Delete(dir, recursive: true); } catch { }
         }
     }
+
+    [Fact]
+    public async Task ReadHostsAsync_MultipleHostnamesPerIp_AllPreserved()
+    {
+        // Regression (data loss): a line mapping one IP to several hostnames
+        // ("127.0.0.1  a  b  c") previously kept only the first hostname, so the
+        // others were dropped on a read→save round trip. Each must survive as its
+        // own entry.
+        var (svc, _, dir) = NewServiceWithTempHosts("127.0.0.1\talpha beta gamma\n");
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            var hosts = entries.Where(e => e.IpAddress == "127.0.0.1").Select(e => e.Hostname).ToList();
+            Assert.Contains("alpha", hosts);
+            Assert.Contains("beta", hosts);
+            Assert.Contains("gamma", hosts);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void SaveHosts_LeavesNoTempFileBehind()
+    {
+        // Regression (atomic write): SaveHosts writes to a temp file then moves it
+        // into place. After a successful save no ".sysmanager.tmp" must remain.
+        var (svc, hosts, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        try
+        {
+            svc.SaveHosts(new List<HostsEntry>
+            {
+                new() { IpAddress = "127.0.0.1", Hostname = "localhost", IsEnabled = true }
+            });
+            Assert.False(File.Exists(hosts + ".sysmanager.tmp"), "temp file was left behind after save");
+            Assert.True(File.Exists(hosts));
+            Assert.Contains("localhost", File.ReadAllText(hosts));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
 }

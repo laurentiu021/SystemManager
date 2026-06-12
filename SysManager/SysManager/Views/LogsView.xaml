@@ -34,9 +34,9 @@
                            Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
-                <Button Content="Open Event Viewer" Command="{Binding OpenEventViewerCommand}" Style="{StaticResource GhostButton}"/>
-                <Button Content="Open log folder" Command="{Binding OpenLogFolderCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
-                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"/>
+                <Button Content="Open Event Viewer" AutomationProperties.Name="Open Event Viewer" Command="{Binding OpenEventViewerCommand}" Style="{StaticResource GhostButton}"/>
+                <Button Content="Open log folder" AutomationProperties.Name="Open log folder" Command="{Binding OpenLogFolderCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                <Button Content="Export CSV" AutomationProperties.Name="Export logs to CSV" Command="{Binding ExportCsvCommand}" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"/>
             </StackPanel>
         </DockPanel>
 
@@ -131,7 +131,7 @@
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Log" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                    <ComboBox ItemsSource="{Binding AvailableLogs}" SelectedItem="{Binding SelectedLog}" Width="130" Margin="8,0,18,0"/>
+                    <ComboBox ItemsSource="{Binding AvailableLogs}" SelectedItem="{Binding SelectedLog}" AutomationProperties.Name="Log source" Width="130" Margin="8,0,18,0"/>
 
                     <TextBlock Text="Time" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" Margin="8,0,18,0">
@@ -158,10 +158,10 @@
                     </StackPanel>
 
                     <TextBlock Text="Max results" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                    <ComboBox ItemsSource="{Binding MaxResultOptions}" SelectedItem="{Binding SelectedMaxResults}" Width="88" Margin="8,0,18,0"/>
+                    <ComboBox ItemsSource="{Binding MaxResultOptions}" SelectedItem="{Binding SelectedMaxResults}" AutomationProperties.Name="Maximum results" Width="88" Margin="8,0,18,0"/>
 
-                    <Button Content="Refresh" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}"/>
-                    <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                    <Button Content="Refresh" AutomationProperties.Name="Refresh logs" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}"/>
+                    <Button Content="Cancel" AutomationProperties.Name="Cancel log loading" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -169,27 +169,27 @@
 
                     <!-- Each toggle has its own colored dot next to the label -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowCritical}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Critical events" IsChecked="{Binding ShowCritical}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#FF3B30" Margin="8,0,6,0"/>
                         <TextBlock Text="Critical" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowError}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Error events" IsChecked="{Binding ShowError}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#F87171" Margin="8,0,6,0"/>
                         <TextBlock Text="Error" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowWarning}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Warning events" IsChecked="{Binding ShowWarning}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource WarningStripe}" Margin="8,0,6,0"/>
                         <TextBlock Text="Warning" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowInfo}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Info events" IsChecked="{Binding ShowInfo}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Info}" Margin="8,0,6,0"/>
                         <TextBlock Text="Info" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,22,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowVerbose}" VerticalAlignment="Center"/>
+                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Verbose events" IsChecked="{Binding ShowVerbose}" VerticalAlignment="Center"/>
                         <Ellipse Style="{StaticResource SevDot}" Fill="#9AA0A6" Margin="8,0,6,0"/>
                         <TextBlock Text="Verbose" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -197,6 +197,7 @@
                     <TextBlock Text="Search" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <Grid Width="280">
                         <TextBox x:Name="SearchBox" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Search logs by message, source, or event ID"
                                  ToolTip="Filters by message, provider, or event ID"/>
                         <TextBlock Text="Filter by message, source, or event ID…"
                                    Foreground="{DynamicResource TextMuted}" FontSize="12"
@@ -357,14 +358,15 @@
                             </Border>
 
                             <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                                <Button Content="Copy details" Command="{Binding CopySelectedCommand}" Style="{StaticResource SecondaryButton}"/>
-                                <Button Content="Search online" Command="{Binding SearchOnlineCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                                <Button Content="Copy details" AutomationProperties.Name="Copy event details" Command="{Binding CopySelectedCommand}" Style="{StaticResource SecondaryButton}"/>
+                                <Button Content="Search online" AutomationProperties.Name="Search this event online" Command="{Binding SearchOnlineCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                             </StackPanel>
 
                             <Expander Header="Full system message" Margin="0,16,0,0" Foreground="{DynamicResource TextSecondary}">
                                 <Border Padding="10" CornerRadius="8" Background="{DynamicResource Surface0}"
                                         BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                     <TextBox Text="{Binding SelectedEntry.FullMessage, Mode=OneWay}"
+                                             AutomationProperties.Name="Full system message"
                                              IsReadOnly="True" TextWrapping="Wrap"
                                              Background="Transparent" BorderThickness="0"
                                              FontFamily="{StaticResource MonoFont}" FontSize="11"
@@ -378,6 +380,7 @@
                                 <Border Padding="10" CornerRadius="8" Background="{DynamicResource Surface0}"
                                         BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                     <TextBox Text="{Binding SelectedEntry.Xml, Mode=OneWay}"
+                                             AutomationProperties.Name="Raw event XML"
                                              IsReadOnly="True" TextWrapping="NoWrap"
                                              Background="Transparent" BorderThickness="0"
                                              FontFamily="{StaticResource MonoFont}" FontSize="11"

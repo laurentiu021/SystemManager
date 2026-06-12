@@ -31,6 +31,7 @@
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        AutomationProperties.Name="Restart SysManager as administrator"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -61,13 +62,16 @@
             <WrapPanel>
                 <Button Content="Apply" Command="{Binding ApplyChangesCommand}"
                         IsEnabled="{Binding HasPendingChanges}"
+                        AutomationProperties.Name="Apply pending privacy changes"
                         Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
                         ToolTip="Write pending toggle changes to the registry."/>
                 <Button Content="Discard" Command="{Binding DiscardChangesCommand}"
                         IsEnabled="{Binding HasPendingChanges}"
+                        AutomationProperties.Name="Discard pending privacy changes"
                         Style="{StaticResource GhostButton}" Margin="0,0,8,0"
                         ToolTip="Revert pending toggle changes back to the last applied state."/>
                 <Button Content="Refresh" Command="{Binding RefreshCommand}"
+                        AutomationProperties.Name="Refresh privacy toggle states"
                         Style="{StaticResource GhostButton}" Margin="0,0,16,0"
                         ToolTip="Re-read all toggle states from the registry."/>
 
@@ -75,6 +79,7 @@
                            Style="{StaticResource Subtle}"/>
                 <ComboBox ItemsSource="{Binding Categories}"
                           SelectedItem="{Binding SelectedCategory}"
+                          AutomationProperties.Name="Filter toggles by category"
                           Width="140" Margin="0,0,12,0"/>
 
                 <Border CornerRadius="10" Padding="10,4" Margin="4,0"
@@ -142,6 +147,7 @@
 
                                     <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}"
                                                   IsChecked="{Binding IsEnabled}"
+                                                  AutomationProperties.Name="{Binding Name, StringFormat='Toggle privacy protection: {0}'}"
                                                   VerticalAlignment="Center" Margin="8,0,0,0"
                                                   ToolTip="Toggle privacy protection on/off"/>
                                 </Grid>

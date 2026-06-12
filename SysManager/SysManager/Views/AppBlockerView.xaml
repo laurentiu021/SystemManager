@@ -86,7 +86,8 @@
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
-                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False" />
+                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False"
+                                        AutomationProperties.Name="Select application" />
                 <DataGridTextColumn Header="Executable" Binding="{Binding ExecutableName}" Width="*" MinWidth="120" IsReadOnly="True" />
             </DataGrid.Columns>
         </DataGrid>

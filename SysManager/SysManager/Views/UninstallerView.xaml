@@ -107,11 +107,13 @@
                         <DataGridCheckBoxColumn.ElementStyle>
                             <Style TargetType="CheckBox">
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for uninstall'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.ElementStyle>
                         <DataGridCheckBoxColumn.EditingElementStyle>
                             <Style TargetType="CheckBox">
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for uninstall'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.EditingElementStyle>
                     </DataGridCheckBoxColumn>

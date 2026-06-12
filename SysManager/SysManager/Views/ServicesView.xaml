@@ -31,7 +31,8 @@
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
@@ -62,7 +63,8 @@
                 <DockPanel>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Refresh" Command="{Binding RefreshCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                                Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                                AutomationProperties.Name="Refresh services"/>
                         <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
                                  Width="240" VerticalContentAlignment="Center"
                                  AutomationProperties.Name="Filter services"/>
@@ -82,18 +84,22 @@
                     <RadioButton Content="{Binding SafeCount, StringFormat='Safe ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,0"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Safe}"
-                                 Style="{StaticResource FilterChip}"/>
+                                 Style="{StaticResource FilterChip}"
+                                 AutomationProperties.Name="Filter safe services"/>
                     <RadioButton Content="{Binding CautionCount, StringFormat='Caution ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,0"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Caution}"
-                                 Style="{StaticResource FilterChipCaution}"/>
+                                 Style="{StaticResource FilterChipCaution}"
+                                 AutomationProperties.Name="Filter caution services"/>
                     <RadioButton Content="{Binding CriticalCount, StringFormat='Critical ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,0"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Critical}"
-                                 Style="{StaticResource FilterChipCritical}"/>
+                                 Style="{StaticResource FilterChipCritical}"
+                                 AutomationProperties.Name="Filter critical services"/>
                     <RadioButton Content="All" GroupName="SafetyFilter" Margin="0,0,6,0"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=All}"
-                                 Style="{StaticResource FilterChip}"/>
+                                 Style="{StaticResource FilterChip}"
+                                 AutomationProperties.Name="Show all services"/>
                 </StackPanel>
             </StackPanel>
         </Border>
@@ -147,19 +153,23 @@
                                 <Button Content="Start" Padding="8,2" Margin="0,0,4,0"
                                         Style="{StaticResource GhostButton}"
                                         Command="{Binding DataContext.StartServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}"/>
+                                        CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Binding DisplayName, StringFormat='Start {0}'}"/>
                                 <Button Content="Stop" Padding="8,2" Margin="0,0,4,0"
                                         Style="{StaticResource GhostButton}"
                                         Command="{Binding DataContext.StopServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}"/>
+                                        CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Binding DisplayName, StringFormat='Stop {0}'}"/>
                                 <Button Content="Disable" Padding="8,2" Margin="0,0,4,0"
                                         Style="{StaticResource GhostButton}"
                                         Command="{Binding DataContext.DisableServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}"/>
+                                        CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Binding DisplayName, StringFormat='Disable {0}'}"/>
                                 <Button Content="Enable" Padding="8,2"
                                         Style="{StaticResource GhostButton}"
                                         Command="{Binding DataContext.EnableServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}"/>
+                                        CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Binding DisplayName, StringFormat='Enable {0}'}"/>
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>

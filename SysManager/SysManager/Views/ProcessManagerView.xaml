@@ -29,7 +29,8 @@
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
                 <Button Content="Refresh" Command="{Binding RefreshCommand}"
-                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                        AutomationProperties.Name="Refresh process list"/>
                 <TextBlock Text="Search:" VerticalAlignment="Center" Margin="8,0,8,0"
                            Style="{StaticResource Subtle}"/>
                 <Grid Width="200" Margin="0,0,12,0">
@@ -42,7 +43,8 @@
                 </Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0"
                             ToolTip="Hide system processes and show only applications with a visible window">
-                    <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowOnlyApps}" VerticalAlignment="Center"/>
+                    <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowOnlyApps}" VerticalAlignment="Center"
+                                  AutomationProperties.Name="Show only apps"/>
                     <TextBlock Text="Show only apps" VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
             </WrapPanel>

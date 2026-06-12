@@ -6,7 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.20.17] - 2026-06-12
+## [1.20.19] - 2026-06-12
+
+### Fixed
+- **Activity history can no longer be corrupted by concurrent updates.** The recent-actions log saved its data outside the lock that protects it, so two actions logged at the same time could clash and produce a "collection modified" error or a truncated file. It now writes a consistent snapshot taken under the lock.
+- **The in-app updater fails gracefully when the download location can't be determined.** Installing an update now checks the downloaded file's folder up front and shows a clear message instead of risking a crash.
+
+### Fixed
+- **More resilient reading of battery, memory, and app-list data.** Unexpected values from Windows (battery stats, memory-module details) could throw a conversion error and interrupt a scan; those conversions now fall back safely. The winget output parser also no longer throws when the tool reports columns in an unusual order.
 
 ### Fixed
 - **Plugged several resource leaks.** The system-tray icon's underlying graphics handle was never released on shutdown; the elevated-relaunch helper left a process handle open; and a memory-module query left a WMI result set undisposed. All are now released properly. Also added handling for a WMI namespace being unavailable when reading drive media/bus details, so that case fails quietly instead of surfacing an error.

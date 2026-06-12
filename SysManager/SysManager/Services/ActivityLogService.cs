@@ -32,13 +32,18 @@ public sealed class ActivityLogService
     public void Log(string action, string detail)
     {
         var entry = new ActivityEntry(action, detail, DateTime.Now);
+        List<ActivityEntry> snapshot;
         lock (_lock)
         {
             _entries.Insert(0, entry);
             if (_entries.Count > MaxEntries)
                 _entries.RemoveRange(MaxEntries, _entries.Count - MaxEntries);
+            // Take the snapshot to persist while still holding the lock — serializing
+            // _entries directly (outside the lock) could race a concurrent Log() that is
+            // mutating the list, throwing "collection was modified" or writing torn JSON.
+            snapshot = [.. _entries];
         }
-        Save();
+        Save(snapshot);
     }
 
     private void Load()
@@ -56,13 +61,13 @@ public sealed class ActivityLogService
         }
     }
 
-    private void Save()
+    private static void Save(List<ActivityEntry> snapshot)
     {
         try
         {
             var dir = Path.GetDirectoryName(FilePath)!;
             Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(_entries, new JsonSerializerOptions { WriteIndented = false });
+            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = false });
             File.WriteAllText(FilePath, json);
         }
         catch (IOException ex)

@@ -97,6 +97,10 @@ internal static partial class WingetTableParser
     {
         if (start < 0 || start >= line.Length) return string.Empty;
         int actualEnd = end < 0 ? line.Length : Math.Min(end, line.Length);
+        // Guard against out-of-order columns (start > end): winget can emit headers
+        // whose detected positions don't increase monotonically, which would make the
+        // range operator throw ArgumentOutOfRangeException.
+        if (actualEnd <= start) return string.Empty;
         return line[start..actualEnd].Trim();
     }
 }

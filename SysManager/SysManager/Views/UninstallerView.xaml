@@ -197,7 +197,7 @@
                                             <Ellipse Width="5" Height="5" VerticalAlignment="Center">
                                                 <Ellipse.Style>
                                                     <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="#6366F1"/>
+                                                        <Setter Property="Fill" Value="{DynamicResource Accent}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Source}" Value="">
                                                                 <Setter Property="Fill" Value="{DynamicResource WarningStripe}"/>

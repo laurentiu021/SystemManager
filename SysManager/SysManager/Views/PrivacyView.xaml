@@ -124,7 +124,7 @@
                                         <Style.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter Property="Background" Value="#10141D"/>
-                                                <Setter Property="BorderBrush" Value="#2A3244"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource Border2}"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>

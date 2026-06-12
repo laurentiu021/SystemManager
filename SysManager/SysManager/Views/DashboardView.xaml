@@ -128,16 +128,16 @@
                         <DockPanel Margin="0,0,0,8">
                             <TextBlock Text="CPU" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
-                            <Ellipse Width="6" Height="6" Fill="#22C55E" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource Success}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
-                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="#22C55E">
+                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="{DynamicResource Success}">
                             <Run Text="{Binding CpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
                         <TextBlock Text="{Binding CpuName}" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                    TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                         <TextBlock Text="{Binding CpuCores}" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                         <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding CpuPercent, Mode=OneWay}"
-                                     Foreground="#22C55E" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
+                                     Foreground="{DynamicResource Success}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
                     </StackPanel>
                 </Border>
 
@@ -389,16 +389,16 @@
                                                 <Ellipse.Style>
                                                     <Style TargetType="Ellipse">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Setter Property="Fill" Value="#22C55E"/>
+                                                        <Setter Property="Fill" Value="{DynamicResource Success}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding State}" Value="Complete">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Severity}" Value="Yellow">
-                                                                <Setter Property="Fill" Value="#F59E0B"/>
+                                                                <Setter Property="Fill" Value="{DynamicResource Warning}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Severity}" Value="Red">
-                                                                <Setter Property="Fill" Value="#EF4444"/>
+                                                                <Setter Property="Fill" Value="{DynamicResource Danger}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>

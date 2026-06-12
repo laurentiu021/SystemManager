@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.16] - 2026-06-12
+
+### Fixed
+- **Starting or stopping a Windows service no longer crashes the app on failure.** If a service couldn't be started or stopped (access denied, a dependency problem, or the service state changing mid-operation), the underlying error escaped unhandled. Those failures are now caught and shown as a clear status message.
+- **Privacy toggles no longer crash on a registry write error.** Applying a privacy toggle only handled permission errors; a registry I/O error or an invalid key/value now logs a warning instead of bringing down the app.
+- **Disabling Xbox Game Bar no longer crashes on a registry I/O error.** The Performance tab's Xbox Game Bar action now handles I/O failures the same way it already handled permission and state errors.
+- **A misbehaving UI subscriber can no longer permanently lock an operation category.** If a property-change notification threw while acquiring an operation lock, the category could stay locked forever (blocking all future disk/network/system operations of that kind). The lock is now rolled back cleanly if that happens.
+
 ## [1.20.15] - 2026-06-12
 
 ### Fixed

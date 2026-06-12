@@ -94,15 +94,23 @@ public sealed partial class ServiceManagerService
             sc.Status == ServiceControllerStatus.StartPending)
             return;
 
-        sc.Start();
         try
         {
+            sc.Start();
             await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30))).ConfigureAwait(false);
         }
         catch (System.ServiceProcess.TimeoutException)
         {
             throw new InvalidOperationException(
                 $"Service '{serviceName}' did not start within 30 seconds. It may still be starting — check Services again in a moment.");
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            // sc.Start() surfaces the underlying Win32 error (e.g. access denied,
+            // dependency failure) as a Win32Exception. Normalize to the type the
+            // ViewModel layer already handles.
+            throw new InvalidOperationException(
+                $"Could not start service '{serviceName}': {ex.Message}", ex);
         }
     }
 
@@ -112,15 +120,22 @@ public sealed partial class ServiceManagerService
         using var sc = new ServiceController(serviceName);
         if (sc.CanStop && sc.Status != ServiceControllerStatus.Stopped)
         {
-            sc.Stop();
             try
             {
+                sc.Stop();
                 await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30))).ConfigureAwait(false);
             }
             catch (System.ServiceProcess.TimeoutException)
             {
                 throw new InvalidOperationException(
                     $"Service '{serviceName}' did not stop within 30 seconds. It may still be stopping — check Services again in a moment.");
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                // The service state can change between the CanStop check and Stop(),
+                // or the caller may lack rights — sc.Stop() then throws Win32Exception.
+                throw new InvalidOperationException(
+                    $"Could not stop service '{serviceName}': {ex.Message}", ex);
             }
         }
     }

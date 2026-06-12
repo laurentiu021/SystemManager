@@ -51,8 +51,21 @@ public sealed partial class OperationLockService : ObservableObject
         if (!_active.TryAdd(category, info))
             return null;
 
-        OnPropertyChanged(nameof(ActiveOperations));
-        OnPropertyChanged(nameof(HasActiveOperations));
+        try
+        {
+            OnPropertyChanged(nameof(ActiveOperations));
+            OnPropertyChanged(nameof(HasActiveOperations));
+        }
+        catch
+        {
+            // A PropertyChanged subscriber threw. The entry is already in _active but no
+            // handle has been returned, so the caller could never release it — that would
+            // lock this category forever. Roll back the add and rethrow so the lock state
+            // stays consistent.
+            _active.TryRemove(category, out _);
+            throw;
+        }
+
         return new OperationHandle(this, category);
     }
 

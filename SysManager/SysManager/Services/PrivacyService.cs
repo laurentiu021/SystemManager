@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Security;
 using Microsoft.Win32;
 using Serilog;
@@ -59,6 +60,16 @@ public sealed class PrivacyService
         catch (SecurityException ex)
         {
             Log.Warning(ex, "Security exception writing privacy toggle {Name} at {Path} — elevation required",
+                toggle.Name, toggle.RegistryPath);
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "Registry I/O error writing privacy toggle {Name} at {Path}",
+                toggle.Name, toggle.RegistryPath);
+        }
+        catch (ArgumentException ex)
+        {
+            Log.Warning(ex, "Invalid registry key or value writing privacy toggle {Name} at {Path}",
                 toggle.Name, toggle.RegistryPath);
         }
     }

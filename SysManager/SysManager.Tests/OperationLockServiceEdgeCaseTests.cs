@@ -137,6 +137,35 @@ public class OperationLockServiceEdgeCaseTests
     }
 
     [Fact]
+    public void TryAcquire_PropertyChangedThrows_DoesNotDeadlockCategory()
+    {
+        // Regression: if a PropertyChanged subscriber throws, TryAcquire must roll back
+        // the entry it added — otherwise the category would be locked forever (no handle
+        // was returned, so the caller can never Release it).
+        void throwingHandler(object? _, System.ComponentModel.PropertyChangedEventArgs __)
+            => throw new InvalidOperationException("subscriber boom");
+
+        // Make sure the category starts free.
+        Service.TryAcquire(OperationCategory.SystemModification, "preClean")?.Dispose();
+
+        Service.PropertyChanged += throwingHandler;
+        try
+        {
+            Assert.Throws<InvalidOperationException>(
+                () => Service.TryAcquire(OperationCategory.SystemModification, "WillThrow"));
+        }
+        finally
+        {
+            Service.PropertyChanged -= throwingHandler;
+        }
+
+        // The category must NOT be stuck locked — a fresh acquire has to succeed.
+        Assert.False(Service.IsLocked(OperationCategory.SystemModification));
+        using var handle = Service.TryAcquire(OperationCategory.SystemModification, "AfterRollback");
+        Assert.NotNull(handle);
+    }
+
+    [Fact]
     public async Task ConcurrentAcquire_OnlyOneSucceeds()
     {
         // Release any existing network lock

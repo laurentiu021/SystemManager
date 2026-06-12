@@ -200,7 +200,7 @@ public sealed partial class LogsViewModel : ViewModelBase
         try
         {
             Directory.CreateDirectory(LogFolder);
-            Process.Start(new ProcessStartInfo("explorer.exe", LogFolder) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("explorer.exe", LogFolder) { UseShellExecute = true })?.Dispose();
         }
         catch (IOException ex) { StatusMessage = ex.Message; }
         catch (UnauthorizedAccessException ex) { StatusMessage = ex.Message; }
@@ -213,7 +213,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     {
         try
         {
-            Process.Start(new ProcessStartInfo("eventvwr.msc") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("eventvwr.msc") { UseShellExecute = true })?.Dispose();
         }
         catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = ex.Message; }
@@ -275,7 +275,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     {
         if (SelectedEntry is null) return;
         var q = Uri.EscapeDataString($"Event ID {SelectedEntry.EventId} {SelectedEntry.ProviderName}");
-        try { Process.Start(new ProcessStartInfo($"https://www.google.com/search?q={q}") { UseShellExecute = true }); }
+        try { Process.Start(new ProcessStartInfo($"https://www.google.com/search?q={q}") { UseShellExecute = true })?.Dispose(); }
         catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = ex.Message; }
     }

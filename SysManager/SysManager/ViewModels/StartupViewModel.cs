@@ -136,7 +136,7 @@ public sealed partial class StartupViewModel : ViewModelBase
                     FileName = "explorer.exe",
                     Arguments = $"/select,\"{path}\"",
                     UseShellExecute = true
-                });
+                })?.Dispose();
             }
             else
             {

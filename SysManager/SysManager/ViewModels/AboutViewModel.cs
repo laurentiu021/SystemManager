@@ -567,7 +567,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden
-            });
+            })?.Dispose();
 
             // Give the script a moment to start before we exit.
             await Task.Delay(500);
@@ -598,7 +598,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         var dir = Path.GetDirectoryName(DownloadedPath);
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
-            try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{DownloadedPath}\"") { UseShellExecute = true }); }
+            try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{DownloadedPath}\"") { UseShellExecute = true })?.Dispose(); }
             catch (InvalidOperationException) { /* explorer launch is best-effort */ }
             catch (System.ComponentModel.Win32Exception) { /* explorer launch is best-effort */ }
         }
@@ -607,7 +607,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     private static void OpenUrl(string url)
     {
         if (System.Windows.Application.Current == null) return;
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); }
         catch (InvalidOperationException) { /* best-effort */ }
         catch (System.ComponentModel.Win32Exception) { /* best-effort */ }
     }

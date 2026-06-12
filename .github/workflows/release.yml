@@ -66,8 +66,20 @@ jobs:
       - name: Extract tag version
         id: version
         shell: pwsh
+        env:
+          # Pass the tag through the environment instead of interpolating ${{ }} directly
+          # into the script body — that avoids any script-injection from a crafted manual
+          # dispatch input and keeps the value as plain data.
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $tag = if ($env:EVENT_NAME -eq "workflow_dispatch") { $env:INPUT_TAG } else { $env:REF_NAME }
+          # Validate the tag shape (vMAJOR.MINOR.PATCH[...]) before using it anywhere.
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+') {
+            Write-Error "Invalid release tag '$tag' — expected a semver tag like v1.2.3."
+            exit 1
+          }
           $version = $tag -replace '^v', ''
           "tag=$tag"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version=$version"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append

@@ -80,12 +80,19 @@ public sealed class AppFixture : IDisposable
     {
         var repoRoot = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var binDir = Path.Combine(repoRoot, "SysManager", "bin", "Debug");
 
-        // Resolve the target-framework folder dynamically (e.g. net10.0-windows)
-        // so the path survives .NET version bumps instead of hardcoding one.
-        if (Directory.Exists(binDir))
+        // Search whichever configuration the app was actually built in. CI builds
+        // Release; local dev often builds Debug — accept either rather than hardcoding
+        // one (the previous Debug-only lookup made every UI test fail under a Release build).
+        // Resolve the target-framework folder dynamically (e.g. net10.0-windows) so the
+        // path survives .NET version bumps.
+        var searched = new List<string>();
+        foreach (var config in new[] { "Release", "Debug" })
         {
+            var binDir = Path.Combine(repoRoot, "SysManager", "bin", config);
+            searched.Add(binDir);
+            if (!Directory.Exists(binDir)) continue;
+
             var candidate = Directory
                 .EnumerateDirectories(binDir, "net*-windows")
                 .Select(tfm => Path.Combine(tfm, "SysManager.exe"))
@@ -94,7 +101,8 @@ public sealed class AppFixture : IDisposable
         }
 
         throw new FileNotFoundException(
-            $"Expected SysManager.exe under {binDir}\\net*-windows. Build SysManager in Debug before running UI tests.");
+            $"Expected SysManager.exe under {string.Join(" or ", searched.Select(d => d + "\\net*-windows"))}. " +
+            "Build SysManager (Debug or Release) before running UI tests.");
     }
 
     public void Dispose()

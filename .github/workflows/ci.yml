@@ -114,6 +114,11 @@ jobs:
       - name: Restore
         run: dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
 
+      # Build the app itself (Release) so the UI test fixture can launch the real exe.
+      # Without this the fixture throws FileNotFoundException and every UI test fails.
+      - name: Build SysManager app (for UI tests to launch)
+        run: dotnet build SysManager/SysManager/SysManager.csproj -c Release
+
       - name: Build UI tests
         run: dotnet build SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 

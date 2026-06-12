@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Buffers;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -35,6 +36,10 @@ public sealed class UpdateService
         assetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
 
     private static readonly HttpClient Http = CreateClient();
+
+    // Version-suffix separators (pre-release / build / trailing space). Hoisted to a
+    // SearchValues so ParseVersion's scan doesn't allocate a char[] per call.
+    private static readonly SearchValues<char> VersionSuffixSeparators = SearchValues.Create("-+ ");
 
     private static HttpClient CreateClient()
     {
@@ -381,7 +386,7 @@ public sealed class UpdateService
             s = s[1..];
         // Reject if still starts with a letter (e.g. "vv1.2.3" → "v1.2.3" → still starts with v).
         if (s.Length == 0 || char.IsLetter(s[0])) return null;
-        var cut = s.IndexOfAny(new[] { '-', '+', ' ' });
+        var cut = s.AsSpan().IndexOfAny(VersionSuffixSeparators);
         if (cut > 0) s = s[..cut];
         return Version.TryParse(s, out var v) ? v : null;
     }

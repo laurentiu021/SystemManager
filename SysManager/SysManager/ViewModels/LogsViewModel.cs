@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Buffers;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -28,6 +29,10 @@ public sealed partial class LogsViewModel : ViewModelBase
     private readonly EventLogService _eventLogs;
     private readonly SynchronizationContext? _sync;
     private CancellationTokenSource? _cts;
+
+    // Characters that force a CSV field to be quoted. Hoisted to a SearchValues so the
+    // per-field scan in Csv() doesn't allocate a char[] on every call during export.
+    private static readonly SearchValues<char> CsvSpecials = SearchValues.Create(",\"\n\r");
 
     public BulkObservableCollection<FriendlyEventEntry> Entries { get; } = new();
     public ICollectionView EntriesView { get; }
@@ -330,7 +335,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     private static string Csv(string? s)
     {
         s ??= "";
-        if (s.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0)
+        if (s.AsSpan().IndexOfAny(CsvSpecials) >= 0)
             return "\"" + s.Replace("\"", "\"\"") + "\"";
         return s;
     }

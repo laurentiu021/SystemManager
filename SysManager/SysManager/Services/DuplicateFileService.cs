@@ -59,7 +59,7 @@ public sealed class DuplicateFileService
             return [];
 
         // ── Pass 1: discover files and group by size ──
-        var sizeGroups = new Dictionary<long, List<FileInfo>>();
+        Dictionary<long, List<FileInfo>> sizeGroups = [];
         long discovered = 0;
         var stack = new Stack<string>();
         stack.Push(rootPath);

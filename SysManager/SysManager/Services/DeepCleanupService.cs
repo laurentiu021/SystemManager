@@ -253,11 +253,11 @@ public sealed class DeepCleanupService
 
     private static string[] SteamRoots(string pfx86, string pf)
     {
-        var roots = new List<string>
-        {
+        List<string> roots =
+        [
             Path.Combine(pfx86, "Steam"),
             Path.Combine(pf, "Steam"),
-        };
+        ];
         foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
         {
             var candidate = Path.Combine(drive.RootDirectory.FullName, "Steam");

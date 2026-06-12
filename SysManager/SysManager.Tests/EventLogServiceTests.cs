@@ -34,7 +34,7 @@ public class EventLogServiceTests
     {
         var opt = new EventLogQueryOptions
         {
-            Severities = new List<EventSeverity> { EventSeverity.Error }
+            Severities = [EventSeverity.Error]
         };
         var result = InvokeBuildXPath(opt);
         Assert.Contains("Level=2", result);

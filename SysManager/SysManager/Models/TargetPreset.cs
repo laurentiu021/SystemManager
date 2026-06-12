@@ -74,8 +74,8 @@ public static class TargetPresets
             ("FACEIT UK",    "82.145.38.1"),
         });
 
-    public static readonly IReadOnlyList<TargetPreset> All = new[]
-    {
+    public static readonly IReadOnlyList<TargetPreset> All =
+    [
         Global, CS2Europe, FaceitEurope, PubgEurope, Streaming
-    };
+    ];
 }

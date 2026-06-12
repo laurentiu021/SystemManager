@@ -116,11 +116,11 @@ public sealed class AppAlertService : IDisposable
     public static IReadOnlyList<AppInstallEntry> GetRegistryApps()
     {
         List<AppInstallEntry> apps = [];
-        var paths = new[]
-        {
+        string[] paths =
+        [
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
             @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-        };
+        ];
 
         foreach (var path in paths)
         {

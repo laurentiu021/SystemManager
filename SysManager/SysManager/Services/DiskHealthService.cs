@@ -63,6 +63,11 @@ public sealed partial class DiskHealthService
         {
             // WMI access denied without elevation.
         }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            // scope.Connect() can throw COMException when the Storage WMI namespace
+            // is unavailable (older/headless Windows). Non-fatal — return what we have.
+        }
         return results;
     }
 

@@ -32,6 +32,7 @@
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        AutomationProperties.Name="Run as administrator"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -65,6 +66,7 @@
                 <StackPanel Orientation="Horizontal">
                     <!-- Win10 button with hover preview -->
                     <Button Content="Win10 Default" Margin="0,0,8,0"
+                            AutomationProperties.Name="Apply Win10 Default menu style"
                             Command="{Binding ApplyPresetCommand}" CommandParameter="win10"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12">
                         <Button.ToolTip>
@@ -90,6 +92,7 @@
                     </Button>
                     <!-- Win11 button with hover preview -->
                     <Button Content="Win11 Default" Margin="0,0,8,0"
+                            AutomationProperties.Name="Apply Win11 Default menu style"
                             Command="{Binding ApplyPresetCommand}" CommandParameter="win11"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12">
                         <Button.ToolTip>
@@ -119,6 +122,7 @@
                     </Button>
                     <!-- Custom indicator -->
                     <Button Content="Custom" Margin="0,0,8,0"
+                            AutomationProperties.Name="Apply Custom menu style"
                             Command="{Binding ApplyPresetCommand}" CommandParameter="custom"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12"
                             ToolTip="Active menu style + your manual entry toggles from the list below. Toggle any entry to switch to Custom mode."/>
@@ -137,9 +141,11 @@
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <ComboBox ItemsSource="{Binding LocationFilters}"
                               SelectedItem="{Binding SelectedLocation}"
+                              AutomationProperties.Name="Filter by location"
                               Width="160" Margin="0,0,8,0"
                               VerticalAlignment="Center"/>
                     <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Search entries"
                              Width="200" Margin="0,0,8,0"
                              VerticalAlignment="Center">
                         <TextBox.Style>
@@ -153,9 +159,11 @@
                         </TextBox.Style>
                     </TextBox>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
+                            AutomationProperties.Name="Refresh entries"
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                     <CheckBox Content="Show system entries"
                               IsChecked="{Binding ShowSystemEntries}"
+                              AutomationProperties.Name="Show system entries"
                               VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
@@ -187,6 +195,7 @@
                                               IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
                                               Command="{Binding DataContext.ToggleEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                               CommandParameter="{Binding}"
+                                              AutomationProperties.Name="{Binding Name, StringFormat='Toggle {0}'}"
                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

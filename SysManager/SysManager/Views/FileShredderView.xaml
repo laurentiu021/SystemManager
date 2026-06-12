@@ -48,6 +48,7 @@
                            Foreground="{DynamicResource TextSecondary}"/>
                 <ComboBox ItemsSource="{Binding Source={StaticResource ShredMethods}}"
                           SelectedItem="{Binding SelectedMethod}"
+                          AutomationProperties.Name="Shred method"
                           Width="120" Margin="0,0,16,0" VerticalAlignment="Center"/>
                 <Button Content="Add Files" Command="{Binding AddFilesCommand}"
                         Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
@@ -63,6 +64,7 @@
 
         <!-- Items DataGrid -->
         <DataGrid Grid.Row="2" ItemsSource="{Binding Items}"
+                  AutomationProperties.Name="Files queued for shredding"
                   AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserSortColumns="True"

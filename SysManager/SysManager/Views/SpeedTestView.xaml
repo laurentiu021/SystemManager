@@ -36,10 +36,12 @@
                                 <TextBlock Text="Official CLI, downloaded on first run" Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <Button Content="Run" Command="{Binding RunOoklaSpeedCommand}" Style="{StaticResource PrimaryButton}"
+                                    AutomationProperties.Name="Run Ookla speed test"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
                                     IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvert}}"/>
                             <ComboBox ItemsSource="{Binding OoklaServerOptions}"
                                       SelectedItem="{Binding SelectedOoklaServer}"
+                                      AutomationProperties.Name="Ookla server"
                                       Width="180" Margin="0,0,8,0" VerticalAlignment="Center"
                                       DockPanel.Dock="Right"/>
                         </DockPanel>
@@ -52,7 +54,7 @@
                         <TextBlock Text="{Binding OoklaResult.Server}" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}"/>
                         <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding OoklaStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
-                        <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
+                        <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" AutomationProperties.Name="Cancel Ookla speed test" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                 </Border>
 
@@ -65,6 +67,7 @@
                                 <TextBlock Text="Measured against speed.cloudflare.com" Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <Button Content="Run" Command="{Binding RunHttpSpeedCommand}" Style="{StaticResource PrimaryButton}"
+                                    AutomationProperties.Name="Run HTTP speed test"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
                                     IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvert}}"/>
                         </DockPanel>
@@ -76,7 +79,7 @@
                         </Grid>
                         <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding HttpStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
-                        <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
+                        <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" AutomationProperties.Name="Cancel HTTP speed test" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                 </Border>
 
@@ -99,6 +102,7 @@
                         <DockPanel>
                             <TextBlock Text="Ookla History" Style="{StaticResource SectionTitle}"/>
                             <Button Content="Clear" Command="{Binding ClearOoklaHistoryCommand}" Style="{StaticResource GhostButton}"
+                                    AutomationProperties.Name="Clear Ookla history"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="12,4" FontSize="12"/>
                         </DockPanel>
                         <DataGrid ItemsSource="{Binding OoklaHistory}" AutoGenerateColumns="False"
@@ -129,6 +133,7 @@
                         <DockPanel>
                             <TextBlock Text="HTTP History" Style="{StaticResource SectionTitle}"/>
                             <Button Content="Clear" Command="{Binding ClearHttpHistoryCommand}" Style="{StaticResource GhostButton}"
+                                    AutomationProperties.Name="Clear HTTP history"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="12,4" FontSize="12"/>
                         </DockPanel>
                         <DataGrid ItemsSource="{Binding HttpHistory}" AutoGenerateColumns="False"

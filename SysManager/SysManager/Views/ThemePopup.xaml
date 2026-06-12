@@ -32,10 +32,13 @@
                             BorderBrush="{DynamicResource Border1}" BorderThickness="1" Margin="0,0,0,16">
                         <UniformGrid Columns="3">
                             <RadioButton x:Name="DarkMode" Content="Dark" GroupName="Mode"
+                                         AutomationProperties.Name="Dark mode"
                                          Style="{StaticResource ModePill}" IsChecked="True"/>
                             <RadioButton x:Name="LightMode" Content="Light" GroupName="Mode"
+                                         AutomationProperties.Name="Light mode"
                                          Style="{StaticResource ModePill}"/>
                             <RadioButton x:Name="CustomMode" Content="Custom" GroupName="Mode"
+                                         AutomationProperties.Name="Custom mode"
                                          Style="{StaticResource ModePill}"/>
                         </UniformGrid>
                     </Border>
@@ -51,6 +54,7 @@
                         <Slider x:Name="ShadeSlider" Minimum="0" Maximum="1" Value="0.5"
                                 LargeChange="0.05" SmallChange="0.01"
                                 IsMoveToPointEnabled="True"
+                                AutomationProperties.Name="Background shade"
                                 Margin="0,0,0,4"/>
                     </StackPanel>
 

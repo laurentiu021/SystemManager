@@ -30,19 +30,24 @@
             <WrapPanel>
                 <TextBlock Text="Folder:" VerticalAlignment="Center" Margin="0,0,8,0"
                            Style="{StaticResource Subtle}"/>
-                <ComboBox ItemsSource="{Binding PresetFolders}"
+                <ComboBox AutomationProperties.Name="Folder to scan"
+                          ItemsSource="{Binding PresetFolders}"
                           SelectedItem="{Binding SelectedFolder}"
                           Width="320" Margin="0,0,8,0"
                           IsEditable="True"/>
-                <Button Content="Browse" Command="{Binding BrowseFolderCommand}"
+                <Button Content="Browse" AutomationProperties.Name="Browse for folder"
+                        Command="{Binding BrowseFolderCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0"/>
                 <TextBlock Text="Min size (KB):" VerticalAlignment="Center" Margin="0,0,8,0"
                            Style="{StaticResource Subtle}"/>
-                <TextBox Text="{Binding MinSizeKb, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox AutomationProperties.Name="Minimum file size in kilobytes"
+                         Text="{Binding MinSizeKb, UpdateSourceTrigger=PropertyChanged}"
                          Width="70" Margin="0,0,12,0"/>
-                <Button Content="Scan" Command="{Binding ScanCommand}"
+                <Button Content="Scan" AutomationProperties.Name="Scan for duplicates"
+                        Command="{Binding ScanCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                <Button Content="Cancel" Command="{Binding CancelScanCommand}"
+                <Button Content="Cancel" AutomationProperties.Name="Cancel scan"
+                        Command="{Binding CancelScanCommand}"
                         Style="{StaticResource GhostButton}"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             </WrapPanel>
@@ -55,7 +60,8 @@
 
         <!-- Results: grouped list (virtualized for performance) -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
-            <ListView ItemsSource="{Binding Groups}"
+            <ListView AutomationProperties.Name="Duplicate file groups"
+                      ItemsSource="{Binding Groups}"
                       Background="Transparent" BorderThickness="0"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                       VirtualizingPanel.IsVirtualizing="True"
@@ -99,11 +105,13 @@
                                             <DockPanel Margin="16,3,0,3">
                                                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                                                     <Button Content="Open" ToolTip="Show in Explorer"
+                                                            AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Show {0} in Explorer'}"
                                                             Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
                                                             Margin="0,0,4,0"/>
                                                     <Button Content="Copy" ToolTip="Copy path"
+                                                            AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Copy path of {0}'}"
                                                             Command="{Binding DataContext.CopyPathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"

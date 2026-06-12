@@ -28,14 +28,19 @@
             <DockPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <Button Content="Start Monitoring" Command="{Binding StartMonitoringCommand}"
+                            AutomationProperties.Name="Start monitoring app installations"
                             Style="{StaticResource PrimaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                     <Button Content="Stop" Command="{Binding StopMonitoringCommand}"
+                            AutomationProperties.Name="Stop monitoring"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
                     <Button Content="Show Installed" Command="{Binding RefreshInstalledAppsCommand}"
+                            AutomationProperties.Name="Show installed apps"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
                     <Button Content="Acknowledge All" Command="{Binding AcknowledgeAllCommand}"
+                            AutomationProperties.Name="Acknowledge all alerts"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
                     <Button Content="Clear History" Command="{Binding ClearHistoryCommand}"
+                            AutomationProperties.Name="Clear alert history"
                             Style="{StaticResource DangerButton}" Padding="12,8"/>
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"

@@ -46,7 +46,8 @@
                         <TextBlock Text="Latency per hop" Style="{StaticResource SectionTitle}"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
                             <TextBlock Text="Every" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                            <ComboBox ItemsSource="{Binding Shared.TraceIntervalOptions}"
+                            <ComboBox AutomationProperties.Name="Auto-trace interval in seconds"
+                                      ItemsSource="{Binding Shared.TraceIntervalOptions}"
                                       SelectedValue="{Binding Shared.TraceIntervalSeconds}" Width="72" Margin="8,0,4,0"/>
                             <TextBlock Text="s" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -73,7 +74,7 @@
                     <StackPanel Grid.Row="1" Margin="0,12,0,12">
                         <TextBlock Text="Run a one-off trace to any host:" Style="{StaticResource Subtle}" Margin="0,0,0,6"/>
                         <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{Binding TraceHost, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
+                            <TextBox AutomationProperties.Name="Host to trace" Text="{Binding TraceHost, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
                             <Button Content="Trace now" Command="{Binding TraceCommand}" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
                                     IsEnabled="{Binding IsTracing, Converter={StaticResource BoolInvert}}"/>
                             <Button Content="Cancel" Command="{Binding CancelTraceCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>

@@ -36,6 +36,11 @@ public sealed class AppFixture : IDisposable
 
         MainWindow = App.GetMainWindow(Automation, TimeSpan.FromSeconds(20))
             ?? throw new InvalidOperationException("Main window did not appear in time");
+
+        // Sidebar groups start collapsed, so their child nav items aren't in the UI
+        // Automation tree until expanded. Expand everything once up front so tests that
+        // look up nav items directly (not via GoToTab) can find them too.
+        ExpandAllNavGroups();
     }
 
     /// <summary>
@@ -44,14 +49,47 @@ public sealed class AppFixture : IDisposable
     /// </summary>
     public void GoToTab(string navId)
     {
-        // Find any descendant with the matching AutomationId and click it.
-        var item = Retry.WhileNull(() =>
-            MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId)),
-            TimeSpan.FromSeconds(5)).Result
-            ?? throw new InvalidOperationException($"Nav item '{navId}' not found");
+        // The sidebar groups start collapsed, so child nav items aren't realized in the
+        // UI Automation tree until their group Expander is open. Drive the UI like a user:
+        // try to find the item; if it isn't there yet, expand every group and retry.
+        var item = MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId));
+        if (item is null)
+        {
+            ExpandAllNavGroups();
+            item = Retry.WhileNull(() =>
+                MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId)),
+                TimeSpan.FromSeconds(5)).Result;
+        }
+
+        if (item is null)
+            throw new InvalidOperationException($"Nav item '{navId}' not found");
 
         item.Click();
         Thread.Sleep(250);
+    }
+
+    /// <summary>
+    /// Expands every collapsible sidebar group so its child nav items are realized in
+    /// the UI Automation tree. Groups render as <see cref="ControlType.Group"/> expanders;
+    /// each is expanded via its ExpandCollapse pattern when currently collapsed.
+    /// </summary>
+    public void ExpandAllNavGroups()
+    {
+        var expanders = MainWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Group));
+        foreach (var e in expanders)
+        {
+            try
+            {
+                var pattern = e.Patterns.ExpandCollapse.PatternOrDefault;
+                if (pattern is not null &&
+                    pattern.ExpandCollapseState.Value == FlaUI.Core.Definitions.ExpandCollapseState.Collapsed)
+                {
+                    pattern.Expand();
+                }
+            }
+            catch (Exception) { /* not an expandable group — skip */ }
+        }
+        Thread.Sleep(300);
     }
 
     /// <summary>

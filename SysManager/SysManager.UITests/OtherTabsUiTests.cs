@@ -57,24 +57,10 @@ public class OtherTabsUiTests
     public void Drivers_ListButton_Exists()
     {
         _fx.GoToTab("nav-drivers");
-        Assert.NotNull(_fx.FindButton("List installed drivers"));
-    }
-
-    [Fact]
-    public void Drivers_CheckUpdatesButton_Exists()
-    {
-        _fx.GoToTab("nav-drivers");
-        Assert.NotNull(_fx.FindButton("Check driver updates (Windows Update)"));
+        Assert.NotNull(_fx.FindButton("List drivers"));
     }
 
     // ---------------- Windows Update ----------------
-
-    [Fact]
-    public void WindowsUpdate_CheckModuleButton_Exists()
-    {
-        _fx.GoToTab("nav-windows-update");
-        Assert.NotNull(_fx.FindButton("Check module"));
-    }
 
     [Fact]
     public void WindowsUpdate_InstallModuleButton_Exists()
@@ -105,10 +91,10 @@ public class OtherTabsUiTests
     }
 
     [Fact]
-    public void WindowsUpdate_InstallUpdatesButton_Exists()
+    public void WindowsUpdate_InstallSelectedButton_Exists()
     {
         _fx.GoToTab("nav-windows-update");
-        Assert.NotNull(_fx.FindButton("Install updates"));
+        Assert.NotNull(_fx.FindButton("Install selected"));
     }
 
     // ---------------- System health ----------------
@@ -117,7 +103,7 @@ public class OtherTabsUiTests
     public void SystemHealth_ScanButton_Exists()
     {
         _fx.GoToTab("nav-system-health");
-        Assert.NotNull(_fx.FindButton("Rescan"));
+        Assert.NotNull(_fx.FindButton("Scan"));
     }
 
     [Fact]

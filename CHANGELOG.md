@@ -156,6 +156,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Page background — theme-aware.** 15 views were defining a hardcoded `LinearGradientBrush PageBg` (`#070A0F`/`#0B1220`/`#090D16`) and using `{StaticResource PageBg}` for their root `Grid.Background`. Replaced with `{DynamicResource Surface0}`. The gradient resource definitions are gone, the views are smaller, and a future light-theme switch will work without per-view edits.
 - **Admin elevation banner colors — theme-aware.** Replaced 4 hardcoded amber hex values (`#1AFBBF24`, `#40FBBF24`, `#FBBF24`, `#FCD34D`) used by elevation banners and warning pills across 17 views with new theme brushes: `WarningBgSubtle`, `WarningBg`, `WarningStripe`, `WarningText`. Defined once in `App.xaml`, used everywhere.
 
+## [1.18.3] - 2026-06-03
+
+### Fixed
+- **Async-safety follow-up.** Dropped the remaining `async void` pipe-listener path and the sync-over-async wrappers flagged during review, completing the threading cleanup started in 1.18.2.
+
 ## [1.18.2] - 2026-06-03
 
 ### Fixed
@@ -178,6 +183,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **PerformanceService.CreateRestorePointAsync** comment reworded — the previous `// BUG-003:` marker was a design note, not an open bug; replaced with an explanation of why PowerShell `AddParameter` cannot be used here.
 - **App.xaml.cs unhandled-exception dialog** — added inline note explaining why `MessageBox.Show` is used instead of `DialogService` (the dispatcher exception may originate from DialogService itself).
 - **`.gitignore`** — added entries for local developer notes (`.session-notes/`, `notes-local.md`, `scratch.md`) so scratch files can never be tracked accidentally.
+
+## [1.18.1] - 2026-06-03
+
+### Fixed
+- **Critical and high-priority audit fixes (P0 + P1).** Resolved the top-severity findings from the code audit ahead of the 1.18 line — crash-safety, resource, and correctness fixes across the service layer.
 
 ## [1.18.0] - 2026-06-03
 
@@ -1443,6 +1453,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Bug: WindowsFeaturesViewModel** — add CanExecute guard on ToggleFeature
   command to prevent rapid-click race condition (BUG-006).
 
+## [0.47.1] - 2026-05-13
+
+### Fixed
+- **Ten high-priority code-review findings** — a batch of correctness and security fixes from the code review, plus the SECURITY.md supported-versions update to the 0.47.x line.
+
 ## [0.47.0] - 2026-05-13
 
 ### Changed
@@ -1596,6 +1611,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Security
 - **Speed Test** — improved download integrity comment and added
   Authenticode signature verification on extracted speedtest.exe (SEC-001).
+
+## [0.35.12] - 2026-05-12
+
+### Fixed
+- **Code-review batch 2** — `IDialogService` extraction plus a set of QA and security fixes from the second code-review pass.
 
 ## [0.35.11] - 2026-05-12
 
@@ -2164,6 +2184,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to zero height. Added MinHeight=250 (#333).
 - **Speed Test: HTTP values too low** — increased parallel streams from 4 to 8
   and payload from 25 MB to 50 MB to saturate 1 Gbps+ links (#334).
+
+## [0.28.1] - 2026-04-29
+
+### Fixed
+- **Startup Manager no longer crashes when scrolling the list** — fixed a DataGrid virtualization crash while scrolling the Startup Manager entries (#337).
 
 ## [0.28.0] - 2026-04-28
 

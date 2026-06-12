@@ -95,12 +95,13 @@ What the app can and cannot do by design:
 
 ## Verifying a release
 
-Every release on GitHub ships a `SysManager.exe` and a matching
-`SysManager.exe.sha256` file. You can verify the binary before running it:
+Every release on GitHub ships a versioned `SysManager-v<version>.exe` (e.g.
+`SysManager-v1.20.21.exe`) and a matching `SysManager-v<version>.exe.sha256`
+file. You can verify the binary before running it:
 
 ```powershell
-Get-FileHash .\SysManager.exe -Algorithm SHA256
-# Compare the output to the contents of SysManager.exe.sha256 from the release page.
+Get-FileHash .\SysManager-v1.20.21.exe -Algorithm SHA256
+# Compare the output to the contents of the .sha256 file from the release page.
 ```
 
 The build is **not** currently code-signed. Windows SmartScreen may show a

@@ -102,7 +102,8 @@ public sealed class MemoryTestService
             {
                 using var s = new ManagementObjectSearcher(
                     "SELECT BankLabel, DeviceLocator, Manufacturer, Capacity, Speed, ConfiguredClockSpeed, PartNumber FROM Win32_PhysicalMemory");
-                foreach (ManagementObject mo in s.Get())
+                using var moc = s.Get();
+                foreach (ManagementObject mo in moc)
                 {
                     using (mo)
                     {

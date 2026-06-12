@@ -21,6 +21,10 @@ public sealed class TrayIconService : IDisposable
     private readonly SystemInfoService _sysInfo;
     private readonly DispatcherTimer _timer;
     private TaskbarIcon? _trayIcon;
+    // The GDI Icon handle we created (via ExtractAssociatedIcon or new Icon(stream)) and
+    // must dispose ourselves. Null when we fell back to the shared SystemIcons.Application,
+    // which is process-wide and must NOT be disposed.
+    private System.Drawing.Icon? _ownedIcon;
     private bool _disposed;
     private int _updating; // PERF-M4: re-entrancy guard for WMI calls
 
@@ -51,7 +55,10 @@ public sealed class TrayIconService : IDisposable
     /// </summary>
     public void Initialize(Window mainWindow)
     {
-        var icon = LoadAppIcon() ?? System.Drawing.SystemIcons.Application;
+        // Track only an icon we own so Dispose can free its GDI handle. The shared
+        // SystemIcons.Application fallback is process-wide and must not be disposed.
+        _ownedIcon = LoadAppIcon();
+        var icon = _ownedIcon ?? System.Drawing.SystemIcons.Application;
         _trayIcon = new TaskbarIcon
         {
             ToolTipText = "SysManager",
@@ -240,5 +247,6 @@ public sealed class TrayIconService : IDisposable
         _disposed = true;
         _timer.Stop();
         _trayIcon?.Dispose();
+        _ownedIcon?.Dispose();
     }
 }

@@ -24,15 +24,18 @@
                         DockPanel.Dock="Right" VerticalAlignment="Center">
                 <Button Content="Start" Command="{Binding StartCommand}"
                         Style="{StaticResource PrimaryButton}"
+                        AutomationProperties.Name="Start ping monitoring"
                         Visibility="{Binding Shared.IsMonitoring,
                             Converter={StaticResource FlexVis},
                             ConverterParameter=Inverse}"/>
                 <Button Content="Stop" Command="{Binding StopCommand}"
                         Style="{StaticResource SecondaryButton}"
+                        AutomationProperties.Name="Stop ping monitoring"
                         Visibility="{Binding Shared.IsMonitoring,
                             Converter={StaticResource FlexVis}}"/>
                 <Button Content="Clear" Command="{Binding ClearHistoryCommand}"
-                        Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                        Style="{StaticResource GhostButton}" Margin="6,0,0,0"
+                        AutomationProperties.Name="Clear ping history"/>
             </StackPanel>
         </DockPanel>
 
@@ -89,7 +92,8 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
                         <TextBlock Text="Preset" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <ComboBox ItemsSource="{Binding Shared.Presets}" DisplayMemberPath="Name"
-                                  SelectedItem="{Binding Shared.SelectedPreset, Mode=TwoWay}" Width="200"/>
+                                  SelectedItem="{Binding Shared.SelectedPreset, Mode=TwoWay}" Width="200"
+                                  AutomationProperties.Name="Target preset"/>
                     </StackPanel>
                 </DockPanel>
                 <TextBlock Text="{Binding Shared.SelectedPreset.Description}"
@@ -111,7 +115,8 @@
                                     <DockPanel Margin="6,0,0,0">
                                         <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" MinWidth="100">
                                             <StackPanel Orientation="Horizontal">
-                                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                              AutomationProperties.Name="{Binding Name, StringFormat='Enable {0}'}"/>
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Host}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="22,2,0,0"/>
@@ -152,8 +157,10 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                    <TextBox Text="{Binding Shared.NewTargetHost, UpdateSourceTrigger=PropertyChanged}" Width="240"/>
-                    <Button Content="Add target" Command="{Binding AddCustomTargetCommand}" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
+                    <TextBox Text="{Binding Shared.NewTargetHost, UpdateSourceTrigger=PropertyChanged}" Width="240"
+                             AutomationProperties.Name="New target host"/>
+                    <Button Content="Add target" Command="{Binding AddCustomTargetCommand}" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                            AutomationProperties.Name="Add target"/>
                 </StackPanel>
             </StackPanel>
         </Border>
@@ -169,10 +176,12 @@
                     <TextBlock Text="Latency" Style="{StaticResource SectionTitle}"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
                         <TextBlock Text="Ping every" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                        <TextBox Text="{Binding Shared.IntervalSeconds, UpdateSourceTrigger=PropertyChanged}" Width="48" Margin="8,0,6,0" TextAlignment="Center"/>
+                        <TextBox Text="{Binding Shared.IntervalSeconds, UpdateSourceTrigger=PropertyChanged}" Width="48" Margin="8,0,6,0" TextAlignment="Center"
+                                 AutomationProperties.Name="Ping interval in seconds"/>
                         <TextBlock Text="s" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         <TextBlock Text="Window" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
-                        <ComboBox SelectedValue="{Binding Shared.WindowSeconds}" ItemsSource="{Binding Shared.WindowOptions}" Width="82" Margin="8,0,0,0"/>
+                        <ComboBox SelectedValue="{Binding Shared.WindowSeconds}" ItemsSource="{Binding Shared.WindowOptions}" Width="82" Margin="8,0,0,0"
+                                  AutomationProperties.Name="Chart time window"/>
                     </StackPanel>
                 </DockPanel>
                 <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="200"

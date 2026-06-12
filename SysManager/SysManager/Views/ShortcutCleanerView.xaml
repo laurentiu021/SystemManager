@@ -29,23 +29,30 @@
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
             <WrapPanel>
                 <Button Content="Scan" Command="{Binding ScanCommand}"
+                        AutomationProperties.Name="Scan for broken shortcuts"
                         Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
                 <Button Content="Delete Selected" Command="{Binding DeleteSelectedCommand}"
+                        AutomationProperties.Name="Delete selected shortcuts"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}"
+                        AutomationProperties.Name="Cancel scan"
                         Style="{StaticResource GhostButton}" Margin="0,0,16,0"
                         Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="Select All" Command="{Binding SelectAllCommand}"
+                        AutomationProperties.Name="Select all shortcuts"
                         Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
                 <Button Content="Deselect All" Command="{Binding DeselectAllCommand}"
+                        AutomationProperties.Name="Deselect all shortcuts"
                         Style="{StaticResource GhostButton}" Margin="0,0,16,0"/>
                 <CheckBox Content="Move to Recycle Bin" IsChecked="{Binding MoveToRecycleBin}"
+                          AutomationProperties.Name="Move deleted shortcuts to Recycle Bin"
                           VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
             </WrapPanel>
         </Border>
 
         <!-- Results DataGrid -->
         <DataGrid Grid.Row="2" ItemsSource="{Binding BrokenShortcuts}"
+                  AutomationProperties.Name="Broken shortcuts"
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserSortColumns="True" CanUserResizeColumns="True"

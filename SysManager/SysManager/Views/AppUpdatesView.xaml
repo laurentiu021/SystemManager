@@ -26,6 +26,7 @@
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        AutomationProperties.Name="Relaunch as administrator"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -53,10 +54,10 @@
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0">
             <StackPanel Orientation="Horizontal">
-                <Button Content="Scan for updates" Command="{Binding ScanCommand}" Style="{StaticResource PrimaryButton}"/>
-                <Button Content="Upgrade selected" Command="{Binding UpgradeSelectedCommand}" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
-                <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
-                <CheckBox Content="Select all" IsChecked="{Binding SelectAll}" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                <Button Content="Scan for updates" Command="{Binding ScanCommand}" AutomationProperties.Name="Scan for updates" Style="{StaticResource PrimaryButton}"/>
+                <Button Content="Upgrade selected" Command="{Binding UpgradeSelectedCommand}" AutomationProperties.Name="Upgrade selected packages" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}" AutomationProperties.Name="Cancel update operation" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                <CheckBox Content="Select all" IsChecked="{Binding SelectAll}" AutomationProperties.Name="Select all packages" Margin="16,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
@@ -75,12 +76,14 @@
                             <Style TargetType="CheckBox">
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
                                 <Setter Property="Margin" Value="4,0"/>
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0}'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.ElementStyle>
                         <DataGridCheckBoxColumn.EditingElementStyle>
                             <Style TargetType="CheckBox">
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
                                 <Setter Property="Margin" Value="4,0"/>
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0}'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.EditingElementStyle>
                     </DataGridCheckBoxColumn>

@@ -226,9 +226,10 @@ public sealed class SystemInfoService
                 }
             }
         }
-        catch (ManagementException)
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
-            // Fallback to Win32_DiskDrive if MSFT_PhysicalDisk isn't available
+            // Fallback to Win32_DiskDrive if MSFT_PhysicalDisk / the Storage WMI namespace
+            // isn't available (older/headless Windows — scope.Connect() throws COMException).
             using var s = new ManagementObjectSearcher("SELECT Model,Size,Status FROM Win32_DiskDrive");
             using var fallbackCollection = s.Get();
             foreach (ManagementObject mo in fallbackCollection)

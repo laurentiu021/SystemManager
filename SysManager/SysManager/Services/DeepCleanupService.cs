@@ -361,7 +361,9 @@ public sealed class DeepCleanupService
                     }
                     foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct))
                     {
-                        try { Directory.Delete(dir, recursive: false); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                        try { Directory.Delete(dir, recursive: false); }
+                        catch (IOException ex) { Log.Debug(ex, "Deep cleanup: failed to delete directory {Dir}", dir); }
+                        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Deep cleanup: access denied deleting directory {Dir}", dir); }
                     }
                 }
                 catch (Exception ex)

@@ -126,12 +126,13 @@ public sealed class ProcessManagerService
         if (string.IsNullOrWhiteSpace(filePath) || !System.IO.File.Exists(filePath)) return;
         try
         {
+            // Dispose the returned Process handle — we don't track the launched explorer.
             Process.Start(new ProcessStartInfo
             {
                 FileName = "explorer.exe",
                 Arguments = $"/select,\"{filePath}\"",
                 UseShellExecute = true
-            });
+            })?.Dispose();
         }
         catch (InvalidOperationException ex) { Log.Warning(ex, "Failed to open file location: {Path}", filePath); }
         catch (System.ComponentModel.Win32Exception ex) { Log.Warning(ex, "Failed to open file location: {Path}", filePath); }

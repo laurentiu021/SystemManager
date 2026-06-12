@@ -233,8 +233,8 @@ public sealed class WindowsUpdateService
         var kb = kbList.Count > 0 ? "KB" + string.Join(",", kbList) : string.Empty;
         long size = 0;
         try { size = (long)(decimal)u.MaxDownloadSize; }
-        catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
-        catch (COMException) { }
+        catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "Windows Update: MaxDownloadSize not exposed for {Title}", title); }
+        catch (COMException ex) { Serilog.Log.Debug(ex, "Windows Update: COM error reading size for {Title}", title); }
         return new UpdateEntry
         {
             Title = title,

@@ -144,7 +144,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    Log.Debug("Dashboard polling error: {Error}", ex.Message);
+                    Log.Debug(ex, "Dashboard polling error");
                     await Task.Delay(1000, ct);
                 }
             }

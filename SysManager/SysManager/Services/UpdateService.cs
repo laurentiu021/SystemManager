@@ -342,8 +342,8 @@ public sealed class UpdateService
     private static void CleanupFile(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        catch (IOException ex) { Serilog.Log.Debug(ex, "Update cleanup: could not delete {Path}", path); }
+        catch (UnauthorizedAccessException ex) { Serilog.Log.Debug(ex, "Update cleanup: access denied deleting {Path}", path); }
     }
 
     // ---------- internals ----------

@@ -40,7 +40,8 @@ public static class AdminHelper
                 Verb = "runas",
                 Arguments = argumentHint ?? string.Empty
             };
-            Process.Start(psi);
+            // Dispose the returned Process handle — we don't track the elevated instance.
+            Process.Start(psi)?.Dispose();
             return true;
         }
         catch (InvalidOperationException ex)

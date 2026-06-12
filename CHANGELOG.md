@@ -6,7 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.20.16] - 2026-06-12
+## [1.20.17] - 2026-06-12
+
+### Fixed
+- **Plugged several resource leaks.** The system-tray icon's underlying graphics handle was never released on shutdown; the elevated-relaunch helper left a process handle open; and a memory-module query left a WMI result set undisposed. All are now released properly. Also added handling for a WMI namespace being unavailable when reading drive media/bus details, so that case fails quietly instead of surfacing an error.
 
 ### Fixed
 - **Starting or stopping a Windows service no longer crashes the app on failure.** If a service couldn't be started or stopped (access denied, a dependency problem, or the service state changing mid-operation), the underlying error escaped unhandled. Those failures are now caught and shown as a clear status message.

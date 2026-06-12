@@ -276,6 +276,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         catch (InvalidOperationException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
+        catch (System.IO.IOException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
     }
 
     // ═══════════════════════════════════════════════════════════════

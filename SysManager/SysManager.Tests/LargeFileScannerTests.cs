@@ -170,15 +170,13 @@ public class LargeFileScannerTests : IDisposable
     public async Task Scan_ReportsProgress()
     {
         CreateFile("big.bin", 2000);
-        var reports = new List<LargeFileScanner.LargeFileProgress>();
-        var progress = new Progress<LargeFileScanner.LargeFileProgress>(p => reports.Add(p));
+        // SyncProgress captures reports synchronously — no Task.Delay race.
+        var progress = new SyncProgress<LargeFileScanner.LargeFileProgress>();
 
         await _scanner.ScanAsync(_root, minSizeBytes: 500, top: 10, progress: progress);
 
-        // Give Progress<T> a moment to flush (it posts to SynchronizationContext)
-        await Task.Delay(100);
-        // At minimum, the final "Done" report should be there
-        Assert.True(reports.Count >= 1);
+        // At minimum, the final "Done" report should be there.
+        Assert.True(progress.Reports.Count >= 1);
     }
 
     // ---------- LargeFileEntry model ----------

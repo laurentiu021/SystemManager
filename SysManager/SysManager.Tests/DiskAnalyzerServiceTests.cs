@@ -183,14 +183,14 @@ public class DiskAnalyzerServiceTests : IDisposable
         CreateFile(Path.Combine("a", "f.bin"), 1024);
         CreateFile(Path.Combine("b", "f.bin"), 1024);
 
-        var reports = new List<DiskAnalyzerService.AnalysisProgress>();
-        var progress = new Progress<DiskAnalyzerService.AnalysisProgress>(p => reports.Add(p));
+        // SyncProgress captures every report synchronously, so by the time AnalyzeAsync
+        // returns all reports are present — no Task.Delay race.
+        var progress = new SyncProgress<DiskAnalyzerService.AnalysisProgress>();
 
         await _service.AnalyzeAsync(_root, progress);
-        await Task.Delay(100);
 
-        Assert.True(reports.Count >= 1);
-        Assert.Contains(reports, r => r.CurrentFolder == "Done");
+        Assert.True(progress.Reports.Count >= 1);
+        Assert.Contains(progress.Reports, r => r.CurrentFolder == "Done");
     }
 
     // ── ShouldSkip ──

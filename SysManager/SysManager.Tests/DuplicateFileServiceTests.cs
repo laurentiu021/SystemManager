@@ -247,14 +247,13 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("a.bin", content);
         CreateFile("b.bin", content);
 
-        var reports = new List<DuplicateFileService.ScanProgress>();
-        var progress = new Progress<DuplicateFileService.ScanProgress>(p => reports.Add(p));
+        // SyncProgress captures reports synchronously — no Task.Delay race.
+        var progress = new SyncProgress<DuplicateFileService.ScanProgress>();
 
         await _service.ScanAsync(_root, progress: progress);
-        await Task.Delay(100); // let Progress<T> flush
 
-        Assert.True(reports.Count >= 1);
-        Assert.Contains(reports, r => r.Phase == "Complete");
+        Assert.True(progress.Reports.Count >= 1);
+        Assert.Contains(progress.Reports, r => r.Phase == "Complete");
     }
 
     // ── Hash correctness ──

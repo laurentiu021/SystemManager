@@ -2,12 +2,16 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 using Xunit;
 
 namespace SysManager.Tests;
 
+// Serialized: the DeleteSelected gate tests swap the static DialogService.Instance.
+[Collection("DialogService")]
 public class ShortcutCleanerViewModelTests
 {
     [Fact]
@@ -68,5 +72,53 @@ public class ShortcutCleanerViewModelTests
 
         s.IsSelected = false;
         Assert.Equal("IsSelected", changedProp);
+    }
+
+    // ── DeleteSelected confirmation gate (destructive — removes broken .lnk files) ──
+
+    [Fact]
+    public void DeleteSelected_WhenUserDeclinesConfirm_DeletesNothing()
+    {
+        var vm = new ShortcutCleanerViewModel(new ShortcutCleanerService());
+        vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "A", ShortcutPath = @"C:\nope\a.lnk", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.DeleteSelectedCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            // Declining must leave the list untouched — nothing was deleted.
+            Assert.Single(vm.BrokenShortcuts);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void DeleteSelected_WithNoSelection_NeverPromptsConfirm()
+    {
+        var vm = new ShortcutCleanerViewModel(new ShortcutCleanerService());
+        vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "A", IsSelected = false });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.DeleteSelectedCommand.Execute(null);
+
+            // No items selected → the destructive prompt must not appear at all.
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
     }
 }

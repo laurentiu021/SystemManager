@@ -10,6 +10,9 @@ using Xunit;
 
 namespace SysManager.Tests;
 
+// Serialized: the confirm-gate tests swap the static DialogService.Instance, which is
+// process-wide shared state (see the DialogService test-collection used elsewhere).
+[Collection("DialogService")]
 public class AppBlockerViewModelTests
 {
     // A blocker that reports nothing blocked — keeps the VM ctor's RefreshList()
@@ -17,6 +20,12 @@ public class AppBlockerViewModelTests
     private static AppBlockerViewModel NewVm()
     {
         var blocker = Substitute.For<IAppBlockerService>();
+        blocker.GetBlockedApps().Returns([]);
+        return new AppBlockerViewModel(blocker);
+    }
+
+    private static AppBlockerViewModel NewVm(IAppBlockerService blocker)
+    {
         blocker.GetBlockedApps().Returns([]);
         return new AppBlockerViewModel(blocker);
     }
@@ -74,5 +83,105 @@ public class AppBlockerViewModelTests
 
         app.IsSelected = true;
         Assert.Equal("IsSelected", changed);
+    }
+
+    // ── Confirmation-gate tests (destructive ops must route through Confirm) ──
+
+    [Fact]
+    public void BlockApp_WhenUserDeclinesConfirm_DoesNotBlock()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        var vm = NewVm(blocker);
+        vm.NewExeName = "game.exe";
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.BlockAppCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            blocker.DidNotReceive().BlockApp(Arg.Any<string>());
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void BlockApp_WhenUserConfirms_BlocksApp()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.BlockApp(Arg.Any<string>()).Returns(true);
+        var vm = NewVm(blocker);
+        vm.NewExeName = "game.exe";
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user clicks "Yes"
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.BlockAppCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            blocker.Received(1).BlockApp("game.exe");
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void UnblockSelected_WhenUserDeclinesConfirm_DoesNotUnblock()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        var vm = NewVm(blocker);
+        vm.BlockedApps.Add(new BlockedApp { ExecutableName = "game.exe", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.UnblockSelectedCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            blocker.DidNotReceive().UnblockApp(Arg.Any<string>());
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void UnblockSelected_WhenUserConfirms_UnblocksSelected()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.UnblockApp(Arg.Any<string>()).Returns(true);
+        var vm = NewVm(blocker);
+        vm.BlockedApps.Add(new BlockedApp { ExecutableName = "game.exe", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.UnblockSelectedCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            blocker.Received(1).UnblockApp("game.exe");
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
     }
 }

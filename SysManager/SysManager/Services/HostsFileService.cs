@@ -129,12 +129,23 @@ public sealed partial class HostsFileService
 
         // Write atomically: a crash midway through File.WriteAllLines would otherwise
         // leave the hosts file truncated or empty. Write to a temp file in the same
-        // directory, then replace the target in one move.
+        // directory, then swap it into place in one operation.
         var tempPath = HostsPath + ".sysmanager.tmp";
         try
         {
             File.WriteAllLines(tempPath, lines);
-            File.Move(tempPath, HostsPath, overwrite: true);
+
+            // File.Replace preserves the target's existing ACL/owner and attributes
+            // (it copies the security descriptor of the file being replaced onto the
+            // replacement), so the security-hardened system hosts file keeps its DACL.
+            // File.Move(overwrite:true) would instead relink a brand-new inode that
+            // inherits only the directory's default ACL — silently weakening the file.
+            // File.Replace requires the destination to already exist; on the very first
+            // creation there is no descriptor to preserve, so a plain Move is correct.
+            if (File.Exists(HostsPath))
+                File.Replace(tempPath, HostsPath, destinationBackupFileName: null);
+            else
+                File.Move(tempPath, HostsPath, overwrite: false);
         }
         finally
         {

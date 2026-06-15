@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Saving the hosts file now preserves its original permissions.** The atomic save introduced in 1.20.24 replaced the file by moving a freshly written temporary file over it, which left the new file with the folder's default permissions instead of the hosts file's own (more restrictive) access-control settings. Saving now replaces the file in place, keeping its existing permissions and attributes intact.
+
 ## [1.20.24] - 2026-06-12
 
 ### Fixed

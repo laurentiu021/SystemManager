@@ -117,6 +117,38 @@ public class HostsFileServiceTests
     }
 
     [Fact]
+    public void SaveHosts_PreservesOriginalFileIdentity_NotJustContent()
+    {
+        // Regression (ACL/attribute loss): SaveHosts must REPLACE the existing hosts
+        // file in place (File.Replace) rather than relink a brand-new inode over it
+        // (File.Move overwrite). A brand-new file would inherit the directory's default
+        // security descriptor instead of the security-hardened hosts file's own DACL.
+        // We can't assert the System32 DACL without admin, but File.Replace preserves the
+        // replaced file's creation time whereas File.Move resets it to "now" — so a
+        // preserved (old) creation time proves the in-place replace path is taken.
+        var (svc, hosts, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        try
+        {
+            var original = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            File.SetCreationTimeUtc(hosts, original);
+
+            svc.SaveHosts(new List<HostsEntry>
+            {
+                new() { IpAddress = "10.0.0.1", Hostname = "managed", IsEnabled = true }
+            });
+
+            // File.Replace keeps the original creation timestamp; File.Move(overwrite)
+            // would have stamped it with the moment the temp file was written.
+            Assert.Equal(original, File.GetCreationTimeUtc(hosts));
+            Assert.Contains("managed", File.ReadAllText(hosts));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public void SaveHosts_LeavesNoTempFileBehind()
     {
         // Regression (atomic write): SaveHosts writes to a temp file then moves it

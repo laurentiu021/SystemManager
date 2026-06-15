@@ -13,15 +13,12 @@ namespace SysManager.Tests;
 public class AdminHelperTests
 {
     [Fact]
-    public void IsElevated_ReturnsBoolean()
-    {
-        var result = AdminHelper.IsElevated();
-        Assert.IsType<bool>(result);
-    }
-
-    [Fact]
     public void IsElevated_IsConsistentAcrossCalls()
     {
+        // Elevation state cannot change during the test process's lifetime, so two
+        // calls must agree. (The former IsElevated_ReturnsBoolean test asserted
+        // Assert.IsType<bool> on a bool-returning method — always true, tested nothing —
+        // and was folded into this real invariant.)
         var a = AdminHelper.IsElevated();
         var b = AdminHelper.IsElevated();
         Assert.Equal(a, b);
@@ -45,10 +42,8 @@ public class AdminHelperTests
         Assert.Null(ex);
     }
 
-    [Fact]
-    public void RelaunchAsAdmin_ReturnsBoolean()
-    {
-        var result = AdminHelper.RelaunchAsAdmin();
-        Assert.IsType<bool>(result);
-    }
+    // Removed RelaunchAsAdmin_ReturnsBoolean: it asserted Assert.IsType<bool> on a
+    // bool-returning method (always true, tested nothing) while needlessly invoking the
+    // side-effecting relaunch a third time. RelaunchAsAdmin_DoesNotThrow already covers
+    // the call.
 }

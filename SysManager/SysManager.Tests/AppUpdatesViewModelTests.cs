@@ -39,10 +39,13 @@ public class AppUpdatesViewModelTests
     }
 
     [Fact]
-    public void Constructor_IsElevated_IsBoolean()
+    public void Constructor_IsElevated_MatchesAdminHelper()
     {
+        // The VM seeds IsElevated from AdminHelper.IsElevated(); assert it reflects that
+        // source of truth rather than the old tautological Assert.IsType<bool> (which
+        // always passed on a bool property).
         var vm = NewVm();
-        Assert.IsType<bool>(vm.IsElevated);
+        Assert.Equal(SysManager.Helpers.AdminHelper.IsElevated(), vm.IsElevated);
     }
 
     [Fact]

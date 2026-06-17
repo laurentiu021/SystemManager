@@ -93,12 +93,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
         await LoadStaticInfoAsync();
         LoadDrives();
         LoadActivity();
-        StartPollingLoop();
+        StartPollingLoop();   // starts BOTH the vitals and temperature loops
         await LoadHealthScoreAsync();
         StartAlertScans();
         await LoadTemperaturesAsync();
-        if (_pollingCts is not null)
-            StartTemperaturePolling(_pollingCts.Token);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -111,16 +109,25 @@ public sealed partial class DashboardViewModel : ViewModelBase
             StartPollingLoop();
         else if (!value)
         {
-            _pollingCts?.Cancel();
+            var old = _pollingCts;
             _pollingCts = null;
+            old?.Cancel();
+            old?.Dispose();
         }
     }
 
     private void StartPollingLoop()
     {
-        _pollingCts?.Cancel();
+        var old = _pollingCts;
         _pollingCts = new CancellationTokenSource();
+        old?.Cancel();
+        old?.Dispose();
         var ct = _pollingCts.Token;
+
+        // Temperature polling shares this CTS so it restarts whenever the tab is
+        // re-shown (previously it was started once in InitAsync and never resumed
+        // after OnIsActiveChanged cancelled the original token).
+        StartTemperaturePolling(ct);
 
         _ = Task.Run(async () =>
         {
@@ -454,7 +461,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
             int criticalCount = 0;
             using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(query);
-            while (reader.ReadEvent() is not null) criticalCount++;
+            // Each EventRecord wraps an unmanaged EVT_HANDLE and must be disposed —
+            // discarding them (as before) leaked a native handle per critical event.
+            System.Diagnostics.Eventing.Reader.EventRecord? rec;
+            while ((rec = reader.ReadEvent()) is not null)
+            {
+                using (rec) criticalCount++;
+            }
 
             var (title, severity) = ClassifyEventLog(criticalCount);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>

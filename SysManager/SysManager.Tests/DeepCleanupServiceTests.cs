@@ -135,6 +135,23 @@ public class DeepCleanupServiceTests
     }
 
     [Fact]
+    public async Task ScanAsync_RecycleBinCategory_IsFlaggedForShellApi()
+    {
+        // The Recycle Bin must be emptied through the shell API (SHEmptyRecycleBin),
+        // not the generic file-delete path which corrupts the per-SID bin metadata.
+        // CleanAsync routes on IsRecycleBin, so a regression that drops the flag would
+        // silently send the bin back to raw delete. Pin the flag here.
+        var s = new DeepCleanupService();
+        var r = await s.ScanAsync();
+        var bin = r.FirstOrDefault(c => c.Name.Contains("Recycle", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(bin);
+        Assert.True(bin!.IsRecycleBin, "Recycle Bin category must be flagged IsRecycleBin so cleanup uses the shell API");
+        // And no other category should carry the flag.
+        Assert.All(r.Where(c => !c.Name.Contains("Recycle", StringComparison.OrdinalIgnoreCase)),
+            c => Assert.False(c.IsRecycleBin));
+    }
+
+    [Fact]
     public async Task ScanAsync_IncludesSteam()
     {
         var s = new DeepCleanupService();

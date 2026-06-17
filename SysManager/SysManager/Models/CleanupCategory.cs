@@ -24,6 +24,13 @@ public sealed partial class CleanupCategory : ObservableObject
     public TimeSpan? OlderThan { get; init; }
     public bool IsDestructiveHint { get; init; }
 
+    /// <summary>
+    /// True for the Recycle Bin category, which must be emptied through the shell
+    /// API (SHEmptyRecycleBin) rather than the generic file-delete path — deleting
+    /// the per-SID <c>$Recycle.Bin</c> contents directly corrupts the bin's state.
+    /// </summary>
+    public bool IsRecycleBin { get; init; }
+
     public string SizeDisplay => FormatHelper.FormatSize(TotalSizeBytes);
     public string CountDisplay => SkippedCount > 0 ? $"{FileCount:N0} files · {SkippedCount:N0} skipped" : $"{FileCount:N0} files";
 }

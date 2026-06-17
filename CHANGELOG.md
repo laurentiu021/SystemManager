@@ -11,6 +11,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **Dashboard alert checks are more robust.** The "estimated time remaining" hint that appears while a dashboard check is still running updated its on-screen state from a background thread, which could occasionally fail to display or glitch; it now updates on the UI thread like every other dashboard check. Separately, two error paths (a failed dashboard check and a failed quick action) now record the underlying error in the log so failures can be diagnosed instead of vanishing silently. No visible change in normal use.
 
+## [1.20.27] - 2026-06-17
+
+### Fixed
+- **Deep Cleanup now empties the Recycle Bin through the Windows shell instead of deleting its files directly.** The "Recycle Bin (all drives)" category used the same raw file-delete path as ordinary caches, removing the internal `$Recycle.Bin` index/data files and per-account folders directly. That could leave the Recycle Bin in an inconsistent state (ghost or undeletable items in Explorer) until the next sign-in. It now empties the bin via the documented shell API, the same safe method used elsewhere in the app.
+
 ## [1.20.26] - 2026-06-16
 
 ### Fixed

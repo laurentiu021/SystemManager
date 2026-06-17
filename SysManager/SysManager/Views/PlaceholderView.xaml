@@ -16,7 +16,7 @@
                        TextWrapping="Wrap" TextAlignment="Center"/>
 
             <!-- WIP badge -->
-            <Border Background="#2A1A3A" CornerRadius="4" Padding="12,6"
+            <Border Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="12,6"
                     HorizontalAlignment="Center" Margin="0,12,0,0">
                 <TextBlock Text="Work in Progress" FontSize="14" FontWeight="SemiBold"
                            Foreground="{DynamicResource Accent}"/>

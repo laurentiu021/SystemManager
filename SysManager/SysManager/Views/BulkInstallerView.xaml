@@ -227,9 +227,9 @@
                                             <TextBlock Text="{Binding Name}"
                                                        FontWeight="SemiBold" FontSize="13"
                                                        Foreground="{DynamicResource TextPrimary}"/>
-                                            <Border CornerRadius="4" Padding="4,2" Margin="8,0,0,0" Background="#1422C55E" BorderBrush="#3022C55E" BorderThickness="1"
+                                            <Border CornerRadius="4" Padding="4,2" Margin="8,0,0,0" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Success}" BorderThickness="1"
                                                     Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVis}}">
-                                                <TextBlock Text="Installed" FontSize="9" Foreground="#4ADE80" FontWeight="SemiBold"/>
+                                                <TextBlock Text="Installed" FontSize="9" Foreground="{DynamicResource Success}" FontWeight="SemiBold"/>
                                             </Border>
                                         </StackPanel>
                                         <TextBlock Text="{Binding Description}"
@@ -240,13 +240,13 @@
 
                                     <!-- Status badge -->
                                     <Border Grid.Column="3" CornerRadius="8" Padding="8,4"
-                                            Background="#14475569" BorderBrush="#0AFFFFFF" BorderThickness="1"
+                                            Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                             VerticalAlignment="Center" Margin="12,0,0,0"
                                             Visibility="{Binding Status, Converter={StaticResource FlexVis}}">
                                         <Grid>
-                                            <Border Background="#475569" Width="3" HorizontalAlignment="Left"
+                                            <Border Background="{DynamicResource Border2}" Width="3" HorizontalAlignment="Left"
                                                     CornerRadius="2" Margin="-8,-4,0,-4"/>
-                                            <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#94A3B8"
+                                            <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                                        FontWeight="SemiBold" Margin="4,0,0,0"
                                                        TextTrimming="CharacterEllipsis" MaxWidth="120"/>
                                         </Grid>

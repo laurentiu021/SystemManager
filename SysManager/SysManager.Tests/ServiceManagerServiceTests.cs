@@ -78,6 +78,24 @@ public class ServiceManagerServiceTests
         Assert.Equal("Unknown", entry.Status);
     }
 
+    // ── StartTypeToScToken (regression: enable restores the previous start type) ──
+
+    [Theory]
+    [InlineData("Automatic", "auto")]
+    [InlineData("Manual", "demand")]
+    [InlineData("Boot", "boot")]
+    [InlineData("System", "system")]
+    public void StartTypeToScToken_MapsKnownStartTypes(string startType, string expected)
+        => Assert.Equal(expected, ServiceManagerService.StartTypeToScToken(startType));
+
+    [Theory]
+    [InlineData("Disabled")]   // re-enabling to Disabled is a no-op → fall back to Manual
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("Weird")]
+    public void StartTypeToScToken_FallsBackToDemand_ForDisabledOrUnknown(string? startType)
+        => Assert.Equal("demand", ServiceManagerService.StartTypeToScToken(startType));
+
     [Fact]
     public void ServiceEntry_ObservableProperties()
     {

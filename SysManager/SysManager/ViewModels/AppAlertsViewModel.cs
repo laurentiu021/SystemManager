@@ -81,7 +81,7 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RefreshInstalledApps()
+    private async Task RefreshInstalledAppsAsync()
     {
         StatusMessage = "Loading installed applications...";
         IsBusy = true;
@@ -89,7 +89,9 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
 
         try
         {
-            var apps = AppAlertService.GetRegistryApps();
+            // The HKLM uninstall-tree enumeration is synchronous and walks the whole
+            // registry — run it off the UI thread so the window stays responsive.
+            var apps = await Task.Run(AppAlertService.GetRegistryApps).ConfigureAwait(true);
             var sorted = apps.OrderBy(a => a.Name).ToList();
             foreach (var app in sorted)
             {

@@ -121,4 +121,19 @@ public class LogsViewModelTests
         Assert.Equal(0, vm.WarningCount);
         Assert.Equal(0, vm.InfoCount);
     }
+
+    // ── Refresh re-entrancy gate (regression: double-invoke pollutes Entries) ──
+
+    [Fact]
+    public void RefreshCommand_DisabledWhileBusy()
+    {
+        var vm = new LogsViewModel(new Services.EventLogService());
+        Assert.True(vm.RefreshCommand.CanExecute(null));   // idle → allowed
+
+        vm.IsBusy = true;
+        Assert.False(vm.RefreshCommand.CanExecute(null));  // scanning → blocked (no second run)
+
+        vm.IsBusy = false;
+        Assert.True(vm.RefreshCommand.CanExecute(null));   // done → allowed again
+    }
 }

@@ -69,6 +69,18 @@ public sealed partial class LogsViewModel : ViewModelBase
         _sync = SynchronizationContext.Current;
         EntriesView = CollectionViewSource.GetDefaultView(Entries);
         EntriesView.Filter = EntryFilter;
+        // Disable Refresh while a scan runs — a second concurrent Refresh lets the
+        // cancelled run's queued UI batches pollute the new Entries list. IsBusy lives
+        // in the base class, so observe it here to re-evaluate the command.
+        PropertyChanged += OnVmPropertyChanged;
+    }
+
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IsBusy))
+            RefreshCommand.NotifyCanExecuteChanged();
     }
 
     private void UpdateVisibleCount()
@@ -116,7 +128,7 @@ public sealed partial class LogsViewModel : ViewModelBase
 
     // ---------- Commands ----------
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
         _cts?.Cancel();
@@ -194,6 +206,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     {
         if (disposing)
         {
+            PropertyChanged -= OnVmPropertyChanged;
             _cts?.Dispose();
         }
         base.Dispose(disposing);

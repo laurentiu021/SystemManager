@@ -110,7 +110,10 @@ public class DnsHostsViewModelGateTests
         var hostsPath = Path.Combine(dir, "hosts");
         File.WriteAllText(hostsPath, "127.0.0.1 localhost\n");
         var runner = Substitute.For<IPowerShellRunner>();
-        var vm = new DnsHostsViewModel(new DnsService(runner), new HostsFileService(hostsPath)) { IsElevated = true };
+        // autoInit: false suppresses the async startup load so the gate assertions
+        // are deterministic (no background thread mutating CurrentDns/HostsStatus or
+        // reading the temp hosts file while the test runs).
+        var vm = new DnsHostsViewModel(new DnsService(runner), new HostsFileService(hostsPath), autoInit: false) { IsElevated = true };
         return (vm, hostsPath, dir, runner);
     }
 
@@ -144,15 +147,9 @@ public class DnsHostsViewModelGateTests
     }
 
     [StaFact]
-    public void SaveHosts_WhenUserConfirms_ProceedsPastGate()
+    public void SaveHosts_WhenUserConfirms_WritesEntries()
     {
-        // Confirm side: the gate is passed and the save path runs (StatusMessage
-        // advances to the success/saved text, set synchronously right after the
-        // gate). We assert the gate + the "not cancelled" outcome rather than the
-        // written file, because the VM's async init also reads the same temp hosts
-        // file — racing it here would be non-deterministic. The decline test below
-        // already proves the gate blocks the write.
-        var (vm, _, dir, _) = NewVm();
+        var (vm, hostsPath, dir, _) = NewVm();
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // "Yes"
@@ -164,8 +161,10 @@ public class DnsHostsViewModelGateTests
             vm.SaveHostsCommand.Execute(null);
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
-            // Confirming must NOT short-circuit with the cancellation message.
-            Assert.DoesNotContain("cancelled", vm.HostsStatus, StringComparison.OrdinalIgnoreCase);
+            // Confirming writes the entries through the SysManager-managed hosts file.
+            var written = File.ReadAllText(hostsPath);
+            Assert.Contains("managed.local", written);
+            Assert.Contains("managed by SysManager", written);
         }
         finally
         {
@@ -200,9 +199,9 @@ public class DnsHostsViewModelGateTests
     // ── ApplyDns (changes the system DNS servers) ─────────────────────────
 
     [StaFact]
-    public async Task ApplyDns_WhenUserDeclinesConfirm_ShortCircuits()
+    public async Task ApplyDns_WhenUserDeclinesConfirm_DoesNotInvokeRunner()
     {
-        var (vm, _, dir, _) = NewVm();
+        var (vm, _, dir, runner) = NewVm();
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // "No"
@@ -215,10 +214,10 @@ public class DnsHostsViewModelGateTests
             await vm.ApplyDnsCommand.ExecuteAsync(null);
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
-            // Declining sets the cancellation message and never enters the applying
-            // state. (We assert VM state rather than runner calls because the VM's
-            // async startup also calls the runner to read current DNS — asserting
-            // "no runner calls" would race that init.)
+            // Declining must short-circuit before any DNS PowerShell runs. With
+            // autoInit off, the runner is only ever touched by ApplyDns itself.
+            await runner.DidNotReceive().RunAsync(Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
             Assert.Equal("DNS change cancelled.", vm.StatusMessage);
             Assert.False(vm.IsDnsApplying);
         }

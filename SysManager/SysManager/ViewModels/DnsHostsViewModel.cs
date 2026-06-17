@@ -53,13 +53,23 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     [ObservableProperty] private bool _isElevated;
 
     public DnsHostsViewModel(DnsService dnsService, HostsFileService hostsService)
+        : this(dnsService, hostsService, autoInit: true) { }
+
+    /// <summary>
+    /// Core constructor. <paramref name="autoInit"/> controls whether the startup
+    /// load (reads current DNS + parses the hosts file, mutating CurrentDns/HostsStatus
+    /// on a background thread) runs. Production always passes true; tests pass false to
+    /// exercise the command gates deterministically without racing the async init.
+    /// </summary>
+    internal DnsHostsViewModel(DnsService dnsService, HostsFileService hostsService, bool autoInit)
     {
         _dnsService = dnsService;
         _hostsService = hostsService;
         Presets = _dnsService.GetPresets();
         IsElevated = AdminHelper.IsElevated();
 
-        InitializeAsync(LoadInitialDataAsync);
+        if (autoInit)
+            InitializeAsync(LoadInitialDataAsync);
     }
 
     private async Task LoadInitialDataAsync()

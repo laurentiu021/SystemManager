@@ -278,4 +278,54 @@ public class TuneUpServiceTests
         Assert.Equal("Healthy", summary.Verdict);
         Assert.Equal("#22C55E", summary.ColorHex);
     }
+
+    // ---------- reparse-point safety (data-loss regression) ----------
+
+    [Fact]
+    public void EnumerateFilesSkippingReparsePoints_DoesNotFollowDirectorySymlink()
+    {
+        // Build:  root/real/secret.txt   (the "outside" data that must NOT be reached)
+        //         root/temp/file.txt     (a normal temp file — should be enumerated)
+        //         root/temp/link -> root/real   (a junction/symlink inside temp)
+        // Walking temp must yield temp/file.txt but NEVER root/real/secret.txt.
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "smtu_" + Guid.NewGuid().ToString("N"));
+        var real = System.IO.Path.Combine(root, "real");
+        var temp = System.IO.Path.Combine(root, "temp");
+        System.IO.Directory.CreateDirectory(real);
+        System.IO.Directory.CreateDirectory(temp);
+        var secret = System.IO.Path.Combine(real, "secret.txt");
+        var normal = System.IO.Path.Combine(temp, "file.txt");
+        System.IO.File.WriteAllText(secret, "must never be enumerated");
+        System.IO.File.WriteAllText(normal, "ordinary temp file");
+
+        var link = System.IO.Path.Combine(temp, "link");
+        try
+        {
+            System.IO.Directory.CreateSymbolicLink(link, real);
+        }
+        catch (Exception)
+        {
+            // Creating a symbolic link can require privilege/Developer Mode. If it
+            // fails the data-loss scenario can't be set up here — skip rather than
+            // fail (the production guard is still exercised by DeepCleanup's tests).
+            System.IO.Directory.Delete(root, recursive: true);
+            return;
+        }
+
+        try
+        {
+            var found = TuneUpService
+                .EnumerateFilesSkippingReparsePoints(temp, CancellationToken.None)
+                .ToList();
+
+            Assert.Contains(found, f => f.EndsWith("file.txt", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(found, f => f.EndsWith("secret.txt", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            // Remove the link first (without recursing through it), then the tree.
+            try { System.IO.Directory.Delete(link, recursive: false); } catch { /* best effort */ }
+            try { System.IO.Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
 }

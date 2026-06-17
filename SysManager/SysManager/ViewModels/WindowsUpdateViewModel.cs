@@ -44,6 +44,10 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         _runner.LineReceived += OnRunnerLineReceived;
         _runner.ProgressChanged += OnRunnerProgressChanged;
         _wu.Log += OnWuLog;
+        // IsBusy lives in the base class, so observe it here to re-evaluate the
+        // long-running commands' CanExecute (disabling them while one runs prevents
+        // a second command disposing the shared CTS the first is still awaiting).
+        PropertyChanged += OnVmPropertyChanged;
         IsElevated = AdminHelper.IsElevated();
         // PSWindowsUpdate is only needed for the History view, so we don't
         // probe for it at startup — the History command checks itself if
@@ -57,6 +61,25 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     private void OnRunnerProgressChanged(int p) => Progress = p;
     private void OnWuLog(string text) => Console.Append(PowerShellLine.Output(text));
 
+    /// <summary>
+    /// Gate for the long-running commands. They all share <see cref="_cts"/> and each
+    /// recreates it; without a re-entrancy guard a second command could dispose the CTS
+    /// the first is still awaiting (ObjectDisposedException). Disabling the buttons
+    /// while one runs makes that impossible. <see cref="ViewModelBase.IsBusy"/> lives in
+    /// the base class, so each command notifies the gate manually around its run
+    /// (mirroring WindowsFeaturesViewModel) rather than via an OnIsBusyChanged hook.
+    /// </summary>
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        ListUpdatesCommand.NotifyCanExecuteChanged();
+        ShowHistoryCommand.NotifyCanExecuteChanged();
+        CheckPendingRebootCommand.NotifyCanExecuteChanged();
+        InstallUpdatesCommand.NotifyCanExecuteChanged();
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -64,6 +87,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             _runner.LineReceived -= OnRunnerLineReceived;
             _runner.ProgressChanged -= OnRunnerProgressChanged;
             _wu.Log -= OnWuLog;
+            PropertyChanged -= OnVmPropertyChanged;
             _cts?.Dispose();
         }
         base.Dispose(disposing);
@@ -135,7 +159,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ListUpdatesAsync()
     {
         IsBusy = true;
@@ -178,7 +202,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ShowHistoryAsync()
     {
         IsBusy = true;
@@ -231,7 +255,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task CheckPendingRebootAsync()
     {
         IsBusy = true;
@@ -266,7 +290,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task InstallUpdatesAsync()
     {
         var selected = Updates.Where(u => u.IsSelected).ToList();

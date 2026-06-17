@@ -63,6 +63,10 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     {
         _service = service;
         _iconService = iconService;
+        // IsBusy lives in the base class; observe it to re-evaluate the install
+        // command's CanExecute so the button disables while an install runs (a second
+        // click would otherwise dispose the shared CTS mid-flight).
+        PropertyChanged += OnVmPropertyChanged;
         IsElevated = AdminHelper.IsElevated();
         Apps.ReplaceWith(BuildCuratedApps());
         ApplyFilter();
@@ -137,7 +141,21 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             System.Windows.Application.Current?.Shutdown();
     }
 
-    [RelayCommand]
+    /// <summary>
+    /// Gate for the install command. Without it the "Install Selected" button stays
+    /// clickable during a running install; a second click re-enters the handler and
+    /// disposes the shared CTS the first invocation is still awaiting
+    /// (ObjectDisposedException). Disabling the button while busy prevents that.
+    /// </summary>
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IsBusy))
+            InstallSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task InstallSelectedAsync()
     {
         var selected = Apps.Where(a => a.IsSelected).ToList();
@@ -149,6 +167,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
         IsBusy = true;
         IsProgressIndeterminate = false;
+        // Re-entrancy is prevented by the NotBusy CanExecute gate, so the running
+        // install can never have its CTS disposed out from under it by a second click.
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
@@ -454,6 +474,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     {
         if (disposing)
         {
+            PropertyChanged -= OnVmPropertyChanged;
             _cts?.Dispose();
         }
         base.Dispose(disposing);

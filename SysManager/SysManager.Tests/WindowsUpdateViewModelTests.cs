@@ -292,6 +292,27 @@ public class WindowsUpdateViewModelTests
         Assert.False(vm.AllSelected);
         Assert.All(vm.Updates, u => Assert.False(u.IsSelected));
     }
+
+    // ── re-entrancy guard (regression: shared CTS disposed mid-flight) ──
+
+    [Fact]
+    public void LongRunningCommands_DisabledWhileBusy()
+    {
+        var vm = NewVm();
+        Assert.True(vm.ListUpdatesCommand.CanExecute(null));
+        Assert.True(vm.ShowHistoryCommand.CanExecute(null));
+        Assert.True(vm.CheckPendingRebootCommand.CanExecute(null));
+        Assert.True(vm.InstallUpdatesCommand.CanExecute(null));
+
+        vm.IsBusy = true;
+        Assert.False(vm.ListUpdatesCommand.CanExecute(null));
+        Assert.False(vm.ShowHistoryCommand.CanExecute(null));
+        Assert.False(vm.CheckPendingRebootCommand.CanExecute(null));
+        Assert.False(vm.InstallUpdatesCommand.CanExecute(null));
+
+        vm.IsBusy = false;
+        Assert.True(vm.ListUpdatesCommand.CanExecute(null));
+    }
 }
 
 // ---------- UpdateEntry model ----------

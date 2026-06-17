@@ -118,10 +118,23 @@ public sealed class SpeedTestService
         using var resp = await _http.PostAsync(CfUploadUrl, content, ct).ConfigureAwait(false);
         sw.Stop();
 
-        // Some responses are rejected with 4xx on POST size — treat as best-effort.
+        // If the server rejects the POST (e.g. 4xx on size) it can return before the
+        // full payload is sent. Reporting PayloadBytes over the now-tiny elapsed time
+        // would fabricate a grossly inflated upload speed, so treat a non-success
+        // response as a failed measurement (0) rather than a real number.
+        if (!resp.IsSuccessStatusCode)
+        {
+            progress?.Report((95, $"Upload measurement failed (HTTP {(int)resp.StatusCode})"));
+            return 0;
+        }
+
+        // Measure the bytes actually consumed by the HTTP stack (the stream's final
+        // position), not the intended payload — so a short-circuited upload reports
+        // the true transferred amount instead of the full 50 MB.
+        var sentBytes = stream.Position;
         var seconds = Math.Max(sw.Elapsed.TotalSeconds, 0.001);
-        progress?.Report((95, $"Upload complete: {PayloadBytes / 1024 / 1024} MB"));
-        return PayloadBytes * 8.0 / 1_000_000.0 / seconds;
+        progress?.Report((95, $"Upload complete: {sentBytes / 1024 / 1024} MB"));
+        return sentBytes * 8.0 / 1_000_000.0 / seconds;
     }
 
     /// <summary>

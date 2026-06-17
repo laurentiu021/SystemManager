@@ -44,7 +44,7 @@
                                VerticalAlignment="Center" FontSize="12"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
-                <Border Background="#2D1F1F" CornerRadius="4" Padding="6,2" Margin="4,0"
+                <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="4,0"
                         Visibility="{Binding PendingReboot, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="⚠ Reboot pending" FontSize="11" Foreground="{DynamicResource Warning}"/>
                 </Border>

@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.35] - 2026-06-17
+
+### Fixed
+- **Several panels are now legible in light themes.** A number of cards, banners, and badges (Deep Cleanup safety note and action row, Privacy toggle rows, the File Shredder SSD warning, Quick Cleanup SFC/DISM result cards, the Speed Test info banner, the Windows Features "reboot pending" badge, the Bulk Installer status/installed badges, and the work-in-progress badge) used fixed dark colours that did not change with the theme, so their text became hard to read on the light presets. They now use theme-aware colours and adapt to the active theme.
+- **The File Shredder "Shred All" button is readable again.** It showed red text on the indigo primary-button background (very low contrast); it now uses the standard red danger-button style with white text.
+
 ## [1.20.34] - 2026-06-17
 
 ### Fixed

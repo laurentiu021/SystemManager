@@ -100,10 +100,8 @@
                 </StackPanel>
                 <!-- SFC verdict (shown after completion) -->
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
+                        Background="{DynamicResource Surface1}"
                         Visibility="{Binding SfcVerdict, Converter={StaticResource FlexVis}}">
-                    <Border.Background>
-                        <SolidColorBrush Color="#0D1117" Opacity="0.8"/>
-                    </Border.Background>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="SFC result:" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -121,10 +119,8 @@
                 </StackPanel>
                 <!-- DISM verdict (shown after completion) -->
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
+                        Background="{DynamicResource Surface1}"
                         Visibility="{Binding DismVerdict, Converter={StaticResource FlexVis}}">
-                    <Border.Background>
-                        <SolidColorBrush Color="#0D1117" Opacity="0.8"/>
-                    </Border.Background>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="DISM result:" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>

@@ -84,7 +84,7 @@
                 </Border>
 
                 <!-- Info: Ookla vs HTTP explanation -->
-                <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#0F1A2E" BorderBrush="#1E3A5F" BorderThickness="1"
+                <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                         CornerRadius="8" Padding="12,10" Margin="0,12,0,0">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"

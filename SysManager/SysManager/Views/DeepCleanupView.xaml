@@ -18,7 +18,7 @@
 
                 <!-- Safety note -->
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0"
-                        Background="#122030" BorderBrush="{DynamicResource Accent}" BorderThickness="1">
+                        Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Accent}" BorderThickness="1">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                    FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Top" Margin="0,2,12,0"/>
@@ -94,7 +94,7 @@
                         </ItemsControl>
 
                         <!-- Clean action row -->
-                        <Border Style="{StaticResource CardInner}" Margin="0,8,0,0" Background="#0E141D">
+                        <Border Style="{StaticResource CardInner}" Margin="0,8,0,0" Background="{DynamicResource Surface2}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>

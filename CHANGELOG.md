@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.36] - 2026-06-17
+
+### Fixed
+- **The Dashboard's live temperature readings now resume after you leave and return to the tab.** Temperature polling was started only once at launch; navigating away stopped it permanently, so on returning to the Dashboard the temperatures stopped updating until the app was restarted. Temperature polling now restarts together with the rest of the live vitals whenever the Dashboard is shown again.
+- **The Dashboard Event Log check no longer leaks system handles.** Counting recent critical events read each event record without releasing it, leaking a Windows event-log handle per event on every scan. Each record is now disposed as it is read.
+
 ## [1.20.35] - 2026-06-17
 
 ### Fixed

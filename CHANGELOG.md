@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.33] - 2026-06-17
+
+### Fixed
+- **Temp cleanup can no longer delete files outside the temp folders by following a junction or symbolic link.** Both the Quick Cleanup temp sweep and the background tune-up temp cleanup recursed into reparse points (directory junctions / symbolic links) inside `%TEMP%`, so a link pointing elsewhere could cause real user data outside the temp tree to be deleted. Both now skip reparse points during the walk and only ever remove the link itself, never its target.
+
 ## [1.20.32] - 2026-06-17
 
 ### Fixed

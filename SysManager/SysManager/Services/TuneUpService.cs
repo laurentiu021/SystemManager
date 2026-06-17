@@ -166,7 +166,11 @@ public sealed partial class TuneUpService
             ct.ThrowIfCancellationRequested();
             try
             {
-                foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                // Walk manually and NEVER descend into reparse points (junctions /
+                // symbolic links). SearchOption.AllDirectories follows them, so a
+                // junction inside %TEMP% pointing elsewhere would let this delete real
+                // user data outside TEMP. Mirrors DeepCleanupService's safe traversal.
+                foreach (var file in EnumerateFilesSkippingReparsePoints(dir, ct))
                 {
                     ct.ThrowIfCancellationRequested();
                     try
@@ -181,11 +185,10 @@ public sealed partial class TuneUpService
                     catch (UnauthorizedAccessException) { errors++; }
                 }
 
-                // Try to remove empty subdirectories
-                // FUNC-M3: Sort by directory depth (separator count) descending,
-                // not string length. A path like "C:\a\b\c" is deeper than
-                // "C:\longname" despite being shorter — we must delete deepest first.
-                foreach (var sub in Directory.EnumerateDirectories(dir, "*", SearchOption.AllDirectories)
+                // Try to remove empty subdirectories, deepest first. Reparse points are
+                // excluded so a junction is never deleted/recursed as if it were a real
+                // directory. Depth = separator count (a deeper path can be shorter).
+                foreach (var sub in EnumerateDirectoriesSkippingReparsePoints(dir, ct)
                              .OrderByDescending(d => d.Count(c => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar)))
                 {
                     ct.ThrowIfCancellationRequested();
@@ -209,6 +212,62 @@ public sealed partial class TuneUpService
         }
 
         return (freed, deleted, errors);
+    }
+
+    /// <summary>
+    /// Enumerates files under <paramref name="root"/> without ever descending into
+    /// reparse points (junctions / symbolic links), so cleanup can never follow a
+    /// link out of the temp tree and delete unrelated user data. Internal for testing.
+    /// </summary>
+    internal static IEnumerable<string> EnumerateFilesSkippingReparsePoints(string root, CancellationToken ct)
+    {
+        var stack = new Stack<string>();
+        stack.Push(root);
+        while (stack.Count > 0 && !ct.IsCancellationRequested)
+        {
+            var cur = stack.Pop();
+            IEnumerable<string> files;
+            IEnumerable<string> dirs;
+            try { files = Directory.EnumerateFiles(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
+            try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { dirs = []; } catch (UnauthorizedAccessException) { dirs = []; }
+
+            foreach (var file in files)
+                yield return file;
+
+            foreach (var d in dirs)
+                if (!IsReparsePoint(d)) stack.Push(d);
+        }
+    }
+
+    /// <summary>
+    /// Enumerates sub-directories under <paramref name="root"/> (excluding the root),
+    /// skipping reparse points so a junction is never deleted or recursed as a real dir.
+    /// </summary>
+    private static IEnumerable<string> EnumerateDirectoriesSkippingReparsePoints(string root, CancellationToken ct)
+    {
+        List<string> all = [];
+        var stack = new Stack<string>();
+        stack.Push(root);
+        while (stack.Count > 0 && !ct.IsCancellationRequested)
+        {
+            var cur = stack.Pop();
+            IEnumerable<string> dirs;
+            try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
+            foreach (var d in dirs)
+                if (!IsReparsePoint(d)) { stack.Push(d); all.Add(d); }
+        }
+        return all;
+    }
+
+    /// <summary>True when the directory is a reparse point (junction or symbolic link).</summary>
+    private static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint;
+        }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 
     // ── Recycle Bin ────────────────────────────────────────────────────

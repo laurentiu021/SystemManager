@@ -184,17 +184,39 @@ public sealed partial class CleanupViewModel : ViewModelBase
         {
             await _runner.RunScriptViaPwshAsync(@"
                 $paths = @($env:TEMP, ""$env:SystemRoot\Temp"")
-                $totalBytes = 0
-                foreach ($p in $paths) {
-                    if (Test-Path $p) {
-                        Get-ChildItem -Path $p -Recurse -Force -ErrorAction SilentlyContinue |
-                            ForEach-Object {
-                                try { $totalBytes += $_.Length } catch {}
-                                try { Remove-Item $_.FullName -Force -Recurse -ErrorAction SilentlyContinue } catch {}
+                $script:totalBytes = 0
+                $reparse = [IO.FileAttributes]::ReparsePoint
+                # Windows PowerShell 5.1's Get-ChildItem -Recurse FOLLOWS junctions and
+                # symbolic links, so a reparse point inside %TEMP% pointing elsewhere
+                # could let Remove-Item delete real user data outside the temp tree.
+                # Walk manually with an explicit stack and never descend into a reparse
+                # point; delete a reparse point itself WITHOUT -Recurse (removes the link,
+                # not its target).
+                function Clear-TempDir([string]$root) {
+                    $stack = New-Object System.Collections.Stack
+                    $stack.Push($root)
+                    while ($stack.Count -gt 0) {
+                        $cur = $stack.Pop()
+                        try { $children = Get-ChildItem -LiteralPath $cur -Force -ErrorAction SilentlyContinue } catch { continue }
+                        foreach ($c in $children) {
+                            $isReparse = ($c.Attributes -band $reparse) -eq $reparse
+                            if ($c.PSIsContainer) {
+                                if ($isReparse) {
+                                    try { [IO.Directory]::Delete($c.FullName, $false) } catch {}
+                                } else {
+                                    $stack.Push($c.FullName)
+                                }
+                            } else {
+                                try { $script:totalBytes += $c.Length } catch {}
+                                try { Remove-Item -LiteralPath $c.FullName -Force -ErrorAction SilentlyContinue } catch {}
                             }
+                        }
                     }
                 }
-                ""Freed approximately $([Math]::Round($totalBytes/1MB,1)) MB""
+                foreach ($p in $paths) {
+                    if (Test-Path $p) { Clear-TempDir $p }
+                }
+                ""Freed approximately $([Math]::Round($script:totalBytes/1MB,1)) MB""
             ", cancellationToken: _tempCts.Token);
             StatusMessage = "Temp cleanup done";
             Log.Information("Temp cleanup completed");

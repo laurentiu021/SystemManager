@@ -64,10 +64,13 @@ public sealed partial class WindowsFeaturesService
         _runner.LineReceived += Collect;
         try
         {
+            // Wrap in try/catch + `exit 1` so a DISM cmdlet failure propagates to the
+            // process exit code. Without this the cmdlet's non-terminating error is
+            // ignored and powershell.exe still exits 0, reporting a false success.
             var code = await _runner.RunProcessAsync("powershell",
-                $"-NoProfile -Command \"Enable-WindowsOptionalFeature -Online " +
-                $"-FeatureName '{featureName}' -NoRestart -All | " +
-                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }}\"", ct).ConfigureAwait(false);
+                $"-NoProfile -Command \"try {{ Enable-WindowsOptionalFeature -Online " +
+                $"-FeatureName '{featureName}' -NoRestart -All -ErrorAction Stop | " +
+                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }} }} catch {{ exit 1 }}\"", ct).ConfigureAwait(false);
 
             var reboot = captured.Any(l =>
                 l.Contains("True", StringComparison.OrdinalIgnoreCase));
@@ -98,10 +101,13 @@ public sealed partial class WindowsFeaturesService
         _runner.LineReceived += Collect;
         try
         {
+            // Wrap in try/catch + `exit 1` so a DISM cmdlet failure propagates to the
+            // process exit code. Without this the cmdlet's non-terminating error is
+            // ignored and powershell.exe still exits 0, reporting a false success.
             var code = await _runner.RunProcessAsync("powershell",
-                $"-NoProfile -Command \"Disable-WindowsOptionalFeature -Online " +
-                $"-FeatureName '{featureName}' -NoRestart | " +
-                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }}\"", ct).ConfigureAwait(false);
+                $"-NoProfile -Command \"try {{ Disable-WindowsOptionalFeature -Online " +
+                $"-FeatureName '{featureName}' -NoRestart -ErrorAction Stop | " +
+                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }} }} catch {{ exit 1 }}\"", ct).ConfigureAwait(false);
 
             var reboot = captured.Any(l =>
                 l.Contains("True", StringComparison.OrdinalIgnoreCase));

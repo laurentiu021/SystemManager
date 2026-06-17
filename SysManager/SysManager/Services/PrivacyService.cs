@@ -34,9 +34,11 @@ public sealed class PrivacyService
 
     /// <summary>
     /// Writes a single toggle's current <see cref="PrivacyToggle.IsEnabled"/> state
-    /// to the registry.
+    /// to the registry. Returns <c>true</c> if the write succeeded, <c>false</c> if it
+    /// was rejected (e.g. an HKLM-backed toggle without elevation) or the hive was
+    /// unrecognized — so the caller can avoid reporting an unwritten change as applied.
     /// </summary>
-    public void ApplyToggle(PrivacyToggle toggle)
+    public bool ApplyToggle(PrivacyToggle toggle)
     {
         ArgumentNullException.ThrowIfNull(toggle);
 
@@ -45,47 +47,60 @@ public sealed class PrivacyService
         try
         {
             using var key = OpenOrCreateKey(toggle.RegistryPath, writable: true);
-            if (key is not null)
+            if (key is null)
             {
-                key.SetValue(toggle.ValueName, valueToWrite, RegistryValueKind.DWord);
-                Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
-                    toggle.Name, valueToWrite, toggle.RegistryPath, toggle.ValueName);
+                Log.Warning("Privacy toggle {Name} not applied — could not open/create {Path}",
+                    toggle.Name, toggle.RegistryPath);
+                return false;
             }
+
+            key.SetValue(toggle.ValueName, valueToWrite, RegistryValueKind.DWord);
+            Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
+                toggle.Name, valueToWrite, toggle.RegistryPath, toggle.ValueName);
+            return true;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Access denied writing privacy toggle {Name} at {Path} — elevation required",
                 toggle.Name, toggle.RegistryPath);
+            return false;
         }
         catch (SecurityException ex)
         {
             Log.Warning(ex, "Security exception writing privacy toggle {Name} at {Path} — elevation required",
                 toggle.Name, toggle.RegistryPath);
+            return false;
         }
         catch (IOException ex)
         {
             Log.Warning(ex, "Registry I/O error writing privacy toggle {Name} at {Path}",
                 toggle.Name, toggle.RegistryPath);
+            return false;
         }
         catch (ArgumentException ex)
         {
             Log.Warning(ex, "Invalid registry key or value writing privacy toggle {Name} at {Path}",
                 toggle.Name, toggle.RegistryPath);
+            return false;
         }
     }
 
     /// <summary>
-    /// Applies all toggles in sequence. Errors on individual toggles are
-    /// logged but do not stop the batch.
+    /// Applies all toggles in sequence. Errors on individual toggles are logged but do
+    /// not stop the batch. Returns the toggles that failed to apply (empty when all
+    /// succeeded) so the caller can report failures and avoid rebasing their baseline.
     /// </summary>
-    public void ApplyAll(IEnumerable<PrivacyToggle> toggles)
+    public IReadOnlyList<PrivacyToggle> ApplyAll(IEnumerable<PrivacyToggle> toggles)
     {
         ArgumentNullException.ThrowIfNull(toggles);
 
+        List<PrivacyToggle> failed = [];
         foreach (var toggle in toggles)
         {
-            ApplyToggle(toggle);
+            if (!ApplyToggle(toggle))
+                failed.Add(toggle);
         }
+        return failed;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────

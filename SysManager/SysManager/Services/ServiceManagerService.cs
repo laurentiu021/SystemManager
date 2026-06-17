@@ -154,8 +154,15 @@ public sealed partial class ServiceManagerService
         if (!allowedTypes.Contains(startType, StringComparer.OrdinalIgnoreCase))
             throw new ArgumentException($"Invalid start type: {startType}", nameof(startType));
 
-        await ps.RunProcessAsync("sc.exe", $"config \"{serviceName}\" start= {startType}", ct, PowerShellRunner.OemEncoding)
+        var exit = await ps.RunProcessAsync("sc.exe", $"config \"{serviceName}\" start= {startType}", ct, PowerShellRunner.OemEncoding)
             .ConfigureAwait(false);
+
+        // sc.exe config can fail even when elevated — e.g. a TrustedInstaller-owned
+        // service returns exit 5 (Access denied). Fail loud so the caller reports the
+        // real outcome instead of a false "set to Disabled" success.
+        if (exit != 0)
+            throw new InvalidOperationException(
+                $"Could not change startup type of '{serviceName}' to '{startType}' (sc.exe exit code {exit}).");
     }
 
     /// <summary>Refresh the status of a single service entry.</summary>
@@ -168,6 +175,11 @@ public sealed partial class ServiceManagerService
             entry.StartType = sc.StartType.ToString();
         }
         catch (InvalidOperationException) { entry.Status = "Unknown"; }
+        // The status/start-type getters call into the SCM and can throw
+        // Win32Exception (access denied, or the handle became invalid right after a
+        // stop/disable). Mirror GetAllServices/RefreshAsync which already catch it,
+        // so refreshing one entry after a mutation can't crash the command.
+        catch (System.ComponentModel.Win32Exception) { entry.Status = "Unknown"; }
     }
 
     private static string GetServiceDescription(ServiceController sc)

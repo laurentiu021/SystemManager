@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.31] - 2026-06-17
+
+### Fixed
+- **DNS changes now report failure honestly instead of a false success.** Applying, resetting, or restoring DNS ran the underlying command without treating its errors as fatal, so a change that was actually rejected (for example without administrator rights, or when the adapter dropped) could still be reported as applied. These operations now surface the real error.
+- **DNS now targets the same network adapter for reading and changing.** The current-DNS display, the saved snapshot, and the apply/reset/restore actions used slightly different rules to pick the active adapter, so on a PC with several adapters (Wi-Fi + Ethernet + VPN) a change could land on a different adapter than the one shown — breaking the undo. All paths now select the adapter by one shared rule.
+- **Disabling a service now reports failure honestly.** Changing a service's startup type ignored the result of the underlying `sc.exe` call, so a change blocked by Windows (for example on a protected service) was still reported as "set to Disabled". The real exit code is now surfaced as a clear error.
+- **Refreshing a service's status after a change can no longer crash the app.** Reading a service's status right after stopping or disabling it could throw if the handle had just become invalid; that error is now handled and the status shows as "Unknown" instead.
+- **Enabling or disabling a Windows optional feature now reports failure honestly.** A failed feature change could still be reported as successful because the command's error was not propagated; failures now surface correctly.
+- **Privacy toggles that fail to apply no longer look like they succeeded.** Toggles backed by machine-wide (HKLM) settings need administrator rights; without elevation the write was silently swallowed and the toggle appeared applied. The app now reports how many changes need administrator rights and keeps the unapplied ones marked as pending.
+
 ## [1.20.30] - 2026-06-17
 
 ### Fixed

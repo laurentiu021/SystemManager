@@ -41,17 +41,13 @@ public sealed class DnsService : IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            const string script = """
-                $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false } | Sort-Object -Property ifIndex
-                if (-not $adapters) { $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Sort-Object -Property ifIndex }
-                foreach ($adapter in $adapters) {
+            const string script = ActiveAdapterSelector + """
+
+                if ($adapter) {
                     $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4
-                    if ($dns.ServerAddresses.Count -gt 0) {
-                        $dns.ServerAddresses -join ', '
-                        return
-                    }
-                }
-                if ($adapters) { 'Automatic (DHCP)' } else { 'No active adapter' }
+                    if ($dns.ServerAddresses.Count -gt 0) { $dns.ServerAddresses -join ', ' }
+                    else { 'Automatic (DHCP)' }
+                } else { 'No active adapter' }
                 """;
 
             Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)
@@ -62,14 +58,25 @@ public sealed class DnsService : IDisposable
         finally { _gate.Release(); }
     }
 
+    // Single source of truth for "the active adapter": prefer a non-virtual adapter
+    // that is Up, fall back to any Up adapter, and always order by ifIndex so the
+    // SAME adapter is chosen for reading, snapshotting, and mutating. Without this,
+    // display/capture and set/reset/restore could target different NICs on a
+    // multi-adapter machine (Wi-Fi + Ethernet + VPN), breaking reversibility.
+    private const string ActiveAdapterSelector =
+        "$adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false } | Sort-Object -Property ifIndex | Select-Object -First 1; " +
+        "if (-not $adapter) { $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Sort-Object -Property ifIndex | Select-Object -First 1 }";
+
     /// <summary>
-    /// Detects the interface index of the first active network adapter.
-    /// Uses the integer index to avoid command injection through adapter names.
+    /// Detects the interface index of the active network adapter using the shared
+    /// <see cref="ActiveAdapterSelector"/> rule. Uses the integer index to avoid
+    /// command injection through adapter names.
     /// </summary>
     private async Task<int> GetActiveInterfaceIndexAsync(CancellationToken ct)
     {
-        const string script = """
-            Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1 -ExpandProperty ifIndex
+        const string script = ActiveAdapterSelector + """
+
+            if ($adapter) { $adapter.ifIndex }
             """;
 
         Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)
@@ -92,8 +99,8 @@ public sealed class DnsService : IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            const string script = """
-                $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Sort-Object -Property ifIndex | Select-Object -First 1
+            const string script = ActiveAdapterSelector + """
+
                 if ($adapter) {
                     $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4
                     $dns.ServerAddresses
@@ -139,8 +146,12 @@ public sealed class DnsService : IDisposable
         {
             int ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
             string joined = string.Join(",", servers.Select(s => $"\"{s}\""));
+            // -ErrorAction Stop makes a non-terminating cmdlet failure (denied
+            // privilege, adapter down, RPC failure) terminating, so RunAsync's
+            // EndInvoke throws instead of the call silently reporting success.
             string script = $"""
-                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @({joined})
+                $ErrorActionPreference = 'Stop'
+                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @({joined}) -ErrorAction Stop
                 """;
 
             await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
@@ -163,7 +174,8 @@ public sealed class DnsService : IDisposable
         {
             int ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
             string script = $"""
-                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @("{primary}","{secondary}")
+                $ErrorActionPreference = 'Stop'
+                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @("{primary}","{secondary}") -ErrorAction Stop
                 """;
 
             await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
@@ -181,7 +193,8 @@ public sealed class DnsService : IDisposable
         {
             int ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
             string script = $"""
-                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ResetServerAddresses
+                $ErrorActionPreference = 'Stop'
+                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ResetServerAddresses -ErrorAction Stop
                 """;
 
             await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);

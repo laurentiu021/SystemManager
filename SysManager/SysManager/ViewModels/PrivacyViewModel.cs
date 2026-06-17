@@ -126,15 +126,29 @@ public sealed partial class PrivacyViewModel : ViewModelBase
             return;
         }
 
-        _service.ApplyAll(changed);
+        var failed = _service.ApplyAll(changed);
+        var failedSet = failed.ToHashSet();
 
-        // Refresh baseline to the just-applied state.
-        foreach (var t in changed)
+        // Only rebase the baseline for toggles that actually succeeded — a failed
+        // (e.g. needs-elevation HKLM) toggle stays "pending" so the user sees it
+        // wasn't applied rather than the change silently vanishing.
+        var applied = changed.Where(t => !failedSet.Contains(t)).ToList();
+        foreach (var t in applied)
             _baselineStates[t] = t.IsEnabled;
         RecomputePendingChanges();
 
-        StatusMessage = $"Applied {changed.Count} change{(changed.Count == 1 ? "" : "s")}.";
-        Log.Information("Privacy: applied {Count} pending changes", changed.Count);
+        if (failed.Count == 0)
+        {
+            StatusMessage = $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}.";
+            Log.Information("Privacy: applied {Count} pending changes", applied.Count);
+        }
+        else
+        {
+            StatusMessage = $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}; " +
+                $"{failed.Count} need administrator rights — relaunch as admin and try again.";
+            Log.Warning("Privacy: {Applied} applied, {Failed} failed (likely elevation required)",
+                applied.Count, failed.Count);
+        }
     }
 
     [RelayCommand]

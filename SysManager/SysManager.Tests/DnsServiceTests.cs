@@ -103,6 +103,68 @@ public class DnsServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    // ---------- fail-loud: cmdlet failures must be made terminating (regression) ----------
+
+    [Fact]
+    public async Task SetDnsAsync_MutationScript_RequestsTerminatingErrors()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("5"));
+        using var svc = new DnsService(runner);
+
+        await svc.SetDnsAsync("1.1.1.1", "1.0.0.1");
+
+        // The Set call must request terminating errors so a non-terminating cmdlet
+        // failure surfaces instead of being reported as a false success.
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s =>
+                s.Contains("Set-DnsClientServerAddress") &&
+                s.Contains("-ErrorAction Stop") &&
+                s.Contains("$ErrorActionPreference = 'Stop'")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ResetToDhcpAsync_MutationScript_RequestsTerminatingErrors()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("3"));
+        using var svc = new DnsService(runner);
+
+        await svc.ResetToDhcpAsync();
+
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s =>
+                s.Contains("-ResetServerAddresses") && s.Contains("-ErrorAction Stop")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetActiveInterfaceIndex_UsesSameOrderedNonVirtualSelectorAsDisplay()
+    {
+        // Read and mutate must select the active adapter by the SAME rule (Up,
+        // non-virtual, ordered by ifIndex) so display/capture and set target the
+        // same NIC on a multi-adapter machine. The Set path's index resolution must
+        // therefore carry the ordered, non-virtual selector.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("7"));
+        using var svc = new DnsService(runner);
+
+        await svc.SetDnsAsync("9.9.9.9", "149.112.112.112");
+
+        await runner.Received().RunAsync(
+            Arg.Is<string>(s =>
+                s.Contains("Virtual -eq $false") &&
+                s.Contains("Sort-Object -Property ifIndex")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task GetCurrentDnsAsync_ReturnsFirstResultLine()
     {

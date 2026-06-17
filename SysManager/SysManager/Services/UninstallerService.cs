@@ -245,6 +245,12 @@ public sealed partial class UninstallerService
             var resolvedName = exeFileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
                 ? exeFileName : exeFileName + ".exe";
             exe = System.IO.Path.Join(systemDir, resolvedName);
+
+            // SEC-LPE: resolving the binary to System32 is NOT enough — rundll32 and
+            // MsiExec take their payload from the (HKCU-writable) arguments. rundll32
+            // will load ANY DLL at ANY entry point, and MsiExec will run an arbitrary
+            // package; both inherit our elevation. Validate the payload before launch.
+            ValidateTrustedBinaryArgs(resolvedName, args);
         }
         else
         {
@@ -386,4 +392,47 @@ public sealed partial class UninstallerService
             !string.IsNullOrEmpty(dir) &&
             candidate.StartsWith(WithSep(System.IO.Path.GetFullPath(dir)), StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// SEC-LPE: validates the arguments passed to a trusted system binary (rundll32 /
+    /// MsiExec) before launch, because those arguments come from the HKCU-writable
+    /// registry UninstallString and the binary executes them with our elevation.
+    /// </summary>
+    /// <remarks>
+    /// rundll32: the leading token (before the first comma) is the DLL path; it must
+    /// resolve under a trusted directory or we refuse to run. MsiExec: the arguments
+    /// must be a product-code uninstall (/X{GUID}); anything else (e.g. an arbitrary
+    /// package path or /I install) is rejected.
+    /// </remarks>
+    internal static void ValidateTrustedBinaryArgs(string resolvedExeName, string args)
+    {
+        if (resolvedExeName.Equals("rundll32.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            // rundll32 syntax: <dll>[,<entrypoint> [<args>]]. Extract the DLL path.
+            var dll = args.Split(',', 2)[0].Trim().Trim('"');
+            if (string.IsNullOrWhiteSpace(dll))
+                throw new InvalidOperationException(
+                    "rundll32 uninstall command has no DLL path — refusing to run for security.");
+
+            var dllFullPath = System.IO.Path.GetFullPath(dll);
+            if (!IsUnderTrustedDirectory(dllFullPath))
+                throw new InvalidOperationException(
+                    $"rundll32 would load a DLL outside trusted directories: '{dll}'. Refusing to run for security.");
+        }
+        else if (resolvedExeName.Equals("MsiExec.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            // Only allow a product-code uninstall (/X{GUID}); reject arbitrary packages.
+            if (!MsiUninstallArgsPattern().IsMatch(args))
+                throw new InvalidOperationException(
+                    $"MsiExec uninstall arguments are not a recognized product-code uninstall: '{args}'. " +
+                    "Refusing to run for security.");
+        }
+    }
+
+    // Matches a product-code uninstall such as "/X{0F2C3A4B-...}" optionally followed
+    // by /quiet, /qn, /norestart and similar switches. Requires the /X{GUID} form so a
+    // crafted UninstallString cannot make MsiExec run an arbitrary package path.
+    [GeneratedRegex(@"^\s*/x\s*\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex MsiUninstallArgsPattern();
 }

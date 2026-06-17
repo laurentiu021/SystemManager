@@ -49,6 +49,25 @@ public class AppBlockerServiceValidationTests
         Assert.False(result); // expected since nothing is actually blocked
     }
 
+    [Theory]
+    [InlineData("winlogon.exe")]
+    [InlineData("lsass.exe")]
+    [InlineData("csrss.exe")]
+    [InlineData("smss.exe")]
+    [InlineData("services.exe")]
+    [InlineData("wininit.exe")]
+    [InlineData("svchost.exe")]
+    [InlineData("explorer.exe")]
+    // case-insensitive + bare-name (the service appends .exe before the denylist check)
+    [InlineData("WinLogon.exe")]
+    [InlineData("lsass")]
+    public void BlockApp_BootCriticalExecutable_IsRefused(string exeName)
+    {
+        // Blocking a boot/logon-critical process via IFEO would render Windows
+        // unbootable. The denylist must reject it before any registry write.
+        Assert.False(NewService().BlockApp(exeName));
+    }
+
     [Fact]
     public void GetBlockedApps_ReturnsListWithoutThrowing()
     {

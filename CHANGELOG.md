@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.30] - 2026-06-17
+
+### Fixed
+- **App Blocker can no longer block a startup-critical Windows process.** The blocker accepted any executable name, so a user could block boot/logon components such as `winlogon.exe` or `lsass.exe` — which would prevent Windows from starting and leave no way to launch the app to undo it. It now refuses a built-in list of boot- and logon-critical executables with a clear message.
+- **Services can no longer disable a boot-critical service behind a generic prompt.** Disabling a service classified as Critical (for example Remote Procedure Call or DCOM Server Process Launcher) could stop Windows from booting or signing in, yet the confirmation read the same as for any safe-to-disable service. Critical services are now refused outright with an explanation of why.
+- **Uninstaller no longer runs unvalidated arguments through `rundll32`/`MsiExec`.** A per-user uninstall entry (which can be written without administrator rights) could point these trusted system binaries at an arbitrary DLL or package, which they would then execute with the app's elevation. The uninstaller now requires the `rundll32` DLL to live under a trusted directory and restricts `MsiExec` to a product-code uninstall.
+- **File Shredder no longer crashes after a successful shred.** Once at least one item was shredded, the cleanup step that removes finished items ran off the UI thread and threw, aborting the operation on its normal success path. The shredding flow now resumes on the UI thread so completed items are removed cleanly.
+
 ## [1.20.29] - 2026-06-17
 
 ### Fixed

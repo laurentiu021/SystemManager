@@ -137,6 +137,19 @@ public sealed partial class ServicesViewModel : ViewModelBase
     private async Task DisableServiceAsync(ServiceEntry? entry)
     {
         if (entry is null) return;
+
+        // A boot/logon-critical service must never be disabled: setting RpcSs,
+        // DcomLaunch, ProfSvc, lsass, etc. to Disabled can prevent Windows from
+        // booting or logging in. Refuse outright rather than hide the risk behind
+        // the same neutral confirm shown for safe-to-disable services. Checked
+        // before the elevation guard — it can never proceed regardless of admin.
+        if (entry.SafetyLevel == SafetyLevel.Critical)
+        {
+            StatusMessage = $"⛔ \"{entry.DisplayName}\" is critical and cannot be disabled — {entry.SafetyDescription}";
+            Log.Warning("Refused to disable critical service: {ServiceName} ({DisplayName})", entry.Name, entry.DisplayName);
+            return;
+        }
+
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
         if (!DialogService.Instance.Confirm(

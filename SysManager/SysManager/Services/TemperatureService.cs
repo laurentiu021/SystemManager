@@ -260,8 +260,10 @@ public sealed class TemperatureService
                 }
             }
         }
-        catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { }
-        catch (DllNotFoundException) { }
+        // No NVIDIA GPU / driver present is the normal case on AMD/Intel systems —
+        // skip GPU temperatures silently rather than logging noise on every poll.
+        catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { /* no NVIDIA GPU */ }
+        catch (DllNotFoundException) { /* nvapi.dll not installed */ }
         catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
         {
             Log.Debug("NVIDIA API init failed: {Error}", ex.Message);

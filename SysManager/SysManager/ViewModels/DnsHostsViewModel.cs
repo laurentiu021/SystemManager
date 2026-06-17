@@ -256,7 +256,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             await RefreshDnsAsync();
             Log.Information("DNS restored to previous setting ({Label})", label);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { /* expected when the view is closed mid-operation */ }
         catch (Exception ex)
         {
             Application.Current?.Dispatcher?.Invoke(() =>

@@ -41,7 +41,7 @@
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageReference Include="System.Management" Version="10.0.8" />
+    <PackageReference Include="System.Management" Version="10.0.9" />
     <PackageReference Include="System.Management.Automation" Version="7.6.2" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.8" />
   </ItemGroup>

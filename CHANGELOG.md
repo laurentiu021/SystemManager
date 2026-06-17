@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.28] - 2026-06-17
+
+### Fixed
+- **Dashboard alert checks are more robust.** The "estimated time remaining" hint that appears while a dashboard check is still running updated its on-screen state from a background thread, which could occasionally fail to display or glitch; it now updates on the UI thread like every other dashboard check. Separately, two error paths (a failed dashboard check and a failed quick action) now record the underlying error in the log so failures can be diagnosed instead of vanishing silently. No visible change in normal use.
+
 ## [1.20.26] - 2026-06-16
 
 ### Fixed

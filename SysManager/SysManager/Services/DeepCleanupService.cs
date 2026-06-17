@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Runtime.InteropServices;
 using Serilog;
 using SysManager.Models;
 
@@ -16,7 +17,7 @@ namespace SysManager.Services;
 /// Both Scan and Clean accept an <see cref="IProgress{T}"/> so the UI can
 /// show a determinate progress bar and the current bucket being scanned.
 /// </summary>
-public sealed class DeepCleanupService
+public sealed partial class DeepCleanupService
 {
     public sealed record ScanProgress(int Current, int Total, string CategoryName);
 
@@ -38,7 +39,8 @@ public sealed class DeepCleanupService
         string Description,
         string[] Paths,
         TimeSpan? OlderThan = null,
-        bool IsDestructiveHint = false);
+        bool IsDestructiveHint = false,
+        bool IsRecycleBin = false);
 
     private static List<Def> BuildDefinitions()
     {
@@ -118,7 +120,8 @@ public sealed class DeepCleanupService
                 DriveInfo.GetDrives()
                     .Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
                     .Select(d => Path.Combine(d.RootDirectory.FullName, "$Recycle.Bin"))
-                    .ToArray()),
+                    .ToArray(),
+                IsRecycleBin: true),
 
             new("Steam — browser & depot cache",
                 "Steam web browser cache, HTML cache, app cache and depot lookup cache. Doesn't touch game files, downloads or logins.",
@@ -241,6 +244,7 @@ public sealed class DeepCleanupService
                 SkippedCount = skipped,
                 OlderThan = d.OlderThan,
                 IsDestructiveHint = d.IsDestructiveHint,
+                IsRecycleBin = d.IsRecycleBin,
                 IsSelected = size > 0 && !d.IsDestructiveHint
             });
         }
@@ -328,6 +332,27 @@ public sealed class DeepCleanupService
             if (ct.IsCancellationRequested) break;
             var cat = selected[idx];
             progress?.Report(new ScanProgress(idx + 1, total, "Cleaning " + cat.Name));
+
+            // The Recycle Bin is not an ordinary folder: each `$Recycle.Bin\<SID>`
+            // holds paired $I/$R index/data files plus a system desktop.ini, and the
+            // shell tracks bin state in its own structures. Deleting those files
+            // directly — and removing the per-SID folder out from under the shell —
+            // leaves the bin inconsistent (ghost/undeletable items in Explorer).
+            // Empty it through the documented shell API instead, matching TuneUp.
+            if (cat.IsRecycleBin)
+            {
+                var sizeBefore = cat.TotalSizeBytes;
+                if (EmptyRecycleBin())
+                {
+                    freed += sizeBefore;
+                    filesDeleted += cat.FileCount;
+                }
+                else
+                {
+                    errors.Add($"{cat.Name}: the Recycle Bin could not be emptied.");
+                }
+                continue;
+            }
 
             var cutoff = cat.OlderThan.HasValue ? DateTime.UtcNow - cat.OlderThan.Value : (DateTime?)null;
             foreach (var path in cat.Paths)
@@ -452,5 +477,33 @@ public sealed class DeepCleanupService
         }
         catch (IOException) { return true; }
         catch (UnauthorizedAccessException) { return true; }
+    }
+
+    // ---------- Recycle Bin (shell API, not raw file delete) ----------
+
+    /// <summary>
+    /// Empties the Recycle Bin on all drives via the documented shell API.
+    /// Returns true on success (or when the bin is already empty).
+    /// </summary>
+    private static bool EmptyRecycleBin()
+    {
+        try
+        {
+            // SHEmptyRecycleBin with SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND.
+            int hr = NativeMethods.SHEmptyRecycleBin(IntPtr.Zero, null, 0x00000007);
+            // S_OK (0) = success, 0x80070012 (ERROR_NO_MORE_FILES) = bin already empty.
+            return hr >= 0 || unchecked((uint)hr) == 0x80070012;
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Warning("Deep cleanup: empty recycle bin failed: {Error}", ex.Message);
+            return false;
+        }
+    }
+
+    private static partial class NativeMethods
+    {
+        [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "SHEmptyRecycleBinW")]
+        internal static partial int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
     }
 }

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.27] - 2026-06-17
+
+### Fixed
+- **Deep Cleanup now empties the Recycle Bin through the Windows shell instead of deleting its files directly.** The "Recycle Bin (all drives)" category used the same raw file-delete path as ordinary caches, removing the internal `$Recycle.Bin` index/data files and per-account folders directly. That could leave the Recycle Bin in an inconsistent state (ghost or undeletable items in Explorer) until the next sign-in. It now empties the bin via the documented shell API, the same safe method used elsewhere in the app.
+
 ## [1.20.26] - 2026-06-16
 
 ### Fixed

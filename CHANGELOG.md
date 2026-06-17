@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.32] - 2026-06-17
+
+### Fixed
+- **Windows Update no longer leaks system resources during scan and install.** Each scanned and installed update holds several underlying Windows Update COM objects (the update's identity, category list, downloader, and child collections). Some of these were only released on the success path, so a cancelled scan, a failed download, or a category match leaked a handle every time. All of them are now released on every path, including errors and cancellation.
+
 ## [1.20.31] - 2026-06-17
 
 ### Fixed

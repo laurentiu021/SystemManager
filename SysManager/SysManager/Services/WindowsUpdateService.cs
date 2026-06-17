@@ -87,24 +87,12 @@ public sealed class WindowsUpdateService
 
             ct.ThrowIfCancellationRequested();
             Emit("Connecting to Windows Update…");
-            var session = CreateSession();
-            var searcher = session.CreateUpdateSearcher();
-            var search = searcher.Search("IsInstalled=0");
-            var liveUpdates = search.Updates;
-            ct.ThrowIfCancellationRequested();
 
-            // Build a UpdateID -> live COM object map for the requested entries.
+            // Declared outside the try so the finally releases every COM object even
+            // when a cancellation check or the map-build throws during setup (these
+            // previously sat on the happy path and leaked on any throw).
+            dynamic? session = null, searcher = null, search = null, liveUpdates = null;
             var byId = new Dictionary<string, dynamic>(StringComparer.OrdinalIgnoreCase);
-            var liveCount = (int)liveUpdates.Count;
-            for (int i = 0; i < liveCount; i++)
-            {
-                var u = liveUpdates.Item(i);
-                var id = (string)u.Identity.UpdateID;
-                if (!byId.ContainsKey(id))
-                    byId[id] = u;
-                else
-                    Marshal.FinalReleaseComObject(u);
-            }
 
             int installed = 0;
             int failed = 0;
@@ -112,6 +100,27 @@ public sealed class WindowsUpdateService
 
             try
             {
+                session = CreateSession();
+                searcher = session.CreateUpdateSearcher();
+                search = searcher.Search("IsInstalled=0");
+                liveUpdates = search.Updates;
+                ct.ThrowIfCancellationRequested();
+
+                // Build a UpdateID -> live COM object map for the requested entries.
+                var liveCount = (int)liveUpdates.Count;
+                for (int i = 0; i < liveCount; i++)
+                {
+                    var u = liveUpdates.Item(i);
+                    dynamic? idObj = null;
+                    string id;
+                    try { idObj = u.Identity; id = (string)idObj.UpdateID; }
+                    finally { if (idObj is not null) Marshal.FinalReleaseComObject(idObj); }
+                    if (!byId.ContainsKey(id))
+                        byId[id] = u;
+                    else
+                        Marshal.FinalReleaseComObject(u);
+                }
+
                 int idx = 0;
                 foreach (var entry in entries)
                 {
@@ -137,11 +146,20 @@ public sealed class WindowsUpdateService
                         {
                             Emit("  Downloading…");
                             var dl = session.CreateUpdateDownloader();
-                            dl.Updates = coll;
-                            var dlResult = dl.Download();
-                            var dlCode = (int)dlResult.ResultCode;
-                            Marshal.FinalReleaseComObject(dlResult);
-                            Marshal.FinalReleaseComObject(dl);
+                            int dlCode;
+                            try
+                            {
+                                dl.Updates = coll;
+                                var dlResult = dl.Download();
+                                dlCode = (int)dlResult.ResultCode;
+                                Marshal.FinalReleaseComObject(dlResult);
+                            }
+                            finally
+                            {
+                                // Release the downloader even if Download() throws,
+                                // otherwise a failed download leaks the COM object.
+                                Marshal.FinalReleaseComObject(dl);
+                            }
 
                             if (dlCode != 2)
                             {
@@ -201,10 +219,10 @@ public sealed class WindowsUpdateService
             finally
             {
                 foreach (var u in byId.Values) Marshal.FinalReleaseComObject(u);
-                Marshal.FinalReleaseComObject(liveUpdates);
-                Marshal.FinalReleaseComObject(search);
-                Marshal.FinalReleaseComObject(searcher);
-                Marshal.FinalReleaseComObject(session);
+                if (liveUpdates is not null) Marshal.FinalReleaseComObject(liveUpdates);
+                if (search is not null) Marshal.FinalReleaseComObject(search);
+                if (searcher is not null) Marshal.FinalReleaseComObject(searcher);
+                if (session is not null) Marshal.FinalReleaseComObject(session);
             }
 
             return new InstallReport(installed, failed, reboot);
@@ -235,12 +253,27 @@ public sealed class WindowsUpdateService
         try { size = (long)(decimal)u.MaxDownloadSize; }
         catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "Windows Update: MaxDownloadSize not exposed for {Title}", title); }
         catch (COMException ex) { Serilog.Log.Debug(ex, "Windows Update: COM error reading size for {Title}", title); }
+
+        // u.Identity returns a fresh IUpdateIdentity RCW each access — capture once and
+        // release it, otherwise every scanned update leaks an Identity COM object.
+        string updateId;
+        dynamic? identity = null;
+        try
+        {
+            identity = u.Identity;
+            updateId = (string)identity.UpdateID;
+        }
+        finally
+        {
+            if (identity is not null) Marshal.FinalReleaseComObject(identity);
+        }
+
         return new UpdateEntry
         {
             Title = title,
             KB = kb,
             Size = FormatSize(size),
-            UpdateId = (string)u.Identity.UpdateID,
+            UpdateId = updateId,
             IsHidden = (bool)u.IsHidden,
             Category = ClassifyCategory(title, u),
             Status = "Available",
@@ -281,9 +314,10 @@ public sealed class WindowsUpdateService
         // COM Categories collection — check Type when available.
         if (u is not null)
         {
+            dynamic? cats = null;
             try
             {
-                var cats = u.Categories;
+                cats = u.Categories;
                 int n = (int)cats.Count;
                 for (int i = 0; i < n; i++)
                 {
@@ -294,10 +328,15 @@ public sealed class WindowsUpdateService
                     if (name.Equals("Upgrades", StringComparison.OrdinalIgnoreCase)) return "Feature upgrade";
                     if (name.Contains("Servicing", StringComparison.OrdinalIgnoreCase)) return "Servicing";
                 }
-                Marshal.FinalReleaseComObject(cats);
             }
             catch (COMException ex) { Serilog.Log.Debug(ex, "ClassifyCategory: COM error reading Categories"); }
             catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "ClassifyCategory: dynamic binding error"); }
+            finally
+            {
+                // Release the Categories collection even when an early return fires on
+                // a match inside the loop (previously the release was skipped on match).
+                if (cats is not null) Marshal.FinalReleaseComObject(cats);
+            }
         }
 
         if (title.Contains("Driver", StringComparison.OrdinalIgnoreCase) ||

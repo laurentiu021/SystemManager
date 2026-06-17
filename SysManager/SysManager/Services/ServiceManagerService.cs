@@ -165,6 +165,23 @@ public sealed partial class ServiceManagerService
                 $"Could not change startup type of '{serviceName}' to '{startType}' (sc.exe exit code {exit}).");
     }
 
+    /// <summary>
+    /// Maps a <see cref="ServiceController.StartType"/> string (the
+    /// <see cref="ServiceStartMode"/> name, e.g. "Automatic", "Manual", "Disabled")
+    /// to the corresponding sc.exe <c>start=</c> token, so a disabled service can be
+    /// re-enabled to its exact previous startup type instead of always to Manual.
+    /// Falls back to "demand" (Manual) for "Disabled" or any unrecognized value, since
+    /// re-enabling to Disabled would be a no-op.
+    /// </summary>
+    internal static string StartTypeToScToken(string? startType) => startType switch
+    {
+        "Automatic" => "auto",
+        "Manual" => "demand",
+        "Boot" => "boot",
+        "System" => "system",
+        _ => "demand",
+    };
+
     /// <summary>Refresh the status of a single service entry.</summary>
     public static void RefreshStatus(ServiceEntry entry)
     {

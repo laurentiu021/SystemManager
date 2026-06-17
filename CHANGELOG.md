@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.34] - 2026-06-17
+
+### Fixed
+- **Re-enabling a service now restores its original startup type instead of always setting it to Manual.** When you disabled a service, SysManager forgot what its startup type had been, and "Enable" always set it to Manual — so a service that was originally Automatic (for example) would not start on the next boot as it used to. Disabling now remembers the previous startup type and Enable restores it exactly.
+
 ## [1.20.33] - 2026-06-17
 
 ### Fixed

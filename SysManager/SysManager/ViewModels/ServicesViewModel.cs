@@ -156,12 +156,17 @@ public sealed partial class ServicesViewModel : ViewModelBase
             $"Disable service \"{entry.DisplayName}\"?\n\nThis prevents the service from starting automatically.",
             "Disable Service — Confirm")) return;
 
+        // Snapshot the current startup type BEFORE disabling so Enable can restore the
+        // exact previous type (e.g. Automatic) instead of always falling back to Manual.
+        var previous = entry.StartType;
+
         try
         {
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, "disabled", _ps);
+            entry.PreviousStartType = previous;
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} set to Disabled.";
-            Log.Information("Service disabled: {ServiceName}", entry.Name);
+            Log.Information("Service disabled: {ServiceName} (was {Previous})", entry.Name, previous);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Disable service failed: {ex.Message}"; }
     }
@@ -172,12 +177,17 @@ public sealed partial class ServicesViewModel : ViewModelBase
         if (entry is null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
+        // Restore the startup type the service had before SysManager disabled it. If we
+        // never disabled it this session, fall back to Manual (the conservative default).
+        var targetToken = ServiceManagerService.StartTypeToScToken(entry.PreviousStartType);
+
         try
         {
-            await ServiceManagerService.SetStartupTypeAsync(entry.Name, "demand", _ps);
+            await ServiceManagerService.SetStartupTypeAsync(entry.Name, targetToken, _ps);
+            entry.PreviousStartType = null;
             ServiceManagerService.RefreshStatus(entry);
-            StatusMessage = $"✓ {entry.DisplayName} set to Manual.";
-            Log.Information("Service enabled (manual): {ServiceName}", entry.Name);
+            StatusMessage = $"✓ {entry.DisplayName} set to {entry.StartType}.";
+            Log.Information("Service enabled: {ServiceName} -> {StartType}", entry.Name, entry.StartType);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Enable service failed: {ex.Message}"; }
     }

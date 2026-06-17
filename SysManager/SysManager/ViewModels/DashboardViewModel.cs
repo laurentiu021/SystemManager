@@ -329,14 +329,20 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private static async Task RunAlertScanAsync(DashboardAlert alert, Func<DashboardAlert, Task> scanner)
     {
         // Fire-and-forget ETA hint: after 5s of loading, surface a "remaining" note.
+        // The mutation must run on the UI thread — `alert` is a bound ObservableObject,
+        // so raising PropertyChanged off the thread-pool thread can throw or fail to
+        // update. Marshal onto the dispatcher exactly like the scanner bodies do.
         _ = Task.Run(async () =>
         {
             await Task.Delay(5000);
-            if (alert.State == AlertLoadingState.Loading)
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                alert.ShowEta = true;
-                alert.Eta = "~10s remaining";
-            }
+                if (alert.State == AlertLoadingState.Loading)
+                {
+                    alert.ShowEta = true;
+                    alert.Eta = "~10s remaining";
+                }
+            });
         });
 
         try
@@ -345,6 +351,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            Log.Debug(ex, "Dashboard alert scan failed: {Alert}", alert.Title);
             alert.Title = $"Check failed: {ex.Message}";
             alert.Severity = AlertSeverity.Yellow;
         }
@@ -692,6 +699,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            Log.Debug(ex, "Quick action {Name} failed", name);
             QuickActionStatus = "Failed";
             QuickActionDetail = ex.Message;
             IsQuickActionDone = true;

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.26] - 2026-06-16
+
+### Fixed
+- **The About → System Info diagnostics no longer leak system handles.** Building the environment summary (CPU, RAM, GPU, display, and OS lines) queried Windows for hardware details but never released the query result sets, leaking a small COM handle on each refresh. Every query now disposes its results, matching how the rest of the app handles these reads. No change to the information shown.
+
 ## [1.20.25] - 2026-06-16
 
 ### Fixed

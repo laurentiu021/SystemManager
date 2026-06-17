@@ -27,11 +27,14 @@ public sealed partial class WingetService
     /// </summary>
     public async Task<List<AppPackage>> ListUpgradableAsync(CancellationToken ct = default)
     {
-        List<string> captured = [];
+        // LineReceived fires from both the stdout and stderr reader threads
+        // concurrently, so the sink must be thread-safe — a plain List<T>.Add can
+        // corrupt the backing array or drop a line under the race.
+        var captured = new System.Collections.Concurrent.ConcurrentQueue<string>();
 
         void Collect(PowerShellLine l)
         {
-            if (l.Kind == OutputKind.Output) captured.Add(l.Text);
+            if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
         }
 
         _runner.LineReceived += Collect;
@@ -42,7 +45,7 @@ public sealed partial class WingetService
         }
         finally { _runner.LineReceived -= Collect; }
 
-        return ParseUpgradeTable(captured);
+        return ParseUpgradeTable(captured.ToList());
     }
 
     private static List<AppPackage> ParseUpgradeTable(List<string> lines)

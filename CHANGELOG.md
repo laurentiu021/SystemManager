@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.38] - 2026-06-17
+
+### Fixed
+- **External command output is no longer occasionally truncated.** Results from tools like the network repair commands, chkdsk, and winget are read on background threads; the app could snapshot the captured text a moment before the last lines arrived, dropping them. The runner now waits for the output streams to fully drain before returning.
+- **The Speed Test no longer leaves a stray `speedtest.exe` running if it is cancelled or times out mid-transfer.** Cancellation during the result read could skip the cleanup that kills the CLI process; the process is now always terminated on cancellation.
+- **Captured output from chkdsk and the winget upgrade scan is now collected safely.** Both gathered command output into a list that two background reader threads wrote to at once, which could drop or corrupt lines; they now use a thread-safe collector.
+
 ## [1.20.37] - 2026-06-17
 
 ### Fixed

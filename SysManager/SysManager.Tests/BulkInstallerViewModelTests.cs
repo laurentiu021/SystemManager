@@ -98,4 +98,19 @@ public class BulkInstallerViewModelTests
         Assert.Contains("Custom", vm.Categories);
         Assert.Equal(13, vm.Categories.Count);
     }
+
+    // ── re-entrancy guard (regression: shared CTS disposed mid-install) ──
+
+    [Fact]
+    public void InstallSelectedCommand_DisabledWhileBusy()
+    {
+        var vm = CreateVm();
+        Assert.True(vm.InstallSelectedCommand.CanExecute(null));   // idle → clickable
+
+        vm.IsBusy = true;
+        Assert.False(vm.InstallSelectedCommand.CanExecute(null));  // running → blocked (no re-entry)
+
+        vm.IsBusy = false;
+        Assert.True(vm.InstallSelectedCommand.CanExecute(null));   // done → clickable again
+    }
 }

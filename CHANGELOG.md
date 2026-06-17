@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.37] - 2026-06-17
+
+### Fixed
+- **Windows Update and Bulk Installer buttons no longer cause an error when clicked during a running operation.** The toolbar actions (List updates / History / Pending reboot / Install selected, and Bulk Installer's Install Selected) stayed clickable while one was already running; a second click could cancel the first operation's work and crash it. These actions are now disabled while one is in progress and re-enable when it finishes.
+
 ## [1.20.36] - 2026-06-17
 
 ### Fixed

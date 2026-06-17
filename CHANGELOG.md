@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.39] - 2026-06-17
+
+### Fixed
+- **A transient system-info failure can no longer crash the app from the tray.** The system tray refreshes a CPU/RAM/uptime tooltip on a background timer; if the underlying WMI query failed transiently (for example "RPC server unavailable"), the error could go unhandled and bring the whole app down. The tray refresh now handles those failures and simply skips that tick.
+
 ## [1.20.38] - 2026-06-17
 
 ### Fixed

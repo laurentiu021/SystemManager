@@ -238,4 +238,37 @@ public class ServicesViewModelTests
         vm.FilterText = "Xbox";
         Assert.Single(vm.Services);
     }
+
+    // ── DisableService: boot-critical guard (regression) ──
+
+    [Fact]
+    public async Task DisableService_CriticalService_IsRefusedAndNotMutated()
+    {
+        // A Critical service (e.g. BITS in the test data, or RpcSs/DcomLaunch in
+        // production) must never be disabled — disabling a boot-critical service can
+        // prevent Windows from starting. The command must short-circuit with a refusal
+        // message before any elevation/confirm/PowerShell call.
+        var critical = new ServiceEntry
+        {
+            Name = "RpcSs", DisplayName = "Remote Procedure Call (RPC)",
+            Status = "Running", StartType = "Automatic",
+            SafetyLevel = Models.SafetyLevel.Critical,
+            SafetyDescription = "Core Windows IPC. System will not function without it."
+        };
+        var vm = CreateWithData(new List<ServiceEntry> { critical });
+
+        await vm.DisableServiceCommand.ExecuteAsync(critical);
+
+        Assert.Contains("cannot be disabled", vm.StatusMessage);
+        // The entry's startup type must be untouched by the refused command.
+        Assert.Equal("Automatic", critical.StartType);
+    }
+
+    [Fact]
+    public async Task DisableService_NullEntry_DoesNotThrow()
+    {
+        var vm = CreateWithData();
+        var ex = await Record.ExceptionAsync(() => vm.DisableServiceCommand.ExecuteAsync(null));
+        Assert.Null(ex);
+    }
 }

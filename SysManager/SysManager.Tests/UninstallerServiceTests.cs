@@ -35,6 +35,56 @@ public class UninstallerServiceTests
     public void IsUnderTrustedDirectory_UntrustedLocation_IsNotTrusted()
         => Assert.False(UninstallerService.IsUnderTrustedDirectory(@"C:\Temp\random\app.exe"));
 
+    // ── ValidateTrustedBinaryArgs (regression: LPE via HKCU UninstallString) ──
+
+    [Fact]
+    public void ValidateTrustedBinaryArgs_Rundll32_DllOutsideTrustedDir_Throws()
+    {
+        // rundll32 would load an attacker-controlled DLL from a writable temp path
+        // with our elevation — must be rejected.
+        var ex = Record.Exception(() =>
+            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", @"C:\Temp\evil.dll,EntryPoint"));
+        Assert.IsType<InvalidOperationException>(ex);
+    }
+
+    [Fact]
+    public void ValidateTrustedBinaryArgs_Rundll32_DllUnderWindows_IsAllowed()
+    {
+        var sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        var dll = System.IO.Path.Combine(sys, "shell32.dll");
+        var ex = Record.Exception(() =>
+            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", $"\"{dll}\",Control_RunDLL"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ValidateTrustedBinaryArgs_Rundll32_NoDllPath_Throws()
+    {
+        var ex = Record.Exception(() =>
+            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", "   "));
+        Assert.IsType<InvalidOperationException>(ex);
+    }
+
+    [Fact]
+    public void ValidateTrustedBinaryArgs_MsiExec_ProductCodeUninstall_IsAllowed()
+    {
+        var ex = Record.Exception(() =>
+            UninstallerService.ValidateTrustedBinaryArgs(
+                "MsiExec.exe", "/X{0F2C3A4B-1234-5678-9ABC-DEF012345678} /quiet /norestart"));
+        Assert.Null(ex);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Temp\evil.msi /quiet")]            // arbitrary package path, not /X{GUID}
+    [InlineData(@"/I{0F2C3A4B-1234-5678-9ABC-DEF012345678}")] // install, not uninstall
+    [InlineData(@"/X notaguid")]                         // /X without a product code
+    public void ValidateTrustedBinaryArgs_MsiExec_NonProductCode_Throws(string args)
+    {
+        var ex = Record.Exception(() =>
+            UninstallerService.ValidateTrustedBinaryArgs("MsiExec.exe", args));
+        Assert.IsType<InvalidOperationException>(ex);
+    }
+
     // ── ParseListTable ──
 
     [Fact]

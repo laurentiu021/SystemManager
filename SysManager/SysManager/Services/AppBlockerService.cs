@@ -27,6 +27,21 @@ public sealed partial class AppBlockerService : IAppBlockerService
     private const string IfeoPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
     private const string BlockerDebugger = @"C:\Windows\System32\SysManager_Blocked.exe";
 
+    /// <summary>
+    /// Boot- and logon-critical executables that must never be blocked. An IFEO
+    /// Debugger redirection on these is applied by the kernel/session manager during
+    /// boot and login; blocking one (e.g. winlogon.exe or lsass.exe) causes a fatal
+    /// boot/login failure that this app can no longer launch to undo. Mirrors the
+    /// system-process set in <see cref="IconExtractorService"/>, restricted to the
+    /// processes whose absence breaks startup.
+    /// </summary>
+    private static readonly HashSet<string> BootCriticalExecutables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "winlogon.exe", "wininit.exe", "csrss.exe", "smss.exe", "services.exe",
+        "lsass.exe", "lsaiso.exe", "fontdrvhost.exe", "dwm.exe", "logonui.exe",
+        "explorer.exe", "svchost.exe", "ctfmon.exe", "userinit.exe", "spoolsv.exe"
+    };
+
     private readonly RegistryKey _baseKey;
 
     /// <summary>
@@ -51,6 +66,15 @@ public sealed partial class AppBlockerService : IAppBlockerService
         if (!ExeNamePattern().IsMatch(exeName))
         {
             Log.Warning("Rejected invalid exeName: {ExeName}", exeName);
+            return false;
+        }
+
+        // Never block a boot/logon-critical process: an IFEO redirection here is
+        // honoured during boot/login and would render Windows unbootable (reboot
+        // loop / BSOD) with no way to launch this app to unblock it.
+        if (BootCriticalExecutables.Contains(exeName))
+        {
+            Log.Warning("Refusing to block boot-critical executable: {ExeName}", exeName);
             return false;
         }
 

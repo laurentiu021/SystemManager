@@ -156,12 +156,17 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     if (item.IsFolder)
                     {
                         item.Status = $"Shredding pass 1/{totalPasses}...";
-                        await _service.ShredFolderAsync(item.Path, SelectedMethod, itemProgress, ct).ConfigureAwait(false);
+                        // No ConfigureAwait(false): this is the UI-facing command body, so the
+                        // continuation must resume on the captured Dispatcher. The post-await code
+                        // mutates the bound Items collection (RemoveAt in finally) and item.Status,
+                        // which throw if run off the UI thread. The service's internal awaits keep
+                        // ConfigureAwait(false).
+                        await _service.ShredFolderAsync(item.Path, SelectedMethod, itemProgress, ct);
                     }
                     else
                     {
                         item.Status = $"Shredding pass 1/{totalPasses}...";
-                        await _service.ShredFileAsync(item.Path, SelectedMethod, itemProgress, ct).ConfigureAwait(false);
+                        await _service.ShredFileAsync(item.Path, SelectedMethod, itemProgress, ct);
                     }
 
                     item.Status = "Done";

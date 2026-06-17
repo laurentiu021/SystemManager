@@ -229,19 +229,23 @@ public sealed class SpeedTestService
         // Read stdout and stderr in parallel to prevent pipe buffer deadlock.
         // If one pipe fills while the other is being read sequentially, the
         // child process blocks indefinitely (classic Windows pipe deadlock).
-        var stdoutTask = proc.StandardOutput.ReadToEndAsync(linked);
-        var stderrTask = proc.StandardError.ReadToEndAsync(linked);
-        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-        var stdout = await stdoutTask.ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
-
+        string stdout, stderr;
         try
         {
+            var stdoutTask = proc.StandardOutput.ReadToEndAsync(linked);
+            var stderrTask = proc.StandardError.ReadToEndAsync(linked);
+            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            stdout = await stdoutTask.ConfigureAwait(false);
+            stderr = await stderrTask.ConfigureAwait(false);
+
             await proc.WaitForExitAsync(linked).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            // Timeout or user cancellation — kill the orphan process
+            // Timeout or user cancellation can hit during the pipe reads OR the wait —
+            // kill the child either way so speedtest.exe is never orphaned. (Previously
+            // the kill only covered WaitForExitAsync, so a cancel during the reads
+            // leaked the process.)
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
             catch (InvalidOperationException) { /* already exited */ }
             throw;

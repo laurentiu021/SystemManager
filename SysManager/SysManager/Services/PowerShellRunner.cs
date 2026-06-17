@@ -212,6 +212,14 @@ public sealed class PowerShellRunner : IPowerShellRunner
         using var reg = cancellationToken.Register(() => { try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } });
         await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
+        // WaitForExitAsync returns when the process exits, but the asynchronous
+        // BeginOutputReadLine/BeginErrorReadLine pumps may not have raised their final
+        // lines yet — callers that snapshot captured output immediately can lose the
+        // last lines. The parameterless WaitForExit() blocks until both readers have
+        // flushed and reached end-of-stream. Cheap here (the process has already exited)
+        // and only reached when not cancelled.
+        await Task.Run(proc.WaitForExit, CancellationToken.None).ConfigureAwait(false);
+
         return proc.ExitCode;
     }
 

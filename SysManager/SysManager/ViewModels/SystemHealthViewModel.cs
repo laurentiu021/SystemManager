@@ -269,8 +269,11 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             // the text rather than relying solely on the exit code. chkdsk
             // may return non-zero even on healthy disks (e.g. when the
             // volume is in use or /scan is not supported on the filesystem).
-            var captured = new System.Collections.Generic.List<string>();
-            void OnLine(PowerShellLine l) => captured.Add(l.Text);
+            // LineReceived fires from both the stdout and stderr reader threads
+            // concurrently, so the sink must be thread-safe — a plain List<T>.Add can
+            // corrupt the backing array or drop a line under the race.
+            var captured = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            void OnLine(PowerShellLine l) => captured.Enqueue(l.Text);
             _runner.LineReceived += OnLine;
 
             int exit;
@@ -280,7 +283,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             }
             finally { _runner.LineReceived -= OnLine; }
 
-            var verdict = ParseChkdskVerdict(captured, exit);
+            var verdict = ParseChkdskVerdict(captured.ToArray(), exit);
             if (target is not null) target.Status = verdict;
             StatusMessage = $"chkdsk {driveLetter} done — {verdict}.";
             Log.Information("chkdsk completed on {Drive}: exit {ExitCode}, verdict {Verdict}", driveLetter, exit, verdict);

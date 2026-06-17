@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.29] - 2026-06-17
+
+### Fixed
+- **Speed Test no longer reports an inflated upload speed when the server cuts the upload short.** The upload test always credited the full 50 MB payload against the elapsed time, even when the server rejected the request early and only part of the data was sent — producing an unrealistically high number. It now reports a failed measurement if the server rejects the upload, and otherwise measures the bytes actually sent, so the upload speed reflects reality.
+
 ## [1.20.26] - 2026-06-16
 
 ### Fixed

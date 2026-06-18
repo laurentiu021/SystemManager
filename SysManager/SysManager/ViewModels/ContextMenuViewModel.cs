@@ -144,7 +144,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ApplyPreset(object? parameter)
+    private async Task ApplyPresetAsync(object? parameter)
     {
         if (parameter is not string presetId) return;
         if (presetId == "custom")
@@ -173,34 +173,42 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
         try
         {
-            if (needsRestart)
+            // Registry writes + RestartExplorer are synchronous and can take a moment
+            // (Explorer restart especially) — run them off the UI thread so the window
+            // stays responsive. No UI state is touched inside the Task.Run body.
+            var (disabled, enabled) = await Task.Run(() =>
             {
-                if (preset.ForcesClassicMenu)
-                    ContextMenuService.EnableClassicMenu();
-                else
-                    ContextMenuService.DisableClassicMenu();
-            }
+                if (needsRestart)
+                {
+                    if (preset.ForcesClassicMenu)
+                        ContextMenuService.EnableClassicMenu();
+                    else
+                        ContextMenuService.DisableClassicMenu();
+                }
 
-            // Disable all third-party entries to restore clean default
-            var disabled = 0;
-            foreach (var entry in _allEntries.Where(e =>
-                         !e.IsSystemEntry && e.IsEnabled && !IsDefaultWindowsEntry(e)))
-            {
-                if (_service.DisableEntry(entry))
-                    disabled++;
-            }
+                // Disable all third-party entries to restore clean default
+                var dis = 0;
+                foreach (var entry in _allEntries.Where(e =>
+                             !e.IsSystemEntry && e.IsEnabled && !IsDefaultWindowsEntry(e)))
+                {
+                    if (_service.DisableEntry(entry))
+                        dis++;
+                }
 
-            // Enable any default Windows entries that were previously disabled
-            var enabled = 0;
-            foreach (var entry in _allEntries.Where(e =>
-                         !e.IsSystemEntry && !e.IsEnabled && IsDefaultWindowsEntry(e)))
-            {
-                if (_service.EnableEntry(entry))
-                    enabled++;
-            }
+                // Enable any default Windows entries that were previously disabled
+                var en = 0;
+                foreach (var entry in _allEntries.Where(e =>
+                             !e.IsSystemEntry && !e.IsEnabled && IsDefaultWindowsEntry(e)))
+                {
+                    if (_service.EnableEntry(entry))
+                        en++;
+                }
 
-            if (needsRestart)
-                ContextMenuService.RestartExplorer();
+                if (needsRestart)
+                    ContextMenuService.RestartExplorer();
+
+                return (dis, en);
+            });
 
             IsClassicMenuEnabled = preset.ForcesClassicMenu;
             ActivePresetId = presetId;

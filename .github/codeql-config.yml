@@ -32,9 +32,16 @@ query-filters:
   # or (string)u.Identity.UpdateID are load-bearing runtime conversions from dynamic
   # to the concrete type the code needs — removing them would propagate `dynamic` and
   # lose type safety. CodeQL sees the static type as object and reports a self-upcast.
+  # NOTE: the `path:` key is NOT honoured inside query-filters (only `id`/`tags` are),
+  # so a path-scoped exclude silently failed to suppress these. Exclude by id alone —
+  # this rule has zero legitimate hand-written hits across the codebase.
   - exclude:
       id: cs/useless-upcast
-      path: SysManager/SysManager/Services/WindowsUpdateService.cs
+  # cs/nested-if-statements is a pure readability suggestion (collapse nested ifs). The
+  # nested forms here read more clearly with their separate guard comments, and the rule
+  # also fires on [GeneratedRegex] source-generator output under obj/. Style, not a defect.
+  - exclude:
+      id: cs/nested-if-statements
   # cs/path-combine flags Path.Combine arguments that embed a directory separator
   # (which can silently discard earlier segments). Every occurrence here passes only
   # separator-free literals ("$Recycle.Bin", "Steam", "drivers"/"etc"/"hosts"), i.e.

@@ -12,6 +12,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Deleting broken shortcuts no longer freezes the window.** The Shortcut Cleaner ran the shell delete on the UI thread, so removing many shortcuts could hang the app until it finished; the delete now runs in the background.
 - **Loading the full installed-apps list no longer freezes the App Alerts tab.** "Show all installed apps" walked the entire registry uninstall tree on the UI thread; that scan now runs in the background.
 - **Refreshing the System Logs twice in a row no longer mixes results.** Starting a second refresh while one was running could let the cancelled run's leftover batches land in the new list. The Refresh button is now disabled while a scan is in progress.
+- **Applying a Context Menu preset no longer freezes the window.** Applying a preset ran the registry changes and the Explorer restart on the UI thread, briefly hanging the app; that work now runs in the background.
 
 ## [1.20.41] - 2026-06-17
 

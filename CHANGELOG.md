@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.41] - 2026-06-17
+
+### Fixed
+- **"Restore All" in Performance Mode now fully clears the saved baseline.** After restoring everything to the original state, the on-disk snapshot was left behind, so the next change reloaded the now-reverted values as its baseline — a later "Restore All" could then re-apply stale settings. The saved snapshot is now deleted when you restore all.
+- **Applying several performance tweaks at once can no longer race the baseline capture.** The independent Apply buttons (power plan, visual effects, Game Mode, Xbox Game Bar, GPU, processor state) each captured the "before" snapshot without coordination, so two run together could both think no baseline existed. Baseline capture is now serialized so the original state is recorded exactly once.
+
 ## [1.20.40] - 2026-06-17
 
 ### Fixed

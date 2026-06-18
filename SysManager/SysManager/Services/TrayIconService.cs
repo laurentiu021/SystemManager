@@ -161,6 +161,13 @@ public sealed class TrayIconService : IDisposable
             // async void must never throw — unhandled exceptions crash the app.
             Log.Warning("TrayIcon timer tick failed: {Error}", ex.Message);
         }
+        catch (Exception ex)
+        {
+            // Last-resort net: this is an async-void background timer, so ANY escaping
+            // exception (e.g. an unexpected WMI/COM fault) would crash the process.
+            // Swallow and log — a failed tooltip refresh must never take the app down.
+            Log.Warning(ex, "TrayIcon timer tick failed unexpectedly");
+        }
     }
 
     private async Task UpdateTooltipAsync()
@@ -188,6 +195,14 @@ public sealed class TrayIconService : IDisposable
         catch (System.Management.ManagementException ex)
         {
             Log.Warning("TrayIcon tooltip update failed: {Error}", ex.Message);
+        }
+        catch (System.Runtime.InteropServices.COMException ex)
+        {
+            // WMI commonly throws COMException on transient failures (RPC server
+            // unavailable 0x800706BA, repository errors). The background timer must
+            // never let this escape — OnTimerTick is async void, so an unhandled
+            // throw would crash the whole app.
+            Log.Warning("TrayIcon tooltip update failed (WMI COM error): 0x{HResult:X8}", ex.HResult);
         }
         catch (InvalidOperationException ex)
         {

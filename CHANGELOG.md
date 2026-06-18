@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.40] - 2026-06-17
+
+### Fixed
+- **The Health Score no longer fails outright when a system query hits a transient WMI error.** A repository or RPC fault while reading system info, disk health, or battery could throw an error the score didn't handle, failing the whole calculation; each source now degrades gracefully and the score is still produced from the rest.
+- **The memory-error check no longer counts a *passing* memory test as an error.** It counted every Windows Memory Diagnostic result, including the "no errors found" result (event 1101), as a problem; it now counts only the actual error result (event 1201).
+- **Known-folder lookup (Downloads, Documents, etc.) now falls back correctly when the system call fails.** The call's failure code was being ignored, so a failed lookup could return an empty path instead of using the standard fallback location; the result is now checked and the fallback applies.
+
+## [1.20.39] - 2026-06-17
+
+### Fixed
+- **A transient system-info failure can no longer crash the app from the tray.** The system tray refreshes a CPU/RAM/uptime tooltip on a background timer; if the underlying WMI query failed transiently (for example "RPC server unavailable"), the error could go unhandled and bring the whole app down. The tray refresh now handles those failures and simply skips that tick.
+
 ## [1.20.38] - 2026-06-17
 
 ### Fixed

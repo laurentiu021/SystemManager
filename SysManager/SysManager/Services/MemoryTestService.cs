@@ -40,25 +40,39 @@ public sealed class MemoryTestService
                     { ReverseDirection = true });
 
                 var cutoff = DateTime.Now.AddDays(-30);
-                System.Diagnostics.Eventing.Reader.EventRecord? rec;
-                while ((rec = reader.ReadEvent()) != null && !ct.IsCancellationRequested)
+                // Check cancellation BEFORE reading so a record read at the moment of
+                // cancellation isn't left to the GC; the read result is always wrapped
+                // in using(rec) below.
+                while (!ct.IsCancellationRequested && reader.ReadEvent() is { } rec)
                 {
                     using (rec)
                     {
                         if (rec.TimeCreated.HasValue && rec.TimeCreated.Value < cutoff) break;
 
                         var provider = rec.ProviderName ?? "";
+                        bool counted = false;
                         if (provider.Contains("WHEA"))
                         {
                             // Memory-related WHEA events are ID 17 / 18 / 19 / 20 typically
                             if (rec.Id == 17 || rec.Id == 18 || rec.Id == 19 || rec.Id == 20)
+                            {
                                 wheaCount++;
+                                counted = true;
+                            }
                         }
                         else if (provider.Contains("MemoryDiagnostics"))
                         {
-                            diagCount++;
+                            // 1201 = errors detected. 1101 = test passed (no errors), which
+                            // must NOT count as a memory error (previously any ID counted,
+                            // turning a clean test into a false warning).
+                            if (rec.Id == 1201)
+                            {
+                                diagCount++;
+                                counted = true;
+                            }
                         }
-                        if (rec.TimeCreated.HasValue && (lastError is null || rec.TimeCreated.Value > lastError))
+                        // Only advance lastError for records that actually count as errors.
+                        if (counted && rec.TimeCreated.HasValue && (lastError is null || rec.TimeCreated.Value > lastError))
                             lastError = rec.TimeCreated.Value;
                     }
                 }

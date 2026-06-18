@@ -47,16 +47,22 @@ public sealed class HealthScoreService
         IReadOnlyList<DiskHealthReport>? disks = null;
         BatteryInfo? battery = null;
 
+        // WMI enumeration (Get()) can throw COMException on repository/RPC failures, not
+        // just ManagementException — without this arm a transient WMI fault crashes the
+        // whole health score instead of degrading to a partial result.
         try { snapshot = await sysTask.ConfigureAwait(false); }
         catch (System.Management.ManagementException ex) { Log.Warning("HealthScore: system info failed: {Error}", ex.Message); }
+        catch (System.Runtime.InteropServices.COMException ex) { Log.Warning("HealthScore: system info WMI COM error: 0x{HResult:X8}", ex.HResult); }
         catch (InvalidOperationException ex) { Log.Warning("HealthScore: system info failed: {Error}", ex.Message); }
 
         try { disks = await diskTask.ConfigureAwait(false); }
         catch (System.Management.ManagementException ex) { Log.Warning("HealthScore: disk health failed: {Error}", ex.Message); }
+        catch (System.Runtime.InteropServices.COMException ex) { Log.Warning("HealthScore: disk health WMI COM error: 0x{HResult:X8}", ex.HResult); }
         catch (InvalidOperationException ex) { Log.Warning("HealthScore: disk health failed: {Error}", ex.Message); }
 
         try { battery = await batteryTask.ConfigureAwait(false); }
         catch (System.Management.ManagementException ex) { Log.Warning("HealthScore: battery failed: {Error}", ex.Message); }
+        catch (System.Runtime.InteropServices.COMException ex) { Log.Warning("HealthScore: battery WMI COM error: 0x{HResult:X8}", ex.HResult); }
         catch (InvalidOperationException ex) { Log.Warning("HealthScore: battery failed: {Error}", ex.Message); }
 
         // Compute component scores

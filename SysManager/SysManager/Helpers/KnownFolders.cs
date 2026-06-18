@@ -23,7 +23,7 @@ internal static partial class KnownFolders
     private static readonly Guid Videos = new("18989B1D-99B5-455B-841C-AB7C74E4DDFC");
 
     [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial void SHGetKnownFolderPath(
+    private static partial int SHGetKnownFolderPath(
         in Guid rfid,
         uint dwFlags,
         nint hToken,
@@ -49,27 +49,33 @@ internal static partial class KnownFolders
 
     private static string GetPath(Guid folderId)
     {
+        // The import returns the HRESULT. Because this is a plain (non-COM-interface)
+        // LibraryImport, a failure does NOT throw — it returns a non-zero HRESULT and a
+        // null/empty path. Check the HRESULT (and guard the path) and fall back to the
+        // SpecialFolder equivalent on any failure.
         try
         {
-            SHGetKnownFolderPath(folderId, 0, nint.Zero, out var path);
-            return path;
+            int hr = SHGetKnownFolderPath(folderId, 0, nint.Zero, out var path);
+            if (hr >= 0 && !string.IsNullOrEmpty(path))
+                return path;
         }
-        catch (COMException)
-        {
-            // Fallback to Environment.SpecialFolder if P/Invoke fails
-            return folderId == Downloads
-                ? Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
-                : folderId == Documents
-                ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-                : folderId == Desktop
-                ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-                : folderId == Pictures
-                ? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)
-                : folderId == Music
-                ? Environment.GetFolderPath(Environment.SpecialFolder.MyMusic)
-                : folderId == Videos
-                ? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)
-                : string.Empty;
-        }
+        catch (COMException) { /* fall through to the SpecialFolder fallback below */ }
+
+        return Fallback(folderId);
     }
+
+    private static string Fallback(Guid folderId) =>
+        folderId == Downloads
+            ? Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
+            : folderId == Documents
+            ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+            : folderId == Desktop
+            ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+            : folderId == Pictures
+            ? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)
+            : folderId == Music
+            ? Environment.GetFolderPath(Environment.SpecialFolder.MyMusic)
+            : folderId == Videos
+            ? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)
+            : string.Empty;
 }

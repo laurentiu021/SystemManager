@@ -150,10 +150,58 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Disabling Xbox Game Bar no longer crashes on a registry I/O error.** The Performance tab's Xbox Game Bar action now handles I/O failures the same way it already handled permission and state errors.
 - **A misbehaving UI subscriber can no longer permanently lock an operation category.** If a property-change notification threw while acquiring an operation lock, the category could stay locked forever (blocking all future disk/network/system operations of that kind). The lock is now rolled back cleanly if that happens.
 
+## [1.20.23] - 2026-06-12
+
+### Fixed
+- **No more leaked process handles when opening Explorer / links.** Ten places that launch Explorer ("show in folder"/"open file location"), Event Viewer, the browser, or the updater left the returned process handle undisposed. Each now releases it. The launched program is unaffected; only the orphaned handle is cleaned up. Covers Deep Cleanup, Disk Analyzer, Duplicate Finder, Startup Manager, Logs, About, and the Context Menu refresh.
+
+## [1.20.22] - 2026-06-12
+
+### Fixed
+- **Drive/disk health reads survive systems without the Storage WMI namespace.** Disk Health and System Info could throw an unhandled COM error on older or headless Windows where the `root\Microsoft\Windows\Storage` namespace isn't present; both now handle that case and fall back gracefully (mirrors the earlier Fixed Drives fix).
+- **No leaked process handle when opening a file location.** "Open file location" in Process Manager left the launched Explorer process handle undisposed; it's now released.
+- **Swallowed errors are now diagnosable.** Several silent `catch` blocks now log at Debug level with the full exception (update-file cleanup, Deep Cleanup directory deletion, Windows Update size extraction, and the Dashboard polling loop), so failures leave a trace in the log instead of vanishing.
+
+## [1.20.21] - 2026-06-12
+
+### Changed
+- **Some status/accent colors now follow the theme instead of being hardcoded.** Replaced hardcoded color values that exactly matched a theme color (success green, warning amber, danger red, accent, hover border) with theme references on the Dashboard, Network Repair, Privacy, and Uninstaller tabs. The colors render identically today but will track the theme going forward.
+
+## [1.20.20] - 2026-06-12
+
+### Fixed
+- **Much better screen-reader support across the app.** Many buttons, toggles, drop-downs, search/filter boxes, data grids, and per-row actions had no accessible name, so screen readers announced them generically (or not at all). Added clear, specific accessible names to interactive controls across 21 tabs — including destructive actions (Delete, Shred, Clear History), per-row buttons (now named after the item they act on), and unlabeled inputs. No visual change.
+
+## [1.20.19] - 2026-06-12
+
+### Fixed
+- **Activity history can no longer be corrupted by concurrent updates.** The recent-actions log saved its data outside the lock that protects it, so two actions logged at the same time could clash and produce a "collection modified" error or a truncated file. It now writes a consistent snapshot taken under the lock.
+- **The in-app updater fails gracefully when the download location can't be determined.** Installing an update now checks the downloaded file's folder up front and shows a clear message instead of risking a crash.
+
+## [1.20.18] - 2026-06-12
+
+### Fixed
+- **More resilient reading of battery, memory, and app-list data.** Unexpected values from Windows (battery stats, memory-module details) could throw a conversion error and interrupt a scan; those conversions now fall back safely. The winget output parser also no longer throws when the tool reports columns in an unusual order.
+
+## [1.20.17] - 2026-06-12
+
+### Fixed
+- **Plugged several resource leaks.** The system-tray icon's underlying graphics handle was never released on shutdown; the elevated-relaunch helper left a process handle open; and a memory-module query left a WMI result set undisposed. All are now released properly. Also added handling for a WMI namespace being unavailable when reading drive media/bus details, so that case fails quietly instead of surfacing an error.
+
+## [1.20.16] - 2026-06-12
+
+### Fixed
+- **Starting or stopping a Windows service no longer crashes the app on failure.** If a service couldn't be started or stopped (access denied, a dependency problem, or the service state changing mid-operation), the underlying error escaped unhandled. Those failures are now caught and shown as a clear status message.
+- **Privacy toggles no longer crash on a registry write error.** Applying a privacy toggle only handled permission errors; a registry I/O error or an invalid key/value now logs a warning instead of bringing down the app.
+- **Disabling Xbox Game Bar no longer crashes on a registry I/O error.** The Performance tab's Xbox Game Bar action now handles I/O failures the same way it already handled permission and state errors.
+- **A misbehaving UI subscriber can no longer permanently lock an operation category.** If a property-change notification threw while acquiring an operation lock, the category could stay locked forever (blocking all future disk/network/system operations of that kind). The lock is now rolled back cleanly if that happens.
+
 ## [1.20.15] - 2026-06-12
 
 ### Fixed
 - **File Shredder can no longer be tricked into destroying a protected system file.** The safety check that blocks shredding inside Windows, System32, and Program Files compared the path you gave it without first following symbolic links — so a link placed in an allowed folder but pointing at a protected system file slipped past the check, and the real file was overwritten. The check now resolves link targets before validating and matches protected folders on an exact directory boundary (so an unrelated folder that merely starts with the same name is no longer falsely blocked). If a file's contents are securely overwritten but the entry can't be removed, the app now reports that clearly instead of surfacing a raw error.
+
+## [1.20.14] - 2026-06-11
 
 ### Fixed
 - **No more hidden shutdown errors when closing the app.** Cleanup ran more than once on exit (it is triggered by both the window-close and the application-exit events), which double-released the network charts' underlying graphics resources — an error that was caught and hidden but still occurred on every exit. Cleanup is now guarded so it runs exactly once, and the shared network monitors are stopped rather than disposed twice, so the app shuts down cleanly.

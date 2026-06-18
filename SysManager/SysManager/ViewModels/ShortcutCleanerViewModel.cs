@@ -90,7 +90,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void DeleteSelected()
+    private async Task DeleteSelectedAsync()
     {
         var selected = BrokenShortcuts.Where(x => x.IsSelected).ToList();
         if (selected.Count == 0)
@@ -104,7 +104,9 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
             $"Are you sure you want to {action} {selected.Count} broken shortcut{(selected.Count == 1 ? "" : "s")}?",
             "Delete Broken Shortcuts — Confirm")) return;
 
-        var deleted = ShortcutCleanerService.DeleteShortcuts(selected, MoveToRecycleBin);
+        // The shell delete (SHFileOperation) is synchronous and can take a while for
+        // many items — run it off the UI thread so the window stays responsive.
+        var deleted = await Task.Run(() => ShortcutCleanerService.DeleteShortcuts(selected, MoveToRecycleBin));
 
         // Remove deleted items from the list
         foreach (var s in selected.Where(s => !System.IO.File.Exists(s.ShortcutPath)))

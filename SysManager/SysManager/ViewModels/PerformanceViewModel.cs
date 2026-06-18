@@ -27,6 +27,9 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 {
     private readonly PerformanceService _service;
     private PerformanceService.OriginalSnapshot? _snapshot;
+    // Serializes the load-modify of _snapshot so two Apply commands running at once
+    // can't both observe a null snapshot and race the capture/save.
+    private readonly SemaphoreSlim _snapshotGate = new(1, 1);
 
     [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private PerformanceProfile _profile = new();
@@ -71,10 +74,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     /// <summary>Ensure snapshot exists before any change.</summary>
     private async Task EnsureSnapshotAsync()
     {
-        _snapshot ??= PerformanceService.LoadSnapshot()
-                   ?? await _service.TakeSnapshotAsync();
-        PerformanceService.SaveSnapshot(_snapshot);
-        HasSnapshot = true;
+        await _snapshotGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _snapshot ??= PerformanceService.LoadSnapshot()
+                       ?? await _service.TakeSnapshotAsync();
+            PerformanceService.SaveSnapshot(_snapshot);
+            HasSnapshot = true;
+        }
+        finally { _snapshotGate.Release(); }
     }
 
     private void UpdateSummary()
@@ -508,6 +516,10 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             Log.Information("Performance settings restored to original snapshot");
             _snapshot = null;
             HasSnapshot = false;
+            // Delete the persisted snapshot too — otherwise the next Apply reloads the
+            // now-reverted pre-restore baseline via LoadSnapshot and a later Restore All
+            // would re-apply stale values.
+            PerformanceService.DeleteSnapshot();
             await RefreshAsync();
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }
@@ -561,6 +573,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         if (disposing)
         {
             _snapshot = null;
+            _snapshotGate.Dispose();
         }
         base.Dispose(disposing);
     }

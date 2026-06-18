@@ -121,6 +121,22 @@ public sealed partial class PerformanceService : IDisposable
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to save performance snapshot"); }
     }
 
+    /// <summary>
+    /// Delete the persisted snapshot from disk. Called after "Restore All" so the next
+    /// Apply captures a fresh baseline instead of reloading the now-reverted pre-restore
+    /// state via <see cref="LoadSnapshot"/>.
+    /// </summary>
+    public static void DeleteSnapshot()
+    {
+        try
+        {
+            if (File.Exists(SnapshotPath)) File.Delete(SnapshotPath);
+            Log.Information("Performance snapshot deleted from {Path}", SnapshotPath);
+        }
+        catch (IOException ex) { Log.Warning(ex, "Failed to delete performance snapshot"); }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to delete performance snapshot"); }
+    }
+
     /// <summary>Load a previously saved snapshot from disk. Returns null if none exists.</summary>
     public static OriginalSnapshot? LoadSnapshot()
     {

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.45] - 2026-06-22
+
+### Fixed
+- **Saving or restoring the hosts file no longer freezes the window.** The Hosts editor wrote the system hosts file (and restored it from backup) synchronously on the UI thread, so the app could hang briefly while the file was written to or copied from System32. Both operations now run in the background.
+
 ## [1.20.44] - 2026-06-22
 
 ### Fixed

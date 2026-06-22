@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.49] - 2026-06-22
+
+### Fixed
+- **Removed a rare crash risk in the network ping chart.** The per-host line offset used `Math.Abs` on a hash code, which throws if the hash happens to be the most-negative integer. The calculation now masks the sign bit instead, so it can never overflow.
+
 ## [1.20.48] - 2026-06-22
 
 ### Fixed

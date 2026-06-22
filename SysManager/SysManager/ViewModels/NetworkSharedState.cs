@@ -258,6 +258,20 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         RefreshHopTable();
     }
 
+    /// <summary>
+    /// A small, stable per-host vertical offset (±~0.4 ms) so overlapping lines on the
+    /// ping chart don't sit exactly on top of each other. Derived from the host's hash
+    /// so it stays constant across target add/remove (unlike a list index).
+    /// The sign bit is masked off rather than using Math.Abs, because GetHashCode can
+    /// return int.MinValue and Math.Abs(int.MinValue) throws OverflowException.
+    /// Internal for unit testing.
+    /// </summary>
+    internal static double StableOffset(string host)
+    {
+        var stableIdx = (host.GetHashCode() & int.MaxValue) % 8;
+        return ((stableIdx % 8) - 3.5) * 0.25;
+    }
+
     /// <summary>Disposes paint resources attached to a chart series.</summary>
     private static void DisposeSeries(ISeries series)
     {
@@ -354,9 +368,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             if (shown.HasValue)
             {
                 // CQ-M2: Stable offset (same fix as RecomputeStats).
-                var stableIdx = Math.Abs(target.Host.GetHashCode()) % 8;
-                var offset = ((stableIdx % 8) - 3.5) * 0.25;
-                shown = shown.Value + offset;
+                shown = shown.Value + StableOffset(target.Host);
             }
 
             buffer.Add(new DateTimePoint(sample.Timestamp.ToLocalTime(), shown));
@@ -399,8 +411,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         // CQ-M2: Use a stable offset derived from the target's host hash instead
         // of Targets.IndexOf. IndexOf shifts after target removal, causing all
         // remaining targets to jump visually on the chart.
-        var stableIdx = Math.Abs(target.Host.GetHashCode()) % 8;
-        var offset = ((stableIdx % 8) - 3.5) * 0.25;
+        var offset = StableOffset(target.Host);
 
         // PERF-M2: Avoid LINQ allocations (this runs 32x/sec per target).
         // Single pass over buffer to compute sum and count.

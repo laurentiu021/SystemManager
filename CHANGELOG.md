@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.20.43] - 2026-06-18
+## [1.20.43] - 2026-06-22
 
 ### Fixed
 - **App-install monitoring can no longer start twice and leak a timer.** Starting the App Alerts monitor a second time without stopping it first orphaned the previous background timer and added duplicate folder watchers. Starting now does nothing if monitoring is already running.

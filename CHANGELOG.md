@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.52] - 2026-06-22
+
+### Fixed
+- **Cancelling a speed test now stops the ping phase immediately.** The initial latency measurement ran four 2-second probes without honoring the cancellation token, so pressing Cancel during the ping phase could wait up to 8 seconds before stopping. The probes now observe cancellation and stop right away.
+
 ## [1.20.51] - 2026-06-22
 
 ### Security

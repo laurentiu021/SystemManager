@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.46] - 2026-06-22
+
+### Fixed
+- **Windows Update scans and installs no longer leak COM objects on error paths.** Reading an update's KB article list left its underlying COM collection unreleased on every scanned update, and a failed install (one that threw a COM error) leaked the update-installer object. Both are now released deterministically even when the operation throws.
+
 ## [1.20.45] - 2026-06-22
 
 ### Fixed

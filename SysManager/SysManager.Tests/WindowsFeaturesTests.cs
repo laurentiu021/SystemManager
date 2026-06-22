@@ -92,6 +92,10 @@ public class WindowsFeaturesTests
     [InlineData("MediaPlayback", "Media & Print")]
     [InlineData("Printing-XPSServices-Features", "Media & Print")]
     [InlineData("DirectPlay", "Legacy")]
+    [InlineData("WorkFolders-Client", "Legacy")]
+    // Regression: a bare "WORK" substring used to drop any "...work..." feature into
+    // Legacy. An unknown feature that merely contains "work" must NOT be Legacy now.
+    [InlineData("SomeFrameworkThing", "Other")]
     [InlineData("SomeRandomFeature", "Other")]
     public void CategorizeFeature_AssignsCorrectCategory(string featureName, string expected)
     {

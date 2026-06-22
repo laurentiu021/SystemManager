@@ -6,6 +6,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.52] - 2026-06-22
+
+### Fixed
+- **Cancelling a speed test now stops the ping phase immediately.** The initial latency measurement ran four 2-second probes without honoring the cancellation token, so pressing Cancel during the ping phase could wait up to 8 seconds before stopping. The probes now observe cancellation and stop right away.
+
+## [1.20.51] - 2026-06-22
+
+### Security
+- **The file shredder now expands 8.3 short paths before its system-folder safety check.** The guard that blocks shredding inside Windows/System32/Program Files compared full paths, but a short-name alias (e.g. `C:\PROGRA~1`) isn't expanded by the framework, so it could slip past the check. Short paths are now expanded to their long form first, closing that bypass.
+
+## [1.20.50] - 2026-06-22
+
+### Fixed
+- **Reverse-DNS lookups during a traceroute no longer keep running after they time out.** Each hop's host-name lookup had an 800 ms budget, but the timeout only abandoned the wait — the lookup itself kept running in the background. It is now actually cancelled when the budget elapses, freeing the resource immediately.
+
+## [1.20.49] - 2026-06-22
+
+### Fixed
+- **Removed a rare crash risk in the network ping chart.** The per-host line offset used `Math.Abs` on a hash code, which throws if the hash happens to be the most-negative integer. The calculation now masks the sign bit instead, so it can never overflow.
+
+## [1.20.48] - 2026-06-22
+
+### Fixed
+- **Hardened the Zip Slip guard on the speed-test CLI download.** The containment check that keeps extracted archive entries inside the tools directory used a plain prefix test, which a sibling folder whose name merely started with the target's name could slip past. The check now requires a directory-separator boundary, closing that edge case.
+
+## [1.20.47] - 2026-06-22
+
+### Fixed
+- **Disk health no longer drops every disk when one reports a bad value.** If a single physical disk returned an unexpected value for its media type, bus type, size, or health status, the conversion threw and aborted the whole scan — so no disks were shown. A disk with an unreadable field is now skipped individually and the rest still appear.
+
 ## [1.20.46] - 2026-06-22
 
 ### Fixed

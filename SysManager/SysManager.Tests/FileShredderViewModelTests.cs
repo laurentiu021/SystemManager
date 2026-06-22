@@ -20,34 +20,34 @@ namespace SysManager.Tests;
 [Collection("DialogService")]
 public class FileShredderViewModelTests
 {
-    private static FileShredderViewModel CreateVm() =>
+    private static FileShredderViewModel NewVm() =>
         new(new FileShredderService());
 
     [Fact]
     public void Constructor_ItemsStartsEmpty()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Empty(vm.Items);
     }
 
     [Fact]
     public void Constructor_SelectedMethodDefaultsToStandard()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(ShredMethod.Standard, vm.SelectedMethod);
     }
 
     [Fact]
     public void Constructor_SelectedMethodValueIs3()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(3, (int)vm.SelectedMethod);
     }
 
     [Fact]
     public void RemoveItem_RemovesFromList()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         var item = new ShredItem
         {
             Path = @"C:\temp\test.txt",
@@ -65,7 +65,7 @@ public class FileShredderViewModelTests
     [Fact]
     public void RemoveItem_WithNull_DoesNotCrash()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         // Should not throw when passing null
         vm.RemoveItemCommand.Execute(null);
         Assert.Empty(vm.Items);
@@ -74,21 +74,21 @@ public class FileShredderViewModelTests
     [Fact]
     public void IsShredding_DefaultsFalse()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(vm.IsShredding);
     }
 
     [Fact]
     public void IsBusy_DefaultsFalse()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(vm.IsBusy);
     }
 
     [Fact]
     public void Items_CanAddMultiple()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.Items.Add(new ShredItem { Path = @"C:\a.txt", Name = "a.txt", SizeBytes = 100, IsFolder = false });
         vm.Items.Add(new ShredItem { Path = @"C:\b.txt", Name = "b.txt", SizeBytes = 200, IsFolder = false });
         vm.Items.Add(new ShredItem { Path = @"C:\folder", Name = "folder", SizeBytes = 5000, IsFolder = true });
@@ -109,7 +109,7 @@ public class FileShredderViewModelTests
         DialogService.Instance = dialog;
         try
         {
-            var vm = CreateVm();
+            var vm = NewVm();
             vm.Items.Add(new ShredItem
             {
                 Path = file, Name = Path.GetFileName(file), SizeBytes = 1, IsFolder = false
@@ -140,7 +140,7 @@ public class FileShredderViewModelTests
         DialogService.Instance = dialog;
         try
         {
-            var vm = CreateVm();
+            var vm = NewVm();
             vm.Items.Add(new ShredItem
             {
                 Path = file, Name = Path.GetFileName(file), SizeBytes = 1, IsFolder = false
@@ -166,7 +166,7 @@ public class FileShredderViewModelTests
         DialogService.Instance = dialog;
         try
         {
-            var vm = CreateVm(); // Items empty
+            var vm = NewVm(); // Items empty
 
             await vm.ShredAllCommand.ExecuteAsync(null);
 

@@ -31,14 +31,14 @@ public class IntGreaterThanZeroConverterTests
     public void Convert_NonInt_ReturnsFalse()
     {
         var result = _sut.Convert("hello", typeof(bool), null!, CultureInfo.InvariantCulture);
-        Assert.Equal(false, result);
+        Assert.False((bool)result!);
     }
 
     [Fact]
     public void Convert_Null_ReturnsFalse()
     {
         var result = _sut.Convert(null!, typeof(bool), null!, CultureInfo.InvariantCulture);
-        Assert.Equal(false, result);
+        Assert.False((bool)result!);
     }
 
     [Fact]

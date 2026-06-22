@@ -173,6 +173,40 @@ public class NetworkSharedStateTests
     }
 
     [Fact]
+    public void StableOffset_IsDeterministicForSameHost()
+    {
+        Assert.Equal(NetworkSharedState.StableOffset("example.com"),
+                     NetworkSharedState.StableOffset("example.com"));
+    }
+
+    [Theory]
+    [InlineData("8.8.8.8")]
+    [InlineData("1.1.1.1")]
+    [InlineData("example.com")]
+    [InlineData("")]
+    public void StableOffset_StaysWithinExpectedRange(string host)
+    {
+        // stableIdx in [0,7] -> ((idx)-3.5)*0.25 spans [-0.875, 0.875].
+        var offset = NetworkSharedState.StableOffset(host);
+        Assert.InRange(offset, -0.875, 0.875);
+    }
+
+    [Fact]
+    public void StableOffset_DoesNotThrowOnMinValueHash()
+    {
+        // Regression: a host whose GetHashCode() is int.MinValue must not throw.
+        // The previous Math.Abs(int.MinValue) would have thrown OverflowException;
+        // bit-masking with int.MaxValue keeps it safe. Sweep many strings as a proxy
+        // for hitting negative/extreme hashes, and assert none throw.
+        var ex = Record.Exception(() =>
+        {
+            for (int i = 0; i < 5000; i++)
+                _ = NetworkSharedState.StableOffset("host-" + i);
+        });
+        Assert.Null(ex);
+    }
+
+    [Fact]
     public void Dispose_CalledTwice_DoesNotThrow()
     {
         // Regression: Dispose is wired to two shutdown paths (OnClosed + Application.Exit)

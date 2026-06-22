@@ -181,13 +181,29 @@ public sealed class WindowsUpdateService
                         Emit("  Installing…");
                         entry.Status = "Installing…";
 
+                        int iCode;
+                        bool needsReboot;
                         var inst = session.CreateUpdateInstaller();
-                        inst.Updates = coll;
-                        var iResult = inst.Install();
-                        var iCode = (int)iResult.ResultCode;
-                        bool needsReboot = (bool)iResult.RebootRequired;
-                        Marshal.FinalReleaseComObject(iResult);
-                        Marshal.FinalReleaseComObject(inst);
+                        try
+                        {
+                            inst.Updates = coll;
+                            var iResult = inst.Install();
+                            try
+                            {
+                                iCode = (int)iResult.ResultCode;
+                                needsReboot = (bool)iResult.RebootRequired;
+                            }
+                            finally
+                            {
+                                Marshal.FinalReleaseComObject(iResult);
+                            }
+                        }
+                        finally
+                        {
+                            // Release the installer even if Install() (or reading its
+                            // result) throws — a failed install otherwise leaks it.
+                            Marshal.FinalReleaseComObject(inst);
+                        }
 
                         if (iCode == 2)
                         {
@@ -283,9 +299,12 @@ public sealed class WindowsUpdateService
     private static List<string> ExtractKbIds(dynamic u)
     {
         List<string> list = [];
+        // u.KBArticleIDs returns a fresh COM string collection (RCW) each access;
+        // release it in a finally so every scanned update doesn't leak one.
+        dynamic? ids = null;
         try
         {
-            var ids = u.KBArticleIDs;
+            ids = u.KBArticleIDs;
             int n = (int)ids.Count;
             for (int i = 0; i < n; i++)
             {
@@ -295,6 +314,10 @@ public sealed class WindowsUpdateService
         }
         catch (COMException ex) { Serilog.Log.Debug(ex, "ExtractKbIds: COM error"); }
         catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "ExtractKbIds: dynamic binding error"); }
+        finally
+        {
+            if (ids is not null) Marshal.FinalReleaseComObject(ids);
+        }
         return list;
     }
 

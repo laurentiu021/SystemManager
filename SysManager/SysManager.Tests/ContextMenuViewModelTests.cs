@@ -14,12 +14,12 @@ namespace SysManager.Tests;
 /// </summary>
 public class ContextMenuViewModelTests
 {
-    private static ContextMenuViewModel CreateVm() => new(new ContextMenuService());
+    private static ContextMenuViewModel NewVm() => new(new ContextMenuService());
 
     [Fact]
     public void Constructor_LocationFilters_ContainsAllPlusSpecific()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Contains("All", vm.LocationFilters);
         Assert.Contains("Files", vm.LocationFilters);
         Assert.Contains("Folders", vm.LocationFilters);
@@ -31,21 +31,21 @@ public class ContextMenuViewModelTests
     [Fact]
     public void Constructor_SelectedLocation_DefaultsToAll()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal("All", vm.SelectedLocation);
     }
 
     [Fact]
     public void Constructor_FilterText_DefaultsEmpty()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal("", vm.FilterText);
     }
 
     [Fact]
     public void Constructor_Entries_StartsEmpty()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         // Before scan, entries should be empty
         Assert.Empty(vm.Entries);
     }
@@ -53,28 +53,28 @@ public class ContextMenuViewModelTests
     [Fact]
     public void Constructor_TotalCount_DefaultsToZero()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(0, vm.TotalCount);
     }
 
     [Fact]
     public void Constructor_EnabledCount_DefaultsToZero()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(0, vm.EnabledCount);
     }
 
     [Fact]
     public void Constructor_DisabledCount_DefaultsToZero()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(0, vm.DisabledCount);
     }
 
     [Fact]
     public void Commands_NotNull()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.NotNull(vm.ScanCommand);
         Assert.NotNull(vm.ToggleEntryCommand);
         Assert.NotNull(vm.RefreshCommand);
@@ -84,7 +84,7 @@ public class ContextMenuViewModelTests
     [Fact]
     public void Constructor_ActivePresetId_DefaultsToMenuStyle()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Contains(vm.ActivePresetId, new[] { "win10", "win11" });
     }
 }

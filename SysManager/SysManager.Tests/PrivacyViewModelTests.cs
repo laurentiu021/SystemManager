@@ -16,19 +16,19 @@ namespace SysManager.Tests;
 [Collection("DialogService")]
 public class PrivacyViewModelTests
 {
-    private static PrivacyViewModel CreateVm() => new(new PrivacyService());
+    private static PrivacyViewModel NewVm() => new(new PrivacyService());
 
     [Fact]
     public void Constructor_Toggles_Populated_With12Items()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(12, vm.Toggles.Count);
     }
 
     [Fact]
     public void Constructor_Categories_ContainsAllPlusSpecific()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Contains("All", vm.Categories);
         Assert.Contains("Telemetry", vm.Categories);
         Assert.Contains("UI Declutter", vm.Categories);
@@ -39,7 +39,7 @@ public class PrivacyViewModelTests
     [Fact]
     public void Constructor_SelectedCategory_DefaultsToAll()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal("All", vm.SelectedCategory);
     }
 
@@ -49,7 +49,7 @@ public class PrivacyViewModelTests
     [InlineData("Features", 4)]
     public void FilterByCategory_ShowsOnlyMatchingToggles(string category, int expectedCount)
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.SelectedCategory = category;
         Assert.Equal(expectedCount, vm.FilteredToggles.Count);
         Assert.All(vm.FilteredToggles, t => Assert.Equal(category, t.Category));
@@ -58,7 +58,7 @@ public class PrivacyViewModelTests
     [Fact]
     public void FilterByAll_ShowsAllToggles()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.SelectedCategory = "Telemetry"; // Filter first
         vm.SelectedCategory = "All";       // Then reset
         Assert.Equal(12, vm.FilteredToggles.Count);
@@ -67,14 +67,14 @@ public class PrivacyViewModelTests
     [Fact]
     public void FilteredToggles_InitiallyMatchesAll()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(vm.Toggles.Count, vm.FilteredToggles.Count);
     }
 
     [Fact]
     public void Constructor_NoPendingChanges_AfterLoad()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(0, vm.PendingChangeCount);
         Assert.False(vm.HasPendingChanges);
     }
@@ -82,7 +82,7 @@ public class PrivacyViewModelTests
     [Fact]
     public void TogglingValue_IncrementsPendingChangeCount()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         var first = vm.Toggles[0];
         first.IsEnabled = !first.IsEnabled;
 
@@ -93,7 +93,7 @@ public class PrivacyViewModelTests
     [Fact]
     public void TogglingValueBackToBaseline_ResetsPendingCount()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         var first = vm.Toggles[0];
         var original = first.IsEnabled;
 
@@ -106,7 +106,7 @@ public class PrivacyViewModelTests
     [Fact]
     public void DiscardChanges_RestoresAllTogglesToBaseline()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         var baseline = vm.Toggles.Select(t => t.IsEnabled).ToList();
 
         // Flip every toggle.
@@ -123,7 +123,7 @@ public class PrivacyViewModelTests
     [Fact]
     public void StatusMessage_MentionsPending_WhenChangesQueued()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled;
 
         Assert.Contains("pending", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
@@ -132,7 +132,7 @@ public class PrivacyViewModelTests
     [Fact]
     public void ApplyChanges_WithNoPending_SetsNoChangesMessage()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.ApplyChangesCommand.Execute(null);
 
         Assert.Contains("no changes", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
@@ -147,7 +147,7 @@ public class PrivacyViewModelTests
         DialogService.Instance = dialog;
         try
         {
-            var vm = CreateVm();
+            var vm = NewVm();
             vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled; // create a pending change
             var pendingBefore = vm.PendingChangeCount;
 

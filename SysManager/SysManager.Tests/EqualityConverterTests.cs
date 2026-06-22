@@ -32,21 +32,21 @@ public class EqualityConverterTests
     public void Convert_NullValue_ReturnsFalse()
     {
         var result = _sut.Convert(null, typeof(bool), "balanced", CultureInfo.InvariantCulture);
-        Assert.Equal(false, result);
+        Assert.False((bool)result!);
     }
 
     [Fact]
     public void Convert_NullParameter_ReturnsFalse()
     {
         var result = _sut.Convert("balanced", typeof(bool), null, CultureInfo.InvariantCulture);
-        Assert.Equal(false, result);
+        Assert.False((bool)result!);
     }
 
     [Fact]
     public void Convert_BothNull_ReturnsFalse()
     {
         var result = _sut.Convert(null, typeof(bool), null, CultureInfo.InvariantCulture);
-        Assert.Equal(false, result);
+        Assert.False((bool)result!);
     }
 
     [Theory]
@@ -77,6 +77,6 @@ public class EqualityConverterTests
     public void Convert_IsCaseSensitive()
     {
         var result = _sut.Convert("Balanced", typeof(bool), "balanced", CultureInfo.InvariantCulture);
-        Assert.Equal(false, result);
+        Assert.False((bool)result!);
     }
 }

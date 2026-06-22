@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.50] - 2026-06-22
+
+### Fixed
+- **Reverse-DNS lookups during a traceroute no longer keep running after they time out.** Each hop's host-name lookup had an 800 ms budget, but the timeout only abandoned the wait — the lookup itself kept running in the background. It is now actually cancelled when the budget elapses, freeing the resource immediately.
+
 ## [1.20.49] - 2026-06-22
 
 ### Fixed

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.44] - 2026-06-22
+
+### Fixed
+- **Better screen-reader support for tables and per-row toggles.** Every data table announced itself generically as "Data table"; each now has a content-specific name (Installed applications, Running processes, Windows services, Event log entries, etc.). The per-row enable/disable toggles in Startup Manager and Windows Features, the Startup "hide system entries" toggle, and the Shortcut Cleaner selection checkboxes also gained clear accessible names. No visual change.
+
 ## [1.20.43] - 2026-06-22
 
 ### Fixed

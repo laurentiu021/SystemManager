@@ -82,7 +82,7 @@
                   HeadersVisibility="Column" GridLinesVisibility="None"
                   BorderThickness="0"
                   Background="Transparent"
-                  AutomationProperties.Name="Data table"
+                  AutomationProperties.Name="Blocked applications"
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>

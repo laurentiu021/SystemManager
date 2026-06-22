@@ -183,7 +183,7 @@
                             <TextBlock Text="{Binding LargeCurrentFolder}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
 
-                        <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding LargeFiles}"
+                        <DataGrid AutomationProperties.Name="Large files" ItemsSource="{Binding LargeFiles}"
                                   AutoGenerateColumns="False" HeadersVisibility="Column"
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   CanUserResizeColumns="True"

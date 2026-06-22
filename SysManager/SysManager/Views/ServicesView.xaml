@@ -105,7 +105,7 @@
         </Border>
 
         <!-- Services list -->
-        <DataGrid AutomationProperties.Name="Data table" Grid.Row="3" ItemsSource="{Binding Services}"
+        <DataGrid AutomationProperties.Name="Windows services" Grid.Row="3" ItemsSource="{Binding Services}"
                   SelectedItem="{Binding SelectedService}"
                   AutoGenerateColumns="False" HeadersVisibility="Column"
                   Background="Transparent" BorderThickness="0"

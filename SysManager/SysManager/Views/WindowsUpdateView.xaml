@@ -120,7 +120,7 @@
 
         <!-- Update table (DataGrid) -->
         <Border Grid.Row="5" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
-            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Updates}"
+            <DataGrid AutomationProperties.Name="Windows updates" ItemsSource="{Binding Updates}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None"

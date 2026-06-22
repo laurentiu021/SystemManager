@@ -57,7 +57,7 @@
 
         <!-- Process list -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
-            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding FilteredProcesses}"
+            <DataGrid AutomationProperties.Name="Running processes" ItemsSource="{Binding FilteredProcesses}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="True"

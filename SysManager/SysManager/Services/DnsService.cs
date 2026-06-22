@@ -114,7 +114,7 @@ public sealed class DnsService : IDisposable
                 .Select(r => r?.ToString())
                 .Where(s => !string.IsNullOrWhiteSpace(s) && IPAddress.TryParse(s, out _))
                 .Select(s => s!)
-                .ToList();
+                .ToArray();
         }
         finally { _gate.Release(); }
     }

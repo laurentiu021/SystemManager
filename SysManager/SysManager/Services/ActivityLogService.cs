@@ -26,7 +26,7 @@ public sealed class ActivityLogService
     public IReadOnlyList<ActivityEntry> GetRecent(int count = 5)
     {
         lock (_lock)
-            return _entries.Take(count).ToList();
+            return _entries.Take(count).ToArray();
     }
 
     public void Log(string action, string detail)

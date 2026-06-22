@@ -95,7 +95,7 @@ public sealed class SpeedTestService
             }
         });
 
-        await Task.WhenAll(tasks);
+        await Task.WhenAll(tasks).ConfigureAwait(false);
         sw.Stop();
 
         var downloaded = Interlocked.Read(ref totalBytes);

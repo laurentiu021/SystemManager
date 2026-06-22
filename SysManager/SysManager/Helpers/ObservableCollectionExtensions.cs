@@ -12,7 +12,7 @@ namespace SysManager.Helpers;
 /// An <see cref="ObservableCollection{T}"/> that supports bulk replacement
 /// with a single <see cref="NotifyCollectionChangedAction.Reset"/> notification.
 /// </summary>
-public class BulkObservableCollection<T> : ObservableCollection<T>
+public sealed class BulkObservableCollection<T> : ObservableCollection<T>
 {
     private bool _suppressNotifications;
 

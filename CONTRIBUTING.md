@@ -124,11 +124,13 @@ Full run:
 
 ```powershell
 dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
+dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
 dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
-UI tests require an interactive desktop session. Run them locally, not
-over SSH/Remote PowerShell.
+The integration and UI tests touch the live system / require an interactive
+desktop session, so they run locally only (not in CI) — run them locally,
+not over SSH/Remote PowerShell. CI runs the unit tests.
 
 Filter to one class while iterating:
 

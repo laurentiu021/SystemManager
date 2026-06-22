@@ -76,7 +76,11 @@ public sealed class TracerouteService
                 {
                     using var dnsCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     dnsCts.CancelAfter(800); // 800ms max for reverse DNS
-                    var entry = await Dns.GetHostEntryAsync(addr.ToString()).WaitAsync(dnsCts.Token).ConfigureAwait(false);
+                    // Pass the token INTO GetHostEntryAsync rather than wrapping it in
+                    // WaitAsync: WaitAsync only abandons the await, leaving the lookup
+                    // running in the background (an orphaned task). The cancellation-aware
+                    // overload actually cancels the lookup when the 800ms budget elapses.
+                    var entry = await Dns.GetHostEntryAsync(addr.ToString(), dnsCts.Token).ConfigureAwait(false);
                     hop.HostName = entry.HostName;
                 }
                 catch (OperationCanceledException) { /* DNS too slow — leave as null */ }

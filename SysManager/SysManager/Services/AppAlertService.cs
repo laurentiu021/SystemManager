@@ -68,6 +68,12 @@ public sealed class AppAlertService : IDisposable
 
         lock (_watcherLock)
         {
+            // Re-entrancy guard: a second Start() without an intervening Stop() would
+            // orphan the first registry Timer (overwritten below, never disposed) and
+            // add a duplicate set of FileSystemWatchers. Bail if already running.
+            if (_registryTimer is not null || _watchers.Count > 0)
+                return;
+
             foreach (var dir in GetMonitoredDirectories().Where(Directory.Exists))
             {
                 try
@@ -84,9 +90,13 @@ public sealed class AppAlertService : IDisposable
                 catch (IOException ex) { Log.Debug(ex, "Failed to watch {Dir}", dir); }
                 catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied watching {Dir}", dir); }
             }
+
+            // Create the timer inside the lock so it's covered by the re-entrancy
+            // guard above (a concurrent Start() can't both pass the guard and each
+            // create a timer).
+            _registryTimer = new Timer(CheckRegistry, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
         }
 
-        _registryTimer = new Timer(CheckRegistry, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
         Log.Information("App alert monitoring started ({Watchers} watchers)", _watchers.Count);
     }
 

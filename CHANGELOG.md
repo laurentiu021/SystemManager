@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.43] - 2026-06-18
+
+### Fixed
+- **App-install monitoring can no longer start twice and leak a timer.** Starting the App Alerts monitor a second time without stopping it first orphaned the previous background timer and added duplicate folder watchers. Starting now does nothing if monitoring is already running.
+- **Listing fixed drives no longer aborts if one drive becomes unavailable mid-scan.** Reading a volume's label/size could throw if the drive dropped out or was locked (e.g. BitLocker) right after it was checked as ready; that one drive is now skipped instead of failing the whole list.
+- **Process icons resolve correctly for apps installed after launch.** A failed icon-path lookup was cached permanently, so a program installed later never got its icon until restart. Only successful lookups are cached now.
+- **A corrupt cached app icon no longer sticks forever.** If a downloaded icon was truncated/corrupt, the bad cache file was kept and reused; it's now deleted and re-downloaded on next use.
+- **Shortcut Cleaner reports an accurate deletion count.** Moving a broken shortcut to the Recycle Bin could silently fail (the shell reports failure without throwing) yet still be counted as deleted; only genuinely recycled items are counted now.
+
 ## [1.20.42] - 2026-06-17
 
 ### Fixed

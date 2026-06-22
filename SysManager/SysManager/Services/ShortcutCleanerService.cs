@@ -89,11 +89,18 @@ public sealed partial class ShortcutCleanerService
                 if (!File.Exists(s.ShortcutPath)) continue;
 
                 if (toRecycleBin)
-                    MoveToRecycleBin(s.ShortcutPath);
+                {
+                    // Only count it if the shell actually recycled the file.
+                    if (MoveToRecycleBin(s.ShortcutPath))
+                        deleted++;
+                    else
+                        Log.Warning("Recycle failed (shell reported error): {Path}", s.ShortcutPath);
+                }
                 else
+                {
                     File.Delete(s.ShortcutPath);
-
-                deleted++;
+                    deleted++;
+                }
             }
             catch (IOException ex) { Log.Warning(ex, "Failed to delete shortcut: {Path}", s.ShortcutPath); }
             catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied deleting shortcut: {Path}", s.ShortcutPath); }
@@ -160,7 +167,7 @@ public sealed partial class ShortcutCleanerService
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);
 
-    private static void MoveToRecycleBin(string path)
+    private static bool MoveToRecycleBin(string path)
     {
         var op = new SHFILEOPSTRUCT
         {
@@ -168,7 +175,11 @@ public sealed partial class ShortcutCleanerService
             pFrom = path + '\0' + '\0',
             fFlags = 0x0040 | 0x0010
         };
-        SHFileOperation(ref op);
+        // SHFileOperation returns non-zero (and/or sets fAnyOperationsAborted) on
+        // failure WITHOUT throwing. Returning that result lets the caller avoid
+        // counting a silently-failed recycle as a successful deletion.
+        var rc = SHFileOperation(ref op);
+        return rc == 0 && !op.fAnyOperationsAborted;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

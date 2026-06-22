@@ -40,7 +40,7 @@ public sealed class SpeedTestService
         IProgress<(int Percent, string Message)>? progress, CancellationToken ct)
     {
         progress?.Report((0, "Pinging test server…"));
-        var pingMs = await MeasurePingAsync(CfPingHost).ConfigureAwait(false);
+        var pingMs = await MeasurePingAsync(CfPingHost, ct).ConfigureAwait(false);
 
         progress?.Report((5, "Measuring download…"));
         var downloadMbps = await MeasureDownloadAsync(progress, ct).ConfigureAwait(false);
@@ -52,7 +52,7 @@ public sealed class SpeedTestService
         return new SpeedTestResult("HTTP", downloadMbps, uploadMbps, pingMs, CfPingHost, DateTime.Now);
     }
 
-    private static async Task<double> MeasurePingAsync(string host)
+    private static async Task<double> MeasurePingAsync(string host, CancellationToken ct)
     {
         try
         {
@@ -60,7 +60,9 @@ public sealed class SpeedTestService
             List<long> samples = [];
             for (int i = 0; i < 4; i++)
             {
-                var r = await p.SendPingAsync(host, 2000).ConfigureAwait(false);
+                // Pass the token so cancelling the speed test interrupts the ping phase
+                // immediately, instead of running all four 2 s probes (up to 8 s) first.
+                var r = await p.SendPingAsync(host, TimeSpan.FromMilliseconds(2000), cancellationToken: ct).ConfigureAwait(false);
                 if (r.Status == IPStatus.Success) samples.Add(r.RoundtripTime);
             }
             return samples.Count > 0 ? samples.Average() : 0;

@@ -180,6 +180,7 @@
                                               IsChecked="{Binding IsEnabled, Mode=OneWay}"
                                               Command="{Binding DataContext.ToggleFeatureCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                               CommandParameter="{Binding}"
+                                              AutomationProperties.Name="{Binding DisplayName, StringFormat='Toggle Windows feature: {0}'}"
                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

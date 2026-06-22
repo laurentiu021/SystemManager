@@ -81,7 +81,7 @@
                         </StackPanel>
                         <TextBlock Text="{Binding TraceStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
                     </StackPanel>
-                    <DataGrid AutomationProperties.Name="Data table" Grid.Row="2" ItemsSource="{Binding Shared.TracerouteHops}"
+                    <DataGrid AutomationProperties.Name="Traceroute hops" Grid.Row="2" ItemsSource="{Binding Shared.TracerouteHops}"
                               AutoGenerateColumns="False" HeadersVisibility="Column"
                               CanUserResizeColumns="True"
                               Background="Transparent" BorderThickness="0"

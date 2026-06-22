@@ -127,7 +127,7 @@
                           CanUserResizeColumns="True"
                           GridLinesVisibility="None" BorderThickness="0"
                           Background="Transparent"
-                          AutomationProperties.Name="Data table"
+                          AutomationProperties.Name="Hosts file entries"
                           Foreground="{DynamicResource TextPrimary}" FontSize="12"
                           SelectionMode="Single" IsReadOnly="False"
                           VirtualizingPanel.IsVirtualizing="True"

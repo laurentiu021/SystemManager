@@ -34,7 +34,8 @@
                             Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
                     <ToggleButton Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding HideWindowsEntries}" Margin="12,0,6,0"
-                                  VerticalAlignment="Center" ToolTip="Hide Windows/Microsoft system entries"/>
+                                  VerticalAlignment="Center" ToolTip="Hide Windows/Microsoft system entries"
+                                  AutomationProperties.Name="Hide Windows/Microsoft system entries"/>
                     <TextBlock Text="Hide system" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                VerticalAlignment="Center"/>
                 </StackPanel>
@@ -45,7 +46,7 @@
 
         <!-- Startup items list -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
-            <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Entries}"
+            <DataGrid AutomationProperties.Name="Startup programs" ItemsSource="{Binding Entries}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       CanUserAddRows="False"
                       Background="Transparent" BorderThickness="0"
@@ -62,6 +63,7 @@
                                               IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
                                               Command="{Binding DataContext.ToggleEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                               CommandParameter="{Binding}"
+                                              AutomationProperties.Name="{Binding Name, StringFormat='Toggle startup entry: {0}'}"
                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

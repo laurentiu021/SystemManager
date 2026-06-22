@@ -230,7 +230,7 @@
             <!-- List -->
             <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0">
                 <Grid>
-                    <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding EntriesView}"
+                    <DataGrid AutomationProperties.Name="Event log entries" ItemsSource="{Binding EntriesView}"
                               SelectedItem="{Binding SelectedEntry}"
                               AutoGenerateColumns="False"
                               HeadersVisibility="Column"

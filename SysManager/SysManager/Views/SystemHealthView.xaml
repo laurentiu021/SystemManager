@@ -62,7 +62,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                     <StackPanel>
                         <TextBlock Text="Memory modules" Style="{StaticResource SectionTitle}"/>
-                        <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Modules}"
+                        <DataGrid AutomationProperties.Name="Memory modules" ItemsSource="{Binding Modules}"
                                   AutoGenerateColumns="False" HeadersVisibility="Column"
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   CanUserResizeColumns="True"
@@ -115,7 +115,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                     <StackPanel>
                         <TextBlock Text="Storage devices" Style="{StaticResource SectionTitle}"/>
-                        <DataGrid AutomationProperties.Name="Data table" ItemsSource="{Binding Disks}"
+                        <DataGrid AutomationProperties.Name="Disk drives" ItemsSource="{Binding Disks}"
                                   AutoGenerateColumns="False" HeadersVisibility="Column"
                                   GridLinesVisibility="None" IsReadOnly="True"
                                   CanUserResizeColumns="True"

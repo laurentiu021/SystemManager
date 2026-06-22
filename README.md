@@ -166,7 +166,7 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - Safe by design: never touches browsers, passwords, the registry, active
   drivers, or actual game files. Locked files are skipped, never forced.
 
-### Large files finder
+#### Large files finder (part of Deep Cleanup)
 - Scan Downloads, Documents, Desktop, Videos, Pictures, Music, Program
   Files, or a whole drive.
 - Configurable min-size (default 500 MB) and top-N (default 100).
@@ -339,6 +339,11 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 ### Dashboard
 - One-line OS / CPU / RAM / disk summary
 - Live uptime counter
+- **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
+  the tab is visible (polling pauses automatically when it isn't), with live
+  indicator dots.
+- **Recent Activity** — the last few actions you ran (Quick Cleanup, Update
+  All Apps, Check Updates, …) with timestamps.
 - **Quick Tune-Up** — one-click wizard that cleans temp files, optionally
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays

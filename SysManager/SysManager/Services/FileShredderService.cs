@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Cryptography;
 using Serilog;
@@ -28,7 +29,7 @@ public enum ShredMethod
 /// Securely deletes files by overwriting their contents with specified patterns
 /// before removing them from the file system.
 /// </summary>
-public sealed class FileShredderService
+public sealed partial class FileShredderService
 {
     private const int BufferSize = 65_536; // 64 KB
 
@@ -245,6 +246,11 @@ public sealed class FileShredderService
         catch (IOException) { /* not a link or cannot resolve — validate the literal path */ }
         catch (UnauthorizedAccessException) { /* cannot probe — validate the literal path */ }
 
+        // Expand any 8.3 short components (e.g. C:\PROGRA~1 -> C:\Program Files).
+        // Path.GetFullPath does NOT expand short names, so without this a short-name
+        // alias of a protected directory would slip past the prefix check below.
+        fullPath = ExpandShortPath(fullPath);
+
         foreach (var prefix in ProtectedPrefixes)
         {
             // Match on a directory boundary, not a raw prefix: the path must equal the
@@ -269,4 +275,34 @@ public sealed class FileShredderService
         ShredMethod.Thorough => [0x00, 0xFF, 0x00, 0xFF, 0xAA, 0x55, null],
         _ => [0x00]
     };
+
+    /// <summary>
+    /// Expands any 8.3 short path components to their long form via GetLongPathName.
+    /// Returns the input unchanged if the path doesn't exist or the API fails — the
+    /// caller still validates the (possibly short) literal path in that case.
+    /// </summary>
+    internal static string ExpandShortPath(string path)
+    {
+        // Fast path: no '~' means there can't be an 8.3 alias component.
+        if (!path.Contains('~')) return path;
+
+        // First call with a zero-length buffer returns the required length (incl. NUL).
+        uint needed = NativeMethods.GetLongPathName(path, [], 0);
+        if (needed == 0) return path; // not found / no permission — keep literal
+
+        var buffer = new char[needed];
+        uint written = NativeMethods.GetLongPathName(path, buffer, needed);
+        if (written == 0 || written >= needed) return path; // failed / race — keep literal
+
+        return new string(buffer, 0, (int)written);
+    }
+
+    private static partial class NativeMethods
+    {
+        [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "GetLongPathNameW")]
+        internal static partial uint GetLongPathName(
+            string lpszShortPath,
+            [Out] char[] lpszLongPath,
+            uint cchBuffer);
+    }
 }

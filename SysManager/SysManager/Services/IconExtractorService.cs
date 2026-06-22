@@ -379,7 +379,16 @@ public sealed partial class IconExtractorService
         var exeName = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
             ? processName : processName + ".exe";
 
-        return _pathCache.GetOrAdd(exeName, static name => ResolveExecutablePath(name));
+        // Only cache POSITIVE results. GetOrAdd would store a null (not-found) result
+        // permanently, so an exe installed after the first lookup would never resolve
+        // for the lifetime of the process. Re-resolve on a miss instead.
+        if (_pathCache.TryGetValue(exeName, out var cached))
+            return cached;
+
+        var resolved = ResolveExecutablePath(exeName);
+        if (resolved is not null)
+            _pathCache[exeName] = resolved;
+        return resolved;
     }
 
     private static string? ResolveExecutablePath(string exeName)

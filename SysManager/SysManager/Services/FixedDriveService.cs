@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Management;
+using Serilog;
 
 namespace SysManager.Services;
 
@@ -37,15 +38,25 @@ public sealed class FixedDriveService
 
         foreach (var di in fixedReady)
         {
-            var letter = di.Name.TrimEnd('\\', '/');
-            drives.Add(new FixedDrive(
-                Letter: letter,
-                Label: string.IsNullOrWhiteSpace(di.VolumeLabel) ? letter : di.VolumeLabel,
-                FileSystem: di.DriveFormat ?? "NTFS",
-                SizeGB: Math.Round(di.TotalSize / 1024d / 1024d / 1024d, 0),
-                FreeGB: Math.Round(di.AvailableFreeSpace / 1024d / 1024d / 1024d, 0),
-                MediaType: "",
-                BusType: ""));
+            // DriveInfo getters (VolumeLabel/TotalSize/AvailableFreeSpace) hit the
+            // volume and can throw IOException/UnauthorizedAccessException if it goes
+            // away or is denied between the IsReady check and the read (e.g. a
+            // BitLocker-locked or transiently-busy volume). Skip that one drive
+            // instead of aborting enumeration of the rest.
+            try
+            {
+                var letter = di.Name.TrimEnd('\\', '/');
+                drives.Add(new FixedDrive(
+                    Letter: letter,
+                    Label: string.IsNullOrWhiteSpace(di.VolumeLabel) ? letter : di.VolumeLabel,
+                    FileSystem: di.DriveFormat ?? "NTFS",
+                    SizeGB: Math.Round(di.TotalSize / 1024d / 1024d / 1024d, 0),
+                    FreeGB: Math.Round(di.AvailableFreeSpace / 1024d / 1024d / 1024d, 0),
+                    MediaType: "",
+                    BusType: ""));
+            }
+            catch (IOException ex) { Log.Debug(ex, "Skipped drive that became unavailable mid-enumeration"); }
+            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Skipped drive — access denied mid-enumeration"); }
         }
 
         // Enrich with MSFT_PhysicalDisk media/bus info when possible.

@@ -48,9 +48,17 @@ public sealed class AppIconService
         Directory.CreateDirectory(CacheDir);
         var cachePath = Path.Combine(CacheDir, $"{SanitizeFileName(appId)}.png");
 
-        // Return cached icon if it exists and is not empty
+        // Return cached icon if it exists and is not empty. If the file is present
+        // but fails to decode (truncated/corrupt download), delete it so we re-download
+        // instead of being permanently poisoned by the bad cache entry.
         if (File.Exists(cachePath) && new FileInfo(cachePath).Length > 0)
-            return LoadFromFile(cachePath);
+        {
+            var cachedIcon = LoadFromFile(cachePath);
+            if (cachedIcon is not null) return cachedIcon;
+            try { File.Delete(cachePath); }
+            catch (IOException ex) { Log.Debug(ex, "Could not delete corrupt icon cache for {AppId}", appId); }
+            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Could not delete corrupt icon cache for {AppId}", appId); }
+        }
 
         // Determine the download URL
         var url = GetFaviconUrl(appId);

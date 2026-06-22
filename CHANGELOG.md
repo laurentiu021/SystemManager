@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.48] - 2026-06-22
+
+### Fixed
+- **Hardened the Zip Slip guard on the speed-test CLI download.** The containment check that keeps extracted archive entries inside the tools directory used a plain prefix test, which a sibling folder whose name merely started with the target's name could slip past. The check now requires a directory-separator boundary, closing that edge case.
+
 ## [1.20.47] - 2026-06-22
 
 ### Fixed

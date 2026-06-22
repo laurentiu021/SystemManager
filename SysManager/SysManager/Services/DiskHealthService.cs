@@ -36,22 +36,33 @@ public sealed partial class DiskHealthService
             {
                 using (mo)
                 {
-                    var report = new DiskHealthReport
+                    // Convert the WMI fields per disk inside a guard: a single disk whose
+                    // MediaType/BusType/Size/HealthStatus comes back as an unexpected type
+                    // would otherwise throw from Convert.* and abort the whole enumeration,
+                    // dropping every other (healthy) disk. Skip the bad disk instead.
+                    try
                     {
-                        FriendlyName = mo["FriendlyName"]?.ToString() ?? "Disk",
-                        MediaType = MapMedia(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
-                        BusType = MapBus(Convert.ToUInt32(mo["BusType"] ?? 0u)),
-                        SizeGB = Math.Round(Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d, 0),
-                        HealthStatus = MapHealth(Convert.ToUInt32(mo["HealthStatus"] ?? 0u))
-                    };
+                        var report = new DiskHealthReport
+                        {
+                            FriendlyName = mo["FriendlyName"]?.ToString() ?? "Disk",
+                            MediaType = MapMedia(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
+                            BusType = MapBus(Convert.ToUInt32(mo["BusType"] ?? 0u)),
+                            SizeGB = Math.Round(Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d, 0),
+                            HealthStatus = MapHealth(Convert.ToUInt32(mo["HealthStatus"] ?? 0u))
+                        };
 
-                    // Get reliability counters for this disk.
-                    var objectId = mo["ObjectId"]?.ToString();
-                    if (!string.IsNullOrEmpty(objectId))
-                        EnrichWithReliability(scope, objectId, report);
+                        // Get reliability counters for this disk.
+                        var objectId = mo["ObjectId"]?.ToString();
+                        if (!string.IsNullOrEmpty(objectId))
+                            EnrichWithReliability(scope, objectId, report);
 
-                    ApplyVerdict(report);
-                    results.Add(report);
+                        ApplyVerdict(report);
+                        results.Add(report);
+                    }
+                    catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException)
+                    {
+                        Log.Debug(ex, "DiskHealth: skipping a disk with an unreadable WMI field");
+                    }
                 }
             }
         }

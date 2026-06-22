@@ -81,7 +81,7 @@ public sealed class MemoryTestService
             catch (UnauthorizedAccessException) { /* EventLog access denied */ }
 
             return new MemoryErrorSummary(wheaCount, diagCount, lastError);
-        }, ct);
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -142,6 +142,6 @@ public sealed class MemoryTestService
             catch (FormatException) { /* malformed WMI value */ }
             catch (OverflowException) { /* WMI value out of range */ }
             return list;
-        });
+        }).ConfigureAwait(false);
     }
 }

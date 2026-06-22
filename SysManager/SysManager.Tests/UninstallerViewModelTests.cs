@@ -15,12 +15,12 @@ namespace SysManager.Tests;
 /// </summary>
 public class UninstallerViewModelTests
 {
-    private static UninstallerViewModel CreateVm() => new(new UninstallerService(new PowerShellRunner()));
+    private static UninstallerViewModel NewVm() => new(new UninstallerService(new PowerShellRunner()));
 
     [Fact]
     public void Constructor_Commands_Exist()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.NotNull(vm.ScanCommand);
         Assert.NotNull(vm.UninstallSelectedCommand);
         Assert.NotNull(vm.CancelCommand);
@@ -31,7 +31,7 @@ public class UninstallerViewModelTests
     [Fact]
     public void Constructor_Collections_NotNull()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.NotNull(vm.AllApps);
         Assert.NotNull(vm.FilteredApps);
         Assert.NotNull(vm.Console);
@@ -40,21 +40,21 @@ public class UninstallerViewModelTests
     [Fact]
     public void FilterText_DefaultEmpty()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal("", vm.FilterText);
     }
 
     [Fact]
     public void Summary_HasDefaultValue()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(string.IsNullOrEmpty(vm.Summary));
     }
 
     [Fact]
     public void FilterText_CanBeChanged()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.FilterText = "chrome";
         Assert.Equal("chrome", vm.FilterText);
     }
@@ -62,7 +62,7 @@ public class UninstallerViewModelTests
     [Fact]
     public void AppCount_DefaultZero()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(0, vm.AppCount);
     }
 

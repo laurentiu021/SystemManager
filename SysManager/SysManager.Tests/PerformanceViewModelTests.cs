@@ -13,14 +13,14 @@ namespace SysManager.Tests;
 /// </summary>
 public class PerformanceViewModelTests
 {
-    private static PerformanceViewModel CreateVm() => new(new PerformanceService(new PowerShellRunner()));
+    private static PerformanceViewModel NewVm() => new(new PerformanceService(new PowerShellRunner()));
 
     // ── Commands exist ──
 
     [Fact]
     public void Constructor_GlobalCommands_Exist()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.NotNull(vm.RefreshCommand);
         Assert.NotNull(vm.RestoreAllCommand);
     }
@@ -28,7 +28,7 @@ public class PerformanceViewModelTests
     [Fact]
     public void Constructor_PerSectionCommands_Exist()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.NotNull(vm.ApplyPowerPlanCommand);
         Assert.NotNull(vm.ApplyVisualEffectsCommand);
         Assert.NotNull(vm.ApplyGameModeCommand);
@@ -42,42 +42,42 @@ public class PerformanceViewModelTests
     [Fact]
     public void Constructor_Profile_NotNull()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.NotNull(vm.Profile);
     }
 
     [Fact]
     public void Constructor_Summary_HasDefaultValue()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(string.IsNullOrEmpty(vm.Summary));
     }
 
     [Fact]
     public void Constructor_SelectedPlan_DefaultBalanced()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal("balanced", vm.SelectedPlan);
     }
 
     [Fact]
     public void Constructor_HasSnapshot_DefaultFalse()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(vm.HasSnapshot);
     }
 
     [Fact]
     public void Constructor_NeedsReboot_DefaultFalse()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(vm.NeedsReboot);
     }
 
     [Fact]
     public void Constructor_WantToggles_DefaultFalse()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(vm.WantVisualEffectsReduced);
         Assert.False(vm.WantGameModeOff);
         Assert.False(vm.WantXboxGameBarOff);
@@ -90,7 +90,7 @@ public class PerformanceViewModelTests
     [Fact]
     public void SelectedPlan_CanBeChanged()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.SelectedPlan = "ultimate";
         Assert.Equal("ultimate", vm.SelectedPlan);
     }
@@ -98,7 +98,7 @@ public class PerformanceViewModelTests
     [Fact]
     public void WantVisualEffectsReduced_CanBeToggled()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.WantVisualEffectsReduced = true;
         Assert.True(vm.WantVisualEffectsReduced);
         vm.WantVisualEffectsReduced = false;
@@ -108,7 +108,7 @@ public class PerformanceViewModelTests
     [Fact]
     public void WantGameModeOff_CanBeToggled()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.WantGameModeOff = true;
         Assert.True(vm.WantGameModeOff);
     }
@@ -116,7 +116,7 @@ public class PerformanceViewModelTests
     [Fact]
     public void WantXboxGameBarOff_CanBeToggled()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.WantXboxGameBarOff = true;
         Assert.True(vm.WantXboxGameBarOff);
     }
@@ -124,7 +124,7 @@ public class PerformanceViewModelTests
     [Fact]
     public void WantGpuMaxPerformance_CanBeToggled()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.WantGpuMaxPerformance = true;
         Assert.True(vm.WantGpuMaxPerformance);
     }
@@ -132,7 +132,7 @@ public class PerformanceViewModelTests
     [Fact]
     public void WantProcessorMaxState_CanBeToggled()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.WantProcessorMaxState = true;
         Assert.True(vm.WantProcessorMaxState);
     }
@@ -140,21 +140,21 @@ public class PerformanceViewModelTests
     [Fact]
     public void NvidiaGpuName_DefaultEmpty()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal("", vm.NvidiaGpuName);
     }
 
     [Fact]
     public void HasNvidiaGpu_DefaultFalse()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(vm.HasNvidiaGpu);
     }
 
     [Fact]
     public void SelectedPlan_NotifiesPropertyChanged()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         var changed = new List<string>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
         vm.SelectedPlan = "high";
@@ -166,14 +166,14 @@ public class PerformanceViewModelTests
     [Fact]
     public void IsProcessorStateLocked_DefaultFalse()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.False(vm.IsProcessorStateLocked);
     }
 
     [Fact]
     public void IsProcessorStateEditable_InverseOfLocked()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.True(vm.IsProcessorStateEditable);
         vm.IsProcessorStateLocked = true;
         Assert.False(vm.IsProcessorStateEditable);
@@ -182,7 +182,7 @@ public class PerformanceViewModelTests
     [Fact]
     public void IsProcessorStateLocked_NotifiesEditable()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         var changed = new List<string>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
         vm.IsProcessorStateLocked = true;

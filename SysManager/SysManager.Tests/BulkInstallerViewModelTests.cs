@@ -14,27 +14,27 @@ namespace SysManager.Tests;
 /// </summary>
 public class BulkInstallerViewModelTests
 {
-    private static BulkInstallerViewModel CreateVm() =>
+    private static BulkInstallerViewModel NewVm() =>
         new(new BulkInstallerService(new PowerShellRunner()), new AppIconService());
 
     [Fact]
     public void Constructor_PopulatesAppsWithCuratedList()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(46, vm.Apps.Count);
     }
 
     [Fact]
     public void Constructor_FilteredAppsMatchesAllApps()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(vm.Apps.Count, vm.FilteredApps.Count);
     }
 
     [Fact]
     public void SelectAll_SelectsAllFilteredApps()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.SelectAllCommand.Execute(null);
         Assert.All(vm.FilteredApps, app => Assert.True(app.IsSelected));
     }
@@ -42,7 +42,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public void DeselectAll_DeselectsAllApps()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         // First select all, then deselect
         vm.SelectAllCommand.Execute(null);
         vm.DeselectAllCommand.Execute(null);
@@ -63,7 +63,7 @@ public class BulkInstallerViewModelTests
     [InlineData("Runtimes & Frameworks", 4)]
     public void FilterByCategory_ShowsOnlyMatchingCategory(string category, int expectedCount)
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.SelectedCategory = category;
         Assert.Equal(expectedCount, vm.FilteredApps.Count);
         Assert.All(vm.FilteredApps, app => Assert.Equal(category, app.Category));
@@ -75,7 +75,7 @@ public class BulkInstallerViewModelTests
     [InlineData("zzz_nonexistent", 0)]
     public void FilterByText_ShowsMatchingName(string text, int expectedCount)
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.FilterText = text;
         Assert.Equal(expectedCount, vm.FilteredApps.Count);
     }
@@ -83,7 +83,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public void CombinedFilter_CategoryAndText_Works()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         vm.SelectedCategory = "Development";
         vm.FilterText = "Git";
         Assert.Single(vm.FilteredApps);
@@ -93,7 +93,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public void Categories_ContainsAllAndElevenSpecificPlusCustom()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Contains("All", vm.Categories);
         Assert.Contains("Custom", vm.Categories);
         Assert.Equal(13, vm.Categories.Count);
@@ -104,7 +104,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public void InstallSelectedCommand_DisabledWhileBusy()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.True(vm.InstallSelectedCommand.CanExecute(null));   // idle → clickable
 
         vm.IsBusy = true;

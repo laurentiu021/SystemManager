@@ -205,8 +205,8 @@ public sealed partial class FileShredderService
 
             FileInfo[] files;
             try { files = dir.GetFiles(); }
-            catch (UnauthorizedAccessException) { continue; }
-            catch (IOException) { continue; }
+            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied enumerating {Dir}", dir.FullName); continue; }
+            catch (IOException ex) { Log.Debug(ex, "Shredder: I/O error enumerating {Dir}", dir.FullName); continue; }
 
             foreach (var file in files)
                 results.Add(file.FullName);

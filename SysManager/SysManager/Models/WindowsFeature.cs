@@ -49,8 +49,10 @@ public sealed partial class WindowsFeature : ObservableObject
             name.Contains("SCAN") || name.Contains("FAX"))
             return "Media & Print";
 
+        // "WORKFOLDERS" specifically — NOT a bare "WORK" substring, which also matches
+        // "netWORK" and "frameWORK" and would mis-bucket unrelated features into Legacy.
         if (name.Contains("LEGACY") || name.Contains("DIRECTPLAY") ||
-            name.Contains("INDEXING") || name.Contains("WORK"))
+            name.Contains("INDEXING") || name.Contains("WORKFOLDERS"))
             return "Legacy";
 
         return "Other";

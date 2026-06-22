@@ -18,7 +18,6 @@ public sealed partial class TracerouteViewModel : ViewModelBase
 {
     public NetworkSharedState Shared { get; }
     private CancellationTokenSource? _traceCts;
-    private int _totalHops;
 
     [ObservableProperty] private string _traceHost = "8.8.8.8";
     [ObservableProperty] private bool _isTracing;
@@ -73,11 +72,9 @@ public sealed partial class TracerouteViewModel : ViewModelBase
         _traceCts?.Dispose();
         _traceCts = new CancellationTokenSource();
         List<TracerouteHop> collected = [];
-        _totalHops = 0;
         void OnHop(TracerouteHop hop)
         {
             collected.Add(hop);
-            _totalHops = collected.Count;
             Shared.InvokeOnUi(() =>
             {
                 TraceStatus = $"Tracing {TraceHost}… hop {hop.HopNumber}";

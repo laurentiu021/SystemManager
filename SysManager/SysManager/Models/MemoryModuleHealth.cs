@@ -6,10 +6,10 @@ namespace SysManager.Models;
 
 public sealed class MemoryModuleHealth
 {
-    public string Slot { get; set; } = "";
-    public string Manufacturer { get; set; } = "";
-    public double CapacityGB { get; set; }
-    public uint SpeedMHz { get; set; }
-    public uint ConfiguredSpeedMHz { get; set; }
-    public string PartNumber { get; set; } = "";
+    public string Slot { get; init; } = "";
+    public string Manufacturer { get; init; } = "";
+    public double CapacityGB { get; init; }
+    public uint SpeedMHz { get; init; }
+    public uint ConfiguredSpeedMHz { get; init; }
+    public string PartNumber { get; init; } = "";
 }

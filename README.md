@@ -456,18 +456,19 @@ to stay on the latest version.
 
 ### Direct download
 
-Grab `SysManager-v<version>.exe` (e.g. `SysManager-v1.19.2.exe`) from the
+Grab `SysManager-v<version>.exe` (the `<version>` shown on the latest release) from the
 [latest release](https://github.com/laurentiu021/SystemManager/releases/latest)
 and double-click it. The executable is self-contained — no installer, no .NET
 runtime required.
 
 ### Verifying the download
 
-Each release ships a matching `SysManager-v<version>.exe.sha256`. Verify before running:
+Each release ships a matching `SysManager-v<version>.exe.sha256`. Verify before running
+(replace `<version>` with the version you downloaded):
 
 ```powershell
-Get-FileHash .\SysManager-v1.19.2.exe -Algorithm SHA256
-# Compare the output to the contents of SysManager-v1.19.2.exe.sha256.
+Get-FileHash .\SysManager-v<version>.exe -Algorithm SHA256
+# Compare the output to the contents of SysManager-v<version>.exe.sha256.
 ```
 
 The build is not currently code-signed, so Windows SmartScreen may warn on
@@ -549,6 +550,7 @@ and elevation state in a format ready to paste into a bug report.
 - WPF-UI (lepoco/wpfui) for Fluent Design theme and controls
 - LiveCharts2 for the real-time latency chart
 - H.NotifyIcon.Wpf for system tray integration
+- LibreHardwareMonitor and NvAPIWrapper for CPU/GPU/disk temperature sensors
 - Serilog for structured logging
 - xUnit, NSubstitute, and FlaUI for unit, integration, and UI-automation tests
 

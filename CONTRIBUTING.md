@@ -180,8 +180,9 @@ Prefixes aren't required, but if you want a convention: `fix:`, `feat:`,
    ARCHITECTURE where relevant).
 5. **Open the PR** against `main`. Fill out the PR template honestly —
    if you didn't add tests, say why.
-6. **CI must be green** before review starts. CI runs build + both test
-   projects on a Windows runner.
+6. **CI must be green** before review starts. On a Windows runner, CI builds
+   the app, runs the unit-test project, compile-checks the integration-test
+   project, and runs the UI-automation tests as a separate non-blocking job.
 7. **Review and iterate.** I try to respond within a few days. If a PR
    goes silent, ping me with a comment.
 8. **Squash merge** is the default. Your individual commits are

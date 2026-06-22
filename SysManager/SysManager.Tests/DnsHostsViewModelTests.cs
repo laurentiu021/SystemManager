@@ -18,27 +18,27 @@ namespace SysManager.Tests;
 /// </summary>
 public class DnsHostsViewModelTests
 {
-    private static DnsHostsViewModel CreateVm() =>
+    private static DnsHostsViewModel NewVm() =>
         new(new DnsService(new PowerShellRunner()), new HostsFileService());
 
     [StaFact]
     public void Constructor_PresetsListPopulated_With5Presets()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.Equal(5, vm.Presets.Count);
     }
 
     [StaFact]
     public void Constructor_HostEntries_IsNotNull()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         Assert.NotNull(vm.HostEntries);
     }
 
     [StaFact]
     public void Presets_ContainsExpectedNames()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         var names = vm.Presets.Select(p => p.Name).ToList();
         Assert.Contains("Google", names);
         Assert.Contains("Cloudflare", names);
@@ -80,7 +80,7 @@ public class DnsHostsViewModelTests
     [StaFact]
     public void RemoveEntry_RemovesFromCollection()
     {
-        var vm = CreateVm();
+        var vm = NewVm();
         var entry = new HostsEntry { IpAddress = "10.0.0.1", Hostname = "test.local" };
         vm.HostEntries.Add(entry);
 

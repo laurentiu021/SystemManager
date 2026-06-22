@@ -632,8 +632,8 @@ public sealed partial class AboutViewModel : ViewModelBase
             if (File.Exists(dll))
                 return File.GetLastWriteTime(dll).ToString("dd MMM yyyy");
         }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        catch (IOException ex) { Log.Debug(ex, "About: could not read build date from disk"); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "About: access denied reading build date"); }
         return string.Empty;
     }
 }

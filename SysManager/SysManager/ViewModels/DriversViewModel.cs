@@ -97,9 +97,9 @@ public sealed partial class DriversViewModel : ViewModelBase
             var root = doc.RootElement;
 
             // PS returns an array if multiple, or a single object if only one.
-            var items = root.ValueKind == JsonValueKind.Array
+            IEnumerable<JsonElement> items = root.ValueKind == JsonValueKind.Array
                 ? root.EnumerateArray()
-                : new[] { root }.AsEnumerable();
+                : [root];
 
             foreach (var entry in items.Select(el => new DriverEntry
             {

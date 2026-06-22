@@ -389,9 +389,9 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             using var doc = JsonDocument.Parse(raw);
             var root = doc.RootElement;
 
-            var items = root.ValueKind == JsonValueKind.Array
+            IEnumerable<JsonElement> items = root.ValueKind == JsonValueKind.Array
                 ? root.EnumerateArray()
-                : new[] { root }.AsEnumerable();
+                : [root];
 
             foreach (var entry in items.Select(el => new UpdateEntry
             {

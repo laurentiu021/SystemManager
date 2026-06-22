@@ -19,6 +19,19 @@ toggle, and a friendly Event Log viewer — all in one WPF desktop app.
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
 [![winget](https://img.shields.io/badge/winget-laurentiu021.SysManager-0078D4?logo=windows)](https://github.com/laurentiu021/SystemManager/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/laurentiu021/SystemManager?style=social)](https://github.com/laurentiu021/SystemManager/stargazers)
+
+---
+
+### ⚡ Get it in one line
+
+```powershell
+winget install laurentiu021.SysManager
+```
+
+…or [**download the portable `.exe`**](https://github.com/laurentiu021/SystemManager/releases/latest) — self-contained, no installer, no .NET runtime needed. Runs on Windows 10/11.
+
+> ⭐ **If SysManager saves you a reinstall or a head-scratch, please [star the repo](https://github.com/laurentiu021/SystemManager/stargazers)** — it's the single biggest help for a solo project and how others discover it.
 
 ---
 
@@ -35,6 +48,27 @@ Everything runs on the machine itself. No cloud, no telemetry, no account.
 Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and streaming
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
+
+## Why SysManager?
+
+Most Windows utilities do one thing, or bundle telemetry and upsells. SysManager
+is a single, local-first app that covers the whole maintenance surface — and it's
+fully open source.
+
+| | **SysManager** | CCleaner | Wintoys | O&O ShutUp10 | HWiNFO |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Open source (MIT) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| No telemetry / no account | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Fully local (no cloud) | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Portable single `.exe` | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Disk / cache cleanup | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Privacy & telemetry toggles | ✅ | ⚠️ | ✅ | ✅ | ❌ |
+| Network diagnostics (ping / traceroute / speed) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Disk / RAM SMART health | ✅ | ⚠️ | ❌ | ❌ | ✅ |
+| App updates + bulk install (winget) | ✅ | ❌ | ⚠️ | ❌ | ❌ |
+| Free | ✅ | ⚠️ | ✅ | ✅ | ✅ |
+
+<sub>⚠️ = partial, paywalled, or limited. Comparison reflects the free editions as of 2026; features evolve — corrections welcome via an issue.</sub>
 
 ## Features
 

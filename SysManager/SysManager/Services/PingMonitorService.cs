@@ -91,7 +91,7 @@ public sealed class PingMonitorService : IDisposable
             foreach (var target in active)
                 _ = PingOnceAsync(target, ct);
 
-            try { await Task.Delay(Clamp(Interval), ct); }
+            try { await Task.Delay(Clamp(Interval), ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
         }
     }

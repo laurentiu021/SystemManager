@@ -133,7 +133,7 @@ public sealed class LargeFileScanner
         }
 
         progress?.Report(new LargeFileProgress(scanned, bytesScanned, "Done"));
-        return heap.Reverse().Select(h => meta[h.Path]).ToList();
+        return heap.Reverse().Select(h => meta[h.Path]).ToArray();
     }
 
     private static bool ShouldSkip(string path)

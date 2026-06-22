@@ -100,7 +100,7 @@ public sealed class TracerouteMonitorService : IDisposable
                 catch (InvalidOperationException) { /* traceroute failed for this target — skip */ }
             }
 
-            try { await Task.Delay(Interval, ct); }
+            try { await Task.Delay(Interval, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
         }
     }

@@ -33,7 +33,7 @@ public sealed class SystemReportService
         var snapshot = await _sysInfo.CaptureAsync(ct).ConfigureAwait(false);
         var diskHealth = await _diskHealth.CollectAsync(ct).ConfigureAwait(false);
 
-        return await Task.Run(() => BuildReport(snapshot, diskHealth), ct);
+        return await Task.Run(() => BuildReport(snapshot, diskHealth), ct).ConfigureAwait(false);
     }
 
     private static string BuildReport(SystemSnapshot snapshot, IReadOnlyList<DiskHealthReport> diskHealth)

@@ -35,15 +35,15 @@ public sealed class TemperatureService
 
         if (isAdmin)
         {
-            await Task.Run(() => ReadViaLibreHardwareMonitor(readings));
+            await Task.Run(() => ReadViaLibreHardwareMonitor(readings)).ConfigureAwait(false);
 
             // LHM storage often has bad names — enrich from DiskHealthService
-            await EnrichStorageNamesAsync(readings);
+            await EnrichStorageNamesAsync(readings).ConfigureAwait(false);
         }
         else
         {
-            await Task.Run(() => ReadNvidiaGpuTemperatures(readings));
-            await ReadDiskTemperaturesAsync(readings);
+            await Task.Run(() => ReadNvidiaGpuTemperatures(readings)).ConfigureAwait(false);
+            await ReadDiskTemperaturesAsync(readings).ConfigureAwait(false);
 
             readings.Add(new TemperatureReading("CPU", "CPU Package", null, RequiresAdmin: true));
         }

@@ -375,11 +375,10 @@ public sealed class SpeedTestService
             // stay within the target directory — a crafted zip with "../"
             // entries could write files outside toolsDir.
             using var archive = ZipFile.OpenRead(zipPath);
-            var fullToolsDir = Path.GetFullPath(toolsDir);
             foreach (var entry in archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)))
             {
                 var destinationPath = Path.GetFullPath(Path.Join(toolsDir, entry.FullName));
-                if (!destinationPath.StartsWith(fullToolsDir, StringComparison.OrdinalIgnoreCase))
+                if (!IsInsideDirectory(toolsDir, destinationPath))
                 {
                     Log.Warning("Zip Slip attempt blocked: {Entry} resolves outside target dir", entry.FullName);
                     continue;
@@ -430,5 +429,21 @@ public sealed class SpeedTestService
         }, ct).ConfigureAwait(false);
 
         return exe;
+    }
+
+    /// <summary>
+    /// True if <paramref name="candidateFullPath"/> resolves to a location strictly
+    /// inside <paramref name="directory"/> — the Zip Slip containment check.
+    /// The target directory is normalized to end in a separator so a sibling whose
+    /// name merely starts with the target's name (e.g. "…\tools-evil" vs "…\tools")
+    /// cannot pass a naive prefix test. Internal for unit testing.
+    /// </summary>
+    internal static bool IsInsideDirectory(string directory, string candidateFullPath)
+    {
+        var fullDir = Path.GetFullPath(directory);
+        var prefix = fullDir.EndsWith(Path.DirectorySeparatorChar)
+            ? fullDir
+            : fullDir + Path.DirectorySeparatorChar;
+        return candidateFullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 }

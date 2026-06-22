@@ -297,7 +297,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SaveHosts()
+    private async Task SaveHostsAsync()
     {
         if (!IsElevated)
         {
@@ -315,11 +315,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
+        // Snapshot the entries on the UI thread, then write off-thread: SaveHosts does
+        // synchronous file I/O (WriteAllLines + File.Replace on the System32 hosts file)
+        // that would otherwise block the UI until the disk write completes.
+        var snapshot = HostEntries.ToList();
         try
         {
-            _hostsService.SaveHosts(HostEntries.ToList());
-            HostsStatus = $"Saved {HostEntries.Count} entries. Original preserved at hosts.bak.";
-            Log.Information("Hosts file saved with {Count} entries", HostEntries.Count);
+            await Task.Run(() => _hostsService.SaveHosts(snapshot)).ConfigureAwait(true);
+            HostsStatus = $"Saved {snapshot.Count} entries. Original preserved at hosts.bak.";
+            Log.Information("Hosts file saved with {Count} entries", snapshot.Count);
         }
         catch (UnauthorizedAccessException)
         {
@@ -358,7 +362,10 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
 
         try
         {
-            if (_hostsService.RestoreBackup())
+            // RestoreBackup copies the .bak over the System32 hosts file synchronously;
+            // run it off the UI thread so the window stays responsive during the copy.
+            bool restored = await Task.Run(_hostsService.RestoreBackup).ConfigureAwait(true);
+            if (restored)
             {
                 await LoadHostsAsync();
                 HostsStatus = "Original hosts file restored from backup.";

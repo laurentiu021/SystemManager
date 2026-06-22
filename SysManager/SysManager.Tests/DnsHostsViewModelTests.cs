@@ -120,7 +120,7 @@ public class DnsHostsViewModelGateTests
     // ── SaveHosts (overwrites the system hosts file) ──────────────────────
 
     [StaFact]
-    public void SaveHosts_WhenUserDeclinesConfirm_DoesNotWrite()
+    public async Task SaveHosts_WhenUserDeclinesConfirm_DoesNotWrite()
     {
         var (vm, hostsPath, dir, _) = NewVm();
         var prevDialog = DialogService.Instance;
@@ -132,7 +132,7 @@ public class DnsHostsViewModelGateTests
             var before = File.ReadAllText(hostsPath);
             vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "managed.local" });
 
-            vm.SaveHostsCommand.Execute(null);
+            await vm.SaveHostsCommand.ExecuteAsync(null);
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
             // Declining must leave the hosts file byte-for-byte untouched.
@@ -147,7 +147,7 @@ public class DnsHostsViewModelGateTests
     }
 
     [StaFact]
-    public void SaveHosts_WhenUserConfirms_WritesEntries()
+    public async Task SaveHosts_WhenUserConfirms_WritesEntries()
     {
         var (vm, hostsPath, dir, _) = NewVm();
         var prevDialog = DialogService.Instance;
@@ -158,7 +158,7 @@ public class DnsHostsViewModelGateTests
         {
             vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "managed.local", IsEnabled = true });
 
-            vm.SaveHostsCommand.Execute(null);
+            await vm.SaveHostsCommand.ExecuteAsync(null);
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
             // Confirming writes the entries through the SysManager-managed hosts file.
@@ -174,7 +174,7 @@ public class DnsHostsViewModelGateTests
     }
 
     [StaFact]
-    public void SaveHosts_WhenNotElevated_NeverPromptsConfirm()
+    public async Task SaveHosts_WhenNotElevated_NeverPromptsConfirm()
     {
         var (vm, _, dir, _) = NewVm();
         vm.IsElevated = false; // admin guard sits before the gate
@@ -184,7 +184,7 @@ public class DnsHostsViewModelGateTests
         try
         {
             vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "x.local" });
-            vm.SaveHostsCommand.Execute(null);
+            await vm.SaveHostsCommand.ExecuteAsync(null);
 
             // Non-elevated short-circuits before the destructive prompt.
             dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());

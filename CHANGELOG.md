@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.47] - 2026-06-22
+
+### Fixed
+- **Disk health no longer drops every disk when one reports a bad value.** If a single physical disk returned an unexpected value for its media type, bus type, size, or health status, the conversion threw and aborted the whole scan — so no disks were shown. A disk with an unreadable field is now skipped individually and the rest still appear.
+
 ## [1.20.46] - 2026-06-22
 
 ### Fixed

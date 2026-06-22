@@ -128,7 +128,7 @@ Key services:
   `SocketsHttpHandler`, retry, and surfaced error messages.
 - `StartupService` — enumerate and toggle startup programs via registry
   Run / RunOnce keys.
-- `DuplicateFileService` — two-pass duplicate finder (size grouping →
+- `DuplicateFileService` — three-pass duplicate finder (size grouping →
   partial hash pre-filter → full SHA-256). Read-only, never deletes.
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping.

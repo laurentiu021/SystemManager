@@ -120,36 +120,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Hosts entries with multiple hostnames per IP are no longer silently lost.** A line like `127.0.0.1 a b c` was read keeping only the first hostname, so editing and saving dropped the rest. Each hostname is now read as its own entry and survives a round trip.
 - **The hosts file is now written atomically.** Saving wrote directly over the file, so a crash mid-write could leave it empty or truncated. It now writes to a temporary file and atomically replaces the target, cleaning up the temp file afterward.
 
-### Fixed
-- **No more leaked process handles when opening Explorer / links.** Ten places that launch Explorer ("show in folder"/"open file location"), Event Viewer, the browser, or the updater left the returned process handle undisposed. Each now releases it. The launched program is unaffected; only the orphaned handle is cleaned up. Covers Deep Cleanup, Disk Analyzer, Duplicate Finder, Startup Manager, Logs, About, and the Context Menu refresh.
-
-### Fixed
-- **Drive/disk health reads survive systems without the Storage WMI namespace.** Disk Health and System Info could throw an unhandled COM error on older or headless Windows where the `root\Microsoft\Windows\Storage` namespace isn't present; both now handle that case and fall back gracefully (mirrors the earlier Fixed Drives fix).
-- **No leaked process handle when opening a file location.** "Open file location" in Process Manager left the launched Explorer process handle undisposed; it's now released.
-- **Swallowed errors are now diagnosable.** Several silent `catch` blocks now log at Debug level with the full exception (update-file cleanup, Deep Cleanup directory deletion, Windows Update size extraction, and the Dashboard polling loop), so failures leave a trace in the log instead of vanishing.
-
-### Changed
-- **Some status/accent colors now follow the theme instead of being hardcoded.** Replaced hardcoded color values that exactly matched a theme color (success green, warning amber, danger red, accent, hover border) with theme references on the Dashboard, Network Repair, Privacy, and Uninstaller tabs. The colors render identically today but will track the theme going forward.
-
-### Fixed
-- **Much better screen-reader support across the app.** Many buttons, toggles, drop-downs, search/filter boxes, data grids, and per-row actions had no accessible name, so screen readers announced them generically (or not at all). Added clear, specific accessible names to interactive controls across 21 tabs — including destructive actions (Delete, Shred, Clear History), per-row buttons (now named after the item they act on), and unlabeled inputs. No visual change.
-
-### Fixed
-- **Activity history can no longer be corrupted by concurrent updates.** The recent-actions log saved its data outside the lock that protects it, so two actions logged at the same time could clash and produce a "collection modified" error or a truncated file. It now writes a consistent snapshot taken under the lock.
-- **The in-app updater fails gracefully when the download location can't be determined.** Installing an update now checks the downloaded file's folder up front and shows a clear message instead of risking a crash.
-
-### Fixed
-- **More resilient reading of battery, memory, and app-list data.** Unexpected values from Windows (battery stats, memory-module details) could throw a conversion error and interrupt a scan; those conversions now fall back safely. The winget output parser also no longer throws when the tool reports columns in an unusual order.
-
-### Fixed
-- **Plugged several resource leaks.** The system-tray icon's underlying graphics handle was never released on shutdown; the elevated-relaunch helper left a process handle open; and a memory-module query left a WMI result set undisposed. All are now released properly. Also added handling for a WMI namespace being unavailable when reading drive media/bus details, so that case fails quietly instead of surfacing an error.
-
-### Fixed
-- **Starting or stopping a Windows service no longer crashes the app on failure.** If a service couldn't be started or stopped (access denied, a dependency problem, or the service state changing mid-operation), the underlying error escaped unhandled. Those failures are now caught and shown as a clear status message.
-- **Privacy toggles no longer crash on a registry write error.** Applying a privacy toggle only handled permission errors; a registry I/O error or an invalid key/value now logs a warning instead of bringing down the app.
-- **Disabling Xbox Game Bar no longer crashes on a registry I/O error.** The Performance tab's Xbox Game Bar action now handles I/O failures the same way it already handled permission and state errors.
-- **A misbehaving UI subscriber can no longer permanently lock an operation category.** If a property-change notification threw while acquiring an operation lock, the category could stay locked forever (blocking all future disk/network/system operations of that kind). The lock is now rolled back cleanly if that happens.
-
 ## [1.20.23] - 2026-06-12
 
 ### Fixed

@@ -10,9 +10,12 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// Scans a folder tree for duplicate files. Two-pass approach:
+/// Scans a folder tree for duplicate files. Three-pass approach:
 /// 1. Group files by size (files with unique sizes can't be duplicates).
-/// 2. For each size group with 2+ files, compute SHA-256 and group by hash.
+/// 2. Within each size group, pre-filter by a partial hash (first 4 KB) to
+///    cheaply rule out files that differ early.
+/// 3. Full SHA-256 only on files whose partial hash matched 2+ others, then
+///    group by the full hash.
 ///
 /// Read-only — never modifies or deletes anything.
 /// </summary>

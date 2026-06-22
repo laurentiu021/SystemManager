@@ -54,12 +54,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup .NET 10 SDK
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5
         with:
           dotnet-version: 10.0.x
 
@@ -157,7 +157,7 @@ jobs:
 
       - name: Create GitHub Release
         id: release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: SysManager ${{ steps.version.outputs.version }}
@@ -169,7 +169,7 @@ jobs:
             publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256
 
       - name: Update winget package
-        uses: vedantmgoyal9/winget-releaser@v2
+        uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         with:
           identifier: laurentiu021.SysManager
           installers-regex: '\.exe$'
@@ -177,7 +177,7 @@ jobs:
           token: ${{ secrets.WINGET_TOKEN }}
 
       - name: Post announcement to Discussions
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const fs = require('fs');
@@ -186,12 +186,7 @@ jobs:
             const notes = fs.readFileSync('release-notes.md', 'utf8');
             const releaseUrl = '${{ steps.release.outputs.url }}';
 
-            // Find the Announcements category
-            const { data: cats } = await github.rest.repos.getAllTopics({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-
+            // Find the Announcements discussion category
             const query = `
               query($owner: String!, $repo: String!) {
                 repository(owner: $owner, name: $repo) {

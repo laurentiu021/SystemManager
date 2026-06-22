@@ -270,4 +270,44 @@ public class FileShredderServiceTests
             () => svc.ShredFileAsync(Path.Combine(sibling, "x.dat"), ShredMethod.Quick, null, CancellationToken.None));
         Assert.IsNotType<SecurityException>(ex);
     }
+
+    // ---------- 8.3 short-path bypass regression ----------
+
+    [Fact]
+    public void ExpandShortPath_PathWithoutTilde_ReturnsUnchanged()
+    {
+        // Fast path: no '~' component means nothing to expand.
+        const string p = @"C:\Program Files\SomeApp\file.dat";
+        Assert.Equal(p, FileShredderService.ExpandShortPath(p));
+    }
+
+    [Fact]
+    public void ExpandShortPath_NonexistentShortPath_ReturnsLiteral()
+    {
+        // A '~' path that doesn't resolve must fall back to the literal input rather
+        // than throw, so ValidatePath still checks the path it was given.
+        var p = @"C:\NOEXIS~1\nothing.dat";
+        Assert.Equal(p, FileShredderService.ExpandShortPath(p));
+    }
+
+    [Fact]
+    public void ExpandShortPath_ProgramFilesShortName_ExpandsToLongForm()
+    {
+        // Regression: C:\PROGRA~1 must expand to the real "Program Files" path so a
+        // short-name alias of a protected directory can't slip past the denylist.
+        var progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var root = Path.GetPathRoot(progFiles); // e.g. "C:\"
+        if (string.IsNullOrEmpty(root)) return;
+        var shortForm = Path.Combine(root, "PROGRA~1");
+
+        var expanded = FileShredderService.ExpandShortPath(shortForm);
+
+        // On volumes with 8.3 generation enabled this expands to "Program Files";
+        // where 8.3 is disabled GetLongPathName returns the literal — accept either,
+        // but it must never be left as a different protected-looking alias.
+        Assert.True(
+            expanded.Equals(progFiles, StringComparison.OrdinalIgnoreCase) ||
+            expanded.Equals(shortForm, StringComparison.OrdinalIgnoreCase),
+            $"Unexpected expansion: {expanded}");
+    }
 }

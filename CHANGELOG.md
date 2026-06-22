@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.51] - 2026-06-22
+
+### Security
+- **The file shredder now expands 8.3 short paths before its system-folder safety check.** The guard that blocks shredding inside Windows/System32/Program Files compared full paths, but a short-name alias (e.g. `C:\PROGRA~1`) isn't expanded by the framework, so it could slip past the check. Short paths are now expanded to their long form first, closing that bypass.
+
 ## [1.20.50] - 2026-06-22
 
 ### Fixed

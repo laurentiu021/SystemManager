@@ -55,6 +55,22 @@ public class DiskAnalyzerServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Analyze_WhenCancelledMidScan_Throws_NotPartialResults()
+    {
+        // Several top-level folders so the traversal reports progress per folder.
+        for (int i = 0; i < 5; i++) CreateFile(Path.Combine("dir" + i, "f.txt"), 1024);
+
+        // Cancel from inside the progress callback (mid-scan) — this exercises the
+        // post-loop ThrowIfCancellationRequested guard, proving a cancelled scan
+        // throws instead of returning the partial results gathered so far.
+        using var cts = new CancellationTokenSource();
+        var progress = new SyncProgress<DiskAnalyzerService.AnalysisProgress>(_ => cts.Cancel());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _service.AnalyzeAsync(_root, progress, cts.Token));
+    }
+
+    [Fact]
     public async Task Analyze_SingleSubfolder_ReturnsOne()
     {
         CreateFile(Path.Combine("docs", "readme.txt"), 2048);

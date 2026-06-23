@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.54] - 2026-06-23
+
+### Fixed
+- **Cancelling a disk-usage or large-files scan no longer shows partial results as if complete.** Both scanners stopped mid-traversal on cancel but still returned what they had gathered, so a cancelled scan looked like a finished one with incomplete data. They now stop cleanly and report the scan as cancelled.
+- **Traceroute now stops correctly when the destination replies on any probe.** The hop status and the stop-at-destination check used only the last probe's result, so if an earlier probe reached the destination but a later one timed out, the trace could mislabel the hop and keep probing past the target. It now tracks the destination-reached result across all probes of each hop.
+
 ## [1.20.53] - 2026-06-23
 
 ### Fixed

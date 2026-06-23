@@ -104,6 +104,15 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
             $"Are you sure you want to {action} {selected.Count} broken shortcut{(selected.Count == 1 ? "" : "s")}?",
             "Delete Broken Shortcuts — Confirm")) return;
 
+        // Hold the Disk operation lock across the delete so it can't race a
+        // concurrent disk operation (cleanup / tune-up), mirroring ScanAsync.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Shortcut Delete");
+        if (opLock is null)
+        {
+            ScanStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
+
         // The shell delete (SHFileOperation) is synchronous and can take a while for
         // many items — run it off the UI thread so the window stays responsive.
         var deleted = await Task.Run(() => ShortcutCleanerService.DeleteShortcuts(selected, MoveToRecycleBin));

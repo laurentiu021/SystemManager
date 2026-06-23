@@ -562,6 +562,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
     private async Task QuickCleanupAsync()
     {
+        if (!DialogService.Instance.Confirm(
+                "Delete temporary files from your user and Windows Temp folders?\n\n" +
+                "Files in use may be skipped. This cannot be undone.",
+                "Confirm Quick Cleanup"))
+            return;
+
         await RunQuickActionAsync("Quick Cleanup", "Cleanup", "nav-cleanup", async () =>
         {
             QuickActionDetail = "Scanning temp folders...";
@@ -606,6 +612,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
     private async Task QuickUpdateAppsAsync()
     {
+        if (!DialogService.Instance.Confirm(
+                "Upgrade all installed apps that have updates available via winget?\n\n" +
+                "Apps may restart during the upgrade.",
+                "Confirm Update All Apps"))
+            return;
+
         await RunQuickActionAsync("Update All Apps", "App Updates", "nav-app-updates", async () =>
         {
             QuickActionDetail = "Checking for upgrades...";

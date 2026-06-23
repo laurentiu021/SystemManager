@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.53] - 2026-06-23
+
+### Fixed
+- **Dashboard quick actions now ask before changing your system.** "Quick Cleanup" deleted temporary files and "Update All Apps" ran a winget upgrade of every installed app with no confirmation — unlike the equivalent actions on their dedicated tabs. Both now show a confirmation dialog first, matching the rest of the app.
+- **Installing Windows updates now asks for confirmation.** Selecting updates and clicking install applied them (including drivers and feature updates that can force a restart) without a prompt. A confirmation dialog now precedes the install.
+- **Deleting broken shortcuts no longer races other disk operations.** The shortcut cleaner's delete now holds the shared disk operation lock for its duration, so it can't run at the same time as a cleanup or tune-up.
+
 ## [1.20.52] - 2026-06-22
 
 ### Fixed

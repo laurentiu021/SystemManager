@@ -300,6 +300,13 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             return;
         }
 
+        if (!DialogService.Instance.Confirm(
+                $"Install {selected.Count} selected Windows update(s)?\n\n" +
+                "This may install drivers or feature updates and can require a restart. " +
+                "Do not reboot while the install is in progress.",
+                "Confirm Windows Update"))
+            return;
+
         if (!AdminHelper.IsElevated())
         {
             StatusMessage = "Admin required. Relaunching elevated...";

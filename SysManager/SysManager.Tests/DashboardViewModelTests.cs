@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -12,6 +13,9 @@ namespace SysManager.Tests;
 /// Pure unit tests for <see cref="DashboardViewModel"/>.
 /// RefreshAsync hits real WMI so it lives in IntegrationTests.
 /// </summary>
+// Serialized: the confirm-gate tests swap the static DialogService.Instance,
+// which is process-wide shared state.
+[Collection("DialogService")]
 public class DashboardViewModelTests
 {
     private static DashboardViewModel NewVm()
@@ -234,5 +238,54 @@ public class DashboardViewModelTests
         var (title, severity) = DashboardViewModel.ClassifyPendingReboot(false);
         Assert.Equal("No pending reboots", title);
         Assert.Equal(AlertSeverity.Green, severity);
+    }
+
+    // ── Confirmation-gate tests (destructive quick actions must route through Confirm) ──
+
+    [Fact]
+    public void QuickCleanup_WhenUserDeclinesConfirm_DoesNotRun()
+    {
+        var vm = NewVm();
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.QuickCleanupCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            // Declining returns before RunQuickActionAsync, so no action ran.
+            Assert.False(vm.IsQuickActionRunning);
+            Assert.False(vm.IsQuickActionDone);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void QuickUpdateApps_WhenUserDeclinesConfirm_DoesNotRun()
+    {
+        var vm = NewVm();
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.QuickUpdateAppsCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.False(vm.IsQuickActionRunning);
+            Assert.False(vm.IsQuickActionDone);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
     }
 }

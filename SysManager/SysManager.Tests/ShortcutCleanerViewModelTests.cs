@@ -121,4 +121,33 @@ public class ShortcutCleanerViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    [Fact]
+    public void DeleteSelected_WhenDiskLocked_DoesNotDelete()
+    {
+        var vm = new ShortcutCleanerViewModel(new ShortcutCleanerService());
+        vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "A", ShortcutPath = @"C:\nope\a.lnk", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user clicks "Yes"
+        DialogService.Instance = dialog;
+
+        // Hold the Disk lock so the delete must bail rather than race a disk op.
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Test Holder");
+        Assert.NotNull(held);
+        try
+        {
+            vm.DeleteSelectedCommand.Execute(null);
+
+            // Confirm was shown, but the lock was unavailable → nothing deleted.
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.Single(vm.BrokenShortcuts);
+            Assert.Contains("already running", vm.ScanStatus);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
 }

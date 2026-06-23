@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -13,6 +14,8 @@ namespace SysManager.Tests;
 /// Pure unit tests for <see cref="WindowsUpdateViewModel"/>.
 /// Tests that require PSWindowsUpdate module are in IntegrationTests.
 /// </summary>
+// Serialized: the confirm-gate test swaps the static DialogService.Instance.
+[Collection("DialogService")]
 public class WindowsUpdateViewModelTests
 {
     private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService());
@@ -312,6 +315,32 @@ public class WindowsUpdateViewModelTests
 
         vm.IsBusy = false;
         Assert.True(vm.ListUpdatesCommand.CanExecute(null));
+    }
+
+    // ── Confirmation-gate test (installing updates must route through Confirm) ──
+
+    [Fact]
+    public void InstallUpdates_WhenUserDeclinesConfirm_DoesNotInstall()
+    {
+        var vm = NewVm();
+        vm.Updates.Add(new UpdateEntry { Title = "KB123", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.InstallUpdatesCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            // Declining returns before the elevation/install path, so nothing started.
+            Assert.False(vm.IsBusy);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
     }
 }
 

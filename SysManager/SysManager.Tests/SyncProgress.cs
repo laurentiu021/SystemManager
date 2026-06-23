@@ -13,6 +13,14 @@ namespace SysManager.Tests;
 /// </summary>
 public sealed class SyncProgress<T> : IProgress<T>
 {
+    private readonly Action<T>? _onReport;
+
+    public SyncProgress() { }
+
+    /// <summary>Also invoke <paramref name="onReport"/> synchronously per report —
+    /// e.g. to cancel a token mid-operation in a deterministic test.</summary>
+    public SyncProgress(Action<T> onReport) => _onReport = onReport;
+
     public List<T> Reports { get; } = [];
-    public void Report(T value) => Reports.Add(value);
+    public void Report(T value) { Reports.Add(value); _onReport?.Invoke(value); }
 }

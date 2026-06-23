@@ -97,6 +97,11 @@ public sealed class DiskAnalyzerService
             });
         }
 
+        // If the scan was cancelled mid-traversal, the loop `break`s leave partial
+        // results — surfacing them as a completed analysis would mislead the user.
+        // Throw so the caller's OperationCanceledException branch handles it.
+        ct.ThrowIfCancellationRequested();
+
         if (rootFileCount > 0)
         {
             results.Add(new DiskUsageEntry

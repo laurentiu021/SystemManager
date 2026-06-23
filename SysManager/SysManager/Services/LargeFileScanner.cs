@@ -132,6 +132,10 @@ public sealed class LargeFileScanner
             }
         }
 
+        // A cancelled scan exits the loop with partial results; surfacing them as
+        // "Done" would mislead the user. Throw so the caller's cancel branch handles it.
+        ct.ThrowIfCancellationRequested();
+
         progress?.Report(new LargeFileProgress(scanned, bytesScanned, "Done"));
         return heap.Reverse().Select(h => meta[h.Path]).ToArray();
     }

@@ -34,7 +34,12 @@ public sealed class TracerouteService
             var options = new PingOptions(ttl, true);
             List<double> latencies = [];
             IPAddress? replyAddress = null;
-            IPStatus lastStatus = IPStatus.Unknown;
+            // Track the destination-reached status across ALL probes of this hop, not
+            // just the last one: if probe 1 reaches the destination (Success) but a
+            // later probe times out, the last-probe status would otherwise mislabel
+            // the hop and fail to stop the traceroute at the destination.
+            bool reachedDestination = false;
+            IPStatus replyStatus = IPStatus.Unknown;
 
             for (int probe = 0; probe < ProbesPerHop; probe++)
             {
@@ -45,12 +50,15 @@ public sealed class TracerouteService
                     var effectiveTimeout = TimeoutMs > 0 ? TimeoutMs : 3000;
                     var reply = await ping.SendPingAsync(host, effectiveTimeout, payload, options).WaitAsync(ct).ConfigureAwait(false);
                     sw.Stop();
-                    lastStatus = reply.Status;
 
                     if (reply.Status is IPStatus.Success or IPStatus.TtlExpired)
                     {
                         replyAddress ??= reply.Address;
                         latencies.Add(sw.Elapsed.TotalMilliseconds);
+                        // Prefer Success (destination) over TtlExpired (intermediate hop)
+                        // when summarizing the hop's status.
+                        if (replyStatus != IPStatus.Success) replyStatus = reply.Status;
+                        if (reply.Status == IPStatus.Success) reachedDestination = true;
                     }
                 }
                 catch (OperationCanceledException) { throw; }
@@ -64,7 +72,7 @@ public sealed class TracerouteService
                 HopNumber = ttl,
                 Address = replyAddress?.ToString() ?? "*",
                 LatencyMs = latencies.Count > 0 ? latencies.Average() : null,
-                Status = latencies.Count > 0 ? lastStatus.ToString() : "Timeout"
+                Status = latencies.Count > 0 ? replyStatus.ToString() : "Timeout"
             };
 
             // Await reverse DNS with a short timeout before emitting the hop.
@@ -90,7 +98,7 @@ public sealed class TracerouteService
             results.Add(hop);
             RaiseHopCompleted(hop);
 
-            if (lastStatus == IPStatus.Success) break; // reached destination
+            if (reachedDestination) break; // any probe reached the destination
         }
 
         return results;

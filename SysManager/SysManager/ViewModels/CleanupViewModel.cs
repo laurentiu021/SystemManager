@@ -273,6 +273,17 @@ public sealed partial class CleanupViewModel : ViewModelBase
             return;
         }
 
+        // SFC and DISM share the single _runner (and its LineReceived event), so they
+        // must be mutually exclusive — running both at once cross-contaminates their
+        // captured output and progress. The SystemModification lock enforces that and
+        // also blocks against the other system-repair operations.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsSfcRunning = true;
         IsProgressIndeterminate = true;
         SfcStatus = "Running — can take 5–15 minutes";
@@ -359,6 +370,16 @@ public sealed partial class CleanupViewModel : ViewModelBase
                 return;
             }
             if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current?.Shutdown();
+            return;
+        }
+
+        // Mutually exclusive with SFC (and the other system-repair ops): both share the
+        // single _runner and its LineReceived event, so concurrent runs would cross-
+        // contaminate captured output and progress.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
 

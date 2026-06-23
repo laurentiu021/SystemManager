@@ -491,4 +491,26 @@ public class DismResultParsingTests
         Assert.Contains("exit code 87", verdict);
         Assert.Equal("#F59E0B", color);
     }
+
+    // RunSfcAsync/RunDismAsync now both acquire the SystemModification operation lock
+    // (after the elevation gate) so they are mutually exclusive — concurrent runs would
+    // cross-contaminate the shared _runner's captured output. The full VM path is gated
+    // behind elevation (skipped in non-admin CI, like the tests above), so this pins the
+    // mutual-exclusion contract the fix relies on at the service level.
+    [Fact]
+    public void SystemModificationLock_IsMutuallyExclusive()
+    {
+        using var first = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan");
+        Assert.NotNull(first);
+
+        // A second acquire for the same category (e.g. DISM while SFC holds it) must fail.
+        var second = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
+        Assert.Null(second);
+        Assert.Equal("SFC scan", OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification));
+
+        first!.Dispose();
+        // Once released, the category is free again.
+        using var third = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
+        Assert.NotNull(third);
+    }
 }

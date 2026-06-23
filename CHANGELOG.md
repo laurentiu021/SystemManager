@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.56] - 2026-06-23
+
+### Fixed
+- **SFC and DISM repairs can no longer run at the same time and corrupt each other's output.** Both share a single PowerShell runner whose output event was subscribed by each command independently, so starting one while the other ran cross-contaminated their captured results and progress. They now acquire a shared system-modification lock, making them mutually exclusive (and blocked against other system-repair operations), with a clear "already running" message instead.
+
 ## [1.20.55] - 2026-06-23
 
 ### Security

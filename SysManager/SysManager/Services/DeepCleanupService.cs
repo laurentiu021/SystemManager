@@ -378,7 +378,7 @@ public sealed partial class DeepCleanupService
                             freed += len;
                             filesDeleted++;
                         }
-                        catch (Exception ex)
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
                         {
                             errors.Add($"{file}: {ex.Message}");
                             Log.Debug(ex, "Deep cleanup: failed to delete file {File}", file);
@@ -391,7 +391,7 @@ public sealed partial class DeepCleanupService
                         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Deep cleanup: access denied deleting directory {Dir}", dir); }
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
                 {
                     errors.Add($"{path}: {ex.Message}");
                     Log.Debug(ex, "Deep cleanup: failed to enumerate path {Path}", path);
@@ -410,6 +410,12 @@ public sealed partial class DeepCleanupService
 
     private static IEnumerable<string> EnumerateFiles(string root, CancellationToken ct)
     {
+        // Guard the traversal ROOT itself, not just its children: if a cleanup-root
+        // cache path is replaced by a junction/symlink (writable without admin, e.g.
+        // %LOCALAPPDATA%\NVIDIA\GLCache), EnumerateFiles(root) would yield the LINK
+        // TARGET's files and the caller would delete them — data loss outside the
+        // target tree. IsReparsePoint fails safe (returns true on access error).
+        if (IsReparsePoint(root)) yield break;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
@@ -445,6 +451,9 @@ public sealed partial class DeepCleanupService
     private static IEnumerable<string> EnumerateDirectoriesDepthFirst(string root, CancellationToken ct)
     {
         List<string> all = [];
+        // Guard the root (see EnumerateFiles): a junction at the root must not be
+        // traversed, or its target's subdirectories could be reached for deletion.
+        if (IsReparsePoint(root)) return all;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)

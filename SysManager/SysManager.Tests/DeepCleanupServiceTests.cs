@@ -466,4 +466,67 @@ public class DeepCleanupServiceTests
             catch { return false; }
         }
     }
+
+    [Fact]
+    public async Task CleanAsync_DoesNotFollowJunctionAtCleanupRoot()
+    {
+        // Regression for the ROOT-as-junction gap: the reparse guard previously only
+        // covered CHILD directories, so a junction planted AT a cleanup-root path
+        // (writable without admin, e.g. %LOCALAPPDATA%\NVIDIA\GLCache) was enumerated
+        // directly and the link TARGET's files were deleted — data loss outside the tree.
+        var baseDir = Path.Combine(Path.GetTempPath(), "smtest_juncroot_" + Guid.NewGuid().ToString("N"));
+        var target = Path.Combine(baseDir, "outside");   // simulates real user data
+        Directory.CreateDirectory(target);
+
+        var precious = Path.Combine(target, "precious.dat");
+        File.WriteAllText(precious, "do not delete me");
+
+        // The cleanup ROOT itself is the junction (points at the target).
+        var cleanRoot = Path.Combine(baseDir, "cacheLink");
+        var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{cleanRoot}\" \"{target}\"")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        try
+        {
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !IsReparse(cleanRoot))
+                {
+                    // Environment can't create junctions (rare) — nothing to assert.
+                    return;
+                }
+            }
+
+            var cat = new CleanupCategory
+            {
+                Name = "Cache",
+                Description = "Cleanup root that IS a junction",
+                Paths = new[] { cleanRoot },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true
+            };
+            var s = new DeepCleanupService();
+            await s.CleanAsync(new[] { cat });
+
+            // The file behind the junction-root must survive: the root reparse guard
+            // stops the traversal before any file is enumerated for deletion.
+            Assert.True(File.Exists(precious), "Cleanup followed a junction at the cleanup root and deleted data outside the target tree");
+        }
+        finally
+        {
+            try { Directory.Delete(baseDir, recursive: true); } catch { }
+        }
+
+        static bool IsReparse(string p)
+        {
+            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
+            catch { return false; }
+        }
+    }
 }

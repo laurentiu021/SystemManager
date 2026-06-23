@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.55] - 2026-06-23
+
+### Security
+- **Deep Cleanup can no longer delete data outside a cache folder via a junction at its root.** The reparse-point guard that stops cleanup from following junctions/symlinks only covered sub-folders, not the cleanup root itself. A junction planted at a cleanup-root path (which a normal user can create without admin) was traversed directly, so the linked target's files could be deleted. The traversal now checks the root for being a reparse point first, and the per-file delete catches only the expected I/O/access exceptions instead of all exceptions.
+
 ## [1.20.54] - 2026-06-23
 
 ### Fixed

@@ -87,12 +87,16 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
 - `PrivacyViewModel` — Windows privacy and telemetry toggles via registry.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
+- `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
+  instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
+  used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
 
 ## Services
 
 Thin wrappers around the underlying platform. Each service is designed to be
-unit-testable — where possible, they depend on interfaces or accept seams for
-swapping the underlying process runner.
+unit-testable. The key seam interfaces are `IPowerShellRunner` (PowerShellRunner),
+`IAppBlockerService` (AppBlockerService), and `IDialogService` (DialogService) —
+substitutable in tests (see `ServiceRegistration.cs`).
 
 Key services:
 - `PingMonitorService` / `TracerouteService` / `TracerouteMonitorService` —
@@ -155,8 +159,10 @@ Key services:
   direct MessageBox calls for testability).
 - `IconExtractorService` — extracts application icons from executables
   for display in process/app lists; caches results.
-- `OperationLockService` — prevents concurrent destructive operations
-  via named semaphore acquisition with timeout.
+- `OperationLockService` — prevents concurrent conflicting operations by
+  category (Disk / Network / SystemModification) via a thread-safe
+  `ConcurrentDictionary` try-acquire. Returns a disposable handle, or `null`
+  immediately if that category is already locked (non-blocking; no timeout).
 - `ProcessDescriptionService` — enriches process entries with friendly
   descriptions from file version info and known-process database.
 - `SpeedTestHistoryService` — persists speed test results to JSON for
@@ -211,8 +217,11 @@ Utility classes that don't fit neatly into Services or ViewModels:
 
 `ServiceRegistration.cs` configures `Microsoft.Extensions.DependencyInjection`.
 `App.OnStartup` builds the `IServiceProvider` and exposes it as `App.Services`.
-Core services and ViewModels are registered as singletons — one shared instance
-per app lifetime. `MainWindowViewModel` resolves child VMs from
+Most core services and ViewModels are registered as singletons — one shared
+instance per app lifetime. The exception is `PowerShellRunner` /
+`IPowerShellRunner`, registered **transient** so each consumer gets its own
+instance, avoiding `LineReceived` event cross-talk between tabs (see
+`ServiceRegistration.cs:24-25`). `MainWindowViewModel` resolves child VMs from
 the container at runtime; falls back to manual creation in tests (no DI
 dependency in the test project).
 
@@ -229,8 +238,11 @@ which restarts the process with `runas` and the current command-line args.
   scans) runs on background tasks.
 - View-model observable properties are updated on the UI thread via the
   dispatcher captured in `ViewModelBase`.
-- SFC and DISM each have their own `IsSfcRunning` / `IsDismRunning`
-  flags so they don't block unrelated UI or each other.
+- SFC and DISM each have their own `IsSfcRunning` / `IsDismRunning` flags for
+  UI state, but they are **mutually exclusive**: both share a single PowerShell
+  runner, so a `SystemModification` `OperationLockService` lock prevents running
+  them (or other system-repair operations) concurrently — starting one while the
+  other runs is refused with a status message.
 
 ## Safety guardrails (Deep Cleanup)
 

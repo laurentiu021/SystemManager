@@ -72,10 +72,13 @@ What the app can and cannot do by design:
 
 - Touching browser caches, cookies, or password stores.
 - Touching the Windows registry for cleanup.
-- Deleting files inside `steamapps\common`, `Program Files\*`, or any
-  active driver folder.
-- Deleting from the Large Files Finder — it is intentionally read-only,
-  even with admin rights.
+- Deleting game files, installed binaries, or any active driver folder. The
+  cleanup engine never touches `steamapps\common` or installed game/program
+  executables; it does remove specific launcher cache and log subfolders that
+  happen to live under `Program Files` (e.g. Steam `appcache` / `htmlcache` /
+  `depotcache` / `shadercache`, Riot/League logs) — but never the games themselves.
+- Deleting from the Large Files scan (in the Deep Cleanup tab) — it is
+  intentionally read-only, even with admin rights.
 - Sending telemetry or contacting any server other than the ones needed
   for an explicit user action (ping targets, speed-test hosts, GitHub
   Releases).

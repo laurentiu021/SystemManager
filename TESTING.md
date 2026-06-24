@@ -6,9 +6,9 @@ SysManager has three test projects, each with a distinct scope and runner.
 
 | Project | What it tests | Runs on CI |
 |---|---|---|
-| `SysManager.Tests` | Unit tests — mostly pure logic, but some tests touch lightweight OS APIs (registry reads, process enumeration, Task Scheduler queries). No WPF dispatcher, no WMI, no network I/O, no admin required. | ✅ Every push / PR |
+| `SysManager.Tests` | Unit tests — mostly pure logic, but some tests touch lightweight OS APIs (registry reads, process enumeration, Task Scheduler queries) and a few exercise STA/UI-thread code via `Xunit.StaFact` (`[StaFact]` / `[UIFact]`). No WMI, no network I/O, no admin required. | ✅ Every push / PR |
 | `SysManager.IntegrationTests` | Integration tests — real Windows APIs (Event Log, WMI, PowerShell, ICMP, WPF dispatcher) | ❌ Local only |
-| `SysManager.UITests` | End-to-end UI automation via FlaUI | ✅ CI (headless, limited) |
+| `SysManager.UITests` | End-to-end UI automation via FlaUI — needs an interactive desktop session; runs in CI on a desktop-enabled runner, non-blocking (`continue-on-error`) and skipped on fork PRs | ⚠️ CI (non-blocking) |
 
 ## Running unit tests (CI-equivalent)
 
@@ -64,9 +64,13 @@ Coverage is collected automatically on CI via `coverlet` and uploaded to
 
 Unit tests run in parallel by default (`parallelizeTestCollections: true`).
 Tests that share state or touch OS resources are isolated via xUnit
-collection definitions:
+collection definitions (all defined in `TestCollections.cs`, each with
+`DisableParallelization = true`):
 
-- `[Collection("Network")]` — tests using ICMP sockets run sequentially.
+- `[Collection("Network")]` — tests using ICMP sockets.
+- `[Collection("OperationLock")]` — tests that acquire the shared `OperationLockService`.
+- `[Collection("IconCache")]` — tests touching the shared icon cache.
+- `[Collection("DialogService")]` — tests that swap the static `DialogService.Instance`.
 
 ### Conventions
 

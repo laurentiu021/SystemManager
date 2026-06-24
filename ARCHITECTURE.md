@@ -41,7 +41,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `PlaceholderViewModel` (Restore Points · Task Scheduler · Boot Analyzer) |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `PlaceholderViewModel` (Task Scheduler · Boot Analyzer) |
 | Gaming & Profiles | `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles) |
 | Monitor | `ProcessManagerViewModel` · `PlaceholderViewModel` (Resource History · Privacy Monitor · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
@@ -89,6 +89,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
 - `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
+- `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for create/restore; restore reboots, gated by confirmation).
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
@@ -192,6 +193,10 @@ Key services:
   variables via `Environment.SetEnvironmentVariable` (which broadcasts
   WM_SETTINGCHANGE), with name validation, pure PATH split/join/dedupe helpers,
   and a one-time JSON backup of the original environment before the first write.
+- `RestorePointService` — lists (`Get-ComputerRestorePoint`), creates
+  (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
+  through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested
+  static method.
 - `AppIconService` — downloads and caches application favicons for UI display.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time

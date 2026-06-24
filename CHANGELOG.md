@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-06-24
+
+### Added
+- **Restore Points tab.** The System group's "Restore Points" placeholder is now a working tab. List every Windows System Restore point (sequence number, date, description, and type, newest first), create a new restore point with an optional description, and restore the PC to a selected point. Creating and restoring require administrator rights (the tab shows the standard elevation banner); viewing the list does not. Restoring warns clearly that Windows will restart and asks for confirmation first. Creating also enables System Restore on the system drive if it was off, and notes Windows' once-per-24-hour limit.
+
 ## [1.22.0] - 2026-06-24
 
 ### Added

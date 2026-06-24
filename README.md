@@ -74,13 +74,13 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 55 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 32 tabs are fully
-implemented; 23 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 33 tabs are fully
+implemented; 22 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points ⚙️ · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Privacy Monitor ⚙️ · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
@@ -175,6 +175,16 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Memory diagnostic that scans the last 30 days of WHEA events for RAM errors
 - Schedule the Windows Memory Diagnostic at next boot
 - Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select
+
+### Restore Points
+- List every Windows System Restore point — sequence number, date, description,
+  and type — newest first
+- **Create** a restore point with an optional custom description (enables System
+  Restore on the system drive first if it's off)
+- **Restore** the PC to a selected point, with a clear confirmation that warns
+  Windows will restart and that programs/drivers added since that point are removed
+- Admin elevation banner — viewing the list works unprivileged; creating and
+  restoring need administrator rights
 
 ### Windows Update (Windows Update Agent COM API)
 - Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —

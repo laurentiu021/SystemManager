@@ -49,6 +49,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public ContextMenuViewModel ContextMenu { get; }
     public SystemReportViewModel SystemReport { get; }
     public EnvironmentVariablesViewModel EnvironmentVariables { get; }
+    public RestorePointsViewModel RestorePoints { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -88,7 +89,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipBootAnalyzer { get; private set; } = null!;
 
     // Advanced group
-    public PlaceholderViewModel WipRestorePoints { get; private set; } = null!;
     public PlaceholderViewModel WipProfileExportImport { get; private set; } = null!;
     public PlaceholderViewModel WipCliInterface { get; private set; } = null!;
 
@@ -149,6 +149,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ContextMenu = sp.GetRequiredService<ContextMenuViewModel>();
             SystemReport = sp.GetRequiredService<SystemReportViewModel>();
             EnvironmentVariables = sp.GetRequiredService<EnvironmentVariablesViewModel>();
+            RestorePoints = sp.GetRequiredService<RestorePointsViewModel>();
         }
         else
         {
@@ -201,6 +202,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ContextMenu = new ContextMenuViewModel(new ContextMenuService());
             SystemReport = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth));
             EnvironmentVariables = new EnvironmentVariablesViewModel(new EnvironmentVariableService());
+            RestorePoints = new RestorePointsViewModel(new RestorePointService(new PowerShellRunner()));
         }
 
         InitPlaceholders();
@@ -248,7 +250,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipBootAnalyzer = new PlaceholderViewModel("Boot Analyzer", "Measure boot time breakdown per service/driver with optimization recommendations.", "#343");
 
         // Advanced group
-        WipRestorePoints = new PlaceholderViewModel("Restore Points", "Create and manage system restore points with size tracking.", "#10");
         WipProfileExportImport = new PlaceholderViewModel("Profile Export/Import", "Export SysManager configuration as JSON, import on another PC.", "#341");
         WipCliInterface = new PlaceholderViewModel("CLI Interface", "Command-line control: sysmanager --cleanup --apply-profile Gaming --silent.", "#342");
     }
@@ -285,7 +286,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-services",         "Services",         "", Services,         typeof(Views.ServicesView)),
             Item("nav-startup",          "Startup Manager",  "", Startup,          typeof(Views.StartupView)),
             Item("nav-windows-features", "Windows Features", "", WindowsFeatures,  typeof(Views.WindowsFeaturesView)),
-            Item("nav-restore-points",   "Restore Points",   "", WipRestorePoints, typeof(Views.PlaceholderView)),
+            Item("nav-restore-points",   "Restore Points",   "", RestorePoints,    typeof(Views.RestorePointsView)),
             Item("nav-task-scheduler",   "Task Scheduler",   "", WipTaskScheduler, typeof(Views.PlaceholderView)),
             Item("nav-boot-analyzer",    "Boot Analyzer",    "", WipBootAnalyzer,  typeof(Views.PlaceholderView))),
 
@@ -464,6 +465,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ContextMenu?.Dispose();
         SystemReport?.Dispose();
         EnvironmentVariables?.Dispose();
+        RestorePoints?.Dispose();
         WipDebloater?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
@@ -473,7 +475,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipVolumeControl?.Dispose();
         WipTaskScheduler?.Dispose();
         WipBootAnalyzer?.Dispose();
-        WipRestorePoints?.Dispose();
         WipProfileExportImport?.Dispose();
         WipCliInterface?.Dispose();
 

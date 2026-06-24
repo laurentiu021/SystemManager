@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 55 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 30 tabs are fully
-implemented; 25 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 31 tabs are fully
+implemented; 24 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
@@ -89,7 +89,7 @@ implemented; 25 are work-in-progress placeholders marked with ⚙️:
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads ⚙️ · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables ⚙️ |
-| ℹ️ Info | Drivers · Battery Health · System Logs · System Report ⚙️ · About |
+| ℹ️ Info | Drivers · Battery Health · System Logs · System Report · About |
 | ⚙️ Advanced | Profile Export/Import ⚙️ · CLI Interface ⚙️ |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
@@ -143,6 +143,17 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - Each event gets a plain-English explanation and recommended next steps
 - Filter by severity and time range, plus full-text search
 - Export to CSV, with a "search online" link for unknown events
+
+### System report
+- One-click, read-only snapshot of the whole machine: OS, CPU, memory
+  (with per-slot module detail), GPU, motherboard, storage health, and active
+  network adapters
+- Storage section carries SMART detail when available — temperature, wear %,
+  and power-on time — reusing the same disk-health data as the System Health tab
+- Export as **plain text**, a styled **self-contained HTML** page, or structured
+  **JSON** — or copy the text straight to the clipboard
+- Fully local: nothing on the system is changed and the report is written only
+  to the file you choose — nothing leaves the machine
 
 ### System health
 - OS / CPU / RAM / storage overview

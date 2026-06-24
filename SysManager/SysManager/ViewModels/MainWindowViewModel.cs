@@ -47,6 +47,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PrivacyViewModel Privacy { get; }
     public DnsHostsViewModel DnsHosts { get; }
     public ContextMenuViewModel ContextMenu { get; }
+    public SystemReportViewModel SystemReport { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -90,7 +91,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipRestorePoints { get; private set; } = null!;
     public PlaceholderViewModel WipProfileExportImport { get; private set; } = null!;
     public PlaceholderViewModel WipCliInterface { get; private set; } = null!;
-    public PlaceholderViewModel WipSystemReport { get; private set; } = null!;
 
     /// <summary>Grouped sidebar tree (12 categories).</summary>
     public ObservableCollection<NavGroup> NavGroups { get; } = new();
@@ -147,6 +147,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             WindowsFeatures = sp.GetRequiredService<WindowsFeaturesViewModel>();
             Privacy = sp.GetRequiredService<PrivacyViewModel>();
             ContextMenu = sp.GetRequiredService<ContextMenuViewModel>();
+            SystemReport = sp.GetRequiredService<SystemReportViewModel>();
         }
         else
         {
@@ -197,6 +198,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             WindowsFeatures = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner));
             Privacy = new PrivacyViewModel(new PrivacyService());
             ContextMenu = new ContextMenuViewModel(new ContextMenuService());
+            SystemReport = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth));
         }
 
         InitPlaceholders();
@@ -248,7 +250,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipRestorePoints = new PlaceholderViewModel("Restore Points", "Create and manage system restore points with size tracking.", "#10");
         WipProfileExportImport = new PlaceholderViewModel("Profile Export/Import", "Export SysManager configuration as JSON, import on another PC.", "#341");
         WipCliInterface = new PlaceholderViewModel("CLI Interface", "Command-line control: sysmanager --cleanup --apply-profile Gaming --silent.", "#342");
-        WipSystemReport = new PlaceholderViewModel("System Report", "Comprehensive system info export (better than DxDiag) in HTML/JSON.", "#4");
     }
 
     private void InitNavigation()
@@ -345,7 +346,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-drivers",       "Drivers",        "", Drivers,        typeof(Views.DriversView)),
             Item("nav-battery",       "Battery Health", "", BatteryHealth,  typeof(Views.BatteryHealthView)),
             Item("nav-logs",          "System Logs",    "", Logs,           typeof(Views.LogsView)),
-            Item("nav-system-report", "System Report",  "", WipSystemReport, typeof(Views.PlaceholderView)),
+            Item("nav-system-report", "System Report",  "", SystemReport, typeof(Views.SystemReportView)),
             Item("nav-about",         "About",          "", About,          typeof(Views.AboutView))),
 
         Group("grp-advanced", "Advanced", "",
@@ -460,6 +461,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipScheduledMaintenance?.Dispose();
         Privacy?.Dispose();
         ContextMenu?.Dispose();
+        SystemReport?.Dispose();
         WipDebloater?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
@@ -473,7 +475,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipRestorePoints?.Dispose();
         WipProfileExportImport?.Dispose();
         WipCliInterface?.Dispose();
-        WipSystemReport?.Dispose();
 
         GC.SuppressFinalize(this);
     }

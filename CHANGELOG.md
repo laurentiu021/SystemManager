@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.68] - 2026-06-24
+
+### Added
+- **System Report tab.** The Info group's "System Report" placeholder is now a working tab. Click *Generate* to gather a full, read-only snapshot of this PC — operating system, CPU, memory (with per-slot detail), GPU, motherboard, storage health (including SMART temperature, wear, and power-on time when available), and active network adapters. Export the report as plain text, a styled self-contained HTML page, or structured JSON, or copy it to the clipboard. The report is read-only: nothing on the system is changed, and the file is written only where you choose — nothing leaves the machine.
+
 ## [1.20.67] - 2026-06-24
 
 ### Changed

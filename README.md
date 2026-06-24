@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 55 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 31 tabs are fully
-implemented; 24 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 32 tabs are fully
+implemented; 23 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
@@ -88,7 +88,7 @@ implemented; 24 are work-in-progress placeholders marked with ⚙️:
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads ⚙️ · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
-| 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables ⚙️ |
+| 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · About |
 | ⚙️ Advanced | Profile Export/Import ⚙️ · CLI Interface ⚙️ |
 
@@ -119,6 +119,19 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - **"Applies to" column** — shows whether entry affects Files, Folders, Desktop, or Directory Background
 - **HKCU fallback** — system-protected entries can be toggled via user-level registry override
 - Admin elevation banner with one-click restart as administrator
+
+### Environment Variables
+Edit Windows environment variables without the cramped built-in dialog:
+- **User and System scopes in one grid** — filter by scope, search by name or value
+- **In-place value editing**, plus add and remove variables
+- **Dedicated PATH editor** for PATH-like variables — reorder directories, remove
+  entries, and strip duplicates in one click
+- **Missing folders highlighted** so you can spot dead PATH entries at a glance
+- **Local until Apply** — changes are staged; a one-time JSON backup of every
+  variable is written before the first write so the original environment is recoverable
+- Changes broadcast to Windows, so new terminals pick them up without a reboot
+- System-scope edits need administrator rights (standard elevation banner); user
+  variables can be edited without it
 
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart

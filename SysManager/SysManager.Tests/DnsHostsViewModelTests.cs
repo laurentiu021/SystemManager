@@ -22,10 +22,11 @@ public class DnsHostsViewModelTests
         new(new DnsService(new PowerShellRunner()), new HostsFileService());
 
     [StaFact]
-    public void Constructor_PresetsListPopulated_With5Presets()
+    public void Constructor_PresetsListPopulated_WithFilteringVariants()
     {
         var vm = NewVm();
-        Assert.Equal(5, vm.Presets.Count);
+        // 4 plain resolvers + 5 filtering variants + Automatic (DHCP).
+        Assert.Equal(10, vm.Presets.Count);
     }
 
     [StaFact]

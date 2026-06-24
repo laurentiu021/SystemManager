@@ -41,7 +41,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `PlaceholderViewModel` (Task Scheduler · Boot Analyzer) |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `LegacyPanelsViewModel` · `PlaceholderViewModel` (Task Scheduler · Boot Analyzer) |
 | Gaming & Profiles | `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles) |
 | Monitor | `ProcessManagerViewModel` · `PlaceholderViewModel` (Resource History · Privacy Monitor · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
@@ -90,6 +90,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for create/restore; restore reboots, gated by confirmation).
+- `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
@@ -202,6 +203,10 @@ Key services:
   per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
   denylist of system-critical package families is enforced in code; the parser and
   denylist check are pure, unit-tested static methods.
+- `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
+  Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
+  hard-coded and `Launch` re-validates catalog membership, so no input reaches
+  `Process.Start`; pure launchers, no system modification.
 - `AppIconService` — downloads and caches application favicons for UI display.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time

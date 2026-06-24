@@ -73,14 +73,14 @@ fully open source.
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 55 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 34 tabs are fully
+The sidebar organises 56 feature tabs into 12 collapsible groups so you can
+find what you need without scrolling through a flat list. 35 tabs are fully
 implemented; 21 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Legacy Panels · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Privacy Monitor ⚙️ · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
@@ -185,6 +185,15 @@ Edit Windows environment variables without the cramped built-in dialog:
   Windows will restart and that programs/drivers added since that point are removed
 - Admin elevation banner — viewing the list works unprivileged; creating and
   restoring need administrator rights
+
+### Legacy Panels
+- One-click launcher for the classic Windows applets that newer releases keep
+  hiding: Control Panel, Sound, Power Options, Network Connections, Region,
+  System Properties, User Accounts, Device Manager, Computer Management,
+  Programs and Features, Mouse, and Date and Time
+- **Pure launchers** — each just opens the built-in panel; nothing is modified,
+  so no elevation or confirmation is needed
+- The applet list is fixed in code, so no typed input ever reaches the launcher
 
 ### Windows Update (Windows Update Agent COM API)
 - Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —

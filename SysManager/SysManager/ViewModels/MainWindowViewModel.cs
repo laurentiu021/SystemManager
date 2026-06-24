@@ -51,6 +51,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public EnvironmentVariablesViewModel EnvironmentVariables { get; }
     public RestorePointsViewModel RestorePoints { get; }
     public DebloaterViewModel Debloater { get; }
+    public LegacyPanelsViewModel LegacyPanels { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -151,6 +152,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             EnvironmentVariables = sp.GetRequiredService<EnvironmentVariablesViewModel>();
             RestorePoints = sp.GetRequiredService<RestorePointsViewModel>();
             Debloater = sp.GetRequiredService<DebloaterViewModel>();
+            LegacyPanels = sp.GetRequiredService<LegacyPanelsViewModel>();
         }
         else
         {
@@ -205,6 +207,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             EnvironmentVariables = new EnvironmentVariablesViewModel(new EnvironmentVariableService());
             RestorePoints = new RestorePointsViewModel(new RestorePointService(new PowerShellRunner()));
             Debloater = new DebloaterViewModel(new DebloaterService(new PowerShellRunner()));
+            LegacyPanels = new LegacyPanelsViewModel(new LegacyPanelService());
         }
 
         InitPlaceholders();
@@ -289,7 +292,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-windows-features", "Windows Features", "", WindowsFeatures,  typeof(Views.WindowsFeaturesView)),
             Item("nav-restore-points",   "Restore Points",   "", RestorePoints,    typeof(Views.RestorePointsView)),
             Item("nav-task-scheduler",   "Task Scheduler",   "", WipTaskScheduler, typeof(Views.PlaceholderView)),
-            Item("nav-boot-analyzer",    "Boot Analyzer",    "", WipBootAnalyzer,  typeof(Views.PlaceholderView))),
+            Item("nav-boot-analyzer",    "Boot Analyzer",    "", WipBootAnalyzer,  typeof(Views.PlaceholderView)),
+            Item("nav-legacy-panels",    "Legacy Panels",    "", LegacyPanels,     typeof(Views.LegacyPanelsView))),
 
         Group("grp-gaming", "Gaming & Profiles", "",
             Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView)),
@@ -468,6 +472,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         EnvironmentVariables?.Dispose();
         RestorePoints?.Dispose();
         Debloater?.Dispose();
+        LegacyPanels?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipDefenderTweaks?.Dispose();

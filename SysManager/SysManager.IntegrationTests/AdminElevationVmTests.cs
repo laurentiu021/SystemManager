@@ -16,7 +16,7 @@ public class AdminElevationVmTests
     [Fact]
     public void WindowsUpdateVm_ExposesIsElevated()
     {
-        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService());
+        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
         // Must equal the current process' elevation state.
         Assert.Equal(Helpers.AdminHelper.IsElevated(), vm.IsElevated);
     }
@@ -24,7 +24,7 @@ public class AdminElevationVmTests
     [Fact]
     public void WindowsUpdateVm_HasRelaunchCommand()
     {
-        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService());
+        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
         Assert.NotNull(vm.RelaunchAsAdminCommand);
     }
 
@@ -59,7 +59,7 @@ public class AdminElevationVmTests
     [Fact]
     public void AllElevationVms_Report_SameElevationFlag()
     {
-        var a = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService()).IsElevated;
+        var a = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService()).IsElevated;
         var b = new CleanupViewModel(new PowerShellRunner()).IsElevated;
         var c = new AppUpdatesViewModel(new WingetService(new PowerShellRunner())).IsElevated;
         Assert.Equal(a, b);

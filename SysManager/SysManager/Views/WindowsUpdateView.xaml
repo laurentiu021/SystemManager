@@ -109,6 +109,39 @@
                             Visibility="{Binding IsShowingHistory, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"/>
                 </WrapPanel>
+
+                <!-- Update deferral policy (registry-backed, fully reversible) -->
+                <Expander Header="Update timing &amp; deferral" Margin="0,8,0,0" Foreground="{DynamicResource TextPrimary}">
+                    <StackPanel Margin="0,10,0,0">
+                        <TextBlock Text="{Binding PolicySummary}" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <WrapPanel VerticalAlignment="Center" Margin="0,0,0,6">
+                            <TextBlock Text="Defer feature updates by" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox Text="{Binding DeferDays}" Width="60" VerticalContentAlignment="Center"
+                                     AutomationProperties.Name="Days to defer feature updates" Margin="0,0,6,0"/>
+                            <TextBlock Text="days" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Button Content="Apply deferral" Command="{Binding DeferFeatureUpdatesCommand}"
+                                    AutomationProperties.Name="Defer feature updates"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                        </WrapPanel>
+
+                        <WrapPanel VerticalAlignment="Center" Margin="0,0,0,6">
+                            <TextBlock Text="Pause all updates for" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox Text="{Binding PauseDays}" Width="60" VerticalContentAlignment="Center"
+                                     AutomationProperties.Name="Days to pause updates" Margin="0,0,6,0"/>
+                            <TextBlock Text="days (max 35)" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Button Content="Pause updates" Command="{Binding PauseUpdatesCommand}"
+                                    AutomationProperties.Name="Pause updates"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                            <Button Content="Restore default" Command="{Binding RestoreUpdatePolicyCommand}"
+                                    AutomationProperties.Name="Restore default update policy"
+                                    Style="{StaticResource GhostButton}"/>
+                        </WrapPanel>
+
+                        <TextBlock Text="Security and quality updates keep installing while feature updates are deferred. A pause is always bounded — SysManager never disables updates permanently. Requires administrator; reversible with Restore default."
+                                   Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Expander>
             </StackPanel>
         </Border>
 

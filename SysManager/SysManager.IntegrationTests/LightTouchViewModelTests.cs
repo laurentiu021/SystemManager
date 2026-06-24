@@ -73,7 +73,7 @@ public class LightTouchViewModelTests
     [Fact]
     public void WindowsUpdateVm_Ctor_IsSafe()
     {
-        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService());
+        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
         Assert.NotNull(vm.Console);
         Assert.False(vm.ModuleAvailable);
     }
@@ -81,7 +81,7 @@ public class LightTouchViewModelTests
     [Fact]
     public void WindowsUpdateVm_AllCommandsExist()
     {
-        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService());
+        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
         Assert.NotNull(vm.CheckModuleCommand);
         Assert.NotNull(vm.InstallModuleCommand);
         Assert.NotNull(vm.ListUpdatesCommand);
@@ -94,7 +94,7 @@ public class LightTouchViewModelTests
     [Fact]
     public void WindowsUpdateVm_ModuleStatusDefault_IsSet()
     {
-        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService());
+        var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
         // Since the WUA COM migration, updates use the COM API directly and
         // PSWindowsUpdate backs only the History view; the default status reflects that.
         Assert.False(string.IsNullOrWhiteSpace(vm.ModuleStatus));

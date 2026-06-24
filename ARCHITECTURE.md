@@ -116,6 +116,10 @@ Key services:
 - `WingetService` — shells out to `winget` and parses its table output.
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting; backs `WindowsUpdateViewModel`.
+- `WindowsUpdatePolicyService` — reads/writes the documented Windows Update
+  deferral policy keys (defer feature updates, bounded pause, restore default).
+  Injectable registry root for tests; deliberately offers no permanent
+  disable-updates option, only a bounded pause.
 - `DiskHealthService` — pulls SMART data through WMI.
 - `MemoryTestService` — scans WHEA / MemoryDiagnostics events.
 - `EventLogService` + `EventExplainer` — read Windows Event Log and attach

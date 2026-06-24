@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.61] - 2026-06-24
+
+### Fixed
+- **Starting a scan or uninstall on the Uninstaller tab while another is running no longer risks a crash.** Both the Scan and Uninstall actions re-create one shared cancellation source, so triggering a second action while the first was still running could dispose the cancellation source the first was using and throw. Those two actions are now disabled while one of them runs — matching the App Updates, Windows Update and Bulk Installer tabs — while Cancel stays available.
+
 ## [1.20.60] - 2026-06-24
 
 ### Fixed

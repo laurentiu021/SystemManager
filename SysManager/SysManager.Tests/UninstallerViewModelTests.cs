@@ -229,4 +229,26 @@ public class UninstallerViewModelGateTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ── re-entrancy guard (regression: shared CTS disposed mid-flight) ──
+
+    [Fact]
+    public void LongRunningCommands_DisabledWhileBusy()
+    {
+        // Scan and UninstallSelected both recreate the shared _cts. Without the NotBusy gate,
+        // triggering one while the other runs would dispose the CTS still being awaited
+        // (ObjectDisposedException). Cancel must stay enabled so an in-flight run can stop.
+        var vm = NewVm();
+        Assert.True(vm.ScanCommand.CanExecute(null));
+        Assert.True(vm.UninstallSelectedCommand.CanExecute(null));
+
+        vm.IsBusy = true;
+        Assert.False(vm.ScanCommand.CanExecute(null));
+        Assert.False(vm.UninstallSelectedCommand.CanExecute(null));
+        Assert.True(vm.CancelCommand.CanExecute(null));
+
+        vm.IsBusy = false;
+        Assert.True(vm.ScanCommand.CanExecute(null));
+        Assert.True(vm.UninstallSelectedCommand.CanExecute(null));
+    }
 }

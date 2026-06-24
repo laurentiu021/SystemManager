@@ -6,6 +6,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Cryptography;
+using Microsoft.Win32.SafeHandles;
 using Serilog;
 
 namespace SysManager.Services;
@@ -250,12 +251,30 @@ public sealed partial class FileShredderService
         // Path.GetFullPath does NOT expand short names, so without this a short-name
         // alias of a protected directory would slip past the prefix check below.
         fullPath = ExpandShortPath(fullPath);
+        ThrowIfProtected(fullPath);
 
+        // ResolveLinkTarget above only follows a reparse point that sits at the LEAF of
+        // the path — it does not collapse a junction/symlink in a PARENT component. So a
+        // path like C:\temp\j\notepad.exe, where C:\temp\j is a junction to System32
+        // (a junction a standard user can create without admin), still slips past the
+        // leaf check above and would be shredded through to the real System32 file.
+        // Ask the OS for the fully-resolved canonical path, which collapses EVERY reparse
+        // point anywhere in the chain, and validate that too. Best-effort: when the path
+        // can't be opened (missing, locked) we keep the already-validated literal form.
+        var canonical = ResolveFinalPath(fullPath);
+        if (canonical is not null && !canonical.Equals(fullPath, StringComparison.OrdinalIgnoreCase))
+            ThrowIfProtected(ExpandShortPath(canonical));
+    }
+
+    /// <summary>
+    /// Throws <see cref="SecurityException"/> if <paramref name="fullPath"/> equals or
+    /// sits under any system-protected root. Matches on a directory boundary so an
+    /// unrelated sibling (e.g. "C:\WindowsApps") is not blocked by "C:\Windows".
+    /// </summary>
+    private static void ThrowIfProtected(string fullPath)
+    {
         foreach (var prefix in ProtectedPrefixes)
         {
-            // Match on a directory boundary, not a raw prefix: the path must equal the
-            // protected root or sit beneath it (prefix + separator). Without this,
-            // "C:\Windows" would also block an unrelated sibling like "C:\WindowsApps".
             if (fullPath.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
                 fullPath.StartsWith(prefix + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             {
@@ -263,6 +282,51 @@ public sealed partial class FileShredderService
                     $"Shredding system-protected paths is not allowed: {fullPath}");
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the fully-resolved canonical path for <paramref name="path"/> with every
+    /// reparse point (junction/symlink) in the chain collapsed, via
+    /// <c>GetFinalPathNameByHandle</c>. Returns null when the path can't be opened
+    /// (missing, locked, access denied) so the caller falls back to the literal path.
+    /// </summary>
+    internal static string? ResolveFinalPath(string path)
+    {
+        // FILE_FLAG_BACKUP_SEMANTICS lets us open a directory handle too, not just files.
+        using SafeFileHandle handle = NativeMethods.CreateFile(
+            path,
+            0, // no access rights needed — we only resolve the name
+            FileShare.ReadWrite | FileShare.Delete,
+            IntPtr.Zero,
+            FileMode.Open,
+            NativeMethods.FILE_FLAG_BACKUP_SEMANTICS,
+            IntPtr.Zero);
+
+        if (handle.IsInvalid)
+            return null;
+
+        // First call with a zero-length buffer returns the required length (incl. NUL).
+        uint needed = NativeMethods.GetFinalPathNameByHandle(handle, [], 0, 0);
+        if (needed == 0)
+            return null;
+
+        var buffer = new char[needed];
+        uint written = NativeMethods.GetFinalPathNameByHandle(handle, buffer, needed, 0);
+        if (written == 0 || written >= needed)
+            return null;
+
+        var result = new string(buffer, 0, (int)written);
+
+        // GetFinalPathNameByHandle returns the \\?\ (or \\?\UNC\) extended-length prefix.
+        // Strip it so the result compares against the plain protected-prefix strings.
+        const string dosPrefix = @"\\?\";
+        const string uncPrefix = @"\\?\UNC\";
+        if (result.StartsWith(uncPrefix, StringComparison.Ordinal))
+            result = @"\\" + result[uncPrefix.Length..];
+        else if (result.StartsWith(dosPrefix, StringComparison.Ordinal))
+            result = result[dosPrefix.Length..];
+
+        return result;
     }
 
     /// <summary>
@@ -299,10 +363,29 @@ public sealed partial class FileShredderService
 
     private static partial class NativeMethods
     {
+        internal const uint FILE_FLAG_BACKUP_SEMANTICS = 0x0200_0000;
+
         [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "GetLongPathNameW")]
         internal static partial uint GetLongPathName(
             string lpszShortPath,
             [Out] char[] lpszLongPath,
             uint cchBuffer);
+
+        [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "CreateFileW", SetLastError = true)]
+        internal static partial SafeFileHandle CreateFile(
+            string lpFileName,
+            uint dwDesiredAccess,
+            FileShare dwShareMode,
+            IntPtr lpSecurityAttributes,
+            FileMode dwCreationDisposition,
+            uint dwFlagsAndAttributes,
+            IntPtr hTemplateFile);
+
+        [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "GetFinalPathNameByHandleW", SetLastError = true)]
+        internal static partial uint GetFinalPathNameByHandle(
+            SafeFileHandle hFile,
+            [Out] char[] lpszFilePath,
+            uint cchFilePath,
+            uint dwFlags);
     }
 }

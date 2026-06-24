@@ -271,6 +271,95 @@ public class FileShredderServiceTests
         Assert.IsNotType<SecurityException>(ex);
     }
 
+    // ---------- mid-path junction bypass regression (P0) ----------
+
+    [Fact]
+    public async Task ShredFileAsync_FileBehindMidPathJunctionToProtected_ThrowsSecurityException()
+    {
+        // Regression: ValidatePath resolved only a LEAF link and expanded 8.3 names, but
+        // neither follows a junction in a PARENT component. A junction at an unprotected
+        // path pointing into System32 (creatable without admin via `mklink /J`) let a
+        // path like <temp>\link\notepad.exe pass the denylist, and the real protected
+        // file behind it was shredded through. The guard must canonicalize the full path.
+        var svc = NewService();
+        var sys32 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32");
+
+        var baseDir = Path.Combine(Path.GetTempPath(), "smtest_midjunc_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        var link = Path.Combine(baseDir, "sys32link");
+
+        try
+        {
+            // mklink /J creates a directory junction; no admin rights required.
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{sys32}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !IsReparse(link))
+                    return; // environment can't create junctions (rare) — nothing to assert
+            }
+
+            // A file that reliably exists under System32, reached THROUGH the junction.
+            var throughJunction = Path.Combine(link, "notepad.exe");
+            if (!File.Exists(throughJunction))
+                throughJunction = Path.Combine(link, "drivers", "etc", "hosts");
+
+            await Assert.ThrowsAsync<SecurityException>(
+                () => svc.ShredFileAsync(throughJunction, ShredMethod.Quick, null, CancellationToken.None));
+        }
+        finally
+        {
+            // Delete the junction itself (Directory.Delete on a junction removes the link,
+            // not its target), then the base dir.
+            try { Directory.Delete(link); } catch { /* ignore */ }
+            try { Directory.Delete(baseDir, recursive: true); } catch { /* ignore */ }
+        }
+
+        static bool IsReparse(string p)
+        {
+            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
+            catch { return false; }
+        }
+    }
+
+    [Fact]
+    public void ResolveFinalPath_MissingPath_ReturnsNull()
+    {
+        // A path that can't be opened must return null so ValidatePath falls back to the
+        // already-validated literal form rather than throwing.
+        var missing = Path.Combine(Path.GetTempPath(), "smtest_nofinal_" + Guid.NewGuid().ToString("N") + ".dat");
+        Assert.Null(FileShredderService.ResolveFinalPath(missing));
+    }
+
+    [Fact]
+    public void ResolveFinalPath_RealTempFile_ResolvesToItself()
+    {
+        // For a normal (non-link) file the canonical path equals the input, confirming the
+        // handle-based resolver and \\?\ prefix stripping work. Compare against the EXPANDED
+        // long form, not the raw input: GetFinalPathNameByHandle always returns the long
+        // form, while %TEMP% on a CI runner can contain an 8.3 component (e.g. RUNNER~1),
+        // so a raw comparison would be environment-dependent and flaky.
+        var file = Path.Combine(Path.GetTempPath(), "smtest_final_" + Guid.NewGuid().ToString("N") + ".dat");
+        File.WriteAllText(file, "x");
+        try
+        {
+            var resolved = FileShredderService.ResolveFinalPath(file);
+            Assert.NotNull(resolved);
+            var expectedLong = FileShredderService.ExpandShortPath(Path.GetFullPath(file));
+            Assert.Equal(expectedLong, resolved, ignoreCase: true);
+        }
+        finally
+        {
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
     // ---------- 8.3 short-path bypass regression ----------
 
     [Fact]

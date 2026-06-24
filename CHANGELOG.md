@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.67] - 2026-06-24
+
+### Changed
+- **Removed the temporary administrator-state startup logging.** The diagnostic added while investigating the "tabs still ask for admin after elevating" report has done its job and is no longer written. The underlying fix (the elevated relaunch now reliably lands in the elevated window) stays in place.
+
 ## [1.20.66] - 2026-06-24
 
 ### Fixed

@@ -258,21 +258,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Title = IsElevated ? "SysManager — Administrator" : "SysManager";
         Log.Information("MainWindow initialized. Elevated: {IsElevated}", IsElevated);
 
-        // DIAGNOSTIC (admin-banner issue): record the process elevation snapshot, plus each
-        // admin-banner VM's own IsElevated, so we can tell whether the tabs genuinely diverge
-        // from the process (a real bug) or the window is the non-elevated instance. The VMs
-        // all read AdminHelper.IsElevated() at construction, so any mismatch here is the bug.
-        // Local log only; removed once root-caused.
-        AdminHelper.LogElevationDiagnostics("MainWindowViewModel");
-        Log.Information(
-            "ELEVATION-DIAG [tabs] dashboard={D} appBlocker={AB} privacy={Pv} services={Sv} " +
-            "windowsFeatures={WF} cleanup={Cl} contextMenu={CM} dnsHosts={DH} uninstaller={Un} " +
-            "windowsUpdate={WU} appUpdates={AU} bulkInstaller={BI} performance={Pf} networkRepair={NR} systemHealth={SH}",
-            Dashboard?.IsElevated, AppBlocker?.IsElevated, Privacy?.IsElevated, Services?.IsElevated,
-            WindowsFeatures?.IsElevated, Cleanup?.IsElevated, ContextMenu?.IsElevated, DnsHosts?.IsElevated,
-            Uninstaller?.IsElevated, WindowsUpdate?.IsElevated, AppUpdates?.IsElevated, BulkInstaller?.IsElevated,
-            Performance?.IsElevated, NetworkRepair?.IsElevated, SystemHealth?.IsElevated);
-
         foreach (var g in BuildNavGroups())
         {
             NavGroups.Add(g);

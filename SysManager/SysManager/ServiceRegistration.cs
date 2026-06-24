@@ -62,6 +62,7 @@ public static class ServiceRegistration
         services.AddSingleton<ContextMenuService>();
         services.AddSingleton<EnvironmentVariableService>();
         services.AddSingleton<RestorePointService>();
+        services.AddSingleton<DebloaterService>();
         services.AddSingleton<WindowsUpdateService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
@@ -100,6 +101,7 @@ public static class ServiceRegistration
         services.AddSingleton<SystemReportViewModel>();
         services.AddSingleton<EnvironmentVariablesViewModel>();
         services.AddSingleton<RestorePointsViewModel>();
+        services.AddSingleton<DebloaterViewModel>();
 
         return services;
     }

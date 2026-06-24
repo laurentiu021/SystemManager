@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-06-24
+
+### Added
+- **Debloater & Ads tab.** The Privacy & Security group's "Debloater & Ads" placeholder is now a working tab. Scan installed Windows Store apps and remove the ones you don't use — with a curated "common bloat" preset that pre-selects safe, frequently-removed apps (Bing News/Weather, Clipchamp, Solitaire, Xbox apps, Teams consumer, and more). System-critical packages (the Store itself, frameworks, security and shell components) are denylisted: they're shown but can never be selected or removed. Removal runs per-user with an impact summary and confirmation first, and is reversible — any removed app can be reinstalled from the Microsoft Store. Search and per-app descriptions help you decide what each app is before removing it.
+
 ## [1.23.0] - 2026-06-24
 
 ### Added

@@ -50,6 +50,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public SystemReportViewModel SystemReport { get; }
     public EnvironmentVariablesViewModel EnvironmentVariables { get; }
     public RestorePointsViewModel RestorePoints { get; }
+    public DebloaterViewModel Debloater { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -73,8 +74,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // Apps group (Bulk Installer is now fully implemented)
 
-    // Privacy & Security group (Privacy & Telemetry is now fully implemented)
-    public PlaceholderViewModel WipDebloater { get; private set; } = null!;
+    // Privacy & Security group (Privacy & Telemetry + Debloater now fully implemented)
     public PlaceholderViewModel WipBrowserCleaner { get; private set; } = null!;
     public PlaceholderViewModel WipEdgeOneDriveRemover { get; private set; } = null!;
     public PlaceholderViewModel WipDefenderTweaks { get; private set; } = null!;
@@ -150,6 +150,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SystemReport = sp.GetRequiredService<SystemReportViewModel>();
             EnvironmentVariables = sp.GetRequiredService<EnvironmentVariablesViewModel>();
             RestorePoints = sp.GetRequiredService<RestorePointsViewModel>();
+            Debloater = sp.GetRequiredService<DebloaterViewModel>();
         }
         else
         {
@@ -203,6 +204,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SystemReport = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth));
             EnvironmentVariables = new EnvironmentVariablesViewModel(new EnvironmentVariableService());
             RestorePoints = new RestorePointsViewModel(new RestorePointService(new PowerShellRunner()));
+            Debloater = new DebloaterViewModel(new DebloaterService(new PowerShellRunner()));
         }
 
         InitPlaceholders();
@@ -235,7 +237,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Apps group — Bulk Installer is now fully implemented (no placeholder needed)
 
         // Privacy & Security group (Privacy & Telemetry is now fully implemented)
-        WipDebloater = new PlaceholderViewModel("Debloater & Ads", "Remove UWP bloatware, disable all Windows ads, remove Copilot/Recall/AI features.", "#9");
         WipBrowserCleaner = new PlaceholderViewModel("Browser Cleaner", "Per-browser cache/cookies/history cleanup with keep-list for important cookies.", "#336");
         WipEdgeOneDriveRemover = new PlaceholderViewModel("Edge/OneDrive Remover", "Safely remove or disable Edge and OneDrive with full restore capability.", "#339");
         WipDefenderTweaks = new PlaceholderViewModel("Defender Tweaks", "Toggle SmartScreen, manage exclusions, configure PUA and cloud protection.", "#344");
@@ -332,7 +333,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-file-shredder",        "File Shredder",         "", FileShredder,           typeof(Views.FileShredderView)),
             Item("nav-app-blocker",          "App Blocker",           "", AppBlocker,             typeof(Views.AppBlockerView)),
             Item("nav-app-alerts",           "App Alerts",            "", AppAlerts,              typeof(Views.AppAlertsView)),
-            Item("nav-debloater",            "Debloater & Ads",       "", WipDebloater,           typeof(Views.PlaceholderView)),
+            Item("nav-debloater",            "Debloater & Ads",       "", Debloater,             typeof(Views.DebloaterView)),
             Item("nav-browser-cleaner",      "Browser Cleaner",       "", WipBrowserCleaner,      typeof(Views.PlaceholderView)),
             Item("nav-edge-onedrive",        "Edge/OneDrive Remover", "", WipEdgeOneDriveRemover, typeof(Views.PlaceholderView)),
             Item("nav-defender-tweaks",      "Defender Tweaks",       "", WipDefenderTweaks,      typeof(Views.PlaceholderView)),
@@ -466,7 +467,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SystemReport?.Dispose();
         EnvironmentVariables?.Dispose();
         RestorePoints?.Dispose();
-        WipDebloater?.Dispose();
+        Debloater?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipDefenderTweaks?.Dispose();

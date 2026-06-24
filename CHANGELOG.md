@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.65] - 2026-06-24
+
+### Changed
+- **Added detailed administrator-state logging at startup** to help diagnose a report of some tabs still showing the "needs administrator" notice after elevating. On launch the app now records, to its local log file only, the process elevation state (including the Windows token elevation type and process ID) and each affected tab's administrator status. This is written only to the local log under `%LocalAppData%\SysManager\logs` with usernames scrubbed — nothing is sent anywhere.
+
 ## [1.20.64] - 2026-06-24
 
 ### Fixed

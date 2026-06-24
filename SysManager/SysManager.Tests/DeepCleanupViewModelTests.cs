@@ -199,13 +199,21 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         var c1 = new CleanupCategory
         {
-            Name = "A", Description = "a", Paths = [],
-            TotalSizeBytes = 1000, FileCount = 1, IsSelected = true
+            Name = "A",
+            Description = "a",
+            Paths = [],
+            TotalSizeBytes = 1000,
+            FileCount = 1,
+            IsSelected = true
         };
         var c2 = new CleanupCategory
         {
-            Name = "B", Description = "b", Paths = [],
-            TotalSizeBytes = 2000, FileCount = 2, IsSelected = false
+            Name = "B",
+            Description = "b",
+            Paths = [],
+            TotalSizeBytes = 2000,
+            FileCount = 2,
+            IsSelected = false
         };
         vm.Categories.Add(c1);
         vm.Categories.Add(c2);
@@ -276,13 +284,21 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         vm.Categories.Add(new CleanupCategory
         {
-            Name = "Safe", Description = "d", Paths = [],
-            TotalSizeBytes = 100, FileCount = 1, IsDestructiveHint = false
+            Name = "Safe",
+            Description = "d",
+            Paths = [],
+            TotalSizeBytes = 100,
+            FileCount = 1,
+            IsDestructiveHint = false
         });
         vm.Categories.Add(new CleanupCategory
         {
-            Name = "Dangerous", Description = "d", Paths = [],
-            TotalSizeBytes = 200, FileCount = 1, IsDestructiveHint = true
+            Name = "Dangerous",
+            Description = "d",
+            Paths = [],
+            TotalSizeBytes = 200,
+            FileCount = 1,
+            IsDestructiveHint = true
         });
 
         vm.SelectAllCommand.Execute(true);
@@ -297,8 +313,12 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         var c = new CleanupCategory
         {
-            Name = "X", Description = "d", Paths = [],
-            TotalSizeBytes = 100, FileCount = 1, IsSelected = true
+            Name = "X",
+            Description = "d",
+            Paths = [],
+            TotalSizeBytes = 100,
+            FileCount = 1,
+            IsSelected = true
         };
         vm.Categories.Add(c);
 
@@ -313,8 +333,12 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         vm.Categories.Add(new CleanupCategory
         {
-            Name = "X", Description = "d", Paths = [],
-            TotalSizeBytes = 100, FileCount = 1, IsDestructiveHint = false
+            Name = "X",
+            Description = "d",
+            Paths = [],
+            TotalSizeBytes = 100,
+            FileCount = 1,
+            IsDestructiveHint = false
         });
 
         vm.SelectAllCommand.Execute(null);
@@ -540,8 +564,12 @@ public class DeepCleanupViewModelTests
             var vm = NewVm();
             vm.Categories.Add(new CleanupCategory
             {
-                Name = "Temp", Description = "test", Paths = new[] { dir },
-                TotalSizeBytes = 1, FileCount = 1, IsSelected = true
+                Name = "Temp",
+                Description = "test",
+                Paths = new[] { dir },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true
             });
 
             await vm.CleanCommand.ExecuteAsync(null);
@@ -573,8 +601,12 @@ public class DeepCleanupViewModelTests
             var vm = NewVm();
             vm.Categories.Add(new CleanupCategory
             {
-                Name = "Temp", Description = "test", Paths = new[] { dir },
-                TotalSizeBytes = 1, FileCount = 1, IsSelected = true
+                Name = "Temp",
+                Description = "test",
+                Paths = new[] { dir },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true
             });
 
             await vm.CleanCommand.ExecuteAsync(null);

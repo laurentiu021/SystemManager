@@ -10,6 +10,14 @@ permissions:
   contents: write
   actions: write
 
+# Serialize version bump+tag across rapid merges to main. Without this, two close
+# merges both read the same latest tag, compute the same next version, and collide
+# (or drop a release). cancel-in-progress:false — let each merge tag in turn rather
+# than cancelling a bump mid-flight.
+concurrency:
+  group: auto-release-main
+  cancel-in-progress: false
+
 jobs:
   bump-and-tag:
     name: Bump version & tag

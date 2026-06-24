@@ -250,8 +250,10 @@ public class ServicesViewModelTests
         // message before any elevation/confirm/PowerShell call.
         var critical = new ServiceEntry
         {
-            Name = "RpcSs", DisplayName = "Remote Procedure Call (RPC)",
-            Status = "Running", StartType = "Automatic",
+            Name = "RpcSs",
+            DisplayName = "Remote Procedure Call (RPC)",
+            Status = "Running",
+            StartType = "Automatic",
             SafetyLevel = Models.SafetyLevel.Critical,
             SafetyDescription = "Core Windows IPC. System will not function without it."
         };

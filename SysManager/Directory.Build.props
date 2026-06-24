@@ -12,6 +12,16 @@
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
+  <!-- Reproducible, path-normalized RELEASE builds. With SourceLink, this rewrites the
+       local source root in the PDB to a '/_/' prefix so the shipped binary never carries
+       an absolute build path (e.g. the OS profile name). Previously these lived only in
+       publish.ps1 args, so a plain `dotnet build -c Release` still leaked the path; now
+       every Release build is clean. Debug builds keep local paths for normal debugging. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.300" PrivateAssets="All" />
   </ItemGroup>

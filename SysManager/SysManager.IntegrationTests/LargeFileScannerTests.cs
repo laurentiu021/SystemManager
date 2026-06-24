@@ -68,9 +68,9 @@ public class LargeFileScannerTests
         var root = Path.Combine(Path.GetTempPath(), "SysManagerLfTest_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         var small = Path.Combine(root, "small.bin");
-        var big   = Path.Combine(root, "big.bin");
+        var big = Path.Combine(root, "big.bin");
         File.WriteAllBytes(small, new byte[100]);
-        File.WriteAllBytes(big,   new byte[2 * 1024 * 1024]); // 2 MB
+        File.WriteAllBytes(big, new byte[2 * 1024 * 1024]); // 2 MB
         try
         {
             var s = new LargeFileScanner();

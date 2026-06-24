@@ -19,7 +19,7 @@ public class UpdateServiceParseVersionBulkTests
                 for (var patch = 0; patch <= 5; patch++)
                 {
                     yield return new object[] { $"v{major}.{minor}.{patch}", major, minor, patch };
-                    yield return new object[] { $"{major}.{minor}.{patch}",  major, minor, patch };
+                    yield return new object[] { $"{major}.{minor}.{patch}", major, minor, patch };
                 }
     }
 

@@ -12,6 +12,12 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+    # Group minor+patch bumps into one PR; keep majors separate for careful review.
+    groups:
+      nuget-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "nuget"
     directory: "/SysManager/SysManager.Tests"
@@ -24,6 +30,12 @@ updates:
       - "tests"
     commit-message:
       prefix: "deps(tests)"
+      include: "scope"
+    groups:
+      nuget-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "nuget"
     directory: "/SysManager/SysManager.UITests"
@@ -36,6 +48,12 @@ updates:
       - "tests"
     commit-message:
       prefix: "deps(uitests)"
+      include: "scope"
+    groups:
+      nuget-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "nuget"
     directory: "/SysManager/SysManager.IntegrationTests"
@@ -48,6 +66,12 @@ updates:
       - "tests"
     commit-message:
       prefix: "deps(integration)"
+      include: "scope"
+    groups:
+      nuget-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   # Keep GitHub Actions current.
   - package-ecosystem: "github-actions"
@@ -55,8 +79,16 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
       prefix: "ci"
+      include: "scope"
+    # Group all action bumps into one PR — they're low-risk and SHA-pinned.
+    groups:
+      github-actions:
+        update-types:
+          - "minor"
+          - "patch"

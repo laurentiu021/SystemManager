@@ -165,8 +165,11 @@ public class LogsViewModelExtendedTests
     {
         var vm = new LogsViewModel(new Services.EventLogService())
         {
-            ShowCritical = true, ShowError = true, ShowWarning = true,
-            ShowInfo = true, ShowVerbose = true
+            ShowCritical = true,
+            ShowError = true,
+            ShowWarning = true,
+            ShowInfo = true,
+            ShowVerbose = true
         };
         Assert.Equal(5, BuildSev(vm).Count);
     }
@@ -176,8 +179,11 @@ public class LogsViewModelExtendedTests
     {
         var vm = new LogsViewModel(new Services.EventLogService())
         {
-            ShowCritical = false, ShowError = false, ShowWarning = false,
-            ShowInfo = false, ShowVerbose = false
+            ShowCritical = false,
+            ShowError = false,
+            ShowWarning = false,
+            ShowInfo = false,
+            ShowVerbose = false
         };
         Assert.Empty(BuildSev(vm));
     }
@@ -291,8 +297,11 @@ public class LogsViewModelExtendedTests
     {
         var vm = new LogsViewModel(new Services.EventLogService())
         {
-            ShowCritical = false, ShowError = false, ShowWarning = false,
-            ShowInfo = false, ShowVerbose = false
+            ShowCritical = false,
+            ShowError = false,
+            ShowWarning = false,
+            ShowInfo = false,
+            ShowVerbose = false
         };
         Assert.False(Filter(vm, Make(EventSeverity.Critical)));
         Assert.False(Filter(vm, Make(EventSeverity.Error)));

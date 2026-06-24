@@ -2,9 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
-using SysManager.Helpers;
 
 namespace SysManager.Tests;
 

@@ -95,6 +95,7 @@ public static class ServiceRegistration
         services.AddSingleton<PrivacyViewModel>();
         services.AddSingleton<DnsHostsViewModel>();
         services.AddSingleton<ContextMenuViewModel>();
+        services.AddSingleton<SystemReportViewModel>();
 
         return services;
     }

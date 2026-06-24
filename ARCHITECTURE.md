@@ -50,7 +50,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
 | Customization | `ContextMenuViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control · Environment Variables) |
-| Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `PlaceholderViewModel` (System Report) · `AboutViewModel` |
+| Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `AboutViewModel` |
 | Advanced | `PlaceholderViewModel` (Profile Export/Import · CLI Interface) |
 
 - `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),
@@ -87,6 +87,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
 - `PrivacyViewModel` — Windows privacy and telemetry toggles via registry.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
+- `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
@@ -182,8 +183,10 @@ Key services:
   restore it (`HasBackup` / `RestoreBackup`).
 - `ContextMenuService` — scans and toggles Explorer context menu shell
   extensions via registry enumeration.
-- `SystemReportService` — generates comprehensive system info reports
-  (hardware, OS, network, drivers) for export or clipboard.
+- `SystemReportService` — gathers a comprehensive system snapshot once
+  (OS, CPU, memory, GPU, motherboard, storage health, network) into a
+  `SystemReportData` payload, then renders it to plain text, self-contained
+  HTML, or JSON so all three exports share a single source of truth.
 - `AppIconService` — downloads and caches application favicons for UI display.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time

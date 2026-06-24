@@ -49,7 +49,8 @@ follows, and what to expect when you open a pull request.
 ```powershell
 git clone https://github.com/laurentiu021/SystemManager.git
 cd SystemManager
-dotnet build -c Debug
+# There is no solution file — build the project explicitly (matches CI).
+dotnet build SysManager/SysManager/SysManager.csproj -c Debug
 ```
 
 **Run the app**
@@ -61,7 +62,7 @@ dotnet run --project SysManager/SysManager/SysManager.csproj
 **Run the tests** (see [Running tests](#running-tests) for more)
 
 ```powershell
-dotnet test -c Release
+dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
 ```
 
 ## Project layout
@@ -132,16 +133,17 @@ The integration and UI tests touch the live system / require an interactive
 desktop session, so they run locally only (not in CI) — run them locally,
 not over SSH/Remote PowerShell. CI runs the unit tests.
 
-Filter to one class while iterating:
+Filter to one class while iterating (pass the project the class lives in —
+`PingMonitorServiceTests` is an integration test):
 
 ```powershell
-dotnet test --filter "FullyQualifiedName~PingMonitorServiceTests"
+dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj --filter "FullyQualifiedName~PingMonitorServiceTests"
 ```
 
 Generate a coverage report:
 
 ```powershell
-dotnet test -c Release --collect:"XPlat Code Coverage"
+dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release --collect:"XPlat Code Coverage"
 ```
 
 **Every non-trivial PR should include at least one test.** If you're

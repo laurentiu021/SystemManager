@@ -10,9 +10,9 @@
     <RootNamespace>SysManager</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>NU1603;NU1701</NoWarn>
-    <Version>1.20.65</Version>
-    <FileVersion>1.20.65.0</FileVersion>
-    <AssemblyVersion>1.20.65.0</AssemblyVersion>
+    <Version>1.20.66</Version>
+    <FileVersion>1.20.66.0</FileVersion>
+    <AssemblyVersion>1.20.66.0</AssemblyVersion>
     <Product>SysManager</Product>
     <Description>SysManager — Windows system monitoring toolkit by laurentiu021. Network, updates, health, logs, safe deep cleanup.</Description>
     <PackageProjectUrl>https://github.com/laurentiu021/SystemManager</PackageProjectUrl>

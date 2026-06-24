@@ -55,11 +55,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public SystemFixesViewModel SystemFixes { get; }
     public ProfileViewModel Profile { get; }
     public BrowserCleanerViewModel BrowserCleaner { get; }
+    public PrivacyMonitorViewModel PrivacyMonitor { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
     public PlaceholderViewModel WipResourceHistory { get; private set; } = null!;
-    public PlaceholderViewModel WipPrivacyMonitor { get; private set; } = null!;
     public PlaceholderViewModel WipFileLockDetector { get; private set; } = null!;
     public PlaceholderViewModel WipSettingsWatchdog { get; private set; } = null!;
     public PlaceholderViewModel WipBandwidthMonitor { get; private set; } = null!;
@@ -157,6 +157,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SystemFixes = sp.GetRequiredService<SystemFixesViewModel>();
             Profile = sp.GetRequiredService<ProfileViewModel>();
             BrowserCleaner = sp.GetRequiredService<BrowserCleanerViewModel>();
+            PrivacyMonitor = sp.GetRequiredService<PrivacyMonitorViewModel>();
         }
         else
         {
@@ -215,6 +216,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SystemFixes = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner()));
             Profile = new ProfileViewModel(new ProfileService());
             BrowserCleaner = new BrowserCleanerViewModel(new BrowserCleanerService());
+            PrivacyMonitor = new PrivacyMonitorViewModel(new PrivacyMonitorService());
         }
 
         InitPlaceholders();
@@ -227,7 +229,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // Monitor group
         WipResourceHistory = new PlaceholderViewModel("Resource History", "Historical CPU, RAM, GPU and temperature graphs with timeline.", "#13");
-        WipPrivacyMonitor = new PlaceholderViewModel("Privacy Monitor", "Monitor and alert on webcam, microphone, and location access in real-time.", "#12");
         WipFileLockDetector = new PlaceholderViewModel("File Lock Detector", "Find which process is locking a file and optionally release the handle.", "#333");
         WipSettingsWatchdog = new PlaceholderViewModel("Settings Watchdog", "Detect when Windows Update resets your settings and offer one-click restore.", "#335");
         WipBandwidthMonitor = new PlaceholderViewModel("Bandwidth Monitor", "Real-time per-app network usage with history graphs and alerts.", "#337");
@@ -311,7 +312,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Group("grp-monitor", "Monitor", "",
             Item("nav-processes",         "Process Manager",    "", ProcessManager,      typeof(Views.ProcessManagerView)),
             Item("nav-resource-history",  "Resource History",   "", WipResourceHistory,  typeof(Views.PlaceholderView)),
-            Item("nav-privacy-monitor",   "Privacy Monitor",    "", WipPrivacyMonitor,   typeof(Views.PlaceholderView)),
+            Item("nav-privacy-monitor",   "Privacy Monitor",    "", PrivacyMonitor,      typeof(Views.PrivacyMonitorView)),
             Item("nav-file-lock",         "File Lock Detector", "", WipFileLockDetector, typeof(Views.PlaceholderView)),
             Item("nav-settings-watchdog", "Settings Watchdog",  "", WipSettingsWatchdog, typeof(Views.PlaceholderView)),
             Item("nav-bandwidth-monitor", "Bandwidth Monitor",  "", WipBandwidthMonitor, typeof(Views.PlaceholderView))),
@@ -462,7 +463,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // WIP placeholders
         WipResourceHistory?.Dispose();
-        WipPrivacyMonitor?.Dispose();
         WipFileLockDetector?.Dispose();
         WipSettingsWatchdog?.Dispose();
         WipBandwidthMonitor?.Dispose();
@@ -482,6 +482,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SystemFixes?.Dispose();
         Profile?.Dispose();
         BrowserCleaner?.Dispose();
+        PrivacyMonitor?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipDefenderTweaks?.Dispose();
         WipNotificationBlocker?.Dispose();

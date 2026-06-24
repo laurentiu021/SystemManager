@@ -74,15 +74,15 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 38 tabs are fully
-implemented; 19 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 39 tabs are fully
+implemented; 18 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Legacy Panels · System Fixes · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
-| 📊 Monitor | Process Manager · Resource History ⚙️ · Privacy Monitor ⚙️ · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
+| 📊 Monitor | Process Manager · Resource History ⚙️ · Privacy Monitor · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
@@ -311,6 +311,14 @@ a confirmation before it runs:
   (System, Trusted, Unknown)
 - Kill process with confirmation dialog
 - Open file location in Explorer
+
+### Privacy Monitor
+- Shows which apps recently used your **camera, microphone, or location**, and when
+- Reads the Windows access history (CapabilityAccessManager consent store) — covers
+  both Store apps and desktop programs
+- Devices **in use right now** are flagged and sorted to the top
+- Read-only: an **Open privacy settings** button hands off to Windows to grant or
+  revoke a permission — SysManager never changes capability permissions itself
 
 ### Operation Lock
 - Prevents conflicting concurrent operations across tabs

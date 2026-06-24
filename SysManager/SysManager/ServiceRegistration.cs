@@ -65,6 +65,7 @@ public static class ServiceRegistration
         services.AddSingleton<DebloaterService>();
         services.AddSingleton<LegacyPanelService>();
         services.AddSingleton<SystemFixService>();
+        services.AddSingleton<ProfileService>();
         services.AddSingleton<WindowsUpdateService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
@@ -106,6 +107,7 @@ public static class ServiceRegistration
         services.AddSingleton<DebloaterViewModel>();
         services.AddSingleton<LegacyPanelsViewModel>();
         services.AddSingleton<SystemFixesViewModel>();
+        services.AddSingleton<ProfileViewModel>();
 
         return services;
     }

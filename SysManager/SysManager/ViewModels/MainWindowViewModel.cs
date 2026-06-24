@@ -53,6 +53,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public DebloaterViewModel Debloater { get; }
     public LegacyPanelsViewModel LegacyPanels { get; }
     public SystemFixesViewModel SystemFixes { get; }
+    public ProfileViewModel Profile { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -91,7 +92,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipBootAnalyzer { get; private set; } = null!;
 
     // Advanced group
-    public PlaceholderViewModel WipProfileExportImport { get; private set; } = null!;
     public PlaceholderViewModel WipCliInterface { get; private set; } = null!;
 
     /// <summary>Grouped sidebar tree (12 categories).</summary>
@@ -155,6 +155,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Debloater = sp.GetRequiredService<DebloaterViewModel>();
             LegacyPanels = sp.GetRequiredService<LegacyPanelsViewModel>();
             SystemFixes = sp.GetRequiredService<SystemFixesViewModel>();
+            Profile = sp.GetRequiredService<ProfileViewModel>();
         }
         else
         {
@@ -211,6 +212,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Debloater = new DebloaterViewModel(new DebloaterService(new PowerShellRunner()));
             LegacyPanels = new LegacyPanelsViewModel(new LegacyPanelService());
             SystemFixes = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner()));
+            Profile = new ProfileViewModel(new ProfileService());
         }
 
         InitPlaceholders();
@@ -257,7 +259,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipBootAnalyzer = new PlaceholderViewModel("Boot Analyzer", "Measure boot time breakdown per service/driver with optimization recommendations.", "#343");
 
         // Advanced group
-        WipProfileExportImport = new PlaceholderViewModel("Profile Export/Import", "Export SysManager configuration as JSON, import on another PC.", "#341");
         WipCliInterface = new PlaceholderViewModel("CLI Interface", "Command-line control: sysmanager --cleanup --apply-profile Gaming --silent.", "#342");
     }
 
@@ -361,7 +362,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-about",         "About",          "", About,          typeof(Views.AboutView))),
 
         Group("grp-advanced", "Advanced", "",
-            Item("nav-profile-export", "Profile Export/Import", "", WipProfileExportImport, typeof(Views.PlaceholderView)),
+            Item("nav-profile-export", "Profile Export/Import", "", Profile,               typeof(Views.ProfileView)),
             Item("nav-cli-interface",  "CLI Interface",         "", WipCliInterface,        typeof(Views.PlaceholderView))),
     ];
 
@@ -478,6 +479,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Debloater?.Dispose();
         LegacyPanels?.Dispose();
         SystemFixes?.Dispose();
+        Profile?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipDefenderTweaks?.Dispose();
@@ -486,7 +488,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipVolumeControl?.Dispose();
         WipTaskScheduler?.Dispose();
         WipBootAnalyzer?.Dispose();
-        WipProfileExportImport?.Dispose();
         WipCliInterface?.Dispose();
 
         GC.SuppressFinalize(this);

@@ -1,0 +1,82 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.ProfileView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             d:DataContext="{d:DesignInstance vm:ProfileViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface0}">
+
+    <Grid Margin="28,24,28,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Profile Export / Import" Style="{StaticResource Display}"/>
+            <TextBlock Text="Save your SysManager settings to a file and carry them to another PC. Only SysManager's own configuration is exported — never system settings — so importing just overwrites the app's config and can be undone by importing a different profile."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Export card -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="16" VerticalAlignment="Top">
+            <StackPanel>
+                <TextBlock Text="Export" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock Text="Choose which settings to include, then save them as a portable JSON profile."
+                           Style="{StaticResource Subtle}" Margin="0,2,0,10" TextWrapping="Wrap"/>
+
+                <ItemsControl ItemsSource="{Binding Sections}" Margin="0,0,0,8"
+                              Visibility="{Binding HasSections, Converter={StaticResource FlexVis}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Content="{Binding DisplayName}"
+                                      IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                      AutomationProperties.Name="{Binding DisplayName, StringFormat='Include {0} in export'}"
+                                      Margin="0,4" Foreground="{DynamicResource TextPrimary}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="No exportable settings found yet. Use the app a little (set a theme, run a speed test), then refresh."
+                           Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,0,0,8"
+                           Visibility="{Binding HasSections, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+
+                <WrapPanel>
+                    <Button Content="Export profile…" Command="{Binding ExportCommand}"
+                            IsEnabled="{Binding HasSections}"
+                            AutomationProperties.Name="Export profile to file"
+                            Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}"
+                            AutomationProperties.Name="Refresh section list"
+                            Style="{StaticResource GhostButton}"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Import card -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="16">
+            <StackPanel>
+                <TextBlock Text="Import" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock Text="Load a profile exported from another PC. You'll see what it contains and confirm before anything is overwritten. Restart SysManager afterwards for all changes to take effect."
+                           Style="{StaticResource Subtle}" Margin="0,2,0,10" TextWrapping="Wrap"/>
+                <Button Content="Import profile…" Command="{Binding ImportCommand}"
+                        AutomationProperties.Name="Import profile from file"
+                        Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Right" Width="180" Height="4"
+                         IsIndeterminate="True"
+                         Visibility="{Binding IsBusy, Converter={StaticResource FlexVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

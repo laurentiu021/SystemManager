@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 36 tabs are fully
-implemented; 21 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 37 tabs are fully
+implemented; 20 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
@@ -90,7 +90,7 @@ implemented; 21 are work-in-progress placeholders marked with ⚙️:
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · About |
-| ⚙️ Advanced | Profile Export/Import ⚙️ · CLI Interface ⚙️ |
+| ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
 
@@ -471,6 +471,15 @@ Remove preinstalled Windows Store apps you don't use:
 - One-click "Install" replaces the running executable in-place and
   restarts automatically (no manual file copying needed).
 - Full release-note history pulled live from GitHub.
+
+### Profile Export / Import
+- Export your SysManager settings — theme/appearance and speed-test history — to
+  a single portable JSON file, and import them on another PC
+- **Selective export** (tick which sections to include) and **selective import**
+  (confirm what a profile contains before anything is overwritten)
+- **Version-aware** — refuses profiles created by a newer, incompatible build
+- Only SysManager's own config is ever touched (never system settings), so an
+  import is fully reversible — just import a different profile
 
 ## Screenshots
 

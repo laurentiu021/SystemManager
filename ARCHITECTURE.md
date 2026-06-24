@@ -43,7 +43,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `LegacyPanelsViewModel` · `SystemFixesViewModel` · `PlaceholderViewModel` (Task Scheduler · Boot Analyzer) |
 | Gaming & Profiles | `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles) |
-| Monitor | `ProcessManagerViewModel` · `PlaceholderViewModel` (Resource History · Privacy Monitor · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
+| Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `PlaceholderViewModel` (Resource History · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
@@ -95,6 +95,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
+- `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
@@ -219,6 +220,9 @@ Key services:
   Firefox) under injectable LOCALAPPDATA/APPDATA roots. Scan is read-only (sizes);
   Clean deletes only discovered files, skips locked files, and never follows
   reparse points. Cookies/sessions are flagged sensitive.
+- `PrivacyMonitorService` — read-only reader of the CapabilityAccessManager consent
+  store (camera/microphone/location access history). Injectable registry root;
+  friendly-name decoding and FILETIME conversion are pure, unit-tested static methods.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-06-25
+
+### Added
+- **Privacy Monitor tab** (Monitor group). The placeholder is now a working tab that shows which applications recently used your **camera, microphone, or location**, and when — read from the Windows access history (the CapabilityAccessManager consent store). Devices currently in use are flagged and sorted to the top. Read-only: to grant or revoke a permission, an **Open privacy settings** button hands off to Windows — SysManager never changes capability permissions itself.
+
 ## [1.31.0] - 2026-06-24
 
 ### Added

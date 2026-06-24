@@ -41,7 +41,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `LegacyPanelsViewModel` · `SystemFixesViewModel` · `PlaceholderViewModel` (Task Scheduler · Boot Analyzer) |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `LegacyPanelsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `PlaceholderViewModel` (Task Scheduler) |
 | Gaming & Profiles | `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles) |
 | Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `PlaceholderViewModel` (Resource History · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
@@ -92,6 +92,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for create/restore; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
+- `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -223,6 +224,10 @@ Key services:
 - `PrivacyMonitorService` — read-only reader of the CapabilityAccessManager consent
   store (camera/microphone/location access history). Injectable registry root;
   friendly-name decoding and FILETIME conversion are pure, unit-tested static methods.
+- `BootAnalyzerService` — read-only reader of the Diagnostics-Performance log
+  (event 100 boot durations; 101–110 slow-component events). Event-ID→kind mapping
+  and event-XML field parsing are pure, unit-tested static methods; reading the log
+  needs admin.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

@@ -56,6 +56,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public ProfileViewModel Profile { get; }
     public BrowserCleanerViewModel BrowserCleaner { get; }
     public PrivacyMonitorViewModel PrivacyMonitor { get; }
+    public BootAnalyzerViewModel BootAnalyzer { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -89,7 +90,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // System group (additions)
     public PlaceholderViewModel WipTaskScheduler { get; private set; } = null!;
-    public PlaceholderViewModel WipBootAnalyzer { get; private set; } = null!;
 
     // Advanced group
     public PlaceholderViewModel WipCliInterface { get; private set; } = null!;
@@ -158,6 +158,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Profile = sp.GetRequiredService<ProfileViewModel>();
             BrowserCleaner = sp.GetRequiredService<BrowserCleanerViewModel>();
             PrivacyMonitor = sp.GetRequiredService<PrivacyMonitorViewModel>();
+            BootAnalyzer = sp.GetRequiredService<BootAnalyzerViewModel>();
         }
         else
         {
@@ -217,6 +218,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Profile = new ProfileViewModel(new ProfileService());
             BrowserCleaner = new BrowserCleanerViewModel(new BrowserCleanerService());
             PrivacyMonitor = new PrivacyMonitorViewModel(new PrivacyMonitorService());
+            BootAnalyzer = new BootAnalyzerViewModel(new BootAnalyzerService());
         }
 
         InitPlaceholders();
@@ -258,7 +260,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // System group (additions)
         WipTaskScheduler = new PlaceholderViewModel("Task Scheduler", "Browse and toggle scheduled tasks with color-coded safety indicators.", "#334");
-        WipBootAnalyzer = new PlaceholderViewModel("Boot Analyzer", "Measure boot time breakdown per service/driver with optimization recommendations.", "#343");
 
         // Advanced group
         WipCliInterface = new PlaceholderViewModel("CLI Interface", "Command-line control: sysmanager --cleanup --apply-profile Gaming --silent.", "#342");
@@ -298,7 +299,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-windows-features", "Windows Features", "", WindowsFeatures,  typeof(Views.WindowsFeaturesView)),
             Item("nav-restore-points",   "Restore Points",   "", RestorePoints,    typeof(Views.RestorePointsView)),
             Item("nav-task-scheduler",   "Task Scheduler",   "", WipTaskScheduler, typeof(Views.PlaceholderView)),
-            Item("nav-boot-analyzer",    "Boot Analyzer",    "", WipBootAnalyzer,  typeof(Views.PlaceholderView)),
+            Item("nav-boot-analyzer",    "Boot Analyzer",    "", BootAnalyzer,     typeof(Views.BootAnalyzerView)),
             Item("nav-legacy-panels",    "Legacy Panels",    "", LegacyPanels,     typeof(Views.LegacyPanelsView)),
             Item("nav-system-fixes",     "System Fixes",     "", SystemFixes,      typeof(Views.SystemFixesView))),
 
@@ -483,13 +484,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Profile?.Dispose();
         BrowserCleaner?.Dispose();
         PrivacyMonitor?.Dispose();
+        BootAnalyzer?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipDefenderTweaks?.Dispose();
         WipNotificationBlocker?.Dispose();
         WipDarkModeScheduler?.Dispose();
         WipVolumeControl?.Dispose();
         WipTaskScheduler?.Dispose();
-        WipBootAnalyzer?.Dispose();
         WipCliInterface?.Dispose();
 
         GC.SuppressFinalize(this);

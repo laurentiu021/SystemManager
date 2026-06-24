@@ -74,13 +74,13 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 39 tabs are fully
-implemented; 18 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 40 tabs are fully
+implemented; 17 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Legacy Panels · System Fixes · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Legacy Panels · System Fixes · Boot Analyzer · Task Scheduler ⚙️ |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Privacy Monitor · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
@@ -210,6 +210,16 @@ a confirmation before it runs:
 - **Set up Auto Sign-in** — opens the built-in User Accounts dialog, so Windows
   stores the credential securely and SysManager never handles your password
 - Live output, honest success/failure reporting, admin elevation banner
+
+### Boot Analyzer
+- Shows how long your PC takes to boot — total, core (main path), and
+  desktop ready-up time — across recent boots, read from the Windows
+  boot-performance history (Diagnostics-Performance log)
+- A trend line tells you whether the last boot was faster or slower than your
+  recent average
+- Lists the apps, drivers, services, and devices Windows flagged as slowing boot,
+  with the delay attributed to each
+- Read-only; reading the log requires administrator (elevation banner shown)
 
 ### Windows Update (Windows Update Agent COM API)
 - Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —

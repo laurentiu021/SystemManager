@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-06-24
+
+### Added
+- **DNS filtering presets and IPv6** (DNS & Hosts tab). The DNS preset switcher now includes ad/malware/family-blocking variants — Cloudflare Malware-blocking (1.1.1.2) and Family (1.1.1.3), AdGuard DNS (ad/tracker blocking, plus a Family variant), and OpenDNS FamilyShield — each with a short description of what it blocks. Every preset now also configures IPv6 resolvers automatically alongside IPv4. The existing "Reset to automatic (DHCP)" undo continues to work for all variants.
+
 ## [1.26.0] - 2026-06-24
 
 ### Added

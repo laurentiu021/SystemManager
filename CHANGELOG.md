@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-06-24
+
+### Added
+- **BIOS & firmware section in System Health.** A scan now also reports your BIOS version, release date, and vendor, the motherboard model, the boot mode (UEFI / Legacy), and Secure Boot status — all read-only. A **Find BIOS update** button opens the right manufacturer support page (ASUS, MSI, Gigabyte, ASRock, Dell, HP, Lenovo, Acer, Biostar, or a web search as a fallback) based on the detected motherboard, and **Copy info** copies the board model + BIOS version for support searches. SysManager never flashes firmware itself; the section includes a clear reminder that BIOS updates carry risk if interrupted.
+
 ## [1.28.0] - 2026-06-24
 
 ### Added

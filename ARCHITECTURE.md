@@ -122,6 +122,10 @@ Key services:
   human-readable explanations.
 - `HealthAnalyzer` — raw SMART / ping data into verdict pills.
 - `SystemInfoService` — OS / CPU / RAM / uptime snapshot.
+- `BiosService` — read-only BIOS/firmware + motherboard info (Win32_BIOS,
+  Win32_BaseBoard, UEFI/Secure-Boot registry) plus a pure manufacturer
+  support-URL resolver for BIOS updates; never flashes firmware. Consumed by
+  `SystemHealthViewModel`.
 - `TuneUpService` — orchestrates the Quick Tune-Up wizard: temp cleanup,
   Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Non-destructive.
 - `HealthScoreService` — aggregates disk health, RAM, uptime, and battery

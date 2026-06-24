@@ -19,7 +19,7 @@ public class AllViewModelsSweepTests
     [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true)));
     [Fact] public void AppUpdates_Constructs() => Assert.NotNull(new AppUpdatesViewModel(new WingetService(new PowerShellRunner())));
     [Fact] public void WindowsUpdate_Constructs() => Assert.NotNull(new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService()));
-    [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner()));
+    [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService()));
     [Fact] public void Cleanup_Constructs() => Assert.NotNull(new CleanupViewModel(new PowerShellRunner()));
     [Fact] public void DeepCleanup_Constructs() => Assert.NotNull(new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()));
     [Fact] public void Drivers_Constructs() => Assert.NotNull(new DriversViewModel(new PowerShellRunner()));
@@ -41,7 +41,7 @@ public class AllViewModelsSweepTests
     [Fact]
     public void SystemHealth_HasCollections()
     {
-        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
+        var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
         Assert.NotNull(vm.Modules);
         Assert.NotNull(vm.Disks);
         Assert.NotNull(vm.DiskHealth);

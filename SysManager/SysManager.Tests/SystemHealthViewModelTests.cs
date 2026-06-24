@@ -10,7 +10,7 @@ namespace SysManager.Tests;
 
 public class SystemHealthViewModelTests
 {
-    private static SystemHealthViewModel NewVm() => new(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
+    private static SystemHealthViewModel NewVm() => new(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
 
     // ---------- construction ----------
 

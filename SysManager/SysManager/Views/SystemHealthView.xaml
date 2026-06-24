@@ -111,6 +111,38 @@
                     </Grid>
                 </Border>
 
+                <!-- BIOS / firmware -->
+                <Border Style="{StaticResource Card}" Margin="0,16,0,0"
+                        Visibility="{Binding Bios, Converter={StaticResource FlexVis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <TextBlock Text="BIOS &amp; firmware" Style="{StaticResource SectionTitle}"/>
+                            <StackPanel Margin="0,8,0,0" DataContext="{Binding Bios}">
+                                <TextBlock Margin="0,2"><Run Text="Motherboard: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding BoardDisplay, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Margin="0,2"><Run Text="BIOS version: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding Version, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Margin="0,2"><Run Text="BIOS date: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding ReleaseDate, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Margin="0,2"><Run Text="BIOS vendor: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding Manufacturer, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Margin="0,2"><Run Text="Boot mode: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding BootMode, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Margin="0,2"><Run Text="Secure Boot: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding SecureBoot, Mode=OneWay}"/></TextBlock>
+                            </StackPanel>
+                            <TextBlock Text="Read-only. Updating a BIOS carries risk if interrupted — only flash from the manufacturer's file, on stable power. SysManager never flashes firmware itself."
+                                       Style="{StaticResource Subtle}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="Find BIOS update" Command="{Binding OpenBiosSupportCommand}"
+                                    AutomationProperties.Name="Open manufacturer support page for BIOS updates"
+                                    Style="{StaticResource PrimaryButton}" Padding="14,8" Margin="0,0,8,0"/>
+                            <Button Content="Copy info" Command="{Binding CopyBiosInfoCommand}"
+                                    AutomationProperties.Name="Copy BIOS and motherboard info"
+                                    Style="{StaticResource GhostButton}" Padding="14,8"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
                 <!-- Storage devices list -->
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                     <StackPanel>

@@ -175,6 +175,11 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Memory diagnostic that scans the last 30 days of WHEA events for RAM errors
 - Schedule the Windows Memory Diagnostic at next boot
 - Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select
+- **BIOS & firmware** — BIOS version/date/vendor, motherboard model, boot mode
+  (UEFI/Legacy), and Secure Boot status, all read-only. A **Find BIOS update**
+  button opens the right manufacturer support page (ASUS, MSI, Gigabyte, ASRock,
+  Dell, HP, Lenovo, …) for the detected board, and **Copy info** grabs the model +
+  BIOS version for support searches. SysManager never flashes firmware itself.
 
 ### Restore Points
 - List every Windows System Restore point — sequence number, date, description,

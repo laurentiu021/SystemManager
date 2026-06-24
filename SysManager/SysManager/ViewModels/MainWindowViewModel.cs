@@ -178,7 +178,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Dashboard = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth));
             AppUpdates = new AppUpdatesViewModel(winget);
             WindowsUpdate = new WindowsUpdateViewModel(runner, new WindowsUpdateService());
-            SystemHealth = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner);
+            SystemHealth = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService());
             Cleanup = new CleanupViewModel(runner);
             DeepCleanup = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), fixedDrives);
             DuplicateFile = new DuplicateFileViewModel(new DuplicateFileService());

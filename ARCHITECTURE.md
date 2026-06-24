@@ -48,7 +48,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
-| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `DebloaterViewModel` · `PlaceholderViewModel` (Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
+| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
 | Customization | `ContextMenuViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `AboutViewModel` |
 | Advanced | `ProfileViewModel` · `PlaceholderViewModel` (CLI Interface) |
@@ -94,6 +94,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
+- `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
@@ -214,6 +215,10 @@ Key services:
   per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
   denylist of system-critical package families is enforced in code; the parser and
   denylist check are pure, unit-tested static methods.
+- `BrowserCleanerService` — scans + cleans per-browser data (Chromium family +
+  Firefox) under injectable LOCALAPPDATA/APPDATA roots. Scan is read-only (sizes);
+  Clean deletes only discovered files, skips locked files, and never follows
+  reparse points. Cookies/sessions are flagged sensitive.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

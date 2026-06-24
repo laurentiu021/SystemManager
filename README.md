@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 37 tabs are fully
-implemented; 20 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 38 tabs are fully
+implemented; 19 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
@@ -87,7 +87,7 @@ implemented; 20 are work-in-progress placeholders marked with ⚙️:
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
-| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
+| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ |
@@ -403,6 +403,16 @@ Remove preinstalled Windows Store apps you don't use:
 - **Impact summary + confirmation** before anything is uninstalled
 - **Reversible** — removal is per-user, so any app can be reinstalled from the Store
 - Search and per-app descriptions help you decide before removing
+
+### Browser Cleaner
+Reclaim space and clear browsing traces, per browser:
+- **Auto-detects** Chrome, Edge, Brave, Opera, and Firefox
+- **Per-category** with size shown: Cache, History, Cookies, Sessions
+- **Cookies/sessions are flagged and left unticked** by default — cleaning them
+  signs you out, so it's always an explicit choice; cache and history are pre-selected
+- **Confirmation with an impact summary** before anything is deleted
+- Per-user (no admin); locked files (browser open) are skipped, not forced, and
+  symlinks/junctions are never followed
 
 ### Battery Health
 - Charge %, health %, wear level, cycle count, chemistry

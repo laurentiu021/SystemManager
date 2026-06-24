@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.62] - 2026-06-24
+
+### Fixed
+- **"Enable All" on the Startup tab now reports honestly when some items can't be enabled.** It used to always say "All items enabled" even if a registry write failed (for example, an item that needs administrator rights), hiding the failure. It now counts the results and reports how many were enabled and how many could not be — and says so when everything was already enabled.
+- **Startup actions can no longer overlap.** Scan, Enable All and the per-item toggle all read or write the same startup registry/task state; running two at once could interleave their writes and produce inconsistent counts. They are now disabled while one of them is running.
+
 ## [1.20.61] - 2026-06-24
 
 ### Fixed

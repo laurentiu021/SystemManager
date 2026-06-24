@@ -31,7 +31,26 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         _winget = winget;
         _lineHandler = line => Console.Append(line);
         _winget.LineReceived += _lineHandler;
+        // Re-evaluate the long-running commands' CanExecute when IsBusy flips. Scan and
+        // UpgradeSelected both recreate the shared _cts; without this gate a second
+        // command could dispose the CTS the first is still awaiting (ObjectDisposedException).
+        PropertyChanged += OnVmPropertyChanged;
         IsElevated = SysManager.Helpers.AdminHelper.IsElevated();
+    }
+
+    /// <summary>
+    /// Gate for the long-running commands. Scan and UpgradeSelected share <see cref="_cts"/>
+    /// and each recreates it, so disabling both while one runs prevents a second command
+    /// from disposing the CTS mid-flight. Cancel is intentionally NOT gated — it must stay
+    /// enabled while an operation runs. Mirrors WindowsUpdateViewModel.
+    /// </summary>
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        ScanCommand.NotifyCanExecuteChanged();
+        UpgradeSelectedCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -47,7 +66,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         foreach (var p in Packages) p.IsSelected = value;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()
     {
         IsBusy = true;
@@ -67,7 +86,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task UpgradeSelectedAsync()
     {
         var toUpgrade = Packages.Where(p => p.IsSelected).ToList();
@@ -113,6 +132,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         if (disposing)
         {
             _winget.LineReceived -= _lineHandler;
+            PropertyChanged -= OnVmPropertyChanged;
             _cts?.Dispose();
         }
         base.Dispose(disposing);

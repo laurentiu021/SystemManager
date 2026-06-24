@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.59] - 2026-06-24
+
+### Fixed
+- **The App Updates and Context Menu tabs no longer risk a crash when their actions overlap.** On both tabs the long-running actions shared one cancellation source that each action re-created. Starting a second action while the first was still running (e.g. clicking Scan again mid-upgrade, or applying a context-menu preset while a scan ran) could dispose the cancellation source the first was still using and throw. Those actions are now disabled while one of them is running — matching how the Windows Update and Bulk Installer tabs already behave — while Cancel stays available. On the Context Menu tab this also prevents two overlapping runs from corrupting the entry list or triggering two Explorer restarts at once.
+
 ## [1.20.58] - 2026-06-24
 
 ### Security

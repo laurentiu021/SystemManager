@@ -36,7 +36,19 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
     public WindowsFeaturesViewModel(WindowsFeaturesService service)
     {
         _service = service;
+        // Scan and ToggleFeature both drive the shared WindowsFeaturesService PowerShell
+        // runner (each subscribes its own LineReceived handler). Running them concurrently
+        // would cross-contaminate the captured output (the SFC/DISM bug class). Re-evaluate
+        // both commands' CanExecute when IsBusy flips so they are mutually exclusive.
+        PropertyChanged += OnVmPropertyChanged;
         IsElevated = AdminHelper.IsElevated();
+    }
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        ScanCommand.NotifyCanExecuteChanged();
+        ToggleFeatureCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -46,7 +58,7 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
             System.Windows.Application.Current?.Shutdown();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()
     {
         IsBusy = true;
@@ -101,7 +113,6 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
             return;
 
         IsBusy = true;
-        ToggleFeatureCommand.NotifyCanExecuteChanged();
         feature.Status = feature.IsEnabled ? "Disabling…" : "Enabling…";
         StatusMessage = $"{(feature.IsEnabled ? "Disabling" : "Enabling")} {feature.DisplayName}…";
         _toggleCts?.Cancel();
@@ -147,7 +158,6 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
-            ToggleFeatureCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -160,10 +170,16 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
     private bool CanToggle(WindowsFeature? _) => !IsBusy;
 
+    /// <summary>Gate for Scan so it can't run while a feature toggle is in flight (and vice
+    /// versa) — both share one PowerShell runner whose LineReceived output would otherwise
+    /// be captured by both operations at once.</summary>
+    private bool NotBusy => !IsBusy;
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            PropertyChanged -= OnVmPropertyChanged;
             _scanCts?.Cancel(); _scanCts?.Dispose();
             _toggleCts?.Cancel(); _toggleCts?.Dispose();
         }

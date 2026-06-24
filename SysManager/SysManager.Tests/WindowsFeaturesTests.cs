@@ -133,4 +133,27 @@ public class WindowsFeaturesTests
         Assert.Equal(0, vm.FeatureCount);
         Assert.False(vm.PendingReboot);
     }
+
+    // ── re-entrancy guard (regression: shared runner cross-contamination) ──
+
+    [Fact]
+    public void ViewModel_ScanAndToggle_DisabledWhileBusy()
+    {
+        // Scan and ToggleFeature both drive the shared WindowsFeaturesService PowerShell
+        // runner. Running them concurrently would let both LineReceived handlers capture
+        // the same output. The NotBusy/CanToggle gates make them mutually exclusive.
+        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(new PowerShellRunner()));
+        var feature = new WindowsFeature { Name = "TelnetClient", DisplayName = "Telnet Client" };
+
+        Assert.True(vm.ScanCommand.CanExecute(null));
+        Assert.True(vm.ToggleFeatureCommand.CanExecute(feature));
+
+        vm.IsBusy = true;
+        Assert.False(vm.ScanCommand.CanExecute(null));
+        Assert.False(vm.ToggleFeatureCommand.CanExecute(feature));
+
+        vm.IsBusy = false;
+        Assert.True(vm.ScanCommand.CanExecute(null));
+        Assert.True(vm.ToggleFeatureCommand.CanExecute(feature));
+    }
 }

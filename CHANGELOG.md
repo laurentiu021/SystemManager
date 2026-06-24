@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.60] - 2026-06-24
+
+### Fixed
+- **Scanning Windows optional features while a feature toggle is running no longer mixes up their output.** The Scan and enable/disable actions share one PowerShell runner, and each subscribes to its output independently. Toggling was already blocked while busy, but Scan was not — so starting a scan mid-toggle let both read the same output stream and cross-contaminate results. Scan is now disabled while a toggle runs (and vice versa), making the two mutually exclusive.
+
 ## [1.20.59] - 2026-06-24
 
 ### Fixed

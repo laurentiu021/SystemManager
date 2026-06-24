@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.30.0] - 2026-06-24
+
+### Added
+- **Windows Update timing & deferral controls** (Windows Update tab). A new "Update timing & deferral" section lets you **defer feature updates** by a configurable number of days while security and quality updates keep installing, **pause all updates** for a bounded window (up to 35 days, after which Windows auto-resumes), and **Restore default** to return to standard behavior. It uses the documented Windows Update policy registry keys and is fully reversible. There is deliberately no "disable updates forever" option — the strongest action is a clearly-bounded pause, so a machine is never left permanently unpatched. Requires administrator.
+
 ## [1.29.0] - 2026-06-24
 
 ### Added

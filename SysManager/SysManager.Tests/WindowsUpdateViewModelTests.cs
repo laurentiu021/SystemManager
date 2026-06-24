@@ -18,7 +18,7 @@ namespace SysManager.Tests;
 [Collection("DialogService")]
 public class WindowsUpdateViewModelTests
 {
-    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService());
+    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
 
     // ---------- construction & defaults ----------
 

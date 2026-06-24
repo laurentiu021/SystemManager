@@ -232,6 +232,12 @@ a confirmation before it runs:
 - Pending-reboot check, update history (last 30 — via PSWindowsUpdate)
 - Admin banner with a one-click "Run as Administrator" relaunch
 - PSWindowsUpdate is optional now (used only for the History view)
+- **Update timing & deferral** — defer feature updates by N days while security
+  patches keep flowing, pause all updates for a bounded window (max 35 days, then
+  Windows auto-resumes), or restore defaults. Uses the documented Windows Update
+  policy keys and is fully reversible. No "disable updates forever" option by
+  design — the strongest action is a bounded pause, so the machine is never left
+  permanently unpatched.
 
 ### App updates (winget)
 - Scan for upgradable packages

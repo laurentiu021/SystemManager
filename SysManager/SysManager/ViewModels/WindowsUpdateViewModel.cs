@@ -17,6 +17,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
 {
     private readonly PowerShellRunner _runner;
     private readonly WindowsUpdateService _wu;
+    private readonly WindowsUpdatePolicyService _policy;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<UpdateEntry> Updates { get; } = new();
@@ -37,10 +38,16 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [ObservableProperty] private bool _allSelected;
     private bool _suppressAllSelected;
 
-    public WindowsUpdateViewModel(PowerShellRunner runner, WindowsUpdateService wu)
+    // Update deferral policy (registry-backed, reversible).
+    [ObservableProperty] private string _policySummary = "";
+    [ObservableProperty] private int _deferDays = 30;
+    [ObservableProperty] private int _pauseDays = 7;
+
+    public WindowsUpdateViewModel(PowerShellRunner runner, WindowsUpdateService wu, WindowsUpdatePolicyService policy)
     {
         _runner = runner;
         _wu = wu;
+        _policy = policy;
         _runner.LineReceived += OnRunnerLineReceived;
         _runner.ProgressChanged += OnRunnerProgressChanged;
         _wu.Log += OnWuLog;
@@ -55,6 +62,56 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         // and IsBusy stays false until the user triggers an action.
         ModuleAvailable = true;
         ModuleStatus = "PSWindowsUpdate is used for the History view only.";
+        RefreshPolicy();
+    }
+
+    private void RefreshPolicy() => PolicySummary = _policy.Read(DateTime.Now).Summary;
+
+    [RelayCommand]
+    private void DeferFeatureUpdates()
+    {
+        if (!RequireAdminForPolicy()) return;
+        if (!DialogService.Instance.Confirm(
+                $"Defer Windows feature updates by {WindowsUpdatePolicyService.ClampDeferDays(DeferDays)} days?\n\n" +
+                "Security and quality updates keep installing normally — only large feature upgrades are held back. " +
+                "Reversible any time with \"Restore default\".",
+                "Defer feature updates"))
+            return;
+        PolicySummary = _policy.DeferFeatureUpdates(DeferDays)
+            ? _policy.Read(DateTime.Now).Summary
+            : "Couldn't apply the policy — administrator rights are required.";
+    }
+
+    [RelayCommand]
+    private void PauseUpdates()
+    {
+        if (!RequireAdminForPolicy()) return;
+        var clamped = WindowsUpdatePolicyService.ClampPauseDays(PauseDays);
+        if (!DialogService.Instance.Confirm(
+                $"Pause all Windows updates for {clamped} days?\n\n" +
+                "Windows will automatically resume updates when the pause ends. This is a bounded pause — " +
+                "SysManager never disables updates permanently.",
+                "Pause updates"))
+            return;
+        PolicySummary = _policy.PauseUpdates(PauseDays, DateTime.Now)
+            ? _policy.Read(DateTime.Now).Summary
+            : "Couldn't apply the policy — administrator rights are required.";
+    }
+
+    [RelayCommand]
+    private void RestoreUpdatePolicy()
+    {
+        if (!RequireAdminForPolicy()) return;
+        PolicySummary = _policy.RestoreDefault()
+            ? _policy.Read(DateTime.Now).Summary
+            : "Couldn't restore the policy — administrator rights are required.";
+    }
+
+    private bool RequireAdminForPolicy()
+    {
+        if (IsElevated) return true;
+        PolicySummary = "Changing update policy requires administrator rights — use \"Run as administrator\".";
+        return false;
     }
 
     private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);

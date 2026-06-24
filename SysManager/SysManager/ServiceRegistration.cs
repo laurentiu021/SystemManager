@@ -67,6 +67,7 @@ public static class ServiceRegistration
         services.AddSingleton<SystemFixService>();
         services.AddSingleton<ProfileService>();
         services.AddSingleton<BiosService>();
+        services.AddSingleton<WindowsUpdatePolicyService>();
         services.AddSingleton<WindowsUpdateService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────

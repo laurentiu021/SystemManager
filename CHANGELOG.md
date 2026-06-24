@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.58] - 2026-06-24
+
+### Security
+- **The file shredder can no longer be tricked into destroying a system file through a junction in the middle of the path.** Its safety check resolved a link only at the end of the path (and expanded short `8.3` names), but a junction or symlink in a *parent* folder — which a standard user can create without admin — was not followed during validation. A path such as `C:\Temp\link\notepad.exe`, where `C:\Temp\link` pointed into `System32`, slipped past the system-folder denylist and the real protected file behind it was overwritten and deleted. The shredder now asks Windows for the fully-resolved canonical path (collapsing every junction/symlink anywhere in the chain) and re-checks that against the protected-folder list before touching anything.
+
+## [1.20.57] - 2026-06-24
+
+### Security
+- **The Uninstaller no longer runs a per-user app's uninstaller from a user-writable folder while elevated.** When SysManager ran as Administrator, uninstalling a local app executed the path from its registry `UninstallString` (and any DLL a `rundll32` command would load). That path was trusted even when it pointed inside `%LocalAppData%`, which a standard user can write to — and the uninstall key in `HKCU` is also user-writable. An unprivileged attacker could therefore plant a binary there plus a fake uninstall entry, then have an elevated SysManager run it with admin rights (local privilege escalation). Admin-protected locations (Program Files, Windows, ProgramData) stay trusted as before; the per-user location is now trusted only when SysManager is *not* elevated, so normal per-user uninstalls (e.g. VS Code, Discord) are unaffected.
+
 ## [1.20.56] - 2026-06-23
 
 ### Fixed

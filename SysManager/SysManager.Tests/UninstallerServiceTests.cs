@@ -19,7 +19,9 @@ public class UninstallerServiceTests
     public void IsUnderTrustedDirectory_PathInsideProgramFiles_IsTrusted()
     {
         var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        Assert.True(UninstallerService.IsUnderTrustedDirectory(System.IO.Path.Combine(pf, "Vendor", "app.exe")));
+        // Program Files is admin-protected, so it is trusted regardless of elevation.
+        Assert.True(UninstallerService.IsUnderTrustedDirectory(System.IO.Path.Combine(pf, "Vendor", "app.exe"), isElevated: false));
+        Assert.True(UninstallerService.IsUnderTrustedDirectory(System.IO.Path.Combine(pf, "Vendor", "app.exe"), isElevated: true));
     }
 
     [Fact]
@@ -28,12 +30,35 @@ public class UninstallerServiceTests
         // "C:\Program Files Evil\..." must NOT pass the "C:\Program Files" check.
         var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var evil = pf + " Evil\\malware.exe";
-        Assert.False(UninstallerService.IsUnderTrustedDirectory(evil));
+        Assert.False(UninstallerService.IsUnderTrustedDirectory(evil, isElevated: false));
     }
 
     [Fact]
     public void IsUnderTrustedDirectory_UntrustedLocation_IsNotTrusted()
-        => Assert.False(UninstallerService.IsUnderTrustedDirectory(@"C:\Temp\random\app.exe"));
+        => Assert.False(UninstallerService.IsUnderTrustedDirectory(@"C:\Temp\random\app.exe", isElevated: false));
+
+    // ── SEC-LPE: user-writable per-user location is trusted only when NOT elevated ──
+
+    [Fact]
+    public void IsUnderTrustedDirectory_LocalAppData_TrustedWhenNotElevated()
+    {
+        // A per-user install (VS Code, Discord) lives under %LocalAppData% and must
+        // still uninstall normally when SysManager runs without elevation.
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var perUserApp = System.IO.Path.Combine(localAppData, "Programs", "VendorApp", "uninstall.exe");
+        Assert.True(UninstallerService.IsUnderTrustedDirectory(perUserApp, isElevated: false));
+    }
+
+    [Fact]
+    public void IsUnderTrustedDirectory_LocalAppData_NotTrustedWhenElevated()
+    {
+        // %LocalAppData% is writable by a standard user. When SysManager is elevated,
+        // executing a binary there would let an unprivileged attacker who planted it
+        // run with our elevation (local privilege escalation) — so it must NOT be trusted.
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var plantedBinary = System.IO.Path.Combine(localAppData, "Programs", "VendorApp", "uninstall.exe");
+        Assert.False(UninstallerService.IsUnderTrustedDirectory(plantedBinary, isElevated: true));
+    }
 
     // ── ValidateTrustedBinaryArgs (regression: LPE via HKCU UninstallString) ──
 
@@ -43,7 +68,7 @@ public class UninstallerServiceTests
         // rundll32 would load an attacker-controlled DLL from a writable temp path
         // with our elevation — must be rejected.
         var ex = Record.Exception(() =>
-            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", @"C:\Temp\evil.dll,EntryPoint"));
+            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", @"C:\Temp\evil.dll,EntryPoint", isElevated: false));
         Assert.IsType<InvalidOperationException>(ex);
     }
 
@@ -53,15 +78,27 @@ public class UninstallerServiceTests
         var sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
         var dll = System.IO.Path.Combine(sys, "shell32.dll");
         var ex = Record.Exception(() =>
-            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", $"\"{dll}\",Control_RunDLL"));
+            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", $"\"{dll}\",Control_RunDLL", isElevated: false));
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ValidateTrustedBinaryArgs_Rundll32_DllInLocalAppData_NotTrustedWhenElevated_Throws()
+    {
+        // SEC-LPE: a rundll32 DLL planted in user-writable %LocalAppData% must be
+        // rejected when elevated, even though it would be allowed un-elevated.
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var dll = System.IO.Path.Combine(localAppData, "evil.dll");
+        var ex = Record.Exception(() =>
+            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", $"\"{dll}\",EntryPoint", isElevated: true));
+        Assert.IsType<InvalidOperationException>(ex);
     }
 
     [Fact]
     public void ValidateTrustedBinaryArgs_Rundll32_NoDllPath_Throws()
     {
         var ex = Record.Exception(() =>
-            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", "   "));
+            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", "   ", isElevated: false));
         Assert.IsType<InvalidOperationException>(ex);
     }
 
@@ -70,7 +107,7 @@ public class UninstallerServiceTests
     {
         var ex = Record.Exception(() =>
             UninstallerService.ValidateTrustedBinaryArgs(
-                "MsiExec.exe", "/X{0F2C3A4B-1234-5678-9ABC-DEF012345678} /quiet /norestart"));
+                "MsiExec.exe", "/X{0F2C3A4B-1234-5678-9ABC-DEF012345678} /quiet /norestart", isElevated: false));
         Assert.Null(ex);
     }
 
@@ -81,7 +118,7 @@ public class UninstallerServiceTests
     public void ValidateTrustedBinaryArgs_MsiExec_NonProductCode_Throws(string args)
     {
         var ex = Record.Exception(() =>
-            UninstallerService.ValidateTrustedBinaryArgs("MsiExec.exe", args));
+            UninstallerService.ValidateTrustedBinaryArgs("MsiExec.exe", args, isElevated: false));
         Assert.IsType<InvalidOperationException>(ex);
     }
 

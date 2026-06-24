@@ -51,7 +51,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `DebloaterViewModel` · `PlaceholderViewModel` (Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
 | Customization | `ContextMenuViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `AboutViewModel` |
-| Advanced | `PlaceholderViewModel` (Profile Export/Import · CLI Interface) |
+| Advanced | `ProfileViewModel` · `PlaceholderViewModel` (CLI Interface) |
 
 - `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),
   temperatures (LibreHardwareMonitor + NvAPIWrapper), storage overview, system
@@ -92,6 +92,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for create/restore; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
+- `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
@@ -214,6 +215,10 @@ Key services:
   `IPowerShellRunner` seam; streams output and returns an honest success/failure
   `SystemFixResult`. Auto-logon is delegated to the built-in netplwiz dialog, never
   a plaintext credential write.
+- `ProfileService` — bundles SysManager's own config files (theme, speed-test
+  history) into a versioned, portable JSON profile and applies it back; only
+  catalog-known sections are written (a tampered profile can't drop arbitrary
+  files), and the config directory is injectable for tests.
 - `AppIconService` — downloads and caches application favicons for UI display.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-06-24
+
+### Added
+- **Profile Export/Import tab** (Advanced group). The placeholder is now a working tab that exports SysManager's own configuration — theme/appearance and speed-test history — to a single portable JSON file, and imports it on another PC. Export is selective (tick which sections to include); import shows what the profile contains and asks for confirmation before overwriting, supports selective per-section apply, and refuses profiles made by a newer, incompatible version. Only SysManager's own config is ever touched — never system settings — so importing is fully reversible.
+
 ## [1.27.0] - 2026-06-24
 
 ### Added

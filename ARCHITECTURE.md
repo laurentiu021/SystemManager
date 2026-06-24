@@ -182,7 +182,8 @@ Key services:
 - `PrivacyService` — reads and writes Windows privacy and telemetry
   registry toggles (activity history, advertising ID, diagnostics, etc.).
 - `DnsService` — manages DNS server configuration via PowerShell
-  `Set-DnsClientServerAddress` with preset support (Google, Cloudflare, etc.).
+  `Set-DnsClientServerAddress` with preset support (plain resolvers plus
+  ad/malware/family-blocking variants), IPv4 + IPv6, and reversible snapshots.
 - `HostsFileService` — parses and edits the Windows hosts file with
   add/remove/toggle operations; keeps a one-time pristine backup and can
   restore it (`HasBackup` / `RestoreBackup`).

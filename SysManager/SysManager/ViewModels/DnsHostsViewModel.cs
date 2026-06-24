@@ -139,9 +139,10 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
+        var v6Note = SelectedPreset.HasIpv6 ? " + IPv6" : "";
         if (!DialogService.Instance.Confirm(
                 $"Change this PC's DNS servers to {SelectedPreset.Name} " +
-                $"({SelectedPreset.Primary}, {SelectedPreset.Secondary})?\n\n" +
+                $"({SelectedPreset.Primary}, {SelectedPreset.Secondary}{v6Note})?\n\n" +
                 "You can revert any time with \"Reset to automatic (DHCP)\".",
                 "Confirm DNS Change"))
         {
@@ -157,7 +158,8 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             // exact previous configuration, not just a generic DHCP reset.
             var snapshot = await _dnsService.CaptureCurrentServersAsync(_cts.Token).ConfigureAwait(false);
 
-            await _dnsService.SetDnsAsync(SelectedPreset.Primary, SelectedPreset.Secondary, _cts.Token)
+            await _dnsService.SetDnsAsync(SelectedPreset.Primary, SelectedPreset.Secondary,
+                    SelectedPreset.PrimaryV6, SelectedPreset.SecondaryV6, _cts.Token)
                 .ConfigureAwait(false);
 
             _previousServers = snapshot;

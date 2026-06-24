@@ -313,6 +313,86 @@ public class DnsServiceTests
         await Assert.ThrowsAsync<ArgumentNullException>(() => svc.RestoreServersAsync(null!));
     }
 
+    // ---------- filtering variants + IPv6 (#910) ----------
+
+    [Fact]
+    public void GetPresets_IncludesFilteringVariants()
+    {
+        using var svc = new DnsService(Substitute.For<IPowerShellRunner>());
+        var names = svc.GetPresets().Select(p => p.Name).ToList();
+
+        Assert.Contains(names, n => n.Contains("Malware", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(names, n => n.Contains("AdGuard", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(names, n => n.Contains("Family", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(names, n => n.Contains("FamilyShield", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GetPresets_PlainResolversCarryIpv6()
+    {
+        using var svc = new DnsService(Substitute.For<IPowerShellRunner>());
+        var cloudflare = svc.GetPresets().First(p => p.Name == "Cloudflare");
+
+        Assert.True(cloudflare.HasIpv6);
+        Assert.Equal("2606:4700:4700::1111", cloudflare.PrimaryV6);
+    }
+
+    [Fact]
+    public void GetPresets_AutomaticHasNoIpv6()
+    {
+        using var svc = new DnsService(Substitute.For<IPowerShellRunner>());
+        var auto = svc.GetPresets().First(p => p.Name.Contains("Automatic", StringComparison.OrdinalIgnoreCase));
+        Assert.False(auto.HasIpv6);
+    }
+
+    [Fact]
+    public async Task SetDnsAsync_WithIpv6_SetsBothFamiliesInSeparateCalls()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("7"));
+        using var svc = new DnsService(runner);
+
+        await svc.SetDnsAsync("1.1.1.2", "1.0.0.2", "2606:4700:4700::1112", "2606:4700:4700::1002");
+
+        // One script issues two Set-DnsClientServerAddress calls: one IPv4, one IPv6.
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s =>
+                s.Contains("-InterfaceIndex 7") &&
+                s.Contains("1.1.1.2") && s.Contains("1.0.0.2") &&
+                s.Contains("2606:4700:4700::1112") && s.Contains("2606:4700:4700::1002")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetDnsAsync_WithoutIpv6_OnlySetsIpv4()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("7"));
+        using var svc = new DnsService(runner);
+
+        await svc.SetDnsAsync("8.8.8.8", "8.8.4.4", "", "");
+
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s => s.Contains("8.8.8.8") && !s.Contains("::")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("not-an-ip")]
+    [InlineData("zzzz::1")]
+    public async Task SetDnsAsync_InvalidIpv6_ThrowsAndNeverRunsScript(string badV6)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        using var svc = new DnsService(runner);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.SetDnsAsync("1.1.1.1", "1.0.0.1", badV6, ""));
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
+
     [Fact]
     public async Task RestoreServersAsync_InvalidAddressInSnapshot_Throws()
     {

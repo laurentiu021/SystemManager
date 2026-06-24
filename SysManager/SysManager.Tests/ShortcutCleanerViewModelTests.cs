@@ -150,4 +150,45 @@ public class ShortcutCleanerViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ── EnumerateLnkFilesSafe (regression: nested scan must not abort on one bad folder) ──
+
+    [Fact]
+    public void EnumerateLnkFilesSafe_FindsLnkFilesAtAllDepths()
+    {
+        // Regression: the old SearchOption.AllDirectories enumerator threw the first time it
+        // hit an unreadable subfolder, aborting the whole location and dropping every later
+        // shortcut. The tolerant walk must find .lnk files at every depth and ignore non-.lnk.
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "smtest_lnkscan_" + System.Guid.NewGuid().ToString("N"));
+        var deep = System.IO.Path.Combine(root, "a", "b", "c");
+        System.IO.Directory.CreateDirectory(deep);
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(root, "top.lnk"), "");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(root, "a", "mid.lnk"), "");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(deep, "deep.lnk"), "");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(deep, "not-a-shortcut.txt"), "");
+
+            var found = ShortcutCleanerService.EnumerateLnkFilesSafe(root, CancellationToken.None)
+                .Select(System.IO.Path.GetFileName)
+                .OrderBy(n => n)
+                .ToList();
+
+            Assert.Equal(new[] { "deep.lnk", "mid.lnk", "top.lnk" }, found);
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void EnumerateLnkFilesSafe_MissingRoot_ReturnsEmptyWithoutThrowing()
+    {
+        // A root that doesn't exist must yield nothing rather than throw (the per-directory
+        // try/catch swallows the access error).
+        var missing = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "smtest_noroot_" + System.Guid.NewGuid().ToString("N"));
+        var found = ShortcutCleanerService.EnumerateLnkFilesSafe(missing, CancellationToken.None).ToList();
+        Assert.Empty(found);
+    }
 }

@@ -22,6 +22,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     private readonly MemoryTestService _memTest;
     private readonly FixedDriveService _drives;
     private readonly PowerShellRunner _runner;
+    private readonly BiosService _biosService;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<MemoryModule> Modules { get; } = new();
@@ -45,13 +46,17 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     [ObservableProperty] private string _memoryHealthVerdict = "Click 'Check memory errors' to inspect.";
     [ObservableProperty] private string _memoryHealthColorHex = "#9AA0A6";
 
-    public SystemHealthViewModel(SystemInfoService sys, DiskHealthService diskHealth, MemoryTestService memTest, FixedDriveService drives, PowerShellRunner runner)
+    // BIOS / firmware (read-only); populated on Scan.
+    [ObservableProperty] private BiosInfo? _bios;
+
+    public SystemHealthViewModel(SystemInfoService sys, DiskHealthService diskHealth, MemoryTestService memTest, FixedDriveService drives, PowerShellRunner runner, BiosService biosService)
     {
         _sys = sys;
         _diskHealth = diskHealth;
         _memTest = memTest;
         _drives = drives;
         _runner = runner;
+        _biosService = biosService;
         IsElevated = AdminHelper.IsElevated();
         _runner.LineReceived += OnRunnerLineReceived;
 
@@ -92,6 +97,8 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             Memory = snap.Memory;
             Modules.ReplaceWith(snap.Memory.Modules);
             Disks.ReplaceWith(snap.Disks);
+            // BIOS read hits blocking WMI/registry — keep it off the UI thread.
+            Bios = await Task.Run(_biosService.Read);
             Summary = $"OS {snap.Os.Caption}  —  CPU {snap.Cpu.Name} ({snap.Cpu.Cores}c/{snap.Cpu.LogicalProcessors}t)  —  RAM {snap.Memory.UsedGB:0.0}/{snap.Memory.TotalGB:0.0} GB  —  Disks {snap.Disks.Count}";
             StatusMessage = $"Scan at {snap.CapturedAt:HH:mm:ss}";
             ToastService.Instance.Show("System Health scan complete", $"{snap.Disks.Count} disks, {snap.Memory.Modules.Count} RAM modules");
@@ -101,6 +108,41 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         catch (System.Management.ManagementException ex) { StatusMessage = $"Scan failed: {ex.Message}"; }
         catch (InvalidOperationException ex) { StatusMessage = $"Scan failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>Opens the motherboard manufacturer's support page (or a web search) for BIOS updates.</summary>
+    [RelayCommand]
+    private void OpenBiosSupport()
+    {
+        var url = BiosService.SupportUrl(Bios?.BoardManufacturer ?? "", Bios?.BoardProduct ?? "");
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
+            StatusMessage = "Opened the manufacturer support page in your browser.";
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Warning("Could not open BIOS support page: {Error}", ex.Message);
+            StatusMessage = "Couldn't open the browser.";
+        }
+    }
+
+    /// <summary>Copies the motherboard model + BIOS version to the clipboard for support searches.</summary>
+    [RelayCommand]
+    private void CopyBiosInfo()
+    {
+        if (Bios is null) { StatusMessage = "Run a scan first."; return; }
+        var text = $"{Bios.BoardDisplay} — BIOS {Bios.Version} ({Bios.ReleaseDate})".Trim();
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+            StatusMessage = "BIOS info copied to clipboard.";
+        }
+        catch (System.Runtime.InteropServices.ExternalException ex)
+        {
+            Log.Debug("Clipboard locked: {Error}", ex.Message);
+            StatusMessage = "Couldn't copy: the clipboard is in use.";
+        }
     }
 
     [RelayCommand]

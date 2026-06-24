@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-06-24
+
+### Added
+- **System Fixes tab** (System group). A consolidated panel for common one-click Windows repairs, each with a plain-English description and a confirmation before it runs: **Reset Windows Update** (stop services, clear the SoftwareDistribution/catroot2 caches, restart services), **Reset Network Stack** (Winsock + TCP/IP reset and DNS flush), and **Reinstall WinGet** (re-register the App Installer when app installs/uninstalls fail). A **Set up Auto Sign-in** shortcut opens the built-in User Accounts dialog so Windows stores the credential securely — SysManager never handles your password. Repairs run with live output and report success or failure honestly. They modify system state and require administrator rights (standard elevation banner).
+
 ## [1.25.0] - 2026-06-24
 
 ### Added

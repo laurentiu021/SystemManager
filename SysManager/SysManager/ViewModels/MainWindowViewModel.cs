@@ -52,6 +52,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public RestorePointsViewModel RestorePoints { get; }
     public DebloaterViewModel Debloater { get; }
     public LegacyPanelsViewModel LegacyPanels { get; }
+    public SystemFixesViewModel SystemFixes { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -153,6 +154,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             RestorePoints = sp.GetRequiredService<RestorePointsViewModel>();
             Debloater = sp.GetRequiredService<DebloaterViewModel>();
             LegacyPanels = sp.GetRequiredService<LegacyPanelsViewModel>();
+            SystemFixes = sp.GetRequiredService<SystemFixesViewModel>();
         }
         else
         {
@@ -208,6 +210,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             RestorePoints = new RestorePointsViewModel(new RestorePointService(new PowerShellRunner()));
             Debloater = new DebloaterViewModel(new DebloaterService(new PowerShellRunner()));
             LegacyPanels = new LegacyPanelsViewModel(new LegacyPanelService());
+            SystemFixes = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner()));
         }
 
         InitPlaceholders();
@@ -293,7 +296,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-restore-points",   "Restore Points",   "", RestorePoints,    typeof(Views.RestorePointsView)),
             Item("nav-task-scheduler",   "Task Scheduler",   "", WipTaskScheduler, typeof(Views.PlaceholderView)),
             Item("nav-boot-analyzer",    "Boot Analyzer",    "", WipBootAnalyzer,  typeof(Views.PlaceholderView)),
-            Item("nav-legacy-panels",    "Legacy Panels",    "", LegacyPanels,     typeof(Views.LegacyPanelsView))),
+            Item("nav-legacy-panels",    "Legacy Panels",    "", LegacyPanels,     typeof(Views.LegacyPanelsView)),
+            Item("nav-system-fixes",     "System Fixes",     "", SystemFixes,      typeof(Views.SystemFixesView))),
 
         Group("grp-gaming", "Gaming & Profiles", "",
             Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView)),
@@ -473,6 +477,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         RestorePoints?.Dispose();
         Debloater?.Dispose();
         LegacyPanels?.Dispose();
+        SystemFixes?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipDefenderTweaks?.Dispose();

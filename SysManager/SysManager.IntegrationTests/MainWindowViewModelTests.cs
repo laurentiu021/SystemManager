@@ -75,16 +75,16 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavItems_ContainAll56()
+    public void NavItems_ContainAll57()
     {
         var vm = new MainWindowViewModel();
-        Assert.Equal(56, vm.NavItems.Count);
+        Assert.Equal(57, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
 
         // Dashboard
         Assert.Contains("nav-dashboard", ids);
 
-        // System (10)
+        // System (11)
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-performance", ids);
@@ -95,6 +95,7 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
         Assert.Contains("nav-legacy-panels", ids);
+        Assert.Contains("nav-system-fixes", ids);
 
         // Gaming & Profiles (5)
         Assert.Contains("nav-gaming-profile", ids);
@@ -239,11 +240,11 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_SystemGroup_Contains10Items()
+    public void NavGroups_SystemGroup_Contains11Items()
     {
         var vm = new MainWindowViewModel();
         var sys = vm.NavGroups.First(g => g.Id == "grp-system");
-        Assert.Equal(10, sys.Children.Count);
+        Assert.Equal(11, sys.Children.Count);
         var ids = sys.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
@@ -255,6 +256,7 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
         Assert.Contains("nav-legacy-panels", ids);
+        Assert.Contains("nav-system-fixes", ids);
     }
 
     [Fact]

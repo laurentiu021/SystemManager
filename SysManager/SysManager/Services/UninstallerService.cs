@@ -225,6 +225,14 @@ public sealed partial class UninstallerService
         // Handles both quoted paths ("C:\path\uninstall.exe" /S) and unquoted.
         var (exe, args) = ParseUninstallCommand(command);
 
+        // SEC-LPE: capture our own elevation up front. The UninstallString (and any
+        // rundll32 DLL path it carries) comes from a registry key that a standard user
+        // can write — HKCU especially. When SysManager itself runs elevated, executing
+        // a binary from a user-writable location would let an unprivileged attacker who
+        // planted it gain our elevation (local privilege escalation). The trusted-path
+        // checks below therefore tighten when elevated.
+        var isElevated = Helpers.AdminHelper.IsElevated();
+
         // SEC-002: Validate the executable exists and is a real file (not a
         // script or arbitrary command). HKCU uninstall keys can be modified
         // without admin, so we must not blindly execute whatever is there.
@@ -250,7 +258,7 @@ public sealed partial class UninstallerService
             // MsiExec take their payload from the (HKCU-writable) arguments. rundll32
             // will load ANY DLL at ANY entry point, and MsiExec will run an arbitrary
             // package; both inherit our elevation. Validate the payload before launch.
-            ValidateTrustedBinaryArgs(resolvedName, args);
+            ValidateTrustedBinaryArgs(resolvedName, args, isElevated);
         }
         else
         {
@@ -263,12 +271,14 @@ public sealed partial class UninstallerService
                 throw new InvalidOperationException(
                     $"Uninstall target is not an executable (.exe): '{exe}'. Refusing to run for security.");
 
-            // SEC-H2: Validate the executable resides under a trusted directory.
+            // SEC-H2 / SEC-LPE: Validate the executable resides under a trusted directory.
             // Registry uninstall keys (especially HKCU) can be modified without admin,
-            // so we must not execute arbitrary paths. Allow: Program Files, Windows,
-            // ProgramData, and LocalApplicationData (per-user installs like VS Code).
+            // so we must not execute arbitrary paths. Admin-protected dirs (Program Files,
+            // Windows, ProgramData) are always trusted; the user-writable per-user location
+            // (LocalApplicationData) is trusted ONLY when we are not elevated — otherwise an
+            // unprivileged attacker who dropped a binary there would gain our elevation.
             var fullPath = System.IO.Path.GetFullPath(exe);
-            if (!IsUnderTrustedDirectory(fullPath))
+            if (!IsUnderTrustedDirectory(fullPath, isElevated))
                 throw new InvalidOperationException(
                     $"Uninstall executable is outside trusted directories: '{exe}'. Refusing to run for security.");
         }
@@ -367,19 +377,28 @@ public sealed partial class UninstallerService
     }
 
     /// <summary>
-    /// Checks whether the given absolute path resides under a trusted system directory
-    /// (Program Files, Windows, ProgramData, or LocalApplicationData).
+    /// Checks whether the given absolute path resides under a trusted directory.
+    /// Admin-protected directories (Program Files, Windows, ProgramData) are always
+    /// trusted. The user-writable per-user location (LocalApplicationData) is trusted
+    /// ONLY when <paramref name="isElevated"/> is false — when we run elevated, a binary
+    /// there could have been planted by an unprivileged attacker, so trusting it would
+    /// be a local privilege-escalation vector (SEC-LPE).
     /// </summary>
-    internal static bool IsUnderTrustedDirectory(string fullPath)
+    internal static bool IsUnderTrustedDirectory(string fullPath, bool isElevated)
     {
-        var trustedDirs = new[]
+        var trustedDirs = new List<string>
         {
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
             Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-            Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData",
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+            Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData"
         };
+
+        // Per-user install locations (e.g. VS Code, Discord) are writable without admin.
+        // Trust them only when we are NOT elevated, so an elevated uninstall can never
+        // execute an attacker-planted binary from a user-writable directory.
+        if (!isElevated)
+            trustedDirs.Add(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
 
         // Compare on a directory boundary, not a raw prefix. A bare StartsWith lets
         // "C:\Program Files Evil\x.exe" pass the "C:\Program Files" check — so append
@@ -404,7 +423,7 @@ public sealed partial class UninstallerService
     /// must be a product-code uninstall (/X{GUID}); anything else (e.g. an arbitrary
     /// package path or /I install) is rejected.
     /// </remarks>
-    internal static void ValidateTrustedBinaryArgs(string resolvedExeName, string args)
+    internal static void ValidateTrustedBinaryArgs(string resolvedExeName, string args, bool isElevated)
     {
         if (resolvedExeName.Equals("rundll32.exe", StringComparison.OrdinalIgnoreCase))
         {
@@ -414,8 +433,11 @@ public sealed partial class UninstallerService
                 throw new InvalidOperationException(
                     "rundll32 uninstall command has no DLL path — refusing to run for security.");
 
+            // Same SEC-LPE rule as the executable check: a user-writable DLL path is only
+            // trusted when not elevated, so rundll32 can't load attacker-planted DLLs with
+            // our elevation.
             var dllFullPath = System.IO.Path.GetFullPath(dll);
-            if (!IsUnderTrustedDirectory(dllFullPath))
+            if (!IsUnderTrustedDirectory(dllFullPath, isElevated))
                 throw new InvalidOperationException(
                     $"rundll32 would load a DLL outside trusted directories: '{dll}'. Refusing to run for security.");
         }

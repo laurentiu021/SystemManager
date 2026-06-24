@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-06-24
+
+### Added
+- **Legacy Panels tab** (System group). A one-click launcher for the classic Windows applets that newer releases keep burying — Control Panel, Sound, Power Options, Network Connections, Region, System Properties, User Accounts, Device Manager, Computer Management, Programs and Features, Mouse, and Date and Time. Each is a pure launcher that just opens the built-in panel; nothing is modified, so no elevation or confirmation is needed. The applet list is hard-coded, so no input ever reaches the process launcher.
+
 ## [1.24.0] - 2026-06-24
 
 ### Added

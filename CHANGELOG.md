@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-06-25
+
+### Added
+- **Boot Analyzer tab** (System group). The placeholder is now a working tab that reads the Windows boot-performance history (the Diagnostics-Performance log) and shows how long your PC takes to boot — total, core (main path), and desktop ready-up time — across recent boots, with a trend versus your recent average. A second list shows the apps, drivers, services, and devices Windows flagged as slowing boot, with the delay attributed to each. Read-only; reading the log requires administrator (the tab shows the standard elevation banner).
+
 ## [1.32.0] - 2026-06-25
 
 ### Added

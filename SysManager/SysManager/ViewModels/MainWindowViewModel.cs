@@ -48,6 +48,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public DnsHostsViewModel DnsHosts { get; }
     public ContextMenuViewModel ContextMenu { get; }
     public SystemReportViewModel SystemReport { get; }
+    public EnvironmentVariablesViewModel EnvironmentVariables { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -81,7 +82,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     // Customization group (Context Menu is now fully implemented)
     public PlaceholderViewModel WipDarkModeScheduler { get; private set; } = null!;
     public PlaceholderViewModel WipVolumeControl { get; private set; } = null!;
-    public PlaceholderViewModel WipEnvVariableEditor { get; private set; } = null!;
 
     // System group (additions)
     public PlaceholderViewModel WipTaskScheduler { get; private set; } = null!;
@@ -148,6 +148,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Privacy = sp.GetRequiredService<PrivacyViewModel>();
             ContextMenu = sp.GetRequiredService<ContextMenuViewModel>();
             SystemReport = sp.GetRequiredService<SystemReportViewModel>();
+            EnvironmentVariables = sp.GetRequiredService<EnvironmentVariablesViewModel>();
         }
         else
         {
@@ -199,6 +200,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Privacy = new PrivacyViewModel(new PrivacyService());
             ContextMenu = new ContextMenuViewModel(new ContextMenuService());
             SystemReport = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth));
+            EnvironmentVariables = new EnvironmentVariablesViewModel(new EnvironmentVariableService());
         }
 
         InitPlaceholders();
@@ -240,7 +242,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Customization group (Context Menu is now fully implemented)
         WipDarkModeScheduler = new PlaceholderViewModel("Dark Mode Scheduler", "Auto light/dark theme + color temperature (f.lux-style) on schedule or sunset.", "#329");
         WipVolumeControl = new PlaceholderViewModel("Volume Control", "Per-app volume mixer with output device routing and profile presets.", "#332");
-        WipEnvVariableEditor = new PlaceholderViewModel("Environment Variables", "GUI PATH editor with drag-reorder, duplicate detection, and path validation.", "#331");
 
         // System group (additions)
         WipTaskScheduler = new PlaceholderViewModel("Task Scheduler", "Browse and toggle scheduled tasks with color-coded safety indicators.", "#334");
@@ -340,7 +341,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-context-menu",   "Context Menu",          "", ContextMenu,          typeof(Views.ContextMenuView)),
             Item("nav-dark-mode",      "Dark Mode Scheduler",   "", WipDarkModeScheduler, typeof(Views.PlaceholderView)),
             Item("nav-volume-control", "Volume Control",        "", WipVolumeControl,     typeof(Views.PlaceholderView)),
-            Item("nav-env-variables",  "Environment Variables", "", WipEnvVariableEditor, typeof(Views.PlaceholderView))),
+            Item("nav-env-variables",  "Environment Variables", "", EnvironmentVariables, typeof(Views.EnvironmentVariablesView))),
 
         Group("grp-info", "Info", "",
             Item("nav-drivers",       "Drivers",        "", Drivers,        typeof(Views.DriversView)),
@@ -462,6 +463,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Privacy?.Dispose();
         ContextMenu?.Dispose();
         SystemReport?.Dispose();
+        EnvironmentVariables?.Dispose();
         WipDebloater?.Dispose();
         WipBrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
@@ -469,7 +471,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipNotificationBlocker?.Dispose();
         WipDarkModeScheduler?.Dispose();
         WipVolumeControl?.Dispose();
-        WipEnvVariableEditor?.Dispose();
         WipTaskScheduler?.Dispose();
         WipBootAnalyzer?.Dispose();
         WipRestorePoints?.Dispose();

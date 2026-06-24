@@ -60,6 +60,7 @@ public static class ServiceRegistration
         services.AddSingleton<DnsService>();
         services.AddSingleton<HostsFileService>();
         services.AddSingleton<ContextMenuService>();
+        services.AddSingleton<EnvironmentVariableService>();
         services.AddSingleton<WindowsUpdateService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
@@ -96,6 +97,7 @@ public static class ServiceRegistration
         services.AddSingleton<DnsHostsViewModel>();
         services.AddSingleton<ContextMenuViewModel>();
         services.AddSingleton<SystemReportViewModel>();
+        services.AddSingleton<EnvironmentVariablesViewModel>();
 
         return services;
     }

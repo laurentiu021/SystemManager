@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-06-24
+
+### Added
+- **Environment Variables tab.** The Customization group's "Environment Variables" placeholder is now a working tab. View and edit both User and System (machine-wide) variables in one grid, filter by scope, and search by name or value. A dedicated PATH editor opens for PATH-like variables: reorder directories, remove entries, strip duplicates in one click, and see missing folders highlighted. Add or remove variables too. Edits stay local until you press *Apply*; a one-time JSON backup of every variable is written first so the original environment can be restored. System-scope changes require administrator rights (the tab shows the standard elevation banner); User-scope changes do not. Changes broadcast to Windows so new terminals pick them up without a reboot.
+
 ## [1.21.0] - 2026-06-24
 
 ### Added

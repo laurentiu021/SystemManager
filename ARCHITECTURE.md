@@ -49,7 +49,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
-| Customization | `ContextMenuViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control · Environment Variables) |
+| Customization | `ContextMenuViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `AboutViewModel` |
 | Advanced | `PlaceholderViewModel` (Profile Export/Import · CLI Interface) |
 
@@ -88,6 +88,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `PrivacyViewModel` — Windows privacy and telemetry toggles via registry.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
 - `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
+- `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
@@ -187,6 +188,10 @@ Key services:
   (OS, CPU, memory, GPU, motherboard, storage health, network) into a
   `SystemReportData` payload, then renders it to plain text, self-contained
   HTML, or JSON so all three exports share a single source of truth.
+- `EnvironmentVariableService` — reads/writes User and Machine environment
+  variables via `Environment.SetEnvironmentVariable` (which broadcasts
+  WM_SETTINGCHANGE), with name validation, pure PATH split/join/dedupe helpers,
+  and a one-time JSON backup of the original environment before the first write.
 - `AppIconService` — downloads and caches application favicons for UI display.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time

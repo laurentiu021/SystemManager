@@ -122,4 +122,26 @@ public class StartupViewModelTests
         var ex = Record.Exception(() => vm.OpenFileLocationCommand.Execute(42));
         Assert.Null(ex);
     }
+
+    // ── re-entrancy guard (regression: overlapping registry writes) ──
+
+    [Fact]
+    public void StateChangingCommands_DisabledWhileBusy()
+    {
+        // Scan, EnableAll and ToggleEntry all read or write the same startup registry/task
+        // state; the NotBusy gate stops them overlapping and interleaving registry writes.
+        // Drive IsBusy explicitly rather than asserting the post-construction baseline: the
+        // constructor kicks off an async auto-scan that briefly sets IsBusy itself.
+        var vm = new StartupViewModel(new Services.StartupService());
+
+        vm.IsBusy = true;
+        Assert.False(vm.ScanCommand.CanExecute(null));
+        Assert.False(vm.EnableAllCommand.CanExecute(null));
+        Assert.False(vm.ToggleEntryCommand.CanExecute(null));
+
+        vm.IsBusy = false;
+        Assert.True(vm.ScanCommand.CanExecute(null));
+        Assert.True(vm.EnableAllCommand.CanExecute(null));
+        Assert.True(vm.ToggleEntryCommand.CanExecute(null));
+    }
 }

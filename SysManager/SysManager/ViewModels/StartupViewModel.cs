@@ -32,7 +32,32 @@ public sealed partial class StartupViewModel : ViewModelBase
     public StartupViewModel(StartupService service)
     {
         _service = service;
+        // Scan, EnableAll and ToggleEntry all read or write the same startup registry/task
+        // state; running them concurrently could interleave registry writes and produce
+        // inconsistent counts. Re-evaluate their CanExecute when IsBusy flips so only one
+        // runs at a time. The startup auto-scan calls ScanAsync directly (not via the
+        // command), so it is unaffected by the gate.
+        PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(InitAsync);
+    }
+
+    /// <summary>Gate so Scan / EnableAll / ToggleEntry can't overlap and interleave their
+    /// registry writes.</summary>
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        ScanCommand.NotifyCanExecuteChanged();
+        EnableAllCommand.NotifyCanExecuteChanged();
+        ToggleEntryCommand.NotifyCanExecuteChanged();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            PropertyChanged -= OnVmPropertyChanged;
+        base.Dispose(disposing);
     }
 
     partial void OnHideWindowsEntriesChanged(bool value) => ApplyFilter();
@@ -44,7 +69,7 @@ public sealed partial class StartupViewModel : ViewModelBase
         catch (UnauthorizedAccessException ex) { Log.Warning("Startup auto-scan failed: {Error}", ex.Message); }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()
     {
         IsBusy = true;
@@ -89,7 +114,7 @@ public sealed partial class StartupViewModel : ViewModelBase
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ToggleEntryAsync(object? parameter)
     {
         if (parameter is not StartupEntry entry) return;
@@ -113,13 +138,42 @@ public sealed partial class StartupViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task EnableAllAsync()
     {
-        foreach (var entry in Entries.Where(e => !e.IsEnabled))
-            await StartupService.SetEnabledAsync(entry, true).ConfigureAwait(false);
-        UpdateCounts();
-        StatusMessage = "All items enabled.";
+        IsBusy = true;
+        try
+        {
+            var toEnable = Entries.Where(e => !e.IsEnabled).ToList();
+            if (toEnable.Count == 0)
+            {
+                StatusMessage = "All startup items are already enabled.";
+                return;
+            }
+
+            // Report the outcome honestly: SetEnabledAsync returns false (and sets the
+            // entry's StatusText) when a registry/task write fails, e.g. an item that
+            // needs elevation. Previously every failure was swallowed and the status
+            // still claimed "All items enabled."
+            var enabled = 0;
+            var failed = 0;
+            foreach (var entry in toEnable)
+            {
+                if (await StartupService.SetEnabledAsync(entry, true).ConfigureAwait(false))
+                    enabled++;
+                else
+                    failed++;
+            }
+
+            UpdateCounts();
+            StatusMessage = failed == 0
+                ? $"Enabled {enabled} startup item(s)."
+                : $"Enabled {enabled} of {toEnable.Count} — {failed} could not be enabled (may require administrator).";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     [RelayCommand]

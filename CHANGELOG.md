@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.58] - 2026-06-24
+
+### Security
+- **The file shredder can no longer be tricked into destroying a system file through a junction in the middle of the path.** Its safety check resolved a link only at the end of the path (and expanded short `8.3` names), but a junction or symlink in a *parent* folder — which a standard user can create without admin — was not followed during validation. A path such as `C:\Temp\link\notepad.exe`, where `C:\Temp\link` pointed into `System32`, slipped past the system-folder denylist and the real protected file behind it was overwritten and deleted. The shredder now asks Windows for the fully-resolved canonical path (collapsing every junction/symlink anywhere in the chain) and re-checks that against the protected-folder list before touching anything.
+
 ## [1.20.57] - 2026-06-24
 
 ### Security

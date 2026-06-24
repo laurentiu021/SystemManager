@@ -54,6 +54,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public LegacyPanelsViewModel LegacyPanels { get; }
     public SystemFixesViewModel SystemFixes { get; }
     public ProfileViewModel Profile { get; }
+    public BrowserCleanerViewModel BrowserCleaner { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -77,8 +78,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // Apps group (Bulk Installer is now fully implemented)
 
-    // Privacy & Security group (Privacy & Telemetry + Debloater now fully implemented)
-    public PlaceholderViewModel WipBrowserCleaner { get; private set; } = null!;
+    // Privacy & Security group (Privacy & Telemetry + Debloater + Browser Cleaner now fully implemented)
     public PlaceholderViewModel WipEdgeOneDriveRemover { get; private set; } = null!;
     public PlaceholderViewModel WipDefenderTweaks { get; private set; } = null!;
     public PlaceholderViewModel WipNotificationBlocker { get; private set; } = null!;
@@ -156,6 +156,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             LegacyPanels = sp.GetRequiredService<LegacyPanelsViewModel>();
             SystemFixes = sp.GetRequiredService<SystemFixesViewModel>();
             Profile = sp.GetRequiredService<ProfileViewModel>();
+            BrowserCleaner = sp.GetRequiredService<BrowserCleanerViewModel>();
         }
         else
         {
@@ -213,6 +214,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             LegacyPanels = new LegacyPanelsViewModel(new LegacyPanelService());
             SystemFixes = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner()));
             Profile = new ProfileViewModel(new ProfileService());
+            BrowserCleaner = new BrowserCleanerViewModel(new BrowserCleanerService());
         }
 
         InitPlaceholders();
@@ -245,7 +247,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Apps group — Bulk Installer is now fully implemented (no placeholder needed)
 
         // Privacy & Security group (Privacy & Telemetry is now fully implemented)
-        WipBrowserCleaner = new PlaceholderViewModel("Browser Cleaner", "Per-browser cache/cookies/history cleanup with keep-list for important cookies.", "#336");
         WipEdgeOneDriveRemover = new PlaceholderViewModel("Edge/OneDrive Remover", "Safely remove or disable Edge and OneDrive with full restore capability.", "#339");
         WipDefenderTweaks = new PlaceholderViewModel("Defender Tweaks", "Toggle SmartScreen, manage exclusions, configure PUA and cloud protection.", "#344");
         WipNotificationBlocker = new PlaceholderViewModel("Notification Blocker", "Suppress annoying app pop-ups (update nags, trial reminders) with allowlist.", "#340");
@@ -343,7 +344,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-app-blocker",          "App Blocker",           "", AppBlocker,             typeof(Views.AppBlockerView)),
             Item("nav-app-alerts",           "App Alerts",            "", AppAlerts,              typeof(Views.AppAlertsView)),
             Item("nav-debloater",            "Debloater & Ads",       "", Debloater,             typeof(Views.DebloaterView)),
-            Item("nav-browser-cleaner",      "Browser Cleaner",       "", WipBrowserCleaner,      typeof(Views.PlaceholderView)),
+            Item("nav-browser-cleaner",      "Browser Cleaner",       "", BrowserCleaner,         typeof(Views.BrowserCleanerView)),
             Item("nav-edge-onedrive",        "Edge/OneDrive Remover", "", WipEdgeOneDriveRemover, typeof(Views.PlaceholderView)),
             Item("nav-defender-tweaks",      "Defender Tweaks",       "", WipDefenderTweaks,      typeof(Views.PlaceholderView)),
             Item("nav-notification-blocker", "Notification Blocker",  "", WipNotificationBlocker, typeof(Views.PlaceholderView))),
@@ -480,7 +481,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         LegacyPanels?.Dispose();
         SystemFixes?.Dispose();
         Profile?.Dispose();
-        WipBrowserCleaner?.Dispose();
+        BrowserCleaner?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipDefenderTweaks?.Dispose();
         WipNotificationBlocker?.Dispose();

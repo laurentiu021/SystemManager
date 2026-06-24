@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.31.0] - 2026-06-24
+
+### Added
+- **Browser Cleaner tab** (Privacy & Security). The placeholder is now a working tab that scans installed browsers — Chrome, Edge, Brave, Opera, and Firefox — and shows the on-disk size of each cleanable category (cache, history, cookies, sessions). Tick what to remove and clean it after a confirmation. Cookies and sessions are flagged "signs you out" and left **unticked by default**, so a clean never logs you out by accident. Cache and history are pre-selected. Cleaning is per-user (no admin); locked files (browser open) are skipped rather than forced, and reparse points are never followed.
+
 ## [1.30.0] - 2026-06-24
 
 ### Added

@@ -68,6 +68,7 @@ public static class ServiceRegistration
         services.AddSingleton<ProfileService>();
         services.AddSingleton<BiosService>();
         services.AddSingleton<WindowsUpdatePolicyService>();
+        services.AddSingleton<BrowserCleanerService>();
         services.AddSingleton<WindowsUpdateService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
@@ -110,6 +111,7 @@ public static class ServiceRegistration
         services.AddSingleton<LegacyPanelsViewModel>();
         services.AddSingleton<SystemFixesViewModel>();
         services.AddSingleton<ProfileViewModel>();
+        services.AddSingleton<BrowserCleanerViewModel>();
 
         return services;
     }

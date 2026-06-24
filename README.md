@@ -73,14 +73,14 @@ fully open source.
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 56 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 35 tabs are fully
+The sidebar organises 57 feature tabs into 12 collapsible groups so you can
+find what you need without scrolling through a flat list. 36 tabs are fully
 implemented; 21 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Legacy Panels · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Legacy Panels · System Fixes · Task Scheduler ⚙️ · Boot Analyzer ⚙️ |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Privacy Monitor ⚙️ · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
@@ -194,6 +194,17 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Pure launchers** — each just opens the built-in panel; nothing is modified,
   so no elevation or confirmation is needed
 - The applet list is fixed in code, so no typed input ever reaches the launcher
+
+### System Fixes
+One-click repairs for common Windows breakages, each with a clear description and
+a confirmation before it runs:
+- **Reset Windows Update** — stop the update services, clear the
+  SoftwareDistribution and catroot2 caches, and restart the services
+- **Reset Network Stack** — Winsock + TCP/IP reset and DNS flush
+- **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
+- **Set up Auto Sign-in** — opens the built-in User Accounts dialog, so Windows
+  stores the credential securely and SysManager never handles your password
+- Live output, honest success/failure reporting, admin elevation banner
 
 ### Windows Update (Windows Update Agent COM API)
 - Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —

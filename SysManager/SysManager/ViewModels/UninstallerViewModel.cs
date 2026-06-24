@@ -38,7 +38,26 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         _service = service;
         _lineHandler = line => Console.Append(line);
         _service.LineReceived += _lineHandler;
+        // Scan and UninstallSelected both recreate the shared _cts; without this gate a
+        // second command could dispose the CTS the first is still awaiting
+        // (ObjectDisposedException). Re-evaluate both commands' CanExecute when IsBusy flips.
+        PropertyChanged += OnVmPropertyChanged;
         IsElevated = AdminHelper.IsElevated();
+    }
+
+    /// <summary>
+    /// Gate for the long-running commands. Scan and UninstallSelected share <see cref="_cts"/>
+    /// and each recreates it, so disabling both while one runs prevents a second command from
+    /// disposing the CTS mid-flight. Cancel is intentionally NOT gated. Mirrors the App Updates
+    /// and Windows Update tabs.
+    /// </summary>
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        ScanCommand.NotifyCanExecuteChanged();
+        UninstallSelectedCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -48,7 +67,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
             System.Windows.Application.Current?.Shutdown();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()
     {
         IsBusy = true;
@@ -84,7 +103,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task UninstallSelectedAsync()
     {
         var toRemove = FilteredApps.Where(a => a.IsSelected).ToList();
@@ -164,6 +183,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         if (disposing)
         {
             _service.LineReceived -= _lineHandler;
+            PropertyChanged -= OnVmPropertyChanged;
             _cts?.Dispose();
         }
         base.Dispose(disposing);

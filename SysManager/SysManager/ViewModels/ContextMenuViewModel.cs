@@ -52,7 +52,35 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         PresetDescription = IsClassicMenuEnabled
             ? ContextMenuPreset.All["win10"].Description
             : ContextMenuPreset.All["win11"].Description;
+        // Re-evaluate the long-running commands' CanExecute when IsBusy flips. Scan,
+        // Refresh and ApplyPreset all mutate the shared _allEntries list off the UI thread
+        // (ApplyPreset also restarts Explorer); disabling them while one runs prevents
+        // overlapping runs from corrupting that list or racing two Explorer restarts.
+        PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(InitAsync);
+    }
+
+    /// <summary>
+    /// Gate for the long-running commands so overlapping Scan/Refresh/ApplyPreset runs
+    /// can't mutate <see cref="_allEntries"/> concurrently or race two Explorer restarts.
+    /// The startup scan calls <see cref="ScanAsync"/> directly (not via the command) so it
+    /// is unaffected by this gate.
+    /// </summary>
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        ScanCommand.NotifyCanExecuteChanged();
+        RefreshCommand.NotifyCanExecuteChanged();
+        ApplyPresetCommand.NotifyCanExecuteChanged();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            PropertyChanged -= OnVmPropertyChanged;
+        base.Dispose(disposing);
     }
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
@@ -66,7 +94,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         catch (UnauthorizedAccessException ex) { Log.Warning("Context menu auto-scan failed: {Error}", ex.Message); }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()
     {
         IsBusy = true;
@@ -143,7 +171,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ApplyPresetAsync(object? parameter)
     {
         if (parameter is not string presetId) return;
@@ -229,7 +257,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private Task RefreshAsync() => ScanAsync();
 
     private void ApplyFilter()

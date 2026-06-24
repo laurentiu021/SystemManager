@@ -87,4 +87,27 @@ public class ContextMenuViewModelTests
         var vm = NewVm();
         Assert.Contains(vm.ActivePresetId, new[] { "win10", "win11" });
     }
+
+    // ---------- re-entrancy guard (regression: overlapping scan/preset runs) ----------
+
+    [Fact]
+    public void LongRunningCommands_DisabledWhileBusy()
+    {
+        // Scan, Refresh and ApplyPreset all mutate the shared _allEntries list off the UI
+        // thread (ApplyPreset also restarts Explorer). The NotBusy gate disables them while
+        // one runs so overlapping runs can't corrupt that list or race two restarts.
+        // Drive IsBusy explicitly rather than asserting the post-construction baseline:
+        // the constructor kicks off an async scan that briefly sets IsBusy itself.
+        var vm = NewVm();
+
+        vm.IsBusy = true;
+        Assert.False(vm.ScanCommand.CanExecute(null));
+        Assert.False(vm.RefreshCommand.CanExecute(null));
+        Assert.False(vm.ApplyPresetCommand.CanExecute(null));
+
+        vm.IsBusy = false;
+        Assert.True(vm.ScanCommand.CanExecute(null));
+        Assert.True(vm.RefreshCommand.CanExecute(null));
+        Assert.True(vm.ApplyPresetCommand.CanExecute(null));
+    }
 }

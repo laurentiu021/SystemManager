@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.63] - 2026-06-24
+
+### Fixed
+- **The Process Manager no longer loses your selected row every second.** The list auto-refreshes once a second, and each refresh rebuilt the whole collection — which cleared the row you had selected (and your scroll position) and re-extracted every process icon each time. The refresh now updates the existing rows in place: surviving processes keep their row (and your selection), new processes are added, exited ones are removed, and icons are only fetched for newly-appeared processes.
+
 ## [1.20.62] - 2026-06-24
 
 ### Fixed

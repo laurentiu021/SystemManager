@@ -73,32 +73,43 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
 
         try
         {
-            // PERF-007: Perform snapshot, icon extraction, and description lookup
-            // on a background thread to avoid UI freezes on slow processes.
+            // PERF-007: snapshot + enrichment on a background thread to avoid UI freezes.
+            // Icon extraction (the expensive part) is done ONLY for processes not already
+            // shown — see ReconcileInto, which is handed the set of PIDs we already track.
+            var existingPids = Processes.Select(p => p.Pid).ToHashSet();
             var enriched = await Task.Run(async () =>
             {
                 var snapshot = await _service.SnapshotAsync();
                 foreach (var p in snapshot)
                 {
-                    p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
-                    var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name);
-                    if (dbEntry is not null)
+                    // Only the volatile metrics change per tick; identity/description are
+                    // stable, so enrich (and extract icons) just for newly-seen PIDs.
+                    if (!existingPids.Contains(p.Pid))
                     {
-                        p.PlainDescription = dbEntry.Description;
-                        p.Category = dbEntry.Category;
-                        p.SafetyLevel = dbEntry.Safety.ToString();
-                    }
-                    else
-                    {
-                        p.PlainDescription = p.Description;
-                        p.Category = "Unknown";
-                        p.SafetyLevel = "Unknown";
+                        p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
+                        var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name);
+                        if (dbEntry is not null)
+                        {
+                            p.PlainDescription = dbEntry.Description;
+                            p.Category = dbEntry.Category;
+                            p.SafetyLevel = dbEntry.Safety.ToString();
+                        }
+                        else
+                        {
+                            p.PlainDescription = p.Description;
+                            p.Category = "Unknown";
+                            p.SafetyLevel = "Unknown";
+                        }
                     }
                 }
                 return snapshot;
             });
 
-            Processes.ReplaceWith(enriched);
+            // Merge into the existing collection in place instead of replacing it. A
+            // wholesale ReplaceWith raises a Reset that makes the DataGrid drop the user's
+            // selection and scroll position every second; ReconcileInto keeps the surviving
+            // ProcessEntry instances (so selection survives) and only adds/removes/updates.
+            ReconcileInto(Processes, enriched);
 
             ApplyFilter();
             StatusMessage = $"Loaded {ProcessCount} processes.";
@@ -115,6 +126,50 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         {
             IsBusy = false;
             IsProgressIndeterminate = false;
+        }
+    }
+
+    /// <summary>
+    /// Merges <paramref name="snapshot"/> into <paramref name="target"/> in place, keyed by
+    /// PID: surviving processes keep their existing <see cref="ProcessEntry"/> instance (with
+    /// volatile metrics updated), new processes are added, and exited processes are removed.
+    /// Preserving the instances is what lets the DataGrid keep the user's selection across a
+    /// refresh. Newly-added entries from <paramref name="snapshot"/> are already enriched
+    /// (icon/description) by the caller; surviving entries keep their existing icon/description.
+    /// </summary>
+    internal static void ReconcileInto(
+        BulkObservableCollection<ProcessEntry> target,
+        IReadOnlyList<ProcessEntry> snapshot)
+    {
+        var existing = target.ToDictionary(p => p.Pid);
+        var seen = new HashSet<int>(snapshot.Count);
+
+        foreach (var fresh in snapshot)
+        {
+            seen.Add(fresh.Pid);
+            if (existing.TryGetValue(fresh.Pid, out var current))
+            {
+                // Update only the volatile metrics on the existing instance; identity fields
+                // (Name, FilePath, Icon, PlainDescription, Category, SafetyLevel, StartTime)
+                // are stable for a given PID and stay as they were.
+                current.CpuPercent = fresh.CpuPercent;
+                current.MemoryBytes = fresh.MemoryBytes;
+                current.ThreadCount = fresh.ThreadCount;
+                current.Status = fresh.Status;
+                current.HasMainWindow = fresh.HasMainWindow;
+            }
+            else
+            {
+                target.Add(fresh);
+            }
+        }
+
+        // Remove processes that no longer exist. Iterate a snapshot of the indices so we can
+        // mutate target safely.
+        for (var i = target.Count - 1; i >= 0; i--)
+        {
+            if (!seen.Contains(target[i].Pid))
+                target.RemoveAt(i);
         }
     }
 
@@ -164,11 +219,47 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         }
 
         // Default order by memory descending; DataGrid column headers handle user sorting.
-        FilteredProcesses.ReplaceWith(source.OrderByDescending(p => p.MemoryBytes));
+        var desired = source.OrderByDescending(p => p.MemoryBytes).ToList();
+
+        // Sync the bound collection in place (Insert/Move/Remove) instead of ReplaceWith,
+        // which raises a Reset. A Reset on the 1 Hz auto-refresh would drop the user's row
+        // selection every second; an in-place sync keeps the surviving instances and their
+        // selection intact.
+        SyncOrdered(FilteredProcesses, desired);
 
         ProcessCount = FilteredProcesses.Count;
         TotalMemory = FilteredProcesses.Sum(p => p.MemoryBytes);
         Summary = $"{ProcessCount} processes · {FormatSize(TotalMemory)} total memory";
+    }
+
+    /// <summary>
+    /// Makes <paramref name="target"/> match <paramref name="desired"/> in both membership
+    /// and order using in-place Insert/Move/Remove operations (never a Reset), so a
+    /// DataGrid bound to it keeps the user's selection and scroll position. Items are matched
+    /// by reference, so surviving <see cref="ProcessEntry"/> instances are reused.
+    /// </summary>
+    internal static void SyncOrdered(
+        BulkObservableCollection<ProcessEntry> target,
+        IReadOnlyList<ProcessEntry> desired)
+    {
+        // Remove items that are no longer desired (walk backwards so indices stay valid).
+        var desiredSet = new HashSet<ProcessEntry>(desired);
+        for (var i = target.Count - 1; i >= 0; i--)
+        {
+            if (!desiredSet.Contains(target[i]))
+                target.RemoveAt(i);
+        }
+
+        // Insert/move each desired item into its target position.
+        for (var i = 0; i < desired.Count; i++)
+        {
+            var item = desired[i];
+            var currentIndex = target.IndexOf(item);
+            if (currentIndex < 0)
+                target.Insert(i, item);
+            else if (currentIndex != i)
+                target.Move(currentIndex, i);
+        }
     }
 
     private static string FormatSize(long bytes) => Helpers.FormatHelper.FormatSize(bytes);

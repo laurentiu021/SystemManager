@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 55 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 33 tabs are fully
-implemented; 22 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 34 tabs are fully
+implemented; 21 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
@@ -87,7 +87,7 @@ implemented; 22 are work-in-progress placeholders marked with ⚙️:
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
-| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads ⚙️ · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
+| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads · Browser Cleaner ⚙️ · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · About |
 | ⚙️ Advanced | Profile Export/Import ⚙️ · CLI Interface ⚙️ |
@@ -357,6 +357,17 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Fully reversible — unblock restores normal execution
 - Shows list of currently blocked apps with select/deselect and batch unblock
 - Requires admin privileges for registry modifications
+
+### Debloater & Ads
+Remove preinstalled Windows Store apps you don't use:
+- **Scan** all installed Store apps with name, publisher, and a short description
+- **Curated "common bloat" preset** pre-selects safe, frequently-removed apps
+  (Bing News/Weather, Clipchamp, Solitaire, Xbox apps, consumer Teams, and more)
+- **System-critical apps are protected** — the Store, frameworks, and security/shell
+  components are denylisted and can never be selected or removed
+- **Impact summary + confirmation** before anything is uninstalled
+- **Reversible** — removal is per-user, so any app can be reinstalled from the Store
+- Search and per-app descriptions help you decide before removing
 
 ### Battery Health
 - Charge %, health %, wear level, cycle count, chemistry

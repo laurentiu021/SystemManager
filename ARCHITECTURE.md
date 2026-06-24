@@ -48,7 +48,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
-| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
+| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `DebloaterViewModel` · `PlaceholderViewModel` (Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
 | Customization | `ContextMenuViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `AboutViewModel` |
 | Advanced | `PlaceholderViewModel` (Profile Export/Import · CLI Interface) |
@@ -90,6 +90,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for create/restore; restore reboots, gated by confirmation).
+- `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
@@ -197,6 +198,10 @@ Key services:
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested
   static method.
+- `DebloaterService` — lists (`Get-AppxPackage`) and removes (`Remove-AppxPackage`,
+  per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
+  denylist of system-critical package families is enforced in code; the parser and
+  denylist check are pure, unit-tested static methods.
 - `AppIconService` — downloads and caches application favicons for UI display.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time

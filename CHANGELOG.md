@@ -8,8 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.20.65] - 2026-06-24
 
+### Fixed
+- **"Run as administrator" now reliably lands you in the elevated window instead of leaving the tabs still asking for admin.** The app allows only one instance at a time, enforced by a system-wide lock. When you clicked "Run as administrator", the elevated copy started while the original (non-elevated) window was still closing and had not yet released that lock — so the elevated copy saw "another instance is already running", brought the *old* non-elevated window back to the foreground, and exited. You were left on the non-elevated instance, where the tabs that need admin still showed the "needs administrator" notice. The elevated relaunch now hands the single-instance lock over to the new instance (it waits briefly for the old one to release it), so you end up in the actually-elevated window.
+
 ### Changed
-- **Added detailed administrator-state logging at startup** to help diagnose a report of some tabs still showing the "needs administrator" notice after elevating. On launch the app now records, to its local log file only, the process elevation state (including the Windows token elevation type and process ID) and each affected tab's administrator status. This is written only to the local log under `%LocalAppData%\SysManager\logs` with usernames scrubbed — nothing is sent anywhere.
+- **Added administrator-state logging at startup** to confirm the fix above and catch any residual case. On launch the app records, to its local log file only, the process elevation state (Windows token elevation type + process ID) and each affected tab's administrator status, under `%LocalAppData%\SysManager\logs` with usernames scrubbed — nothing is sent anywhere.
 
 ## [1.20.64] - 2026-06-24
 

@@ -53,9 +53,21 @@ public partial class App : Application
         _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
         if (!createdNew)
         {
-            ActivateExistingInstance();
-            Shutdown();
-            return;
+            // When this instance was started by "Run as administrator", the outgoing
+            // non-elevated instance is shutting down but may not have released the mutex
+            // yet. Wait briefly for it to hand over instead of treating ourselves as a
+            // duplicate — otherwise the elevated copy exits and the user is left on the
+            // non-elevated window with the admin banners still showing.
+            if (WasRelaunchedElevated(e.Args) && TryWaitForMutexHandover())
+            {
+                createdNew = true; // acquired after the old instance released it
+            }
+            else
+            {
+                ActivateExistingInstance();
+                Shutdown();
+                return;
+            }
         }
 
         LogService.Init();
@@ -82,6 +94,34 @@ public partial class App : Application
         // Fire-and-forget is intentional — the listener loop runs for the app
         // lifetime and is cancelled via _pipeCts on OnExit.
         _ = StartPipeListenerAsync();
+    }
+
+    /// <summary>
+    /// True when this instance was started by <see cref="Helpers.AdminHelper.RelaunchAsAdmin"/>
+    /// (carries the elevation sentinel argument).
+    /// </summary>
+    private static bool WasRelaunchedElevated(string[] args)
+        => args.Any(a => string.Equals(a, Helpers.AdminHelper.RelaunchedElevatedArg, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Waits up to a few seconds for the outgoing instance to release the single-instance
+    /// mutex, then takes ownership. Returns true if the mutex was acquired. The wait covers
+    /// the brief window between the old instance calling Shutdown() and its OnExit releasing
+    /// the mutex. An <see cref="AbandonedMutexException"/> still means we own it (the previous
+    /// owner exited without releasing) — that is success, not failure.
+    /// </summary>
+    private bool TryWaitForMutexHandover()
+    {
+        if (_instanceMutex is null) return false;
+        try
+        {
+            return _instanceMutex.WaitOne(TimeSpan.FromSeconds(5));
+        }
+        catch (AbandonedMutexException)
+        {
+            // Previous owner exited without releasing — ownership has passed to us.
+            return true;
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

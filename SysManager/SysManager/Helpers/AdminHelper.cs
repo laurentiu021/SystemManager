@@ -102,6 +102,16 @@ public static partial class AdminHelper
     }
 
     /// <summary>
+    /// Command-line sentinel passed to the elevated instance started by
+    /// <see cref="RelaunchAsAdmin"/>. The single-instance guard in App.OnStartup recognizes
+    /// it and WAITS for the outgoing instance's mutex to be released instead of treating the
+    /// elevated copy as a duplicate and exiting — otherwise the elevated instance loses the
+    /// single-instance race against the still-closing original and the user is left on the
+    /// non-elevated window (the "tabs still ask for admin after elevating" bug).
+    /// </summary>
+    public const string RelaunchedElevatedArg = "--relaunched-elevated";
+
+    /// <summary>
     /// Relaunch the current process with UAC elevation and exit the current instance.
     /// Pass an optional argument hint so the new instance can jump back to the right tab.
     /// </summary>
@@ -114,12 +124,18 @@ public static partial class AdminHelper
             var exePath = Environment.ProcessPath ?? currentProc.MainModule?.FileName;
             if (string.IsNullOrWhiteSpace(exePath)) return false;
 
+            // Always tag the elevated child so its single-instance guard waits for this
+            // instance to release the mutex rather than bailing as a "duplicate".
+            var arguments = string.IsNullOrWhiteSpace(argumentHint)
+                ? RelaunchedElevatedArg
+                : $"{RelaunchedElevatedArg} {argumentHint}";
+
             var psi = new ProcessStartInfo
             {
                 FileName = exePath,
                 UseShellExecute = true,
                 Verb = "runas",
-                Arguments = argumentHint ?? string.Empty
+                Arguments = arguments
             };
             // Dispose the returned Process handle — we don't track the elevated instance.
             Process.Start(psi)?.Dispose();

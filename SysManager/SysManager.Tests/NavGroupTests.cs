@@ -32,16 +32,26 @@ public class NavGroupTests
     [Fact]
     public void Subtitle_CanBeSet()
     {
-        var g = new NavGroup { Id = "test", Label = "Test", Glyph = "T",
-            Subtitle = "A · B · C" };
+        var g = new NavGroup
+        {
+            Id = "test",
+            Label = "Test",
+            Glyph = "T",
+            Subtitle = "A · B · C"
+        };
         Assert.Equal("A · B · C", g.Subtitle);
     }
 
     [Fact]
     public void Tooltip_CanBeSet()
     {
-        var g = new NavGroup { Id = "test", Label = "Test", Glyph = "T",
-            Tooltip = "Alpha\nBeta\nGamma" };
+        var g = new NavGroup
+        {
+            Id = "test",
+            Label = "Test",
+            Glyph = "T",
+            Tooltip = "Alpha\nBeta\nGamma"
+        };
         Assert.Contains("Alpha", g.Tooltip);
         Assert.Contains("Beta", g.Tooltip);
     }
@@ -49,12 +59,18 @@ public class NavGroupTests
     [Fact]
     public void IsSingleItem_FalseWhenMultipleChildren()
     {
-        var g = new NavGroup { Id = "test", Label = "Test", Glyph = "T", Children = {
+        var g = new NavGroup
+        {
+            Id = "test",
+            Label = "Test",
+            Glyph = "T",
+            Children = {
             new NavItem { Id = "a", Label = "A", Glyph = "A",
                 Content = new object(), ViewType = typeof(object) },
             new NavItem { Id = "b", Label = "B", Glyph = "B",
                 Content = new object(), ViewType = typeof(object) },
-        }};
+        }
+        };
         Assert.False(g.IsSingleItem);
         Assert.Equal(2, g.ChildCount);
     }

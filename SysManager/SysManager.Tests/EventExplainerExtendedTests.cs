@@ -75,8 +75,13 @@ public class EventExplainerExtendedTests
     }
 
     [Theory]
-    [InlineData(7000)] [InlineData(7001)] [InlineData(7009)]
-    [InlineData(7011)] [InlineData(7023)] [InlineData(7031)] [InlineData(7034)]
+    [InlineData(7000)]
+    [InlineData(7001)]
+    [InlineData(7009)]
+    [InlineData(7011)]
+    [InlineData(7023)]
+    [InlineData(7031)]
+    [InlineData(7034)]
     public void ServiceControlManager_AllEvents_AreExplained(int id)
     {
         var e = Make("Service Control Manager", id);

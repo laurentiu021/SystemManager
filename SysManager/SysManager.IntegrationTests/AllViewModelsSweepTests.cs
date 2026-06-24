@@ -27,16 +27,19 @@ public class AllViewModelsSweepTests
     [Fact] public void About_Constructs() => Assert.NotNull(new AboutViewModel());
     [Fact] public void MainWindow_Constructs() => Assert.NotNull(new MainWindowViewModel());
 
-    [Fact] public void Dashboard_HasNonEmptySummaryOrEmpty()
+    [Fact]
+    public void Dashboard_HasNonEmptySummaryOrEmpty()
         => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true)));
 
-    [Fact] public void AppUpdates_HasCollections()
+    [Fact]
+    public void AppUpdates_HasCollections()
     {
         var vm = new AppUpdatesViewModel(new WingetService(new PowerShellRunner()));
         Assert.NotNull(vm.Packages);
     }
 
-    [Fact] public void SystemHealth_HasCollections()
+    [Fact]
+    public void SystemHealth_HasCollections()
     {
         var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner());
         Assert.NotNull(vm.Modules);
@@ -45,19 +48,22 @@ public class AllViewModelsSweepTests
         Assert.NotNull(vm.ChkdskDrives);
     }
 
-    [Fact] public void Logs_HasCollection()
+    [Fact]
+    public void Logs_HasCollection()
     {
         var vm = new LogsViewModel(new EventLogService());
         Assert.NotNull(vm.Entries);
     }
 
-    [Fact] public void Drivers_HasDriversCollection()
+    [Fact]
+    public void Drivers_HasDriversCollection()
     {
         var vm = new DriversViewModel(new PowerShellRunner());
         Assert.NotNull(vm.Drivers);
     }
 
-    [Fact] public void DeepCleanup_HasCollections()
+    [Fact]
+    public void DeepCleanup_HasCollections()
     {
         var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
         Assert.NotNull(vm.Categories);
@@ -65,7 +71,8 @@ public class AllViewModelsSweepTests
         Assert.NotNull(vm.ScanLocations);
     }
 
-    [Fact] public void About_HasCollection()
+    [Fact]
+    public void About_HasCollection()
     {
         var vm = new AboutViewModel();
         Assert.NotNull(vm.ReleaseHistory);

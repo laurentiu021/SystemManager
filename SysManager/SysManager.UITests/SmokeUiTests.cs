@@ -39,14 +39,14 @@ public class SmokeUiTests
     }
 
     [Theory]
-    [InlineData("nav-dashboard",      "Scan system")]
-    [InlineData("nav-app-updates",    "Scan for updates")]
+    [InlineData("nav-dashboard", "Scan system")]
+    [InlineData("nav-app-updates", "Scan for updates")]
     [InlineData("nav-windows-update", "Check module")]
-    [InlineData("nav-system-health",  "Overview")]
-    [InlineData("nav-cleanup",        "Clean TEMP")]
-    [InlineData("nav-network",        "Targets")]
-    [InlineData("nav-drivers",        "List installed drivers")]
-    [InlineData("nav-logs",           "System logs")]
+    [InlineData("nav-system-health", "Overview")]
+    [InlineData("nav-cleanup", "Clean TEMP")]
+    [InlineData("nav-network", "Targets")]
+    [InlineData("nav-drivers", "List installed drivers")]
+    [InlineData("nav-logs", "System logs")]
     public void EachTab_ShowsSignatureElement(string navId, string expectedText)
     {
         _fx.GoToTab(navId);

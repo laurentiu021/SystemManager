@@ -58,7 +58,9 @@ public class CleanupCategoryTests
     {
         var c = new CleanupCategory
         {
-            Name = "X", Description = "Y", Paths = Array.Empty<string>(),
+            Name = "X",
+            Description = "Y",
+            Paths = Array.Empty<string>(),
             FileCount = 12345
         };
         Assert.Equal("12,345 files", c.CountDisplay);
@@ -69,7 +71,9 @@ public class CleanupCategoryTests
     {
         var c = new CleanupCategory
         {
-            Name = "X", Description = "Y", Paths = Array.Empty<string>(),
+            Name = "X",
+            Description = "Y",
+            Paths = Array.Empty<string>(),
             TotalSizeBytes = 2048
         };
         Assert.Equal("2.0 KB", c.SizeDisplay);
@@ -80,7 +84,9 @@ public class CleanupCategoryTests
     {
         var c = new CleanupCategory
         {
-            Name = "X", Description = "Y", Paths = Array.Empty<string>()
+            Name = "X",
+            Description = "Y",
+            Paths = Array.Empty<string>()
         };
         c.IsSelected = true;
         Assert.True(c.IsSelected);
@@ -104,7 +110,9 @@ public class CleanupCategoryTests
     {
         var c = new CleanupCategory
         {
-            Name = "X", Description = "Y", Paths = Array.Empty<string>(),
+            Name = "X",
+            Description = "Y",
+            Paths = Array.Empty<string>(),
             OlderThan = TimeSpan.FromDays(30)
         };
         Assert.Equal(TimeSpan.FromDays(30), c.OlderThan);

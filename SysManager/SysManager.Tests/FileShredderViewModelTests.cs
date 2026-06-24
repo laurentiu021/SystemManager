@@ -4,10 +4,10 @@
 
 using System.IO;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
-using SysManager.Helpers;
 
 namespace SysManager.Tests;
 
@@ -112,7 +112,10 @@ public class FileShredderViewModelTests
             var vm = NewVm();
             vm.Items.Add(new ShredItem
             {
-                Path = file, Name = Path.GetFileName(file), SizeBytes = 1, IsFolder = false
+                Path = file,
+                Name = Path.GetFileName(file),
+                SizeBytes = 1,
+                IsFolder = false
             });
 
             await vm.ShredAllCommand.ExecuteAsync(null);
@@ -143,7 +146,10 @@ public class FileShredderViewModelTests
             var vm = NewVm();
             vm.Items.Add(new ShredItem
             {
-                Path = file, Name = Path.GetFileName(file), SizeBytes = 1, IsFolder = false
+                Path = file,
+                Name = Path.GetFileName(file),
+                SizeBytes = 1,
+                IsFolder = false
             });
 
             await vm.ShredAllCommand.ExecuteAsync(null);

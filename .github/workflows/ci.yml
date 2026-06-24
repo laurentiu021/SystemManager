@@ -43,8 +43,15 @@ jobs:
           dotnet restore SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj
           dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
 
+      # Format-check every C# project the workflow builds, not just the main one —
+      # the same .editorconfig governs the test projects, so otherwise their style
+      # could drift past CI silently.
       - name: Check formatting
-        run: dotnet format SysManager/SysManager/SysManager.csproj --verify-no-changes --verbosity diagnostic
+        run: |
+          dotnet format SysManager/SysManager/SysManager.csproj --verify-no-changes --verbosity diagnostic
+          dotnet format SysManager/SysManager.Tests/SysManager.Tests.csproj --verify-no-changes --verbosity diagnostic
+          dotnet format SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj --verify-no-changes --verbosity diagnostic
+          dotnet format SysManager/SysManager.UITests/SysManager.UITests.csproj --verify-no-changes --verbosity diagnostic
 
       - name: Build (Release)
         run: dotnet build SysManager/SysManager/SysManager.csproj -c Release --no-restore

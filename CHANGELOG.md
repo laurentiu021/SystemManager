@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.66] - 2026-06-24
+
+### Fixed
+- **The System Logs tab is no longer blank.** One of the severity summary cards (Warnings) set a glow effect's colour from a brush resource instead of a colour value, which threw when the tab's view was first built and left the whole tab empty. The glow now uses the colour directly, matching the other cards, so the tab renders normally.
+- **The Privacy and Windows Features tabs no longer show two "running as administrator" notices at once.** When elevated, each of those tabs displayed both the standard full-width administrator banner and a small redundant "Administrator" chip in the toolbar. The redundant chip has been removed; the standard banner remains (and the Windows Features "Reboot pending" chip is unaffected).
+
 ## [1.20.65] - 2026-06-24
 
 ### Fixed

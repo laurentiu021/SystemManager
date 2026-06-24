@@ -95,7 +95,11 @@
                     <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
                         <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource WarningStripe}">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="{DynamicResource WarningStripe}" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                                <!-- DropShadowEffect.Color is a Color, not a Brush — binding the
+                                     WarningStripe brush resource here threw at view-load time and
+                                     left the whole System Logs tab blank. Use the literal color
+                                     (WarningStripe = #FBBF24), matching the other severity cards. -->
+                                <DropShadowEffect Color="#FBBF24" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding WarningCount}" FontSize="20" FontWeight="Bold"

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.64] - 2026-06-24
+
+### Fixed
+- **The broken-shortcut scan no longer stops early at the first unreadable folder, and no longer mislabels long-target shortcuts as broken.** The scan used a recursive enumerator that threw the moment it reached a folder it couldn't read (e.g. a protected Start Menu subfolder), which aborted the rest of that location and silently skipped every shortcut after it. It now walks folder-by-folder and skips only the unreadable ones (and skips junction/symlink folders so it can't be redirected out of the tree). Separately, shortcut targets were read into a 260-character buffer, so a target longer than that was truncated and the shortcut wrongly reported as broken — the buffer is now large enough to hold extended-length paths.
+
 ## [1.20.63] - 2026-06-24
 
 ### Fixed

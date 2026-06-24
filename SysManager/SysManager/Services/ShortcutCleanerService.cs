@@ -37,43 +37,85 @@ public sealed partial class ShortcutCleanerService
 
             progress?.Report($"Scanning {label}...");
 
-            try
+            foreach (var lnk in EnumerateLnkFilesSafe(path, ct))
             {
-                foreach (var lnk in Directory.EnumerateFiles(path, "*.lnk", SearchOption.AllDirectories))
+                if (ct.IsCancellationRequested) break;
+
+                try
                 {
-                    if (ct.IsCancellationRequested) break;
+                    var target = ResolveShortcutTarget(lnk);
+                    if (string.IsNullOrWhiteSpace(target)) continue;
 
-                    try
+                    // Skip URLs, shell objects, and special targets
+                    if (target.StartsWith("::") || target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    // Check if target exists (file or directory)
+                    if (!File.Exists(target) && !Directory.Exists(target))
                     {
-                        var target = ResolveShortcutTarget(lnk);
-                        if (string.IsNullOrWhiteSpace(target)) continue;
-
-                        // Skip URLs, shell objects, and special targets
-                        if (target.StartsWith("::") || target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        // Check if target exists (file or directory)
-                        if (!File.Exists(target) && !Directory.Exists(target))
+                        results.Add(new BrokenShortcut
                         {
-                            results.Add(new BrokenShortcut
-                            {
-                                Name = Path.GetFileNameWithoutExtension(lnk),
-                                ShortcutPath = lnk,
-                                TargetPath = target,
-                                Location = label
-                            });
-                        }
+                            Name = Path.GetFileNameWithoutExtension(lnk),
+                            ShortcutPath = lnk,
+                            TargetPath = target,
+                            Location = label
+                        });
                     }
-                    catch (IOException) { /* skip inaccessible shortcut */ }
-                    catch (UnauthorizedAccessException) { /* skip protected shortcut */ }
-                    catch (COMException) { /* skip corrupted shortcut */ }
                 }
+                catch (IOException) { /* skip inaccessible shortcut */ }
+                catch (UnauthorizedAccessException) { /* skip protected shortcut */ }
+                catch (COMException) { /* skip corrupted shortcut */ }
             }
-            catch (IOException ex) { Log.Debug(ex, "Failed to scan {Location}", label); }
-            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied scanning {Location}", label); }
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Recursively enumerates <c>*.lnk</c> files under <paramref name="root"/>, tolerating
+    /// per-directory access errors. <see cref="Directory.EnumerateFiles(string, string, SearchOption)"/>
+    /// with <see cref="SearchOption.AllDirectories"/> throws mid-iteration the first time it hits
+    /// a folder it can't read (e.g. a protected Start-Menu subfolder), which previously aborted
+    /// the entire scan for that location and silently dropped every shortcut after it. This walks
+    /// the tree directory-by-directory so one unreadable folder is skipped, not the whole scan.
+    /// Reparse points (junctions/symlinks) are skipped to avoid following links out of the tree.
+    /// </summary>
+    internal static IEnumerable<string> EnumerateLnkFilesSafe(string root, CancellationToken ct)
+    {
+        Stack<string> stack = [];
+        stack.Push(root);
+
+        while (stack.Count > 0)
+        {
+            if (ct.IsCancellationRequested) yield break;
+            var dir = stack.Pop();
+
+            string[] files;
+            try { files = Directory.GetFiles(dir, "*.lnk"); }
+            catch (IOException) { continue; }
+            catch (UnauthorizedAccessException) { continue; }
+
+            foreach (var f in files)
+                yield return f;
+
+            string[] subDirs;
+            try { subDirs = Directory.GetDirectories(dir); }
+            catch (IOException) { continue; }
+            catch (UnauthorizedAccessException) { continue; }
+
+            foreach (var sub in subDirs)
+            {
+                // Skip reparse points so a junction can't redirect the walk outside the tree.
+                try
+                {
+                    if ((File.GetAttributes(sub) & FileAttributes.ReparsePoint) != 0) continue;
+                }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+
+                stack.Push(sub);
+            }
+        }
     }
 
     /// <summary>
@@ -146,7 +188,11 @@ public sealed partial class ShortcutCleanerService
         {
             file.Load(lnkPath, 0);
 
-            var sb = new char[260];
+            // Use an extended-length buffer rather than the legacy MAX_PATH (260). A target
+            // longer than 260 chars would otherwise be truncated, fail the existence check,
+            // and the shortcut would be wrongly reported as broken (a destructive false
+            // positive — the user could delete a perfectly valid shortcut).
+            var sb = new char[short.MaxValue];
             link.GetPath(sb, sb.Length, IntPtr.Zero, 0);
             var target = new string(sb).TrimEnd('\0');
 

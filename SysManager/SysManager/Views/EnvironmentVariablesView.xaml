@@ -73,8 +73,13 @@
                             ToolTip="Revert all pending changes."/>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             AutomationProperties.Name="Refresh variable list"
-                            Style="{StaticResource GhostButton}" Margin="0,0,16,0"
+                            Style="{StaticResource GhostButton}" Margin="0,0,8,0"
                             ToolTip="Re-read all variables from the registry."/>
+                    <Button Content="Restore backup" Command="{Binding RestoreBackupCommand}"
+                            IsEnabled="{Binding HasBackup}"
+                            AutomationProperties.Name="Restore the original environment from backup"
+                            Style="{StaticResource GhostButton}" Margin="0,0,16,0"
+                            ToolTip="Revert every variable to its value from before your first change (created on first Apply)."/>
 
                     <TextBlock Text="Scope:" VerticalAlignment="Center" Margin="0,0,8,0" Style="{StaticResource Subtle}"/>
                     <ComboBox ItemsSource="{Binding ScopeFilters}" SelectedItem="{Binding SelectedScopeFilter}"

@@ -324,7 +324,20 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             return;
         }
 
-        _service.EnsureBackup();
+        try { _service.EnsureBackup(); }
+        catch (IOException ex)
+        {
+            StatusMessage = "Could not write the safety backup — no changes were made.";
+            Log.Warning(ex, "Environment: backup write failed; aborting apply");
+            return;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            StatusMessage = "Could not write the safety backup — no changes were made.";
+            Log.Warning(ex, "Environment: backup write denied; aborting apply");
+            return;
+        }
+        OnPropertyChanged(nameof(HasBackup));
 
         var failures = 0;
         var applied = 0;
@@ -348,6 +361,9 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             else failures++;
         }
 
+        // Broadcast once so running processes (Explorer, new shells) pick up the changes.
+        if (applied > 0) EnvironmentVariableService.BroadcastSettingChange();
+
         RecomputePending();
 
         if (failures == 0)
@@ -370,6 +386,53 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     {
         var live = Variables.Select(Key).ToHashSet(StringComparer.Ordinal);
         return _originals.Where(kv => !live.Contains(kv.Key)).Select(kv => kv.Value);
+    }
+
+    /// <summary>True once a pristine backup exists (after the first Apply) — enables Restore.</summary>
+    public bool HasBackup => _service.HasBackup;
+
+    [RelayCommand]
+    private void RestoreBackup()
+    {
+        if (!_service.HasBackup)
+        {
+            StatusMessage = "There is no backup to restore yet — it is created the first time you apply changes.";
+            return;
+        }
+
+        // Restoring Machine-scope variables needs admin; warn early like Apply does.
+        if (!IsElevated && _service.ReadBackup() is { Machine.Count: > 0 })
+        {
+            // Still allow restoring User-scope vars, but tell the user System ones will be skipped.
+            if (!DialogService.Instance.Confirm(
+                    "Restore the original environment from the backup?\n\n" +
+                    "This rewrites every variable to its value from before your first change, and removes " +
+                    "variables added since. System variables can only be restored when running as administrator " +
+                    "and will be skipped now.",
+                    "Restore Environment"))
+            {
+                StatusMessage = "Restore cancelled.";
+                return;
+            }
+        }
+        else if (!DialogService.Instance.Confirm(
+                     "Restore the original environment from the backup?\n\n" +
+                     "This rewrites every variable to its value from before your first change, and removes " +
+                     "variables added since.",
+                     "Restore Environment"))
+        {
+            StatusMessage = "Restore cancelled.";
+            return;
+        }
+
+        var r = _service.RestoreFromBackup();
+        if (r.Restored > 0 || r.Removed > 0) EnvironmentVariableService.BroadcastSettingChange();
+        Load();
+
+        StatusMessage = r.Failed == 0
+            ? $"Restored {r.Restored} variable{(r.Restored == 1 ? "" : "s")}" +
+              (r.Removed > 0 ? $" and removed {r.Removed} added since." : ".")
+            : $"Restored {r.Restored}, removed {r.Removed}; {r.Failed} need administrator rights.";
     }
 
     [RelayCommand]

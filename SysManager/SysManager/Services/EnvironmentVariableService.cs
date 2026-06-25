@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -17,9 +18,14 @@ namespace SysManager.Services;
 /// Reads and writes Windows environment variables for both the User
 /// (HKCU\Environment) and Machine (HKLM ...\Session Manager\Environment) scopes.
 ///
-/// Writes go through <see cref="Environment.SetEnvironmentVariable(string,string,EnvironmentVariableTarget)"/>,
-/// which updates the registry AND broadcasts WM_SETTINGCHANGE so already-running
-/// processes (Explorer, new shells) pick up the change without a reboot.
+/// Writes go directly to the registry so the value KIND is preserved: a variable
+/// stored as REG_EXPAND_SZ (e.g. a PATH containing %SystemRoot%) stays REG_EXPAND_SZ,
+/// and reads return the RAW value with %VAR% tokens intact (not the expansion). Using
+/// <see cref="Environment.SetEnvironmentVariable(string,string,EnvironmentVariableTarget)"/>
+/// would instead rewrite every variable as REG_SZ and freeze its tokens to their
+/// edit-time expansion — silently corrupting PATH. After a batch of writes the caller
+/// broadcasts WM_SETTINGCHANGE once (see <see cref="BroadcastSettingChange"/>) so
+/// already-running processes (Explorer, new shells) pick the change up without a reboot.
 ///
 /// Machine-scope writes require administrator rights; <see cref="SetVariable"/> returns
 /// <c>false</c> (rather than throwing) when the write is denied, mirroring
@@ -28,6 +34,10 @@ namespace SysManager.Services;
 /// </summary>
 public sealed partial class EnvironmentVariableService
 {
+    // Registry locations of the two environment scopes.
+    private const string UserEnvPath = @"Environment";
+    private const string MachineEnvPath = @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+
     private readonly string _backupDir;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -69,29 +79,44 @@ public sealed partial class EnvironmentVariableService
 
     // ── Reading ──────────────────────────────────────────────────────────────
 
-    /// <summary>Reads all variables for the given scope, sorted by name.</summary>
+    private static (RegistryKey hive, string path) Location(EnvVarScope scope) =>
+        scope == EnvVarScope.Machine
+            ? (Registry.LocalMachine, MachineEnvPath)
+            : (Registry.CurrentUser, UserEnvPath);
+
+    /// <summary>
+    /// Reads all variables for the given scope, sorted by name. Reads the RAW value
+    /// (<see cref="RegistryValueOptions.DoNotExpandEnvironmentNames"/>) so %VAR% tokens
+    /// are preserved for round-tripping, and records the value KIND so a write can keep
+    /// REG_EXPAND_SZ intact.
+    /// </summary>
     public List<EnvVariable> Read(EnvVarScope scope)
     {
         List<EnvVariable> result = [];
-        var target = scope == EnvVarScope.Machine
-            ? EnvironmentVariableTarget.Machine
-            : EnvironmentVariableTarget.User;
+        var (hive, path) = Location(scope);
         try
         {
-            var vars = Environment.GetEnvironmentVariables(target);
-            foreach (System.Collections.DictionaryEntry kv in vars)
+            using var key = hive.OpenSubKey(path);
+            if (key is null) return result;
+            foreach (var name in key.GetValueNames())
             {
-                var name = kv.Key?.ToString();
                 if (string.IsNullOrEmpty(name)) continue;
+                var raw = key.GetValue(name, "", RegistryValueOptions.DoNotExpandEnvironmentNames);
+                var expandable = key.GetValueKind(name) == RegistryValueKind.ExpandString;
                 result.Add(new EnvVariable
                 {
                     Name = name,
                     Scope = scope,
-                    Value = kv.Value?.ToString() ?? ""
+                    Value = raw?.ToString() ?? "",
+                    IsExpandable = expandable
                 });
             }
         }
         catch (System.Security.SecurityException ex)
+        {
+            Log.Warning(ex, "Environment: reading {Scope} scope denied", scope);
+        }
+        catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Environment: reading {Scope} scope denied", scope);
         }
@@ -109,21 +134,42 @@ public sealed partial class EnvironmentVariableService
     // ── Writing ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Sets (or, when <paramref name="value"/> is null, deletes) a variable. Validates
-    /// the name at the trust boundary. Returns <c>false</c> if the write is denied
-    /// (typically a Machine-scope write without elevation) instead of throwing.
+    /// Sets (or, when <paramref name="value"/> is null, deletes) a variable, writing
+    /// directly to the registry so the value KIND is preserved. An existing variable
+    /// keeps its kind (REG_EXPAND_SZ stays expandable); a new variable is written as
+    /// REG_EXPAND_SZ when its value contains a %VAR% token, else REG_SZ. Validates the
+    /// name at the trust boundary. Returns <c>false</c> if the write is denied (typically
+    /// a Machine-scope write without elevation) instead of throwing.
+    ///
+    /// Does NOT broadcast WM_SETTINGCHANGE — the caller broadcasts once after a batch via
+    /// <see cref="BroadcastSettingChange"/>.
     /// </summary>
     public bool SetVariable(string name, string? value, EnvVarScope scope)
     {
         var validName = ValidateName(name);
-        var target = scope == EnvVarScope.Machine
-            ? EnvironmentVariableTarget.Machine
-            : EnvironmentVariableTarget.User;
+        var (hive, path) = Location(scope);
         try
         {
-            Environment.SetEnvironmentVariable(validName, value, target);
-            Log.Information("Environment: {Action} {Scope} variable {Name}",
-                value is null ? "deleted" : "set", scope, validName);
+            using var key = hive.OpenSubKey(path, writable: true);
+            if (key is null)
+            {
+                Log.Warning("Environment: {Scope} environment key not found", scope);
+                return false;
+            }
+
+            if (value is null)
+            {
+                key.DeleteValue(validName, throwOnMissingValue: false);
+                Log.Information("Environment: deleted {Scope} variable {Name}", scope, validName);
+                return true;
+            }
+
+            // Preserve the existing kind; for a new value, choose ExpandString when it
+            // references a %VAR% token so expansion keeps working (matches how Windows
+            // itself stores PATH and similar variables).
+            var kind = ChooseKind(ExistingKind(key, validName), value);
+            key.SetValue(validName, value, kind);
+            Log.Information("Environment: set {Scope} variable {Name} ({Kind})", scope, validName, kind);
             return true;
         }
         catch (System.Security.SecurityException ex)
@@ -138,8 +184,51 @@ public sealed partial class EnvironmentVariableService
         }
     }
 
+    private static RegistryValueKind? ExistingKind(RegistryKey key, string name)
+    {
+        try { return key.GetValueKind(name); }
+        catch (IOException) { return null; }   // value does not exist yet
+    }
+
+    /// <summary>
+    /// Decides the registry value kind for a write: keep an existing variable's kind so a
+    /// REG_EXPAND_SZ (e.g. PATH) is never flattened to REG_SZ; for a NEW variable use
+    /// REG_EXPAND_SZ when the value contains a %VAR% token, else REG_SZ. Pure for testing.
+    /// </summary>
+    public static RegistryValueKind ChooseKind(RegistryValueKind? existingKind, string value)
+        => existingKind ?? (value.Contains('%') ? RegistryValueKind.ExpandString : RegistryValueKind.String);
+
     /// <summary>Deletes a variable. Returns false if the write is denied.</summary>
     public bool DeleteVariable(string name, EnvVarScope scope) => SetVariable(name, null, scope);
+
+    /// <summary>
+    /// Broadcasts WM_SETTINGCHANGE("Environment") so already-running processes pick up
+    /// environment changes without a reboot. Bounded (SMTO_ABORTIFHUNG, 5 s) so a frozen
+    /// top-level window can't hang the caller. Call once after a batch of writes.
+    /// </summary>
+    public static void BroadcastSettingChange()
+    {
+        try
+        {
+            _ = NativeMethods.SendMessageTimeout(
+                NativeMethods.HWND_BROADCAST, NativeMethods.WM_SETTINGCHANGE,
+                IntPtr.Zero, "Environment",
+                NativeMethods.SMTO_ABORTIFHUNG, 5000, out _);
+        }
+        catch (EntryPointNotFoundException ex) { Log.Debug("Environment: WM_SETTINGCHANGE broadcast unavailable: {Error}", ex.Message); }
+    }
+
+    private static partial class NativeMethods
+    {
+        internal static readonly IntPtr HWND_BROADCAST = new(0xFFFF);
+        internal const uint WM_SETTINGCHANGE = 0x001A;
+        internal const uint SMTO_ABORTIFHUNG = 0x0002;
+
+        [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "SendMessageTimeoutW")]
+        internal static partial IntPtr SendMessageTimeout(
+            IntPtr hWnd, uint msg, IntPtr wParam, string lParam,
+            uint flags, uint timeout, out IntPtr result);
+    }
 
     // ── PATH helpers (pure, testable) ──────────────────────────────────────────
 
@@ -227,5 +316,44 @@ public sealed partial class EnvironmentVariableService
             Log.Warning(ex, "Environment: backup file could not be read");
             return null;
         }
+    }
+
+    /// <summary>The outcome of a <see cref="RestoreFromBackup"/> call.</summary>
+    public readonly record struct RestoreResult(bool HadBackup, int Restored, int Removed, int Failed);
+
+    /// <summary>
+    /// Restores the environment to the pristine backup: every backed-up variable is
+    /// written back (kind preserved for existing names), and any variable that did NOT
+    /// exist in the backup is removed. Returns counts. Machine-scope changes need admin —
+    /// those writes count as failures (not exceptions) when not elevated. The caller
+    /// should <see cref="BroadcastSettingChange"/> once afterwards.
+    /// </summary>
+    public RestoreResult RestoreFromBackup()
+    {
+        var backup = ReadBackup();
+        if (backup is null) return new RestoreResult(false, 0, 0, 0);
+
+        int restored = 0, removed = 0, failed = 0;
+        foreach (var scope in new[] { EnvVarScope.User, EnvVarScope.Machine })
+        {
+            var saved = scope == EnvVarScope.Machine ? backup.Machine : backup.User;
+
+            // Re-write every backed-up variable to its original value.
+            foreach (var (name, value) in saved)
+            {
+                if (SetVariable(name, value, scope)) restored++;
+                else failed++;
+            }
+
+            // Remove anything present now but absent from the backup (added since).
+            foreach (var current in Read(scope))
+            {
+                if (saved.ContainsKey(current.Name)) continue;
+                if (DeleteVariable(current.Name, scope)) removed++;
+                else failed++;
+            }
+        }
+        Log.Information("Environment: restored {Restored}, removed {Removed}, failed {Failed} from backup", restored, removed, failed);
+        return new RestoreResult(true, restored, removed, failed);
     }
 }

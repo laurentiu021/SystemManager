@@ -91,13 +91,30 @@ public sealed class BootAnalyzerService
 
     // ── Pure parsing (unit-tested) ─────────────────────────────────────────────
 
-    /// <summary>Reads a named &lt;Data Name="x"&gt; value from an event's XML payload.</summary>
+    /// <summary>
+    /// Reads a named value from an event's XML payload, handling BOTH shapes the
+    /// Diagnostics-Performance provider can emit:
+    ///  • the generic <c>&lt;EventData&gt;&lt;Data Name="BootTime"&gt;…&lt;/Data&gt;</c> form, and
+    ///  • the provider's real <c>&lt;UserData&gt;&lt;…&gt;&lt;BootTime&gt;…&lt;/BootTime&gt;</c> form,
+    ///    where the field is a directly-named child element (in the provider namespace).
+    /// The named-element fallback is namespace-agnostic (matched by local name), so the
+    /// boot fields resolve regardless of which shape Windows produces.
+    /// </summary>
     internal static string? DataValue(XElement? eventXml, string name)
     {
         if (eventXml is null) return null;
+
+        // 1) <Data Name="name">value</Data>
         var data = eventXml.Descendants(EvtNs + "Data")
             .FirstOrDefault(d => (string?)d.Attribute("Name") == name);
-        return data?.Value;
+        if (data is not null) return data.Value;
+
+        // 2) <name>value</name> directly-named child (UserData shape) — match by local name,
+        //    ignoring the provider-specific namespace. Skip container elements that have
+        //    their own child elements (we want the leaf value).
+        var named = eventXml.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == name && !e.HasElements);
+        return named?.Value;
     }
 
     private static long ParseLong(XElement? xml, string name)

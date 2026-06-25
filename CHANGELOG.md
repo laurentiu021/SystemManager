@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.2] - 2026-06-25
+
+### Fixed
+- **The Privacy Monitor no longer risks failing to open if the Windows access-history store contains an unusual entry.** Decoding an app's name from a desktop-app entry whose key was made up only of path separators could throw and, because the tab is built at start-up, prevent the window from loading. The decoder now falls back to the raw key name for such entries, and a single unreadable or malformed entry is skipped instead of aborting the whole scan. Also refined "in use now" detection so an app whose most recent start is newer than its last stop (e.g. after a force-close) is correctly shown as currently using the device, and the "last used" time now reflects the most recent of the two timestamps.
+
 ## [1.33.1] - 2026-06-25
 
 ### Fixed

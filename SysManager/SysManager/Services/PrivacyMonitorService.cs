@@ -66,18 +66,27 @@ public sealed class PrivacyMonitorService
         foreach (var appKeyName in capKey.GetSubKeyNames())
         {
             if (appKeyName.Equals("NonPackaged", StringComparison.OrdinalIgnoreCase)) continue;
-            using var appKey = capKey.OpenSubKey(appKeyName);
-            if (appKey is null) continue;
+            try
+            {
+                using var appKey = capKey.OpenSubKey(appKeyName);
+                if (appKey is null) continue;
 
-            var start = ToFileTime(appKey.GetValue("LastUsedTimeStart"));
-            var stop = ToFileTime(appKey.GetValue("LastUsedTimeStop"));
-            var inUse = start.HasValue && !stop.HasValue;
+                var start = ToFileTime(appKey.GetValue("LastUsedTimeStart"));
+                var stop = ToFileTime(appKey.GetValue("LastUsedTimeStop"));
+                // In use now: a fresh Start with no Stop, or a Start newer than the last Stop
+                // (a force-killed app may leave a stale Stop that predates its current Start).
+                var inUse = start.HasValue && (!stop.HasValue || start > stop);
 
-            DateTime? lastUsed = null;
-            var ticks = stop ?? start;
-            if (ticks.HasValue) lastUsed = FileTimeToLocal(ticks.Value);
+                DateTime? lastUsed = null;
+                // Report the most recent of the two timestamps, not always Stop.
+                var ticks = start.HasValue && stop.HasValue ? Math.Max(start.Value, stop.Value) : stop ?? start;
+                if (ticks.HasValue) lastUsed = FileTimeToLocal(ticks.Value);
 
-            entries.Add(new PrivacyAccessEntry(label, FriendlyAppName(appKeyName), lastUsed, inUse));
+                entries.Add(new PrivacyAccessEntry(label, FriendlyAppName(appKeyName), lastUsed, inUse));
+            }
+            // A single malformed/unreadable app subkey must not abort the whole capability scan.
+            catch (System.Security.SecurityException ex) { Log.Debug("Privacy monitor skipped app key {App}: {Error}", appKeyName, ex.Message); }
+            catch (UnauthorizedAccessException ex) { Log.Debug("Privacy monitor skipped app key {App}: {Error}", appKeyName, ex.Message); }
         }
     }
 
@@ -107,9 +116,10 @@ public sealed class PrivacyMonitorService
 
         if (keyName.Contains('#'))
         {
-            // e.g. "C:#Program Files#App#app.exe" → "app.exe"
-            var last = keyName.Split('#', StringSplitOptions.RemoveEmptyEntries)[^1];
-            return last;
+            // e.g. "C:#Program Files#App#app.exe" → "app.exe". A degenerate key that is only
+            // separators ("#", "##") splits to an empty array — fall back to the raw key.
+            var parts = keyName.Split('#', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length > 0 ? parts[^1] : keyName;
         }
 
         // Packaged: "Microsoft.WindowsCamera_8wekyb3d8bbwe" → "Microsoft.WindowsCamera"

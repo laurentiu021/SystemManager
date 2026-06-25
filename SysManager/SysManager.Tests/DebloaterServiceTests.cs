@@ -33,21 +33,43 @@ public class DebloaterServiceTests
     // ---------- IsProtected (denylist) ----------
 
     [Theory]
-    // Each entry is the REAL Get-AppxPackage .Name of a system-critical package; a too-specific
-    // or misspelled denylist prefix would make StartsWith fail and let it be removed.
+    // Each value below is the EXACT Get-AppxPackage `.Name` (the family-name prefix) of a
+    // system-critical package, confirmed against a real `Get-AppxPackage | Select Name`
+    // capture from a Windows 11 machine — NOT echoed from the denylist constants. A
+    // too-specific or misspelled denylist prefix would make StartsWith fail and silently
+    // let a critical package be removed (the class of bug that hit Photos with the old
+    // `...Photos.Settings` entry). Verifying against the real `.Name` is what prevents that.
+    //
+    // The bare `.Name` (as Windows reports it for these system packages):
     [InlineData("Microsoft.WindowsStore")]
-    [InlineData("Microsoft.WindowsStore_22210.1402.7.0_x64__8wekyb3d8bbwe")]
     [InlineData("Microsoft.DesktopAppInstaller")]
-    [InlineData("Microsoft.VCLibs.140.00")]
-    [InlineData("Microsoft.NET.Native.Framework.2.2")]
-    [InlineData("Microsoft.UI.Xaml.2.8")]
     [InlineData("Microsoft.Windows.ShellExperienceHost")]
     [InlineData("Microsoft.Windows.StartMenuExperienceHost")]
-    [InlineData("Microsoft.SecHealthUI")]
+    [InlineData("Microsoft.SecHealthUI")]                    // verified present — NOT "Microsoft.Windows.SecHealthUI"
     [InlineData("Microsoft.AccountsControl")]
+    [InlineData("Microsoft.AAD.BrokerPlugin")]
+    [InlineData("Microsoft.LockApp")]
+    [InlineData("Microsoft.CredDialogHost")]
+    [InlineData("Microsoft.Win32WebViewHost")]
+    [InlineData("Microsoft.Windows.CloudExperienceHost")]
+    [InlineData("Microsoft.Windows.PeopleExperienceHost")]
+    [InlineData("Microsoft.Windows.NarratorQuickStart")]
+    [InlineData("Microsoft.XboxGameCallableUI")]
     [InlineData("Microsoft.Windows.Photos")]                 // regression: was ...Photos.Settings (too specific)
     [InlineData("Microsoft.Windows.ContentDeliveryManager")]
     [InlineData("Microsoft.StorePurchaseApp")]
+    // Versioned frameworks: the real `.Name` carries a version segment, so the denylist
+    // prefix (e.g. "Microsoft.VCLibs") must match the LONGER real name, not equal it.
+    [InlineData("Microsoft.VCLibs.140.00")]
+    [InlineData("Microsoft.VCLibs.140.00.UWPDesktop")]
+    [InlineData("Microsoft.NET.Native.Framework.2.2")]
+    [InlineData("Microsoft.NET.Native.Runtime.2.2")]
+    [InlineData("Microsoft.UI.Xaml.2.8")]
+    [InlineData("Microsoft.WindowsAppRuntime.1.8")]
+    [InlineData("MicrosoftWindows.Client.Core")]             // Win11 client family (covers search/start host)
+    [InlineData("MicrosoftWindows.Client.CBS")]
+    // PackageFullName form (with _version_arch__hash) must also be protected via prefix.
+    [InlineData("Microsoft.WindowsStore_22210.1402.7.0_x64__8wekyb3d8bbwe")]
     public void IsProtected_TrueForSystemCriticalPackages(string name)
         => Assert.True(DebloaterService.IsProtected(name));
 

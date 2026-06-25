@@ -27,6 +27,7 @@ namespace SysManager.Services;
 public sealed partial class PerformanceService : IDisposable
 {
     private readonly PowerShellRunner _ps;
+    private readonly RestorePointService _restorePoints;
     private readonly SemaphoreSlim _psGate = new(1, 1);
     private bool _disposed;
 
@@ -56,7 +57,11 @@ public sealed partial class PerformanceService : IDisposable
     private static partial bool SystemParametersInfoSet(
         uint uiAction, uint uiParam, int pvParam, uint fWinIni);
 
-    public PerformanceService(PowerShellRunner ps) => _ps = ps;
+    public PerformanceService(PowerShellRunner ps, RestorePointService restorePoints)
+    {
+        _ps = ps;
+        _restorePoints = restorePoints;
+    }
 
     // ═══════════════════════════════════════════════════════════════
     //  SNAPSHOT — captures original state for safe restore
@@ -542,7 +547,7 @@ public sealed partial class PerformanceService : IDisposable
     /// first) — this method exists only as the Performance tab's convenience entry point.
     /// </summary>
     public Task<bool> CreateRestorePointAsync(string description, CancellationToken ct = default)
-        => new RestorePointService(_ps).CreateAsync(description, ct);
+        => _restorePoints.CreateAsync(description, ct);
 
     // ═══════════════════════════════════════════════════════════════
     //  RAM WORKING SET TRIM — via EmptyWorkingSet (instant)

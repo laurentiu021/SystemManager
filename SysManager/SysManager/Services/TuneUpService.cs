@@ -4,6 +4,7 @@
 
 using System.IO;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -19,7 +20,7 @@ namespace SysManager.Services;
 ///
 /// No admin required. No registry edits. No service changes.
 /// </summary>
-public sealed partial class TuneUpService
+public sealed class TuneUpService
 {
     private readonly ShortcutCleanerService _shortcuts;
     private readonly DiskHealthService _diskHealth;
@@ -273,27 +274,5 @@ public sealed partial class TuneUpService
     // ── Recycle Bin ────────────────────────────────────────────────────
 
     private static Task<bool> EmptyRecycleBinAsync(CancellationToken ct)
-        => Task.Run(() => EmptyRecycleBin(), ct);
-
-    private static bool EmptyRecycleBin()
-    {
-        try
-        {
-            // SHEmptyRecycleBin with SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND
-            int hr = NativeMethods.SHEmptyRecycleBin(IntPtr.Zero, null, 0x00000007);
-            // S_OK (0) = success, 0x80070012 (ERROR_NO_MORE_FILES) = bin already empty
-            return hr >= 0 || unchecked((uint)hr) == 0x80070012;
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            Log.Warning("TuneUp empty recycle bin failed: {Error}", ex.Message);
-            return false;
-        }
-    }
-
-    private static partial class NativeMethods
-    {
-        [System.Runtime.InteropServices.LibraryImport("shell32.dll", StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf16, EntryPoint = "SHEmptyRecycleBinW")]
-        internal static partial int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
-    }
+        => Task.Run(RecycleBinHelper.EmptyAllDrives, ct);
 }

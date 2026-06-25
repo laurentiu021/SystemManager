@@ -189,7 +189,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ProcessManager = new ProcessManagerViewModel(new ProcessManagerService());
             BatteryHealth = new BatteryHealthViewModel(battery);
             Uninstaller = new UninstallerViewModel(new UninstallerService(runner));
-            Performance = new PerformanceViewModel(new PerformanceService(runner));
+            var restorePoints = new RestorePointService(runner);
+            Performance = new PerformanceViewModel(new PerformanceService(runner, restorePoints));
             Startup = new StartupViewModel(new StartupService());
             NetworkShared = new NetworkSharedState(pinger, tracer, traceMonitor, speedTest, netRepair);
             Ping = new PingViewModel(NetworkShared);
@@ -211,7 +212,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ContextMenu = new ContextMenuViewModel(new ContextMenuService());
             SystemReport = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth));
             EnvironmentVariables = new EnvironmentVariablesViewModel(new EnvironmentVariableService());
-            RestorePoints = new RestorePointsViewModel(new RestorePointService(new PowerShellRunner()));
+            RestorePoints = new RestorePointsViewModel(restorePoints);
             Debloater = new DebloaterViewModel(new DebloaterService(new PowerShellRunner()));
             LegacyPanels = new LegacyPanelsViewModel(new LegacyPanelService());
             SystemFixes = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner()));

@@ -266,6 +266,8 @@ Utility classes that don't fit neatly into Services or ViewModels:
 - `GatewayHelper` — default gateway IP lookup for network tabs.
 - `EtaCalculator` — estimates time remaining for long-running operations.
 - `KnownFolders` — resolves Windows Known Folder paths via shell API.
+- `RecycleBinHelper` — empties the Recycle Bin via the shell API; shared by Deep
+  Cleanup and the One-Click Tune-Up so the interop has one source of truth.
 - `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.
 - Value converters: `EqualityConverter`, `IntGreaterThanZeroConverter`,
   `ValueConverters` (boolean/visibility/inverse helpers).

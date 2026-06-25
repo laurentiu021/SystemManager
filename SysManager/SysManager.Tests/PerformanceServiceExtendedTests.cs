@@ -44,7 +44,7 @@ public class PerformanceServiceExtendedTests
     public void Service_AcceptsPowerShellRunner()
     {
         var ps = new PowerShellRunner();
-        var service = new PerformanceService(ps);
+        var service = new PerformanceService(ps, new RestorePointService(ps));
         Assert.NotNull(service);
     }
 }

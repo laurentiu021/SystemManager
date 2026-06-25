@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.10] - 2026-06-25
+
+### Fixed
+- **The Dashboard's Quick Cleanup now uses the same safe temp cleaner as the One-Click Tune-Up.** It previously had its own inline cleaner that only looked at the top level of the user TEMP folder, ignored the Windows TEMP folder, and silently swallowed every error. It now cleans both temp folders and never follows a junction or symbolic link out of the temp tree, so it can't be redirected into unrelated files — matching the protection already used elsewhere.
+
 ## [1.33.9] - 2026-06-25
 
 ### Fixed

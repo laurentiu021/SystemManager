@@ -570,35 +570,15 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
         await RunQuickActionAsync("Quick Cleanup", "Cleanup", "nav-cleanup", async () =>
         {
-            QuickActionDetail = "Scanning temp folders...";
-            QuickActionProgress = 20;
-            var tempPath = Path.GetTempPath();
-            await Task.Run(() =>
-            {
-                try
-                {
-                    return new DirectoryInfo(tempPath)
-                        .EnumerateFiles("*", SearchOption.AllDirectories)
-                        .Sum(f => { try { return f.Length; } catch { return 0L; } });
-                }
-                catch { return 0L; }
-            });
-
             QuickActionDetail = "Cleaning temp files...";
             QuickActionProgress = 50;
-            long freed = 0;
-            await Task.Run(() =>
-            {
-                try
-                {
-                    foreach (var file in new DirectoryInfo(tempPath).EnumerateFiles("*", SearchOption.TopDirectoryOnly))
-                    {
-                        try { var len = file.Length; file.Delete(); freed += len; }
-                        catch { /* locked — skip */ }
-                    }
-                }
-                catch { /* access denied — skip */ }
-            });
+
+            // Delegate to the shared TuneUpService cleaner: it cleans BOTH user and Windows
+            // TEMP and never follows reparse points (junctions / symlinks) out of the temp
+            // tree, so it can't be redirected into unrelated user data. This replaces an
+            // earlier inline cleaner that only scanned the user TEMP top level and swallowed
+            // every error.
+            var (freed, _, _) = await TuneUpService.CleanTempFilesAsync(CancellationToken.None);
 
             QuickActionProgress = 100;
             var freedMB = freed / 1024.0 / 1024.0;

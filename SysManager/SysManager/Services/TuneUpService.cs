@@ -147,7 +147,14 @@ public sealed class TuneUpService
 
     // ── Temp file cleanup ──────────────────────────────────────────────
 
-    private static Task<(long BytesFreed, int FilesDeleted, int Errors)> CleanTempFilesAsync(CancellationToken ct)
+    /// <summary>
+    /// Cleans user + Windows TEMP, never descending into reparse points (junctions /
+    /// symbolic links) so a link inside TEMP can't redirect deletion to unrelated data.
+    /// Returns the bytes freed, files deleted, and per-file error count. Shared by the
+    /// full Tune-Up sequence and the Dashboard's Quick Cleanup shortcut so both use this
+    /// one safe implementation.
+    /// </summary>
+    public static Task<(long BytesFreed, int FilesDeleted, int Errors)> CleanTempFilesAsync(CancellationToken ct = default)
         => Task.Run(() => CleanTempFiles(ct), ct);
 
     private static (long BytesFreed, int FilesDeleted, int Errors) CleanTempFiles(CancellationToken ct)

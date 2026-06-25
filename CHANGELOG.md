@@ -17,8 +17,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.33.7] - 2026-06-25
 
-### Fixed
-- **The Boot Analyzer now reads boot times on real hardware.** It parsed only the generic `<Data Name="BootTime">` event shape, but the Windows boot-performance provider actually emits event 100 as a `<UserData>` block whose fields are directly-named child elements — so on a real machine the parser found nothing and the tab showed "no boot performance events" even with a full history. The value reader now also resolves directly-named child elements (by local name, ignoring the provider namespace), so both event shapes are handled and the boot history populates.
+### Changed
+- **Boot Analyzer: hardened the event-XML reader to tolerate alternate payload shapes.** The boot-performance reader already parses the standard `<EventData><Data Name="BootTime">` form that Windows emits, and that path is unchanged. This adds a defensive fallback that also resolves directly-named child elements (matched by local name, namespace-agnostic) for any event variant that nests its fields differently, so the reader is robust across builds. No behavior change on current Windows — the boot history is read exactly as before.
 
 ## [1.33.6] - 2026-06-25
 

@@ -50,8 +50,26 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
     [InlineData("Microsoft.WindowsCamera_8wekyb3d8bbwe", "Microsoft.WindowsCamera")]
     [InlineData("C:#Program Files#Zoom#zoom.exe", "zoom.exe")]
     [InlineData("SomeApp", "SomeApp")]
+    [InlineData("#", "#")]                 // degenerate all-separator key must not throw
+    [InlineData("##", "##")]
+    [InlineData("###", "###")]
     public void FriendlyAppName_DecodesKeyNames(string key, string expected)
         => Assert.Equal(expected, PrivacyMonitorService.FriendlyAppName(key));
+
+    [Fact]
+    public void Read_DegenerateSeparatorKey_DoesNotThrow_AndIsSkippedOrNamed()
+    {
+        // A consent subkey named only with separators previously crashed FriendlyAppName
+        // (Split('#', RemoveEmptyEntries)[^1] on an empty array → IndexOutOfRangeException),
+        // which propagated through the eagerly-constructed VM and broke startup.
+        var start = new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc).ToFileTimeUtc();
+        WriteApp("webcam", "##", start, null, nonPackaged: true);
+        WriteApp("webcam", "Microsoft.WindowsCamera_8wekyb3d8bbwe", start, start + 10);
+
+        var entries = _svc.Read();   // must not throw
+        // The valid app still surfaces — a degenerate sibling does not abort the scan.
+        Assert.Contains(entries, e => e.AppName == "Microsoft.WindowsCamera");
+    }
 
     [Fact]
     public void ToFileTime_RejectsZeroAndNonPositive()

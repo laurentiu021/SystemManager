@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.6] - 2026-06-25
+
+### Fixed
+- **The Debloater now correctly protects the Photos app from removal.** The system-critical denylist listed `Microsoft.Windows.Photos.Settings`, but the real package name is `Microsoft.Windows.Photos` — and because the match is a prefix check, the shorter real name never matched, so Photos was offered as removable. The entry is now the correct family name. A redundant, never-matching Windows Security entry was also removed (the correct one was already present). Added tests covering each critical package by its real name, plus tests confirming removal refuses a protected package and rejects an injection-shaped package name without ever invoking PowerShell.
+
 ## [1.33.5] - 2026-06-25
 
 ### Fixed

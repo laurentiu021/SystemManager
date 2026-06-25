@@ -48,8 +48,7 @@ public sealed partial class DebloaterService
         "Microsoft.Windows.ShellExperienceHost",
         "Microsoft.Windows.StartMenuExperienceHost",
         "Microsoft.Windows.Search",            // search host
-        "Microsoft.Windows.SecHealthUI",       // Windows Security UI
-        "Microsoft.SecHealthUI",
+        "Microsoft.SecHealthUI",               // Windows Security UI (real package family name)
         "Microsoft.AAD.BrokerPlugin",
         "Microsoft.AccountsControl",
         "Microsoft.LockApp",
@@ -58,7 +57,7 @@ public sealed partial class DebloaterService
         "Microsoft.Windows.CloudExperienceHost",
         "Microsoft.Windows.ContentDeliveryManager",
         "Microsoft.Windows.PeopleExperienceHost",
-        "Microsoft.Windows.Photos.Settings",
+        "Microsoft.Windows.Photos",            // Photos app — real .Name (not the ...Photos.Settings sub-package)
         "Microsoft.WindowsAppRuntime",
         "MicrosoftWindows.Client",             // client framework family
         "Windows.CBSPreview",

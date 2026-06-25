@@ -2,7 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.ObjectModel;
 using System.Management.Automation;
+using NSubstitute;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -30,6 +33,8 @@ public class DebloaterServiceTests
     // ---------- IsProtected (denylist) ----------
 
     [Theory]
+    // Each entry is the REAL Get-AppxPackage .Name of a system-critical package; a too-specific
+    // or misspelled denylist prefix would make StartsWith fail and let it be removed.
     [InlineData("Microsoft.WindowsStore")]
     [InlineData("Microsoft.WindowsStore_22210.1402.7.0_x64__8wekyb3d8bbwe")]
     [InlineData("Microsoft.DesktopAppInstaller")]
@@ -37,7 +42,12 @@ public class DebloaterServiceTests
     [InlineData("Microsoft.NET.Native.Framework.2.2")]
     [InlineData("Microsoft.UI.Xaml.2.8")]
     [InlineData("Microsoft.Windows.ShellExperienceHost")]
+    [InlineData("Microsoft.Windows.StartMenuExperienceHost")]
     [InlineData("Microsoft.SecHealthUI")]
+    [InlineData("Microsoft.AccountsControl")]
+    [InlineData("Microsoft.Windows.Photos")]                 // regression: was ...Photos.Settings (too specific)
+    [InlineData("Microsoft.Windows.ContentDeliveryManager")]
+    [InlineData("Microsoft.StorePurchaseApp")]
     public void IsProtected_TrueForSystemCriticalPackages(string name)
         => Assert.True(DebloaterService.IsProtected(name));
 
@@ -122,4 +132,58 @@ public class DebloaterServiceTests
     [Fact]
     public void Parse_EmptyInput_ReturnsEmpty()
         => Assert.Empty(DebloaterService.ParsePackages([]));
+
+    // ---------- RemoveAsync safety gates ----------
+
+    private static StoreApp App(string name, string full, bool isProtected = false) => new()
+    {
+        Name = name, PackageFullName = full, PackageFamilyName = name + "_abc",
+        DisplayName = name, Publisher = "CN=Microsoft", Version = "1.0.0.0", IsProtected = isProtected
+    };
+
+    [Fact]
+    public async Task RemoveAsync_RefusesProtectedPackage_WithoutInvokingRunner()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var svc = new DebloaterService(runner);
+
+        // Protected by name even if the flag was (somehow) cleared by a tampered binding.
+        var result = await svc.RemoveAsync(App("Microsoft.Windows.Photos", "Microsoft.Windows.Photos_1_x64__abc"));
+
+        Assert.False(result);
+        await runner.DidNotReceive().RunAsync(
+            Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("App.Name'; Remove-Item C:\\ -Recurse #")]
+    [InlineData("App Name with spaces")]
+    [InlineData("App$(rm)")]
+    public async Task RemoveAsync_RejectsInjectionInFullName_WithoutInvokingRunner(string badFull)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var svc = new DebloaterService(runner);
+
+        var result = await svc.RemoveAsync(App("Contoso.App", badFull));
+
+        Assert.False(result);
+        await runner.DidNotReceive().RunAsync(
+            Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RemoveAsync_ValidRemovableApp_InvokesRunner_AndConfirmsSuccess()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject> { PSObject.AsPSObject("__SM_RM_OK__") });
+        var svc = new DebloaterService(runner);
+
+        var result = await svc.RemoveAsync(App("Contoso.RandomApp", "Contoso.RandomApp_1.0.0.0_x64__abc"));
+
+        Assert.True(result);
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s => s.Contains("Remove-AppxPackage") && s.Contains("Contoso.RandomApp_1.0.0.0_x64__abc")),
+            Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+    }
 }

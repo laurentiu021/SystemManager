@@ -43,9 +43,10 @@ public class BootAnalyzerServiceTests
     public void DataValue_NullXml_ReturnsNull()
         => Assert.Null(BootAnalyzerService.DataValue(null, "BootTime"));
 
-    // The real Diagnostics-Performance provider emits event 100 as a <UserData> block whose
-    // fields are directly-named child elements in the provider namespace — NOT <Data Name>.
-    // DataValue must read that shape too, or the tab is empty on real hardware.
+    // Windows emits event 100 in the <EventData><Data Name=...> form (verified against a live
+    // event), which the tests above cover. These two also exercise the defensive fallback for
+    // a hypothetical variant that nests the fields as directly-named child elements under a
+    // <UserData> block, so DataValue stays robust if a build ever uses that shape.
     private const string ProviderNs = "http://manifests.microsoft.com/win/2004/08/windows/diagnosis";
 
     private static XElement UserDataEvent(int eventId, params (string Name, string Value)[] fields)

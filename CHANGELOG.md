@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.1] - 2026-06-25
+
+### Fixed
+- **Browser Cleaner now refuses to follow junctions or symbolic links out of a browser's own folders.** The reparse-point safety check failed *open* — if a folder's attributes couldn't be read it was treated as a normal folder and traversed — and the file-deletion path skipped the check entirely, so a junction or link placed inside a browser profile directory (something a standard user can create without administrator rights) could redirect a clean to measure or delete files outside the browser tree. The check now fails *safe* (an unreadable entry is treated as a link and skipped), runs before every measure and delete on both files and folders, and matches the behavior already used by Deep Cleanup and the File Shredder. The Firefox "Cache" entry now targets each profile's `cache2` cache folder specifically, instead of the whole profile directory — so a Firefox clean can never touch saved logins, bookmarks, or preferences.
+
 ## [1.33.0] - 2026-06-25
 
 ### Added

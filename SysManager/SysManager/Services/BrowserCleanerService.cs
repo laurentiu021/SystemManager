@@ -50,9 +50,35 @@ public sealed class BrowserCleanerService
         defs.AddRange(ChromiumDefs("Microsoft Edge", @"Microsoft\Edge\User Data"));
         defs.AddRange(ChromiumDefs("Brave", @"BraveSoftware\Brave-Browser\User Data"));
         defs.AddRange(ChromiumDefs("Opera", @"Opera Software\Opera Stable"));
-        // Firefox keeps profiles in roaming AppData; cache lives in local.
-        defs.Add(new("Firefox", "Cache", "Cached images and files.", false, [@"Mozilla\Firefox\Profiles"]) );
+        // Firefox keeps profiles in roaming AppData, but the cache lives under LocalAppData
+        // in per-profile "<profile>\cache2" folders. We target the cache2 subfolders only —
+        // never the Profiles root, which holds prefs.js, logins.json, key4.db and bookmarks.
+        // The exact profile folder name is machine-specific, so the per-profile cache2 paths
+        // are expanded at scan time (see ExpandFirefoxCachePaths).
+        foreach (var cachePath in ExpandFirefoxCachePaths())
+            defs.Add(new("Firefox", "Cache", "Cached images and files.", false, [cachePath]));
         return defs;
+    }
+
+    /// <summary>
+    /// Returns the relative paths of each Firefox profile's <c>cache2</c> folder under
+    /// LocalAppData (e.g. <c>Mozilla\Firefox\Profiles\abc.default-release\cache2</c>).
+    /// Returns an empty sequence when Firefox isn't installed. Never returns the Profiles
+    /// root, so a clean can only ever touch cache, never saved logins/bookmarks/prefs.
+    /// </summary>
+    private IEnumerable<string> ExpandFirefoxCachePaths()
+    {
+        const string profilesRel = @"Mozilla\Firefox\Profiles";
+        var profilesAbs = Path.Combine(_localAppData, profilesRel);
+        if (!Directory.Exists(profilesAbs) || IsReparsePoint(profilesAbs)) yield break;
+
+        string[] profileDirs;
+        try { profileDirs = Directory.GetDirectories(profilesAbs); }
+        catch (IOException) { yield break; }
+        catch (UnauthorizedAccessException) { yield break; }
+
+        foreach (var dir in profileDirs)
+            yield return Path.Combine(profilesRel, Path.GetFileName(dir), "cache2");
     }
 
     private string Root(bool roaming) => roaming ? _roamingAppData : _localAppData;
@@ -125,8 +151,11 @@ public sealed class BrowserCleanerService
     {
         try
         {
+            // Skip reparse-point leaves (a file/dir symlink or junction): following one
+            // could measure — and later delete — data outside the browser's own tree.
+            if (IsReparsePoint(path)) return (0, 0);
             if (File.Exists(path)) return (SafeLength(path), 1);
-            if (!Directory.Exists(path) || IsReparsePoint(path)) return (0, 0);
+            if (!Directory.Exists(path)) return (0, 0);
             long size = 0; var files = 0;
             foreach (var file in SafeEnumerateFiles(path, ct))
             {
@@ -145,12 +174,17 @@ public sealed class BrowserCleanerService
         var deleted = 0;
         try
         {
+            // Skip reparse-point leaves before any delete. File.Delete on a file symlink
+            // removes the link, but a junction standing in for an expected directory leaf
+            // would otherwise be recursed into and its target's files deleted — data loss
+            // outside the browser tree. Fail-closed IsReparsePoint is the gate (see below).
+            if (IsReparsePoint(path)) return 0;
             if (File.Exists(path))
             {
                 if (TryDeleteFile(path)) deleted++;
                 return deleted;
             }
-            if (!Directory.Exists(path) || IsReparsePoint(path)) return 0;
+            if (!Directory.Exists(path)) return 0;
             foreach (var file in SafeEnumerateFiles(path, ct))
             {
                 if (ct.IsCancellationRequested) break;
@@ -176,11 +210,17 @@ public sealed class BrowserCleanerService
         catch (UnauthorizedAccessException) { return 0; }
     }
 
+    /// <summary>
+    /// True when the path is a reparse point (junction or symbolic link). Fails SAFE:
+    /// returns true when the attributes can't be read, so an unreadable entry is treated
+    /// as a link and skipped rather than followed/deleted. Mirrors
+    /// <see cref="DeepCleanupService"/> and <see cref="FileShredderService"/>.
+    /// </summary>
     private static bool IsReparsePoint(string path)
     {
-        try { return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0; }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
+        try { return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 
     private static IEnumerable<string> SafeEnumerateFiles(string root, CancellationToken ct)

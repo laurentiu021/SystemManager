@@ -43,6 +43,45 @@ public class BootAnalyzerServiceTests
     public void DataValue_NullXml_ReturnsNull()
         => Assert.Null(BootAnalyzerService.DataValue(null, "BootTime"));
 
+    // The real Diagnostics-Performance provider emits event 100 as a <UserData> block whose
+    // fields are directly-named child elements in the provider namespace — NOT <Data Name>.
+    // DataValue must read that shape too, or the tab is empty on real hardware.
+    private const string ProviderNs = "http://manifests.microsoft.com/win/2004/08/windows/diagnosis";
+
+    private static XElement UserDataEvent(int eventId, params (string Name, string Value)[] fields)
+    {
+        XNamespace ns = Ns;
+        XNamespace pn = ProviderNs;
+        var inner = new XElement(pn + "EventXML");
+        foreach (var (name, value) in fields)
+            inner.Add(new XElement(pn + name, value));
+        return new XElement(ns + "Event",
+            new XElement(ns + "System", new XElement(ns + "EventID", eventId)),
+            new XElement(ns + "UserData", inner));
+    }
+
+    [Fact]
+    public void DataValue_ReadsUserDataNamedChildren()
+    {
+        var ev = UserDataEvent(100, ("BootTime", "55000"), ("MainPathBootTime", "40000"), ("BootPostBootTime", "15000"));
+        Assert.Equal("55000", BootAnalyzerService.DataValue(ev, "BootTime"));
+        Assert.Equal("40000", BootAnalyzerService.DataValue(ev, "MainPathBootTime"));
+        Assert.Null(BootAnalyzerService.DataValue(ev, "Missing"));
+    }
+
+    [Fact]
+    public void ParseBoot_ReadsUserDataShape()
+    {
+        var when = new DateTime(2026, 6, 25, 8, 0, 0, DateTimeKind.Local);
+        var ev = UserDataEvent(100, ("BootTime", "55000"), ("MainPathBootTime", "40000"), ("BootPostBootTime", "15000"));
+        var b = BootAnalyzerService.ParseBoot(when, ev);
+
+        Assert.NotNull(b);
+        Assert.Equal(55000, b!.BootTimeMs);
+        Assert.Equal(40000, b.MainPathBootTimeMs);
+        Assert.Equal(15000, b.PostBootTimeMs);
+    }
+
     // ---------- KindForEventId ----------
 
     [Theory]

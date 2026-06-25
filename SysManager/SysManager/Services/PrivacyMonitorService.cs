@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using Microsoft.Win32;
 using Serilog;
 using SysManager.Models;
@@ -39,6 +40,10 @@ public sealed class PrivacyMonitorService
     public PrivacyMonitorService(RegistryKey? baseKey = null)
         => _baseKey = baseKey ?? Registry.CurrentUser;
 
+    /// <summary>Reads the access history for all capabilities off the UI thread, most-recent first.</summary>
+    public Task<IReadOnlyList<PrivacyAccessEntry>> ReadAsync(CancellationToken ct = default)
+        => Task.Run(Read, ct);
+
     /// <summary>Reads the access history for all capabilities, most-recent first.</summary>
     public IReadOnlyList<PrivacyAccessEntry> Read()
     {
@@ -57,6 +62,9 @@ public sealed class PrivacyMonitorService
             }
             catch (System.Security.SecurityException ex) { Log.Debug("Privacy monitor read denied for {Cap}: {Error}", capKey, ex.Message); }
             catch (UnauthorizedAccessException ex) { Log.Debug("Privacy monitor read denied for {Cap}: {Error}", capKey, ex.Message); }
+            // A corrupt/locked hive can throw IOException from OpenSubKey/enumeration; skip the
+            // capability rather than let it bubble up and crash the (eagerly-built) ViewModel.
+            catch (IOException ex) { Log.Debug("Privacy monitor read failed for {Cap}: {Error}", capKey, ex.Message); }
         }
         return [.. entries.OrderByDescending(e => e.InUse).ThenByDescending(e => e.LastUsed ?? DateTime.MinValue)];
     }
@@ -87,6 +95,7 @@ public sealed class PrivacyMonitorService
             // A single malformed/unreadable app subkey must not abort the whole capability scan.
             catch (System.Security.SecurityException ex) { Log.Debug("Privacy monitor skipped app key {App}: {Error}", appKeyName, ex.Message); }
             catch (UnauthorizedAccessException ex) { Log.Debug("Privacy monitor skipped app key {App}: {Error}", appKeyName, ex.Message); }
+            catch (IOException ex) { Log.Debug("Privacy monitor skipped app key {App}: {Error}", appKeyName, ex.Message); }
         }
     }
 

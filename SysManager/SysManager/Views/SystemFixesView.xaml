@@ -81,21 +81,6 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Reset Network Stack" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
-                        <TextBlock Text="Reset Winsock + TCP/IP and flush DNS — fixes many connectivity issues. Needs a reboot."
-                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                    </StackPanel>
-                    <Button Grid.Column="1" Content="Run" Command="{Binding ResetNetworkCommand}"
-                            AutomationProperties.Name="Reset network stack"
-                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" MinWidth="80"/>
-                </Grid>
-
-                <Grid Margin="0,0,0,10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                         <TextBlock Text="Reinstall WinGet" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Re-register the Windows Package Manager (App Installer) when app installs or uninstalls fail."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
@@ -119,6 +104,9 @@
                             AutomationProperties.Name="Open auto sign-in settings"
                             Style="{StaticResource GhostButton}" VerticalAlignment="Center" MinWidth="80"/>
                 </Grid>
+
+                <TextBlock Margin="0,12,0,0" FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                           Text="Looking to reset the network stack (Winsock / TCP-IP / DNS flush)? Use the Network → Network Repair tab, which provides those as individual one-click tools."/>
             </StackPanel>
         </Border>
 

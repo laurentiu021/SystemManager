@@ -82,7 +82,7 @@ implemented; 17 are work-in-progress placeholders marked with ⚙️:
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Legacy Panels · System Fixes · Boot Analyzer · Task Scheduler ⚙️ |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
-| 📊 Monitor | Process Manager · Resource History ⚙️ · Privacy Monitor · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
+| 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
@@ -205,11 +205,12 @@ One-click repairs for common Windows breakages, each with a clear description an
 a confirmation before it runs:
 - **Reset Windows Update** — stop the update services, clear the
   SoftwareDistribution and catroot2 caches, and restart the services
-- **Reset Network Stack** — Winsock + TCP/IP reset and DNS flush
 - **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
 - **Set up Auto Sign-in** — opens the built-in User Accounts dialog, so Windows
   stores the credential securely and SysManager never handles your password
 - Live output, honest success/failure reporting, admin elevation banner
+- *Network-stack reset (Winsock / TCP-IP / DNS flush) lives on the Network → Network
+  Repair tab, which offers those as individual one-click tools.*
 
 ### Boot Analyzer
 - Shows how long your PC takes to boot — total, core (main path), and
@@ -322,7 +323,7 @@ a confirmation before it runs:
 - Kill process with confirmation dialog
 - Open file location in Explorer
 
-### Privacy Monitor
+### Camera/Mic/Location
 - Shows which apps recently used your **camera, microphone, or location**, and when
 - Reads the Windows access history (CapabilityAccessManager consent store) — covers
   both Store apps and desktop programs

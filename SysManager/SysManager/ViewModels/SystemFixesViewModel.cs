@@ -14,10 +14,11 @@ namespace SysManager.ViewModels;
 
 /// <summary>
 /// ViewModel for the System Fixes tab. Surfaces a small set of well-known one-click
-/// repairs (Windows Update, network stack, WinGet) plus a secure shortcut to the
-/// built-in auto-logon dialog. Each repair confirms first, runs through
-/// <see cref="SystemFixService"/>, streams output, and reports success/failure honestly.
-/// Repairs require administrator rights; the tab shows the standard elevation banner.
+/// repairs (Windows Update, WinGet) plus a secure shortcut to the built-in auto-logon
+/// dialog. Each repair confirms first, runs through <see cref="SystemFixService"/>,
+/// streams output, and reports success/failure honestly. Repairs require administrator
+/// rights; the tab shows the standard elevation banner. (Network-stack reset lives on the
+/// Network Repair tab, which owns Winsock/TCP-IP/DNS-flush, so it is not duplicated here.)
 /// </summary>
 public sealed partial class SystemFixesViewModel : ViewModelBase
 {
@@ -43,7 +44,6 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         if (e.PropertyName is nameof(IsBusy) or nameof(IsElevated))
         {
             ResetWindowsUpdateCommand.NotifyCanExecuteChanged();
-            ResetNetworkCommand.NotifyCanExecuteChanged();
             ReinstallWinGetCommand.NotifyCanExecuteChanged();
         }
     }
@@ -62,14 +62,6 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         "(SoftwareDistribution and catroot2, renamed so Windows rebuilds them), and restarts " +
         "the services. Pending updates will re-download. A reboot is recommended afterwards.\n\nContinue?",
         ct => _service.ResetWindowsUpdateAsync(ct));
-
-    [RelayCommand(CanExecute = nameof(CanRunFix))]
-    private Task ResetNetworkAsync() => RunFixAsync(
-        "Reset Network Stack?",
-        "This resets the Winsock catalog and TCP/IP stack and flushes the DNS cache. " +
-        "It can fix many connectivity problems but will briefly drop the connection and " +
-        "needs a reboot to fully apply.\n\nContinue?",
-        ct => _service.ResetNetworkAsync(ct));
 
     [RelayCommand(CanExecute = nameof(CanRunFix))]
     private Task ReinstallWinGetAsync() => RunFixAsync(

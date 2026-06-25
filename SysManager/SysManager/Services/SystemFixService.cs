@@ -54,20 +54,8 @@ public sealed class SystemFixService : IDisposable
         return RunFixAsync("Reset Windows Update", script, needsReboot: true, ct);
     }
 
-    /// <summary>
-    /// Resets the network stack: Winsock catalog and TCP/IP. Requires admin and a reboot.
-    /// </summary>
-    public Task<SystemFixResult> ResetNetworkAsync(CancellationToken ct = default)
-    {
-        const string script = """
-            $ErrorActionPreference = 'Continue'
-            & netsh winsock reset | Out-String
-            & netsh int ip reset | Out-String
-            & ipconfig /flushdns | Out-String
-            'Network stack reset. Reboot to complete.'
-            """;
-        return RunFixAsync("Reset Network", script, needsReboot: true, ct);
-    }
+    // Network-stack reset (Winsock / TCP-IP / DNS flush) intentionally lives ONLY on the
+    // Network Repair tab — it is not duplicated here. See NetworkRepairService.
 
     /// <summary>
     /// Re-registers the WinGet (App Installer) package so app installs/uninstalls work

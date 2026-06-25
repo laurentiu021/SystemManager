@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.5] - 2026-06-25
+
+### Fixed
+- **Profile Export/Import now correctly handles the theme/appearance section.** The exporter looked for every config file under one folder (Local AppData), but the theme is saved under Roaming AppData — so exporting never picked up your theme, and importing a profile wrote the theme to a folder the app doesn't read on startup, making it a silent no-op. Each config file is now read from and written to the same folder its owning feature uses (theme under Roaming, speed-test history under Local), so theme export and import actually take effect.
+
 ## [1.33.4] - 2026-06-25
 
 ### Fixed

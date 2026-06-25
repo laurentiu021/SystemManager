@@ -14,10 +14,13 @@ namespace SysManager.Services;
 /// <summary>
 /// Exports and imports SysManager's own configuration as a single portable JSON profile,
 /// so a user can replicate their setup on another PC. Only SysManager's own config files
-/// (under %LOCALAPPDATA%\SysManager) are included — never system state — so applying a
-/// profile just overwrites those app files and is fully reversible.
+/// are included — never system state — so applying a profile just overwrites those app
+/// files and is fully reversible. Each config file is read from and written to the SAME
+/// folder its owning service uses: <c>theme.json</c> lives under Roaming AppData (matching
+/// <see cref="ThemeService"/>) while <c>speedtest-history.json</c> lives under Local AppData
+/// (matching <see cref="SpeedTestHistoryService"/>).
 ///
-/// The config directory is constructor-injectable so the export/import logic can be unit
+/// The base directories are constructor-injectable so the export/import logic can be unit
 /// tested against a temp directory without touching the real profile.
 /// </summary>
 public sealed class ProfileService
@@ -25,7 +28,8 @@ public sealed class ProfileService
     /// <summary>Bump when the on-disk profile shape changes incompatibly.</summary>
     public const int CurrentSchemaVersion = 1;
 
-    private readonly string _configDir;
+    private readonly string _localConfigDir;
+    private readonly string _roamingConfigDir;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,24 +37,49 @@ public sealed class ProfileService
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    /// <summary>The set of config files a profile carries — logical key, label, and file name.</summary>
-    private static readonly (string Key, string DisplayName, string FileName)[] Catalog =
+    /// <summary>Whether a config file lives under Roaming (true) or Local (false) AppData.</summary>
+    private enum Base { Local, Roaming }
+
+    /// <summary>
+    /// The set of config files a profile carries — logical key, label, file name, and which
+    /// AppData base it lives under. The base MUST match the owning service or export/import
+    /// silently reads/writes the wrong location.
+    /// </summary>
+    private static readonly (string Key, string DisplayName, string FileName, Base Base)[] Catalog =
     [
-        ("theme", "Theme & appearance", "theme.json"),
-        ("speedtest", "Speed-test history", "speedtest-history.json"),
+        ("theme", "Theme & appearance", "theme.json", Base.Roaming),        // ThemeService → Roaming
+        ("speedtest", "Speed-test history", "speedtest-history.json", Base.Local), // SpeedTestHistoryService → Local
     ];
 
+    /// <summary>
+    /// Creates the service. When <paramref name="configDir"/> is given (tests), BOTH bases
+    /// resolve to it so the temp tree holds every section. In production the bases are the
+    /// real Roaming/Local <c>SysManager</c> folders.
+    /// </summary>
     public ProfileService(string? configDir = null)
-        => _configDir = configDir ?? Path.Combine(
+    {
+        _localConfigDir = configDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        _roamingConfigDir = configDir ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager");
+    }
+
+    /// <summary>Test seam: distinct Local/Roaming bases to verify each section lands in the right one.</summary>
+    internal ProfileService(string localConfigDir, string roamingConfigDir)
+    {
+        _localConfigDir = localConfigDir;
+        _roamingConfigDir = roamingConfigDir;
+    }
+
+    private string DirFor(Base b) => b == Base.Roaming ? _roamingConfigDir : _localConfigDir;
 
     /// <summary>The config sections available to export (those whose file exists on disk).</summary>
     public IReadOnlyList<ConfigSection> AvailableSections()
     {
         List<ConfigSection> sections = [];
-        foreach (var (key, display, fileName) in Catalog)
+        foreach (var (key, display, fileName, baseDir) in Catalog)
         {
-            var path = Path.Combine(_configDir, fileName);
+            var path = Path.Combine(DirFor(baseDir), fileName);
             if (!File.Exists(path)) continue;
             string json;
             try { json = File.ReadAllText(path); }
@@ -103,7 +132,6 @@ public sealed class ProfileService
     /// </summary>
     public int ApplySections(IEnumerable<ConfigSection> sections)
     {
-        Directory.CreateDirectory(_configDir);
         var applied = 0;
         foreach (var section in sections)
         {
@@ -113,8 +141,11 @@ public sealed class ProfileService
                 Log.Warning("Profile: skipping unknown config section '{Key}'", section.Key);
                 continue;
             }
-            // Always use the catalog's own file name — never a path from the (untrusted) profile.
-            var path = Path.Combine(_configDir, known.FileName);
+            // Always use the catalog's own file name + base — never a path from the
+            // (untrusted) profile — and write to the SAME folder the owning service reads.
+            var dir = DirFor(known.Base);
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, known.FileName);
             try
             {
                 File.WriteAllText(path, section.Json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));

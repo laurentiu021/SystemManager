@@ -105,6 +105,37 @@ public class ProfileServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_dir, "theme.json")));
     }
 
+    [Fact]
+    public void Theme_UsesRoamingBase_Speedtest_UsesLocalBase()
+    {
+        // Regression: theme.json lives under Roaming AppData (ThemeService) while
+        // speedtest-history.json lives under Local (SpeedTestHistoryService). The profiler
+        // must read/write each from its OWN base, not a single shared dir.
+        var local = Path.Combine(_dir, "Local");
+        var roaming = Path.Combine(_dir, "Roaming");
+        Directory.CreateDirectory(local);
+        Directory.CreateDirectory(roaming);
+        var svc = new ProfileService(local, roaming);
+
+        // Apply both sections.
+        svc.ApplySections(
+        [
+            new ConfigSection("theme", "Theme", "theme.json", "{\"preset\":\"midnight\"}"),
+            new ConfigSection("speedtest", "Speed-test history", "speedtest-history.json", "[1,2]"),
+        ]);
+
+        // theme.json must land in Roaming; speedtest-history.json in Local.
+        Assert.True(File.Exists(Path.Combine(roaming, "theme.json")));
+        Assert.False(File.Exists(Path.Combine(local, "theme.json")));
+        Assert.True(File.Exists(Path.Combine(local, "speedtest-history.json")));
+        Assert.False(File.Exists(Path.Combine(roaming, "speedtest-history.json")));
+
+        // And export reads them back from the correct bases.
+        var sections = svc.AvailableSections();
+        Assert.Contains(sections, s => s.Key == "theme" && s.Json.Contains("midnight"));
+        Assert.Contains(sections, s => s.Key == "speedtest");
+    }
+
     // ---------- Export / Import file round-trip ----------
 
     [Fact]

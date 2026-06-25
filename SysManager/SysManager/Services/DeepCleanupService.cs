@@ -3,8 +3,8 @@
 // License: MIT
 
 using System.IO;
-using System.Runtime.InteropServices;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -17,7 +17,7 @@ namespace SysManager.Services;
 /// Both Scan and Clean accept an <see cref="IProgress{T}"/> so the UI can
 /// show a determinate progress bar and the current bucket being scanned.
 /// </summary>
-public sealed partial class DeepCleanupService
+public sealed class DeepCleanupService
 {
     public sealed record ScanProgress(int Current, int Total, string CategoryName);
 
@@ -342,7 +342,7 @@ public sealed partial class DeepCleanupService
             if (cat.IsRecycleBin)
             {
                 var sizeBefore = cat.TotalSizeBytes;
-                if (EmptyRecycleBin())
+                if (RecycleBinHelper.EmptyAllDrives())
                 {
                     freed += sizeBefore;
                     filesDeleted += cat.FileCount;
@@ -488,31 +488,6 @@ public sealed partial class DeepCleanupService
         catch (UnauthorizedAccessException) { return true; }
     }
 
-    // ---------- Recycle Bin (shell API, not raw file delete) ----------
-
-    /// <summary>
-    /// Empties the Recycle Bin on all drives via the documented shell API.
-    /// Returns true on success (or when the bin is already empty).
-    /// </summary>
-    private static bool EmptyRecycleBin()
-    {
-        try
-        {
-            // SHEmptyRecycleBin with SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND.
-            int hr = NativeMethods.SHEmptyRecycleBin(IntPtr.Zero, null, 0x00000007);
-            // S_OK (0) = success, 0x80070012 (ERROR_NO_MORE_FILES) = bin already empty.
-            return hr >= 0 || unchecked((uint)hr) == 0x80070012;
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            Log.Warning("Deep cleanup: empty recycle bin failed: {Error}", ex.Message);
-            return false;
-        }
-    }
-
-    private static partial class NativeMethods
-    {
-        [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "SHEmptyRecycleBinW")]
-        internal static partial int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
-    }
+    // Recycle Bin is emptied via the shared RecycleBinHelper (shell API, not raw file
+    // delete) so the SHEmptyRecycleBin interop has a single source of truth.
 }

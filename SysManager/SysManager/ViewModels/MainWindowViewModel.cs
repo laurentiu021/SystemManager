@@ -313,7 +313,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Group("grp-monitor", "Monitor", "",
             Item("nav-processes",         "Process Manager",    "", ProcessManager,      typeof(Views.ProcessManagerView)),
             Item("nav-resource-history",  "Resource History",   "", WipResourceHistory,  typeof(Views.PlaceholderView)),
-            Item("nav-privacy-monitor",   "Privacy Monitor",    "", PrivacyMonitor,      typeof(Views.PrivacyMonitorView)),
+            Item("nav-privacy-monitor",   "Camera/Mic/Location",    "", PrivacyMonitor,      typeof(Views.PrivacyMonitorView)),
             Item("nav-file-lock",         "File Lock Detector", "", WipFileLockDetector, typeof(Views.PlaceholderView)),
             Item("nav-settings-watchdog", "Settings Watchdog",  "", WipSettingsWatchdog, typeof(Views.PlaceholderView)),
             Item("nav-bandwidth-monitor", "Bandwidth Monitor",  "", WipBandwidthMonitor, typeof(Views.PlaceholderView))),

@@ -537,30 +537,12 @@ public sealed partial class PerformanceService : IDisposable
     /// <summary>
     /// Create a Windows System Restore point. Requires admin elevation.
     /// Returns true if the restore point was created successfully.
+    /// Delegates to <see cref="RestorePointService.CreateAsync"/> so restore-point creation
+    /// has a single source of truth (it also enables System Restore on the system drive
+    /// first) — this method exists only as the Performance tab's convenience entry point.
     /// </summary>
-    public async Task<bool> CreateRestorePointAsync(string description, CancellationToken ct = default)
-    {
-        // NOTE: PowerShell AddParameter binds runtime arguments but does NOT
-        // create script-scope variables, so the description has to be embedded
-        // directly in the script body — with single-quote escaping to avoid
-        // injection via the user-supplied string.
-        var safeDesc = (description ?? "SysManager Restore Point").Replace("'", "''");
-        // Checkpoint-Computer does NOT always throw on failure — e.g. the once-per-24h
-        // rate limit writes a non-terminating error and produces no exception. Force the
-        // error to terminate and emit an explicit success sentinel only when it really
-        // succeeded, so a silent failure can no longer be reported as success.
-        var script =
-            "try { " +
-            $"Checkpoint-Computer -Description '{safeDesc}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop; " +
-            "'__SM_RESTORE_OK__' " +
-            "} catch { Write-Error $_; exit 1 }";
-        var results = await _ps.RunAsync(script, null, ct).ConfigureAwait(false);
-        var succeeded = results.Any(o =>
-            string.Equals(o?.BaseObject?.ToString(), "__SM_RESTORE_OK__", StringComparison.Ordinal));
-        if (!succeeded)
-            Log.Warning("CreateRestorePoint: Checkpoint-Computer did not confirm success (it may be rate-limited to one per 24h).");
-        return succeeded;
-    }
+    public Task<bool> CreateRestorePointAsync(string description, CancellationToken ct = default)
+        => new RestorePointService(_ps).CreateAsync(description, ct);
 
     // ═══════════════════════════════════════════════════════════════
     //  RAM WORKING SET TRIM — via EmptyWorkingSet (instant)

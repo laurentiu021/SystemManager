@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.8] - 2026-06-25
+
+### Changed
+- **Removed the duplicate "Reset Network Stack" button from System Fixes.** The same Winsock + TCP/IP reset and DNS flush already lives on the Network → Network Repair tab (as individual one-click tools), so having it in two places was confusing and risked the two copies drifting apart. System Fixes now links to Network Repair for network resets instead of duplicating them.
+- **Renamed the "Privacy Monitor" tab to "Camera/Mic/Location"** so it is no longer confused with the separate "Privacy & Telemetry" tab. The feature is unchanged — it still shows which apps recently used your camera, microphone, or location.
+
+### Fixed
+- **Performance Mode's "Create restore point" now uses the same code as the Restore Points tab.** The two had separate implementations of the same operation that had begun to diverge; they now share one, which also enables System Restore on the system drive first if it was turned off. No visible change beyond that improvement.
+
 ## [1.33.7] - 2026-06-25
 
 ### Fixed

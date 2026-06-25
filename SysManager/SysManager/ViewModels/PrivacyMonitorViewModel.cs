@@ -21,6 +21,7 @@ namespace SysManager.ViewModels;
 public sealed partial class PrivacyMonitorViewModel : ViewModelBase
 {
     private readonly PrivacyMonitorService _service;
+    private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<PrivacyAccessEntry> Entries { get; } = new();
 
@@ -29,21 +30,41 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
     public PrivacyMonitorViewModel(PrivacyMonitorService service)
     {
         _service = service;
-        Refresh();
+        StatusMessage = "Reading access history…";
+        PropertyChanged += OnVmPropertyChanged;
+        // Read off the UI thread so a registry walk (or a corrupt-hive failure) can never
+        // block or crash startup — this VM is built eagerly with the main window.
+        InitializeAsync(RefreshAsync);
     }
 
-    [RelayCommand]
-    private void Refresh()
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        var entries = _service.Read();
-        Entries.ReplaceWith(entries);
-        HasEntries = Entries.Count > 0;
-        var inUse = entries.Count(e => e.InUse);
-        StatusMessage = entries.Count == 0
-            ? "No camera, microphone, or location access has been recorded yet."
-            : inUse > 0
-                ? $"{entries.Count} access record(s) — {inUse} device(s) in use right now."
-                : $"{entries.Count} access record(s) across camera, microphone, and location.";
+        if (e.PropertyName is nameof(IsBusy)) RefreshCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
+    private async Task RefreshAsync()
+    {
+        IsBusy = true;
+        StatusMessage = "Reading access history…";
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var entries = await _service.ReadAsync(_cts.Token).ConfigureAwait(true);
+            Entries.ReplaceWith(entries);
+            HasEntries = Entries.Count > 0;
+            var inUse = entries.Count(e => e.InUse);
+            StatusMessage = entries.Count == 0
+                ? "No camera, microphone, or location access has been recorded yet."
+                : inUse > 0
+                    ? $"{entries.Count} access record(s) — {inUse} device(s) in use right now."
+                    : $"{entries.Count} access record(s) across camera, microphone, and location.";
+        }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]
@@ -61,5 +82,15 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
             Log.Warning("Could not open privacy settings: {Error}", ex.Message);
             StatusMessage = "Couldn't open Windows privacy settings.";
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }

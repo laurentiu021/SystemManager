@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.9] - 2026-06-25
+
+### Fixed
+- **The Camera/Mic/Location tab no longer reads the registry on the UI thread at startup.** Its access history was loaded synchronously while the main window was being built, so the registry walk ran on every launch — even though most people never open the tab — and an unreadable or corrupt consent-store entry could surface as a startup failure. It now loads in the background like the other tabs (with a Cancel-able refresh) and a damaged entry is skipped instead of bubbling up.
+
 ## [1.33.8] - 2026-06-25
 
 ### Changed

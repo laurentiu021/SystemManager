@@ -95,6 +95,21 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
         => Assert.Empty(_svc.Read());
 
     [Fact]
+    public async Task ReadAsync_ReturnsSameEntriesAsRead()
+    {
+        // ReadAsync just runs Read off the UI thread (the VM is built eagerly at startup,
+        // so the registry walk must never block or crash the constructor). Same result.
+        var start = new DateTime(2024, 5, 1, 9, 0, 0, DateTimeKind.Utc).ToFileTimeUtc();
+        WriteApp("webcam", "Microsoft.WindowsCamera_8wekyb3d8bbwe", start, start + 10);
+
+        var sync = _svc.Read();
+        var async = await _svc.ReadAsync();
+
+        Assert.Equal(sync.Count, async.Count);
+        Assert.Contains(async, e => e.AppName == "Microsoft.WindowsCamera");
+    }
+
+    [Fact]
     public void Read_PackagedApp_WithStartAndStop_NotInUse()
     {
         var start = new DateTime(2024, 5, 1, 9, 0, 0, DateTimeKind.Utc).ToFileTimeUtc();

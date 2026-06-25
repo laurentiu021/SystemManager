@@ -32,7 +32,23 @@ public sealed class BrowserCleanerServiceTests : IDisposable
     public void Dispose()
     {
         var parent = Directory.GetParent(_local)!.FullName;
-        if (Directory.Exists(parent)) Directory.Delete(parent, recursive: true);
+        if (!Directory.Exists(parent)) return;
+        // Remove any junctions/symlinks as links first — Directory.Delete(recursive:true)
+        // throws "The parameter is incorrect" on reparse points (the junctions some tests
+        // create). Unlink them (non-recursively, so the target is untouched), then delete.
+        try { UnlinkReparsePoints(parent); } catch (IOException) { /* best-effort teardown */ }
+        try { Directory.Delete(parent, recursive: true); } catch (IOException) { /* best-effort teardown */ }
+    }
+
+    private static void UnlinkReparsePoints(string dir)
+    {
+        foreach (var sub in Directory.GetDirectories(dir))
+        {
+            if ((File.GetAttributes(sub) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
+                Directory.Delete(sub);            // remove the link only, never its target
+            else
+                UnlinkReparsePoints(sub);
+        }
     }
 
     private void WriteFile(string relUnderLocal, int bytes)

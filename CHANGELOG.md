@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.3] - 2026-06-25
+
+### Fixed
+- **Editing an environment variable no longer breaks `%VAR%` expansion in PATH and similar variables.** SysManager wrote every variable as a plain string (REG_SZ), which silently converted variables Windows stores as expandable (REG_EXPAND_SZ) — most importantly the system `Path` — and froze references like `%SystemRoot%` or `%JAVA_HOME%` to whatever they happened to expand to at edit time, so they stopped tracking their source variable. Variables are now written directly to the registry with their original type preserved (a variable that was expandable stays expandable, and a new value containing a `%token%` is created as expandable), and the editor now shows and round-trips the raw `%VAR%` tokens instead of their expanded form. A single `WM_SETTINGCHANGE` broadcast still notifies running programs after a batch of changes.
+
+### Added
+- **Restore button on the Environment Variables tab.** The one-time backup taken before your first change can now be restored from inside the app: every variable is rewritten to its original value (type preserved) and any variable added since is removed. The Apply confirmation already promised this was possible — now there's a button for it. (System-scope restore needs administrator rights; if the safety backup can't be written, Apply now stops without making any change instead of risking an unbacked edit.)
+
 ## [1.33.2] - 2026-06-25
 
 ### Fixed

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using Microsoft.Win32;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -42,6 +43,34 @@ public class EnvironmentVariableServiceTests
     [Fact]
     public void ValidateName_RejectsOverlongName()
         => Assert.Throws<ArgumentException>(() => EnvironmentVariableService.ValidateName(new string('A', 256)));
+
+    // ---------- ChooseKind (REG_EXPAND_SZ preservation) ----------
+
+    [Fact]
+    public void ChooseKind_PreservesExistingExpandString()
+    {
+        // The core regression: an existing PATH stored as REG_EXPAND_SZ must STAY expandable
+        // even when its new value no longer literally contains a '%' at edit time, so its
+        // %VAR% tokens keep expanding system-wide.
+        Assert.Equal(RegistryValueKind.ExpandString,
+            EnvironmentVariableService.ChooseKind(RegistryValueKind.ExpandString, @"C:\Tools;C:\Bin"));
+    }
+
+    [Fact]
+    public void ChooseKind_PreservesExistingString()
+    {
+        Assert.Equal(RegistryValueKind.String,
+            EnvironmentVariableService.ChooseKind(RegistryValueKind.String, @"%SystemRoot%\x"));
+    }
+
+    [Theory]
+    [InlineData(@"%SystemRoot%\System32", true)]   // new value with a token → expandable
+    [InlineData(@"C:\Plain\Path", false)]          // new value without a token → plain
+    public void ChooseKind_NewVariable_UsesExpandStringWhenTokenPresent(string value, bool expectExpand)
+    {
+        var expected = expectExpand ? RegistryValueKind.ExpandString : RegistryValueKind.String;
+        Assert.Equal(expected, EnvironmentVariableService.ChooseKind(null, value));
+    }
 
     // ---------- SplitPath / JoinPath ----------
 
@@ -158,6 +187,35 @@ public class EnvironmentVariableServiceTests
             Assert.Null(svc.ReadBackup());
         }
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void SetVariable_PreservesExpandSz_AndReadsRawTokens_EndToEnd()
+    {
+        // End-to-end regression for the REG_EXPAND_SZ flattening bug: write an expandable
+        // value to a throwaway User variable, then confirm via the service that the value
+        // KIND stayed REG_EXPAND_SZ and the RAW %VAR% token round-tripped (not expanded).
+        // Uses a unique name in the real HKCU\Environment and removes it in finally.
+        var svc = new EnvironmentVariableService();
+        var name = "SM_TEST_" + Guid.NewGuid().ToString("N");
+        const string rawValue = @"%SystemRoot%\System32;C:\SmTest";
+        try
+        {
+            Assert.True(svc.SetVariable(name, rawValue, EnvVarScope.User));
+
+            using var key = Registry.CurrentUser.OpenSubKey("Environment");
+            Assert.NotNull(key);
+            Assert.Equal(RegistryValueKind.ExpandString, key!.GetValueKind(name));
+
+            var roundTripped = svc.Read(EnvVarScope.User).Single(v => v.Name == name);
+            Assert.Equal(rawValue, roundTripped.Value);   // %SystemRoot% preserved, not expanded
+            Assert.True(roundTripped.IsExpandable);
+        }
+        finally
+        {
+            using var key = Registry.CurrentUser.OpenSubKey("Environment", writable: true);
+            key?.DeleteValue(name, throwOnMissingValue: false);
+        }
     }
 
     [Fact]

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.4] - 2026-06-25
+
+### Fixed
+- **"Undo" on the DNS & Hosts tab now fully restores the previous setting, including IPv6.** Applying a filtering preset configures both IPv4 and IPv6 resolvers, but Undo only captured and restored IPv4 — so reverting an ad/family-blocking preset left its IPv6 resolvers active, and on a dual-stack network the "undone" filtering was often still in effect. Undo now snapshots both families before a change and, on restore, clears the adapter's DNS first (removing anything applied since) before re-applying exactly what was captured. Undo is also offered now even if a change only partially applied. Additionally, programming the IPv6 resolvers is treated as best-effort: on a machine with IPv6 disabled the IPv4 change still succeeds (and stays undoable) instead of the whole apply failing.
+
 ## [1.33.3] - 2026-06-25
 
 ### Fixed

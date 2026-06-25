@@ -107,72 +107,114 @@ public sealed class DnsService : IDisposable
     }
 
     /// <summary>
+    /// A point-in-time snapshot of an adapter's DNS configuration for BOTH families, so a
+    /// change can be reverted exactly. An empty list for a family means that family was on
+    /// automatic (DHCP) at capture time and is restored by clearing it back to DHCP.
+    /// </summary>
+    public sealed record DnsSnapshot(IReadOnlyList<string> V4, IReadOnlyList<string> V6)
+    {
+        public static readonly DnsSnapshot Empty = new([], []);
+    }
+
+    /// <summary>
     /// Captures the current IPv4 DNS server addresses of the active adapter so a
     /// change can be reverted to the exact previous configuration. Returns an empty
     /// list when the adapter is on automatic (DHCP) — restoring that snapshot resets
     /// to DHCP rather than re-applying static servers.
     /// </summary>
     public async Task<IReadOnlyList<string>> CaptureCurrentServersAsync(CancellationToken ct = default)
+        => (await CaptureSnapshotAsync(ct).ConfigureAwait(false)).V4;
+
+    /// <summary>
+    /// Captures the current DNS server addresses of the active adapter for BOTH IPv4 and
+    /// IPv6, so a change that programs both families can be fully reverted. An empty list
+    /// for a family means it was on automatic (DHCP).
+    /// </summary>
+    public async Task<DnsSnapshot> CaptureSnapshotAsync(CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // Tag each address with its family so one query returns both, in order.
             const string script = ActiveAdapterSelector + """
 
                 if ($adapter) {
-                    $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4
-                    $dns.ServerAddresses
+                    foreach ($fam in @('IPv4','IPv6')) {
+                        $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily $fam
+                        foreach ($a in $dns.ServerAddresses) { "$fam=$a" }
+                    }
                 }
                 """;
 
             Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)
                 .ConfigureAwait(false);
 
-            return results
-                .Select(r => r?.ToString())
-                .Where(s => !string.IsNullOrWhiteSpace(s) && IPAddress.TryParse(s, out _))
-                .Select(s => s!)
-                .ToArray();
+            List<string> v4 = [], v6 = [];
+            foreach (var r in results)
+            {
+                var line = r?.ToString();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                var eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                var fam = line[..eq];
+                var addr = line[(eq + 1)..];
+                if (!IPAddress.TryParse(addr, out _)) continue;
+                if (fam == "IPv4") v4.Add(addr);
+                else if (fam == "IPv6") v6.Add(addr);
+            }
+            return new DnsSnapshot(v4, v6);
         }
         finally { _gate.Release(); }
     }
 
     /// <summary>
-    /// Restores DNS to a previously captured set of server addresses. An empty
+    /// Restores DNS to a previously captured IPv4-only set of server addresses. An empty
     /// snapshot means the adapter was on DHCP, so this resets to automatic.
     /// </summary>
-    public async Task RestoreServersAsync(IReadOnlyList<string> servers, CancellationToken ct = default)
+    public Task RestoreServersAsync(IReadOnlyList<string> servers, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(servers);
+        return RestoreSnapshotAsync(new DnsSnapshot(servers, []), ct);
+    }
 
-        if (servers.Count == 0)
-        {
-            await ResetToDhcpAsync(ct).ConfigureAwait(false);
-            return;
-        }
+    /// <summary>
+    /// Restores DNS to a previously captured snapshot for BOTH families. Resets the adapter
+    /// to DHCP first (clearing anything that was applied since, including filtering IPv6
+    /// resolvers a v4-only restore would otherwise leave behind), then re-applies the
+    /// captured static servers per family. A fully-empty snapshot therefore restores DHCP.
+    /// </summary>
+    public async Task RestoreSnapshotAsync(DnsSnapshot snapshot, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
 
-        // Validate every captured address before applying — the snapshot should
-        // already be clean, but never interpolate an unvalidated value into a script.
-        foreach (var server in servers)
+        // Validate every captured address before applying — the snapshot should already be
+        // clean, but never interpolate an unvalidated value into a script.
+        foreach (var server in snapshot.V4.Concat(snapshot.V6))
         {
             if (!IPAddress.TryParse(server, out _))
-                throw new ArgumentException($"Invalid DNS address in snapshot: '{server}'", nameof(servers));
+                throw new ArgumentException($"Invalid DNS address in snapshot: '{server}'", nameof(snapshot));
         }
 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             int ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
-            string joined = string.Join(",", servers.Select(s => $"\"{s}\""));
-            // -ErrorAction Stop makes a non-terminating cmdlet failure (denied
-            // privilege, adapter down, RPC failure) terminating, so RunAsync's
-            // EndInvoke throws instead of the call silently reporting success.
-            string script = $"""
-                $ErrorActionPreference = 'Stop'
-                Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @({joined}) -ErrorAction Stop
-                """;
+            var script = new System.Text.StringBuilder();
+            script.AppendLine("$ErrorActionPreference = 'Stop'");
+            // Clear BOTH families first so any servers applied since (incl. IPv6) are removed.
+            script.AppendLine($"Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ResetServerAddresses -ErrorAction Stop");
+            if (snapshot.V4.Count > 0)
+            {
+                var v4 = string.Join(",", snapshot.V4.Select(s => $"\"{s}\""));
+                script.AppendLine($"Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @({v4}) -ErrorAction Stop");
+            }
+            if (snapshot.V6.Count > 0)
+            {
+                var v6 = string.Join(",", snapshot.V6.Select(s => $"\"{s}\""));
+                script.AppendLine($"Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @({v6}) -ErrorAction Stop");
+            }
 
-            await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
+            await _ps.RunAsync(script.ToString(), cancellationToken: ct).ConfigureAwait(false);
         }
         finally { _gate.Release(); }
     }
@@ -233,9 +275,14 @@ public sealed class DnsService : IDisposable
             if (hasV6)
             {
                 var v6List = string.IsNullOrEmpty(secondaryV6) ? $"\"{primaryV6}\"" : $"\"{primaryV6}\",\"{secondaryV6}\"";
-                // -AddressFamily is implied by the address shape, but listing both families in
-                // one call replaces all of them — so issue IPv6 as its own call to be additive.
-                script.AppendLine($"Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @({v6List}) -ErrorAction Stop");
+                // IPv6 is BEST-EFFORT: on a machine with IPv6 disabled, setting an IPv6 DNS
+                // throws. We must NOT fail the whole apply (IPv4 already succeeded) or the UI
+                // would report failure while IPv4 silently changed, with Undo never offered.
+                // The address family is implied by the address shape; a separate call keeps it
+                // additive to the IPv4 set above. A warning is emitted but does not terminate.
+                script.AppendLine(
+                    $"try {{ Set-DnsClientServerAddress -InterfaceIndex {ifIndex} -ServerAddresses @({v6List}) -ErrorAction Stop }} " +
+                    "catch { Write-Warning \"IPv6 DNS not applied: $($_.Exception.Message)\" }");
             }
 
             await _ps.RunAsync(script.ToString(), cancellationToken: ct).ConfigureAwait(false);

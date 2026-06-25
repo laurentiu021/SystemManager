@@ -225,11 +225,12 @@ public class DnsServiceTests
     public async Task CaptureCurrentServersAsync_ReturnsParsedAddresses()
     {
         var runner = Substitute.For<IPowerShellRunner>();
+        // Capture now tags each address with its family ("IPv4=" / "IPv6=").
         runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
               .Returns(new Collection<PSObject>
               {
-                  PSObject.AsPSObject("8.8.8.8"),
-                  PSObject.AsPSObject("8.8.4.4"),
+                  PSObject.AsPSObject("IPv4=8.8.8.8"),
+                  PSObject.AsPSObject("IPv4=8.8.4.4"),
               });
         using var svc = new DnsService(runner);
 
@@ -239,15 +240,33 @@ public class DnsServiceTests
     }
 
     [Fact]
+    public async Task CaptureSnapshotAsync_CapturesBothFamilies()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>
+              {
+                  PSObject.AsPSObject("IPv4=8.8.8.8"),
+                  PSObject.AsPSObject("IPv6=2001:4860:4860::8888"),
+              });
+        using var svc = new DnsService(runner);
+
+        var snap = await svc.CaptureSnapshotAsync();
+
+        Assert.Equal(["8.8.8.8"], snap.V4);
+        Assert.Equal(["2001:4860:4860::8888"], snap.V6);
+    }
+
+    [Fact]
     public async Task CaptureCurrentServersAsync_FiltersNonIpNoise()
     {
         var runner = Substitute.For<IPowerShellRunner>();
         runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
               .Returns(new Collection<PSObject>
               {
-                  PSObject.AsPSObject("1.1.1.1"),
-                  PSObject.AsPSObject(""),       // blank line
-                  PSObject.AsPSObject("garbage"),// non-IP noise
+                  PSObject.AsPSObject("IPv4=1.1.1.1"),
+                  PSObject.AsPSObject(""),            // blank line
+                  PSObject.AsPSObject("IPv4=garbage"),// non-IP noise
               });
         using var svc = new DnsService(runner);
 
@@ -301,6 +320,44 @@ public class DnsServiceTests
 
         await runner.Received(1).RunAsync(
             Arg.Is<string>(s => s.Contains("-ResetServerAddresses")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RestoreSnapshotAsync_ResetsThenReAppliesBothFamilies()
+    {
+        // The reversibility regression: restoring must CLEAR both families first (so any
+        // filtering IPv6 resolver applied since is removed) and then re-apply the captured
+        // v4 + v6 — not leave the IPv6 in place as the old IPv4-only restore did.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("7"));
+        using var svc = new DnsService(runner);
+
+        await svc.RestoreSnapshotAsync(new DnsService.DnsSnapshot(["9.9.9.9"], ["2620:fe::fe"]));
+
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s =>
+                s.Contains("-ResetServerAddresses") &&        // clears whatever was applied since
+                s.Contains("9.9.9.9") &&                      // re-applies captured IPv4
+                s.Contains("2620:fe::fe")),                   // re-applies captured IPv6
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RestoreSnapshotAsync_EmptyBothFamilies_ResetsToDhcp()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("7"));
+        using var svc = new DnsService(runner);
+
+        await svc.RestoreSnapshotAsync(DnsService.DnsSnapshot.Empty);
+
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s => s.Contains("-ResetServerAddresses") && !s.Contains("@(\"")),
             Arg.Any<IDictionary<string, object?>?>(),
             Arg.Any<CancellationToken>());
     }

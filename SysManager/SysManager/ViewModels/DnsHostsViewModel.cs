@@ -36,7 +36,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     /// change, captured so the change can be reverted to the exact previous state.
     /// Null until a change is applied this session.
     /// </summary>
-    private IReadOnlyList<string>? _previousServers;
+    private DnsService.DnsSnapshot? _previousServers;
 
     [ObservableProperty] private bool _canRestorePreviousDns;
 
@@ -154,16 +154,17 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         StatusMessage = $"Applying {SelectedPreset.Name} DNS...";
         try
         {
-            // Snapshot the servers in effect now so the change is reversible to the
-            // exact previous configuration, not just a generic DHCP reset.
-            var snapshot = await _dnsService.CaptureCurrentServersAsync(_cts.Token).ConfigureAwait(false);
+            // Snapshot BOTH families in effect now so the change is reversible to the exact
+            // previous configuration, not just a generic DHCP reset. Record it (and enable
+            // Undo) BEFORE the Set: if the Set partially applies (e.g. IPv4 lands, IPv6
+            // fails), the user must still be offered an Undo for what did change.
+            var snapshot = await _dnsService.CaptureSnapshotAsync(_cts.Token).ConfigureAwait(false);
+            _previousServers = snapshot;
+            Application.Current?.Dispatcher?.Invoke(() => CanRestorePreviousDns = true);
 
             await _dnsService.SetDnsAsync(SelectedPreset.Primary, SelectedPreset.Secondary,
                     SelectedPreset.PrimaryV6, SelectedPreset.SecondaryV6, _cts.Token)
                 .ConfigureAwait(false);
-
-            _previousServers = snapshot;
-            Application.Current?.Dispatcher?.Invoke(() => CanRestorePreviousDns = true);
 
             await RefreshDnsAsync();
             Application.Current?.Dispatcher?.Invoke(() =>
@@ -231,9 +232,10 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
-        var label = _previousServers.Count == 0
+        var allPrev = _previousServers.V4.Concat(_previousServers.V6).ToList();
+        var label = allPrev.Count == 0
             ? "automatic (DHCP)"
-            : string.Join(", ", _previousServers);
+            : string.Join(", ", allPrev);
 
         if (!DialogService.Instance.Confirm(
                 $"Restore this PC's DNS to its previous setting ({label})?",
@@ -247,7 +249,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         StatusMessage = "Restoring previous DNS...";
         try
         {
-            await _dnsService.RestoreServersAsync(_previousServers, _cts.Token).ConfigureAwait(false);
+            await _dnsService.RestoreSnapshotAsync(_previousServers, _cts.Token).ConfigureAwait(false);
 
             _previousServers = null;
             Application.Current?.Dispatcher?.Invoke(() =>

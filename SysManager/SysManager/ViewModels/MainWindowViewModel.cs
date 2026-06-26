@@ -64,6 +64,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public DefenderViewModel Defender { get; }
     public TaskSchedulerViewModel TaskScheduler { get; }
     public DarkModeViewModel DarkMode { get; }
+    public StandbyMemoryViewModel StandbyMemory { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -173,6 +174,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Defender = sp.GetRequiredService<DefenderViewModel>();
             TaskScheduler = sp.GetRequiredService<TaskSchedulerViewModel>();
             DarkMode = sp.GetRequiredService<DarkModeViewModel>();
+            StandbyMemory = sp.GetRequiredService<StandbyMemoryViewModel>();
         }
         else
         {
@@ -241,6 +243,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Defender = new DefenderViewModel(new DefenderService(new PowerShellRunner()));
             TaskScheduler = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner()));
             DarkMode = new DarkModeViewModel(new WindowsThemeService());
+            StandbyMemory = new StandbyMemoryViewModel(new StandbyMemoryService());
         }
 
         InitPlaceholders();
@@ -326,7 +329,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Group("grp-gaming", "Gaming & Profiles", "",
             Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView)),
-            Item("nav-standby-cleaner",  "Standby List Cleaner", "", WipStandbyListCleaner, typeof(Views.PlaceholderView)),
+            Item("nav-standby-cleaner",  "Standby List Cleaner", "", StandbyMemory,         typeof(Views.StandbyMemoryView), inDevelopment: true),
             Item("nav-timer-resolution", "Timer Resolution",     "", TimerResolution,       typeof(Views.TimerResolutionView), inDevelopment: true),
             Item("nav-cpu-affinity",     "CPU Core Affinity",    "", CpuAffinity,           typeof(Views.CpuAffinityView), inDevelopment: true),
             Item("nav-display-profiles", "Display Profiles",     "", DisplayProfile,        typeof(Views.DisplayProfileView), inDevelopment: true)),

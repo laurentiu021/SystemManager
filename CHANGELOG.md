@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.0] - 2026-06-26
+
+### Added
+- **Standby List Cleaner tab (Gaming & Profiles).** Frees cached "standby" memory to reduce stutter when RAM runs low — the built-in equivalent of ISLC. Shows live total / available / load%, purges the standby list on demand, and can auto-purge when available RAM drops below a threshold you set. Safe and non-destructive: the standby list is clean, disk-backed file cache, so clearing it loses nothing — Windows just reloads from disk on next use. Reading stats needs no admin; purging requires administrator (it enables the same privilege RAMMap/ISLC use and reports cleanly if not elevated). Marked **PREVIEW** while it's verified. Closes #325.
+
 ## [1.41.0] - 2026-06-26
 
 ### Added

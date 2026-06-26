@@ -42,7 +42,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `TaskSchedulerViewModel` |
-| Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner) |
+| Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` · `PlaceholderViewModel` (Gaming Profile) |
 | Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `PlaceholderViewModel` (Resource History · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
@@ -100,6 +100,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). _Preview._
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back. _Preview._
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule. _Preview._
+- `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin. _Preview._
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -265,6 +266,11 @@ Key services:
   `WM_SETTINGCHANGE("ImmersiveColorSet")` for immediate effect. Persists the schedule JSON;
   the overnight-aware `ShouldBeDark` evaluation is a pure, unit-tested method. Distinct from
   `ThemeService` (which themes SysManager's own WPF UI).
+- `StandbyMemoryService` — `GlobalMemoryStatusEx` for stats (no admin) and ntdll
+  `NtSetSystemInformation(SystemMemoryListInformation, MemoryPurgeStandbyList)` to purge,
+  after enabling `SeProfileSingleProcessPrivilege` via `AdjustTokenPrivileges` (the
+  RAMMap/ISLC mechanism). Purge is non-destructive (standby is clean disk-backed cache).
+  All-`[LibraryImport]`; checks `ERROR_NOT_ALL_ASSIGNED` to detect a non-elevated token.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

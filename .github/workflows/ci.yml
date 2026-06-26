@@ -119,7 +119,15 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
+        run: |
+          dotnet restore SysManager/SysManager/SysManager.csproj
+          dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
+
+      # The UI tests launch the real app, so the app itself must be built first.
+      # Without this the fixture finds no SysManager.exe and every UI test errors
+      # at setup — which the previous Release-only job masked behind continue-on-error.
+      - name: Build app (Release)
+        run: dotnet build SysManager/SysManager/SysManager.csproj -c Release --no-restore
 
       - name: Build UI tests
         run: dotnet build SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release

@@ -36,6 +36,11 @@ public sealed class AppFixture : IDisposable
 
         MainWindow = App.GetMainWindow(Automation, TimeSpan.FromSeconds(20))
             ?? throw new InvalidOperationException("Main window did not appear in time");
+
+        // Sidebar groups render as collapsed Expanders, so their child nav items aren't
+        // realized in the UI Automation tree until expanded. Expand everything once up
+        // front so tests that look up nav items directly (not via GoToTab) find them too.
+        ExpandAllNavGroups();
     }
 
     /// <summary>
@@ -44,14 +49,68 @@ public sealed class AppFixture : IDisposable
     /// </summary>
     public void GoToTab(string navId)
     {
-        // Find any descendant with the matching AutomationId and click it.
-        var item = Retry.WhileNull(() =>
-            MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId)),
-            TimeSpan.FromSeconds(5)).Result
-            ?? throw new InvalidOperationException($"Nav item '{navId}' not found");
+        // Sidebar groups start collapsed, so child nav items aren't in the automation
+        // tree until their group Expander is open. Drive the UI like a user: try to find
+        // the item; if it isn't realized yet, expand every group and retry.
+        var item = MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId));
+        if (item is null)
+        {
+            ExpandAllNavGroups();
+            item = Retry.WhileNull(() =>
+                MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId)),
+                TimeSpan.FromSeconds(5)).Result;
+        }
+
+        if (item is null)
+            throw new InvalidOperationException($"Nav item '{navId}' not found.{DescribeNavTree()}");
 
         item.Click();
         Thread.Sleep(250);
+    }
+
+    /// <summary>
+    /// Expands every collapsible sidebar group so its child nav items are realized in the
+    /// UI Automation tree. Groups render as Expanders; each is opened via its
+    /// ExpandCollapse pattern when collapsed. Also clicks the header as a fallback for
+    /// Expanders that don't expose the pattern.
+    /// </summary>
+    public void ExpandAllNavGroups()
+    {
+        foreach (var e in MainWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Group)))
+        {
+            try
+            {
+                var pattern = e.Patterns.ExpandCollapse.PatternOrDefault;
+                if (pattern is not null && pattern.ExpandCollapseState.Value == ExpandCollapseState.Collapsed)
+                    pattern.Expand();
+                else if (pattern is null)
+                    e.Click(); // header click toggles a templated Expander with no pattern
+            }
+            catch (Exception) { /* not an expandable group — skip */ }
+        }
+        Thread.Sleep(400);
+    }
+
+    /// <summary>
+    /// Dumps the current automation tree (AutomationId / ControlType / Name) so a
+    /// "nav item not found" failure in CI carries the real tree in its message/artifact,
+    /// instead of needing an interactive FlaUI session to diagnose.
+    /// </summary>
+    private string DescribeNavTree()
+    {
+        try
+        {
+            var lines = MainWindow.FindAllDescendants()
+                .Take(120)
+                .Select(e =>
+                {
+                    var id = e.Properties.AutomationId.ValueOrDefault;
+                    var name = e.Properties.Name.ValueOrDefault;
+                    return $"  [{e.ControlType}] id='{id}' name='{name}'";
+                });
+            return "\nAutomation tree (first 120 elements):\n" + string.Join("\n", lines);
+        }
+        catch (Exception ex) { return $"\n(could not dump tree: {ex.Message})"; }
     }
 
     /// <summary>
@@ -80,12 +139,18 @@ public sealed class AppFixture : IDisposable
     {
         var repoRoot = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var binDir = Path.Combine(repoRoot, "SysManager", "bin", "Debug");
 
-        // Resolve the target-framework folder dynamically (e.g. net10.0-windows)
-        // so the path survives .NET version bumps instead of hardcoding one.
-        if (Directory.Exists(binDir))
+        // Search whichever configuration the app was actually built in. CI builds Release;
+        // local dev often builds Debug — accept either rather than hardcoding one (the old
+        // Debug-only lookup made every UI test fail under a Release build). The target-
+        // framework folder is resolved dynamically so the path survives .NET version bumps.
+        var searched = new List<string>();
+        foreach (var config in new[] { "Release", "Debug" })
         {
+            var binDir = Path.Combine(repoRoot, "SysManager", "bin", config);
+            searched.Add(binDir);
+            if (!Directory.Exists(binDir)) continue;
+
             var candidate = Directory
                 .EnumerateDirectories(binDir, "net*-windows")
                 .Select(tfm => Path.Combine(tfm, "SysManager.exe"))
@@ -94,7 +159,8 @@ public sealed class AppFixture : IDisposable
         }
 
         throw new FileNotFoundException(
-            $"Expected SysManager.exe under {binDir}\\net*-windows. Build SysManager in Debug before running UI tests.");
+            $"Expected SysManager.exe under {string.Join(" or ", searched.Select(d => d + "\\net*-windows"))}. " +
+            "Build SysManager (Debug or Release) before running UI tests.");
     }
 
     public void Dispose()
@@ -104,8 +170,9 @@ public sealed class AppFixture : IDisposable
             if (!App.HasExited) App.Close();
             App.Dispose();
         }
-        catch { }
-        try { Automation.Dispose(); } catch { }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"AppFixture: app teardown failed: {ex.Message}"); }
+        try { Automation.Dispose(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"AppFixture: automation teardown failed: {ex.Message}"); }
     }
 }
 

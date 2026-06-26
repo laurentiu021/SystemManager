@@ -81,4 +81,27 @@ public class NavGroupTests
         var g = new NavGroup { Id = "test", Label = "Test", Glyph = "T" };
         Assert.False(g.IsExpanded);
     }
+
+    [Fact]
+    public void NavItem_IsInDevelopment_DefaultsFalse()
+    {
+        var item = new NavItem
+        {
+            Id = "a", Label = "A", Glyph = "A",
+            Content = new object(), ViewType = typeof(object),
+        };
+        Assert.False(item.IsInDevelopment);
+    }
+
+    [Fact]
+    public void NavItem_IsInDevelopment_SetViaInitializer()
+    {
+        var item = new NavItem
+        {
+            Id = "a", Label = "A", Glyph = "A",
+            Content = new object(), ViewType = typeof(object),
+            IsInDevelopment = true,
+        };
+        Assert.True(item.IsInDevelopment);
+    }
 }

@@ -1,0 +1,30 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.DevelopmentBanner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Reusable banner for features that are implemented but not yet QA-verified.
+         Drop <v:DevelopmentBanner/> at the top of a view to surface its "Preview"
+         status. Distinct from the WIP placeholder (which means "not built yet"):
+         this means "built and working, pending verification". -->
+    <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Info}"
+            BorderThickness="1" CornerRadius="10" Padding="12,10">
+        <Grid>
+            <!-- Left accent stripe, mirrors the elevated-admin banner pattern -->
+            <Border Background="{DynamicResource Info}" Width="4" HorizontalAlignment="Left"
+                    CornerRadius="2" Margin="-12,-10,0,-10"/>
+            <StackPanel Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="&#xE9F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                           FontSize="15" Foreground="{DynamicResource Info}"
+                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Preview feature" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Info}"/>
+                    <TextBlock Text="This feature is newly added and still being verified. Please report anything unexpected on GitHub."
+                               FontSize="11.5" Foreground="{DynamicResource TextSecondary}"
+                               Margin="0,2,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

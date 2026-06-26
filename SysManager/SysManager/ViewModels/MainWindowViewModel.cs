@@ -379,8 +379,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         return g;
     }
 
-    private static NavItem Item(string id, string label, string glyph, object content, Type viewType)
-        => new() { Id = id, Label = label, Glyph = glyph, Content = content, ViewType = viewType };
+    private static NavItem Item(string id, string label, string glyph, object content, Type viewType, bool inDevelopment = false)
+        => new() { Id = id, Label = label, Glyph = glyph, Content = content, ViewType = viewType, IsInDevelopment = inDevelopment };
 
     partial void OnSelectedNavChanged(NavItem? value)
     {

@@ -96,6 +96,13 @@
                                                        FontFamily="{StaticResource UiFont}"
                                                        FontSize="13" FontWeight="Medium"
                                                        Foreground="{DynamicResource TextSecondary}"/>
+                                            <!-- PREVIEW pill: implemented but not yet QA-verified -->
+                                            <Border Background="{DynamicResource AccentSoft}" CornerRadius="4"
+                                                    Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
+                                                    Visibility="{Binding Children[0].IsInDevelopment, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
+                                                           Foreground="{DynamicResource Info}"/>
+                                            </Border>
                                         </StackPanel>
                                     </Border>
                                 </ContentControl>
@@ -242,10 +249,20 @@
                                                                        VerticalAlignment="Center"
                                                                        Foreground="{DynamicResource TextSecondary}"/>
                                                             <StackPanel VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding Label}"
-                                                                           FontFamily="{StaticResource UiFont}"
-                                                                           FontSize="13" FontWeight="Medium"
-                                                                           Foreground="{DynamicResource TextSecondary}"/>
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{Binding Label}"
+                                                                               FontFamily="{StaticResource UiFont}"
+                                                                               FontSize="13" FontWeight="Medium"
+                                                                               VerticalAlignment="Center"
+                                                                               Foreground="{DynamicResource TextSecondary}"/>
+                                                                    <!-- PREVIEW pill: implemented but not yet QA-verified -->
+                                                                    <Border Background="{DynamicResource AccentSoft}" CornerRadius="4"
+                                                                            Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
+                                                                            Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
+                                                                        <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
+                                                                                   Foreground="{DynamicResource Info}"/>
+                                                                    </Border>
+                                                                </StackPanel>
                                                                 <ProgressBar Height="2" Margin="0,3,0,0"
                                                                              IsIndeterminate="True"
                                                                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>

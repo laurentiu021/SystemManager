@@ -74,18 +74,32 @@
                     </Border>
                 </Grid>
 
-                <TextBlock Text="Actions" Style="{StaticResource SectionTitle}" Margin="0,0,0,4"/>
-                <TextBlock Text="Clean TEMP removes temporary files from %TEMP% and Windows\Temp. SFC /scannow checks Windows system files for corruption and repairs them. DISM /RestoreHealth repairs the Windows component store using Windows Update as a source."
+                <!-- Clean up section -->
+                <TextBlock Text="Clean up" Style="{StaticResource SectionTitle}" Margin="0,0,0,4"/>
+                <TextBlock Text="Clean TEMP removes temporary files from %TEMP% and Windows\Temp. Empty Recycle Bin clears deleted files on every drive."
                            Style="{StaticResource Subtle}" Margin="0,0,0,10" TextWrapping="Wrap"/>
                 <WrapPanel Orientation="Horizontal">
-                    <Button Content="Clean TEMP" Command="{Binding CleanTempCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="Rescan" Command="{Binding RescanCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                    <Button Content="Clean TEMP" Command="{Binding CleanTempCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
+                            AutomationProperties.Name="Clean temporary files"/>
+                    <Button Content="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                            AutomationProperties.Name="Empty the Recycle Bin"/>
+                    <Button Content="Rescan" Command="{Binding RescanCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                            AutomationProperties.Name="Rescan cleanup sizes"/>
+                </WrapPanel>
+
+                <!-- Repair section — Windows system-file repairs, distinct from cleanup -->
+                <TextBlock Text="Repair Windows" Style="{StaticResource SectionTitle}" Margin="0,14,0,4"/>
+                <TextBlock Text="SFC /scannow checks Windows system files for corruption and repairs them. DISM /RestoreHealth repairs the Windows component store using Windows Update as a source. Both run in the background — you can keep using the app."
+                           Style="{StaticResource Subtle}" Margin="0,0,0,10" TextWrapping="Wrap"/>
+                <WrapPanel Orientation="Horizontal">
                     <Button Content="SFC /scannow" Command="{Binding RunSfcCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                            AutomationProperties.Name="Run SFC system file check"
                             IsEnabled="{Binding IsSfcRunning, Converter={StaticResource BoolInvert}}"/>
                     <Button Content="DISM RestoreHealth" Command="{Binding RunDismCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                            AutomationProperties.Name="Run DISM RestoreHealth"
                             IsEnabled="{Binding IsDismRunning, Converter={StaticResource BoolInvert}}"/>
-                    <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"/>
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"
+                            AutomationProperties.Name="Cancel the running operation"/>
                 </WrapPanel>
 
                 <!-- Background-task indicators. Stay visible while SFC/DISM

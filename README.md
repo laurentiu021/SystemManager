@@ -88,9 +88,9 @@ implemented; 17 are work-in-progress placeholders marked with ⚙️:
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · App Alerts · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
-| 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ · Environment Variables |
+| 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · About |
-| ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ |
+| ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ · Environment Variables |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
 

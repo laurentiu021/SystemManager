@@ -355,8 +355,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Group("grp-customization", "Customization", "",
             Item("nav-context-menu",   "Context Menu",          "", ContextMenu,          typeof(Views.ContextMenuView)),
             Item("nav-dark-mode",      "Dark Mode Scheduler",   "", WipDarkModeScheduler, typeof(Views.PlaceholderView)),
-            Item("nav-volume-control", "Volume Control",        "", WipVolumeControl,     typeof(Views.PlaceholderView)),
-            Item("nav-env-variables",  "Environment Variables", "", EnvironmentVariables, typeof(Views.EnvironmentVariablesView))),
+            Item("nav-volume-control", "Volume Control",        "", WipVolumeControl,     typeof(Views.PlaceholderView))),
 
         Group("grp-info", "Info", "",
             Item("nav-drivers",       "Drivers",        "", Drivers,        typeof(Views.DriversView)),
@@ -367,7 +366,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Group("grp-advanced", "Advanced", "",
             Item("nav-profile-export", "Profile Export/Import", "", Profile,               typeof(Views.ProfileView)),
-            Item("nav-cli-interface",  "CLI Interface",         "", WipCliInterface,        typeof(Views.PlaceholderView))),
+            Item("nav-cli-interface",  "CLI Interface",         "", WipCliInterface,        typeof(Views.PlaceholderView)),
+            Item("nav-env-variables",  "Environment Variables", "", EnvironmentVariables, typeof(Views.EnvironmentVariablesView))),
     ];
 
     private static NavGroup Group(string id, string label, string glyph, params NavItem[] children)

@@ -49,9 +49,9 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
-| Customization | `ContextMenuViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control) |
+| Customization | `ContextMenuViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `AboutViewModel` |
-| Advanced | `ProfileViewModel` · `PlaceholderViewModel` (CLI Interface) |
+| Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (CLI Interface) |
 
 - `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),
   temperatures (LibreHardwareMonitor + NvAPIWrapper), storage overview, system

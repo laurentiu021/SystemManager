@@ -66,11 +66,19 @@ What the app can and cannot do by design:
 - Launch external CLIs: `winget`, Ookla `speedtest`, `tracert`, `ping`.
 - Delete files in user-selected cleanup categories (Deep Cleanup tab).
 - Empty the Recycle Bin.
+- Clear per-browser cache, history, cookies, and sessions (Browser Cleaner tab)
+  — only for categories the user explicitly selects. Cookies and sessions are
+  marked sensitive and unticked by default so a clean never silently signs the
+  user out; locked files (browser open) are skipped, and reparse points are
+  never followed out of the browser's own folders.
 - Download application updates from the official GitHub Releases API.
 
 ### By design — forbidden
 
-- Touching browser caches, cookies, or password stores.
+- Reading or exfiltrating saved passwords or any browser password store.
+- The Deep Cleanup engine touching browser data — that engine never reads or
+  deletes browser caches/cookies; only the dedicated Browser Cleaner tab does,
+  and only with the explicit per-category consent described above.
 - Touching the Windows registry for cleanup.
 - Deleting game files, installed binaries, or any active driver folder. The
   cleanup engine never touches `steamapps\common` or installed game/program

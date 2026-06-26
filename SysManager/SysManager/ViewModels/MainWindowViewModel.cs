@@ -60,6 +60,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public TimerResolutionViewModel TimerResolution { get; }
     public FileLockViewModel FileLock { get; }
     public DisplayProfileViewModel DisplayProfile { get; }
+    public CpuAffinityViewModel CpuAffinity { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -165,6 +166,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             TimerResolution = sp.GetRequiredService<TimerResolutionViewModel>();
             FileLock = sp.GetRequiredService<FileLockViewModel>();
             DisplayProfile = sp.GetRequiredService<DisplayProfileViewModel>();
+            CpuAffinity = sp.GetRequiredService<CpuAffinityViewModel>();
         }
         else
         {
@@ -229,6 +231,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             TimerResolution = new TimerResolutionViewModel(new TimerResolutionService());
             FileLock = new FileLockViewModel(new FileLockService());
             DisplayProfile = new DisplayProfileViewModel(new DisplayProfileService());
+            CpuAffinity = new CpuAffinityViewModel(new CpuAffinityService());
         }
 
         InitPlaceholders();
@@ -316,7 +319,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView)),
             Item("nav-standby-cleaner",  "Standby List Cleaner", "", WipStandbyListCleaner, typeof(Views.PlaceholderView)),
             Item("nav-timer-resolution", "Timer Resolution",     "", TimerResolution,       typeof(Views.TimerResolutionView), inDevelopment: true),
-            Item("nav-cpu-affinity",     "CPU Core Affinity",    "", WipCpuAffinity,        typeof(Views.PlaceholderView)),
+            Item("nav-cpu-affinity",     "CPU Core Affinity",    "", CpuAffinity,           typeof(Views.CpuAffinityView), inDevelopment: true),
             Item("nav-display-profiles", "Display Profiles",     "", DisplayProfile,        typeof(Views.DisplayProfileView), inDevelopment: true)),
 
         Group("grp-monitor", "Monitor", "",

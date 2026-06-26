@@ -74,15 +74,15 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 43 tabs are fully
-implemented; 14 are work-in-progress placeholders marked with ⚙️. Newly added
+find what you need without scrolling through a flat list. 44 tabs are fully
+implemented; 13 are work-in-progress placeholders marked with ⚙️. Newly added
 tabs still being verified are marked **PREVIEW**:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · System Fixes · Boot Analyzer · Task Scheduler ⚙️ |
-| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution 🔬 · CPU Core Affinity ⚙️ · Display Profiles 🔬 |
+| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution 🔬 · CPU Core Affinity 🔬 · Display Profiles 🔬 |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector 🔬 · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
@@ -482,6 +482,19 @@ Reclaim space and clear browsing traces, per browser:
   "Keep", so a bad mode can never strand you on a blank screen
 - **Per-display** — choose which monitor to configure; shows the current mode
 - Validates each mode (CDS_TEST) before applying; no admin required
+- _Preview — implemented and usable, still being verified._
+
+### CPU Core Affinity 🔬
+- **Pin a process to specific CPU cores** — pick a running process and choose
+  which logical CPUs it may run on, then Apply (or Restore the original)
+- **Hybrid-CPU aware** — on Intel 12th-gen+ CPUs, P-cores and E-cores are
+  detected and labelled (via `GetLogicalProcessorInformationEx`), with one-click
+  **P-cores** / **All cores** presets
+- **Safe and temporary** — affinity is per-running-process and reverts when the
+  process exits; no admin for your own processes (changing another user's
+  process is surfaced as needing admin, not a crash)
+- An empty selection is rejected — Windows treats an empty mask as "let the OS
+  decide", so the app never silently does the opposite of what you picked
 - _Preview — implemented and usable, still being verified._
 
 ### Performance Mode

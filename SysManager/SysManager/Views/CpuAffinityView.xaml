@@ -1,0 +1,110 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.CpuAffinityView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CpuAffinityViewModel}"
+             Background="{DynamicResource Surface0}">
+
+    <Grid Margin="28,24,28,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Preview banner -->
+        <v:DevelopmentBanner Grid.Row="0" Margin="0,0,0,16"/>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <TextBlock Text="CPU Core Affinity" Style="{StaticResource Display}"/>
+            <TextBlock Text="Pin a process to specific CPU cores. On Intel hybrid CPUs, P-cores and E-cores are labelled. Affinity reverts when the process exits."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Process picker -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="PROCESS" Style="{StaticResource Caption}"/>
+                    <ComboBox ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}"
+                              DisplayMemberPath="Display" Margin="0,4,0,0" Padding="8,6" FontSize="13"
+                              MaxDropDownHeight="320"
+                              AutomationProperties.Name="Process to set affinity for"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshProcessesCommand}"
+                        Style="{StaticResource GhostButton}" Margin="8,0,0,0" Padding="14,8" VerticalAlignment="Bottom"
+                        AutomationProperties.Name="Refresh process list"/>
+            </Grid>
+        </Border>
+
+        <!-- Core grid -->
+        <Border Grid.Row="3" Style="{StaticResource Card}">
+            <StackPanel>
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Logical processors" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Content="P-cores" Command="{Binding SelectPerformanceCoresCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Padding="12,5"
+                                Visibility="{Binding IsHybrid, Converter={StaticResource FlexVis}}"
+                                AutomationProperties.Name="Select performance cores"/>
+                        <Button Content="All cores" Command="{Binding SelectAllCoresCommand}"
+                                Style="{StaticResource SecondaryButton}" Padding="12,5"
+                                AutomationProperties.Name="Select all cores"/>
+                    </StackPanel>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Cores}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardInner}" Margin="0,0,8,8" Padding="10,8" Width="120">
+                                <StackPanel>
+                                    <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Label}"
+                                              FontWeight="SemiBold"
+                                              AutomationProperties.Name="{Binding Label}"/>
+                                    <TextBlock Text="{Binding TypeLabel}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- Actions + status -->
+        <Grid Grid.Row="4" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+            <Button Grid.Column="1" Content="Restore" Command="{Binding RestoreCommand}"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Padding="14,8"
+                    AutomationProperties.Name="Restore original affinity"/>
+            <Button Grid.Column="2" Content="Apply affinity" Command="{Binding ApplyCommand}"
+                    Style="{StaticResource PrimaryButton}" Padding="16,8"
+                    AutomationProperties.Name="Apply CPU affinity"/>
+        </Grid>
+    </Grid>
+</UserControl>

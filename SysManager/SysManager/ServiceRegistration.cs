@@ -75,6 +75,7 @@ public static class ServiceRegistration
         services.AddSingleton<TimerResolutionService>();
         services.AddSingleton<FileLockService>();
         services.AddSingleton<DisplayProfileService>();
+        services.AddSingleton<CpuAffinityService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -122,6 +123,7 @@ public static class ServiceRegistration
         services.AddSingleton<TimerResolutionViewModel>();
         services.AddSingleton<FileLockViewModel>();
         services.AddSingleton<DisplayProfileViewModel>();
+        services.AddSingleton<CpuAffinityViewModel>();
 
         return services;
     }

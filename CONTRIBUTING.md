@@ -118,8 +118,10 @@ guide. That said, a few explicit rules:
 
 ## Running tests
 
-The suite runs sequentially (see `xunit.runner.json`) so file-system
-fixtures can share temp folders safely.
+Unit tests run in parallel by default (`parallelizeTestCollections: true`).
+Tests that share state or touch OS resources are isolated via xUnit collection
+definitions in `TestCollections.cs` (each `DisableParallelization = true`), so
+file-system fixtures never collide. The integration suite runs sequentially.
 
 Full run:
 

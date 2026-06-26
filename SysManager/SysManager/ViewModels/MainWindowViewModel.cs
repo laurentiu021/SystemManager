@@ -58,6 +58,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PrivacyMonitorViewModel PrivacyMonitor { get; }
     public BootAnalyzerViewModel BootAnalyzer { get; }
     public TimerResolutionViewModel TimerResolution { get; }
+    public FileLockViewModel FileLock { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -161,6 +162,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             PrivacyMonitor = sp.GetRequiredService<PrivacyMonitorViewModel>();
             BootAnalyzer = sp.GetRequiredService<BootAnalyzerViewModel>();
             TimerResolution = sp.GetRequiredService<TimerResolutionViewModel>();
+            FileLock = sp.GetRequiredService<FileLockViewModel>();
         }
         else
         {
@@ -223,6 +225,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             PrivacyMonitor = new PrivacyMonitorViewModel(new PrivacyMonitorService());
             BootAnalyzer = new BootAnalyzerViewModel(new BootAnalyzerService());
             TimerResolution = new TimerResolutionViewModel(new TimerResolutionService());
+            FileLock = new FileLockViewModel(new FileLockService());
         }
 
         InitPlaceholders();
@@ -318,7 +321,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-resource-history",  "Resource History",   "", WipResourceHistory,  typeof(Views.PlaceholderView)),
             Item("nav-privacy-monitor",   "Camera/Mic/Location",    "", PrivacyMonitor,      typeof(Views.PrivacyMonitorView)),
             Item("nav-app-alerts",        "App Alerts",         "", AppAlerts,           typeof(Views.AppAlertsView)),
-            Item("nav-file-lock",         "File Lock Detector", "", WipFileLockDetector, typeof(Views.PlaceholderView)),
+            Item("nav-file-lock",         "File Lock Detector", "", FileLock,            typeof(Views.FileLockView), inDevelopment: true),
             Item("nav-settings-watchdog", "Settings Watchdog",  "", WipSettingsWatchdog, typeof(Views.PlaceholderView)),
             Item("nav-bandwidth-monitor", "Bandwidth Monitor",  "", WipBandwidthMonitor, typeof(Views.PlaceholderView))),
 

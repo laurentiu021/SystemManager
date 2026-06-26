@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.36.0] - 2026-06-26
+
+### Added
+- **File Lock Detector tab (Monitor).** When you hit a "file is in use" error, enter or browse to the file/folder and see exactly which process is holding it — name, PID, type and start time — via the Windows Restart Manager (the same mechanism Explorer's own dialog uses). You can end a selected locking process (with confirmation) to release the file; critical system processes are protected. Detecting works as a standard user; ending a process owned by SYSTEM or another user needs admin (surfaced cleanly, never crashes). Marked **PREVIEW** while it's verified. Closes #333.
+
 ## [1.35.0] - 2026-06-26
 
 ### Added

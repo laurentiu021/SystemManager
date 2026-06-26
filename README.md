@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 41 tabs are fully
-implemented; 16 are work-in-progress placeholders marked with ⚙️. Newly added
+find what you need without scrolling through a flat list. 42 tabs are fully
+implemented; 15 are work-in-progress placeholders marked with ⚙️. Newly added
 tabs still being verified are marked **PREVIEW**:
 
 | Group | Tabs |
@@ -83,7 +83,7 @@ tabs still being verified are marked **PREVIEW**:
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · System Fixes · Boot Analyzer · Task Scheduler ⚙️ |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution 🔬 · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
-| 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
+| 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector 🔬 · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
@@ -324,6 +324,17 @@ a confirmation before it runs:
   (System, Trusted, Unknown)
 - Kill process with confirmation dialog
 - Open file location in Explorer
+
+### File Lock Detector 🔬
+- **Find what's holding a file** — when you get a "file in use" error, enter or
+  browse to a file/folder path and see which process(es) are using it, via the
+  Windows Restart Manager (the same mechanism Explorer's own dialog uses)
+- Shows process name, PID, type, and start time for each locker
+- **End process** — terminate a selected locker (with confirmation) to release
+  the file; critical system processes are protected from termination
+- Detection works as a standard user; ending a process owned by SYSTEM or
+  another user needs administrator rights (surfaced, not crashed)
+- _Preview — implemented and usable, still being verified._
 
 ### Camera/Mic/Location
 - Shows which apps recently used your **camera, microphone, or location**, and when

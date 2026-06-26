@@ -77,6 +77,7 @@ public static class ServiceRegistration
         services.AddSingleton<DisplayProfileService>();
         services.AddSingleton<CpuAffinityService>();
         services.AddSingleton<DefenderService>();
+        services.AddSingleton<TaskSchedulerService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -126,6 +127,7 @@ public static class ServiceRegistration
         services.AddSingleton<DisplayProfileViewModel>();
         services.AddSingleton<CpuAffinityViewModel>();
         services.AddSingleton<DefenderViewModel>();
+        services.AddSingleton<TaskSchedulerViewModel>();
 
         return services;
     }

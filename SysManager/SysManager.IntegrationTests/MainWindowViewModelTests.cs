@@ -400,4 +400,14 @@ public class MainWindowViewModelTests
         Assert.IsType<DefenderViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    [Fact]
+    public void NavLeaf_TaskScheduler_IsImplementedAndMarkedPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-task-scheduler");
+        Assert.Equal(typeof(SysManager.Views.TaskSchedulerView), item.ViewType);
+        Assert.IsType<TaskSchedulerViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

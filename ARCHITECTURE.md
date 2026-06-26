@@ -41,7 +41,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `PlaceholderViewModel` (Task Scheduler) |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `TaskSchedulerViewModel` |
 | Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner) |
 | Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `PlaceholderViewModel` (Resource History · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
@@ -98,6 +98,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net. _Preview._
 - `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. _Preview._
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). _Preview._
+- `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back. _Preview._
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -254,6 +255,10 @@ Key services:
   `IPowerShellRunner`. Normalizes the inverted `Disable*` booleans; exclusion paths are
   bound parameters (never interpolated); every change is verified by reading the value
   back (Tamper Protection can silently reject). The parse helpers are pure, unit-tested.
+- `TaskSchedulerService` — the `ScheduledTasks` PowerShell module (`Get-ScheduledTask`
+  / `Get-ScheduledTaskInfo` / `Enable`/`Disable-ScheduledTask`) through `IPowerShellRunner`.
+  Disabling is reversible and never unregisters; toggles are verified by read-back. The
+  `ClassifyTask` safety heuristic (telemetry/system/third-party) is a pure, unit-tested method.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

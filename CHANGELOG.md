@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.13] - 2026-06-26
+
+### Fixed
+- **Traceroute monitor no longer risks a background error when stopped mid-cycle.** Stopping the live traceroute monitor disposed its cancellation source unconditionally, even if a route was still being traced; the still-running cycle could then throw on the disposed token in the background. Disposal is now deferred until the cycle actually finishes, matching the ping monitor. No visible change in normal use.
+
 ## [1.33.12] - 2026-06-26
 
 ### Fixed

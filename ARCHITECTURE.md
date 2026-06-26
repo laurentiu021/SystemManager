@@ -48,7 +48,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
-| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
+| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `DefenderViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Notification Blocker) |
 | Customization | `ContextMenuViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
 | Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (CLI Interface) |
@@ -97,6 +97,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. _Preview._
 - `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net. _Preview._
 - `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. _Preview._
+- `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). _Preview._
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -248,6 +249,11 @@ Key services:
   and detects P-core/E-core topology via kernel32 `GetLogicalProcessorInformationEx`
   (variable-length buffer walked by each record's `Size`). The mask helpers
   (build/test/all-cores) are pure, unit-tested static methods.
+- `DefenderService` — Microsoft Defender via the Defender PowerShell module
+  (`Get-MpPreference` / `Set-MpPreference` / `Add`/`Remove-MpPreference`) through
+  `IPowerShellRunner`. Normalizes the inverted `Disable*` booleans; exclusion paths are
+  bound parameters (never interpolated); every change is verified by reading the value
+  back (Tamper Protection can silently reject). The parse helpers are pure, unit-tested.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

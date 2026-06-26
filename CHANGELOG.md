@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.39.0] - 2026-06-26
+
+### Added
+- **Defender Tweaks tab (Privacy & Security).** See your Microsoft Defender status at a glance (real-time protection, cloud protection, PUA and Controlled Folder Access), toggle PUA protection and Controlled Folder Access, and manage scan-exclusion folders (add/remove). Built to be safe: every change requires administrator and is **verified by reading the value back** — because Tamper Protection can silently ignore changes, the tab detects it and shows a clear warning, and never reports a change as done unless Windows actually applied it. Exclusion folders are validated (rooted, existing, no wildcards) before use, and changes are confirmed first. Marked **PREVIEW** while it's verified. Closes #344.
+
 ## [1.38.0] - 2026-06-26
 
 ### Added

@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 44 tabs are fully
-implemented; 13 are work-in-progress placeholders marked with ⚙️. Newly added
+find what you need without scrolling through a flat list. 45 tabs are fully
+implemented; 12 are work-in-progress placeholders marked with ⚙️. Newly added
 tabs still being verified are marked **PREVIEW**:
 
 | Group | Tabs |
@@ -88,7 +88,7 @@ tabs still being verified are marked **PREVIEW**:
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
-| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks ⚙️ · Notification Blocker ⚙️ |
+| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks 🔬 · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ · Environment Variables |
@@ -445,6 +445,21 @@ Reclaim space and clear browsing traces, per browser:
 - **Confirmation with an impact summary** before anything is deleted
 - Per-user (no admin); locked files (browser open) are skipped, not forced, and
   symlinks/junctions are never followed
+
+### Defender Tweaks 🔬
+Manage Microsoft Defender without digging through Windows Security:
+- **Status at a glance** — real-time protection, cloud protection (MAPS), PUA
+  protection, and Controlled Folder Access
+- **Toggle PUA protection and Controlled Folder Access** (ransomware protection)
+- **Scan exclusions** — add or remove folders Defender should skip (handy for
+  big game libraries); paths are validated and additions never replace your
+  existing exclusions
+- **Honest about Tamper Protection** — if it's on, Windows can silently ignore
+  changes, so the tab detects it, warns you, and only reports a change as done
+  after reading it back and confirming Windows actually applied it
+- Changes need administrator and are confirmed first; lowering a protection is
+  always an explicit, reversible choice
+- _Preview — implemented and usable, still being verified._
 
 ### Battery Health
 - Charge %, health %, wear level, cycle count, chemistry

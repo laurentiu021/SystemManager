@@ -61,6 +61,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public FileLockViewModel FileLock { get; }
     public DisplayProfileViewModel DisplayProfile { get; }
     public CpuAffinityViewModel CpuAffinity { get; }
+    public DefenderViewModel Defender { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -167,6 +168,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             FileLock = sp.GetRequiredService<FileLockViewModel>();
             DisplayProfile = sp.GetRequiredService<DisplayProfileViewModel>();
             CpuAffinity = sp.GetRequiredService<CpuAffinityViewModel>();
+            Defender = sp.GetRequiredService<DefenderViewModel>();
         }
         else
         {
@@ -232,6 +234,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             FileLock = new FileLockViewModel(new FileLockService());
             DisplayProfile = new DisplayProfileViewModel(new DisplayProfileService());
             CpuAffinity = new CpuAffinityViewModel(new CpuAffinityService());
+            Defender = new DefenderViewModel(new DefenderService(new PowerShellRunner()));
         }
 
         InitPlaceholders();
@@ -360,7 +363,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-debloater",            "Debloater & Ads",       "", Debloater,             typeof(Views.DebloaterView)),
             Item("nav-browser-cleaner",      "Browser Cleaner",       "", BrowserCleaner,         typeof(Views.BrowserCleanerView)),
             Item("nav-edge-onedrive",        "Edge/OneDrive Remover", "", WipEdgeOneDriveRemover, typeof(Views.PlaceholderView)),
-            Item("nav-defender-tweaks",      "Defender Tweaks",       "", WipDefenderTweaks,      typeof(Views.PlaceholderView)),
+            Item("nav-defender-tweaks",      "Defender Tweaks",       "", Defender,               typeof(Views.DefenderView), inDevelopment: true),
             Item("nav-notification-blocker", "Notification Blocker",  "", WipNotificationBlocker, typeof(Views.PlaceholderView))),
 
         Group("grp-customization", "Customization", "",

@@ -360,4 +360,14 @@ public class MainWindowViewModelTests
         // Surfaced as PREVIEW until verified.
         Assert.True(item.IsInDevelopment);
     }
+
+    [Fact]
+    public void NavLeaf_FileLock_IsImplementedAndMarkedPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-file-lock");
+        Assert.Equal(typeof(SysManager.Views.FileLockView), item.ViewType);
+        Assert.IsType<FileLockViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

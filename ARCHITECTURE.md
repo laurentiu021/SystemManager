@@ -43,7 +43,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `PlaceholderViewModel` (Task Scheduler) |
 | Gaming & Profiles | `TimerResolutionViewModel` · `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · CPU Core Affinity · Display Profiles) |
-| Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Resource History · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
+| Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `PlaceholderViewModel` (Resource History · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
@@ -94,6 +94,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value. _Preview._
+- `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. _Preview._
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -233,6 +234,10 @@ Key services:
   `NtSetTimerResolution`. The request is a per-process contribution Windows reverts
   on exit, so it's fully reversible and needs no admin; the 100ns→ms conversion and
   high-resolution detection are pure, unit-tested static methods on the model.
+- `FileLockService` — Restart Manager (`rstrtmgr.dll`) wrapper that lists the processes
+  using a file/folder and can terminate one. The one place we use classic `[DllImport]`
+  (not `[LibraryImport]`): `RM_PROCESS_INFO` has inline `ByValTStr` buffers and
+  `RmStartSession` needs a `StringBuilder`, neither supported by the source generator.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

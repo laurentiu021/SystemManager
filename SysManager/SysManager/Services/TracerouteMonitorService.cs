@@ -64,13 +64,26 @@ public sealed class TracerouteMonitorService : IDisposable
     {
         lock (_stateLock)
         {
-            _cts?.Cancel();
-            try { _loop?.Wait(3000); }
-            catch (AggregateException) { /* task cancellation or faulted — expected during stop */ }
-            catch (ObjectDisposedException) { /* task already cleaned up */ }
-            _cts?.Dispose();
+            var cts = _cts;
+            var loop = _loop;
             _cts = null;
             _loop = null;
+            if (cts is null) return;
+
+            cts.Cancel();
+            try { loop?.Wait(3000); }
+            catch (AggregateException) { /* task cancellation or faulted — expected during stop */ }
+            catch (ObjectDisposedException) { /* task already cleaned up */ }
+
+            // Dispose the CTS only once the loop has actually finished. A traceroute cycle is
+            // heavy (a full route per target), so the 3 s Wait can time out while PumpAsync is
+            // still using the token; disposing now would throw ObjectDisposedException on the
+            // background thread. Defer disposal to a continuation in that case so the CTS is
+            // neither used-after-dispose nor leaked. (Mirrors PingMonitorService.Stop.)
+            if (loop is null || loop.IsCompleted)
+                cts.Dispose();
+            else
+                loop.ContinueWith(_ => cts.Dispose(), TaskScheduler.Default);
         }
     }
 

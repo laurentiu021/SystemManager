@@ -410,4 +410,14 @@ public class MainWindowViewModelTests
         Assert.IsType<TaskSchedulerViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    [Fact]
+    public void NavLeaf_DarkMode_IsImplementedAndMarkedPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-dark-mode");
+        Assert.Equal(typeof(SysManager.Views.DarkModeView), item.ViewType);
+        Assert.IsType<DarkModeViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

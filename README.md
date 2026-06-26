@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 46 tabs are fully
-implemented; 11 are work-in-progress placeholders marked with ⚙️. Newly added
+find what you need without scrolling through a flat list. 47 tabs are fully
+implemented; 10 are work-in-progress placeholders marked with ⚙️. Newly added
 tabs still being verified are marked **PREVIEW**:
 
 | Group | Tabs |
@@ -89,7 +89,7 @@ tabs still being verified are marked **PREVIEW**:
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks 🔬 · Notification Blocker ⚙️ |
-| 🎨 Customization | Context Menu · Dark Mode Scheduler ⚙️ · Volume Control ⚙️ |
+| 🎨 Customization | Context Menu · Dark Mode Scheduler 🔬 · Volume Control ⚙️ |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ · Environment Variables |
 
@@ -134,6 +134,16 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Changes broadcast to Windows, so new terminals pick them up without a reboot
 - System-scope edits need administrator rights (standard elevation banner); user
   variables can be edited without it
+
+### Dark Mode Scheduler 🔬
+- **Switch the Windows light/dark theme** instantly — apps only, or the taskbar
+  and Start too
+- **Schedule it** — set a dark time and a light time (e.g. 19:00 / 07:00) and the
+  theme follows automatically; handles the overnight switch correctly
+- Applies immediately with no sign-out, no admin needed, and is fully reversible
+- **Honest about its limits** — the schedule runs while SysManager (or its tray)
+  is open; it's not a background Windows service
+- _Preview — implemented and usable, still being verified._
 
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart

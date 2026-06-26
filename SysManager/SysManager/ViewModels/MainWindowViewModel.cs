@@ -63,6 +63,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public CpuAffinityViewModel CpuAffinity { get; }
     public DefenderViewModel Defender { get; }
     public TaskSchedulerViewModel TaskScheduler { get; }
+    public DarkModeViewModel DarkMode { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -171,6 +172,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             CpuAffinity = sp.GetRequiredService<CpuAffinityViewModel>();
             Defender = sp.GetRequiredService<DefenderViewModel>();
             TaskScheduler = sp.GetRequiredService<TaskSchedulerViewModel>();
+            DarkMode = sp.GetRequiredService<DarkModeViewModel>();
         }
         else
         {
@@ -238,6 +240,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             CpuAffinity = new CpuAffinityViewModel(new CpuAffinityService());
             Defender = new DefenderViewModel(new DefenderService(new PowerShellRunner()));
             TaskScheduler = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner()));
+            DarkMode = new DarkModeViewModel(new WindowsThemeService());
         }
 
         InitPlaceholders();
@@ -371,7 +374,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Group("grp-customization", "Customization", "",
             Item("nav-context-menu",   "Context Menu",          "", ContextMenu,          typeof(Views.ContextMenuView)),
-            Item("nav-dark-mode",      "Dark Mode Scheduler",   "", WipDarkModeScheduler, typeof(Views.PlaceholderView)),
+            Item("nav-dark-mode",      "Dark Mode Scheduler",   "", DarkMode,             typeof(Views.DarkModeView), inDevelopment: true),
             Item("nav-volume-control", "Volume Control",        "", WipVolumeControl,     typeof(Views.PlaceholderView))),
 
         Group("grp-info", "Info", "",

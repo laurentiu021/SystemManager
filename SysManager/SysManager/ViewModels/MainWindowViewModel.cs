@@ -301,7 +301,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-restore-points",   "Restore Points",   "", RestorePoints,    typeof(Views.RestorePointsView)),
             Item("nav-task-scheduler",   "Task Scheduler",   "", WipTaskScheduler, typeof(Views.PlaceholderView)),
             Item("nav-boot-analyzer",    "Boot Analyzer",    "", BootAnalyzer,     typeof(Views.BootAnalyzerView)),
-            Item("nav-legacy-panels",    "Legacy Panels",    "", LegacyPanels,     typeof(Views.LegacyPanelsView)),
             Item("nav-system-fixes",     "System Fixes",     "", SystemFixes,      typeof(Views.SystemFixesView))),
 
         Group("grp-gaming", "Gaming & Profiles", "",
@@ -315,6 +314,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-processes",         "Process Manager",    "", ProcessManager,      typeof(Views.ProcessManagerView)),
             Item("nav-resource-history",  "Resource History",   "", WipResourceHistory,  typeof(Views.PlaceholderView)),
             Item("nav-privacy-monitor",   "Camera/Mic/Location",    "", PrivacyMonitor,      typeof(Views.PrivacyMonitorView)),
+            Item("nav-app-alerts",        "App Alerts",         "", AppAlerts,           typeof(Views.AppAlertsView)),
             Item("nav-file-lock",         "File Lock Detector", "", WipFileLockDetector, typeof(Views.PlaceholderView)),
             Item("nav-settings-watchdog", "Settings Watchdog",  "", WipSettingsWatchdog, typeof(Views.PlaceholderView)),
             Item("nav-bandwidth-monitor", "Bandwidth Monitor",  "", WipBandwidthMonitor, typeof(Views.PlaceholderView))),
@@ -345,7 +345,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-privacy-settings",     "Privacy & Telemetry",   "", Privacy,                typeof(Views.PrivacyView)),
             Item("nav-file-shredder",        "File Shredder",         "", FileShredder,           typeof(Views.FileShredderView)),
             Item("nav-app-blocker",          "App Blocker",           "", AppBlocker,             typeof(Views.AppBlockerView)),
-            Item("nav-app-alerts",           "App Alerts",            "", AppAlerts,              typeof(Views.AppAlertsView)),
             Item("nav-debloater",            "Debloater & Ads",       "", Debloater,             typeof(Views.DebloaterView)),
             Item("nav-browser-cleaner",      "Browser Cleaner",       "", BrowserCleaner,         typeof(Views.BrowserCleanerView)),
             Item("nav-edge-onedrive",        "Edge/OneDrive Remover", "", WipEdgeOneDriveRemover, typeof(Views.PlaceholderView)),
@@ -362,6 +361,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-battery",       "Battery Health", "", BatteryHealth,  typeof(Views.BatteryHealthView)),
             Item("nav-logs",          "System Logs",    "", Logs,           typeof(Views.LogsView)),
             Item("nav-system-report", "System Report",  "", SystemReport, typeof(Views.SystemReportView)),
+            Item("nav-legacy-panels", "Legacy Panels",  "", LegacyPanels, typeof(Views.LegacyPanelsView)),
             Item("nav-about",         "About",          "", About,          typeof(Views.AboutView))),
 
         Group("grp-advanced", "Advanced", "",

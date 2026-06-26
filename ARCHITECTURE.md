@@ -41,16 +41,16 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `LegacyPanelsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `PlaceholderViewModel` (Task Scheduler) |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `PlaceholderViewModel` (Task Scheduler) |
 | Gaming & Profiles | `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles) |
-| Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `PlaceholderViewModel` (Resource History · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
+| Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Resource History · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
-| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `AppAlertsViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
+| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Defender Tweaks · Notification Blocker) |
 | Customization | `ContextMenuViewModel` · `PlaceholderViewModel` (Dark Mode Scheduler · Volume Control) |
-| Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `AboutViewModel` |
+| Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
 | Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (CLI Interface) |
 
 - `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),

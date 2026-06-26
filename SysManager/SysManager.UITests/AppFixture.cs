@@ -71,8 +71,42 @@ public sealed class AppFixture : IDisposable
         if (item is null)
             throw new InvalidOperationException($"Nav item '{navId}' not found.{DescribeNavTree()}");
 
-        item.Click();
-        Thread.Sleep(250);
+        // Navigation is driven by a MouseLeftButtonUp handler on the nav Border. A single
+        // synthetic Click() on the container peer doesn't reliably fire it on a slow headless
+        // runner — the click can land before the row is hit-testable, so the content pane
+        // never switches and the following FindButton/WaitForText sees the previous tab. Click,
+        // then VERIFY the content host actually changed; retry the click a few times if not.
+        var before = ContentSignature();
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try { item.Click(); } catch (Exception) { /* re-found below if it went stale */ }
+            // Wait for the content host to differ from its pre-click state.
+            var changed = Retry.WhileFalse(
+                () => ContentSignature() != before,
+                TimeSpan.FromSeconds(3), TimeSpan.FromMilliseconds(150)).Result;
+            if (changed) { Thread.Sleep(200); return; } // settle once switched
+
+            // Re-resolve the item in case the tree was rebuilt, and try again.
+            item = MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId)) ?? item;
+        }
+        Thread.Sleep(250); // best-effort; a genuinely missing element is reported by the assert
+    }
+
+    /// <summary>
+    /// A cheap signature of the content-host subtree, used to detect that navigation actually
+    /// switched the active view (the count + first child's name change when the tab changes).
+    /// </summary>
+    private string ContentSignature()
+    {
+        try
+        {
+            var host = MainWindow.FindFirstDescendant(cf => cf.ByAutomationId("ContentHost"));
+            if (host is null) return "";
+            var kids = host.FindAllDescendants();
+            var first = kids.Length > 0 ? kids[0].Properties.Name.ValueOrDefault : "";
+            return $"{kids.Length}|{first}";
+        }
+        catch (Exception) { return ""; }
     }
 
     /// <summary>

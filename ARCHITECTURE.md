@@ -42,7 +42,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `PlaceholderViewModel` (Task Scheduler) |
-| Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · CPU Core Affinity) |
+| Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner) |
 | Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `PlaceholderViewModel` (Resource History · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
@@ -96,6 +96,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value. _Preview._
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. _Preview._
 - `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net. _Preview._
+- `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. _Preview._
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -243,6 +244,10 @@ Key services:
   `EnumDisplaySettingsW` / `ChangeDisplaySettingsExW`) to read and switch resolution +
   refresh rate. Session-only apply (reverts on reboot); validated with `CDS_TEST` first.
   Also classic `[DllImport]` (DEVMODE has non-blittable inline buffers).
+- `CpuAffinityService` — gets/sets per-process CPU affinity via `Process.ProcessorAffinity`
+  and detects P-core/E-core topology via kernel32 `GetLogicalProcessorInformationEx`
+  (variable-length buffer walked by each record's `Size`). The mask helpers
+  (build/test/all-cores) are pure, unit-tested static methods.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.38.0] - 2026-06-26
+
+### Added
+- **CPU Core Affinity tab (Gaming & Profiles).** Pin a running process to specific CPU cores — useful for games on Intel hybrid CPUs, where **P-cores and E-cores are detected and labelled** (via `GetLogicalProcessorInformationEx`). One-click "P-cores" / "All cores" presets, a per-core checkbox map, Apply and Restore. Affinity is per-running-process and is lost when the process exits, so it's inherently temporary and reversible; no admin needed for your own processes (changing another user's process is surfaced as needing admin, not a crash). An empty core selection is rejected (Windows would treat 0 as "let the OS decide"). Marked **PREVIEW** while it's verified. Closes #327.
+
 ## [1.37.0] - 2026-06-26
 
 ### Added

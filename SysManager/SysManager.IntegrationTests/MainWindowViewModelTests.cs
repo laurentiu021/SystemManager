@@ -380,4 +380,14 @@ public class MainWindowViewModelTests
         Assert.IsType<DisplayProfileViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    [Fact]
+    public void NavLeaf_CpuAffinity_IsImplementedAndMarkedPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-cpu-affinity");
+        Assert.Equal(typeof(SysManager.Views.CpuAffinityView), item.ViewType);
+        Assert.IsType<CpuAffinityViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

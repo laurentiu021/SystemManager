@@ -3,7 +3,6 @@
 // License: MIT
 
 using System.Management;
-using System.Text.RegularExpressions;
 using Serilog;
 using SysManager.Models;
 
@@ -15,7 +14,7 @@ namespace SysManager.Services;
 /// user-friendly verdict ("Healthy / Watch out / Replace soon").
 /// No admin required for read-only queries.
 /// </summary>
-public sealed partial class DiskHealthService
+public sealed class DiskHealthService
 {
     public Task<IReadOnlyList<DiskHealthReport>> CollectAsync(CancellationToken ct = default)
         => Task.Run(() => Collect(), ct);
@@ -29,8 +28,12 @@ public sealed partial class DiskHealthService
             scope.Connect();
 
             // First pull MSFT_PhysicalDisk for basic info.
+            // __PATH must be selected so each returned object carries its full WMI
+            // identity — GetRelated (used in EnrichWithReliability to walk the
+            // reliability-counter association) needs it; without it the object has an
+            // empty relative path and GetRelated throws InvalidOperationException.
             using var searcher = new ManagementObjectSearcher(scope,
-                new ObjectQuery("SELECT ObjectId, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"));
+                new ObjectQuery("SELECT __PATH, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"));
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
             {
@@ -51,10 +54,11 @@ public sealed partial class DiskHealthService
                             HealthStatus = MapHealth(Convert.ToUInt32(mo["HealthStatus"] ?? 0u))
                         };
 
-                        // Get reliability counters for this disk.
-                        var objectId = mo["ObjectId"]?.ToString();
-                        if (!string.IsNullOrEmpty(objectId))
-                            EnrichWithReliability(scope, objectId, report);
+                        // Get reliability counters for this disk by navigating the
+                        // CIM association directly from this object — no WQL string,
+                        // no ObjectId parsing (the Storage-provider ObjectId format
+                        // embeds = and " which broke the old literal-interpolation path).
+                        EnrichWithReliability(mo, report);
 
                         ApplyVerdict(report);
                         results.Add(report);
@@ -82,26 +86,25 @@ public sealed partial class DiskHealthService
         return results;
     }
 
-    private static void EnrichWithReliability(ManagementScope scope, string objectId, DiskHealthReport report)
+    private static void EnrichWithReliability(ManagementObject disk, DiskHealthReport report)
     {
         try
         {
-            // Defense-in-depth: validate objectId format before WQL interpolation.
-            // ObjectId from MSFT_PhysicalDisk is typically like {guid}\\PhysicalDisk0.
-            // Reject anything that doesn't match expected characters.
-            if (!ObjectIdFormatPattern().IsMatch(objectId))
-            {
-                Log.Warning("DiskHealth: unexpected objectId format, skipping reliability query");
-                return;
-            }
-
-            // Escape quotes & backslashes for the WQL literal.
-            var safeId = objectId.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("'", "\\'");
-            var query = new ObjectQuery(
-                $"ASSOCIATORS OF {{MSFT_PhysicalDisk.ObjectId=\"{safeId}\"}} WHERE AssocClass=MSFT_PhysicalDiskToStorageReliabilityCounter");
-            using var searcher = new ManagementObjectSearcher(scope, query);
-            using var collection = searcher.Get();
-            foreach (ManagementObject mo in collection)
+            // Navigate the association from THIS disk to its reliability counter via
+            // GetRelated — WMI walks the relationship itself, so we never build a WQL
+            // literal from the ObjectId. This is injection-safe by construction and
+            // works regardless of the ObjectId format (the Storage-provider form,
+            // ...SPACES_PhysicalDisk.ObjectId="{guid}:PD:{guid}", contains = and "
+            // that the old regex rejected, silently dropping all SMART data on those
+            // machines). An empty result is normal — non-elevated sessions, Storage
+            // Spaces topologies, and virtual disks simply expose no counter — so it
+            // is NOT logged as a warning (that produced hundreds of WRN lines per
+            // session on the ~2s temperature poll).
+            using var related = disk.GetRelated(
+                "MSFT_StorageReliabilityCounter",
+                "MSFT_PhysicalDiskToStorageReliabilityCounter",
+                null, null, null, null, false, null);
+            foreach (ManagementObject mo in related)
             {
                 using (mo)
                 {
@@ -119,6 +122,7 @@ public sealed partial class DiskHealthService
         }
         catch (ManagementException) { /* driver may not expose counters */ }
         catch (UnauthorizedAccessException) { /* WMI access denied */ }
+        catch (InvalidOperationException) { /* object lacks a full path to navigate from — treat as no counter */ }
     }
 
     /// <summary>
@@ -230,7 +234,4 @@ public sealed partial class DiskHealthService
         2 => "Unhealthy",
         _ => "Unknown"
     };
-
-    [GeneratedRegex(@"^[\w{}\-\\.:/]+$")]
-    private static partial Regex ObjectIdFormatPattern();
 }

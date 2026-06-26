@@ -206,4 +206,38 @@ public class DiskHealthServiceTests
     [Fact] public void ToLong_Zero_ReturnsNull() => Assert.Null(InvokeToLong(0L));
     [Fact] public void ToLong_ValidValue_ReturnsValue() => Assert.Equal(12345L, InvokeToLong(12345L));
     [Fact] public void ToLong_InvalidString_ReturnsNull() => Assert.Null(InvokeToLong("nope"));
+
+    // ---------- Reliability enrichment: association navigation (no ObjectId regex) ----------
+    // Regression for the Storage-Spaces SMART-drop bug: the old code validated the
+    // MSFT_PhysicalDisk ObjectId against a regex (^[\w{}\-\\.:/]+$) before building a
+    // WQL literal. The real Storage-provider ObjectId format embeds = and " characters,
+    // so the regex rejected it and ALL reliability/SMART data was silently dropped on
+    // those machines (plus a Warning logged on every ~2s temperature poll). The fix
+    // navigates the association via ManagementObject.GetRelated instead — no ObjectId
+    // parsing, injection-safe, format-agnostic. These tests pin that contract so the
+    // brittle regex path can never be reintroduced.
+
+    [Fact]
+    public void EnrichWithReliability_TakesManagementObject_NotObjectIdString()
+    {
+        // The method must accept the disk ManagementObject (association source),
+        // proving enrichment no longer parses/validates an ObjectId string.
+        var m = typeof(DiskHealthService).GetMethod(
+            "EnrichWithReliability", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(m);
+        var parms = m!.GetParameters();
+        Assert.Equal("System.Management.ManagementObject", parms[0].ParameterType.FullName);
+        // No parameter is a string ObjectId anymore.
+        Assert.DoesNotContain(parms, p => p.ParameterType == typeof(string));
+    }
+
+    [Fact]
+    public void ObjectIdFormatPattern_IsRemoved()
+    {
+        // The brittle ObjectId-validation regex must be gone — its presence is what
+        // dropped SMART data on Storage-Spaces machines.
+        var regexMethod = typeof(DiskHealthService).GetMethod(
+            "ObjectIdFormatPattern", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.Null(regexMethod);
+    }
 }

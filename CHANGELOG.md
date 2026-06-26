@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.1] - 2026-06-27
+
+### Fixed
+- **System Health now reads SMART/reliability data on Storage Spaces and similar setups.** On machines where Windows surfaces disks through the Storage provider, the physical-disk identifier embeds characters (`=` and `"`) that the previous safety check rejected, so temperature, wear, power-on hours and read/write error counts were silently dropped — the drive still showed as healthy but with no detail — and a warning was written to the rotating log on every few-second refresh. The reliability counters are now read by following the disk's WMI association directly instead of rebuilding a query from the identifier, which is robust to the identifier format and needs no text parsing. Drives that genuinely expose no counters (non-elevated sessions, virtual disks) are treated as a normal empty result rather than logged as a warning. No visible change on machines that already showed full SMART detail.
+
 ## [1.42.0] - 2026-06-26
 
 ### Added

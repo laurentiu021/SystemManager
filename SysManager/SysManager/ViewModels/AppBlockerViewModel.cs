@@ -31,7 +31,9 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     {
         _blocker = blocker;
         IsElevated = AdminHelper.IsElevated();
-        RefreshList();
+        // Walk the IFEO registry tree off the UI thread so the eagerly-built VM doesn't
+        // block startup; the UI update runs back on the UI thread (ConfigureAwait true).
+        InitializeAsync(RefreshListAsync);
     }
 
     [RelayCommand]
@@ -41,10 +43,17 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
             Application.Current?.Shutdown();
     }
 
-    [RelayCommand]
-    private void RefreshList()
+    private async Task RefreshListAsync()
     {
-        var apps = _blocker.GetBlockedApps();
+        var apps = await Task.Run(_blocker.GetBlockedApps).ConfigureAwait(true);
+        ApplyBlockedApps(apps);
+    }
+
+    [RelayCommand]
+    private void RefreshList() => ApplyBlockedApps(_blocker.GetBlockedApps());
+
+    private void ApplyBlockedApps(IReadOnlyList<BlockedApp> apps)
+    {
         BlockedApps.ReplaceWith(apps);
         BlockedCount = BlockedApps.Count;
         BlockStatus = BlockedCount == 0

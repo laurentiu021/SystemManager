@@ -71,18 +71,27 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();
-        Load();
+        // Read both env hives off the UI thread so the eagerly-built VM doesn't block
+        // startup; the UI update runs back on the UI thread (ConfigureAwait true).
+        InitializeAsync(LoadAsync);
     }
 
     private static string Key(EnvVariable v) => Key(v.Scope, v.Name);
     private static string Key(EnvVarScope scope, string name) => $"{(int)scope}\0{name.ToUpperInvariant()}";
 
-    private void Load()
+    private async Task LoadAsync()
+    {
+        var loaded = await Task.Run(_service.ReadAll).ConfigureAwait(true);
+        Load(loaded);
+    }
+
+    private void Load() => Load(_service.ReadAll());
+
+    private void Load(List<EnvVariable> loaded)
     {
         foreach (var v in Variables)
             v.PropertyChanged -= OnVariablePropertyChanged;
 
-        var loaded = _service.ReadAll();
         Variables.ReplaceWith(loaded);
 
         _baseline.Clear();

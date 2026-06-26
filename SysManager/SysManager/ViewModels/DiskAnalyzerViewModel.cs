@@ -43,13 +43,26 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     public DiskAnalyzerViewModel(DiskAnalyzerService service)
     {
         _service = service;
-        PopulatePresets();
+        // Probe drives off the UI thread: DriveInfo.IsReady can stall on a disconnected
+        // mapped/removable volume, which would freeze startup since this VM is built eagerly.
+        // The collection update runs back on the UI thread.
+        InitializeAsync(PopulatePresetsAsync);
     }
 
-    private void PopulatePresets()
+    private async Task PopulatePresetsAsync()
     {
+        var paths = await Task.Run(EnumeratePresetPaths).ConfigureAwait(true);
+        foreach (var p in paths)
+            PresetPaths.Add(p);
+        if (PresetPaths.Count > 0)
+            SelectedPath = PresetPaths[0];
+    }
+
+    private static List<string> EnumeratePresetPaths()
+    {
+        var result = new List<string>();
         foreach (var d in DriveInfo.GetDrives().Where(x => x.DriveType == DriveType.Fixed && x.IsReady))
-            PresetPaths.Add(d.RootDirectory.FullName);
+            result.Add(d.RootDirectory.FullName);
 
         var special = new[]
         {
@@ -57,11 +70,10 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
         };
-        foreach (var p in special.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x) && !PresetPaths.Contains(x)))
-            PresetPaths.Add(p);
+        foreach (var p in special.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x) && !result.Contains(x)))
+            result.Add(p);
 
-        if (PresetPaths.Count > 0)
-            SelectedPath = PresetPaths[0];
+        return result;
     }
 
     [RelayCommand]

@@ -76,6 +76,7 @@ public static class ServiceRegistration
         services.AddSingleton<FileLockService>();
         services.AddSingleton<DisplayProfileService>();
         services.AddSingleton<CpuAffinityService>();
+        services.AddSingleton<DefenderService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -124,6 +125,7 @@ public static class ServiceRegistration
         services.AddSingleton<FileLockViewModel>();
         services.AddSingleton<DisplayProfileViewModel>();
         services.AddSingleton<CpuAffinityViewModel>();
+        services.AddSingleton<DefenderViewModel>();
 
         return services;
     }

@@ -390,4 +390,14 @@ public class MainWindowViewModelTests
         Assert.IsType<CpuAffinityViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    [Fact]
+    public void NavLeaf_Defender_IsImplementedAndMarkedPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-defender-tweaks");
+        Assert.Equal(typeof(SysManager.Views.DefenderView), item.ViewType);
+        Assert.IsType<DefenderViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

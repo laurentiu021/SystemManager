@@ -132,11 +132,17 @@ public sealed class AppFixture : IDisposable
                     e.Name.Contains(text, StringComparison.OrdinalIgnoreCase)),
             TimeSpan.FromSeconds(timeoutSeconds)).Result;
 
-    /// <summary>Find a Button by its exact visible content text.</summary>
-    public Button? FindButton(string text) =>
-        MainWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
-            .FirstOrDefault(b => string.Equals(b.Name, text, StringComparison.OrdinalIgnoreCase))
-            ?.AsButton();
+    /// <summary>
+    /// Find a Button by its exact visible content text, retrying up to
+    /// <paramref name="timeoutSeconds"/>. The retry matters on a slow CI runner: a tab's
+    /// buttons aren't realized in the automation tree the instant navigation happens, so a
+    /// single snapshot (as this used to do) returned null before the content rendered.
+    /// </summary>
+    public Button? FindButton(string text, int timeoutSeconds = 5) =>
+        Retry.WhileNull(() =>
+            MainWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+                .FirstOrDefault(b => string.Equals(b.Name, text, StringComparison.OrdinalIgnoreCase)),
+            TimeSpan.FromSeconds(timeoutSeconds)).Result?.AsButton();
 
     /// <summary>Find a control by its AutomationId.</summary>
     public AutomationElement? FindById(string automationId) =>

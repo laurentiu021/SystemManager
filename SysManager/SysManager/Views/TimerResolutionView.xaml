@@ -1,0 +1,100 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.TimerResolutionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:TimerResolutionViewModel}"
+             Background="{DynamicResource Surface0}">
+
+    <Grid Margin="28,24,28,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Preview banner -->
+        <v:DevelopmentBanner Grid.Row="0" Margin="0,0,0,16"/>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <TextBlock Text="Timer Resolution" Style="{StaticResource Display}"/>
+            <TextBlock Text="Request a finer Windows timer for lower input latency in games. Fully reversible — released when you turn it off or close the app."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Current resolution card -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Current resolution" Style="{StaticResource SectionTitle}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CurrentDisplay}" FontSize="30" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <Border CornerRadius="6" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center"
+                            Background="{DynamicResource Surface3}"
+                            Visibility="{Binding IsHighResolution, Converter={StaticResource FlexVis}}">
+                        <TextBlock Text="HIGH RESOLUTION" FontSize="11" FontWeight="Bold"
+                                   Foreground="{DynamicResource Success}"/>
+                    </Border>
+                </StackPanel>
+                <Grid Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0">
+                        <StackPanel>
+                            <TextBlock Text="FINEST AVAILABLE" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="{Binding FinestDisplay}" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="WINDOWS DEFAULT" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="{Binding CoarsestDisplay}" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Power warning -->
+        <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+                BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE9CE;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                           FontSize="14" Foreground="{DynamicResource WarningText}"
+                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="A finer timer wakes the CPU more often, which can increase power draw, heat and battery drain — most noticeable on laptops."
+                           Foreground="{DynamicResource WarningText}" FontSize="12.5"
+                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Actions -->
+        <WrapPanel Grid.Row="4" Orientation="Horizontal" VerticalAlignment="Top">
+            <Button Content="Enable 0.5 ms timer" Command="{Binding EnableCommand}"
+                    Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
+                    AutomationProperties.Name="Enable high-resolution timer"/>
+            <Button Content="Restore default" Command="{Binding DisableCommand}"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                    AutomationProperties.Name="Restore default timer resolution"/>
+            <Button Content="Refresh" Command="{Binding RefreshCommand}"
+                    Style="{StaticResource GhostButton}" Margin="0,0,8,8"
+                    AutomationProperties.Name="Refresh timer resolution"/>
+        </WrapPanel>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="5" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+                   VerticalAlignment="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"/>
+    </Grid>
+</UserControl>

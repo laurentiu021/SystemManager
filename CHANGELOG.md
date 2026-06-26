@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.35.0] - 2026-06-26
+
+### Added
+- **Timer Resolution tab (Gaming & Profiles).** Request the finest Windows timer resolution (≈0.5 ms instead of the ~15.6 ms default) to reduce input latency in games, and restore it with one click. Shows the live current/finest/default values — it re-queries the *effective* resolution rather than echoing the request, so the number is honest even when Windows stops honoring it (e.g. while minimized on Windows 11). Fully reversible and no admin needed; includes a clear power-consumption warning. Marked **PREVIEW** while it's verified. Closes #326.
+
 ## [1.34.0] - 2026-06-26
 
 ### Added

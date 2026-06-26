@@ -74,14 +74,15 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 40 tabs are fully
-implemented; 17 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 41 tabs are fully
+implemented; 16 are work-in-progress placeholders marked with ⚙️. Newly added
+tabs still being verified are marked **PREVIEW**:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · System Fixes · Boot Analyzer · Task Scheduler ⚙️ |
-| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution ⚙️ · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
+| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution 🔬 · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector ⚙️ · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
@@ -93,6 +94,7 @@ implemented; 17 are work-in-progress placeholders marked with ⚙️:
 | ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ · Environment Variables |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
+> 🔬 = Preview — implemented and usable, still being verified; marked with a PREVIEW pill in the app.
 
 Groups expand and collapse with a click. Collapsed groups show a child count
 badge, a subtitle with abbreviated child labels, and a tooltip with the full
@@ -446,6 +448,19 @@ Reclaim space and clear browsing traces, per browser:
 - Select/deselect all, batch uninstall with confirmation dialog
 - Local app support — uninstalls apps not in winget via registry UninstallString
 - Live console output from winget
+
+### Timer Resolution 🔬
+- **Lower input latency for games** — requests the finest Windows timer
+  resolution (≈0.5 ms) instead of the ~15.6 ms default, via the ntdll
+  `NtSetTimerResolution` API
+- **Live current/finest/default readout** — always re-queries the *effective*
+  resolution (Windows 11 may stop honoring a request while the window is
+  minimized), so the number shown is the real one
+- **One-click enable / restore** — fully reversible; the request is released
+  when you restore it or simply close the app. No admin required
+- **Power-cost warning** — a finer timer wakes the CPU more often, increasing
+  power draw and battery drain on laptops
+- _Preview — implemented and usable, still being verified._
 
 ### Performance Mode
 - **Per-tweak Apply buttons** — each setting is independent

@@ -42,7 +42,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `PlaceholderViewModel` (Task Scheduler) |
-| Gaming & Profiles | `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles) |
+| Gaming & Profiles | `TimerResolutionViewModel` · `PlaceholderViewModel` (Gaming Profile · Standby List Cleaner · CPU Core Affinity · Display Profiles) |
 | Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `PlaceholderViewModel` (Resource History · File Lock Detector · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
@@ -93,6 +93,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
+- `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value. _Preview._
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -228,6 +229,10 @@ Key services:
   (event 100 boot durations; 101–110 slow-component events). Event-ID→kind mapping
   and event-XML field parsing are pure, unit-tested static methods; reading the log
   needs admin.
+- `TimerResolutionService` — thin wrapper over ntdll `NtQueryTimerResolution` /
+  `NtSetTimerResolution`. The request is a per-process contribution Windows reverts
+  on exit, so it's fully reversible and needs no admin; the 100ns→ms conversion and
+  high-resolution detection are pure, unit-tested static methods on the model.
 - `LegacyPanelService` — opens classic Windows applets (Control Panel, Sound,
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches

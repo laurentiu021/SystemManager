@@ -348,4 +348,16 @@ public class MainWindowViewModelTests
             Assert.Equal(1, owners);
         }
     }
+
+    [Fact]
+    public void NavLeaf_TimerResolution_IsImplementedAndMarkedPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-timer-resolution");
+        // Now a real view, not the WIP placeholder.
+        Assert.Equal(typeof(SysManager.Views.TimerResolutionView), item.ViewType);
+        Assert.IsType<TimerResolutionViewModel>(item.Content);
+        // Surfaced as PREVIEW until verified.
+        Assert.True(item.IsInDevelopment);
+    }
 }

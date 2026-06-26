@@ -57,6 +57,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public BrowserCleanerViewModel BrowserCleaner { get; }
     public PrivacyMonitorViewModel PrivacyMonitor { get; }
     public BootAnalyzerViewModel BootAnalyzer { get; }
+    public TimerResolutionViewModel TimerResolution { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -159,6 +160,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             BrowserCleaner = sp.GetRequiredService<BrowserCleanerViewModel>();
             PrivacyMonitor = sp.GetRequiredService<PrivacyMonitorViewModel>();
             BootAnalyzer = sp.GetRequiredService<BootAnalyzerViewModel>();
+            TimerResolution = sp.GetRequiredService<TimerResolutionViewModel>();
         }
         else
         {
@@ -220,6 +222,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             BrowserCleaner = new BrowserCleanerViewModel(new BrowserCleanerService());
             PrivacyMonitor = new PrivacyMonitorViewModel(new PrivacyMonitorService());
             BootAnalyzer = new BootAnalyzerViewModel(new BootAnalyzerService());
+            TimerResolution = new TimerResolutionViewModel(new TimerResolutionService());
         }
 
         InitPlaceholders();
@@ -306,7 +309,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Group("grp-gaming", "Gaming & Profiles", "",
             Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView)),
             Item("nav-standby-cleaner",  "Standby List Cleaner", "", WipStandbyListCleaner, typeof(Views.PlaceholderView)),
-            Item("nav-timer-resolution", "Timer Resolution",     "", WipTimerResolution,    typeof(Views.PlaceholderView)),
+            Item("nav-timer-resolution", "Timer Resolution",     "", TimerResolution,       typeof(Views.TimerResolutionView), inDevelopment: true),
             Item("nav-cpu-affinity",     "CPU Core Affinity",    "", WipCpuAffinity,        typeof(Views.PlaceholderView)),
             Item("nav-display-profiles", "Display Profiles",     "", WipDisplayProfiles,    typeof(Views.PlaceholderView))),
 

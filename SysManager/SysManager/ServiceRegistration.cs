@@ -72,6 +72,7 @@ public static class ServiceRegistration
         services.AddSingleton<PrivacyMonitorService>();
         services.AddSingleton<BootAnalyzerService>();
         services.AddSingleton<WindowsUpdateService>();
+        services.AddSingleton<TimerResolutionService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -116,6 +117,7 @@ public static class ServiceRegistration
         services.AddSingleton<BrowserCleanerViewModel>();
         services.AddSingleton<PrivacyMonitorViewModel>();
         services.AddSingleton<BootAnalyzerViewModel>();
+        services.AddSingleton<TimerResolutionViewModel>();
 
         return services;
     }

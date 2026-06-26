@@ -84,7 +84,7 @@ public class MainWindowViewModelTests
         // Dashboard
         Assert.Contains("nav-dashboard", ids);
 
-        // System (11)
+        // System (10)
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-performance", ids);
@@ -94,7 +94,6 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-restore-points", ids);
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
-        Assert.Contains("nav-legacy-panels", ids);
         Assert.Contains("nav-system-fixes", ids);
 
         // Gaming & Profiles (5)
@@ -104,10 +103,11 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-cpu-affinity", ids);
         Assert.Contains("nav-display-profiles", ids);
 
-        // Monitor (6)
+        // Monitor (7)
         Assert.Contains("nav-processes", ids);
         Assert.Contains("nav-resource-history", ids);
         Assert.Contains("nav-privacy-monitor", ids);
+        Assert.Contains("nav-app-alerts", ids);
         Assert.Contains("nav-file-lock", ids);
         Assert.Contains("nav-settings-watchdog", ids);
         Assert.Contains("nav-bandwidth-monitor", ids);
@@ -134,33 +134,33 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-bulk-installer", ids);
         Assert.Contains("nav-uninstaller", ids);
 
-        // Privacy & Security (9)
+        // Privacy & Security (8)
         Assert.Contains("nav-privacy-settings", ids);
         Assert.Contains("nav-file-shredder", ids);
         Assert.Contains("nav-app-blocker", ids);
-        Assert.Contains("nav-app-alerts", ids);
         Assert.Contains("nav-debloater", ids);
         Assert.Contains("nav-browser-cleaner", ids);
         Assert.Contains("nav-edge-onedrive", ids);
         Assert.Contains("nav-defender-tweaks", ids);
         Assert.Contains("nav-notification-blocker", ids);
 
-        // Customization (4)
+        // Customization (3)
         Assert.Contains("nav-context-menu", ids);
         Assert.Contains("nav-dark-mode", ids);
         Assert.Contains("nav-volume-control", ids);
-        Assert.Contains("nav-env-variables", ids);
 
-        // Info (5)
+        // Info (6)
         Assert.Contains("nav-drivers", ids);
         Assert.Contains("nav-battery", ids);
         Assert.Contains("nav-logs", ids);
         Assert.Contains("nav-system-report", ids);
+        Assert.Contains("nav-legacy-panels", ids);
         Assert.Contains("nav-about", ids);
 
-        // Advanced (2)
+        // Advanced (3)
         Assert.Contains("nav-profile-export", ids);
         Assert.Contains("nav-cli-interface", ids);
+        Assert.Contains("nav-env-variables", ids);
     }
 
     [Fact]
@@ -240,11 +240,11 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_SystemGroup_Contains11Items()
+    public void NavGroups_SystemGroup_Contains10Items()
     {
         var vm = new MainWindowViewModel();
         var sys = vm.NavGroups.First(g => g.Id == "grp-system");
-        Assert.Equal(11, sys.Children.Count);
+        Assert.Equal(10, sys.Children.Count);
         var ids = sys.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
@@ -255,8 +255,30 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-restore-points", ids);
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
-        Assert.Contains("nav-legacy-panels", ids);
         Assert.Contains("nav-system-fixes", ids);
+        // Legacy Panels is a read-only applet launcher — it lives in Info, not System.
+        Assert.DoesNotContain("nav-legacy-panels", ids);
+    }
+
+    [Fact]
+    public void NavGroups_AppAlerts_LivesInMonitorNotPrivacy()
+    {
+        var vm = new MainWindowViewModel();
+        var monitor = vm.NavGroups.First(g => g.Id == "grp-monitor").Children.Select(c => c.Id).ToList();
+        var privacy = vm.NavGroups.First(g => g.Id == "grp-privacy").Children.Select(c => c.Id).ToList();
+        // App Alerts passively watches for new installs — it belongs with the monitoring tabs.
+        Assert.Contains("nav-app-alerts", monitor);
+        Assert.DoesNotContain("nav-app-alerts", privacy);
+    }
+
+    [Fact]
+    public void NavGroups_LegacyPanels_LivesInInfoNotSystem()
+    {
+        var vm = new MainWindowViewModel();
+        var info = vm.NavGroups.First(g => g.Id == "grp-info").Children.Select(c => c.Id).ToList();
+        var system = vm.NavGroups.First(g => g.Id == "grp-system").Children.Select(c => c.Id).ToList();
+        Assert.Contains("nav-legacy-panels", info);
+        Assert.DoesNotContain("nav-legacy-panels", system);
     }
 
     [Fact]

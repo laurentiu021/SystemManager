@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.16] - 2026-06-26
+
+### Changed
+- **Moved "Environment Variables" from the Customization group to Advanced**, next to Profile Export/Import — it's a system/developer tool, not a UI-customization one. The tab itself is unchanged.
+- **Moved "App Alerts" from Privacy & Security to the Monitor group.** App Alerts passively watches for newly installed apps and keeps a timestamped history — it observes rather than enforces, so it belongs alongside the other monitoring tabs. The tab itself is unchanged.
+- **Moved "Legacy Panels" from the System group to Info.** It's a read-only launcher for classic Windows applets (Device Manager, Disk Management, etc.) with no system modification, so it sits better among the other read-only Info tabs. The tab itself is unchanged.
+- **Quick Cleanup now separates "Clean up" from "Repair Windows".** Clean TEMP / Empty Recycle Bin / Rescan and the SFC / DISM repairs were previously one mixed row of buttons; they're now two labelled sections so it's clear which actions free space and which repair Windows. Also added accessible names to all the action buttons for screen readers.
+
 ## [1.33.15] - 2026-06-26
 
 ### Fixed

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.41.0] - 2026-06-26
+
+### Added
+- **Dark Mode Scheduler tab (Customization).** Switch the Windows light/dark theme on demand, or have it follow a fixed-time schedule (e.g. dark at 19:00, light at 07:00). Optionally switches the taskbar/Start too. The theme is applied instantly (no sign-out) by writing the per-user theme setting and notifying Windows; no admin needed and fully reversible. Honest about its limits: the schedule runs while SysManager (or its tray) is open — it's not a background service. Marked **PREVIEW** while it's verified. Closes #329.
+
 ## [1.40.0] - 2026-06-26
 
 ### Added

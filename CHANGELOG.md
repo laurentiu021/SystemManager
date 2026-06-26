@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.40.0] - 2026-06-26
+
+### Added
+- **Task Scheduler tab (System).** Browse all Windows scheduled tasks and turn them on or off. Tasks are color-coded by type — Third-party, well-known Telemetry (CEIP / Compatibility Appraiser / Feedback / Error Reporting), and System — so it's clear what's safe to touch. Filter by name/path, optionally hide system tasks, and see each task's last/next run. Disabling is **fully reversible and never deletes a task**; system tasks show an extra confirmation warning, changes need administrator, and each toggle is verified by reading the task's state back. Marked **PREVIEW** while it's verified. Closes #334.
+
 ## [1.39.0] - 2026-06-26
 
 ### Added

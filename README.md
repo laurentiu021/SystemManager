@@ -74,14 +74,14 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 45 tabs are fully
-implemented; 12 are work-in-progress placeholders marked with ⚙️. Newly added
+find what you need without scrolling through a flat list. 46 tabs are fully
+implemented; 11 are work-in-progress placeholders marked with ⚙️. Newly added
 tabs still being verified are marked **PREVIEW**:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · System Fixes · Boot Analyzer · Task Scheduler ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · System Fixes · Boot Analyzer · Task Scheduler 🔬 |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution 🔬 · CPU Core Affinity 🔬 · Display Profiles 🔬 |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector 🔬 · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
@@ -223,6 +223,17 @@ a confirmation before it runs:
 - Lists the apps, drivers, services, and devices Windows flagged as slowing boot,
   with the delay attributed to each
 - Read-only; reading the log requires administrator (elevation banner shown)
+
+### Task Scheduler 🔬
+- **Browse every Windows scheduled task** with its state, type, and last/next run
+- **Color-coded by type** — Third-party, well-known **Telemetry** (Compatibility
+  Appraiser, CEIP, Feedback, Error Reporting), and **System** — so it's obvious
+  what's safe to touch
+- **Enable / disable** any task; disabling is **fully reversible and never deletes
+  the task** — System tasks show an extra warning before you disable them
+- Filter by name or path, and optionally hide system tasks to focus on the rest
+- Changes need administrator and are verified by reading the task's state back
+- _Preview — implemented and usable, still being verified._
 
 ### Windows Update (Windows Update Agent COM API)
 - Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —

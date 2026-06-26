@@ -62,6 +62,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public DisplayProfileViewModel DisplayProfile { get; }
     public CpuAffinityViewModel CpuAffinity { get; }
     public DefenderViewModel Defender { get; }
+    public TaskSchedulerViewModel TaskScheduler { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -169,6 +170,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             DisplayProfile = sp.GetRequiredService<DisplayProfileViewModel>();
             CpuAffinity = sp.GetRequiredService<CpuAffinityViewModel>();
             Defender = sp.GetRequiredService<DefenderViewModel>();
+            TaskScheduler = sp.GetRequiredService<TaskSchedulerViewModel>();
         }
         else
         {
@@ -235,6 +237,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             DisplayProfile = new DisplayProfileViewModel(new DisplayProfileService());
             CpuAffinity = new CpuAffinityViewModel(new CpuAffinityService());
             Defender = new DefenderViewModel(new DefenderService(new PowerShellRunner()));
+            TaskScheduler = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner()));
         }
 
         InitPlaceholders();
@@ -314,7 +317,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-startup",          "Startup Manager",  "", Startup,          typeof(Views.StartupView)),
             Item("nav-windows-features", "Windows Features", "", WindowsFeatures,  typeof(Views.WindowsFeaturesView)),
             Item("nav-restore-points",   "Restore Points",   "", RestorePoints,    typeof(Views.RestorePointsView)),
-            Item("nav-task-scheduler",   "Task Scheduler",   "", WipTaskScheduler, typeof(Views.PlaceholderView)),
+            Item("nav-task-scheduler",   "Task Scheduler",   "", TaskScheduler,    typeof(Views.TaskSchedulerView), inDevelopment: true),
             Item("nav-boot-analyzer",    "Boot Analyzer",    "", BootAnalyzer,     typeof(Views.BootAnalyzerView)),
             Item("nav-system-fixes",     "System Fixes",     "", SystemFixes,      typeof(Views.SystemFixesView))),
 

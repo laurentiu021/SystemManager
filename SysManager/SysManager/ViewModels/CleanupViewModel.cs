@@ -121,12 +121,16 @@ public sealed partial class CleanupViewModel : ViewModelBase
                 try
                 {
                     long binBytes = 0;
-                    var recyclePath = @"C:\$Recycle.Bin";
-                    if (System.IO.Directory.Exists(recyclePath))
+                    // The Recycle Bin lives in a hidden $Recycle.Bin folder on EVERY fixed
+                    // drive, not just C:. Sum them all so the estimate isn't drive-bound.
+                    foreach (var drive in DriveInfo.GetDrives())
                     {
-                        foreach (var f in System.IO.Directory.EnumerateFiles(recyclePath, "*", System.IO.SearchOption.AllDirectories))
+                        if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
+                        var recyclePath = Path.Combine(drive.RootDirectory.FullName, "$Recycle.Bin");
+                        if (!Directory.Exists(recyclePath)) continue;
+                        foreach (var f in Directory.EnumerateFiles(recyclePath, "*", SearchOption.AllDirectories))
                         {
-                            try { binBytes += new System.IO.FileInfo(f).Length; }
+                            try { binBytes += new FileInfo(f).Length; }
                             catch (IOException) { /* skip inaccessible file */ }
                             catch (UnauthorizedAccessException) { /* skip protected file */ }
                         }

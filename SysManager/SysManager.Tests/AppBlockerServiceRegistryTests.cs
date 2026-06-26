@@ -17,7 +17,12 @@ namespace SysManager.Tests;
 public sealed class AppBlockerServiceRegistryTests : IDisposable
 {
     private const string IfeoPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
-    private const string BlockerDebugger = @"C:\Windows\System32\SysManager_Blocked.exe";
+
+    // Mirror the service's own derivation (Environment.SystemDirectory) rather than a
+    // hardcoded C:\Windows\System32 — Windows can be installed elsewhere, and asserting a
+    // literal would make this test pass only on a default install.
+    private static readonly string BlockerDebugger =
+        System.IO.Path.Combine(Environment.SystemDirectory, "SysManager_Blocked.exe");
 
     private readonly string _rootName = @"Software\SysManagerTests\AppBlocker_" + Guid.NewGuid().ToString("N");
     private readonly RegistryKey _root;

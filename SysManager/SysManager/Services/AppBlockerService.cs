@@ -25,7 +25,13 @@ namespace SysManager.Services;
 public sealed partial class AppBlockerService : IAppBlockerService
 {
     private const string IfeoPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
-    private const string BlockerDebugger = @"C:\Windows\System32\SysManager_Blocked.exe";
+
+    // Sentinel "Debugger" path written into IFEO to block an app: it points at a file that
+    // does not exist, so the launch fails. Derived from the real system directory rather than
+    // hardcoding C:\Windows\System32 (Windows can be installed on another drive/directory).
+    // Compared case-insensitively on read, so blocks written with the old literal still match.
+    private static readonly string BlockerDebugger =
+        Path.Combine(Environment.SystemDirectory, "SysManager_Blocked.exe");
 
     /// <summary>
     /// Boot- and logon-critical executables that must never be blocked. An IFEO

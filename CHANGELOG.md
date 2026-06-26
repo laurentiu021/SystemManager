@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.11] - 2026-06-26
+
+### Fixed
+- **Recycle Bin size estimate on the Cleanup tab now counts every fixed drive, not just C:.** It previously looked only at `C:\$Recycle.Bin`, so deleted files on other drives weren't reflected in the estimate. It now sums the hidden `$Recycle.Bin` on each ready fixed drive.
+- **App Blocker no longer assumes Windows is installed on C:.** The sentinel path it writes to block an app is now derived from the real system directory instead of a hardcoded `C:\Windows\System32`, so blocking works on systems where Windows lives on another drive. Existing blocks are unaffected (the value is compared case-insensitively).
+
 ## [1.33.10] - 2026-06-25
 
 ### Fixed

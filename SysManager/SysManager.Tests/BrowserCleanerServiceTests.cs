@@ -174,8 +174,12 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         // the deletion path itself refuses to follow the junction.
         var item = new Models.BrowserCleanupItem
         {
-            Browser = "Google Chrome", Category = "Cache", Description = "",
-            Paths = [cacheLink], IsSensitive = false, IsSelected = true
+            Browser = "Google Chrome",
+            Category = "Cache",
+            Description = "",
+            Paths = [cacheLink],
+            IsSensitive = false,
+            IsSelected = true
         };
         var deleted = await _svc.CleanAsync([item]);
 

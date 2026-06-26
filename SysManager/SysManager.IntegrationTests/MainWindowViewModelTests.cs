@@ -370,4 +370,14 @@ public class MainWindowViewModelTests
         Assert.IsType<FileLockViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    [Fact]
+    public void NavLeaf_DisplayProfiles_IsImplementedAndMarkedPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-display-profiles");
+        Assert.Equal(typeof(SysManager.Views.DisplayProfileView), item.ViewType);
+        Assert.IsType<DisplayProfileViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

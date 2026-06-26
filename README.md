@@ -74,15 +74,15 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 42 tabs are fully
-implemented; 15 are work-in-progress placeholders marked with ⚙️. Newly added
+find what you need without scrolling through a flat list. 43 tabs are fully
+implemented; 14 are work-in-progress placeholders marked with ⚙️. Newly added
 tabs still being verified are marked **PREVIEW**:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · System Fixes · Boot Analyzer · Task Scheduler ⚙️ |
-| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution 🔬 · CPU Core Affinity ⚙️ · Display Profiles ⚙️ |
+| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution 🔬 · CPU Core Affinity ⚙️ · Display Profiles 🔬 |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector 🔬 · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
@@ -471,6 +471,17 @@ Reclaim space and clear browsing traces, per browser:
   when you restore it or simply close the app. No admin required
 - **Power-cost warning** — a finer timer wakes the CPU more often, increasing
   power draw and battery drain on laptops
+- _Preview — implemented and usable, still being verified._
+
+### Display Profiles 🔬
+- **Quick-switch resolution + refresh rate** — pick a mode (e.g. 165 Hz for
+  gaming, 60 Hz for work) from the list of everything your display supports,
+  using only the Windows display APIs (no NVIDIA/AMD tool conflict)
+- **Safe by design** — applies for the session, so a reboot reverts; on top of
+  that a **15-second auto-revert** restores the previous mode unless you confirm
+  "Keep", so a bad mode can never strand you on a blank screen
+- **Per-display** — choose which monitor to configure; shows the current mode
+- Validates each mode (CDS_TEST) before applying; no admin required
 - _Preview — implemented and usable, still being verified._
 
 ### Performance Mode

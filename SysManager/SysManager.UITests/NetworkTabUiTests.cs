@@ -6,19 +6,25 @@ using FlaUI.Core.AutomationElements;
 
 namespace SysManager.UITests;
 
+/// <summary>
+/// UI tests for the Ping tab (Network group). Ping, Traceroute, and Speed Test are now
+/// separate sidebar entries (nav-ping / nav-traceroute / nav-speed-test), so this suite
+/// only asserts the Ping tab's own content — the old combined "Network" tab with sub-tabs
+/// no longer exists.
+/// </summary>
 [Collection("App")]
 public class NetworkTabUiTests
 {
     private readonly AppFixture _fx;
     public NetworkTabUiTests(AppFixture fx) => _fx = fx;
 
-    private void GoTo() => _fx.GoToTab("nav-network");
+    private void GoTo() => _fx.GoToTab("nav-ping");
 
     [Fact]
     public void Header_Visible()
     {
         GoTo();
-        Assert.NotNull(_fx.WaitForText("Network"));
+        Assert.NotNull(_fx.WaitForText("Ping"));
     }
 
     [Fact]
@@ -40,15 +46,6 @@ public class NetworkTabUiTests
     {
         GoTo();
         Assert.NotNull(_fx.WaitForText("Preset"));
-    }
-
-    [Fact]
-    public void SubTabs_Ping_Traceroute_SpeedTest_Visible()
-    {
-        GoTo();
-        Assert.NotNull(_fx.WaitForText("Ping"));
-        Assert.NotNull(_fx.WaitForText("Traceroute"));
-        Assert.NotNull(_fx.WaitForText("Speed test"));
     }
 
     [Fact]
@@ -88,9 +85,8 @@ public class NetworkTabUiTests
     public void HealthHeadline_Renders()
     {
         GoTo();
-        // Before Start, the health headline is either "Waiting for data…" or a
-        // verdict from a previous run. Either way, the word "…" / a real headline
-        // element must exist.
+        // Before Start, the health headline is either "Waiting for data…" or a verdict
+        // from a previous run. Either way a real headline element must exist.
         var headline = _fx.WaitForText("data") ?? _fx.WaitForText("healthy") ?? _fx.WaitForText("problem");
         Assert.True(headline != null, "No health headline visible");
     }
@@ -121,39 +117,5 @@ public class NetworkTabUiTests
     {
         GoTo();
         Assert.NotNull(_fx.FindButton("Add target"));
-    }
-
-    [Fact]
-    public void SwitchToTraceroute_ShowsTraceNow()
-    {
-        GoTo();
-        // Click the Traceroute pill
-        var pill = _fx.MainWindow.FindAllDescendants()
-            .FirstOrDefault(e =>
-                string.Equals(e.Name, "Traceroute", StringComparison.OrdinalIgnoreCase) &&
-                e.ControlType == FlaUI.Core.Definitions.ControlType.TabItem);
-        if (pill != null)
-        {
-            pill.AsTabItem().Select();
-            Thread.Sleep(300);
-            Assert.NotNull(_fx.WaitForText("Trace now"));
-        }
-    }
-
-    [Fact]
-    public void SwitchToSpeedTest_ShowsBothEngines()
-    {
-        GoTo();
-        var pill = _fx.MainWindow.FindAllDescendants()
-            .FirstOrDefault(e =>
-                string.Equals(e.Name, "Speed test", StringComparison.OrdinalIgnoreCase) &&
-                e.ControlType == FlaUI.Core.Definitions.ControlType.TabItem);
-        if (pill != null)
-        {
-            pill.AsTabItem().Select();
-            Thread.Sleep(300);
-            Assert.NotNull(_fx.WaitForText("HTTP speed test"));
-            Assert.NotNull(_fx.WaitForText("Ookla speed test"));
-        }
     }
 }

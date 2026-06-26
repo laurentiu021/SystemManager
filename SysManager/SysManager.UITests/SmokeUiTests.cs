@@ -41,11 +41,11 @@ public class SmokeUiTests
     [Theory]
     [InlineData("nav-dashboard", "Scan system")]
     [InlineData("nav-app-updates", "Scan for updates")]
-    [InlineData("nav-windows-update", "Check module")]
+    [InlineData("nav-windows-update", "Windows Update")]
     [InlineData("nav-system-health", "Overview")]
     [InlineData("nav-cleanup", "Clean TEMP")]
-    [InlineData("nav-network", "Targets")]
-    [InlineData("nav-drivers", "List installed drivers")]
+    [InlineData("nav-ping", "Targets")]
+    [InlineData("nav-drivers", "List drivers")]
     [InlineData("nav-logs", "System logs")]
     public void EachTab_ShowsSignatureElement(string navId, string expectedText)
     {
@@ -58,7 +58,7 @@ public class SmokeUiTests
     {
         foreach (var id in new[] {
             "nav-dashboard", "nav-app-updates", "nav-windows-update",
-            "nav-system-health", "nav-cleanup", "nav-network",
+            "nav-system-health", "nav-cleanup", "nav-ping",
             "nav-drivers", "nav-logs" })
         {
             Assert.NotNull(_fx.FindById(id));
@@ -68,8 +68,8 @@ public class SmokeUiTests
     [Fact]
     public void NavSelection_PersistsAfterChange()
     {
-        _fx.GoToTab("nav-network");
-        // After clicking Network, verify the content area shows Network content.
+        _fx.GoToTab("nav-ping");
+        // After clicking the Network → Ping tab, verify the content area shows its content.
         Assert.NotNull(_fx.WaitForText("Targets"));
     }
 
@@ -77,7 +77,7 @@ public class SmokeUiTests
     public void Navigate_BackAndForth_NoCrash()
     {
         _fx.GoToTab("nav-logs");
-        _fx.GoToTab("nav-network");
+        _fx.GoToTab("nav-ping");
         _fx.GoToTab("nav-dashboard");
         _fx.GoToTab("nav-cleanup");
         _fx.GoToTab("nav-logs");

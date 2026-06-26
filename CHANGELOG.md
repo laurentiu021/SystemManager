@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.12] - 2026-06-26
+
+### Fixed
+- **Sidebar navigation items are now announced correctly by screen readers.** Each tab in the sidebar exposes its name (e.g. "Dashboard", "System Health") to assistive technology and UI automation; previously the items had no accessible name and were announced only as an internal type name. No visual change.
+
 ## [1.33.11] - 2026-06-26
 
 ### Fixed

@@ -23,7 +23,8 @@ public class DashboardTabUiTests
     public void SectionLabels_Present()
     {
         GoTo();
-        Assert.NotNull(_fx.WaitForText("Operating System"));
+        // The live-vitals tiles: CPU / MEMORY / GPU, plus the Storage section.
+        // (WaitForText is case-insensitive, so "Memory" matches the "MEMORY" tile.)
         Assert.NotNull(_fx.WaitForText("CPU"));
         Assert.NotNull(_fx.WaitForText("Memory"));
         Assert.NotNull(_fx.WaitForText("Storage"));

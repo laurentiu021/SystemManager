@@ -119,7 +119,15 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
+        run: |
+          dotnet restore SysManager/SysManager/SysManager.csproj
+          dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
+
+      # The UI tests launch the real app, so the app itself must be built first.
+      # Without this the fixture finds no SysManager.exe and every UI test errors
+      # at setup — which the previous Release-only job masked behind continue-on-error.
+      - name: Build app (Release)
+        run: dotnet build SysManager/SysManager/SysManager.csproj -c Release --no-restore
 
       - name: Build UI tests
         run: dotnet build SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
@@ -133,10 +141,13 @@ jobs:
           --results-directory TestResults
         continue-on-error: true
 
-      # TEST-005: Surface UI test failures as a visible PR annotation
+      # Surface UI test failures as a visible warning annotation. Use `conclusion`,
+      # NOT `outcome`: with continue-on-error the step's `outcome` is forced to
+      # 'success', so an `outcome == 'failure'` check never fires and the failure is
+      # masked entirely. `conclusion` reflects the real step result.
       - name: Annotate UI test failures
-        if: steps.ui-tests.outcome == 'failure'
-        run: echo "::warning::UI automation tests failed — review test results artifact for details."
+        if: steps.ui-tests.conclusion == 'failure'
+        run: echo "::warning::UI automation tests failed — review the ui-test-results artifact for details."
 
       - name: Upload UI test results
         if: always()

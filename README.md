@@ -74,15 +74,15 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 47 tabs are fully
-implemented; 10 are work-in-progress placeholders marked with ⚙️. Newly added
+find what you need without scrolling through a flat list. 48 tabs are fully
+implemented; 9 are work-in-progress placeholders marked with ⚙️. Newly added
 tabs still being verified are marked **PREVIEW**:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · System Fixes · Boot Analyzer · Task Scheduler 🔬 |
-| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner ⚙️ · Timer Resolution 🔬 · CPU Core Affinity 🔬 · Display Profiles 🔬 |
+| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner 🔬 · Timer Resolution 🔬 · CPU Core Affinity 🔬 · Display Profiles 🔬 |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector 🔬 · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
@@ -531,6 +531,18 @@ Manage Microsoft Defender without digging through Windows Security:
   process is surfaced as needing admin, not a crash)
 - An empty selection is rejected — Windows treats an empty mask as "let the OS
   decide", so the app never silently does the opposite of what you picked
+- _Preview — implemented and usable, still being verified._
+
+### Standby List Cleaner 🔬
+- **Frees cached standby memory** — the built-in equivalent of ISLC, to reduce
+  stutter when RAM runs low in games
+- **Live stats** — total RAM, available, and memory load %, refreshed every 2s
+- **Purge on demand** or **auto-purge** when available RAM drops below a
+  threshold you set with a slider
+- **Safe and non-destructive** — the standby list is clean, disk-backed file
+  cache, so clearing it loses nothing; Windows reloads from disk on next use
+- Reading stats needs no admin; purging requires administrator (it enables the
+  same privilege RAMMap and ISLC use) and reports cleanly if not elevated
 - _Preview — implemented and usable, still being verified._
 
 ### Performance Mode

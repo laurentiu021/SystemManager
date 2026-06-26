@@ -420,4 +420,14 @@ public class MainWindowViewModelTests
         Assert.IsType<DarkModeViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    [Fact]
+    public void NavLeaf_StandbyCleaner_IsImplementedAndMarkedPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-standby-cleaner");
+        Assert.Equal(typeof(SysManager.Views.StandbyMemoryView), item.ViewType);
+        Assert.IsType<StandbyMemoryViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

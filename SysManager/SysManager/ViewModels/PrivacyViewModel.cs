@@ -38,16 +38,25 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();
-        LoadToggles();
+        // Read the registry-backed toggles off the UI thread so the eagerly-built VM
+        // doesn't block startup; the UI update runs back on the UI thread (ConfigureAwait true).
+        InitializeAsync(LoadTogglesAsync);
     }
 
-    private void LoadToggles()
+    private async Task LoadTogglesAsync()
+    {
+        var loaded = await Task.Run(_service.LoadToggles).ConfigureAwait(true);
+        LoadToggles(loaded);
+    }
+
+    private void LoadToggles() => LoadToggles(_service.LoadToggles());
+
+    private void LoadToggles(List<PrivacyToggle> loaded)
     {
         // Unsubscribe from old toggles
         foreach (var t in Toggles)
             t.PropertyChanged -= OnTogglePropertyChanged;
 
-        var loaded = _service.LoadToggles();
         Toggles.ReplaceWith(loaded);
 
         // Capture baseline so we can compute the pending-change count.

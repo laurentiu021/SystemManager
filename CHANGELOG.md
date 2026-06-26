@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.15] - 2026-06-26
+
+### Fixed
+- **Faster, smoother startup — several tabs no longer read the registry or probe drives on the UI thread while the app launches.** The Privacy & Telemetry, Environment Variables, App Blocker, Duplicate Finder, Disk Analyzer, and Profile Export/Import tabs loaded their initial data synchronously as the window was being built, which could briefly freeze launch (worst case: a stalled or disconnected drive). Each now loads in the background like the other tabs, so the window appears promptly and the tab fills in a moment later.
+
 ## [1.33.14] - 2026-06-26
 
 ### Fixed

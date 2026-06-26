@@ -14,10 +14,20 @@ namespace SysManager.Tests;
 /// </summary>
 public class DuplicateFileViewModelTests
 {
+    // The VM resolves its preset folders asynchronously off the UI thread (known-folder +
+    // DriveInfo probing can stall, so it's moved off startup); wait for that init so the
+    // preset assertions observe the populated collection instead of racing the load.
+    private static DuplicateFileViewModel NewVm()
+    {
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
     [Fact]
     public void Constructor_InitialState_IsCorrect()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         Assert.False(vm.IsBusy);
         Assert.Equal(0, vm.GroupCount);
         Assert.Equal(0, vm.DuplicateFileCount);
@@ -30,21 +40,21 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void Constructor_PresetFolders_NotEmpty()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         Assert.NotEmpty(vm.PresetFolders);
     }
 
     [Fact]
     public void Constructor_SelectedFolder_IsSet()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         Assert.False(string.IsNullOrWhiteSpace(vm.SelectedFolder));
     }
 
     [Fact]
     public void Constructor_PresetFolders_ContainUserProfile()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         Assert.Contains(vm.PresetFolders, f => f == userProfile);
     }
@@ -52,7 +62,7 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void Constructor_PresetFolders_ContainFixedDrives()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         var drives = DriveInfo.GetDrives()
             .Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
             .Select(d => d.RootDirectory.FullName);
@@ -64,42 +74,42 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void ScanCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         Assert.NotNull(vm.ScanCommand);
     }
 
     [Fact]
     public void CancelScanCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         Assert.NotNull(vm.CancelScanCommand);
     }
 
     [Fact]
     public void ShowInExplorerCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         Assert.NotNull(vm.ShowInExplorerCommand);
     }
 
     [Fact]
     public void CopyPathCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         Assert.NotNull(vm.CopyPathCommand);
     }
 
     [Fact]
     public void BrowseFolderCommand_Exists()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         Assert.NotNull(vm.BrowseFolderCommand);
     }
 
     [Fact]
     public void MinSizeKb_CanBeChanged()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         vm.MinSizeKb = 500;
         Assert.Equal(500, vm.MinSizeKb);
     }
@@ -107,7 +117,7 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void SelectedFolder_CanBeChanged()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = NewVm();
         vm.SelectedFolder = @"C:\Test";
         Assert.Equal(@"C:\Test", vm.SelectedFolder);
     }

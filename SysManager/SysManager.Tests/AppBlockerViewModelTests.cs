@@ -21,13 +21,17 @@ public class AppBlockerViewModelTests
     {
         var blocker = Substitute.For<IAppBlockerService>();
         blocker.GetBlockedApps().Returns([]);
-        return new AppBlockerViewModel(blocker);
+        return NewVm(blocker);
     }
 
+    // The VM loads the blocked list asynchronously off the UI thread; wait for that init to
+    // finish so the background load can't race a test that mutates BlockedApps afterwards.
     private static AppBlockerViewModel NewVm(IAppBlockerService blocker)
     {
         blocker.GetBlockedApps().Returns([]);
-        return new AppBlockerViewModel(blocker);
+        var vm = new AppBlockerViewModel(blocker);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
     }
 
     [Fact]

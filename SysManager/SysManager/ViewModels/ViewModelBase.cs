@@ -17,11 +17,25 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Completes when the constructor's <see cref="InitializeAsync"/> work has finished
+    /// (or immediately if the VM does no async init). Production never awaits this — the
+    /// window paints while init runs in the background — but tests can await it to observe
+    /// the loaded state deterministically instead of racing the fire-and-forget load.
+    /// </summary>
+    public Task InitializationComplete { get; private set; } = Task.CompletedTask;
+
+    /// <summary>
     /// Safely launches an async task from a constructor or non-async context.
     /// Exceptions are caught and logged instead of becoming unobserved task
-    /// exceptions that could crash the application (CQ-M3).
+    /// exceptions that could crash the application (CQ-M3). The running task is exposed
+    /// via <see cref="InitializationComplete"/> for deterministic test observation.
     /// </summary>
-    protected static async void InitializeAsync(Func<Task> asyncAction, [System.Runtime.CompilerServices.CallerMemberName] string callerName = "")
+    protected void InitializeAsync(Func<Task> asyncAction, [System.Runtime.CompilerServices.CallerMemberName] string callerName = "")
+    {
+        InitializationComplete = RunInitAsync(asyncAction, callerName);
+    }
+
+    private static async Task RunInitAsync(Func<Task> asyncAction, string callerName)
     {
         try
         {

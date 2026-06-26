@@ -31,15 +31,23 @@ public sealed partial class ProfileViewModel : ViewModelBase
     public ProfileViewModel(ProfileService service)
     {
         _service = service;
-        RefreshSections();
         StatusMessage = "Export your SysManager settings to a file, or import a profile from another PC.";
+        // Read the config files off the UI thread so the eagerly-built VM doesn't block
+        // startup; the collection update runs back on the UI thread.
+        InitializeAsync(RefreshSectionsAsync);
     }
 
-    private void RefreshSections()
+    private async Task RefreshSectionsAsync()
     {
-        var available = _service.AvailableSections()
-            .Select(s => new SelectableSection(s) { IsSelected = true });
-        Sections.ReplaceWith(available);
+        var available = await Task.Run(_service.AvailableSections).ConfigureAwait(true);
+        ApplySections(available);
+    }
+
+    private void RefreshSections() => ApplySections(_service.AvailableSections());
+
+    private void ApplySections(IReadOnlyList<ConfigSection> available)
+    {
+        Sections.ReplaceWith(available.Select(s => new SelectableSection(s) { IsSelected = true }));
         HasSections = Sections.Count > 0;
     }
 

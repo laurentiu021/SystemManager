@@ -37,11 +37,24 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     public DuplicateFileViewModel(DuplicateFileService service)
     {
         _service = service;
-        PopulatePresets();
+        // Resolve known-folder paths + probe drives off the UI thread: DriveInfo.IsReady can
+        // stall on a disconnected mapped/removable volume, which would freeze startup since
+        // this VM is built eagerly. The collection update runs back on the UI thread.
+        InitializeAsync(PopulatePresetsAsync);
     }
 
-    private void PopulatePresets()
+    private async Task PopulatePresetsAsync()
     {
+        var folders = await Task.Run(EnumeratePresetFolders).ConfigureAwait(true);
+        foreach (var f in folders)
+            PresetFolders.Add(f);
+        if (PresetFolders.Count > 0)
+            SelectedFolder = PresetFolders[0];
+    }
+
+    private static List<string> EnumeratePresetFolders()
+    {
+        var result = new List<string>();
         var folders = new[]
         {
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -54,14 +67,13 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         };
 
         foreach (var f in folders.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x)))
-            PresetFolders.Add(f);
+            result.Add(f);
 
         // Add fixed drives
         foreach (var d in DriveInfo.GetDrives().Where(x => x.DriveType == DriveType.Fixed && x.IsReady))
-            PresetFolders.Add(d.RootDirectory.FullName);
+            result.Add(d.RootDirectory.FullName);
 
-        if (PresetFolders.Count > 0)
-            SelectedFolder = PresetFolders[0];
+        return result;
     }
 
     [RelayCommand]

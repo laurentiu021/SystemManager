@@ -16,7 +16,15 @@ namespace SysManager.Tests;
 [Collection("DialogService")]
 public class PrivacyViewModelTests
 {
-    private static PrivacyViewModel NewVm() => new(new PrivacyService());
+    // The VM loads its toggles asynchronously off the UI thread (so startup isn't blocked);
+    // wait for that init to finish before asserting loaded state, so the tests observe the
+    // populated collections deterministically instead of racing the background load.
+    private static PrivacyViewModel NewVm()
+    {
+        var vm = new PrivacyViewModel(new PrivacyService());
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
 
     [Fact]
     public void Constructor_Toggles_Populated_With12Items()

@@ -13,10 +13,20 @@ namespace SysManager.Tests;
 /// </summary>
 public class DiskAnalyzerViewModelTests
 {
+    // The VM resolves its preset paths asynchronously off the UI thread (DriveInfo probing
+    // can stall, so it's moved off startup); wait for that init so the preset assertions
+    // observe the populated collection instead of racing the background load.
+    private static DiskAnalyzerViewModel NewVm()
+    {
+        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
     [Fact]
     public void Constructor_InitialState_IsCorrect()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.False(vm.IsBusy);
         Assert.Equal(0, vm.TotalSize);
         Assert.Equal(0, vm.TotalFiles);
@@ -29,21 +39,21 @@ public class DiskAnalyzerViewModelTests
     [Fact]
     public void Constructor_PresetPaths_NotEmpty()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.NotEmpty(vm.PresetPaths);
     }
 
     [Fact]
     public void Constructor_SelectedPath_IsSet()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.False(string.IsNullOrWhiteSpace(vm.SelectedPath));
     }
 
     [Fact]
     public void Constructor_PresetPaths_ContainFixedDrives()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         var drives = DriveInfo.GetDrives()
             .Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
             .Select(d => d.RootDirectory.FullName);
@@ -55,49 +65,49 @@ public class DiskAnalyzerViewModelTests
     [Fact]
     public void AnalyzeCommand_Exists()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.NotNull(vm.AnalyzeCommand);
     }
 
     [Fact]
     public void CancelAnalysisCommand_Exists()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.NotNull(vm.CancelAnalysisCommand);
     }
 
     [Fact]
     public void ShowInExplorerCommand_Exists()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.NotNull(vm.ShowInExplorerCommand);
     }
 
     [Fact]
     public void DrillDownCommand_Exists()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.NotNull(vm.DrillDownCommand);
     }
 
     [Fact]
     public void GoUpCommand_Exists()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.NotNull(vm.GoUpCommand);
     }
 
     [Fact]
     public void BrowseFolderCommand_Exists()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.NotNull(vm.BrowseFolderCommand);
     }
 
     [Fact]
     public void SelectedPath_CanBeChanged()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         vm.SelectedPath = @"C:\Test";
         Assert.Equal(@"C:\Test", vm.SelectedPath);
     }
@@ -105,7 +115,7 @@ public class DiskAnalyzerViewModelTests
     [Fact]
     public void HasDriveInfo_DefaultFalse()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = NewVm();
         Assert.False(vm.HasDriveInfo);
     }
 }

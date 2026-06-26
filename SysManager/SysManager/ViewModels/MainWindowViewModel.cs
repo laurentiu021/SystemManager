@@ -59,6 +59,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public BootAnalyzerViewModel BootAnalyzer { get; }
     public TimerResolutionViewModel TimerResolution { get; }
     public FileLockViewModel FileLock { get; }
+    public DisplayProfileViewModel DisplayProfile { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -163,6 +164,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             BootAnalyzer = sp.GetRequiredService<BootAnalyzerViewModel>();
             TimerResolution = sp.GetRequiredService<TimerResolutionViewModel>();
             FileLock = sp.GetRequiredService<FileLockViewModel>();
+            DisplayProfile = sp.GetRequiredService<DisplayProfileViewModel>();
         }
         else
         {
@@ -226,6 +228,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             BootAnalyzer = new BootAnalyzerViewModel(new BootAnalyzerService());
             TimerResolution = new TimerResolutionViewModel(new TimerResolutionService());
             FileLock = new FileLockViewModel(new FileLockService());
+            DisplayProfile = new DisplayProfileViewModel(new DisplayProfileService());
         }
 
         InitPlaceholders();
@@ -314,7 +317,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-standby-cleaner",  "Standby List Cleaner", "", WipStandbyListCleaner, typeof(Views.PlaceholderView)),
             Item("nav-timer-resolution", "Timer Resolution",     "", TimerResolution,       typeof(Views.TimerResolutionView), inDevelopment: true),
             Item("nav-cpu-affinity",     "CPU Core Affinity",    "", WipCpuAffinity,        typeof(Views.PlaceholderView)),
-            Item("nav-display-profiles", "Display Profiles",     "", WipDisplayProfiles,    typeof(Views.PlaceholderView))),
+            Item("nav-display-profiles", "Display Profiles",     "", DisplayProfile,        typeof(Views.DisplayProfileView), inDevelopment: true)),
 
         Group("grp-monitor", "Monitor", "",
             Item("nav-processes",         "Process Manager",    "", ProcessManager,      typeof(Views.ProcessManagerView)),

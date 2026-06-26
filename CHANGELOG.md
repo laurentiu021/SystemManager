@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.37.0] - 2026-06-26
+
+### Added
+- **Display Profiles tab (Gaming & Profiles).** Quickly switch resolution and refresh rate per monitor — e.g. 165 Hz for gaming, 60 Hz for work — from the list of modes your display actually supports, using only the Windows display APIs (no NVIDIA/AMD tool conflict). Safe by design: changes apply for the session (a reboot reverts), and a **15-second auto-revert** restores the previous mode unless you confirm "Keep", so a bad mode can never strand you on a blank screen. Each mode is validated before applying; no admin needed. Marked **PREVIEW** while it's verified. Closes #328.
+
 ## [1.36.0] - 2026-06-26
 
 ### Added

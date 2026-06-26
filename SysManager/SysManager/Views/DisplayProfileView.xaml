@@ -1,0 +1,106 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.DisplayProfileView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:DisplayProfileViewModel}"
+             Background="{DynamicResource Surface0}">
+
+    <Grid Margin="28,24,28,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Preview banner -->
+        <v:DevelopmentBanner Grid.Row="0" Margin="0,0,0,16"/>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <TextBlock Text="Display Profiles" Style="{StaticResource Display}"/>
+            <TextBlock Text="Quickly switch resolution and refresh rate — e.g. 165 Hz for gaming, 60 Hz for work. Applies for this session and reverts on reboot."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Display picker + current mode -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="DISPLAY" Style="{StaticResource Caption}"/>
+                    <ComboBox ItemsSource="{Binding Displays}" SelectedItem="{Binding SelectedDisplay}"
+                              DisplayMemberPath="Display" Margin="0,4,0,0" Padding="8,6" FontSize="13"
+                              AutomationProperties.Name="Display to configure"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="CURRENT" Style="{StaticResource Caption}"/>
+                    <TextBlock Text="{Binding CurrentMode.Display, FallbackValue=—}" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Auto-revert confirmation bar -->
+        <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+                BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,12"
+                Visibility="{Binding IsAwaitingConfirm, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Foreground="{DynamicResource WarningText}" FontWeight="SemiBold">
+                    <Run Text="Keep these settings? Reverting in"/>
+                    <Run Text="{Binding RevertCountdown, Mode=OneWay}"/><Run Text="s."/>
+                </TextBlock>
+                <Button Grid.Column="1" Content="Keep" Command="{Binding KeepSettingsCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" Padding="16,6"
+                        AutomationProperties.Name="Keep the new display settings"/>
+                <Button Grid.Column="2" Content="Revert now" Command="{Binding RevertNowCommand}"
+                        Style="{StaticResource SecondaryButton}" Padding="14,6"
+                        AutomationProperties.Name="Revert display settings now"/>
+            </Grid>
+        </Border>
+
+        <!-- Modes grid -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
+            <DataGrid ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}"
+                      AutomationProperties.Name="Supported display modes"
+                      AutoGenerateColumns="False" HeadersVisibility="Column"
+                      CanUserAddRows="False" IsReadOnly="True" SelectionMode="Single"
+                      Background="Transparent" BorderThickness="0" GridLinesVisibility="None"
+                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Resolution" Binding="{Binding ResolutionDisplay}" Width="*"/>
+                    <DataGridTextColumn Header="Refresh rate" Binding="{Binding RefreshDisplay}" Width="160"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- Actions + status -->
+        <Grid Grid.Row="5" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+            <Button Grid.Column="1" Content="Apply mode" Command="{Binding ApplyCommand}"
+                    Style="{StaticResource PrimaryButton}" Padding="16,8"
+                    AutomationProperties.Name="Apply the selected display mode"/>
+        </Grid>
+    </Grid>
+</UserControl>

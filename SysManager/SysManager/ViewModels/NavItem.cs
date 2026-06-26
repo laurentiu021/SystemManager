@@ -26,6 +26,13 @@ public sealed partial class NavItem : ObservableObject, IDisposable
     public required object Content { get; init; }
     public required Type ViewType { get; init; }
 
+    /// <summary>
+    /// True for features that are implemented but not yet QA-verified. The sidebar
+    /// shows a small "PREVIEW" pill next to the label, and the view shows a
+    /// <see cref="Views.DevelopmentBanner"/> so users know the feature is new.
+    /// </summary>
+    public bool IsInDevelopment { get; init; }
+
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>

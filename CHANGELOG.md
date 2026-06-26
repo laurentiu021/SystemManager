@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.34.0] - 2026-06-26
+
+### Added
+- **"Preview" marking for newly added features.** Features that are implemented but not yet fully verified now show a small **PREVIEW** pill next to their name in the sidebar and a short banner at the top of the page, so it's clear which tabs are brand-new. This lets new features ship and be tried out while they're still being polished.
+
 ## [1.33.16] - 2026-06-26
 
 ### Changed

@@ -34,8 +34,15 @@ public sealed class AppFixture : IDisposable
             CreateNoWindow = false
         });
 
-        MainWindow = App.GetMainWindow(Automation, TimeSpan.FromSeconds(20))
-            ?? throw new InvalidOperationException("Main window did not appear in time");
+        // A cold WPF app on a freshly-built headless CI runner can take a while to render
+        // its first window, so allow generous time. On failure, report WHY (did the process
+        // crash on launch, or is it just slow?) so a CI failure is diagnosable from the log.
+        MainWindow = App.GetMainWindow(Automation, TimeSpan.FromSeconds(45))
+            ?? throw new InvalidOperationException(
+                "Main window did not appear in time. " +
+                (App.HasExited
+                    ? $"The app process EXITED with code {SafeExitCode()} — it crashed on launch rather than rendering."
+                    : "The app process is still running but produced no main window within the timeout."));
 
         // Sidebar groups render as collapsed Expanders, so their child nav items aren't
         // realized in the UI Automation tree until expanded. Expand everything once up
@@ -134,6 +141,13 @@ public sealed class AppFixture : IDisposable
     /// <summary>Find a control by its AutomationId.</summary>
     public AutomationElement? FindById(string automationId) =>
         MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(automationId));
+
+    /// <summary>Exit code of the launched app, or a marker if it can't be read.</summary>
+    private string SafeExitCode()
+    {
+        try { return App.HasExited ? App.ExitCode.ToString() : "(still running)"; }
+        catch (Exception ex) { return $"(unreadable: {ex.Message})"; }
+    }
 
     private static string FindExecutable()
     {

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.14] - 2026-06-26
+
+### Fixed
+- **Quick Cleanup empties the Recycle Bin the same reliable way as the rest of the app.** It used a PowerShell `Clear-RecycleBin` call that can leave "ghost" entries behind; it now uses the shared shell-API helper (the same one Deep Cleanup and the One-Click Tune-Up use), which clears every drive's bin cleanly. Keeps the three entry points from drifting apart.
+
 ## [1.33.13] - 2026-06-26
 
 ### Fixed

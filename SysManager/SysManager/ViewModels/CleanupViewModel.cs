@@ -247,10 +247,12 @@ public sealed partial class CleanupViewModel : ViewModelBase
         _binCts = new CancellationTokenSource();
         try
         {
-            await _runner.RunScriptViaPwshAsync(@"
-                Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-                'Recycle Bin cleared'
-            ", cancellationToken: _binCts.Token);
+            // Use the shared shell-API helper (the single source of truth) rather than an
+            // inline Clear-RecycleBin: the shell API reliably removes ghosted entries that
+            // Clear-RecycleBin can leave behind, and keeps this in step with Deep Cleanup
+            // and the One-Click Tune-Up. Run off the UI thread.
+            var ct = _binCts.Token;
+            await Task.Run(RecycleBinHelper.EmptyAllDrives, ct);
             StatusMessage = "Done";
             ToastService.Instance.Show("Cleanup complete", "Operation finished successfully");
             await PreScanAsync();

@@ -159,8 +159,13 @@ public class DebloaterServiceTests
 
     private static StoreApp App(string name, string full, bool isProtected = false) => new()
     {
-        Name = name, PackageFullName = full, PackageFamilyName = name + "_abc",
-        DisplayName = name, Publisher = "CN=Microsoft", Version = "1.0.0.0", IsProtected = isProtected
+        Name = name,
+        PackageFullName = full,
+        PackageFamilyName = name + "_abc",
+        DisplayName = name,
+        Publisher = "CN=Microsoft",
+        Version = "1.0.0.0",
+        IsProtected = isProtected
     };
 
     [Fact]

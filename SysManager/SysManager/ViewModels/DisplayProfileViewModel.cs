@@ -62,9 +62,19 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     partial void OnSelectedDisplayChanged(DisplayDevice? value)
     {
         if (value is null) return;
-        var modes = _service.GetSupportedModes(value.DeviceName);
+        // Enumerating modes loops EnumDisplaySettings over every supported mode and
+        // reads the current mode — both are blocking P/Invoke, so run them off the UI
+        // thread and marshal the results back (ConfigureAwait(true)). Launched through
+        // the guarded helper so an unexpected failure is logged, not unobserved.
+        InitializeAsync(() => LoadModesAsync(value.DeviceName));
+    }
+
+    private async Task LoadModesAsync(string deviceName)
+    {
+        var modes = await Task.Run(() => _service.GetSupportedModes(deviceName)).ConfigureAwait(true);
+        var current = await Task.Run(() => _service.GetCurrentMode(deviceName)).ConfigureAwait(true);
         Modes.ReplaceWith(modes);
-        CurrentMode = _service.GetCurrentMode(value.DeviceName);
+        CurrentMode = current;
         SelectedMode = modes.FirstOrDefault(m =>
             CurrentMode is not null && m.Width == CurrentMode.Width &&
             m.Height == CurrentMode.Height && m.RefreshHz == CurrentMode.RefreshHz);
@@ -77,15 +87,22 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         && SelectedMode is not null && !SelectedMode.Equals(CurrentMode);
 
     [RelayCommand(CanExecute = nameof(CanApply))]
-    private void Apply()
+    private async Task ApplyAsync()
     {
         var display = SelectedDisplay;
         var mode = SelectedMode;
         if (display is null || mode is null) return;
 
-        _previousMode = _service.GetCurrentMode(display.DeviceName);
+        // ChangeDisplaySettingsEx can block while the driver re-trains the panel, and
+        // GetCurrentMode is a P/Invoke read — run them off the UI thread so the window
+        // (and the auto-revert DispatcherTimer) stays responsive during the switch.
+        _previousMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
 
-        bool ok = _service.TryApplyMode(display.DeviceName, mode.Width, mode.Height, mode.RefreshHz, out string error);
+        var (ok, error) = await Task.Run(() =>
+        {
+            bool applied = _service.TryApplyMode(display.DeviceName, mode.Width, mode.Height, mode.RefreshHz, out string err);
+            return (applied, err);
+        }).ConfigureAwait(true);
         if (!ok)
         {
             StatusMessage = error;
@@ -93,7 +110,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         }
 
         Log.Information("Applied display mode {Mode} to {Device}", mode.Display, display.DeviceName);
-        CurrentMode = _service.GetCurrentMode(display.DeviceName);
+        CurrentMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
 
         // Begin the auto-revert window — the user must confirm to keep the change.
         BeginRevertCountdown();
@@ -110,7 +127,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RevertNow() => RevertToPrevious("Reverted to the previous display mode.");
+    private Task RevertNowAsync() => RevertToPreviousAsync("Reverted to the previous display mode.");
 
     private void BeginRevertCountdown()
     {
@@ -133,10 +150,12 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
             StatusMessage = $"Keep these settings? Reverting in {RevertCountdown}s…";
             return;
         }
-        RevertToPrevious("No confirmation — reverted to the previous display mode.");
+        // Launch the (async) revert through the guarded helper — the timer callback is
+        // void, so an awaited failure would otherwise be unobserved.
+        InitializeAsync(() => RevertToPreviousAsync("No confirmation — reverted to the previous display mode."));
     }
 
-    private void RevertToPrevious(string message)
+    private async Task RevertToPreviousAsync(string message)
     {
         StopRevertTimer();
         IsAwaitingConfirm = false;
@@ -144,8 +163,10 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         var display = SelectedDisplay;
         if (display is not null && _previousMode is not null)
         {
-            _service.TryApplyMode(display.DeviceName, _previousMode.Width, _previousMode.Height, _previousMode.RefreshHz, out _);
-            CurrentMode = _service.GetCurrentMode(display.DeviceName);
+            var prev = _previousMode;
+            await Task.Run(() =>
+                _service.TryApplyMode(display.DeviceName, prev.Width, prev.Height, prev.RefreshHz, out _)).ConfigureAwait(true);
+            CurrentMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
         }
         _previousMode = null;
         StatusMessage = message;

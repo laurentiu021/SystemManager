@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.2] - 2026-06-27
+
+### Fixed
+- **Display Profiles applies and auto-reverts without freezing the window.** Switching resolution/refresh rate, picking a display, and the 15-second auto-revert all called the Windows display APIs (`EnumDisplaySettings` / `ChangeDisplaySettingsEx`) directly on the UI thread, so the app could briefly stop responding while the driver re-trained the panel — and that stall could hold up the very countdown meant to rescue you from a bad mode. These calls now run on a background thread, so the window and the auto-revert timer stay responsive throughout.
+- **Defender Tweaks no longer lets two changes overlap.** The PUA, Controlled Folder Access, exclusion-add and exclusion-remove actions could be triggered again while a previous change was still being written and verified, starting overlapping operations whose read-back checks could race and show a misleading "not changed" message. Each action now disables the others until it finishes, matching how the rest of the app serialises long-running operations. No change to what any action does.
+
 ## [1.42.1] - 2026-06-27
 
 ### Fixed

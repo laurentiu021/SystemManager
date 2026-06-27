@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.8] - 2026-06-27
+
+### Fixed
+- **Empty-list messages are clearer and no longer misleading.** The "nothing to show" text on Services, Startup Manager, Process Manager, Uninstaller, Windows Features and DNS & Hosts previously assumed a specific cause (e.g. "use Refresh" or "no match for the filter") even when a different one applied, and could flash briefly while a tab was still loading. The wording is now neutral and accurate in every state.
+- **Preview tabs are now released cleanly on exit.** The newer tabs (Display Profiles, Defender Tweaks, Task Scheduler, CPU Affinity, Timer Resolution, File Lock Detector, Standby List Cleaner, Dark Mode Scheduler) weren't being disposed when the app closed, so their timers and event subscriptions could linger. They're now disposed with the rest, and Defender Tweaks unsubscribes its internal handler.
+
+### Changed
+- Documentation accuracy: corrected the System-group tab order in the README and ARCHITECTURE feature tables, fixed the Windows Update description (it uses the Windows Update COM API, user-triggered — not a PSWindowsUpdate auto-check), and aligned the SECURITY supported-versions table with the "latest minor only" policy.
+
 ## [1.42.7] - 2026-06-27
 
 ### Fixed

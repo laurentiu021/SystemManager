@@ -153,7 +153,7 @@
                 </DataGrid>
 
                 <!-- Empty state -->
-                <TextBlock Text="No host entries yet. Add one above, or your hosts file is empty."
+                <TextBlock Text="No host entries to show. Add one above to get started."
                            Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            Visibility="{Binding HostEntries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

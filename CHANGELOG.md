@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.5] - 2026-06-27
+
+### Fixed
+- **Display Profiles auto-revert now restores the correct monitor.** If you applied a mode and then switched to a different display in the dropdown during the 15-second "Keep these settings?" countdown, the automatic revert could restore the *previous* display's old mode onto the *newly selected* one. The pending revert now remembers the exact display it belongs to and only ever restores that one. Also hardened against rapid display switching: an in-flight mode list for a display you've already switched away from no longer overwrites the current one.
+
 ## [1.42.4] - 2026-06-27
 
 ### Fixed

@@ -24,6 +24,11 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     private readonly DisplayProfileService _service;
     private DispatcherTimer? _revertTimer;
     private DisplayMode? _previousMode;
+    // The display the pending revert belongs to, captured at Apply time. The user can
+    // switch SelectedDisplay during the 15 s countdown, so revert must target THIS
+    // device — not whatever is selected when the timer fires — or it would apply
+    // display A's old mode to display B.
+    private DisplayDevice? _previousDevice;
     private const int RevertSeconds = 15;
 
     public BulkObservableCollection<DisplayDevice> Displays { get; } = new();
@@ -73,6 +78,10 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     {
         var modes = await Task.Run(() => _service.GetSupportedModes(deviceName)).ConfigureAwait(true);
         var current = await Task.Run(() => _service.GetCurrentMode(deviceName)).ConfigureAwait(true);
+        // Rapid display switches launch overlapping loads; if the selection moved on while
+        // this one was running, drop its results so a slow earlier load can't overwrite
+        // the newer display's modes (last-writer-wins).
+        if (SelectedDisplay is null || SelectedDisplay.DeviceName != deviceName) return;
         Modes.ReplaceWith(modes);
         CurrentMode = current;
         SelectedMode = modes.FirstOrDefault(m =>
@@ -96,6 +105,9 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         // ChangeDisplaySettingsEx can block while the driver re-trains the panel, and
         // GetCurrentMode is a P/Invoke read — run them off the UI thread so the window
         // (and the auto-revert DispatcherTimer) stays responsive during the switch.
+        // Capture the device alongside its previous mode so a revert targets THIS
+        // display even if the user changes the selection during the countdown.
+        _previousDevice = display;
         _previousMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
 
         var (ok, error) = await Task.Run(() =>
@@ -122,6 +134,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         StopRevertTimer();
         IsAwaitingConfirm = false;
         _previousMode = null;
+        _previousDevice = null;
         StatusMessage = $"Display set to {CurrentMode?.Display}.";
         ApplyCommand.NotifyCanExecuteChanged();
     }
@@ -160,15 +173,22 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         StopRevertTimer();
         IsAwaitingConfirm = false;
 
-        var display = SelectedDisplay;
-        if (display is not null && _previousMode is not null)
+        // Revert the device the change was APPLIED to (captured at Apply time), not the
+        // one currently selected — the user may have switched the picker during the
+        // countdown, and reverting the wrong display would corrupt its mode.
+        var device = _previousDevice;
+        var prev = _previousMode;
+        if (device is not null && prev is not null)
         {
-            var prev = _previousMode;
             await Task.Run(() =>
-                _service.TryApplyMode(display.DeviceName, prev.Width, prev.Height, prev.RefreshHz, out _)).ConfigureAwait(true);
-            CurrentMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
+                _service.TryApplyMode(device.DeviceName, prev.Width, prev.Height, prev.RefreshHz, out _)).ConfigureAwait(true);
+            // Only refresh CurrentMode if the reverted device is still the selected one,
+            // so we don't overwrite the display the user has since switched to.
+            if (ReferenceEquals(device, SelectedDisplay))
+                CurrentMode = await Task.Run(() => _service.GetCurrentMode(device.DeviceName)).ConfigureAwait(true);
         }
         _previousMode = null;
+        _previousDevice = null;
         StatusMessage = message;
         ApplyCommand.NotifyCanExecuteChanged();
     }

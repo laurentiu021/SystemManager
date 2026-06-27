@@ -2,18 +2,22 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="TimerResolutionViewModel"/>. <see cref="TimerResolutionService"/>
-/// is sealed with no interface, so it cannot be substituted; these drive the real service
-/// (its <c>Query</c> is a harmless read-only NT call) and exercise the deterministic
-/// surface only: construction, post-init state, and the mutually-exclusive Enable/Disable
-/// CanExecute gating. The Enable/Disable commands themselves issue a real
-/// <c>NtSetTimerResolution</c> against this process, so they are NOT executed here.
+/// Tests for <see cref="TimerResolutionViewModel"/>. Two layers of coverage:
+/// the deterministic-surface tests drive the real <see cref="TimerResolutionService"/>
+/// (its <c>Query</c> is a harmless read-only NT call) and assert construction, post-init
+/// state, and the mutually-exclusive Enable/Disable CanExecute gating; the
+/// mutating-path tests substitute <see cref="ITimerResolutionService"/> so the
+/// Enable/Disable commands can be exercised without issuing a real
+/// <c>NtSetTimerResolution</c> against this process — they assert the VM calls the
+/// service exactly once and reflects the returned <see cref="TimerResolutionStatus"/>.
 /// </summary>
 public class TimerResolutionViewModelTests
 {
@@ -23,6 +27,22 @@ public class TimerResolutionViewModelTests
     private static TimerResolutionViewModel NewVm()
     {
         var vm = new TimerResolutionViewModel(new TimerResolutionService());
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
+    // A supported, default-resolution status: finest 0.5 ms, coarsest ~15.6 ms, current at
+    // the coarse default → IsSupported, not high-res (so Enable is the available command).
+    private static TimerResolutionStatus DefaultStatus()
+        => new(FinestHundredNs: 5000, CoarsestHundredNs: 156250, CurrentHundredNs: 156250, EnabledByApp: false);
+
+    // A supported, high-resolution status: current is at the finest → IsHighResolution.
+    private static TimerResolutionStatus HighResStatus()
+        => new(FinestHundredNs: 5000, CoarsestHundredNs: 156250, CurrentHundredNs: 5000, EnabledByApp: true);
+
+    private static TimerResolutionViewModel NewVm(ITimerResolutionService service)
+    {
+        var vm = new TimerResolutionViewModel(service);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -101,5 +121,58 @@ public class TimerResolutionViewModelTests
         await vm.RefreshCommand.ExecuteAsync(null);
         Assert.False(string.IsNullOrWhiteSpace(vm.StatusMessage));
         Assert.False(vm.IsBusy);
+    }
+
+    // ── Mutating-path tests (substituted ITimerResolutionService) ──────────
+
+    [Fact]
+    public async Task EnableCommand_CallsServiceEnableOnce_AndReflectsHighResStatus()
+    {
+        var service = Substitute.For<ITimerResolutionService>();
+        // Construction's RefreshAsync sees the default (not high-res) state so Enable is gated on.
+        service.Query().Returns(DefaultStatus());
+        // The Enable command's outcome is the high-res status the service returns.
+        service.Enable().Returns(HighResStatus());
+
+        var vm = NewVm(service);
+        Assert.True(vm.IsSupported);
+        Assert.False(vm.IsHighResolution);
+        Assert.True(vm.EnableCommand.CanExecute(null));
+
+        await vm.EnableCommand.ExecuteAsync(null);
+
+        service.Received(1).Enable();
+        // The VM applied the returned status: it is now at high resolution.
+        Assert.True(vm.IsHighResolution);
+        Assert.Equal(HighResStatus().CurrentDisplay, vm.CurrentDisplay);
+        Assert.Contains("enabled", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        // Enable→Disable are mutually exclusive: after a successful enable, Disable is the gate.
+        Assert.False(vm.EnableCommand.CanExecute(null));
+        Assert.True(vm.DisableCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task DisableCommand_CallsServiceDisableOnce_AndReflectsDefaultStatus()
+    {
+        var service = Substitute.For<ITimerResolutionService>();
+        // Construction sees a high-res state so Disable is the gated-on command.
+        service.Query().Returns(HighResStatus());
+        // The Disable command returns the timer to the coarse default.
+        service.Disable().Returns(DefaultStatus());
+
+        var vm = NewVm(service);
+        Assert.True(vm.IsHighResolution);
+        Assert.True(vm.DisableCommand.CanExecute(null));
+
+        await vm.DisableCommand.ExecuteAsync(null);
+
+        service.Received(1).Disable();
+        // The VM applied the returned status: no longer high resolution.
+        Assert.False(vm.IsHighResolution);
+        Assert.Equal(DefaultStatus().CurrentDisplay, vm.CurrentDisplay);
+        Assert.Contains("default", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        // Mutually exclusive again: after disable, Enable is back on and Disable is off.
+        Assert.True(vm.EnableCommand.CanExecute(null));
+        Assert.False(vm.DisableCommand.CanExecute(null));
     }
 }

@@ -23,7 +23,7 @@ namespace SysManager.Services;
 /// API via classic <c>[DllImport]</c> (the returned buffer is a variable-length record
 /// stream walked by each record's Size — not something the source generator marshals).
 /// </summary>
-public sealed class CpuAffinityService
+public sealed class CpuAffinityService : ICpuAffinityService
 {
     /// <summary>Total logical processors as Windows schedules them.</summary>
     public int LogicalProcessorCount => Environment.ProcessorCount;

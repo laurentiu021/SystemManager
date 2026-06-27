@@ -23,7 +23,7 @@ namespace SysManager.Services;
 /// We therefore always re-query the EFFECTIVE resolution after a set rather than
 /// trusting the requested value.
 /// </summary>
-public sealed partial class TimerResolutionService
+public sealed partial class TimerResolutionService : ITimerResolutionService
 {
     private bool _enabledByApp;
 

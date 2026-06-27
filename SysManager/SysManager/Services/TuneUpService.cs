@@ -229,6 +229,11 @@ public sealed class TuneUpService
     /// </summary>
     internal static IEnumerable<string> EnumerateFilesSkippingReparsePoints(string root, CancellationToken ct)
     {
+        // Guard the traversal ROOT too: if the root itself is a junction/symlink,
+        // descending into it would follow the link out of the temp tree and yield
+        // (then delete) unrelated files — amplified when running elevated. Child dirs
+        // are already filtered below; the root needs the same check.
+        if (IsReparsePoint(root)) yield break;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
@@ -254,6 +259,9 @@ public sealed class TuneUpService
     private static IEnumerable<string> EnumerateDirectoriesSkippingReparsePoints(string root, CancellationToken ct)
     {
         List<string> all = [];
+        // Same root guard as EnumerateFilesSkippingReparsePoints: never recurse a
+        // junction/symlink root out of the temp tree.
+        if (IsReparsePoint(root)) return all;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)

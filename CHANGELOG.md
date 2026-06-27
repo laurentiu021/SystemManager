@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.6] - 2026-06-27
+
+### Fixed
+- **Temp cleanup can't be tricked into deleting files outside the temp folder.** The cleanup scan already refused to descend into junctions/symlinks it found *inside* the temp tree, but didn't check whether the starting folder itself was a junction — so a redirected temp root could, in theory, lead it to enumerate (and delete) files elsewhere on disk, especially when run as administrator. The scan now treats a junction/symlink root the same way and stops immediately.
+- **Speed Test re-verifies the bundled Ookla CLI's signature every run.** The Ookla command-line tool is cached under your local app data (a user-writable folder). Its Authenticode signature was checked right after download but not on later reuse, leaving a window where a swapped binary could be launched. It is now re-verified (Ookla-signed, fail-closed) before every run, not only on first download.
+
 ## [1.42.5] - 2026-06-27
 
 ### Fixed

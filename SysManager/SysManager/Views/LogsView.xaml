@@ -352,12 +352,12 @@
                             </Border>
 
                             <TextBlock Text="What this means" Style="{StaticResource SectionTitle}" Margin="0,18,0,6"/>
-                            <Border Padding="12" CornerRadius="8" Background="#102028" BorderBrush="#1E3A4A" BorderThickness="1">
+                            <Border Style="{StaticResource CardInner}">
                                 <TextBlock Text="{Binding SelectedEntry.Explanation}" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"/>
                             </Border>
 
                             <TextBlock Text="What to try" Style="{StaticResource SectionTitle}" Margin="0,14,0,6"/>
-                            <Border Padding="12" CornerRadius="8" Background="#141B14" BorderBrush="#2D4A2D" BorderThickness="1">
+                            <Border Style="{StaticResource CardInner}">
                                 <TextBlock Text="{Binding SelectedEntry.Recommendation}" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"/>
                             </Border>
 
@@ -374,7 +374,7 @@
                                              IsReadOnly="True" TextWrapping="Wrap"
                                              Background="Transparent" BorderThickness="0"
                                              FontFamily="{StaticResource MonoFont}" FontSize="11"
-                                             Foreground="#C0C6CC"
+                                             Foreground="{DynamicResource TextSecondary}"
                                              MaxHeight="240"
                                              VerticalScrollBarVisibility="Auto"/>
                                 </Border>
@@ -388,7 +388,7 @@
                                              IsReadOnly="True" TextWrapping="NoWrap"
                                              Background="Transparent" BorderThickness="0"
                                              FontFamily="{StaticResource MonoFont}" FontSize="11"
-                                             Foreground="#8A9198"
+                                             Foreground="{DynamicResource TextMuted}"
                                              MaxHeight="260"
                                              VerticalScrollBarVisibility="Auto"
                                              HorizontalScrollBarVisibility="Auto"/>

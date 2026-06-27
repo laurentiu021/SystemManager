@@ -121,7 +121,8 @@
                 </DockPanel>
 
                 <!-- DataGrid -->
-                <DataGrid Grid.Row="1" ItemsSource="{Binding HostEntries}"
+                <Grid Grid.Row="1">
+                <DataGrid ItemsSource="{Binding HostEntries}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserDeleteRows="False" HeadersVisibility="Column"
                           CanUserResizeColumns="True"
@@ -150,6 +151,13 @@
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+
+                <!-- Empty state -->
+                <TextBlock Text="No host entries yet. Add one above, or your hosts file is empty."
+                           Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Visibility="{Binding HostEntries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
 
                 <!-- Add entry row -->
                 <DockPanel Grid.Row="2" Margin="0,12,0,0">

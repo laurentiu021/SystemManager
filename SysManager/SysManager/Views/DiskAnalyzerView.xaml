@@ -69,6 +69,7 @@
 
         <!-- Folder list -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <Grid>
             <ListView AutomationProperties.Name="Folder size list" ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                       HorizontalContentAlignment="Stretch">
@@ -145,6 +146,13 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+
+            <!-- Empty state -->
+            <TextBlock Text="No results yet — pick a folder and scan to see what's using space."
+                       Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
         </Border>
 
         <!-- Status bar -->

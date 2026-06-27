@@ -108,6 +108,52 @@ public class ConverterTests
             conv.ConvertBack(Visibility.Visible, typeof(bool), null!, CultureInfo.InvariantCulture));
     }
 
+    // Numeric values drive visibility by their non-zero-ness — this is what lets an
+    // empty-state message bind to a collection's .Count with ConverterParameter=Inverse
+    // (show the message only when Count == 0). Before this, any int was treated as a
+    // non-null object => always truthy, so count-bound empty states never appeared.
+
+    [Fact]
+    public void FlexibleBool_ZeroCount_ReturnsCollapsed()
+    {
+        var conv = new FlexibleBoolToVisibilityConverter();
+        var result = conv.Convert(0, typeof(Visibility), null!, CultureInfo.InvariantCulture);
+        Assert.Equal(Visibility.Collapsed, result);
+    }
+
+    [Fact]
+    public void FlexibleBool_NonZeroCount_ReturnsVisible()
+    {
+        var conv = new FlexibleBoolToVisibilityConverter();
+        var result = conv.Convert(5, typeof(Visibility), null!, CultureInfo.InvariantCulture);
+        Assert.Equal(Visibility.Visible, result);
+    }
+
+    [Fact]
+    public void FlexibleBool_Inverse_ZeroCount_ReturnsVisible()
+    {
+        // The empty-state pattern: Count == 0 with Inverse => the message shows.
+        var conv = new FlexibleBoolToVisibilityConverter();
+        var result = conv.Convert(0, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture);
+        Assert.Equal(Visibility.Visible, result);
+    }
+
+    [Fact]
+    public void FlexibleBool_Inverse_NonZeroCount_ReturnsCollapsed()
+    {
+        // Count > 0 with Inverse => the message is hidden (the list has content).
+        var conv = new FlexibleBoolToVisibilityConverter();
+        var result = conv.Convert(12, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture);
+        Assert.Equal(Visibility.Collapsed, result);
+    }
+
+    [Fact]
+    public void FlexibleBool_ZeroLong_ReturnsCollapsed()
+    {
+        var conv = new FlexibleBoolToVisibilityConverter();
+        Assert.Equal(Visibility.Collapsed, conv.Convert(0L, typeof(Visibility), null!, CultureInfo.InvariantCulture));
+    }
+
     [Fact]
     public void FlexibleBool_EmptyString_ReturnsCollapsed()
     {

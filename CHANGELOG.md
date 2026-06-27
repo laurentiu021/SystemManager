@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.3] - 2026-06-27
+
+### Fixed
+- **Lists that are empty now say so, instead of showing a blank area.** Several tabs (Services, Startup Manager, Process Manager, Uninstaller, Windows Features, DNS & Hosts, Disk Analyzer) showed an empty table with no explanation when there was nothing to display or a filter matched nothing — leaving you unsure whether it was still loading, found nothing, or had failed. Each now shows a short, centred message in that case. This also fixes the empty-state messages on the Speed Test history, which previously never appeared: the visibility converter treated a list's item count as "always present", so a count of zero was misread — numeric values are now correctly treated as empty when zero.
+
 ## [1.42.2] - 2026-06-27
 
 ### Fixed

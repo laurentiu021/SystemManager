@@ -57,6 +57,7 @@
 
         <!-- Process list -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <Grid>
             <DataGrid AutomationProperties.Name="Running processes" ItemsSource="{Binding FilteredProcesses}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
@@ -189,6 +190,13 @@
                     </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
+
+            <!-- Empty state -->
+            <TextBlock Text="No processes match the current filter."
+                       Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{Binding FilteredProcesses.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
         </Border>
 
         <!-- Status bar -->

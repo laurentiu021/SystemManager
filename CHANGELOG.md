@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.9] - 2026-06-27
+
+### Fixed
+- **System Logs detail cards regained their colour coding.** The "What this means" and "What to try" panels are tinted blue and green again to tell them apart at a glance — this time using theme-aware translucent tints, so they stay legible on light and custom themes (the previous fix had flattened them to a neutral surface).
+
 ## [1.42.8] - 2026-06-27
 
 ### Fixed

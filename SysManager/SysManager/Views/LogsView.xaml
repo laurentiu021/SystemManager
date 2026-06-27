@@ -352,12 +352,14 @@
                             </Border>
 
                             <TextBlock Text="What this means" Style="{StaticResource SectionTitle}" Margin="0,18,0,6"/>
-                            <Border Style="{StaticResource CardInner}">
+                            <Border Style="{StaticResource CardInner}"
+                                    Background="{DynamicResource InfoBgSubtle}" BorderBrush="{DynamicResource InfoBorder}">
                                 <TextBlock Text="{Binding SelectedEntry.Explanation}" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"/>
                             </Border>
 
                             <TextBlock Text="What to try" Style="{StaticResource SectionTitle}" Margin="0,14,0,6"/>
-                            <Border Style="{StaticResource CardInner}">
+                            <Border Style="{StaticResource CardInner}"
+                                    Background="{DynamicResource SuccessBgSubtle}" BorderBrush="{DynamicResource SuccessBorder}">
                                 <TextBlock Text="{Binding SelectedEntry.Recommendation}" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"/>
                             </Border>
 

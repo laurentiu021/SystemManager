@@ -37,9 +37,9 @@ public sealed partial class LogsViewModel : ViewModelBase
     public BulkObservableCollection<FriendlyEventEntry> Entries { get; } = new();
     public ICollectionView EntriesView { get; }
 
-    public string[] AvailableLogs { get; } = { "System", "Application", "Security", "Setup" };
-    public string[] TimeRanges { get; } = { "Last hour", "Last 24 hours", "Last 7 days", "Last 30 days", "All" };
-    public string[] MaxResultOptions { get; } = { "200", "500", "1000", "5000" };
+    public string[] AvailableLogs { get; } = ["System", "Application", "Security", "Setup"];
+    public string[] TimeRanges { get; } = ["Last hour", "Last 24 hours", "Last 7 days", "Last 30 days", "All"];
+    public string[] MaxResultOptions { get; } = ["200", "500", "1000", "5000"];
 
     [ObservableProperty] private string _selectedLog = "System";
     [ObservableProperty] private string _selectedTimeRange = "Last 24 hours";

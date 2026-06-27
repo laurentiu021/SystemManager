@@ -24,6 +24,7 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
 
     public BulkObservableCollection<ScheduledTaskInfo> Tasks { get; } = new();
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private ScheduledTaskInfo? _selectedTask;
     [ObservableProperty] private string _filter = "";
     [ObservableProperty] private bool _hideSystemTasks;
@@ -31,8 +32,16 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
     public TaskSchedulerViewModel(TaskSchedulerService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Loading scheduled tasks…";
         InitializeAsync(RefreshAsync);
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     [RelayCommand]

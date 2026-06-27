@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.43.0] - 2026-06-27
+
+### Added
+- **Six more tabs now tell you when they need administrator rights.** Process Manager, Startup Manager, Task Scheduler, Defender Tweaks, File Lock Detector and Shortcut Cleaner all perform actions that require elevation (ending system processes, toggling startup entries and scheduled tasks, changing Defender settings, unlocking protected files, removing shortcuts in shared locations) — but unlike the rest of the app they gave no upfront hint. Each now shows the same banner the other tabs use: a "Run as administrator" prompt when you're not elevated, and a confirmation strip when you are. Consistent with Services, DNS & Hosts, Uninstaller, and the others.
+
 ## [1.42.12] - 2026-06-27
 
 ### Fixed

@@ -23,6 +23,7 @@ public sealed partial class FileLockViewModel : ViewModelBase
 
     public BulkObservableCollection<FileLocker> Lockers { get; } = new();
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _path = "";
     [ObservableProperty] private bool _hasScanned;
     [ObservableProperty] private FileLocker? _selectedLocker;
@@ -30,8 +31,16 @@ public sealed partial class FileLockViewModel : ViewModelBase
     public FileLockViewModel(FileLockService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Enter a file or folder path, then scan to see what's using it.";
         PropertyChanged += OnVmPropertyChanged;
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     private bool CanScan => !IsBusy && !string.IsNullOrWhiteSpace(Path);

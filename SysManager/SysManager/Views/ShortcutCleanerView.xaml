@@ -12,6 +12,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -25,8 +26,40 @@
                        Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 
+        <!-- Elevation banner: not elevated -->
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="28,16,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                    <TextBlock Text="Removing broken shortcuts in shared locations requires administrator privileges."
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
+                CornerRadius="10" Padding="12,8" Margin="28,16,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — you can remove broken shortcuts everywhere."
+                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Toolbar -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
             <WrapPanel>
                 <Button Content="Scan" Command="{Binding ScanCommand}"
                         AutomationProperties.Name="Scan for broken shortcuts"
@@ -51,7 +84,7 @@
         </Border>
 
         <!-- Results DataGrid -->
-        <DataGrid Grid.Row="2" ItemsSource="{Binding BrokenShortcuts}"
+        <DataGrid Grid.Row="3" ItemsSource="{Binding BrokenShortcuts}"
                   AutomationProperties.Name="Broken shortcuts"
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
@@ -81,7 +114,7 @@
         </DataGrid>
 
         <!-- Footer -->
-        <Border Grid.Row="3" Margin="28,8,28,16" Padding="8">
+        <Border Grid.Row="4" Margin="28,8,28,16" Padding="8">
             <TextBlock Style="{StaticResource Subtle}">
                 <Run Text="{Binding BrokenCount, Mode=OneWay}"/>
                 <Run Text=" broken · "/>

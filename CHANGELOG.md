@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.11] - 2026-06-27
+
+### Changed
+- **The in-app updater no longer uses an on-disk script.** Applying an update previously wrote a small batch file to a temporary folder and ran it through `cmd.exe` to swap in the new build after the app closed. That left a brief window in which another program running as the same user could tamper with the script before it executed. The update is now applied entirely from within the freshly-downloaded (and already hash- and signature-checked) executable itself: it waits for the old version to close, replaces it using a staged atomic file move — so an interrupted update can never leave a half-written, unstartable executable — and relaunches, keeping your run-as-administrator state if you were elevated. There is no longer any script on disk for another process to interfere with.
+
 ## [1.42.10] - 2026-06-27
 
 ### Fixed

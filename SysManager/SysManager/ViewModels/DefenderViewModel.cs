@@ -38,10 +38,28 @@ public sealed partial class DefenderViewModel : ViewModelBase
     {
         _service = service;
         StatusMessage = "Reading Defender status…";
+        PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
     }
 
-    [RelayCommand]
+    /// <summary>True when no Defender operation is in flight — gates the mutating
+    /// commands so a user can't start a second Set-MpPreference while the first is
+    /// still running (each spins its own runspace and the read-back verification
+    /// could race). Mirrors the NotBusy convention used across the other VMs.</summary>
+    public bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        OnPropertyChanged(nameof(NotBusy));
+        RefreshCommand.NotifyCanExecuteChanged();
+        TogglePuaCommand.NotifyCanExecuteChanged();
+        ToggleCfaCommand.NotifyCanExecuteChanged();
+        AddExclusionCommand.NotifyCanExecuteChanged();
+        RemoveExclusionCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
         IsBusy = true;
@@ -58,27 +76,37 @@ public sealed partial class DefenderViewModel : ViewModelBase
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task TogglePuaAsync()
     {
         if (!Confirm($"{(PuaEnabled ? "Disable" : "Enable")} potentially-unwanted-app (PUA) protection?")) return;
-        int target = PuaEnabled ? 0 : 1;
-        var status = await _service.SetPuaProtectionAsync(target).ConfigureAwait(true);
-        Apply(status);
-        ReportVerified("PUA protection", status.PuaProtection == target);
+        IsBusy = true;
+        try
+        {
+            int target = PuaEnabled ? 0 : 1;
+            var status = await _service.SetPuaProtectionAsync(target).ConfigureAwait(true);
+            Apply(status);
+            ReportVerified("PUA protection", status.PuaProtection == target);
+        }
+        finally { IsBusy = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ToggleCfaAsync()
     {
         if (!Confirm($"{(CfaEnabled ? "Disable" : "Enable")} Controlled Folder Access (ransomware protection)?")) return;
-        int target = CfaEnabled ? 0 : 1;
-        var status = await _service.SetControlledFolderAccessAsync(target).ConfigureAwait(true);
-        Apply(status);
-        ReportVerified("Controlled Folder Access", status.ControlledFolderAccess == target);
+        IsBusy = true;
+        try
+        {
+            int target = CfaEnabled ? 0 : 1;
+            var status = await _service.SetControlledFolderAccessAsync(target).ConfigureAwait(true);
+            Apply(status);
+            ReportVerified("Controlled Folder Access", status.ControlledFolderAccess == target);
+        }
+        finally { IsBusy = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task AddExclusionAsync()
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Select a folder to exclude from scanning" };
@@ -92,24 +120,36 @@ public sealed partial class DefenderViewModel : ViewModelBase
         }
         if (!Confirm($"Exclude \"{path}\" from Defender scanning?\n\nFiles in an excluded folder are not scanned for malware.")) return;
 
-        var status = await _service.AddExclusionPathAsync(path).ConfigureAwait(true);
-        Apply(status);
-        ReportVerified("Exclusion", status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
+        IsBusy = true;
+        try
+        {
+            var status = await _service.AddExclusionPathAsync(path).ConfigureAwait(true);
+            Apply(status);
+            ReportVerified("Exclusion", status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
+        }
+        finally { IsBusy = false; }
     }
 
-    [RelayCommand(CanExecute = nameof(HasSelectedExclusion))]
+    [RelayCommand(CanExecute = nameof(CanRemoveExclusion))]
     private async Task RemoveExclusionAsync()
     {
         string? path = SelectedExclusion;
         if (path is null) return;
         if (!Confirm($"Stop excluding \"{path}\"?\n\nThe folder will be scanned for malware again.")) return;
 
-        var status = await _service.RemoveExclusionPathAsync(path).ConfigureAwait(true);
-        Apply(status);
-        ReportVerified("Exclusion removal", !status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
+        IsBusy = true;
+        try
+        {
+            var status = await _service.RemoveExclusionPathAsync(path).ConfigureAwait(true);
+            Apply(status);
+            ReportVerified("Exclusion removal", !status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
+        }
+        finally { IsBusy = false; }
     }
 
     private bool HasSelectedExclusion => SelectedExclusion is not null;
+    // Remove must be both busy-gated and have a selection.
+    private bool CanRemoveExclusion => NotBusy && HasSelectedExclusion;
     partial void OnSelectedExclusionChanged(string? value) => RemoveExclusionCommand.NotifyCanExecuteChanged();
 
     /// <summary>A valid exclusion is a rooted, existing folder with no wildcards.</summary>

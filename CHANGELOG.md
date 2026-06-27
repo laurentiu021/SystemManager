@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.4] - 2026-06-27
+
+### Fixed
+- **Event Viewer detail panel and System Health bars now follow the theme correctly.** A few surfaces used fixed dark colours instead of theme brushes, so under a light or custom theme the "What this means" / "What to try" cards in System Logs, their monospace message/XML boxes, and the small health/usage bars on System Health could lose contrast (light text on a still-dark panel). They now use the shared theme brushes and adapt to any preset or custom theme.
+
 ## [1.42.3] - 2026-06-27
 
 ### Fixed

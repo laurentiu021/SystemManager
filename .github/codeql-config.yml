@@ -15,12 +15,15 @@ query-filters:
   # exclude) if a genuine useless-assignment is ever introduced in source.
   - exclude:
       id: cs/useless-assignment-to-local
-  # Intentional use of CreateFromSignedFile for Authenticode verification —
-  # no modern .NET replacement exists without P/Invoke. Already suppressed
-  # with #pragma warning disable SYSLIB0057.
+  # Intentional use of CreateFromSignedFile for Authenticode verification — no modern
+  # .NET replacement exists without P/Invoke. Used in UpdateService.cs AND
+  # SpeedTestService.cs, both already wrapped in #pragma warning disable SYSLIB0057.
+  # Excluded by id alone: the `path:` key is NOT honoured inside query-filters (only
+  # `id`/`tags` are — see the cs/useless-upcast note below), so a path-scoped exclude
+  # silently covered the whole repo anyway AND would have missed the SpeedTestService
+  # usage if it ever were honoured. There are no other call sites, so id-only is correct.
   - exclude:
       id: cs/call-to-obsolete-method
-      path: SysManager/SysManager/Services/UpdateService.cs
   # cs/useless-cast-to-self fires only on [GeneratedRegex] source-generator output
   # under obj/ (RegexGenerator.g.cs). Like cs/useless-assignment-to-local above, the
   # manual-build CodeQL database traces generated files into analysis. Zero

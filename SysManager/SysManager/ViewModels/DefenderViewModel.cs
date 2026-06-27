@@ -59,6 +59,12 @@ public sealed partial class DefenderViewModel : ViewModelBase
         RemoveExclusionCommand.NotifyCanExecuteChanged();
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) PropertyChanged -= OnVmPropertyChanged;
+        base.Dispose(disposing);
+    }
+
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {

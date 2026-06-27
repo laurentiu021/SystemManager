@@ -81,7 +81,7 @@ tabs still being verified are marked **PREVIEW**:
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · System Fixes · Boot Analyzer · Task Scheduler 🔬 |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler 🔬 · Boot Analyzer · System Fixes |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner 🔬 · Timer Resolution 🔬 · CPU Core Affinity 🔬 · Display Profiles 🔬 |
 | 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector 🔬 · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |

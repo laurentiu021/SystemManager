@@ -487,6 +487,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         FileShredder?.Dispose();
         DnsHosts?.Dispose();
 
+        // Implemented PREVIEW tabs — these own timers / event subscriptions
+        // (e.g. DisplayProfile's revert DispatcherTimer, Defender's PropertyChanged),
+        // so they must be disposed on shutdown like every other real VM.
+        TimerResolution?.Dispose();
+        FileLock?.Dispose();
+        DisplayProfile?.Dispose();
+        CpuAffinity?.Dispose();
+        Defender?.Dispose();
+        TaskScheduler?.Dispose();
+        DarkMode?.Dispose();
+        StandbyMemory?.Dispose();
+
         // WIP placeholders
         WipResourceHistory?.Dispose();
         WipFileLockDetector?.Dispose();

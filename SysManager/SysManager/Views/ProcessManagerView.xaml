@@ -192,7 +192,7 @@
             </DataGrid>
 
             <!-- Empty state -->
-            <TextBlock Text="No processes match the current filter."
+            <TextBlock Text="No processes to show."
                        Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Visibility="{Binding FilteredProcesses.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

@@ -41,7 +41,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `SystemFixesViewModel` · `BootAnalyzerViewModel` · `TaskSchedulerViewModel` |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` |
 | Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` · `PlaceholderViewModel` (Gaming Profile) |
 | Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `PlaceholderViewModel` (Resource History · Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
@@ -58,7 +58,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
   alerts (auto-scan at boot), quick actions with inline progress, health score,
   and recent activity log. IsActive pattern pauses polling when tab not visible.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
-- `WindowsUpdateViewModel` — PSWindowsUpdate wrapper with auto-check.
+- `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk.
 - `CleanupViewModel` — TEMP, Recycle Bin, SFC, DISM (background-aware).
 - `DeepCleanupViewModel` — scan-first deep cleanup + large-files finder.

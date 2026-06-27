@@ -253,7 +253,7 @@
             </DataGrid>
 
             <!-- Empty state -->
-            <TextBlock Text="No applications match the current filter."
+            <TextBlock Text="No applications to show."
                        Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Visibility="{Binding FilteredApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

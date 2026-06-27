@@ -10,10 +10,10 @@ app and its releases matters — thank you for helping keep it safe.
 Security fixes are applied to the latest minor release only. If you're on an
 older build, the first step is usually to update.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x     | :white_check_mark: |
-| < 1.0   | :x:                |
+| Version  | Supported          |
+| -------- | ------------------ |
+| 1.42.x   | :white_check_mark: |
+| < 1.42   | :x:                |
 
 ## Reporting a vulnerability
 

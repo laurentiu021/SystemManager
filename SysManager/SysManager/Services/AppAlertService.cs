@@ -105,11 +105,14 @@ public sealed class AppAlertService : IDisposable
     /// </summary>
     public void Stop()
     {
-        _registryTimer?.Dispose();
-        _registryTimer = null;
-
         lock (_watcherLock)
         {
+            // Dispose the timer under the same lock that creates it in Start(), so a
+            // concurrent Start()/Stop() can't race on _registryTimer (Start creates it
+            // inside the lock; tearing it down outside would reopen that window).
+            _registryTimer?.Dispose();
+            _registryTimer = null;
+
             foreach (var w in _watchers)
             {
                 w.EnableRaisingEvents = false;

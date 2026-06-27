@@ -365,10 +365,15 @@ retained). The in-app Console mirrors the same stream per tab.
 
 `UpdateService` hits `api.github.com/repos/laurentiu021/SystemManager/releases`
 at startup and on demand. Downloads land in
-`%LOCALAPPDATA%\SysManager\updates\SysManager-{version}.exe` with size
-checksum so re-opening the app doesn't re-download a good copy. The "Install"
-button launches the new exe and closes the current instance; Windows swaps
-them cleanly.
+`%LOCALAPPDATA%\SysManager\updates\SysManager-{version}.exe` with a companion
+`.sha256` so re-opening the app doesn't re-download a good copy. The "Install"
+button verifies the download's SHA256 and Authenticode signature, then hands
+off to `UpdateApplier`: the freshly-downloaded exe is relaunched with
+`--apply-update`, which `App.OnStartup` intercepts before any window opens. That
+process waits for the old instance to exit, swaps itself over the old executable
+via a staged atomic move (a sibling `.new` file plus `File.Move`, so an
+interrupted copy can never leave a half-written binary), and relaunches —
+inheriting the original's elevation. No on-disk script is involved.
 
 ## Testing
 

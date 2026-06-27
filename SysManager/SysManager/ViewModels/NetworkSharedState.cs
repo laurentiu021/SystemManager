@@ -100,10 +100,10 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             FlushTimer.Tick += (_, _) => FlushPending();
         }
 
-        LatencyXAxes = new[] { BuildTimeAxis() };
-        LatencyYAxes = new[] { BuildValueAxis("Latency (ms)") };
-        TraceXAxes = new[] { BuildHopAxis() };
-        TraceYAxes = new[] { BuildValueAxis("Latency (ms)") };
+        LatencyXAxes = [BuildTimeAxis()];
+        LatencyYAxes = [BuildValueAxis("Latency (ms)")];
+        TraceXAxes = [BuildHopAxis()];
+        TraceYAxes = [BuildValueAxis("Latency (ms)")];
 
         Pinger.SampleReceived += OnSample;
         TraceMonitor.RouteCompleted += OnRouteCompleted;

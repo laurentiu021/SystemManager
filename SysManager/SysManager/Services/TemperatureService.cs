@@ -15,10 +15,19 @@ namespace SysManager.Services;
 /// With admin: LibreHardwareMonitor gives ALL temps (CPU, GPU, Disk, Motherboard).
 /// Without admin: NVIDIA GPU (via NvAPIWrapper) + Disk SMART temps only.
 /// </summary>
-public sealed class TemperatureService
+public sealed class TemperatureService : IDisposable
 {
     private readonly DiskHealthService _diskHealth;
     private readonly bool _skipHardwareInit;
+
+    // LibreHardwareMonitor's Computer.Open() loads a ring0 kernel driver and
+    // enumerates all hardware — far too heavy to do on every 2s poll. Open it once
+    // (lazily, on the first elevated read) and keep it alive for the service
+    // lifetime; each poll then only calls Update(). The lock serialises the
+    // not-thread-safe LHM access in case more than one caller polls at once.
+    private readonly Lock _lhmLock = new();
+    private Computer? _computer;
+    private bool _disposed;
 
     public TemperatureService(DiskHealthService diskHealth, bool skipHardwareInit = false)
     {
@@ -51,142 +60,160 @@ public sealed class TemperatureService
         return readings;
     }
 
-    private static void ReadViaLibreHardwareMonitor(List<TemperatureReading> readings)
+    private void ReadViaLibreHardwareMonitor(List<TemperatureReading> readings)
     {
-        Computer? computer = null;
-        try
+        lock (_lhmLock)
         {
-            computer = new Computer
+            if (_disposed) return;
+            try
             {
-                IsCpuEnabled = true,
-                IsGpuEnabled = true,
-                IsStorageEnabled = true,
-                IsMotherboardEnabled = true
-            };
-            computer.Open();
+                // Open the kernel-level monitor once and reuse it; subsequent polls
+                // only Update() the already-enumerated hardware.
+                _computer ??= OpenComputer();
 
-            // Pre-fetch disk names from WMI for cross-reference
-            var diskNames = GetDiskNamesFromWmi();
+                // Pre-fetch disk names from WMI for cross-reference
+                var diskNames = GetDiskNamesFromWmi();
 
-            foreach (var hardware in computer.Hardware)
-            {
-                hardware.Update();
-
-                foreach (var subHardware in hardware.SubHardware)
-                    subHardware.Update();
-
-                Log.Debug("LHM: {Type} '{Name}' — {SensorCount} temp sensors",
-                    hardware.HardwareType, hardware.Name,
-                    hardware.Sensors.Count(s => s.SensorType == SensorType.Temperature));
-
-                var component = hardware.HardwareType switch
+                foreach (var hardware in _computer.Hardware)
                 {
-                    HardwareType.Cpu => "CPU",
-                    HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel => "GPU",
-                    HardwareType.Storage => "Storage",
-                    HardwareType.Motherboard => "Motherboard",
-                    _ => null
-                };
+                    hardware.Update();
 
-                if (component is null) continue;
+                    foreach (var subHardware in hardware.SubHardware)
+                        subHardware.Update();
 
-                var tempSensors = hardware.Sensors
-                    .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0)
-                    .ToList();
+                    Log.Debug("LHM: {Type} '{Name}' — {SensorCount} temp sensors",
+                        hardware.HardwareType, hardware.Name,
+                        hardware.Sensors.Count(s => s.SensorType == SensorType.Temperature));
 
-                // Also check sub-hardware (e.g. motherboard chips)
-                foreach (var sub in hardware.SubHardware)
-                {
-                    tempSensors.AddRange(sub.Sensors
-                        .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0));
-                }
-
-                if (component == "CPU")
-                {
-                    // Take "CPU Package" or first available
-                    var packageSensor = tempSensors.FirstOrDefault(s =>
-                        s.Name.Contains("Package", StringComparison.OrdinalIgnoreCase)) ?? tempSensors.FirstOrDefault();
-
-                    if (packageSensor is not null)
+                    var component = hardware.HardwareType switch
                     {
-                        readings.Add(new TemperatureReading("CPU", $"CPU Package ({hardware.Name})",
-                            packageSensor.Value));
-                    }
+                        HardwareType.Cpu => "CPU",
+                        HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel => "GPU",
+                        HardwareType.Storage => "Storage",
+                        HardwareType.Motherboard => "Motherboard",
+                        _ => null
+                    };
 
-                    // Add highest core temp if different from package
-                    var maxCore = tempSensors
-                        .Where(s => s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase))
-                        .MaxBy(s => s.Value);
-                    if (maxCore is not null && !ReferenceEquals(maxCore, packageSensor))
-                    {
-                        readings.Add(new TemperatureReading("CPU", $"Hottest Core ({maxCore.Name})",
-                            maxCore.Value));
-                    }
-                }
-                else if (component == "GPU")
-                {
-                    var gpuTemp = tempSensors.FirstOrDefault(s =>
-                        s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) ||
-                        s.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase)) ?? tempSensors.FirstOrDefault();
+                    if (component is null) continue;
 
-                    if (gpuTemp is not null)
-                    {
-                        readings.Add(new TemperatureReading("GPU Core",
-                            hardware.Name, gpuTemp.Value));
-                    }
+                    var tempSensors = hardware.Sensors
+                        .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0)
+                        .ToList();
 
-                    var hotSpot = tempSensors.FirstOrDefault(s =>
-                        s.Name.Contains("Hot Spot", StringComparison.OrdinalIgnoreCase) ||
-                        s.Name.Contains("Junction", StringComparison.OrdinalIgnoreCase));
-                    if (hotSpot is not null)
-                    {
-                        readings.Add(new TemperatureReading("GPU Hot Spot",
-                            hardware.Name, hotSpot.Value));
-                    }
-                }
-                else if (component == "Storage")
-                {
-                    var diskTemp = tempSensors.FirstOrDefault();
-                    if (diskTemp is not null)
-                    {
-                        var name = hardware.Name;
-
-                        // LHM often returns empty or cryptic names for storage
-                        if (string.IsNullOrWhiteSpace(name) || name.Length <= 3 || name.All(char.IsDigit))
-                        {
-                            // Try matching by index from WMI disk list
-                            var storageIndex = readings.Count(r => r.Component == "Storage");
-                            name = storageIndex < diskNames.Count
-                                ? diskNames[storageIndex]
-                                : $"Drive {storageIndex + 1}";
-                        }
-
-                        readings.Add(new TemperatureReading("Storage", name, diskTemp.Value));
-                    }
-                }
-                else if (component == "Motherboard")
-                {
+                    // Also check sub-hardware (e.g. motherboard chips)
                     foreach (var sub in hardware.SubHardware)
                     {
-                        var chipTemp = sub.Sensors
-                            .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0)
-                            .FirstOrDefault();
-                        if (chipTemp is not null)
+                        tempSensors.AddRange(sub.Sensors
+                            .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0));
+                    }
+
+                    if (component == "CPU")
+                    {
+                        // Take "CPU Package" or first available
+                        var packageSensor = tempSensors.FirstOrDefault(s =>
+                            s.Name.Contains("Package", StringComparison.OrdinalIgnoreCase)) ?? tempSensors.FirstOrDefault();
+
+                        if (packageSensor is not null)
                         {
-                            readings.Add(new TemperatureReading("Motherboard", $"{sub.Name}", chipTemp.Value));
+                            readings.Add(new TemperatureReading("CPU", $"CPU Package ({hardware.Name})",
+                                packageSensor.Value));
+                        }
+
+                        // Add highest core temp if different from package
+                        var maxCore = tempSensors
+                            .Where(s => s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase))
+                            .MaxBy(s => s.Value);
+                        if (maxCore is not null && !ReferenceEquals(maxCore, packageSensor))
+                        {
+                            readings.Add(new TemperatureReading("CPU", $"Hottest Core ({maxCore.Name})",
+                                maxCore.Value));
+                        }
+                    }
+                    else if (component == "GPU")
+                    {
+                        var gpuTemp = tempSensors.FirstOrDefault(s =>
+                            s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) ||
+                            s.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase)) ?? tempSensors.FirstOrDefault();
+
+                        if (gpuTemp is not null)
+                        {
+                            readings.Add(new TemperatureReading("GPU Core",
+                                hardware.Name, gpuTemp.Value));
+                        }
+
+                        var hotSpot = tempSensors.FirstOrDefault(s =>
+                            s.Name.Contains("Hot Spot", StringComparison.OrdinalIgnoreCase) ||
+                            s.Name.Contains("Junction", StringComparison.OrdinalIgnoreCase));
+                        if (hotSpot is not null)
+                        {
+                            readings.Add(new TemperatureReading("GPU Hot Spot",
+                                hardware.Name, hotSpot.Value));
+                        }
+                    }
+                    else if (component == "Storage")
+                    {
+                        var diskTemp = tempSensors.FirstOrDefault();
+                        if (diskTemp is not null)
+                        {
+                            var name = hardware.Name;
+
+                            // LHM often returns empty or cryptic names for storage
+                            if (string.IsNullOrWhiteSpace(name) || name.Length <= 3 || name.All(char.IsDigit))
+                            {
+                                // Try matching by index from WMI disk list
+                                var storageIndex = readings.Count(r => r.Component == "Storage");
+                                name = storageIndex < diskNames.Count
+                                    ? diskNames[storageIndex]
+                                    : $"Drive {storageIndex + 1}";
+                            }
+
+                            readings.Add(new TemperatureReading("Storage", name, diskTemp.Value));
+                        }
+                    }
+                    else if (component == "Motherboard")
+                    {
+                        foreach (var sub in hardware.SubHardware)
+                        {
+                            var chipTemp = sub.Sensors
+                                .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0)
+                                .FirstOrDefault();
+                            if (chipTemp is not null)
+                            {
+                                readings.Add(new TemperatureReading("Motherboard", $"{sub.Name}", chipTemp.Value));
+                            }
                         }
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                Log.Debug("LibreHardwareMonitor failed: {Error}", ex.Message);
+            }
         }
-        catch (Exception ex)
+    }
+
+    private static Computer OpenComputer()
+    {
+        var computer = new Computer
         {
-            Log.Debug("LibreHardwareMonitor failed: {Error}", ex.Message);
-        }
-        finally
+            IsCpuEnabled = true,
+            IsGpuEnabled = true,
+            IsStorageEnabled = true,
+            IsMotherboardEnabled = true
+        };
+        computer.Open();
+        return computer;
+    }
+
+    public void Dispose()
+    {
+        lock (_lhmLock)
         {
-            try { computer?.Close(); }
+            if (_disposed) return;
+            _disposed = true;
+            try { _computer?.Close(); }
             catch (Exception ex) { Log.Debug(ex, "LibreHardwareMonitor close failed"); }
+            _computer = null;
         }
     }
 

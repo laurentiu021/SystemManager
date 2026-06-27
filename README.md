@@ -605,7 +605,8 @@ Manage Microsoft Defender without digging through Windows Security:
 - Background download of the new build with a progress bar. If the
   download is blocked, a "Manual download" button opens GitHub in the
   browser.
-- SHA256 hash verification before install — blocks corrupted downloads.
+- SHA256 hash + Authenticode signature verification before install — blocks
+  corrupted or tampered downloads.
 - One-click "Install" replaces the running executable in-place and
   restarts automatically (no manual file copying needed).
 - Full release-note history pulled live from GitHub.

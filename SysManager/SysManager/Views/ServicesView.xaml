@@ -105,7 +105,8 @@
         </Border>
 
         <!-- Services list -->
-        <DataGrid AutomationProperties.Name="Windows services" Grid.Row="3" ItemsSource="{Binding Services}"
+        <Grid Grid.Row="3">
+        <DataGrid AutomationProperties.Name="Windows services" ItemsSource="{Binding Services}"
                   SelectedItem="{Binding SelectedService}"
                   AutoGenerateColumns="False" HeadersVisibility="Column"
                   Background="Transparent" BorderThickness="0"
@@ -176,6 +177,13 @@
                 </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
+
+            <!-- Empty state -->
+            <TextBlock Text="No services to show yet. They load automatically — use Refresh if the list stays empty."
+                       Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{Binding Services.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+        </Grid>
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">

@@ -89,6 +89,7 @@
 
         <!-- Feature list -->
         <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
+            <Grid>
             <DataGrid AutomationProperties.Name="Features table" ItemsSource="{Binding FilteredFeatures}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       Background="Transparent" BorderThickness="0"
@@ -263,6 +264,13 @@
                     </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
+
+            <!-- Empty state -->
+            <TextBlock Text="No Windows features match the current filter."
+                       Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{Binding FilteredFeatures.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
         </Border>
 
         <!-- Status bar -->

@@ -35,8 +35,11 @@ public sealed class OutputKindToBrushConverter : IValueConverter
 
 /// <summary>
 /// BooleanToVisibility with optional inversion via ConverterParameter="Inverse".
-/// Also treats any non-null object reference as "true" so it can be used to
-/// toggle visibility based on a nullable result being populated.
+/// Truthiness rules: a bool is itself; null is false; a non-empty string is true;
+/// a numeric value is true only when non-zero; any other non-null object is true.
+/// The numeric rule lets a collection's <c>.Count</c> drive visibility directly
+/// (e.g. an empty-state message bound to <c>Items.Count</c> with <c>Inverse</c>),
+/// which is the common "show this when the list is empty" pattern.
 /// </summary>
 public sealed class FlexibleBoolToVisibilityConverter : IValueConverter
 {
@@ -47,6 +50,8 @@ public sealed class FlexibleBoolToVisibilityConverter : IValueConverter
             bool b => b,
             null => false,
             string s => !string.IsNullOrWhiteSpace(s),
+            sbyte or byte or short or ushort or int or uint or long or ulong => System.Convert.ToInt64(value) != 0,
+            float or double or decimal => System.Convert.ToDecimal(value) != 0m,
             _ => true
         };
         var invert = parameter as string == "Inverse";

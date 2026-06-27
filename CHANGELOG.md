@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.10] - 2026-06-27
+
+### Fixed
+- **The in-app updater is hardened against a local tampering window.** When applying a downloaded update, SysManager writes a small batch script that swaps in the new executable after the app closes. That script was previously written into the same predictable, user-writable folder as the download and launched via the bare `cmd.exe` name. A malicious program running as the same user could, in theory, replace the script (or plant a fake `cmd.exe` on the search path) during the brief window before it ran, getting its own commands executed by the update step. The script is now written to a fresh, randomly-named private folder, launched via the full system path to `cmd.exe`, refuses any path containing an illegal character, and cleans up its own folder afterwards. Hash and Authenticode verification of the downloaded binary were already in place and are unchanged.
+
 ## [1.42.9] - 2026-06-27
 
 ### Fixed

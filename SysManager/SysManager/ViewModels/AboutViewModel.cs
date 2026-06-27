@@ -519,47 +519,21 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        // The updater script is written next to the downloaded binary. Resolve that
-        // directory up front: Path.GetDirectoryName returns null for a rooted/invalid
-        // path, which would otherwise NRE inside Path.Join below.
-        var downloadDir = string.IsNullOrWhiteSpace(DownloadedPath)
-            ? null : Path.GetDirectoryName(DownloadedPath);
-        if (string.IsNullOrEmpty(downloadDir))
-        {
-            DownloadStatus = "Cannot determine the downloaded update's location.";
-            return;
-        }
-
-        // Step 3: Write an updater script that waits for this process to exit,
-        // copies the new exe over the old one, then launches the new version.
+        // Step 3: Write an updater script to an isolated, randomly-named temp
+        // directory — never the predictable, user-writable download folder — then
+        // launch it via the absolute path to cmd.exe. The old code wrote the script
+        // next to the download and ran "cmd.exe" by bare name, so a same-user process
+        // could pre-plant the script (or a fake interpreter on the search path) and
+        // have it run during the elevated copy step (updater TOCTOU → local EoP). The
+        // script waits for this process to exit, copies the verified new exe over the
+        // old one, relaunches it, then removes its own directory.
         try
         {
             var pid = Environment.ProcessId;
-            var scriptPath = Path.Join(
-                downloadDir,
-                $"update-{Guid.NewGuid():N}.cmd");
-
-            var script = $"""
-                @echo off
-                title SysManager Updater
-                echo Waiting for SysManager to close...
-                :wait
-                tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
-                if not errorlevel 1 (
-                    timeout /t 1 /nobreak >NUL
-                    goto wait
-                )
-                echo Applying update...
-                copy /Y "{DownloadedPath}" "{currentExe}" >NUL
-                if errorlevel 1 (
-                    echo Update failed — could not copy file. Press any key to exit.
-                    pause >NUL
-                    exit /b 1
-                )
-                echo Starting SysManager...
-                start "" "{currentExe}"
-                del "%~f0"
-                """;
+            var scriptDir = CreateUpdaterDirectory();
+            var scriptPath = Path.Join(scriptDir, "update.cmd");
+            // DownloadedPath is non-null here: validated by File.Exists above.
+            var script = BuildUpdaterScript(pid, DownloadedPath!, currentExe);
 
             await File.WriteAllTextAsync(scriptPath, script);
 
@@ -567,7 +541,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
             Process.Start(new ProcessStartInfo
             {
-                FileName = "cmd.exe",
+                FileName = UpdaterCmdPath,
                 Arguments = $"/C \"{scriptPath}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -594,6 +568,64 @@ public sealed partial class AboutViewModel : ViewModelBase
         {
             DownloadStatus = $"Update failed: {ex.Message}";
         }
+    }
+
+    // ---------- Updater script (TOCTOU-hardened) ----------
+
+    /// <summary>
+    /// Absolute path to the system cmd.exe. Launching the interpreter by bare
+    /// name ("cmd.exe") resolves it via the search path, which a same-user
+    /// process could hijack; resolving it under %SystemRoot%\System32 pins the
+    /// real interpreter.
+    /// </summary>
+    internal static string UpdaterCmdPath { get; } =
+        Path.Join(Environment.SystemDirectory, "cmd.exe");
+
+    /// <summary>
+    /// Creates a fresh, randomly-named directory for the updater script. The
+    /// unpredictable name (under the per-user temp root) is what defeats the
+    /// TOCTOU: an attacker cannot pre-plant a malicious update.cmd at a path it
+    /// can't know, and the directory does not exist until we create it.
+    /// </summary>
+    internal static string CreateUpdaterDirectory() =>
+        Directory.CreateTempSubdirectory("SysMgrUpd_").FullName;
+
+    /// <summary>
+    /// Builds the updater batch script. Pure and side-effect free so it can be
+    /// asserted in tests. Windows paths cannot legally contain a double quote,
+    /// so a quote in either path means tampering/injection — reject rather than
+    /// emit a script that could break out of its quoting.
+    /// </summary>
+    internal static string BuildUpdaterScript(int pid, string downloadedPath, string currentExe)
+    {
+        if (downloadedPath.Contains('"') || currentExe.Contains('"'))
+            throw new InvalidOperationException("Update path contains an invalid character.");
+
+        return $"""
+            @echo off
+            title SysManager Updater
+            echo Waiting for SysManager to close...
+            :wait
+            tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
+            if not errorlevel 1 (
+                timeout /t 1 /nobreak >NUL
+                goto wait
+            )
+            echo Applying update...
+            copy /Y "{downloadedPath}" "{currentExe}" >NUL
+            if errorlevel 1 (
+                echo Update failed — could not copy file. Press any key to exit.
+                pause >NUL
+                exit /b 1
+            )
+            echo Starting SysManager...
+            start "" "{currentExe}"
+            rem Self-delete this script's isolated directory. (goto) 2>nul releases
+            rem cmd's handle on the running batch first, so rmdir can remove it. This
+            rem is the last, non-critical step — the update already applied above, so
+            rem a cleanup failure here can never affect the update.
+            (goto) 2>nul & rmdir /S /Q "%~dp0"
+            """;
     }
 
     [RelayCommand]

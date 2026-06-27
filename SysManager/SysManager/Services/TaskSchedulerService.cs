@@ -42,14 +42,25 @@ public sealed class TaskSchedulerService
 
     private const string InfoScript = """
         param([string]$Name, [string]$Path)
-        Get-ScheduledTaskInfo -TaskName $Name -TaskPath $Path | Select-Object LastRunTime, NextRunTime
+        # -TaskName/-TaskPath are wildcard parameters in the ScheduledTasks module (there is
+        # no -LiteralName), so escape * ? [ ] in the values to force an exact match — a task
+        # legitimately named e.g. "Adobe [Pro] Updater" would otherwise be read as a pattern.
+        $n = [System.Management.Automation.WildcardPattern]::Escape($Name)
+        $p = [System.Management.Automation.WildcardPattern]::Escape($Path)
+        Get-ScheduledTaskInfo -TaskName $n -TaskPath $p | Select-Object LastRunTime, NextRunTime
         """;
 
     private const string SetEnabledScript = """
         param([string]$Name, [string]$Path, [bool]$Enabled)
-        if ($Enabled) { Enable-ScheduledTask -TaskName $Name -TaskPath $Path -ErrorAction SilentlyContinue | Out-Null }
-        else { Disable-ScheduledTask -TaskName $Name -TaskPath $Path -ErrorAction SilentlyContinue | Out-Null }
-        Get-ScheduledTask -TaskName $Name -TaskPath $Path |
+        # Escape wildcard metacharacters: -TaskName/-TaskPath interpret * ? [ ] as patterns,
+        # so an un-escaped name could over-match siblings (disabling MORE than the selected
+        # task) or fail to match its own literal name. Escaping pins the operation to exactly
+        # the chosen task. See WildcardPattern.Escape.
+        $n = [System.Management.Automation.WildcardPattern]::Escape($Name)
+        $p = [System.Management.Automation.WildcardPattern]::Escape($Path)
+        if ($Enabled) { Enable-ScheduledTask -TaskName $n -TaskPath $p -ErrorAction SilentlyContinue | Out-Null }
+        else { Disable-ScheduledTask -TaskName $n -TaskPath $p -ErrorAction SilentlyContinue | Out-Null }
+        Get-ScheduledTask -TaskName $n -TaskPath $p |
             Select-Object TaskName, TaskPath, @{ n='State'; e={ [string]$_.State } }, Author, Description
         """;
 
@@ -108,8 +119,13 @@ public sealed class TaskSchedulerService
         {
             var parameters = new Dictionary<string, object?> { ["Name"] = name, ["Path"] = path, ["Enabled"] = enabled };
             Collection<PSObject> results = await _ps.RunAsync(SetEnabledScript, parameters, ct).ConfigureAwait(false);
-            var row = results.Count > 0 ? results[0] : null;
-            if (row is null) return null;
+
+            // The read-back must resolve to EXACTLY one task. Wildcards are escaped in the
+            // script, so the only way to see != 1 row is a genuine miss (0, e.g. needs admin
+            // / vanished) or an ambiguous match (>1) — either way we can't honestly claim the
+            // selected task toggled, so report failure rather than trusting results[0].
+            if (results.Count != 1) return null;
+            var row = results[0];
 
             string observed = Str(row, "State") ?? "Unknown";
             bool observedDisabled = string.Equals(observed, "Disabled", StringComparison.OrdinalIgnoreCase);

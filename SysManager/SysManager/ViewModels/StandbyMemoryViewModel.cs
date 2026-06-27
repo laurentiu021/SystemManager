@@ -63,33 +63,57 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
         LoadDisplay = status.LoadDisplay;
     }
 
-    private void Tick()
+    private bool _autoPurgeInFlight;
+
+    private async void Tick()
     {
         var status = _service.GetMemoryStatus();
         TotalDisplay = status.TotalDisplay;
         AvailableDisplay = status.AvailableDisplay;
         LoadDisplay = status.LoadDisplay;
 
-        if (AutoPurgeEnabled && IsElevated && ShouldAutoPurge(status.AvailableMb, ThresholdMb))
+        // Auto-purge off the UI thread (same reason as PurgeAsync). _autoPurgeInFlight
+        // guards against the 2s timer stacking a second purge on top of one still running.
+        if (AutoPurgeEnabled && IsElevated && !_autoPurgeInFlight
+            && ShouldAutoPurge(status.AvailableMb, ThresholdMb))
         {
-            if (_service.TryPurgeStandbyList(out _))
+            _autoPurgeInFlight = true;
+            try
             {
-                Log.Information("Auto-purged standby list (available {Avail:F0} MB < {Threshold:F0} MB)", status.AvailableMb, ThresholdMb);
-                StatusMessage = $"Auto-purged — available RAM was below {ThresholdMb:F0} MB.";
-                Refresh();
+                var avail = status.AvailableMb;
+                var purged = await Task.Run(() => _service.TryPurgeStandbyList(out _)).ConfigureAwait(true);
+                if (purged)
+                {
+                    Log.Information("Auto-purged standby list (available {Avail:F0} MB < {Threshold:F0} MB)", avail, ThresholdMb);
+                    StatusMessage = $"Auto-purged — available RAM was below {ThresholdMb:F0} MB.";
+                    Refresh();
+                }
             }
+            finally { _autoPurgeInFlight = false; }
         }
     }
 
     [RelayCommand]
-    private void Purge()
+    private async Task PurgeAsync()
     {
         if (!IsElevated)
         {
             StatusMessage = "Purging the standby list requires administrator rights.";
             return;
         }
-        if (_service.TryPurgeStandbyList(out string error))
+
+        // The native standby-list purge (NtSetSystemInformation) can block for a noticeable
+        // time on a large cache, so run it off the UI thread to keep the window responsive —
+        // mirrors PerformanceViewModel.TrimRamAsync. ConfigureAwait(true) resumes on the UI
+        // thread so the status/Refresh updates marshal correctly.
+        StatusMessage = "Purging standby list…";
+        var (ok, error) = await Task.Run(() =>
+        {
+            var success = _service.TryPurgeStandbyList(out var err);
+            return (success, err);
+        }).ConfigureAwait(true);
+
+        if (ok)
         {
             Log.Information("User purged standby list");
             StatusMessage = "Standby list purged — cached memory released to the free list.";

@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -30,8 +31,40 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
+        <!-- Elevation banner: not elevated -->
+        <Border Grid.Row="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                    <TextBlock Text="Changing Microsoft Defender settings requires administrator privileges."
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="2" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
+                CornerRadius="10" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — you can change Defender settings."
+                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Tamper Protection warning -->
-        <Border Grid.Row="2" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+        <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
                 BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,12"
                 Visibility="{Binding IsTamperProtected, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal">
@@ -43,7 +76,7 @@
         </Border>
 
         <!-- Status cards -->
-        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12">
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12">
             <StackPanel>
                 <TextBlock Text="Protection status" Style="{StaticResource SectionTitle}"/>
                 <Grid Margin="0,10,0,0">
@@ -90,7 +123,7 @@
         </Border>
 
         <!-- Exclusions -->
-        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
+        <Border Grid.Row="5" Style="{StaticResource Card}" Padding="0">
             <DockPanel>
                 <Grid DockPanel.Dock="Top" Margin="14,12,14,8">
                     <Grid.ColumnDefinitions>
@@ -114,7 +147,7 @@
         </Border>
 
         <!-- Status -->
-        <TextBlock Grid.Row="5" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+        <TextBlock Grid.Row="6" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
                    Margin="0,12,0,0" TextWrapping="Wrap"/>
     </Grid>
 </UserControl>

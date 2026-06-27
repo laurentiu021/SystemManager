@@ -22,6 +22,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 
     public BulkObservableCollection<BrokenShortcut> BrokenShortcuts { get; } = new();
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _scanStatus = "Click Scan to find broken shortcuts.";
     [ObservableProperty] private string _currentLocation = "";
     [ObservableProperty] private int _brokenCount;
@@ -32,6 +33,14 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
     public ShortcutCleanerViewModel(ShortcutCleanerService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     [RelayCommand]

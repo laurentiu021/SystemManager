@@ -24,6 +24,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     public BulkObservableCollection<ProcessEntry> Processes { get; } = new();
     public BulkObservableCollection<ProcessEntry> FilteredProcesses { get; } = new();
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private bool _showOnlyApps;
     [ObservableProperty] private bool _isActive = true;
@@ -37,7 +38,15 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     public ProcessManagerViewModel(ProcessManagerService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     private async Task InitAsync()

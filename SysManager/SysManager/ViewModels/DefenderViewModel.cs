@@ -24,6 +24,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
 
     public BulkObservableCollection<string> ExclusionPaths { get; } = new();
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _isAvailable = true;
     [ObservableProperty] private bool _isTamperProtected;
     [ObservableProperty] private string _realtimeDisplay = "—";
@@ -37,9 +38,17 @@ public sealed partial class DefenderViewModel : ViewModelBase
     public DefenderViewModel(DefenderService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Reading Defender status…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     /// <summary>True when no Defender operation is in flight — gates the mutating

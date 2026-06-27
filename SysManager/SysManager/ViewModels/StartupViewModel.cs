@@ -23,6 +23,7 @@ public sealed partial class StartupViewModel : ViewModelBase
 
     public BulkObservableCollection<StartupEntry> Entries { get; } = new();
 
+    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private int _enabledCount;
     [ObservableProperty] private int _disabledCount;
     [ObservableProperty] private int _totalCount;
@@ -32,6 +33,7 @@ public sealed partial class StartupViewModel : ViewModelBase
     public StartupViewModel(StartupService service)
     {
         _service = service;
+        IsElevated = AdminHelper.IsElevated();
         // Scan, EnableAll and ToggleEntry all read or write the same startup registry/task
         // state; running them concurrently could interleave registry writes and produce
         // inconsistent counts. Re-evaluate their CanExecute when IsBusy flips so only one
@@ -67,6 +69,13 @@ public sealed partial class StartupViewModel : ViewModelBase
         try { await ScanAsync(); }
         catch (InvalidOperationException ex) { Log.Warning("Startup auto-scan failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Warning("Startup auto-scan failed: {Error}", ex.Message); }
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            System.Windows.Application.Current?.Shutdown();
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

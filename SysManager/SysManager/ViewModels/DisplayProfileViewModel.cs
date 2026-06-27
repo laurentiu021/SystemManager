@@ -178,10 +178,21 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         // countdown, and reverting the wrong display would corrupt its mode.
         var device = _previousDevice;
         var prev = _previousMode;
+        bool revertFailed = false;
         if (device is not null && prev is not null)
         {
-            await Task.Run(() =>
-                _service.TryApplyMode(device.DeviceName, prev.Width, prev.Height, prev.RefreshHz, out _)).ConfigureAwait(true);
+            // Revert is the only in-app safety net for a mode that blanked the panel, so its
+            // success matters — don't discard it. If the driver rejects the previous mode,
+            // tell the user exactly how to recover via Windows rather than claiming success.
+            var (reverted, revertError) = await Task.Run(() =>
+            {
+                var ok = _service.TryApplyMode(device.DeviceName, prev.Width, prev.Height, prev.RefreshHz, out var err);
+                return (ok, err);
+            }).ConfigureAwait(true);
+            revertFailed = !reverted;
+            if (revertFailed)
+                Log.Warning("Display auto-revert failed for {Device}: {Error}", device.DeviceName, revertError);
+
             // Only refresh CurrentMode if the reverted device is still the selected one,
             // so we don't overwrite the display the user has since switched to.
             if (ReferenceEquals(device, SelectedDisplay))
@@ -189,7 +200,9 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         }
         _previousMode = null;
         _previousDevice = null;
-        StatusMessage = message;
+        StatusMessage = revertFailed
+            ? "Couldn't restore the previous display mode — if the screen looks wrong, press Esc or use Windows Settings ▸ System ▸ Display to reset it."
+            : message;
         ApplyCommand.NotifyCanExecuteChanged();
     }
 

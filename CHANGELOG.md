@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.43.1] - 2026-06-27
+
+### Fixed
+- **Task Scheduler enable/disable now always acts on exactly the task you picked.** Windows task names can contain characters like `* ? [ ]`; the enable/disable used these verbatim against a wildcard-matching command, so a task whose name contained them could have toggled *more than one* task (or silently none) while still reporting success. Names and paths are now matched literally, and the operation reports success only when exactly the selected task changed.
+- **The Standby List Cleaner no longer freezes the window while purging.** The memory purge ran on the UI thread; on a large cache that briefly locked up the app. It now runs in the background, both for the manual button and the automatic threshold purge (which also no longer stacks if a purge is still running).
+- **Display Profiles tells you if it couldn't undo a change.** If the 15-second auto-revert failed to restore your previous resolution/refresh rate (e.g. the driver rejected it), the app used to claim it had reverted. It now detects the failure and tells you how to recover via Windows display settings.
+- **Defender Tweaks no longer reports a change that didn't happen.** Turning a protection off or removing an exclusion could show "updated" even when the change silently failed (e.g. without administrator rights), because the verification matched the unavailable/empty fallback state. It now confirms Defender status was actually readable before reporting success.
+
 ## [1.43.0] - 2026-06-27
 
 ### Added

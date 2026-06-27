@@ -82,4 +82,38 @@ public class DefenderViewModelTests
         vm.IsBusy = true;
         Assert.False(vm.RemoveExclusionCommand.CanExecute(null));
     }
+
+    [Fact]
+    public async Task TogglePua_Off_WhenStatusUnavailable_ReportsFailureNotSuccess()
+    {
+        // Regression: a disable-toggle targets PuaProtection==0. If the Set silently fails
+        // (needs admin / PS fault) the service returns the all-zeros Unavailable status,
+        // whose PuaProtection is also 0 — which would FALSELY satisfy the read-back check.
+        // The verdict must require status.Available, so this reports "not changed", not
+        // "updated".
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+          .Returns(new Collection<PSObject>()); // empty -> DefenderStatus.Unavailable (all zeros)
+        var vm = new DefenderViewModel(new DefenderService(ps));
+        await vm.InitializationComplete;
+
+        // Pretend PUA was on so the toggle requests OFF (target 0), the dangerous case.
+        vm.PuaEnabled = true;
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // auto-confirm
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.TogglePuaCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+
+        Assert.Contains("was not changed", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("updated", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+    }
 }

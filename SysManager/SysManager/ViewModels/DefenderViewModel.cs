@@ -106,7 +106,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
             int target = PuaEnabled ? 0 : 1;
             var status = await _service.SetPuaProtectionAsync(target).ConfigureAwait(true);
             Apply(status);
-            ReportVerified("PUA protection", status.PuaProtection == target);
+            ReportVerified("PUA protection", status, status.PuaProtection == target);
         }
         finally { IsBusy = false; }
     }
@@ -121,7 +121,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
             int target = CfaEnabled ? 0 : 1;
             var status = await _service.SetControlledFolderAccessAsync(target).ConfigureAwait(true);
             Apply(status);
-            ReportVerified("Controlled Folder Access", status.ControlledFolderAccess == target);
+            ReportVerified("Controlled Folder Access", status, status.ControlledFolderAccess == target);
         }
         finally { IsBusy = false; }
     }
@@ -145,7 +145,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         {
             var status = await _service.AddExclusionPathAsync(path).ConfigureAwait(true);
             Apply(status);
-            ReportVerified("Exclusion", status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
+            ReportVerified("Exclusion", status, status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
         }
         finally { IsBusy = false; }
     }
@@ -162,7 +162,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         {
             var status = await _service.RemoveExclusionPathAsync(path).ConfigureAwait(true);
             Apply(status);
-            ReportVerified("Exclusion removal", !status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
+            ReportVerified("Exclusion removal", status, !status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
         }
         finally { IsBusy = false; }
     }
@@ -194,9 +194,14 @@ public sealed partial class DefenderViewModel : ViewModelBase
         RemoveExclusionCommand.NotifyCanExecuteChanged();
     }
 
-    private void ReportVerified(string what, bool applied)
+    private void ReportVerified(string what, DefenderStatus status, bool applied)
     {
-        if (applied)
+        // A read-back only proves anything when the status is actually readable. When the
+        // Set failed (needs admin / PowerShell host fault), the service returns the all-zeros
+        // DefenderStatus.Unavailable — against which a disable-toggle (target 0) or an
+        // exclusion removal (empty list) would FALSELY satisfy `applied`. Treat an
+        // unavailable read-back as a failure, never a silent success.
+        if (applied && status.Available)
         {
             StatusMessage = $"{what} updated.";
             Log.Information("Defender: {What} change applied", what);

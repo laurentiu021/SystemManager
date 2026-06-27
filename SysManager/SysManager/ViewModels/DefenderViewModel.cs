@@ -73,6 +73,11 @@ public sealed partial class DefenderViewModel : ViewModelBase
                     ? "Tamper Protection is ON — some changes may be ignored by Windows until you turn it off in Windows Security."
                     : "Defender status loaded.";
         }
+        // GetStatusAsync runs PowerShell; a runspace-level fault (not just a script
+        // RuntimeException the service catches) would otherwise escape this async
+        // command unobserved. Surface it as a status message instead.
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not read Defender status: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not read Defender status: {ex.Message}"; }
         finally { IsBusy = false; }
     }
 

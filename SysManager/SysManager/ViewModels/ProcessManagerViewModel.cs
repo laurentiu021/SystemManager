@@ -52,16 +52,19 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
 
     private async Task AutoRefreshLoopAsync(CancellationToken ct)
     {
-        try
+        while (!ct.IsCancellationRequested)
         {
-            while (!ct.IsCancellationRequested)
+            try
             {
                 await Task.Delay(1000, ct);
                 if (!IsActive) continue;
                 await RefreshAsync();
             }
+            catch (OperationCanceledException) { break; /* expected on shutdown */ }
+            // A single refresh fault (transient process/WMI/Win32 hiccup) must not kill
+            // the loop permanently — log and keep polling, mirroring DashboardViewModel.
+            catch (Exception ex) { Log.Debug("Process auto-refresh error: {Error}", ex.Message); }
         }
-        catch (OperationCanceledException) { /* expected on shutdown */ }
     }
 
     [RelayCommand]

@@ -46,6 +46,18 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Update applier: when this process was launched by the in-app updater to
+        // swap itself over the old executable, do only that and exit — no mutex,
+        // no DI, no window. This must run before anything else (and before the
+        // single-instance guard, since the old instance may still hold the mutex).
+        if (UpdateApplier.TryParseArgs(e.Args, out var targetExe, out var oldPid))
+        {
+            LogService.Init();
+            UpdateApplier.Run(targetExe, oldPid);
+            Shutdown();
+            return;
+        }
+
         // Register OEM/ANSI code pages (437, 852, etc.) required by system
         // tools like chkdsk.exe, sfc.exe, and DISM.exe on .NET 8+.
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);

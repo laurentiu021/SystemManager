@@ -102,7 +102,21 @@ What the app can and cannot do by design:
   the feature fails safely rather than substituting an alternative.
 - **Auto-update**: new builds are downloaded from the official GitHub
   Releases endpoint. The app does not auto-install without an explicit
-  click. You can also download manually and verify the binary yourself.
+  click. Before applying, the downloaded binary's SHA256 and Authenticode
+  signature are checked; the swap is then performed from within the
+  downloaded executable itself (no intermediate script on disk) using a
+  staged atomic file move, so an interrupted update cannot leave a
+  half-written, unstartable binary. You can also download manually and
+  verify the binary yourself.
+- **Portable distribution model**: the standard distribution is a portable,
+  self-contained `.exe` (also published to winget as a portable package),
+  which lives in a per-user, user-writable location. This means a process
+  already running under your account could replace the executable on disk —
+  a property inherent to any user-writable portable app, independent of the
+  update flow. If you run SysManager elevated, only run a build you obtained
+  from the official Releases page and verified. A machine-scope installed
+  build under `Program Files` (not user-writable) is planned alongside code
+  signing once a certificate is available.
 
 ## Verifying a release
 

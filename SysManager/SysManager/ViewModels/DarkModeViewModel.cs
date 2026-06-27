@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class DarkModeViewModel : ViewModelBase
 {
-    private readonly WindowsThemeService _service;
+    private readonly IWindowsThemeService _service;
     private readonly DispatcherTimer? _timer;
     private bool _suppressSave;
 
@@ -28,7 +28,7 @@ public sealed partial class DarkModeViewModel : ViewModelBase
     [ObservableProperty] private string _lightStart = "07:00";
     [ObservableProperty] private bool _applyToSystem = true;
 
-    public DarkModeViewModel(WindowsThemeService service)
+    public DarkModeViewModel(IWindowsThemeService service)
     {
         _service = service;
         LoadFromSchedule();

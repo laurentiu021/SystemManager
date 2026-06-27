@@ -25,7 +25,7 @@ namespace SysManager.Services;
 /// by the <c>[LibraryImport]</c> source generator (it emits SYSLIB1051). The Restart
 /// Manager functions have no A/W variants, so no <c>EntryPoint</c> suffix is needed.
 /// </summary>
-public sealed class FileLockService
+public sealed class FileLockService : IFileLockService
 {
     /// <summary>
     /// Returns the processes currently using <paramref name="path"/> (a file or folder).

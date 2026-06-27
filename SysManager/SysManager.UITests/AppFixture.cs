@@ -148,6 +148,30 @@ public sealed class AppFixture : IDisposable
     public AutomationElement? FindById(string automationId) =>
         MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(automationId));
 
+    /// <summary>
+    /// True if any descendant's Name contains <paramref name="text"/>
+    /// (case-insensitive), waiting up to <paramref name="timeoutSeconds"/>.
+    /// A convenience over WaitForText for boolean presence assertions.
+    /// </summary>
+    public bool HasText(string text, int timeoutSeconds = 5)
+        => WaitForText(text, timeoutSeconds) is not null;
+
+    /// <summary>
+    /// True when the current tab shows the shared "requires administrator"
+    /// elevation banner (the not-elevated variant carries that phrase). Used to
+    /// assert that privileged tabs surface the banner when the app is not elevated.
+    /// </summary>
+    public bool HasAdminBanner(int timeoutSeconds = 5)
+        => WaitForText("requires administrator", timeoutSeconds) is not null;
+
+    /// <summary>
+    /// Count Button controls currently realized anywhere in the window. A crude
+    /// but useful smoke signal that a tab rendered its action surface rather than
+    /// an empty/crashed view.
+    /// </summary>
+    public int VisibleButtonCount()
+        => MainWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Button)).Length;
+
     /// <summary>Exit code of the launched app, or a marker if it can't be read.</summary>
     private string SafeExitCode()
     {

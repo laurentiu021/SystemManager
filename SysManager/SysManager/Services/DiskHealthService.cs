@@ -123,6 +123,7 @@ public sealed class DiskHealthService
         catch (ManagementException) { /* driver may not expose counters */ }
         catch (UnauthorizedAccessException) { /* WMI access denied */ }
         catch (InvalidOperationException) { /* object lacks a full path to navigate from — treat as no counter */ }
+        catch (System.Runtime.InteropServices.COMException) { /* GetRelated can surface a transient WMI COM fault — treat as no counter, don't abort the whole disk enumeration */ }
     }
 
     /// <summary>

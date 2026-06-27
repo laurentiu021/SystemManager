@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.7] - 2026-06-27
+
+### Fixed
+- **Process Manager keeps auto-refreshing even if one refresh hits a snag.** Its 1-second live refresh loop only handled cancellation; any other transient fault (a process vanishing mid-read, a brief WMI hiccup) would stop the auto-refresh for the rest of the session. A failed refresh is now logged and the loop simply continues, matching the Dashboard's polling.
+- **Disk and battery readings shrug off transient WMI COM faults.** System Health's reliability/SMART read and the Battery Health queries now also catch the COM-level exception WMI can throw under load, so a one-off glitch no longer drops the whole disk list or aborts the battery scan.
+- **"Trim RAM" no longer briefly freezes the window.** Emptying every process's working set (a per-process system call across hundreds of processes) now runs on a background thread, keeping the Performance tab responsive while it works.
+- **Defender status read reports errors instead of failing silently.** If reading Defender status hit a PowerShell host fault, the tab could end up stuck; it now shows a clear message.
+
 ## [1.42.6] - 2026-06-27
 
 ### Fixed

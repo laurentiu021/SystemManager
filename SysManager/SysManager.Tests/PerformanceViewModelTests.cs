@@ -193,4 +193,14 @@ public class PerformanceViewModelTests
         Assert.Contains("IsProcessorStateLocked", changed);
         Assert.Contains("IsProcessorStateEditable", changed);
     }
+
+    [Fact]
+    public void TrimRamCommand_IsAsync()
+    {
+        // TrimRam enumerates every process and calls EmptyWorkingSet (P/Invoke) on each;
+        // it must run off the UI thread. An IAsyncRelayCommand proves the work is awaited
+        // (offloaded), not executed synchronously on the dispatcher.
+        var vm = NewVm();
+        Assert.IsAssignableFrom<CommunityToolkit.Mvvm.Input.IAsyncRelayCommand>(vm.TrimRamCommand);
+    }
 }

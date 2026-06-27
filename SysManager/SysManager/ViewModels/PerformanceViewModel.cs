@@ -414,7 +414,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     // ═══════════════════════════════════════════════════════════════
 
     [RelayCommand]
-    private void TrimRam()
+    private async Task TrimRamAsync()
     {
         if (!DialogService.Instance.Confirm(
             "Trim the working set of all processes?\n\n"
@@ -426,7 +426,10 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
         try
         {
-            var count = PerformanceService.TrimWorkingSets();
+            // TrimWorkingSets enumerates every process and calls EmptyWorkingSet
+            // (P/Invoke) on each — run it off the UI thread so the window stays
+            // responsive while hundreds of processes are trimmed.
+            var count = await Task.Run(PerformanceService.TrimWorkingSets).ConfigureAwait(true);
             StatusMessage = $"✓ Trimmed working set of {count} processes.";
             Log.Information("RAM trim completed: {Count} processes trimmed", count);
         }

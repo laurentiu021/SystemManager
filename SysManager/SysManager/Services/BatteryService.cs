@@ -48,6 +48,7 @@ public sealed class BatteryService
         }
         catch (ManagementException) { /* WMI class not available */ }
         catch (UnauthorizedAccessException) { /* insufficient permissions */ }
+        catch (System.Runtime.InteropServices.COMException) { /* transient WMI COM fault — return what we have */ }
 
         if (!info.HasBattery)
         {
@@ -73,6 +74,7 @@ public sealed class BatteryService
         }
         catch (ManagementException) { /* WMI class not present on this device */ }
         catch (UnauthorizedAccessException) { /* needs elevation for root\WMI */ }
+        catch (System.Runtime.InteropServices.COMException) { /* transient WMI COM fault — return what we have */ }
 
         // ── BatteryFullChargedCapacity (current max) ──
         try
@@ -92,6 +94,7 @@ public sealed class BatteryService
         }
         catch (ManagementException) { /* WMI class not present on this device */ }
         catch (UnauthorizedAccessException) { /* needs elevation for root\WMI */ }
+        catch (System.Runtime.InteropServices.COMException) { /* transient WMI COM fault — return what we have */ }
 
         // ── BatteryCycleCount ──
         try
@@ -111,6 +114,7 @@ public sealed class BatteryService
         }
         catch (ManagementException) { /* WMI class not present on this device */ }
         catch (UnauthorizedAccessException) { /* needs elevation for root\WMI */ }
+        catch (System.Runtime.InteropServices.COMException) { /* transient WMI COM fault — return what we have */ }
 
         return info;
     }

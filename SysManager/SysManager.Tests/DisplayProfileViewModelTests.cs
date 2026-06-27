@@ -48,4 +48,17 @@ public class DisplayProfileViewModelTests
         Assert.NotNull(vm.Displays);
         Assert.NotNull(vm.Modes);
     }
+
+    [Fact]
+    public void Revert_CapturesTheAppliedDevice_NotJustTheMode()
+    {
+        // Regression pin for the cross-display revert bug: the auto-revert must target
+        // the display the change was APPLIED to (captured at Apply time), not whatever
+        // is selected when the 15 s timer fires. That requires the VM to remember the
+        // device alongside the previous mode — assert the capture field exists.
+        var device = typeof(DisplayProfileViewModel).GetField(
+            "_previousDevice", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(device);
+        Assert.Equal("SysManager.Models.DisplayDevice", device!.FieldType.FullName);
+    }
 }

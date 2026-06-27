@@ -327,7 +327,14 @@ public sealed class SpeedTestService
         }, ct).ConfigureAwait(false);
 
         var exe = Path.Join(toolsDir, "speedtest.exe");
-        if (!needsDownload) return exe;
+        if (!needsDownload)
+        {
+            // TOCTOU guard: the cached exe lives in a user-writable dir, so an attacker
+            // could swap it between runs. Re-verify its Authenticode signature every
+            // time before we hand it back to be executed — not only right after download.
+            await Task.Run(() => VerifyOoklaSignature(exe), ct).ConfigureAwait(false);
+            return exe;
+        }
 
         progress?.Report((5, "Downloading Ookla CLI…"));
         var arch = Environment.Is64BitOperatingSystem ? "win64" : "win32";
@@ -399,38 +406,48 @@ public sealed class SpeedTestService
         if (!File.Exists(exe))
             throw new FileNotFoundException("speedtest.exe not found after extraction");
 
-        // Verify Authenticode signature on extracted binary — fail-closed.
-        // If the binary is not signed by Ookla, delete it and throw.
-        await Task.Run(() =>
-        {
-            try
-            {
-#pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete — no direct replacement for Authenticode verification
-                var cert = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
-#pragma warning restore SYSLIB0057
-                if (cert is null || !cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
-                {
-                    Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert?.Subject ?? "none");
-                    try { File.Delete(exe); }
-                    catch (IOException ex2) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex2.Message)); }
-                    catch (UnauthorizedAccessException ex2) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex2.Message)); }
-                    throw new InvalidOperationException(
-                        $"Ookla speedtest.exe failed Authenticode verification (subject: {cert?.Subject ?? "none"}). Binary deleted for security.");
-                }
-                Log.Information("Ookla speedtest.exe Authenticode verified: {Subject}", cert.Subject);
-            }
-            catch (System.Security.Cryptography.CryptographicException ex)
-            {
-                Log.Warning(ex, "Ookla speedtest.exe has no valid Authenticode signature");
-                try { File.Delete(exe); }
-                catch (IOException ex2) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex2.Message)); }
-                catch (UnauthorizedAccessException ex2) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex2.Message)); }
-                throw new InvalidOperationException(
-                    "Ookla speedtest.exe has no valid Authenticode signature. Binary deleted for security.", ex);
-            }
-        }, ct).ConfigureAwait(false);
+        // Verify Authenticode signature on the freshly-extracted binary — fail-closed.
+        await Task.Run(() => VerifyOoklaSignature(exe), ct).ConfigureAwait(false);
 
         return exe;
+    }
+
+    /// <summary>
+    /// Verifies that <paramref name="exe"/> carries a valid Authenticode signature whose
+    /// subject is Ookla's — fail-closed (deletes the binary and throws on any mismatch or
+    /// missing signature). Runs both right after download AND on every cached-exe reuse,
+    /// since the cache lives in a user-writable directory (TOCTOU).
+    /// </summary>
+    private static void VerifyOoklaSignature(string exe)
+    {
+        try
+        {
+#pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete — no direct replacement for Authenticode verification
+            var cert = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
+#pragma warning restore SYSLIB0057
+            if (cert is null || !cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert?.Subject ?? "none");
+                TryDeleteExe(exe);
+                throw new InvalidOperationException(
+                    $"Ookla speedtest.exe failed Authenticode verification (subject: {cert?.Subject ?? "none"}). Binary deleted for security.");
+            }
+            Log.Information("Ookla speedtest.exe Authenticode verified: {Subject}", cert.Subject);
+        }
+        catch (System.Security.Cryptography.CryptographicException ex)
+        {
+            Log.Warning(ex, "Ookla speedtest.exe has no valid Authenticode signature");
+            TryDeleteExe(exe);
+            throw new InvalidOperationException(
+                "Ookla speedtest.exe has no valid Authenticode signature. Binary deleted for security.", ex);
+        }
+    }
+
+    private static void TryDeleteExe(string exe)
+    {
+        try { File.Delete(exe); }
+        catch (IOException ex) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex.Message)); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex.Message)); }
     }
 
     /// <summary>

@@ -328,4 +328,44 @@ public class TuneUpServiceTests
             try { System.IO.Directory.Delete(root, recursive: true); } catch { /* best effort */ }
         }
     }
+
+    [Fact]
+    public void EnumerateFilesSkippingReparsePoints_DoesNotFollowReparsePointRoot()
+    {
+        // Regression for the root-not-guarded gap: if the traversal ROOT is itself a
+        // junction/symlink (not just a child), enumeration must NOT follow it out of
+        // the temp tree. Build:  outside/secret.txt  and  rootLink -> outside.
+        // Walking rootLink must yield NOTHING (never secret.txt).
+        var baseDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "smtu_" + Guid.NewGuid().ToString("N"));
+        var outside = System.IO.Path.Combine(baseDir, "outside");
+        System.IO.Directory.CreateDirectory(outside);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outside, "secret.txt"), "must never be enumerated");
+
+        var rootLink = System.IO.Path.Combine(baseDir, "rootlink");
+        try
+        {
+            System.IO.Directory.CreateSymbolicLink(rootLink, outside);
+        }
+        catch (Exception)
+        {
+            // Symlink creation needs privilege/Developer Mode — skip if unavailable.
+            System.IO.Directory.Delete(baseDir, recursive: true);
+            return;
+        }
+
+        try
+        {
+            var found = TuneUpService
+                .EnumerateFilesSkippingReparsePoints(rootLink, CancellationToken.None)
+                .ToList();
+
+            Assert.Empty(found);
+            Assert.DoesNotContain(found, f => f.EndsWith("secret.txt", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(rootLink, recursive: false); } catch { /* best effort */ }
+            try { System.IO.Directory.Delete(baseDir, recursive: true); } catch { /* best effort */ }
+        }
+    }
 }

@@ -22,6 +22,14 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _pollingCts;
 
+    // GPU adapter name and usage availability are effectively static for a session,
+    // but the polling loop runs every 300ms — so initialise the NVIDIA API at most
+    // once and resolve the adapter name only once (via NvAPI, else a single WMI
+    // query), instead of re-initialising and re-querying on every tick.
+    private bool _nvApiInitTried;
+    private bool _nvApiAvailable;
+    private bool _gpuNameResolved;
+
     // ── Real-time vitals (300ms polling) ──────────────────────────────────
     [ObservableProperty] private double _cpuPercent;
     [ObservableProperty] private string _cpuName = "";
@@ -160,36 +168,57 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private void UpdateGpuUsage()
     {
-        try
+        // Initialise NvAPI at most once per session. Repeated Initialize() calls on
+        // the 300ms loop are wasted work; once we know it's unavailable (non-NVIDIA),
+        // we never retry and fall through to the one-time WMI name lookup.
+        if (!_nvApiInitTried)
         {
-            NvAPIWrapper.NVIDIA.Initialize();
-            var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
-            if (gpus.Length > 0)
+            _nvApiInitTried = true;
+            try
             {
-                var gpu = gpus[0];
-                var usage = gpu.UsageInformation.GPU.Percentage;
-                var memTotal = gpu.MemoryInformation.DedicatedVideoMemoryInkB / 1024.0 / 1024.0;
-                var memUsed = (gpu.MemoryInformation.DedicatedVideoMemoryInkB -
-                               gpu.MemoryInformation.AvailableDedicatedVideoMemoryInkB) / 1024.0 / 1024.0;
-
-                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-                {
-                    GpuPercent = usage;
-                    GpuName = gpu.FullName;
-                    GpuVram = $"{memUsed:F1} / {memTotal:F1} GB VRAM";
-                });
-                return;
+                NvAPIWrapper.NVIDIA.Initialize();
+                _nvApiAvailable = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs().Length > 0;
+            }
+            catch (Exception ex)
+            {
+                _nvApiAvailable = false;
+                Log.Debug("NVIDIA GPU API unavailable: {Error}", ex.Message);
             }
         }
-        catch (Exception ex)
+
+        if (_nvApiAvailable)
         {
-            Log.Debug("NVIDIA GPU polling unavailable: {Error}", ex.Message);
+            try
+            {
+                var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
+                if (gpus.Length > 0)
+                {
+                    var gpu = gpus[0];
+                    var usage = gpu.UsageInformation.GPU.Percentage;
+                    var memTotal = gpu.MemoryInformation.DedicatedVideoMemoryInkB / 1024.0 / 1024.0;
+                    var memUsed = (gpu.MemoryInformation.DedicatedVideoMemoryInkB -
+                                   gpu.MemoryInformation.AvailableDedicatedVideoMemoryInkB) / 1024.0 / 1024.0;
+
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                    {
+                        GpuPercent = usage;
+                        GpuName = gpu.FullName;
+                        GpuVram = $"{memUsed:F1} / {memTotal:F1} GB VRAM";
+                    });
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("NVIDIA GPU polling error: {Error}", ex.Message);
+            }
         }
 
-        // No NVIDIA GPU (NvAPI only covers NVIDIA). Fall back to WMI so AMD/Intel
-        // GPUs at least show the adapter name. Live usage % is NVIDIA-only because
-        // it requires vendor-specific APIs.
-        UpdateGpuNameFromWmi();
+        // No NVIDIA GPU (NvAPI only covers NVIDIA). The adapter name is static, so
+        // resolve it via WMI exactly once — live usage % is NVIDIA-only because it
+        // requires vendor-specific APIs.
+        if (!_gpuNameResolved)
+            UpdateGpuNameFromWmi();
     }
 
     private void UpdateGpuNameFromWmi()
@@ -205,6 +234,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 {
                     var name = mo["Name"]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(name)) continue;
+                    _gpuNameResolved = true; // static value — don't query WMI again
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
                     {
                         GpuName = name;

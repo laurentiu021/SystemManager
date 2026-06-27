@@ -86,7 +86,10 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         {
             var icon = await _iconService.GetIconAsync(app.WingetId).ConfigureAwait(false);
             if (icon != null)
-                App.Current?.Dispatcher.Invoke(() => app.Icon = icon);
+                // BeginInvoke (non-blocking) matches the rest of the project's off-thread
+                // UI updates; a synchronous Invoke here would stall this loop against UI
+                // availability for every app.
+                App.Current?.Dispatcher.BeginInvoke(() => app.Icon = icon);
         }
     }
 

@@ -73,6 +73,15 @@ internal static class UpdateApplier
     /// </summary>
     internal static bool ApplyCopy(string sourceExe, string targetExe, int maxAttempts = 10, int delayMs = 500)
     {
+        // A missing source is non-recoverable — without this guard File.Copy throws
+        // FileNotFoundException (an IOException subtype), which the retry block below
+        // would misread as a transient lock and burn the full backoff before failing.
+        if (!File.Exists(sourceExe))
+        {
+            Log.Error("Update apply: source executable not found at {Source}", LogService.SanitizePath(sourceExe));
+            return false;
+        }
+
         var staging = targetExe + ".new";
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
@@ -90,12 +99,12 @@ internal static class UpdateApplier
             }
             catch (UnauthorizedAccessException ex)
             {
-                Log.Warning(ex, "Update apply: access denied writing {Target}", targetExe);
+                Log.Warning(ex, "Update apply: access denied writing {Target}", LogService.SanitizePath(targetExe));
                 TryDelete(staging);
                 return false;
             }
         }
-        Log.Error("Update apply: gave up after {Max} attempts — {Target} stayed locked", maxAttempts, targetExe);
+        Log.Error("Update apply: gave up after {Max} attempts — {Target} stayed locked", maxAttempts, LogService.SanitizePath(targetExe));
         return false;
     }
 
@@ -133,7 +142,7 @@ internal static class UpdateApplier
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            Log.Error(ex, "Update apply: failed to relaunch {Target}", targetExe);
+            Log.Error(ex, "Update apply: failed to relaunch {Target}", LogService.SanitizePath(targetExe));
         }
     }
 

@@ -280,9 +280,9 @@ public sealed class UpdateService
             var match = string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase);
             if (!match)
                 Serilog.Log.Warning("SHA256 mismatch for {File}: expected {Expected}, got {Actual}",
-                    filePath, expectedHash, actualHash);
+                    LogService.SanitizePath(filePath), expectedHash, actualHash);
             else
-                Serilog.Log.Information("SHA256 verified for {File}: {Hash}", filePath, actualHash);
+                Serilog.Log.Information("SHA256 verified for {File}: {Hash}", LogService.SanitizePath(filePath), actualHash);
 
             return (match, expectedHash, actualHash);
         }

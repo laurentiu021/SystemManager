@@ -125,7 +125,12 @@ public class UpdateApplierTests
             var target = Path.Combine(dir.FullName, "current.exe");
             File.WriteAllText(target, "OLD-BUILD");
 
-            var ok = UpdateApplier.ApplyCopy(source, target, maxAttempts: 2, delayMs: 0);
+            // A missing source is non-recoverable: the early-exit guard returns false
+            // immediately, so even a large maxAttempts must NOT spin the retry/backoff
+            // loop (it would otherwise misread FileNotFoundException as a transient lock).
+            // delayMs is large on purpose — if the guard regressed and the loop ran, the
+            // test would hang noticeably rather than return instantly.
+            var ok = UpdateApplier.ApplyCopy(source, target, maxAttempts: 10, delayMs: 10_000);
 
             // A failed copy must never destroy the working executable.
             Assert.False(ok);

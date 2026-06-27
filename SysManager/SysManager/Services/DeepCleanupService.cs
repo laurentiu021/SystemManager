@@ -56,8 +56,7 @@ public sealed class DeepCleanupService
         {
             new("NVIDIA installer leftovers",
                 "Extracted driver packages NVIDIA drops on your drive root and in ProgramData during an install. Safe to remove once the driver is installed.",
-                new[]
-                {
+                [
                     Path.Combine(systemDrive, "NVIDIA"),
                     Path.Combine(programData, "NVIDIA Corporation", "Downloader"),
                     Path.Combine(programData, "NVIDIA Corporation", "NV_Cache"),
@@ -65,55 +64,54 @@ public sealed class DeepCleanupService
                     Path.Combine(localAppData, "NVIDIA", "GLCache"),
                     Path.Combine(localAppData, "NVIDIA", "DXCache"),
                     Path.Combine(localAppData, "NVIDIA", "ComputeCache"),
-                }),
+                ]),
 
             new("AMD installer leftovers",
                 "Unpacked driver installer folder AMD creates on the root of C:\\. Confirmed safe by AMD community docs.",
-                new[] { Path.Combine(systemDrive, "AMD") }),
+                [Path.Combine(systemDrive, "AMD")]),
 
             new("Intel driver extracts",
                 "Temporary driver package extracts from Intel installers.",
-                new[] { Path.Combine(systemDrive, "Intel") }),
+                [Path.Combine(systemDrive, "Intel")]),
 
             new("Windows Update cache",
                 "Previously downloaded Windows Update packages. Windows re-downloads anything it still needs next time.",
-                new[] { Path.Combine(windowsDir, "SoftwareDistribution", "Download") }),
+                [Path.Combine(windowsDir, "SoftwareDistribution", "Download")]),
 
             new("Delivery Optimization cache",
                 "Peer-to-peer update cache. Regenerated on demand.",
-                new[] { Path.Combine(windowsDir, "SoftwareDistribution", "DeliveryOptimization", "Cache") }),
+                [Path.Combine(windowsDir, "SoftwareDistribution", "DeliveryOptimization", "Cache")]),
 
             new("Windows Installer patch cache",
                 "C:\\Windows\\Installer\\$PatchCache$ stores baseline patch files used only when uninstalling an MSI patch. Safe per Microsoft devblog.",
-                new[] { Path.Combine(windowsDir, "Installer", "$PatchCache$") }),
+                [Path.Combine(windowsDir, "Installer", "$PatchCache$")]),
 
             new("Temporary files",
                 "Per-user and system TEMP folders. Anything still in use is skipped automatically.",
-                new[] { tempUser, Path.Combine(windowsDir, "Temp") }),
+                [tempUser, Path.Combine(windowsDir, "Temp")]),
 
             new("Prefetch files",
                 "Windows boot/launch prefetch cache. Windows rebuilds it as apps are used.",
-                new[] { Path.Combine(windowsDir, "Prefetch") }),
+                [Path.Combine(windowsDir, "Prefetch")]),
 
             new("Crash dumps & error reports",
                 "Windows Error Reporting queue and user-mode crash dumps (*.dmp).",
-                new[]
-                {
+                [
                     Path.Combine(localAppData, "CrashDumps"),
                     Path.Combine(localAppData, "Microsoft", "Windows", "WER", "ReportQueue"),
                     Path.Combine(localAppData, "Microsoft", "Windows", "WER", "ReportArchive"),
                     Path.Combine(programData, "Microsoft", "Windows", "WER", "ReportQueue"),
                     Path.Combine(programData, "Microsoft", "Windows", "WER", "ReportArchive"),
-                }),
+                ]),
 
             new("Old Windows servicing logs (> 30 days)",
                 "CBS logs older than 30 days. Windows keeps rolling ones itself.",
-                new[] { Path.Combine(windowsDir, "Logs", "CBS") },
+                [Path.Combine(windowsDir, "Logs", "CBS")],
                 OlderThan: TimeSpan.FromDays(30)),
 
             new("DirectX shader cache",
                 "Precompiled GPU shaders cached by Windows. Rebuilt automatically the next time games run — clearing can fix stutter.",
-                new[] { Path.Combine(localAppData, "D3DSCache") }),
+                [Path.Combine(localAppData, "D3DSCache")]),
 
             new("Recycle Bin (all drives)",
                 "Emptying the recycle bin on every fixed drive.",
@@ -133,23 +131,21 @@ public sealed class DeepCleanupService
 
             new("Epic Games Launcher — webcache & logs",
                 "Epic Launcher browser webcache and log files. Doesn't affect your Epic login or installed games.",
-                new[]
-                {
+                [
                     Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "webcache"),
                     Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "webcache_4147"),
                     Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "webcache_4430"),
                     Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "Logs"),
                     Path.Combine(localAppData, "UnrealEngineLauncher", "Saved", "webcache"),
-                }),
+                ]),
 
             new("Battle.net — cache",
                 "Battle.net agent and Blizzard launcher cache. Doesn't touch installed games or logins.",
-                new[]
-                {
+                [
                     Path.Combine(programData, "Battle.net", "Agent", "data", "cache"),
                     Path.Combine(programData, "Blizzard Entertainment", "Battle.net", "Cache"),
                     Path.Combine(localAppData, "Battle.net", "Cache"),
-                }),
+                ]),
 
             new("Riot Client / League of Legends — logs",
                 "Riot Client and League client logs only. No game files or credentials.",
@@ -157,21 +153,19 @@ public sealed class DeepCleanupService
 
             new("GOG Galaxy — cache",
                 "GOG Galaxy launcher webcache and redists installer cache.",
-                new[]
-                {
+                [
                     Path.Combine(localAppData, "GOG.com", "Galaxy", "webcache"),
                     Path.Combine(programData, "GOG.com", "Galaxy", "redists"),
-                }),
+                ]),
 
             new("EA App / Origin — cache",
                 "EA Desktop (and legacy Origin) browser cache and logs. Doesn't affect installed games or logins.",
-                new[]
-                {
+                [
                     Path.Combine(localAppData, "Electronic Arts", "EA Desktop", "CEF-Cache"),
                     Path.Combine(localAppData, "Electronic Arts", "EA Desktop", "Logs"),
                     Path.Combine(localAppData, "Origin", "Logs"),
                     Path.Combine(programData, "Origin", "Logs"),
-                }),
+                ]),
         };
 
         // Windows.old — optional, never auto-selected
@@ -181,7 +175,7 @@ public sealed class DeepCleanupService
             defs.Add(new Def(
                 "Windows.old (previous Windows installation)",
                 "Remove only if you're sure you don't want to roll back to your previous Windows version. Windows normally auto-deletes this after 10 days.",
-                new[] { windowsOld },
+                [windowsOld],
                 IsDestructiveHint: true));
         }
 

@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.12] - 2026-06-27
+
+### Fixed
+- **The Dashboard is lighter on the system while it's open.** Two background readings were doing far more work than needed on their refresh timers: the GPU widget re-initialised the graphics API (and re-queried the adapter on non-NVIDIA machines) several times a second, and — when running as administrator — the temperature panel opened and closed its hardware-monitoring driver on every two-second poll. Both now initialise once and reuse that handle, so the live Dashboard uses noticeably less CPU and fewer system handles without changing what you see.
+- **Log files no longer record your Windows username from the update path.** A couple of update-related log lines wrote the full executable path (which for a per-user install includes `C:\Users\<name>\…`) without the existing path-scrubbing the rest of the app applies. They now scrub the username like everywhere else.
+- **A failed update recovers instantly instead of stalling.** If the downloaded file went missing right before applying (e.g. removed by antivirus), the updater treated it as a temporarily-locked file and retried for several seconds before giving up; it now detects the missing file immediately and reports it.
+
 ## [1.42.11] - 2026-06-27
 
 ### Changed

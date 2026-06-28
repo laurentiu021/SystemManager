@@ -138,10 +138,18 @@
                             Style="{StaticResource DangerButton}" Padding="12,6"
                             AutomationProperties.Name="Remove the selected exclusion"/>
                 </Grid>
-                <ListBox ItemsSource="{Binding ExclusionPaths}" SelectedItem="{Binding SelectedExclusion}"
-                         Background="Transparent" BorderThickness="0" Margin="6,0,6,6"
-                         AutomationProperties.Name="Exclusion folders"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                <Grid>
+                    <ListBox ItemsSource="{Binding ExclusionPaths}" SelectedItem="{Binding SelectedExclusion}"
+                             Background="Transparent" BorderThickness="0" Margin="6,0,6,6"
+                             AutomationProperties.Name="Exclusion folders"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+
+                    <!-- Empty state -->
+                    <v:EmptyState Glyph="&#xE730;"
+                                  Title="No exclusion folders"
+                                  Message="Add a folder above to exclude it from Defender scans."
+                                  Visibility="{Binding ExclusionPaths.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
             </DockPanel>
         </Border>
 

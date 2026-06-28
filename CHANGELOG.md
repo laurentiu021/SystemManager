@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.45.0] - 2026-06-29
+
+### Changed
+- **Consistent "empty list" messages across every tab.** Lists and tables that can start empty — App Updates, App Blocker, App Alerts, Shortcut Cleaner, File Shredder, Duplicate Finder, Context Menu, Task Scheduler, Display Profiles, Boot Analyzer, Defender exclusions and the live output console — now show the same centred placeholder (an icon, a short title and a one-line hint on how to populate the list) instead of a blank area or nothing at all. The handful of tabs that already had a placeholder (Debloater, Restore Points, Camera/Mic/Location, Browser Cleaner, System Logs, System Report) were moved onto the same shared component so the look can't drift between tabs again. A 📂 emoji in the Disk Analyzer and a shield emoji in Process Manager were also swapped for the proper icon font. Purely visual — no behaviour changes.
+
 ## [1.44.1] - 2026-06-28
 
 ### Changed

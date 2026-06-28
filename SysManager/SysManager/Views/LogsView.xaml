@@ -1,7 +1,8 @@
 <!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
 <UserControl x:Class="SysManager.Views.LogsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views">
     <UserControl.Resources>
         <Style x:Key="SevDot" TargetType="Ellipse">
             <Setter Property="Width" Value="8"/>
@@ -283,14 +284,10 @@
                 </DataGrid>
 
                     <!-- No-results overlay -->
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                                Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}">
-                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                        <TextBlock Text="No events match your filters" FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Try adjusting severity checkboxes or clearing the search"
-                                   Style="{StaticResource Subtle}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                    </StackPanel>
+                    <v:EmptyState Glyph="&#xE721;"
+                                  Title="No events match your filters"
+                                  Message="Try adjusting severity checkboxes or clearing the search."
+                                  Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>
                 </Grid>
             </Border>
 

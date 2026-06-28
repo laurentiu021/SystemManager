@@ -62,6 +62,7 @@
         </Border>
 
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
+            <Grid>
             <DataGrid AutomationProperties.Name="Upgradable packages" ItemsSource="{Binding Packages}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       GridLinesVisibility="None" CanUserAddRows="False"
@@ -95,6 +96,13 @@
                     <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" MinWidth="80" SortMemberPath="Status"/>
                 </DataGrid.Columns>
             </DataGrid>
+
+            <!-- Empty state -->
+            <v:EmptyState Glyph="&#xE896;"
+                          Title="No updates available"
+                          Message="All detected packages are up to date. Run a check to refresh."
+                          Visibility="{Binding Packages.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
         </Border>
 
         <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">

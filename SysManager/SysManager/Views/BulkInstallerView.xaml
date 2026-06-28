@@ -91,8 +91,7 @@
         <!-- Custom winget search -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <StackPanel>
-                <TextBlock Text="Search winget packages" FontWeight="SemiBold" FontSize="14"
-                           Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock Text="Search winget packages" Style="{StaticResource SectionTitle}"/>
                 <TextBlock Text="Find and install any app available on winget."
                            Style="{StaticResource Subtle}" Margin="0,2,0,12"/>
                 <DockPanel>

@@ -349,17 +349,13 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Footer status -->
-                <Grid Margin="0,16,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"/>
-                    <ProgressBar AutomationProperties.Name="Progress" Grid.Column="1" Width="180" Height="4"
+                <!-- Status bar -->
+                <DockPanel Margin="0,16,0,0">
+                    <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                                  IsIndeterminate="{Binding IsProgressIndeterminate}"
-                                 Visibility="{Binding IsBusy, Converter={StaticResource FlexVis}}"/>
-                </Grid>
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+                </DockPanel>
             </StackPanel>
         </ScrollViewer>
     </Grid>

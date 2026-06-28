@@ -168,7 +168,7 @@
                                                 <TextBlock Text="{Binding PublishedAt}" Foreground="{DynamicResource TextMuted}" FontSize="12" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock helpers:MarkdownTextBlock.Markdown="{Binding Body}" Foreground="{DynamicResource TextSecondary}"
-                                                       TextWrapping="Wrap" Margin="0,8,0,0" FontFamily="{StaticResource UiFont}"/>
+                                                       TextWrapping="Wrap" Margin="0,8,0,0"/>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>

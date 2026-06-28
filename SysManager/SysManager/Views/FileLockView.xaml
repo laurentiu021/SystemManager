@@ -21,7 +21,6 @@
         </Grid.RowDefinitions>
 
         <!-- Preview banner -->
-        <v:DevelopmentBanner Grid.Row="0" Margin="0,0,0,16"/>
 
         <!-- Header -->
         <StackPanel Grid.Row="1" Margin="0,0,0,16">

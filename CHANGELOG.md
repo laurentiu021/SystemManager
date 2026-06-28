@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.44.0] - 2026-06-28
+
+### Changed
+- **Eight tabs graduated out of Preview.** Task Scheduler, Standby List Cleaner, Timer Resolution, CPU Core Affinity, Display Profiles, File Lock Detector, Defender Tweaks and Dark Mode Scheduler no longer carry the "Preview feature" banner or the PREVIEW tag in the sidebar. They've been verified end to end — functionality, error handling, safety guards, automated tests for the command paths, and a live check that each one's real effect on the system works and reverts cleanly. (The four correctness fixes from 1.43.1 — the Task Scheduler wildcard match, the Standby purge running off the UI thread, the Display Profiles revert check, and the Defender verification — were part of this hardening.)
+
 ## [1.43.1] - 2026-06-27
 
 ### Fixed

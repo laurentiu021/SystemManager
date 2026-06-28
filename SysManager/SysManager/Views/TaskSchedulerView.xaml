@@ -83,6 +83,7 @@
 
         <!-- Tasks grid -->
         <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
+            <Grid>
             <DataGrid ItemsSource="{Binding Tasks}" SelectedItem="{Binding SelectedTask}"
                       AutomationProperties.Name="Scheduled tasks"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
@@ -97,6 +98,13 @@
                     <DataGridTextColumn Header="Last run" Binding="{Binding LastRunDisplay}" Width="140"/>
                 </DataGrid.Columns>
             </DataGrid>
+
+            <!-- Empty state -->
+            <v:EmptyState Glyph="&#xE946;"
+                          Title="No scheduled tasks found"
+                          Message="Run a scan to list Windows scheduled tasks you can manage."
+                          Visibility="{Binding Tasks.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
         </Border>
 
         <!-- Actions + status -->

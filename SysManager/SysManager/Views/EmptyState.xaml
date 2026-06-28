@@ -1,0 +1,34 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.EmptyState"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+
+    <!-- Reusable empty-state placeholder for any list/grid that can be empty.
+         Single source of truth for the "icon + title + message" idiom so the
+         look can never drift between views. Drop it as a sibling of the
+         collection control inside a Grid and bind its Visibility to the
+         collection's emptiness, e.g.:
+           <Grid>
+             <DataGrid ItemsSource="{Binding Items}"/>
+             <v:EmptyState Glyph="&#xE777;" Title="No items" Message="Run a scan to check."
+                           Visibility="{Binding Items.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+           </Grid>
+         Glyph is optional — omit it for a title/message-only state. -->
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
+        <TextBlock Text="{Binding Glyph, ElementName=Root}"
+                   FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="32"
+                   HorizontalAlignment="Center" Margin="0,0,0,8"
+                   Foreground="{DynamicResource TextSecondary}"
+                   Visibility="{Binding Glyph, ElementName=Root, Converter={StaticResource FlexVis}}"/>
+        <TextBlock Text="{Binding Title, ElementName=Root}"
+                   FontSize="14" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextSecondary}"
+                   HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"/>
+        <TextBlock Text="{Binding Message, ElementName=Root}"
+                   Style="{StaticResource Subtle}"
+                   HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+                   Margin="0,4,0,0"
+                   Visibility="{Binding Message, ElementName=Root, Converter={StaticResource FlexVis}}"/>
+    </StackPanel>
+</UserControl>

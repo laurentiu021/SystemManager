@@ -76,6 +76,7 @@
 
         <!-- Modes grid -->
         <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
+            <Grid>
             <DataGrid ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}"
                       AutomationProperties.Name="Supported display modes"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
@@ -87,6 +88,13 @@
                     <DataGridTextColumn Header="Refresh rate" Binding="{Binding RefreshDisplay}" Width="160"/>
                 </DataGrid.Columns>
             </DataGrid>
+
+            <!-- Empty state -->
+            <v:EmptyState Glyph="&#xE946;"
+                          Title="No display modes found"
+                          Message="No supported resolutions were reported for this display."
+                          Visibility="{Binding Modes.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
         </Border>
 
         <!-- Actions + status -->

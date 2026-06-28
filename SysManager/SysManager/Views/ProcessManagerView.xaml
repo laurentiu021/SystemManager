@@ -51,7 +51,7 @@
                 <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                         Margin="-12,-8,0,-8"/>
                 <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
-                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center" Foreground="{DynamicResource WarningText}"/>
                     <TextBlock Text="Running as administrator — you can end any process."
                                Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>

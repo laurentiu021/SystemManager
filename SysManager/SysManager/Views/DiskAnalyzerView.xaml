@@ -136,7 +136,7 @@
                                        HorizontalAlignment="Right"/>
 
                             <!-- Open in Explorer -->
-                            <Button Grid.Column="4" Content="📂" ToolTip="Show in Explorer"
+                            <Button Grid.Column="4" Content="&#xE838;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" ToolTip="Show in Explorer"
                                     AutomationProperties.Name="{Binding Name, StringFormat='Show {0} in Explorer'}"
                                     Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"

@@ -29,7 +29,7 @@ public sealed partial class CoreToggle : ObservableObject
 /// </summary>
 public sealed partial class CpuAffinityViewModel : ViewModelBase
 {
-    private readonly CpuAffinityService _service;
+    private readonly ICpuAffinityService _service;
     private long _originalMask;
     private bool _hasOriginal;
 
@@ -39,7 +39,7 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
     [ObservableProperty] private RunningProcess? _selectedProcess;
     [ObservableProperty] private bool _isHybrid;
 
-    public CpuAffinityViewModel(CpuAffinityService service)
+    public CpuAffinityViewModel(ICpuAffinityService service)
     {
         _service = service;
         StatusMessage = "Reading CPU topology…";

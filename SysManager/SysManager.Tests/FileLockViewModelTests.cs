@@ -11,20 +11,22 @@ using SysManager.ViewModels;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="FileLockViewModel"/>. <see cref="FileLockService"/> is sealed with
-/// no interface, so it cannot be substituted; these drive the real service. Its
-/// <c>FindLockers</c> is a read-only Restart Manager query (safe to run against a temp file),
-/// but <c>KillProcess</c> would terminate a real process, so the success path of
-/// <c>KillSelected</c> is NOT executed — only the confirmation-gated branches (critical-process
-/// block and user-declines) and CanExecute gating are covered.
+/// Tests for <see cref="FileLockViewModel"/>. The read-only / gating tests drive the real
+/// <see cref="FileLockService"/> (its <c>FindLockers</c> is a read-only Restart Manager
+/// query, safe against a temp file); the mutating-path test substitutes
+/// <see cref="IFileLockService"/> so the confirmed <c>KillSelected</c> success path can be
+/// executed (asserting <c>KillProcess</c> is called with the selected pid) without
+/// terminating a real process. The confirmation-gated branches (critical-process block,
+/// user-declines) and CanExecute gating are covered against the real service.
 ///
-/// Serialized because the critical-process and decline tests swap the global
-/// <see cref="DialogService.Instance"/> static.
+/// Serialized because several tests swap the global <see cref="DialogService.Instance"/> static.
 /// </summary>
 [Collection("DialogService")]
 public class FileLockViewModelTests
 {
     private static FileLockViewModel NewVm() => new(new FileLockService());
+
+    private static FileLockViewModel NewVm(IFileLockService service) => new(service);
 
     [Fact]
     public void Constructor_Succeeds_WithInitialState()
@@ -167,5 +169,44 @@ public class FileLockViewModelTests
         var vm = NewVm();
         var ex = Record.Exception(() => vm.RelaunchAsAdminCommand.Execute(null));
         Assert.Null(ex);
+    }
+
+    // ── Mutating-path test (substituted IFileLockService) ──────────────────
+
+    [Fact]
+    public async Task KillSelected_WhenConfirmed_CallsKillProcessWithPid_AndRescans()
+    {
+        // A non-critical locker, the user confirms, and the service reports a successful kill.
+        // The VM must call KillProcess(pid) exactly once, then trigger the re-scan via the
+        // substituted FindLockers (returning no lockers). No real process is touched.
+        const int pid = 4242;
+        var service = Substitute.For<IFileLockService>();
+        service.KillProcess(pid).Returns(true);
+        service.FindLockers(Arg.Any<string>()).Returns(new List<FileLocker>()); // post-kill re-scan
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user clicks "Yes"
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = NewVm(service);
+            vm.Path = @"C:\some\locked\file.txt"; // CanScan needs a non-empty path for the re-scan
+            vm.SelectedLocker = new FileLocker(pid, "target.exe", "RmMainWindow", null);
+
+            vm.KillSelectedCommand.Execute(null);
+
+            service.Received(1).KillProcess(pid);
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+
+            // KillSelected fires ScanCommand.Execute (async) to refresh the locker list; await it.
+            await vm.ScanCommand.ExecuteAsync(null);
+            service.Received().FindLockers(Arg.Any<string>());
+            Assert.Empty(vm.Lockers);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
     }
 }

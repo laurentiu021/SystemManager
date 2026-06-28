@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class TimerResolutionViewModel : ViewModelBase
 {
-    private readonly TimerResolutionService _service;
+    private readonly ITimerResolutionService _service;
 
     [ObservableProperty] private string _currentDisplay = "—";
     [ObservableProperty] private string _finestDisplay = "—";
@@ -25,7 +25,7 @@ public sealed partial class TimerResolutionViewModel : ViewModelBase
     [ObservableProperty] private bool _isHighResolution;
     [ObservableProperty] private bool _isSupported = true;
 
-    public TimerResolutionViewModel(TimerResolutionService service)
+    public TimerResolutionViewModel(ITimerResolutionService service)
     {
         _service = service;
         StatusMessage = "Reading timer resolution…";

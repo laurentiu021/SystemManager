@@ -26,7 +26,7 @@ public enum WindowsTheme { Light, Dark }
 ///
 /// Fully reversible: writing the opposite DWORD restores the previous theme.
 /// </summary>
-public sealed partial class WindowsThemeService
+public sealed partial class WindowsThemeService : IWindowsThemeService
 {
     private const string PersonalizeKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize";
     private const string AppsValue = "AppsUseLightTheme";

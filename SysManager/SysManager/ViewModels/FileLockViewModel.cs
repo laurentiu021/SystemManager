@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class FileLockViewModel : ViewModelBase
 {
-    private readonly FileLockService _service;
+    private readonly IFileLockService _service;
 
     public BulkObservableCollection<FileLocker> Lockers { get; } = new();
 
@@ -28,7 +28,7 @@ public sealed partial class FileLockViewModel : ViewModelBase
     [ObservableProperty] private bool _hasScanned;
     [ObservableProperty] private FileLocker? _selectedLocker;
 
-    public FileLockViewModel(FileLockService service)
+    public FileLockViewModel(IFileLockService service)
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();

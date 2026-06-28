@@ -72,13 +72,13 @@ public static class ServiceRegistration
         services.AddSingleton<PrivacyMonitorService>();
         services.AddSingleton<BootAnalyzerService>();
         services.AddSingleton<WindowsUpdateService>();
-        services.AddSingleton<TimerResolutionService>();
-        services.AddSingleton<FileLockService>();
+        services.AddSingleton<ITimerResolutionService, TimerResolutionService>();
+        services.AddSingleton<IFileLockService, FileLockService>();
         services.AddSingleton<DisplayProfileService>();
-        services.AddSingleton<CpuAffinityService>();
+        services.AddSingleton<ICpuAffinityService, CpuAffinityService>();
         services.AddSingleton<DefenderService>();
         services.AddSingleton<TaskSchedulerService>();
-        services.AddSingleton<WindowsThemeService>();
+        services.AddSingleton<IWindowsThemeService, WindowsThemeService>();
         services.AddSingleton<StandbyMemoryService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────

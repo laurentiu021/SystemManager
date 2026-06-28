@@ -111,7 +111,7 @@
                     <Run Text="{Binding Items.Count, Mode=OneWay}"/>
                     <Run Text=" item(s) queued"/>
                 </TextBlock>
-                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
                            Margin="16,0,0,0" Opacity="0.8"/>
             </StackPanel>
         </Border>

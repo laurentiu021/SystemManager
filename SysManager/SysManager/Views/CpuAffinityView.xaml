@@ -36,7 +36,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="PROCESS" Style="{StaticResource Caption}"/>
+                    <TextBlock Text="PROCESS" Style="{StaticResource SectionLabel}"/>
                     <ComboBox ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}"
                               DisplayMemberPath="Display" Margin="0,4,0,0" Padding="8,6" FontSize="13"
                               MaxDropDownHeight="320"

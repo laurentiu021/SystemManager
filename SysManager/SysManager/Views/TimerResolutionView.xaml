@@ -50,14 +50,14 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0">
                         <StackPanel>
-                            <TextBlock Text="FINEST AVAILABLE" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="FINEST AVAILABLE" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding FinestDisplay}" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0,0,0">
                         <StackPanel>
-                            <TextBlock Text="WINDOWS DEFAULT" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="WINDOWS DEFAULT" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding CoarsestDisplay}" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0"/>
                         </StackPanel>

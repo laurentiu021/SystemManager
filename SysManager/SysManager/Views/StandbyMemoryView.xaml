@@ -53,21 +53,21 @@
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,4,0">
                     <StackPanel>
-                        <TextBlock Text="TOTAL RAM" Style="{StaticResource Caption}"/>
+                        <TextBlock Text="TOTAL RAM" Style="{StaticResource SectionLabel}"/>
                         <TextBlock Text="{Binding TotalDisplay}" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
                 <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="4,0,4,0">
                     <StackPanel>
-                        <TextBlock Text="AVAILABLE" Style="{StaticResource Caption}"/>
+                        <TextBlock Text="AVAILABLE" Style="{StaticResource SectionLabel}"/>
                         <TextBlock Text="{Binding AvailableDisplay}" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource Success}" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
                 <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="4,0,0,0">
                     <StackPanel>
-                        <TextBlock Text="MEMORY LOAD" Style="{StaticResource Caption}"/>
+                        <TextBlock Text="MEMORY LOAD" Style="{StaticResource SectionLabel}"/>
                         <TextBlock Text="{Binding LoadDisplay}" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                     </StackPanel>

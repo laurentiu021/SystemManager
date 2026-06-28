@@ -58,12 +58,12 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Text="DARK STARTS AT" Style="{StaticResource Caption}"/>
+                        <TextBlock Text="DARK STARTS AT" Style="{StaticResource SectionLabel}"/>
                         <TextBox Text="{Binding DarkStart, UpdateSourceTrigger=LostFocus}" Padding="8,6" Margin="0,4,0,0"
                                  FontSize="14" AutomationProperties.Name="Dark theme start time (HH:mm)"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                        <TextBlock Text="LIGHT STARTS AT" Style="{StaticResource Caption}"/>
+                        <TextBlock Text="LIGHT STARTS AT" Style="{StaticResource SectionLabel}"/>
                         <TextBox Text="{Binding LightStart, UpdateSourceTrigger=LostFocus}" Padding="8,6" Margin="0,4,0,0"
                                  FontSize="14" AutomationProperties.Name="Light theme start time (HH:mm)"/>
                     </StackPanel>

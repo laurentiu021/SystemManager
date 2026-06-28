@@ -86,21 +86,21 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,4,0">
                         <StackPanel>
-                            <TextBlock Text="REAL-TIME" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="REAL-TIME" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding RealtimeDisplay}" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{DynamicResource Success}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="4,0,4,0">
                         <StackPanel>
-                            <TextBlock Text="CLOUD (MAPS)" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="CLOUD (MAPS)" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding MapsDisplay}" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="4,0,0,0">
                         <StackPanel>
-                            <TextBlock Text="PUA / CFA" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="PUA / CFA" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Margin="0,4,0,0" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}">
                                 <Run Text="{Binding PuaDisplay, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding CfaDisplay, Mode=OneWay}"/>
                             </TextBlock>

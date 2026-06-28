@@ -31,11 +31,11 @@
                             </StackPanel>
                             <TextBlock Text="Local Windows system monitoring toolkit." Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                <TextBlock Text="BUILD" Style="{StaticResource Caption}"/>
+                                <TextBlock Text="BUILD" Style="{StaticResource SectionLabel}"/>
                                 <TextBlock Text="{Binding BuildDate}" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
-                                <TextBlock Text="LICENSE" Style="{StaticResource Caption}"/>
+                                <TextBlock Text="LICENSE" Style="{StaticResource SectionLabel}"/>
                                 <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
-                                <TextBlock Text="SOURCE" Style="{StaticResource Caption}"/>
+                                <TextBlock Text="SOURCE" Style="{StaticResource SectionLabel}"/>
                                 <TextBlock Margin="8,0,0,0" FontSize="12">
                                     <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{DynamicResource Accent}">github.com/laurentiu021/SystemManager</Hyperlink>
                                 </TextBlock>

@@ -37,13 +37,13 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="DISPLAY" Style="{StaticResource Caption}"/>
+                    <TextBlock Text="DISPLAY" Style="{StaticResource SectionLabel}"/>
                     <ComboBox ItemsSource="{Binding Displays}" SelectedItem="{Binding SelectedDisplay}"
                               DisplayMemberPath="Display" Margin="0,4,0,0" Padding="8,6" FontSize="13"
                               AutomationProperties.Name="Display to configure"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="CURRENT" Style="{StaticResource Caption}"/>
+                    <TextBlock Text="CURRENT" Style="{StaticResource SectionLabel}"/>
                     <TextBlock Text="{Binding CurrentMode.Display, FallbackValue=—}" FontSize="15" FontWeight="SemiBold"
                                Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                 </StackPanel>

@@ -61,21 +61,21 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Border Style="{StaticResource CardInner}" Margin="8,0" Padding="16,8" MinWidth="110">
                         <StackPanel>
-                            <TextBlock Text="AVG PING" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="AVG PING" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding Shared.Health.AveragePingMs, StringFormat={}{0:F0} ms}"
                                        Style="{StaticResource Metric}" Foreground="#60A5FA"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource CardInner}" Margin="8,0" Padding="16,8" MinWidth="110">
                         <StackPanel>
-                            <TextBlock Text="WORST LOSS" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="WORST LOSS" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding Shared.Health.WorstLossPercent, StringFormat={}{0:F1}%}"
                                        Style="{StaticResource Metric}" Foreground="{DynamicResource WarningStripe}"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource CardInner}" Margin="8,0" Padding="16,8" MinWidth="110">
                         <StackPanel>
-                            <TextBlock Text="WORST JITTER" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="WORST JITTER" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding Shared.Health.WorstJitterMs, StringFormat={}{0:F0} ms}"
                                        Style="{StaticResource Metric}" Foreground="#F472B6"/>
                         </StackPanel>

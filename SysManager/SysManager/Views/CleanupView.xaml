@@ -60,14 +60,14 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0">
                         <StackPanel>
-                            <TextBlock Text="TEMP FOLDERS" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="TEMP FOLDERS" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding TempSizeLabel}" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0,0,0">
                         <StackPanel>
-                            <TextBlock Text="RECYCLE BIN" Style="{StaticResource Caption}"/>
+                            <TextBlock Text="RECYCLE BIN" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding RecycleBinLabel}" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{DynamicResource WarningStripe}" Margin="0,4,0,0"/>
                         </StackPanel>
@@ -149,15 +149,12 @@
             <v:ConsoleView DataContext="{Binding Console}"/>
         </Border>
 
-        <Grid Grid.Row="4" Margin="28,12,28,24">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <ProgressBar AutomationProperties.Name="Progress" Grid.Column="0" Height="6" Minimum="0" Maximum="100"
-                         Value="{Binding Progress}"
-                         IsIndeterminate="{Binding IsProgressIndeterminate}"/>
-            <TextBlock Grid.Column="1" Margin="12,0,0,0" Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"/>
-        </Grid>
+        <!-- Status bar -->
+        <DockPanel Grid.Row="4" Margin="28,12,28,24">
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+        </DockPanel>
     </Grid>
 </UserControl>

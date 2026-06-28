@@ -402,16 +402,12 @@
             </Border>
         </Grid>
 
-        <!-- Footer -->
-        <Grid Grid.Row="4" Margin="28,12,28,24">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"/>
-            <ProgressBar AutomationProperties.Name="Progress" Grid.Column="1" Width="180" Height="4"
+        <!-- Status bar -->
+        <DockPanel Grid.Row="4" Margin="28,12,28,24">
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
-                         Visibility="{Binding IsBusy, Converter={StaticResource FlexVis}}"/>
-        </Grid>
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+        </DockPanel>
     </Grid>
 </UserControl>

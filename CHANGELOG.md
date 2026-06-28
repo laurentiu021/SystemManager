@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.44.1] - 2026-06-28
+
+### Changed
+- **More consistent look across tabs.** A pass over the whole UI brought the remaining tabs in line with the app's design system: every tab that does background work now shows the same slim progress indicator next to its status line; status text, section labels and large readouts use the shared text styles instead of one-off sizes; a few hardcoded colours and an emoji icon were swapped for the shared theme colours and the proper icon font; and a redundant font override was removed. Purely visual consistency — no behaviour changes.
+
 ## [1.44.0] - 2026-06-28
 
 ### Changed

@@ -75,7 +75,7 @@
                                             <Border Background="{DynamicResource Surface3}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{Binding IsSensitive, Converter={StaticResource FlexVis}}">
-                                                <TextBlock Text="signs you out" FontSize="10" Foreground="#FBBF24"/>
+                                                <TextBlock Text="signs you out" FontSize="10" Foreground="{DynamicResource WarningStripe}"/>
                                             </Border>
                                         </StackPanel>
                                         <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextMuted}"
@@ -103,10 +103,10 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="3" Margin="0,8,0,0">
-            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Right" Width="180" Height="4"
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
-                         Visibility="{Binding IsBusy, Converter={StaticResource FlexVis}}"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
         </DockPanel>
     </Grid>
 </UserControl>

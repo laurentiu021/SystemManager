@@ -109,13 +109,13 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Right" Width="180" Height="4"
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
-                         Visibility="{Binding IsBusy, Converter={StaticResource FlexVis}}"/>
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <Button DockPanel.Dock="Right" Content="Refresh" Command="{Binding RefreshCommand}"
                     AutomationProperties.Name="Refresh boot history"
                     Style="{StaticResource GhostButton}" Margin="0,0,12,0" Padding="10,2"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
         </DockPanel>
     </Grid>
 </UserControl>

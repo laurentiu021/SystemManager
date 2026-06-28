@@ -18,7 +18,7 @@
             <Border Grid.Row="0" Padding="20,16,20,12" BorderBrush="{DynamicResource Border1}" BorderThickness="0,0,0,1">
                 <StackPanel>
                     <TextBlock Text="Appearance" FontSize="15" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextPrimary}" FontFamily="{StaticResource UiFont}"/>
+                               Foreground="{DynamicResource TextPrimary}"/>
                     <TextBlock Text="Personalize your workspace" FontSize="11"
                                Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                 </StackPanel>

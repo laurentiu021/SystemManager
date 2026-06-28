@@ -105,8 +105,12 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
-                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+            <DockPanel Grid.Column="0" VerticalAlignment="Center">
+                <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                             IsIndeterminate="{Binding IsProgressIndeterminate}"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+            </DockPanel>
             <Button Grid.Column="1" Content="Enable / Disable" Command="{Binding ToggleEnabledCommand}"
                     Style="{StaticResource PrimaryButton}" Padding="16,8"
                     AutomationProperties.Name="Enable or disable the selected task"/>

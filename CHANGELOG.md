@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.5] - 2026-06-29
+
+### Fixed
+- **Scheduled Maintenance buttons no longer double-fire.** Save / Remove / Refresh are now disabled while one of them is running, so a fast double-click can't start overlapping operations.
+
+### Changed
+- **Scheduled Maintenance task now pins an explicit user principal.** The recurring task is registered to run as the current interactive user at the standard (non-elevated) level via an explicit principal, rather than relying on the scheduler's default — making its "current user, no admin, only when logged on" behavior deliberate.
+
 ## [1.51.4] - 2026-06-29
 
 ### Fixed

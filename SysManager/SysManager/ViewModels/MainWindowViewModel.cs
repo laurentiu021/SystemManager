@@ -69,6 +69,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public SettingsWatchdogViewModel SettingsWatchdog { get; }
     public CliInterfaceViewModel CliInterface { get; }
     public ScheduledMaintenanceViewModel ScheduledMaintenance { get; }
+    public TweaksHubViewModel TweaksHub { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -175,6 +176,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SettingsWatchdog = sp.GetRequiredService<SettingsWatchdogViewModel>();
             CliInterface = sp.GetRequiredService<CliInterfaceViewModel>();
             ScheduledMaintenance = sp.GetRequiredService<ScheduledMaintenanceViewModel>();
+            TweaksHub = sp.GetRequiredService<TweaksHubViewModel>();
         }
         else
         {
@@ -248,6 +250,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SettingsWatchdog = new SettingsWatchdogViewModel(new SettingsWatchdogService());
             CliInterface = new CliInterfaceViewModel();
             ScheduledMaintenance = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner()));
+            TweaksHub = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), restorePoints));
         }
 
         InitPlaceholders();
@@ -325,7 +328,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-restore-points",   "Restore Points",   "", RestorePoints,    typeof(Views.RestorePointsView)),
             Item("nav-task-scheduler",   "Task Scheduler",   "", TaskScheduler,    typeof(Views.TaskSchedulerView)),
             Item("nav-boot-analyzer",    "Boot Analyzer",    "", BootAnalyzer,     typeof(Views.BootAnalyzerView)),
-            Item("nav-system-fixes",     "System Fixes",     "", SystemFixes,      typeof(Views.SystemFixesView))),
+            Item("nav-system-fixes",     "System Fixes",     "", SystemFixes,      typeof(Views.SystemFixesView)),
+            Item("nav-tweaks-hub",      "Tweaks Hub",       "", TweaksHub,        typeof(Views.TweaksHubView), inDevelopment: true)),
 
         Group("grp-gaming", "Gaming & Profiles", "",
             Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView)),
@@ -508,6 +512,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SettingsWatchdog?.Dispose();
         CliInterface?.Dispose();
         ScheduledMaintenance?.Dispose();
+        TweaksHub?.Dispose();
 
         // WIP placeholders
         WipFileLockDetector?.Dispose();

@@ -75,16 +75,16 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavItems_ContainAll57()
+    public void NavItems_ContainAll58()
     {
         var vm = new MainWindowViewModel();
-        Assert.Equal(57, vm.NavItems.Count);
+        Assert.Equal(58, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
 
         // Dashboard
         Assert.Contains("nav-dashboard", ids);
 
-        // System (10)
+        // System (11)
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-performance", ids);
@@ -95,6 +95,7 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
         Assert.Contains("nav-system-fixes", ids);
+        Assert.Contains("nav-tweaks-hub", ids);
 
         // Gaming & Profiles (5)
         Assert.Contains("nav-gaming-profile", ids);
@@ -240,11 +241,11 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_SystemGroup_Contains10Items()
+    public void NavGroups_SystemGroup_Contains11Items()
     {
         var vm = new MainWindowViewModel();
         var sys = vm.NavGroups.First(g => g.Id == "grp-system");
-        Assert.Equal(10, sys.Children.Count);
+        Assert.Equal(11, sys.Children.Count);
         var ids = sys.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
@@ -256,6 +257,7 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
         Assert.Contains("nav-system-fixes", ids);
+        Assert.Contains("nav-tweaks-hub", ids);
         // Legacy Panels is a read-only applet launcher — it lives in Info, not System.
         Assert.DoesNotContain("nav-legacy-panels", ids);
     }
@@ -476,6 +478,17 @@ public class MainWindowViewModelTests
         var item = vm.NavItems.First(n => n.Id == "nav-scheduled-maintenance");
         Assert.Equal(typeof(SysManager.Views.ScheduledMaintenanceView), item.ViewType);
         Assert.IsType<ScheduledMaintenanceViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
+
+    // Tweaks Hub (#907) — a brand-new tab (not a graduated placeholder), real view/VM, PREVIEW.
+    [Fact]
+    public void NavLeaf_TweaksHub_IsImplementedAndInPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-tweaks-hub");
+        Assert.Equal(typeof(SysManager.Views.TweaksHubView), item.ViewType);
+        Assert.IsType<TweaksHubViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
 }

@@ -1,0 +1,137 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.TweaksHubView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:TweaksHubViewModel}"
+             Background="{DynamicResource Surface0}">
+
+    <UserControl.Resources>
+        <!-- One reviewable tweak row: select checkbox + name/description + applied-state pill. -->
+        <DataTemplate x:Key="TweakRow">
+            <Border Margin="0,2" Padding="12,10" CornerRadius="6" BorderThickness="1"
+                    Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,12,0"
+                              AutomationProperties.Name="{Binding Name, StringFormat='Select tweak: {0}'}"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                   TextWrapping="Wrap" Margin="0,2,16,0"/>
+                    </StackPanel>
+                    <Border Grid.Column="2" CornerRadius="4" Padding="8,2" VerticalAlignment="Center"
+                            Background="{DynamicResource Surface3}">
+                        <TextBlock FontSize="10" FontWeight="Bold">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="DEFAULT"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsApplied}" Value="True">
+                                            <Setter Property="Text" Value="APPLIED"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource Success}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Border>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Preview banner -->
+        <v:DevelopmentBanner Grid.Row="0" Margin="28,24,28,0"/>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="1" Margin="28,16,28,0">
+            <TextBlock Text="Tweaks Hub" Style="{StaticResource Display}"/>
+            <TextBlock Text="One place to review and apply safe, reversible optimizations that are otherwise spread across tabs. Tick the ones you want, then Apply or Undo — a System Restore point is created before the first change, and every tweak is individually reversible."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
+        </StackPanel>
+
+        <!-- Admin banner (only Advanced tweaks need it) -->
+        <Border Grid.Row="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="28,12,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                    <TextBlock Text="Essential tweaks apply as-is. Advanced (machine-wide) tweaks need administrator."
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Tweaks: Essential + Advanced -->
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="28,16,28,0">
+            <StackPanel>
+                <!-- Essential -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="ESSENTIAL" Style="{StaticResource SectionLabel}" Margin="0,0,0,4"/>
+                        <TextBlock Text="Low-risk, broadly recommended, per-user — safe for most people."
+                                   Style="{StaticResource Subtle}" Margin="0,0,0,10"/>
+                        <ItemsControl ItemsSource="{Binding Essential}" ItemTemplate="{StaticResource TweakRow}"
+                                      AutomationProperties.Name="Essential tweaks"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Advanced -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="ADVANCED" Style="{StaticResource SectionLabel}" Margin="0,0,0,4"/>
+                        <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+                                BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+                            <TextBlock Text="Higher-impact, machine-wide changes — review each one. Still fully reversible."
+                                       Foreground="{DynamicResource WarningText}" FontSize="12" TextWrapping="Wrap"/>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding Advanced}" ItemTemplate="{StaticResource TweakRow}"
+                                      AutomationProperties.Name="Advanced tweaks"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Action bar -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,12,28,24" Padding="12">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
+                           Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Command="{Binding ApplySelectedCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                            Content="{Binding PendingApply, StringFormat='Apply Selected ({0})'}"
+                            AutomationProperties.Name="Apply selected tweaks"/>
+                    <Button Command="{Binding UndoSelectedCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                            Content="{Binding PendingUndo, StringFormat='Undo Selected ({0})'}"
+                            AutomationProperties.Name="Undo selected tweaks"/>
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}" Style="{StaticResource GhostButton}"
+                            AutomationProperties.Name="Refresh tweak states"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

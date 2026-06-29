@@ -41,7 +41,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` · `TweaksHubViewModel` |
 | Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` · `PlaceholderViewModel` (Gaming Profile) |
 | Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `SettingsWatchdogViewModel` · `PlaceholderViewModel` (Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `ScheduledMaintenanceViewModel` |
@@ -94,6 +94,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for create/restore; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
+- `TweaksHubViewModel` — unified front-end over the reversible privacy/UX tweaks, grouped Essential (per-user) / Advanced (machine-wide, needs admin), with selective Apply/Undo, a pending-change count, and an auto restore-point before the first change. Delegates to `TweaksHubService` (no parallel tweak implementation).
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected.
@@ -318,6 +319,11 @@ Key services:
   touches its own task — never enumerates or modifies others. The command is built from a
   fixed argument whitelist (`MaintenanceSchedule.CliArguments`), so no free-form input reaches
   the scheduler; result-code description is a pure, unit-tested helper.
+- `TweaksHubService` — thin orchestrator behind the Tweaks Hub tab: loads `PrivacyService`
+  toggles as tier-classified `TweakItem`s, applies/reverts a selected set via the same
+  reversible `PrivacyService.ApplyToggle`, and takes one `RestorePointService` snapshot before
+  the first change of a session (best-effort). It reimplements no tweak; `PendingApplyCount` /
+  `PendingUndoCount` / `TweakItem.ClassifyTier` are pure, unit-tested helpers.
 - `SafetyDatabase` — curated safety ratings for Windows services.
 - `ThemeService` — runtime theme switching with 12 presets and persistence.
 - `ToastService` — global glass-style toast notifications.

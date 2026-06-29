@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.45.1] - 2026-06-29
+
+### Fixed
+- **CPU Core Affinity now scrolls when there are many cores.** On a machine with a high logical-processor count (or a short window), the core tiles overflowed the card and the lower ones were cut off with no way to reach them. The core grid now scrolls, with the header and select buttons pinned, so every core is reachable regardless of core count or window size.
+
 ## [1.45.0] - 2026-06-29
 
 ### Changed

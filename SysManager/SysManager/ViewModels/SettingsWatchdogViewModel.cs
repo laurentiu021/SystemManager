@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class SettingsWatchdogViewModel : ViewModelBase
 {
-    private readonly SettingsWatchdogService _service;
+    private readonly ISettingsWatchdogService _service;
 
     public BulkObservableCollection<DriftRow> Drifts { get; } = new();
     public BulkObservableCollection<WatchedSetting> Watched { get; } = new();
@@ -29,7 +29,7 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     [ObservableProperty] private bool _hasDrift;
     [ObservableProperty] private bool _isElevated;
 
-    public SettingsWatchdogViewModel(SettingsWatchdogService service)
+    public SettingsWatchdogViewModel(ISettingsWatchdogService service)
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();

@@ -109,8 +109,11 @@ public sealed class MaintenanceSchedulerService
 
     // Register-ScheduledTask with -Force replaces any existing task of the same name, so
     // re-registering just updates the schedule. The action runs the app's own exe with the
-    // whitelisted CLI args; the trigger is daily or weekly at the chosen time. Registered
-    // for the current user (-User $env:USERNAME), runs only when logged on — no admin needed.
+    // whitelisted CLI args; the trigger is daily or weekly at the chosen time. The task is
+    // pinned to the current interactive user at the LIMITED run level via an explicit
+    // principal — so it needs no admin to register and runs only when that user is logged on,
+    // never with elevation. (Previously this relied on the cmdlet's default principal; the
+    // explicit principal makes the security posture deliberate rather than implicit.)
     private const string RegisterScript = """
         param([string]$Exe, [string]$Args, [string]$Folder, [string]$Name,
               [bool]$Daily, [string]$At, [string]$DayOfWeek)
@@ -121,8 +124,10 @@ public sealed class MaintenanceSchedulerService
             $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DayOfWeek -At $At
         }
         $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
         Register-ScheduledTask -TaskName $Name -TaskPath $Folder -Action $action -Trigger $trigger `
-            -Settings $settings -Description "SysManager automated maintenance." -Force -ErrorAction Stop |
+            -Settings $settings -Principal $principal -Description "SysManager automated maintenance." `
+            -Force -ErrorAction Stop |
             Select-Object @{ n='State'; e={ [string]$_.State } } | Out-Null
         Get-ScheduledTask -TaskName $Name -TaskPath $Folder -ErrorAction Stop |
             Select-Object @{ n='State'; e={ [string]$_.State } }

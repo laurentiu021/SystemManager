@@ -43,43 +43,65 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     public ScheduledMaintenanceViewModel(MaintenanceSchedulerService service)
     {
         _service = service;
+        PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
     }
 
     partial void OnSelectedFrequencyChanged(MaintenanceFrequency value)
         => IsWeekly = value == MaintenanceFrequency.Weekly;
 
+    /// <summary>Gate for the async commands so a second click can't start an overlapping
+    /// Save/Remove/Refresh while one is in flight (which would race IsBusy + the read-back).</summary>
+    private bool NotBusy => !IsBusy;
+
+    // IsBusy lives in ViewModelBase, so the [ObservableProperty] partial hook isn't generated
+    // here — observe it via PropertyChanged to re-evaluate the gated commands' CanExecute.
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        RefreshCommand.NotifyCanExecuteChanged();
+        SaveScheduleCommand.NotifyCanExecuteChanged();
+        RemoveScheduleCommand.NotifyCanExecuteChanged();
+    }
+
     private MaintenanceSchedule BuildSchedule() =>
         new(SelectedAction, SelectedFrequency, SelectedHour, SelectedMinute, SelectedDay);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
         IsBusy = true;
-        try
-        {
-            var status = await _service.GetStatusAsync();
-            IsScheduled = status.Exists;
-            if (status.Exists)
-            {
-                CurrentSummary = $"Maintenance is scheduled (state: {status.State}).";
-                LastRun = status.LastRun is { } lr ? lr.ToString("yyyy-MM-dd HH:mm") : "—";
-                NextRun = status.NextRun is { } nr ? nr.ToString("yyyy-MM-dd HH:mm") : "—";
-                LastResult = status.LastResultDescription ?? "";
-                StatusMessage = "A maintenance task is registered. You can update or remove it below.";
-            }
-            else
-            {
-                CurrentSummary = "No maintenance is scheduled yet.";
-                LastRun = NextRun = LastResult = "";
-                StatusMessage = "Pick an action and time, then Save schedule to automate it.";
-            }
-            RemoveScheduleCommand.NotifyCanExecuteChanged();
-        }
+        try { await LoadStatusAsync(); }
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
+    /// <summary>
+    /// Reads the task status and updates the bound state. Does NOT touch <see cref="IsBusy"/>,
+    /// so Save/Remove can call it without prematurely clearing their own busy flag (which would
+    /// re-enable the commands mid-operation).
+    /// </summary>
+    private async Task LoadStatusAsync()
+    {
+        var status = await _service.GetStatusAsync();
+        IsScheduled = status.Exists;
+        if (status.Exists)
+        {
+            CurrentSummary = $"Maintenance is scheduled (state: {status.State}).";
+            LastRun = status.LastRun is { } lr ? lr.ToString("yyyy-MM-dd HH:mm") : "—";
+            NextRun = status.NextRun is { } nr ? nr.ToString("yyyy-MM-dd HH:mm") : "—";
+            LastResult = status.LastResultDescription ?? "";
+            StatusMessage = "A maintenance task is registered. You can update or remove it below.";
+        }
+        else
+        {
+            CurrentSummary = "No maintenance is scheduled yet.";
+            LastRun = NextRun = LastResult = "";
+            StatusMessage = "Pick an action and time, then Save schedule to automate it.";
+        }
+        RemoveScheduleCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task SaveScheduleAsync()
     {
         var schedule = BuildSchedule();
@@ -93,6 +115,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
         try
         {
             bool ok = await _service.RegisterAsync(schedule);
+            await LoadStatusAsync(); // refresh state first, then set the outcome message so it isn't overwritten
             if (ok)
             {
                 ActivityLogService.Instance.Log("Scheduled Maintenance", $"{schedule.ActionLabel} — {schedule.Summary}");
@@ -103,12 +126,11 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
             {
                 StatusMessage = "Could not register the scheduled task. Check the log for details.";
             }
-            await RefreshAsync();
         }
         finally { IsBusy = false; }
     }
 
-    private bool CanRemove() => IsScheduled;
+    private bool CanRemove() => IsScheduled && !IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanRemove))]
     private async Task RemoveScheduleAsync()
@@ -123,11 +145,17 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
         {
             bool removed = await _service.RemoveAsync();
             if (removed) ActivityLogService.Instance.Log("Scheduled Maintenance", "Removed the maintenance schedule");
+            await LoadStatusAsync(); // refresh state first, then set the outcome message
             StatusMessage = removed ? "Scheduled maintenance removed." : "Could not remove the task. Check the log.";
-            await RefreshAsync();
         }
         finally { IsBusy = false; }
     }
 
     partial void OnIsScheduledChanged(bool value) => RemoveScheduleCommand.NotifyCanExecuteChanged();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) PropertyChanged -= OnVmPropertyChanged;
+        base.Dispose(disposing);
+    }
 }

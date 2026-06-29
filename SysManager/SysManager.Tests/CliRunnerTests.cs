@@ -71,6 +71,17 @@ public class CliRunnerTests
         => Assert.True(CliRunner.IsCliInvocation(["--health"]));
 
     [Fact]
+    public void IsCliInvocation_TrueForUnknownFlag_SoItReportsUsageError()
+        // Regression: an unrecognized flag (typo) must run headless and report a usage
+        // error (exit 2), NOT silently fall through and open the GUI window.
+        => Assert.True(CliRunner.IsCliInvocation(["--bogus"]));
+
+    [Fact]
+    public void IsCliInvocation_FalseForBareTokens()
+        // Non-flag tokens (no leading - or /) never trigger CLI mode.
+        => Assert.False(CliRunner.IsCliInvocation(["foo", "bar"]));
+
+    [Fact]
     public void IsCliInvocation_FalseForNoArgs()
         => Assert.False(CliRunner.IsCliInvocation([]));
 

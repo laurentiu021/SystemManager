@@ -35,10 +35,32 @@ public sealed class CliRunner
         "--help", "-h", "-?", "/?", "--version", "-v", "--list", "--health", "--cleanup", "--trim-ram",
     };
 
-    /// <summary>True only when a recognized CLI verb is present — used by startup to choose
-    /// headless mode over the GUI. Deliberately strict: an unrecognized flag (e.g. the
-    /// elevation sentinel) does NOT trigger CLI mode, so other startup branches still run.</summary>
-    public static bool IsCliInvocation(string[] args) => args.Any(a => CliVerbs.Contains(a.Trim()));
+    // Internal startup sentinels that LOOK like CLI flags but are handled by their own
+    // OnStartup branches (elevation relaunch, in-process update applier). They must NEVER
+    // be treated as a CLI invocation, so an unknown-flag dispatch can't hijack them.
+    private static readonly HashSet<string> NonCliSentinels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        Helpers.AdminHelper.RelaunchedElevatedArg, UpdateApplier.ApplyUpdateArg,
+    };
+
+    /// <summary>True when the args should run headlessly (CLI mode) rather than open the GUI.
+    /// That's any recognized verb, OR an unrecognized option flag (so a typo like
+    /// <c>--bogus</c> reports a usage error + exit 2 instead of silently opening the window) —
+    /// EXCEPT the internal startup sentinels (elevation relaunch, update applier), which route
+    /// to their own branches. Bare non-flag tokens never trigger CLI mode.</summary>
+    public static bool IsCliInvocation(string[] args)
+    {
+        foreach (var raw in args)
+        {
+            var a = raw.Trim();
+            if (NonCliSentinels.Contains(a)) return false;
+        }
+        return args.Any(a => IsCliToken(a.Trim()));
+    }
+
+    // A recognized verb, or any unrecognized option flag (leading - or /). Bare tokens aren't.
+    private static bool IsCliToken(string arg)
+        => CliVerbs.Contains(arg) || arg.StartsWith('-') || arg.StartsWith('/');
 
     /// <summary>
     /// Parses the argument list into a <see cref="CliRequest"/>. The first recognized verb

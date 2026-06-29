@@ -52,6 +52,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     [ObservableProperty] private int _retentionDays;
     [ObservableProperty] private int _sampleCount;
     [ObservableProperty] private bool _hasData;
+    [ObservableProperty] private bool _hasTemperatureData;
     [ObservableProperty] private string _summary = "";
 
     // ── Charts (built once, buffers replaced on reload) ───────────────────
@@ -119,6 +120,9 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
 
             SampleCount = _loaded.Count;
             HasData = _loaded.Count > 0;
+            // The temperature chart is meaningful only if at least one sample carries a temp
+            // reading (sensors/admin dependent); otherwise show its empty state, not a blank.
+            HasTemperatureData = _loaded.Any(s => s.CpuTempC.HasValue || s.GpuTempC.HasValue);
             Summary = BuildSummary(_loaded);
             StatusMessage = HasData
                 ? $"Showing {_loaded.Count} sample(s) over {SelectedRange.Label.ToLowerInvariant()}."

@@ -43,6 +43,7 @@ public sealed class ResourceHistoryService : IDisposable
     private readonly SemaphoreSlim _fileLock = new(1, 1);
 
     private CancellationTokenSource? _cts;
+    private Task? _loopTask;
     private bool _disposed;
     private int _samplesSincePrune;
 
@@ -70,7 +71,7 @@ public sealed class ResourceHistoryService : IDisposable
             if (clamped == _retentionDays) return;
             _retentionDays = clamped;
             SaveRetention(clamped);
-            _ = PruneAsync();
+            _ = PruneAsync(_cts?.Token ?? CancellationToken.None);
         }
     }
 
@@ -88,9 +89,9 @@ public sealed class ResourceHistoryService : IDisposable
         var ct = _cts.Token;
 
         // Prune stale/malformed lines from a previous session before accruing new ones.
-        _ = PruneAsync();
+        _ = PruneAsync(ct);
 
-        _ = Task.Run(async () =>
+        _loopTask = Task.Run(async () =>
         {
             while (!ct.IsCancellationRequested)
             {
@@ -103,7 +104,7 @@ public sealed class ResourceHistoryService : IDisposable
                     if (++_samplesSincePrune >= PruneEverySamples)
                     {
                         _samplesSincePrune = 0;
-                        await PruneAsync().ConfigureAwait(false);
+                        await PruneAsync(ct).ConfigureAwait(false);
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(SampleIntervalSeconds), ct).ConfigureAwait(false);
@@ -127,7 +128,9 @@ public sealed class ResourceHistoryService : IDisposable
         double? cpuTemp = null, gpuTemp = null;
         try
         {
-            var readings = await _temps.ReadAllAsync().ConfigureAwait(false);
+            // includeStorage:false — the sampler only needs CPU/GPU temps, so skip the
+            // heavy per-poll disk WMI + SMART enumeration that storage naming would trigger.
+            var readings = await _temps.ReadAllAsync(includeStorage: false).ConfigureAwait(false);
             cpuTemp = readings
                 .Where(r => r.Component == "CPU" && r.TemperatureC.HasValue)
                 .Select(r => r.TemperatureC).Max();
@@ -185,7 +188,7 @@ public sealed class ResourceHistoryService : IDisposable
             await File.AppendAllTextAsync(DataPath, Serialize(sample) + "\n", ct).ConfigureAwait(false);
         }
         catch (IOException ex) { Log.Debug("Resource history append failed: {Error}", ex.Message); }
-        finally { _fileLock.Release(); }
+        finally { if (!_disposed) _fileLock.Release(); }
     }
 
     /// <summary>
@@ -200,34 +203,41 @@ public sealed class ResourceHistoryService : IDisposable
             if (!File.Exists(DataPath)) return [];
             var lines = await File.ReadAllLinesAsync(DataPath, ct).ConfigureAwait(false);
             var cutoff = DateTime.Now - range;
-            var samples = new List<ResourceSample>(lines.Length);
-            foreach (var line in lines)
+            // The file is append-only and time-ordered, so the requested range is a suffix:
+            // walk from the END and stop at the first line older than the cutoff. This bounds
+            // work to the window (e.g. ~360 lines for "last hour") instead of parsing the whole
+            // file — which for a 30-day file is ~260k lines / ~260k allocations on every load.
+            var samples = new List<ResourceSample>();
+            for (int i = lines.Length - 1; i >= 0; i--)
             {
-                if (TryParse(line, out var s) && s!.Timestamp >= cutoff)
-                    samples.Add(s);
+                if (!TryParse(lines[i], out var s)) continue;   // skip blanks/malformed
+                if (s!.Timestamp < cutoff) break;                // older than the window — done
+                samples.Add(s);
             }
-            samples.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+            samples.Reverse(); // collected newest-first; callers expect oldest-first
             return samples;
         }
         catch (IOException ex) { Log.Debug("Resource history load failed: {Error}", ex.Message); return []; }
-        finally { _fileLock.Release(); }
+        finally { if (!_disposed) _fileLock.Release(); }
     }
 
     /// <summary>Rewrites the file dropping samples older than the retention window and any malformed lines.</summary>
-    public async Task PruneAsync()
+    public async Task PruneAsync(CancellationToken ct = default)
     {
-        await _fileLock.WaitAsync().ConfigureAwait(false);
+        try { await _fileLock.WaitAsync(ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { return; }
         try
         {
             if (!File.Exists(DataPath)) return;
-            var lines = await File.ReadAllLinesAsync(DataPath).ConfigureAwait(false);
+            var lines = await File.ReadAllLinesAsync(DataPath, ct).ConfigureAwait(false);
             var kept = Prune(lines, DateTime.Now, TimeSpan.FromDays(_retentionDays));
             // Only rewrite when something actually changed, to avoid needless disk churn.
             if (kept.Count == lines.Length) return;
-            await File.WriteAllLinesAsync(DataPath, kept).ConfigureAwait(false);
+            await File.WriteAllLinesAsync(DataPath, kept, ct).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) { /* shutdown */ }
         catch (IOException ex) { Log.Debug("Resource history prune failed: {Error}", ex.Message); }
-        finally { _fileLock.Release(); }
+        finally { if (!_disposed) _fileLock.Release(); }
     }
 
     // ── Pure helpers (unit-testable, no WPF / WMI / file IO) ───────────────
@@ -352,8 +362,13 @@ public sealed class ResourceHistoryService : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
         _cts?.Cancel();
+        // Wait briefly for the sampler loop to observe cancellation and exit before we dispose
+        // the semaphore it may still hold/await — otherwise its finally-block Release() would
+        // hit a disposed SemaphoreSlim. Bounded so shutdown can't hang on a stuck IO call.
+        try { _loopTask?.Wait(TimeSpan.FromSeconds(2)); }
+        catch (AggregateException) { /* loop faulted/cancelled — fine, we're tearing down */ }
+        _disposed = true;
         _cts?.Dispose();
         _cts = null;
         _fileLock.Dispose();

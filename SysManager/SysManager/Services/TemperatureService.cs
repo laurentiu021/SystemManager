@@ -35,7 +35,14 @@ public sealed class TemperatureService : IDisposable
         _skipHardwareInit = skipHardwareInit;
     }
 
-    public async Task<List<TemperatureReading>> ReadAllAsync()
+    /// <summary>
+    /// Reads all available temperature sensors. When <paramref name="includeStorage"/> is
+    /// false, the disk-temperature paths are skipped — the storage-name WMI lookup and the
+    /// per-disk SMART enumeration (<see cref="DiskHealthService.CollectAsync"/>) are by far
+    /// the heaviest part of a read, so a fast caller that only needs CPU/GPU (e.g. the
+    /// always-on resource sampler polling every 10s) passes false to avoid that cost.
+    /// </summary>
+    public async Task<List<TemperatureReading>> ReadAllAsync(bool includeStorage = true)
     {
         if (_skipHardwareInit) return [];
 
@@ -44,15 +51,17 @@ public sealed class TemperatureService : IDisposable
 
         if (isAdmin)
         {
-            await Task.Run(() => ReadViaLibreHardwareMonitor(readings)).ConfigureAwait(false);
+            await Task.Run(() => ReadViaLibreHardwareMonitor(readings, includeStorage)).ConfigureAwait(false);
 
-            // LHM storage often has bad names — enrich from DiskHealthService
-            await EnrichStorageNamesAsync(readings).ConfigureAwait(false);
+            // LHM storage often has bad names — enrich from DiskHealthService (skipped on the fast path).
+            if (includeStorage)
+                await EnrichStorageNamesAsync(readings).ConfigureAwait(false);
         }
         else
         {
             await Task.Run(() => ReadNvidiaGpuTemperatures(readings)).ConfigureAwait(false);
-            await ReadDiskTemperaturesAsync(readings).ConfigureAwait(false);
+            if (includeStorage)
+                await ReadDiskTemperaturesAsync(readings).ConfigureAwait(false);
 
             readings.Add(new TemperatureReading("CPU", "CPU Package", null, RequiresAdmin: true));
         }
@@ -60,7 +69,7 @@ public sealed class TemperatureService : IDisposable
         return readings;
     }
 
-    private void ReadViaLibreHardwareMonitor(List<TemperatureReading> readings)
+    private void ReadViaLibreHardwareMonitor(List<TemperatureReading> readings, bool includeStorage = true)
     {
         lock (_lhmLock)
         {
@@ -71,8 +80,9 @@ public sealed class TemperatureService : IDisposable
                 // only Update() the already-enumerated hardware.
                 _computer ??= OpenComputer();
 
-                // Pre-fetch disk names from WMI for cross-reference
-                var diskNames = GetDiskNamesFromWmi();
+                // Pre-fetch disk names from WMI for cross-reference (skipped on the fast path —
+                // this WMI query runs every poll otherwise and the sampler doesn't need names).
+                var diskNames = includeStorage ? GetDiskNamesFromWmi() : [];
 
                 foreach (var hardware in _computer.Hardware)
                 {
@@ -152,6 +162,7 @@ public sealed class TemperatureService : IDisposable
                     }
                     else if (component == "Storage")
                     {
+                        if (!includeStorage) continue;
                         var diskTemp = tempSensors.FirstOrDefault();
                         if (diskTemp is not null)
                         {

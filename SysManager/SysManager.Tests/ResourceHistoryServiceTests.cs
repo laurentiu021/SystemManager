@@ -94,6 +94,53 @@ public class ResourceHistoryServiceTests
     }
 
     [Fact]
+    public void Downsample_MaxPointsZero_ClampsToOne()
+    {
+        var now = new DateTime(2026, 6, 29);
+        var input = Enumerable.Range(0, 50).Select(i => Sample(now.AddSeconds(i), cpu: 10)).ToList();
+        var result = ResourceHistoryService.Downsample(input, 0);
+        Assert.Single(result); // clamped to 1 bucket, no divide-by-zero
+    }
+
+    [Fact]
+    public void Downsample_MaxPointsOne_AveragesEntireSeriesIntoOneBucket()
+    {
+        var now = new DateTime(2026, 6, 29);
+        var input = new[]
+        {
+            Sample(now, cpu: 20), Sample(now.AddSeconds(10), cpu: 40),
+            Sample(now.AddSeconds(20), cpu: 60), Sample(now.AddSeconds(30), cpu: 80),
+        };
+        var result = ResourceHistoryService.Downsample(input, 1);
+        Assert.Single(result);
+        Assert.Equal(50, result[0].CpuPercent); // (20+40+60+80)/4
+    }
+
+    [Fact]
+    public void Downsample_ExactlyMaxPoints_ReturnsUnchanged()
+    {
+        var now = new DateTime(2026, 6, 29);
+        var input = new[] { Sample(now), Sample(now.AddSeconds(10)), Sample(now.AddSeconds(20)) };
+        var result = ResourceHistoryService.Downsample(input, 3); // count == maxPoints
+        Assert.Same(input, result);
+    }
+
+    [Fact]
+    public void Downsample_PartialGpuNullsInBucket_AveragesOnlyPresentValues()
+    {
+        var now = new DateTime(2026, 6, 29);
+        // One bucket: two GPU=100, two GPU=null → expect avg 100 (over present only), not 50.
+        var input = new[]
+        {
+            Sample(now.AddSeconds(0), gpu: 100), Sample(now.AddSeconds(10), gpu: null),
+            Sample(now.AddSeconds(20), gpu: 100), Sample(now.AddSeconds(30), gpu: null),
+        };
+        var result = ResourceHistoryService.Downsample(input, 1);
+        Assert.Single(result);
+        Assert.Equal(100, result[0].GpuPercent);
+    }
+
+    [Fact]
     public void Downsample_AboveCap_ReducesToAtMostMaxPoints()
     {
         var now = new DateTime(2026, 6, 29);

@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.3] - 2026-06-29
+
+### Changed
+- **Resource History is lighter on the system.** The background sampler no longer runs a disk health/SMART query every 10 seconds just to label storage sensors it doesn't record — it now reads only the CPU/GPU temperatures it actually stores, cutting continuous background WMI work over a long session.
+- **Faster history loading.** Opening the tab or changing the range now reads only the samples in the selected window (reading the file from the newest end and stopping at the cutoff) instead of parsing the entire history file every time, which matters once weeks of history have accrued.
+
+### Fixed
+- **Cleaner shutdown for Resource History.** The sampler now stops fully before its file lock is released on exit, avoiding a harmless-but-noisy background error during shutdown.
+- **Temperature chart now shows a clear "no data" message** on machines without supported temperature sensors, instead of a blank chart.
+
 ## [1.51.2] - 2026-06-29
 
 ### Fixed

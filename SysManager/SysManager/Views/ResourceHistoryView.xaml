@@ -1,0 +1,112 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.ResourceHistoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:ResourceHistoryViewModel}">
+
+    <Grid Background="{DynamicResource Surface0}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Preview banner -->
+        <v:DevelopmentBanner Grid.Row="0" Margin="28,24,28,0"/>
+
+        <!-- Header + controls -->
+        <DockPanel Grid.Row="1" Margin="28,16,28,0">
+            <StackPanel>
+                <TextBlock Text="Resource History" Style="{StaticResource Display}"/>
+                <TextBlock Text="Historical CPU, RAM, GPU usage and temperatures. Samples are recorded every 10 seconds while the app runs — scroll back through hours or days, then export to CSV."
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        DockPanel.Dock="Right" VerticalAlignment="Center">
+                <TextBlock Text="Range" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                <ComboBox ItemsSource="{Binding RangeOptions}" DisplayMemberPath="Label"
+                          SelectedItem="{Binding SelectedRange, Mode=TwoWay}" Width="150" Margin="8,0,0,0"
+                          AutomationProperties.Name="History time range"/>
+                <TextBlock Text="Keep" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                <ComboBox ItemsSource="{Binding RetentionOptions}"
+                          SelectedItem="{Binding RetentionDays, Mode=TwoWay}" Width="64" Margin="8,0,0,0"
+                          AutomationProperties.Name="History retention in days"/>
+                <TextBlock Text="days" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                <Button Content="Refresh" Command="{Binding ReloadCommand}"
+                        Style="{StaticResource GhostButton}" Margin="16,0,0,0"
+                        AutomationProperties.Name="Refresh history"/>
+                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
+                        AutomationProperties.Name="Export history to CSV"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Summary strip -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
+                Visibility="{Binding HasData, Converter={StaticResource FlexVis}}">
+            <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource TextSecondary}"
+                       FontSize="13" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Charts -->
+        <Grid Grid.Row="3" Margin="28,16,28,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="3*"/>
+                <RowDefinition Height="2*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Usage chart -->
+            <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Usage" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
+                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="180"
+                                        Series="{Binding UsageSeries}"
+                                        XAxes="{Binding UsageXAxes}" YAxes="{Binding UsageYAxes}"
+                                        LegendPosition="Bottom"
+                                        LegendTextPaint="{Binding LegendTextPaint}"
+                                        LegendBackgroundPaint="{Binding LegendBackgroundPaint}"
+                                        TooltipTextPaint="{Binding TooltipTextPaint}"
+                                        TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"/>
+                    <v:EmptyState Grid.Row="1" Glyph="&#xE9D9;" Title="No history yet"
+                                  Message="Resource samples are recorded every 10 seconds while the app runs. Come back after a while to see your usage trend."
+                                  Visibility="{Binding HasData, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
+            </Border>
+
+            <!-- Temperature chart -->
+            <Border Grid.Row="1" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Temperature" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
+                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="120"
+                                        Series="{Binding TemperatureSeries}"
+                                        XAxes="{Binding TemperatureXAxes}" YAxes="{Binding TemperatureYAxes}"
+                                        LegendPosition="Bottom"
+                                        LegendTextPaint="{Binding LegendTextPaint}"
+                                        LegendBackgroundPaint="{Binding LegendBackgroundPaint}"
+                                        TooltipTextPaint="{Binding TooltipTextPaint}"
+                                        TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+                   Margin="28,12,28,24" TextWrapping="Wrap"/>
+    </Grid>
+</UserControl>

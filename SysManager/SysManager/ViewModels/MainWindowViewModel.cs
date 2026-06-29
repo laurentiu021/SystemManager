@@ -65,10 +65,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public TaskSchedulerViewModel TaskScheduler { get; }
     public DarkModeViewModel DarkMode { get; }
     public StandbyMemoryViewModel StandbyMemory { get; }
+    public ResourceHistoryViewModel ResourceHistory { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
-    public PlaceholderViewModel WipResourceHistory { get; private set; } = null!;
     public PlaceholderViewModel WipFileLockDetector { get; private set; } = null!;
     public PlaceholderViewModel WipSettingsWatchdog { get; private set; } = null!;
     public PlaceholderViewModel WipBandwidthMonitor { get; private set; } = null!;
@@ -175,6 +175,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             TaskScheduler = sp.GetRequiredService<TaskSchedulerViewModel>();
             DarkMode = sp.GetRequiredService<DarkModeViewModel>();
             StandbyMemory = sp.GetRequiredService<StandbyMemoryViewModel>();
+            ResourceHistory = sp.GetRequiredService<ResourceHistoryViewModel>();
         }
         else
         {
@@ -244,6 +245,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             TaskScheduler = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner()));
             DarkMode = new DarkModeViewModel(new WindowsThemeService());
             StandbyMemory = new StandbyMemoryViewModel(new StandbyMemoryService());
+            ResourceHistory = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth)));
         }
 
         InitPlaceholders();
@@ -255,7 +257,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // ── WIP placeholders for planned features ──────────────────────
 
         // Monitor group
-        WipResourceHistory = new PlaceholderViewModel("Resource History", "Historical CPU, RAM, GPU and temperature graphs with timeline.", "#13");
         WipFileLockDetector = new PlaceholderViewModel("File Lock Detector", "Find which process is locking a file and optionally release the handle.", "#333");
         WipSettingsWatchdog = new PlaceholderViewModel("Settings Watchdog", "Detect when Windows Update resets your settings and offer one-click restore.", "#335");
         WipBandwidthMonitor = new PlaceholderViewModel("Bandwidth Monitor", "Real-time per-app network usage with history graphs and alerts.", "#337");
@@ -336,7 +337,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Group("grp-monitor", "Monitor", "",
             Item("nav-processes",         "Process Manager",    "", ProcessManager,      typeof(Views.ProcessManagerView)),
-            Item("nav-resource-history",  "Resource History",   "", WipResourceHistory,  typeof(Views.PlaceholderView)),
+            Item("nav-resource-history",  "Resource History",   "", ResourceHistory,     typeof(Views.ResourceHistoryView), inDevelopment: true),
             Item("nav-privacy-monitor",   "Camera/Mic/Location",    "", PrivacyMonitor,      typeof(Views.PrivacyMonitorView)),
             Item("nav-app-alerts",        "App Alerts",         "", AppAlerts,           typeof(Views.AppAlertsView)),
             Item("nav-file-lock",         "File Lock Detector", "", FileLock,            typeof(Views.FileLockView)),
@@ -504,9 +505,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         TaskScheduler?.Dispose();
         DarkMode?.Dispose();
         StandbyMemory?.Dispose();
+        ResourceHistory?.Dispose();
 
         // WIP placeholders
-        WipResourceHistory?.Dispose();
         WipFileLockDetector?.Dispose();
         WipSettingsWatchdog?.Dispose();
         WipBandwidthMonitor?.Dispose();

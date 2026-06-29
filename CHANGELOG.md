@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.47.0] - 2026-06-29
+
+### Added
+- **Resource History tab (Preview).** A new Monitor tab that records your CPU, RAM and GPU usage plus CPU/GPU temperatures every 10 seconds in the background — including while the app is minimized to the tray — so you can investigate what caused a slowdown hours or days ago instead of only seeing the live moment. Pick a range (last hour through 30 days) to scroll a usage chart and a temperature chart, keep 7/14/30 days of history, and export the visible range to CSV. Strictly local: history lives in your `%LocalAppData%\SysManager` folder and nothing leaves the machine. Closes #13.
+
 ## [1.46.0] - 2026-06-29
 
 ### Changed

@@ -43,7 +43,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` |
 | Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` · `PlaceholderViewModel` (Gaming Profile) |
-| Monitor | `ProcessManagerViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `PlaceholderViewModel` (Resource History · Settings Watchdog · Bandwidth Monitor) |
+| Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `PlaceholderViewModel` (Settings Watchdog · Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
@@ -290,6 +290,12 @@ Key services:
   polling with 2s interval.
 - `ActivityLogService` — persists last 20 user actions to JSON file for
   Dashboard recent activity display.
+- `ResourceHistoryService` — always-on background sampler (started at app startup,
+  runs while minimized to tray) that records CPU/RAM/GPU usage + CPU/GPU temperatures
+  every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,
+  with 7/14/30-day retention (periodic prune). Reuses `SystemInfoService` + NvAPIWrapper +
+  `TemperatureService`; serialize/parse/prune/downsample/CSV are pure, unit-tested static
+  helpers. Strictly local — no system writes, nothing leaves the machine.
 - `SafetyDatabase` — curated safety ratings for Windows services.
 - `ThemeService` — runtime theme switching with 12 presets and persistence.
 - `ToastService` — global glass-style toast notifications.

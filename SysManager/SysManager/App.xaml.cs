@@ -95,6 +95,11 @@ public partial class App : Application
         // Initialize tray icon service from DI
         _trayService = Services.GetRequiredService<TrayIconService>();
 
+        // Start the always-on resource history sampler so usage/temperature trends
+        // accrue for the whole session, including while minimized to the tray. The
+        // service is disposed with the DI container on exit (stops the loop).
+        Services.GetRequiredService<ResourceHistoryService>().Start();
+
         DispatcherUnhandledException += OnUi;
         AppDomain.CurrentDomain.UnhandledException += OnDomain;
         TaskScheduler.UnobservedTaskException += OnTask;

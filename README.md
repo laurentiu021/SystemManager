@@ -74,15 +74,15 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 48 tabs are fully
-implemented; 9 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 49 tabs are fully
+implemented; 8 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
-| 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
+| 📊 Monitor | Process Manager · Resource History · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
@@ -341,6 +341,20 @@ a confirmation before it runs:
   (System, Trusted, Unknown)
 - Kill process with confirmation dialog
 - Open file location in Explorer
+
+### Resource History
+- **Historical CPU, RAM, GPU usage and temperatures** — the app samples your
+  vitals every 10 seconds in the background (including while minimized to the
+  tray), so you can investigate what caused a spike yesterday instead of seeing
+  only the live moment
+- **Scrollable timeline** — pick a range (last hour, 6 hours, 24 hours, 7 days,
+  30 days); the usage chart (CPU / RAM / GPU %) and a separate temperature chart
+  (CPU / GPU °C) redraw to fit, downsampled so even a 30-day view stays smooth
+- **Configurable retention** — keep 7, 14, or 30 days of history; older samples
+  are pruned automatically
+- **Export to CSV** — save the visible range for analysis in Excel or elsewhere
+- Strictly local: history is stored in your `%LocalAppData%\SysManager` folder
+  and nothing ever leaves the machine
 
 ### File Lock Detector
 - **Find what's holding a file** — when you get a "file in use" error, enter or

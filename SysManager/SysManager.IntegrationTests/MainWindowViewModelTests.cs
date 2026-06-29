@@ -431,4 +431,18 @@ public class MainWindowViewModelTests
         Assert.IsType<StandbyMemoryViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
+
+    // Resource History (#13) is implemented but newly added — it's wired to a real
+    // view/VM and flagged PREVIEW (IsInDevelopment == true) until QA-verified, not a
+    // PlaceholderView stub. This pins both facts so an accidental regression to the
+    // placeholder, or a premature graduation, fails here.
+    [Fact]
+    public void NavLeaf_ResourceHistory_IsImplementedAndInPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-resource-history");
+        Assert.Equal(typeof(SysManager.Views.ResourceHistoryView), item.ViewType);
+        Assert.IsType<ResourceHistoryViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

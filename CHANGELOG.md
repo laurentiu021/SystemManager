@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.0] - 2026-06-29
+
+### Added
+- **Tweaks Hub tab (Preview).** A single place to review and apply the safe, reversible optimizations that are otherwise spread across tabs. Tweaks are grouped into **Essential** (low-risk, per-user, apply without admin) and **Advanced** (higher-impact, machine-wide, need administrator). Tick the ones you want and **Apply Selected** or **Undo Selected** in bulk — a live counter shows pending changes, an automatic System Restore point is created before the first change, and every tweak is individually reversible. Each row shows whether it's currently Applied or at the Windows Default. It's a front-end over the same reversible operations as the Privacy & Telemetry tab — no tweak is reimplemented. Closes #907.
+
 ## [1.50.0] - 2026-06-29
 
 ### Added

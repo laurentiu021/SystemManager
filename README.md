@@ -73,14 +73,14 @@ fully open source.
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 52 tabs are fully
+The sidebar organises 58 feature tabs into 12 collapsible groups so you can
+find what you need without scrolling through a flat list. 53 tabs are fully
 implemented; 5 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes · Tweaks Hub |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
 | 📊 Monitor | Process Manager · Resource History · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance |
@@ -220,6 +220,20 @@ a confirmation before it runs:
 - Live output, honest success/failure reporting, admin elevation banner
 - *Network-stack reset (Winsock / TCP-IP / DNS flush) lives on the Network → Network
   Repair tab, which offers those as individual one-click tools.*
+
+### Tweaks Hub
+- **One place for safe, reversible optimizations** that are otherwise spread across
+  tabs — review them all in a single list, tick the ones you want, and apply or
+  undo in bulk
+- **Essential** group — low-risk, per-user tweaks that apply without administrator
+- **Advanced** group — higher-impact, machine-wide tweaks behind a caution banner
+  (need administrator)
+- **Apply Selected / Undo Selected** with a live count of pending changes — nothing
+  is written until you click, and each tweak is individually reversible
+- An automatic **System Restore point** is created before the first change in a
+  session, so you can always roll back
+- Each row shows whether it's currently **Applied** or at the Windows **Default**;
+  it's a front-end over the same reversible operations as the Privacy & Telemetry tab
 
 ### Boot Analyzer
 - Shows how long your PC takes to boot — total, core (main path), and

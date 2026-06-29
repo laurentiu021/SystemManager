@@ -21,7 +21,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class TweaksHubViewModel : ViewModelBase
 {
-    private readonly TweaksHubService _service;
+    private readonly ITweaksHubService _service;
 
     public BulkObservableCollection<TweakItem> Essential { get; } = new();
     public BulkObservableCollection<TweakItem> Advanced { get; } = new();
@@ -30,7 +30,7 @@ public sealed partial class TweaksHubViewModel : ViewModelBase
     [ObservableProperty] private int _pendingApply;
     [ObservableProperty] private int _pendingUndo;
 
-    public TweaksHubViewModel(TweaksHubService service)
+    public TweaksHubViewModel(ITweaksHubService service)
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();
@@ -88,8 +88,8 @@ public sealed partial class TweaksHubViewModel : ViewModelBase
 
         if (!DialogService.Instance.Confirm(
                 $"Apply {toApply.Count} selected tweak(s)?\n\n" +
-                "A System Restore point is created before the first change so you can roll back. " +
-                "Each tweak is individually reversible.",
+                "SysManager will try to create a System Restore point first (when running as " +
+                "administrator), and each tweak is individually reversible from here.",
                 "Apply Tweaks — Confirm"))
             return;
 
@@ -115,14 +115,19 @@ public sealed partial class TweaksHubViewModel : ViewModelBase
         IsBusy = true;
         try
         {
-            var failed = await _service.ApplyAsync(items, enable);
-            int ok = items.Count - failed.Count;
+            var result = await _service.ApplyAsync(items, enable);
+            int failedCount = result.Failed.Count;
+            int ok = items.Count - failedCount;
             if (ok > 0) ActivityLogService.Instance.Log("Tweaks Hub", $"{verb} {ok} tweak(s)");
-            Log.Information("Tweaks Hub {Verb}: {Ok} ok, {Failed} failed", verb, ok, failed.Count);
+            Log.Information("Tweaks Hub {Verb}: {Ok} ok, {Failed} failed, restorePoint={Rp}",
+                verb, ok, failedCount, result.RestorePointCreated);
 
-            StatusMessage = failed.Count == 0
-                ? $"{verb} {ok} tweak(s)."
-                : $"{verb} {ok} tweak(s) · {failed.Count} need administrator (run as admin and retry).";
+            // Mention the restore point only when one was actually created — never claim a
+            // safety net that silently didn't materialize (non-admin / rate-limited / SR off).
+            var rp = enable && result.RestorePointCreated ? " Restore point created." : "";
+            StatusMessage = failedCount == 0
+                ? $"{verb} {ok} tweak(s).{rp}"
+                : $"{verb} {ok} tweak(s) · {failedCount} need administrator (run as admin and retry).{rp}";
             RecountPending();
         }
         finally { IsBusy = false; }

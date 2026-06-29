@@ -83,7 +83,7 @@ public static class ServiceRegistration
         services.AddSingleton<ResourceHistoryService>();
         services.AddSingleton<ISettingsWatchdogService, SettingsWatchdogService>();
         services.AddSingleton<MaintenanceSchedulerService>();
-        services.AddSingleton<TweaksHubService>();
+        services.AddSingleton<ITweaksHubService, TweaksHubService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();

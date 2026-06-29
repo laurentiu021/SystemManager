@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.2] - 2026-06-29
+
+### Fixed
+- **Tweaks Hub now reports the restore point honestly.** It previously stated a System Restore point "is created before the first change" as a fact; creating one needs administrator and Windows only allows one per 24h, so it often silently didn't happen. The wording now says it's attempted (when running as administrator) and the status line confirms only when one was actually created — every tweak remains individually reversible regardless.
+- **Fixed a threading issue when applying tweaks.** The first apply of a session updated the on-screen state from a background thread; it now stays on the UI thread, avoiding a potential intermittent error.
+
 ## [1.51.1] - 2026-06-29
 
 ### Fixed

@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 50 tabs are fully
-implemented; 7 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 51 tabs are fully
+implemented; 6 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
@@ -90,7 +90,7 @@ implemented; 7 are work-in-progress placeholders marked with ⚙️:
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control ⚙️ |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
-| ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ · Environment Variables |
+| ⚙️ Advanced | Profile Export/Import · CLI Interface · Environment Variables |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
 
@@ -637,6 +637,21 @@ Manage Microsoft Defender without digging through Windows Security:
 - **Version-aware** — refuses profiles created by a newer, incompatible build
 - Only SysManager's own config is ever touched (never system settings), so an
   import is fully reversible — just import a different profile
+
+### CLI Interface
+- **Automate the safe actions from scripts, Task Scheduler, or deployment tools** —
+  SysManager accepts command-line flags and runs headless (no window), writing its
+  output to the launching console
+- Commands: `--health` (read-only health score), `--cleanup` (temp-file cleanup,
+  never follows junctions), `--trim-ram` (purge the standby list), plus `--version`,
+  `--help`, and `--list`
+- `--json` emits machine-readable output; `--silent` suppresses chatter for
+  scripting; conventional **exit codes** (0 success · 1 error · 2 usage) let a script
+  branch on the result
+- Only read-only or non-destructive actions are exposed on the CLI — anything that
+  changes the system irreversibly stays in the GUI behind a confirmation dialog
+- The in-app **CLI Interface** tab is a reference: it lists every command with a
+  one-click copy button. Example: `SysManager.exe --cleanup --silent`
 
 ## Screenshots
 

@@ -51,7 +51,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `DefenderViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Notification Blocker) |
 | Customization | `ContextMenuViewModel` · `DarkModeViewModel` · `PlaceholderViewModel` (Volume Control) |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
-| Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `PlaceholderViewModel` (CLI Interface) |
+| Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `CliInterfaceViewModel` |
 
 - `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),
   temperatures (LibreHardwareMonitor + NvAPIWrapper), storage overview, system
@@ -89,6 +89,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
 - `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
+- `CliInterfaceViewModel` — read-only reference tab listing the headless CLI commands (sourced from `CliRunner.Commands`) with copy-to-clipboard; documents the flags, runs nothing itself.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for create/restore; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
@@ -302,6 +303,13 @@ Key services:
   live registry against it and restores drifted values on request. `DetectChanges` is a
   pure, unit-tested diff; registry access reuses the validated HKCU/HKLM helper pattern
   from `PrivacyService`. Reads/writes only well-known values; nothing leaves the machine.
+- `CliRunner` — the headless command-line entry point (dispatched from `App.OnStartup`
+  before the single-instance mutex, attaching to the parent console). Exposes only
+  read-only/safe verbs (`--health`, `--cleanup`, `--trim-ram`, `--version/--help/--list`)
+  with `--json`/`--silent` modifiers and conventional exit codes (0/1/2). `Parse` and
+  `ExecuteAsync` are pure/return-value-based, so the whole CLI is unit-tested without
+  launching the process; `IsCliInvocation` is strict so the elevation/update-applier args
+  never trigger CLI mode.
 - `SafetyDatabase` — curated safety ratings for Windows services.
 - `ThemeService` — runtime theme switching with 12 presets and persistence.
 - `ToastService` — global glass-style toast notifications.

@@ -456,4 +456,15 @@ public class MainWindowViewModelTests
         Assert.IsType<SettingsWatchdogViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    // CLI Interface (#342) — implemented reference tab, wired to a real view/VM, flagged PREVIEW.
+    [Fact]
+    public void NavLeaf_CliInterface_IsImplementedAndInPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-cli-interface");
+        Assert.Equal(typeof(SysManager.Views.CliInterfaceView), item.ViewType);
+        Assert.IsType<CliInterfaceViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

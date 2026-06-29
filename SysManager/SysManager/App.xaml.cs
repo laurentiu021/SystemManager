@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager;
@@ -42,6 +43,17 @@ public partial class App : Application
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool IsIconic(IntPtr hWnd);
 
+    // Console attach for headless CLI mode: a WinExe has no console of its own, so
+    // attach to the parent (the cmd/PowerShell that launched it) to write output there.
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool AttachConsole(int dwProcessId);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool FreeConsole();
+
+    private const int AttachParentProcess = -1;
     private const int SW_RESTORE = 9;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -61,6 +73,15 @@ public partial class App : Application
         // Register OEM/ANSI code pages (437, 852, etc.) required by system
         // tools like chkdsk.exe, sfc.exe, and DISM.exe on .NET 8+.
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
+        // Headless CLI mode: when launched with a recognized CLI verb, run it and exit
+        // without a window, mutex, or DI graph. Runs before the single-instance guard so
+        // a script can run `SysManager.exe --cleanup` while the GUI is already open.
+        if (CliRunner.IsCliInvocation(e.Args))
+        {
+            RunCliAndExit(e.Args);
+            return;
+        }
 
         _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
         if (!createdNew)
@@ -111,6 +132,33 @@ public partial class App : Application
         // Fire-and-forget is intentional — the listener loop runs for the app
         // lifetime and is cancelled via _pipeCts on OnExit.
         _ = StartPipeListenerAsync();
+    }
+
+    /// <summary>
+    /// Runs the headless CLI and exits with the command's exit code. Attaches to the parent
+    /// console so output appears in the launching shell; output is written there, not to a
+    /// window. No DI container or window is created. <c>--silent</c> suppresses stdout for
+    /// successful commands (the exit code still conveys the result to scripts).
+    /// </summary>
+    private void RunCliAndExit(string[] args)
+    {
+        var request = CliRunner.Parse(args);
+        bool attached = AttachConsole(AttachParentProcess);
+        int exitCode = CliResult.UsageError;
+        try
+        {
+            var result = new CliRunner().ExecuteAsync(request).GetAwaiter().GetResult();
+            exitCode = result.ExitCode;
+            bool suppress = request.Silent && result.ExitCode == CliResult.Ok;
+            if (attached && !suppress && !string.IsNullOrEmpty(result.Output))
+                Console.Out.WriteLine(result.Output);
+        }
+        finally
+        {
+            if (attached) FreeConsole();
+            Shutdown(exitCode);
+            Environment.Exit(exitCode);
+        }
     }
 
     /// <summary>

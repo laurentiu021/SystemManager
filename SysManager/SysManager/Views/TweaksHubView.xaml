@@ -119,6 +119,9 @@
         <!-- Action bar -->
         <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,12,28,24" Padding="12">
             <DockPanel>
+                <ProgressBar AutomationProperties.Name="Working" DockPanel.Dock="Left" Width="100" Height="4"
+                             VerticalAlignment="Center" Margin="0,0,12,0" IsIndeterminate="True"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
                            Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

@@ -113,7 +113,11 @@
         </Border>
 
         <!-- Status -->
-        <TextBlock Grid.Row="5" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
-                   Margin="28,12,28,24" TextWrapping="Wrap"/>
+        <DockPanel Grid.Row="5" Margin="28,12,28,24">
+            <ProgressBar AutomationProperties.Name="Working" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="True"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+        </DockPanel>
     </Grid>
 </UserControl>

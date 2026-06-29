@@ -7,33 +7,14 @@ conventions below so they render cleanly in the README.
 ## File naming
 
 Use zero-padded numbers so the file list stays in the same order as the
-nav on the left rail:
+nav on the left rail. The current set is captured against the live app and
+covers most tabs; the number matches the tab's position in the sidebar, so
+a few numbers are intentionally skipped (work-in-progress tabs, or tabs whose
+live data couldn't be shared even after redaction — see Privacy check below).
 
-```
-01-dashboard.png
-02-system-health.png
-03-windows-update.png
-04-performance.png
-05-quick-cleanup.png
-06-deep-cleanup.png
-07-disk-analyzer.png
-08-duplicates.png
-09-ping.png
-10-traceroute.png
-11-speed-test.png
-12-network-repair.png
-13-app-updates.png
-14-uninstaller.png
-15-drivers.png
-16-battery.png
-17-logs.png
-18-about.png
-```
-
-Tabs not yet captured (contain sensitive data):
-- Startup Manager
-- Process Manager
-- Services
+A short animated tour also lives under [`docs/gifs/`](../gifs/)
+(`feature-tour.gif`, `cleanup-tools.gif`) and is embedded at the top of the
+README's Screenshots section.
 
 ## Format and size
 
@@ -60,16 +41,19 @@ On the machine you use day-to-day:
 ## Privacy check before commit
 
 Screenshots captured on a real machine will include personal data. Before
-you commit, blur or crop out:
+you commit, black out or blur:
 
-- Your Windows username (visible in paths and the admin badge).
-- Machine name (visible in System health and Logs).
-- Public IP addresses (visible in Network traceroute).
-- Drive serial numbers (visible in System health SMART).
-- Any event log entries mentioning people or apps you'd rather not share.
+- Windows username (visible in paths and the admin badge).
+- Machine name / hostname (visible in System Health and Logs).
+- Corporate Windows edition string and IP addresses.
+- Installed-app and service lists, scheduled-task paths, and environment
+  variables — these can name internal/work software. When in doubt, redact
+  the whole Name/Publisher/Value column rather than guessing per row.
+- Drive serial numbers and the battery manufacturer/ID line.
 
-A quick pass in the built-in Photos app with the highlight/blur tool is
-usually enough.
+Generic hardware (CPU/GPU model) is fine to leave visible. The committed set
+was redacted with opaque boxes over the items above; capture full-window
+(no OS taskbar) and re-check each shot before committing.
 
 ## Linking from README
 

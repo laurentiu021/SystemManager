@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.45.2] - 2026-06-29
+
+### Fixed
+- **Docs now match the app after the eight features left Preview.** The README still showed those eight tabs with a "Preview" marker and ARCHITECTURE still tagged them "Preview" even though they had graduated — both are now corrected so the documentation reflects the shipped state.
+- **Update log no longer records the full user folder path** in three places (an invalid-signature warning and two cleanup messages); they now use the same path-scrubbing the rest of the updater already applied, so a shared log can't reveal the account name.
+
 ## [1.45.1] - 2026-06-29
 
 ### Fixed

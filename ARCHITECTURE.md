@@ -93,14 +93,14 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
-- `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value. _Preview._
-- `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. _Preview._
-- `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net. _Preview._
-- `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. _Preview._
-- `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). _Preview._
-- `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back. _Preview._
-- `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule. _Preview._
-- `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin. _Preview._
+- `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
+- `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected.
+- `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net.
+- `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit.
+- `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject).
+- `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back.
+- `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
+- `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.

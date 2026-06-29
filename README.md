@@ -686,6 +686,17 @@ Manage Microsoft Defender without digging through Windows Security:
 > [`docs/screenshots/README.md`](docs/screenshots/README.md) for capture
 > conventions.
 
+### In motion
+
+<p>
+<img src="docs/gifs/feature-tour.gif" width="640" alt="Feature tour — Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer"><br>
+<em>A quick tour: Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer.</em>
+</p>
+<p>
+<img src="docs/gifs/cleanup-tools.gif" width="640" alt="Cleanup & tools — Quick/Deep Cleanup, Disk Analyzer, Dark Mode, Defender, Privacy"><br>
+<em>Cleanup &amp; tools: Quick/Deep Cleanup, Disk Analyzer, Dark Mode Scheduler, Defender Tweaks, Privacy &amp; Telemetry.</em>
+</p>
+
 <details open>
 <summary><strong>🏠 Dashboard</strong></summary>
 <br>
@@ -693,30 +704,63 @@ Manage Microsoft Defender without digging through Windows Security:
 </details>
 
 <details>
-<summary><strong>🔧 System</strong> — Health · Windows Update · Performance</summary>
+<summary><strong>🔧 System</strong> — Health · Windows Update · Performance · Windows Features · Restore Points · Boot Analyzer · System Fixes · Tweaks Hub</summary>
 <br>
 <p>
 <a href="docs/screenshots/02-system-health.png"><img src="docs/screenshots/02-system-health.png" width="280" alt="System Health"></a>&nbsp;
 <a href="docs/screenshots/03-windows-update.png"><img src="docs/screenshots/03-windows-update.png" width="280" alt="Windows Update"></a>&nbsp;
-<a href="docs/screenshots/04-performance.png"><img src="docs/screenshots/04-performance.png" width="280" alt="Performance Mode"></a>
+<a href="docs/screenshots/04-performance-mode.png"><img src="docs/screenshots/04-performance-mode.png" width="280" alt="Performance Mode"></a>
+</p>
+<p>
+<a href="docs/screenshots/07-windows-features.png"><img src="docs/screenshots/07-windows-features.png" width="280" alt="Windows Features"></a>&nbsp;
+<a href="docs/screenshots/08-restore-points.png"><img src="docs/screenshots/08-restore-points.png" width="280" alt="Restore Points"></a>&nbsp;
+<a href="docs/screenshots/10-boot-analyzer.png"><img src="docs/screenshots/10-boot-analyzer.png" width="280" alt="Boot Analyzer"></a>
+</p>
+<p>
+<a href="docs/screenshots/11-system-fixes.png"><img src="docs/screenshots/11-system-fixes.png" width="280" alt="System Fixes"></a>&nbsp;
+<a href="docs/screenshots/12-tweaks-hub.png"><img src="docs/screenshots/12-tweaks-hub.png" width="280" alt="Tweaks Hub"></a>
 </p>
 </details>
 
 <details>
-<summary><strong>🧹 Cleanup</strong> — Quick Cleanup · Deep Cleanup</summary>
+<summary><strong>🎮 Gaming &amp; Profiles</strong> — Gaming Profile · Standby Cleaner · Timer Resolution · CPU Affinity · Display Profiles</summary>
 <br>
 <p>
-<a href="docs/screenshots/05-quick-cleanup.png"><img src="docs/screenshots/05-quick-cleanup.png" width="420" alt="Quick Cleanup"></a>&nbsp;
-<a href="docs/screenshots/06-deep-cleanup.png"><img src="docs/screenshots/06-deep-cleanup.png" width="420" alt="Deep Cleanup"></a>
+<a href="docs/screenshots/13-gaming-profile.png"><img src="docs/screenshots/13-gaming-profile.png" width="280" alt="Gaming Profile"></a>&nbsp;
+<a href="docs/screenshots/14-standby-cleaner.png"><img src="docs/screenshots/14-standby-cleaner.png" width="280" alt="Standby List Cleaner"></a>&nbsp;
+<a href="docs/screenshots/15-timer-resolution.png"><img src="docs/screenshots/15-timer-resolution.png" width="280" alt="Timer Resolution"></a>
+</p>
+<p>
+<a href="docs/screenshots/16-cpu-affinity.png"><img src="docs/screenshots/16-cpu-affinity.png" width="280" alt="CPU Core Affinity"></a>&nbsp;
+<a href="docs/screenshots/17-display-profiles.png"><img src="docs/screenshots/17-display-profiles.png" width="280" alt="Display Profiles"></a>
 </p>
 </details>
 
 <details>
-<summary><strong>💾 Storage</strong> — Disk Analyzer · Duplicates</summary>
+<summary><strong>📊 Monitor</strong> — Resource History · App Alerts · File Lock · Settings Watchdog · Bandwidth</summary>
 <br>
 <p>
-<a href="docs/screenshots/07-disk-analyzer.png"><img src="docs/screenshots/07-disk-analyzer.png" width="420" alt="Disk Analyzer"></a>&nbsp;
-<a href="docs/screenshots/08-duplicates.png"><img src="docs/screenshots/08-duplicates.png" width="420" alt="Duplicate Finder"></a>
+<a href="docs/screenshots/19-resource-history.png"><img src="docs/screenshots/19-resource-history.png" width="280" alt="Resource History"></a>&nbsp;
+<a href="docs/screenshots/21-app-alerts.png"><img src="docs/screenshots/21-app-alerts.png" width="280" alt="App Installation Alerts"></a>&nbsp;
+<a href="docs/screenshots/22-file-lock.png"><img src="docs/screenshots/22-file-lock.png" width="280" alt="File Lock Detector"></a>
+</p>
+<p>
+<a href="docs/screenshots/23-settings-watchdog.png"><img src="docs/screenshots/23-settings-watchdog.png" width="280" alt="Settings Watchdog"></a>&nbsp;
+<a href="docs/screenshots/24-bandwidth-monitor.png"><img src="docs/screenshots/24-bandwidth-monitor.png" width="280" alt="Bandwidth Monitor"></a>
+</p>
+</details>
+
+<details>
+<summary><strong>🧹 Cleanup</strong> — Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance</summary>
+<br>
+<p>
+<a href="docs/screenshots/25-quick-cleanup.png"><img src="docs/screenshots/25-quick-cleanup.png" width="280" alt="Quick Cleanup"></a>&nbsp;
+<a href="docs/screenshots/26-deep-cleanup.png"><img src="docs/screenshots/26-deep-cleanup.png" width="280" alt="Deep Cleanup"></a>&nbsp;
+<a href="docs/screenshots/27-shortcut-cleaner.png"><img src="docs/screenshots/27-shortcut-cleaner.png" width="280" alt="Shortcut Cleaner"></a>
+</p>
+<p>
+<a href="docs/screenshots/28-scheduled-maintenance.png"><img src="docs/screenshots/28-scheduled-maintenance.png" width="280" alt="Scheduled Maintenance"></a>&nbsp;
+<a href="docs/screenshots/29-disk-analyzer.png"><img src="docs/screenshots/29-disk-analyzer.png" width="280" alt="Disk Analyzer"></a>
 </p>
 </details>
 
@@ -724,34 +768,67 @@ Manage Microsoft Defender without digging through Windows Security:
 <summary><strong>🌐 Network</strong> — Ping · Traceroute · Speed Test · Repair</summary>
 <br>
 <p>
-<a href="docs/screenshots/09-ping.png"><img src="docs/screenshots/09-ping.png" width="420" alt="Ping"></a>&nbsp;
-<a href="docs/screenshots/10-traceroute.png"><img src="docs/screenshots/10-traceroute.png" width="420" alt="Traceroute"></a>
+<a href="docs/screenshots/31-ping.png"><img src="docs/screenshots/31-ping.png" width="280" alt="Ping"></a>&nbsp;
+<a href="docs/screenshots/32-traceroute.png"><img src="docs/screenshots/32-traceroute.png" width="280" alt="Traceroute"></a>&nbsp;
+<a href="docs/screenshots/33-speed-test.png"><img src="docs/screenshots/33-speed-test.png" width="280" alt="Speed Test"></a>
 </p>
 <p>
-<a href="docs/screenshots/11-speed-test.png"><img src="docs/screenshots/11-speed-test.png" width="420" alt="Speed Test"></a>&nbsp;
-<a href="docs/screenshots/12-network-repair.png"><img src="docs/screenshots/12-network-repair.png" width="420" alt="Network Repair"></a>
-</p>
-</details>
-
-<details>
-<summary><strong>📦 Apps</strong> — App Updates · Uninstaller</summary>
-<br>
-<p>
-<a href="docs/screenshots/13-app-updates.png"><img src="docs/screenshots/13-app-updates.png" width="420" alt="App Updates"></a>&nbsp;
-<a href="docs/screenshots/14-uninstaller.png"><img src="docs/screenshots/14-uninstaller.png" width="420" alt="Uninstaller"></a>
+<a href="docs/screenshots/34-network-repair.png"><img src="docs/screenshots/34-network-repair.png" width="280" alt="Network Repair"></a>
 </p>
 </details>
 
 <details>
-<summary><strong>ℹ️ Info</strong> — Drivers · Battery · Logs · About</summary>
+<summary><strong>📦 Apps</strong> — App Updates · Bulk Installer</summary>
 <br>
 <p>
-<a href="docs/screenshots/15-drivers.png"><img src="docs/screenshots/15-drivers.png" width="420" alt="Drivers"></a>&nbsp;
-<a href="docs/screenshots/16-battery.png"><img src="docs/screenshots/16-battery.png" width="420" alt="Battery Health"></a>
+<a href="docs/screenshots/36-app-updates.png"><img src="docs/screenshots/36-app-updates.png" width="280" alt="App Updates"></a>&nbsp;
+<a href="docs/screenshots/37-bulk-installer.png"><img src="docs/screenshots/37-bulk-installer.png" width="280" alt="Bulk Installer"></a>
+</p>
+</details>
+
+<details>
+<summary><strong>🔒 Privacy &amp; Security</strong> — Privacy &amp; Telemetry · File Shredder · App Blocker · Debloater · Browser Cleaner · Defender</summary>
+<br>
+<p>
+<a href="docs/screenshots/39-privacy-telemetry.png"><img src="docs/screenshots/39-privacy-telemetry.png" width="280" alt="Privacy &amp; Telemetry"></a>&nbsp;
+<a href="docs/screenshots/40-file-shredder.png"><img src="docs/screenshots/40-file-shredder.png" width="280" alt="File Shredder"></a>&nbsp;
+<a href="docs/screenshots/41-app-blocker.png"><img src="docs/screenshots/41-app-blocker.png" width="280" alt="App Blocker"></a>
 </p>
 <p>
-<a href="docs/screenshots/17-logs.png"><img src="docs/screenshots/17-logs.png" width="420" alt="Logs"></a>&nbsp;
-<a href="docs/screenshots/18-about.png"><img src="docs/screenshots/18-about.png" width="420" alt="About"></a>
+<a href="docs/screenshots/42-debloater.png"><img src="docs/screenshots/42-debloater.png" width="280" alt="Debloater &amp; Ads"></a>&nbsp;
+<a href="docs/screenshots/43-browser-cleaner.png"><img src="docs/screenshots/43-browser-cleaner.png" width="280" alt="Browser Cleaner"></a>&nbsp;
+<a href="docs/screenshots/45-defender-tweaks.png"><img src="docs/screenshots/45-defender-tweaks.png" width="280" alt="Defender Tweaks"></a>
+</p>
+</details>
+
+<details>
+<summary><strong>🎨 Customization</strong> — Dark Mode Scheduler</summary>
+<br>
+<p>
+<a href="docs/screenshots/48-dark-mode.png"><img src="docs/screenshots/48-dark-mode.png" width="280" alt="Dark Mode Scheduler"></a>
+</p>
+</details>
+
+<details>
+<summary><strong>ℹ️ Info</strong> — Drivers · Battery · Logs · System Report · About</summary>
+<br>
+<p>
+<a href="docs/screenshots/50-drivers.png"><img src="docs/screenshots/50-drivers.png" width="280" alt="Drivers"></a>&nbsp;
+<a href="docs/screenshots/51-battery-health.png"><img src="docs/screenshots/51-battery-health.png" width="280" alt="Battery Health"></a>&nbsp;
+<a href="docs/screenshots/52-system-logs.png"><img src="docs/screenshots/52-system-logs.png" width="280" alt="System Logs"></a>
+</p>
+<p>
+<a href="docs/screenshots/53-system-report.png"><img src="docs/screenshots/53-system-report.png" width="280" alt="System Report"></a>&nbsp;
+<a href="docs/screenshots/55-about.png"><img src="docs/screenshots/55-about.png" width="280" alt="About"></a>
+</p>
+</details>
+
+<details>
+<summary><strong>⚙️ Advanced</strong> — Profile Export/Import · CLI Interface</summary>
+<br>
+<p>
+<a href="docs/screenshots/56-profile-export.png"><img src="docs/screenshots/56-profile-export.png" width="280" alt="Profile Export/Import"></a>&nbsp;
+<a href="docs/screenshots/57-cli-interface.png"><img src="docs/screenshots/57-cli-interface.png" width="280" alt="CLI Interface"></a>
 </p>
 </details>
 

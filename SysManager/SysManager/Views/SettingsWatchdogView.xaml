@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -44,8 +45,25 @@
             </StackPanel>
         </DockPanel>
 
+        <!-- Elevation banner: not elevated (restoring HKLM-backed settings needs admin) -->
+        <Border Grid.Row="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="28,12,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                    <TextBlock Text="Some watched settings are machine-wide and need administrator to restore."
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
         <!-- Baseline status banner -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"
                 Visibility="{Binding HasBaseline, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -56,7 +74,7 @@
         </Border>
 
         <!-- Drift summary banner (warning) -->
-        <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+        <Border Grid.Row="4" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
                 BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="28,12,28,0"
                 Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal">
@@ -69,7 +87,7 @@
         </Border>
 
         <!-- Drift list -->
-        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,16,28,0">
+        <Border Grid.Row="5" Style="{StaticResource Card}" Margin="28,16,28,0">
             <Grid>
                 <DataGrid ItemsSource="{Binding Drifts}" AutoGenerateColumns="False" IsReadOnly="True"
                           HeadersVisibility="Column" GridLinesVisibility="None" Background="Transparent"
@@ -92,7 +110,7 @@
         </Border>
 
         <!-- Status -->
-        <TextBlock Grid.Row="5" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+        <TextBlock Grid.Row="6" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
                    Margin="28,12,28,24" TextWrapping="Wrap"/>
     </Grid>
 </UserControl>

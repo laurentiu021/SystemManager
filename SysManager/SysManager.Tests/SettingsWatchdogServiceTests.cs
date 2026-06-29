@@ -23,6 +23,17 @@ public class SettingsWatchdogServiceTests
     // ── DetectChanges ─────────────────────────────────────────────────────
 
     [Fact]
+    public void DetectChanges_NullBaseline_ReturnsEmpty_DoesNotThrow()
+    {
+        // Regression: a baseline JSON file that parses but omits "Values" deserializes to a
+        // BaselineSnapshot with Values == null. DetectChanges must treat that as "nothing
+        // captured" rather than NRE-ing (which previously crashed the Refresh command).
+        var ex = Record.Exception(() =>
+            Assert.Empty(SettingsWatchdogService.DetectChanges(Catalog, null!, new Dictionary<string, int?>())));
+        Assert.Null(ex);
+    }
+
+    [Fact]
     public void DetectChanges_NoDifference_ReturnsEmpty()
     {
         var baseline = new Dictionary<string, int?> { ["a"] = 0, ["b"] = 0, ["c"] = 1 };

@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.1] - 2026-06-29
+
+### Fixed
+- **Settings Watchdog no longer crashes on a malformed baseline file.** A `settings-baseline.json` that was valid JSON but missing its data could throw when checking for changes; it's now treated as "no baseline saved" so the tab stays usable.
+- **Settings Watchdog now shows a "Run as administrator" banner** when not elevated, since restoring machine-wide settings needs admin — previously you only found out after a restore silently failed.
+
 ## [1.51.0] - 2026-06-29
 
 ### Added

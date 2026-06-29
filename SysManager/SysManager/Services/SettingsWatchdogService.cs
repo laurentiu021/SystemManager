@@ -19,7 +19,7 @@ namespace SysManager.Services;
 /// settings. Strictly local — reads/writes only well-known registry values, nothing leaves
 /// the machine. Registry access mirrors <see cref="PrivacyService"/>'s validated helper.
 /// </summary>
-public sealed class SettingsWatchdogService
+public sealed class SettingsWatchdogService : ISettingsWatchdogService
 {
     private static readonly string BaselinePath = Path.Join(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -51,7 +51,12 @@ public sealed class SettingsWatchdogService
         try
         {
             if (!File.Exists(BaselinePath)) return null;
-            return JsonSerializer.Deserialize<BaselineSnapshot>(File.ReadAllText(BaselinePath));
+            var snapshot = JsonSerializer.Deserialize<BaselineSnapshot>(File.ReadAllText(BaselinePath));
+            // A baseline file that parses as JSON but omits the "Values" property deserializes
+            // with Values == null (System.Text.Json does not enforce non-null on positional
+            // record params). Normalize it to an empty map so downstream diffing never NREs on
+            // a malformed-but-parseable file.
+            return snapshot is { Values: null } ? snapshot with { Values = [] } : snapshot;
         }
         catch (Exception ex) when (ex is JsonException or IOException)
         {
@@ -109,6 +114,9 @@ public sealed class SettingsWatchdogService
         IReadOnlyDictionary<string, int?> baseline,
         IReadOnlyDictionary<string, int?> current)
     {
+        // Defensive: a malformed/legacy baseline can yield a null map. Treat it as "nothing
+        // captured" rather than throwing — this is the trust boundary for persisted state.
+        if (baseline is null) return [];
         var drifts = new List<SettingDrift>();
         foreach (var setting in catalog)
         {

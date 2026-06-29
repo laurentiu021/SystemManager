@@ -136,6 +136,7 @@ public static class ServiceRegistration
         services.AddSingleton<StandbyMemoryViewModel>();
         services.AddSingleton<ResourceHistoryViewModel>();
         services.AddSingleton<SettingsWatchdogViewModel>();
+        services.AddSingleton<CliInterfaceViewModel>();
 
         return services;
     }

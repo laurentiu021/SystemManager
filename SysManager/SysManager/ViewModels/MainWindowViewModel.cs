@@ -67,6 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public StandbyMemoryViewModel StandbyMemory { get; }
     public ResourceHistoryViewModel ResourceHistory { get; }
     public SettingsWatchdogViewModel SettingsWatchdog { get; }
+    public CliInterfaceViewModel CliInterface { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -98,9 +99,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // System group (additions)
     public PlaceholderViewModel WipTaskScheduler { get; private set; } = null!;
-
-    // Advanced group
-    public PlaceholderViewModel WipCliInterface { get; private set; } = null!;
 
     /// <summary>Grouped sidebar tree (12 categories).</summary>
     public ObservableCollection<NavGroup> NavGroups { get; } = new();
@@ -177,6 +175,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             StandbyMemory = sp.GetRequiredService<StandbyMemoryViewModel>();
             ResourceHistory = sp.GetRequiredService<ResourceHistoryViewModel>();
             SettingsWatchdog = sp.GetRequiredService<SettingsWatchdogViewModel>();
+            CliInterface = sp.GetRequiredService<CliInterfaceViewModel>();
         }
         else
         {
@@ -248,6 +247,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             StandbyMemory = new StandbyMemoryViewModel(new StandbyMemoryService());
             ResourceHistory = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth)));
             SettingsWatchdog = new SettingsWatchdogViewModel(new SettingsWatchdogService());
+            CliInterface = new CliInterfaceViewModel();
         }
 
         InitPlaceholders();
@@ -289,7 +289,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipTaskScheduler = new PlaceholderViewModel("Task Scheduler", "Browse and toggle scheduled tasks with color-coded safety indicators.", "#334");
 
         // Advanced group
-        WipCliInterface = new PlaceholderViewModel("CLI Interface", "Command-line control: sysmanager --cleanup --apply-profile Gaming --silent.", "#342");
     }
 
     private void InitNavigation()
@@ -392,7 +391,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Group("grp-advanced", "Advanced", "",
             Item("nav-profile-export", "Profile Export/Import", "", Profile,               typeof(Views.ProfileView)),
-            Item("nav-cli-interface",  "CLI Interface",         "", WipCliInterface,        typeof(Views.PlaceholderView)),
+            Item("nav-cli-interface",  "CLI Interface",         "", CliInterface,           typeof(Views.CliInterfaceView), inDevelopment: true),
             Item("nav-env-variables",  "Environment Variables", "", EnvironmentVariables, typeof(Views.EnvironmentVariablesView))),
     ];
 
@@ -508,6 +507,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         StandbyMemory?.Dispose();
         ResourceHistory?.Dispose();
         SettingsWatchdog?.Dispose();
+        CliInterface?.Dispose();
 
         // WIP placeholders
         WipFileLockDetector?.Dispose();
@@ -536,7 +536,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipDarkModeScheduler?.Dispose();
         WipVolumeControl?.Dispose();
         WipTaskScheduler?.Dispose();
-        WipCliInterface?.Dispose();
 
         GC.SuppressFinalize(this);
     }

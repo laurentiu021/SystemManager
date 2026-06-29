@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.49.0] - 2026-06-29
+
+### Added
+- **Command-line interface (Preview).** SysManager now accepts command-line flags so you can automate the safe maintenance actions from scripts, Task Scheduler, or deployment tools — it runs headless (no window) and writes to the launching console. Commands: `--health` (read-only health score), `--cleanup` (temp-file cleanup), `--trim-ram` (purge the standby list), plus `--version`, `--help`, and `--list`; add `--json` for machine-readable output or `--silent` for scripting, with conventional exit codes (0 success · 1 error · 2 usage). Only read-only or non-destructive actions are exposed — anything that changes the system irreversibly stays in the GUI behind a confirmation. A new **CLI Interface** tab lists every command with one-click copy. Closes #342.
+
 ## [1.48.0] - 2026-06-29
 
 ### Added

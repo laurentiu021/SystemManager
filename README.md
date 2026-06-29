@@ -49,6 +49,11 @@ Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and strea
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
 
+<p align="center">
+<img src="docs/gifs/feature-tour.gif" width="720" alt="Feature tour — Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer"><br>
+<em>A quick tour: Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer. More below ↓</em>
+</p>
+
 ## Why SysManager?
 
 Most Windows utilities do one thing, or bundle telemetry and upsells. SysManager
@@ -688,10 +693,9 @@ Manage Microsoft Defender without digging through Windows Security:
 
 ### In motion
 
-<p>
-<img src="docs/gifs/feature-tour.gif" width="640" alt="Feature tour — Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer"><br>
-<em>A quick tour: Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer.</em>
-</p>
+> The feature tour GIF is at the [top of this README](#sysmanager). Here's a
+> second one focused on cleanup & maintenance tools:
+
 <p>
 <img src="docs/gifs/cleanup-tools.gif" width="640" alt="Cleanup & tools — Quick/Deep Cleanup, Disk Analyzer, Dark Mode, Defender, Privacy"><br>
 <em>Cleanup &amp; tools: Quick/Deep Cleanup, Disk Analyzer, Dark Mode Scheduler, Defender Tweaks, Privacy &amp; Telemetry.</em>

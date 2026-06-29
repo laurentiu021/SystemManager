@@ -1,0 +1,98 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.SettingsWatchdogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:SettingsWatchdogViewModel}"
+             Background="{DynamicResource Surface0}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Preview banner -->
+        <v:DevelopmentBanner Grid.Row="0" Margin="28,24,28,0"/>
+
+        <!-- Header -->
+        <DockPanel Grid.Row="1" Margin="28,16,28,0">
+            <StackPanel>
+                <TextBlock Text="Settings Watchdog" Style="{StaticResource Display}"/>
+                <TextBlock Text="Save a baseline of the Windows settings that feature updates tend to reset — telemetry, web search, widgets, lock-screen ads — and the watchdog will flag anything that drifts, with one-click restore."
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        DockPanel.Dock="Right" VerticalAlignment="Center">
+                <Button Content="Save baseline" Command="{Binding SaveBaselineCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        AutomationProperties.Name="Save settings baseline"/>
+                <Button Content="Check now" Command="{Binding RefreshCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
+                        AutomationProperties.Name="Check for setting changes now"/>
+                <Button Content="Restore changed" Command="{Binding RestoreSelectedCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
+                        AutomationProperties.Name="Restore changed settings to baseline"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Baseline status banner -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"
+                Visibility="{Binding HasBaseline, Converter={StaticResource FlexVis}}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                           FontSize="15" Foreground="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="{Binding BaselineTaken}" Foreground="{DynamicResource TextSecondary}"
+                           FontSize="13" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Drift summary banner (warning) -->
+        <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+                BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="28,12,28,0"
+                Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="Some settings have changed since your baseline. Review them below and restore if they weren't your doing."
+                           Foreground="{DynamicResource WarningText}" FontSize="12.5"
+                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Drift list -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,16,28,0">
+            <Grid>
+                <DataGrid ItemsSource="{Binding Drifts}" AutoGenerateColumns="False" IsReadOnly="True"
+                          HeadersVisibility="Column" GridLinesVisibility="None" Background="Transparent"
+                          BorderThickness="0" CanUserAddRows="False"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          AutomationProperties.Name="Changed settings"
+                          Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Setting" Binding="{Binding Name}" Width="2*"/>
+                        <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="*"/>
+                        <DataGridTextColumn Header="Was" Binding="{Binding BaselineLabel}" Width="*"/>
+                        <DataGridTextColumn Header="Now" Binding="{Binding CurrentLabel}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <v:EmptyState Glyph="&#xE73E;" Title="No changes detected"
+                              Message="Save a baseline, then check back after a Windows update. Any setting that drifted from your baseline will appear here, ready to restore."
+                              Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
+        </Border>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="5" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+                   Margin="28,12,28,24" TextWrapping="Wrap"/>
+    </Grid>
+</UserControl>

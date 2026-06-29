@@ -445,4 +445,15 @@ public class MainWindowViewModelTests
         Assert.IsType<ResourceHistoryViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    // Settings Watchdog (#335) — implemented, wired to a real view/VM, flagged PREVIEW.
+    [Fact]
+    public void NavLeaf_SettingsWatchdog_IsImplementedAndInPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-settings-watchdog");
+        Assert.Equal(typeof(SysManager.Views.SettingsWatchdogView), item.ViewType);
+        Assert.IsType<SettingsWatchdogViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

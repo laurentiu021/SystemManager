@@ -43,7 +43,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` |
 | Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` · `PlaceholderViewModel` (Gaming Profile) |
-| Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `PlaceholderViewModel` (Settings Watchdog · Bandwidth Monitor) |
+| Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `SettingsWatchdogViewModel` · `PlaceholderViewModel` (Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `PlaceholderViewModel` (Scheduled Maintenance) |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
@@ -296,6 +296,12 @@ Key services:
   with 7/14/30-day retention (periodic prune). Reuses `SystemInfoService` + NvAPIWrapper +
   `TemperatureService`; serialize/parse/prune/downsample/CSV are pure, unit-tested static
   helpers. Strictly local — no system writes, nothing leaves the machine.
+- `SettingsWatchdogService` — snapshots a curated catalog of settings Windows Update
+  tends to reset (telemetry, web search, widgets, lock-screen ads, Start suggestions, …)
+  as a JSON baseline in `%LocalAppData%\SysManager\settings-baseline.json`, then diffs the
+  live registry against it and restores drifted values on request. `DetectChanges` is a
+  pure, unit-tested diff; registry access reuses the validated HKCU/HKLM helper pattern
+  from `PrivacyService`. Reads/writes only well-known values; nothing leaves the machine.
 - `SafetyDatabase` — curated safety ratings for Windows services.
 - `ThemeService` — runtime theme switching with 12 presets and persistence.
 - `ToastService` — global glass-style toast notifications.

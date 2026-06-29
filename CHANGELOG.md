@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.48.0] - 2026-06-29
+
+### Added
+- **Settings Watchdog tab (Preview).** A new Monitor tab that catches the settings Windows Update silently resets — telemetry level, web search in Start, the Widgets board, lock-screen ads, and Start-menu suggestions. Save a baseline of your current preferences with one click; after an update, "Check now" lists anything that drifted in plain language (e.g. "Diagnostic data: was 'Off', now 'Full'") and "Restore changed" writes them back to your baseline in one step. Strictly local: the baseline lives in your `%LocalAppData%\SysManager` folder and only a fixed list of well-known registry values is ever read or written. Closes #335.
+
 ## [1.47.0] - 2026-06-29
 
 ### Added

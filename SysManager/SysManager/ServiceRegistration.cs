@@ -81,6 +81,7 @@ public static class ServiceRegistration
         services.AddSingleton<IWindowsThemeService, WindowsThemeService>();
         services.AddSingleton<StandbyMemoryService>();
         services.AddSingleton<ResourceHistoryService>();
+        services.AddSingleton<SettingsWatchdogService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -134,6 +135,7 @@ public static class ServiceRegistration
         services.AddSingleton<DarkModeViewModel>();
         services.AddSingleton<StandbyMemoryViewModel>();
         services.AddSingleton<ResourceHistoryViewModel>();
+        services.AddSingleton<SettingsWatchdogViewModel>();
 
         return services;
     }

@@ -74,15 +74,15 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 49 tabs are fully
-implemented; 8 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 50 tabs are fully
+implemented; 7 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
-| 📊 Monitor | Process Manager · Resource History · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
+| 📊 Monitor | Process Manager · Resource History · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
@@ -373,6 +373,20 @@ a confirmation before it runs:
 - Devices **in use right now** are flagged and sorted to the top
 - Read-only: an **Open privacy settings** button hands off to Windows to grant or
   revoke a permission — SysManager never changes capability permissions itself
+
+### Settings Watchdog
+- **Catch the settings Windows Update silently resets** — feature and quality
+  updates often flip telemetry back to Full, re-enable web search, the Widgets
+  board, lock-screen ads, and Start-menu suggestions
+- **Save a baseline** of your current preferences with one click; the watchdog
+  remembers exactly what each watched setting was
+- **Check now** re-reads the live values and lists any drift in plain language —
+  e.g. *"Diagnostic data: was 'Off (Security)', now 'Full'"* — with the category
+  and a before/after comparison
+- **Restore changed** writes the drifted settings back to your baseline values in
+  one step (HKLM-backed settings need administrator rights, surfaced not crashed)
+- Strictly local: the baseline lives in your `%LocalAppData%\SysManager` folder and
+  the watchdog only ever reads or writes a fixed list of well-known registry values
 
 ### Operation Lock
 - Prevents conflicting concurrent operations across tabs

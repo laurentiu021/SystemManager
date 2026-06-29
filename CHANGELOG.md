@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.7] - 2026-06-29
+
+### Fixed
+- **Unknown command-line flags now report a usage error instead of silently opening the app.** Running `SysManager.exe --bogus` (or any unrecognized `--flag`) used to fall through to launching the GUI and exit 0, contradicting the documented contract (`--help` states unknown options exit 2). Unrecognized flags are now treated as a headless usage error: they print "Unknown option" with the help text and exit 2, while the internal startup sentinels (the elevation relaunch and the in-process update applier) are explicitly excluded so they still route to their own startup paths. Bare non-flag arguments are still ignored.
+
 ## [1.51.6] - 2026-06-29
 
 ### Added

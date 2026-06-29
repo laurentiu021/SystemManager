@@ -339,7 +339,7 @@ public sealed class UpdateService
         catch (System.Security.Cryptography.CryptographicException)
         {
             // Invalid/tampered signature — file HAS a signature but it's broken.
-            Serilog.Log.Warning("Update binary has INVALID Authenticode signature — possible tampering: {File}", filePath);
+            Serilog.Log.Warning("Update binary has INVALID Authenticode signature — possible tampering: {File}", LogService.SanitizePath(filePath));
             return false;
         }
     }
@@ -347,8 +347,8 @@ public sealed class UpdateService
     private static void CleanupFile(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); }
-        catch (IOException ex) { Serilog.Log.Debug(ex, "Update cleanup: could not delete {Path}", path); }
-        catch (UnauthorizedAccessException ex) { Serilog.Log.Debug(ex, "Update cleanup: access denied deleting {Path}", path); }
+        catch (IOException ex) { Serilog.Log.Debug(ex, "Update cleanup: could not delete {Path}", LogService.SanitizePath(path)); }
+        catch (UnauthorizedAccessException ex) { Serilog.Log.Debug(ex, "Update cleanup: access denied deleting {Path}", LogService.SanitizePath(path)); }
     }
 
     // ---------- internals ----------

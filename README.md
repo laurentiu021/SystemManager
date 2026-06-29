@@ -75,26 +75,24 @@ fully open source.
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
 find what you need without scrolling through a flat list. 48 tabs are fully
-implemented; 9 are work-in-progress placeholders marked with ⚙️. Newly added
-tabs still being verified are marked **PREVIEW**:
+implemented; 9 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler 🔬 · Boot Analyzer · System Fixes |
-| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner 🔬 · Timer Resolution 🔬 · CPU Core Affinity 🔬 · Display Profiles 🔬 |
-| 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector 🔬 · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
+| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
+| 📊 Monitor | Process Manager · Resource History ⚙️ · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog ⚙️ · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
-| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks 🔬 · Notification Blocker ⚙️ |
-| 🎨 Customization | Context Menu · Dark Mode Scheduler 🔬 · Volume Control ⚙️ |
+| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks · Notification Blocker ⚙️ |
+| 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control ⚙️ |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface ⚙️ · Environment Variables |
 
 > ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
-> 🔬 = Preview — implemented and usable, still being verified; marked with a PREVIEW pill in the app.
 
 Groups expand and collapse with a click. Collapsed groups show a child count
 badge, a subtitle with abbreviated child labels, and a tooltip with the full
@@ -135,7 +133,7 @@ Edit Windows environment variables without the cramped built-in dialog:
 - System-scope edits need administrator rights (standard elevation banner); user
   variables can be edited without it
 
-### Dark Mode Scheduler 🔬
+### Dark Mode Scheduler
 - **Switch the Windows light/dark theme** instantly — apps only, or the taskbar
   and Start too
 - **Schedule it** — set a dark time and a light time (e.g. 19:00 / 07:00) and the
@@ -143,7 +141,6 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Applies immediately with no sign-out, no admin needed, and is fully reversible
 - **Honest about its limits** — the schedule runs while SysManager (or its tray)
   is open; it's not a background Windows service
-- _Preview — implemented and usable, still being verified._
 
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart
@@ -234,7 +231,7 @@ a confirmation before it runs:
   with the delay attributed to each
 - Read-only; reading the log requires administrator (elevation banner shown)
 
-### Task Scheduler 🔬
+### Task Scheduler
 - **Browse every Windows scheduled task** with its state, type, and last/next run
 - **Color-coded by type** — Third-party, well-known **Telemetry** (Compatibility
   Appraiser, CEIP, Feedback, Error Reporting), and **System** — so it's obvious
@@ -243,7 +240,6 @@ a confirmation before it runs:
   the task** — System tasks show an extra warning before you disable them
 - Filter by name or path, and optionally hide system tasks to focus on the rest
 - Changes need administrator and are verified by reading the task's state back
-- _Preview — implemented and usable, still being verified._
 
 ### Windows Update (Windows Update Agent COM API)
 - Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —
@@ -346,7 +342,7 @@ a confirmation before it runs:
 - Kill process with confirmation dialog
 - Open file location in Explorer
 
-### File Lock Detector 🔬
+### File Lock Detector
 - **Find what's holding a file** — when you get a "file in use" error, enter or
   browse to a file/folder path and see which process(es) are using it, via the
   Windows Restart Manager (the same mechanism Explorer's own dialog uses)
@@ -355,7 +351,6 @@ a confirmation before it runs:
   the file; critical system processes are protected from termination
 - Detection works as a standard user; ending a process owned by SYSTEM or
   another user needs administrator rights (surfaced, not crashed)
-- _Preview — implemented and usable, still being verified._
 
 ### Camera/Mic/Location
 - Shows which apps recently used your **camera, microphone, or location**, and when
@@ -467,7 +462,7 @@ Reclaim space and clear browsing traces, per browser:
 - Per-user (no admin); locked files (browser open) are skipped, not forced, and
   symlinks/junctions are never followed
 
-### Defender Tweaks 🔬
+### Defender Tweaks
 Manage Microsoft Defender without digging through Windows Security:
 - **Status at a glance** — real-time protection, cloud protection (MAPS), PUA
   protection, and Controlled Folder Access
@@ -480,7 +475,6 @@ Manage Microsoft Defender without digging through Windows Security:
   after reading it back and confirming Windows actually applied it
 - Changes need administrator and are confirmed first; lowering a protection is
   always an explicit, reversible choice
-- _Preview — implemented and usable, still being verified._
 
 ### Battery Health
 - Charge %, health %, wear level, cycle count, chemistry
@@ -496,7 +490,7 @@ Manage Microsoft Defender without digging through Windows Security:
 - Local app support — uninstalls apps not in winget via registry UninstallString
 - Live console output from winget
 
-### Timer Resolution 🔬
+### Timer Resolution
 - **Lower input latency for games** — requests the finest Windows timer
   resolution (≈0.5 ms) instead of the ~15.6 ms default, via the ntdll
   `NtSetTimerResolution` API
@@ -507,9 +501,8 @@ Manage Microsoft Defender without digging through Windows Security:
   when you restore it or simply close the app. No admin required
 - **Power-cost warning** — a finer timer wakes the CPU more often, increasing
   power draw and battery drain on laptops
-- _Preview — implemented and usable, still being verified._
 
-### Display Profiles 🔬
+### Display Profiles
 - **Quick-switch resolution + refresh rate** — pick a mode (e.g. 165 Hz for
   gaming, 60 Hz for work) from the list of everything your display supports,
   using only the Windows display APIs (no NVIDIA/AMD tool conflict)
@@ -518,9 +511,8 @@ Manage Microsoft Defender without digging through Windows Security:
   "Keep", so a bad mode can never strand you on a blank screen
 - **Per-display** — choose which monitor to configure; shows the current mode
 - Validates each mode (CDS_TEST) before applying; no admin required
-- _Preview — implemented and usable, still being verified._
 
-### CPU Core Affinity 🔬
+### CPU Core Affinity
 - **Pin a process to specific CPU cores** — pick a running process and choose
   which logical CPUs it may run on, then Apply (or Restore the original)
 - **Hybrid-CPU aware** — on Intel 12th-gen+ CPUs, P-cores and E-cores are
@@ -531,9 +523,8 @@ Manage Microsoft Defender without digging through Windows Security:
   process is surfaced as needing admin, not a crash)
 - An empty selection is rejected — Windows treats an empty mask as "let the OS
   decide", so the app never silently does the opposite of what you picked
-- _Preview — implemented and usable, still being verified._
 
-### Standby List Cleaner 🔬
+### Standby List Cleaner
 - **Frees cached standby memory** — the built-in equivalent of ISLC, to reduce
   stutter when RAM runs low in games
 - **Live stats** — total RAM, available, and memory load %, refreshed every 2s
@@ -543,7 +534,6 @@ Manage Microsoft Defender without digging through Windows Security:
   cache, so clearing it loses nothing; Windows reloads from disk on next use
 - Reading stats needs no admin; purging requires administrator (it enables the
   same privilege RAMMap and ISLC use) and reports cleanly if not elevated
-- _Preview — implemented and usable, still being verified._
 
 ### Performance Mode
 - **Per-tweak Apply buttons** — each setting is independent

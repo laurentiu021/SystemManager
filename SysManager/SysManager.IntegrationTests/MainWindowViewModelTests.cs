@@ -349,85 +349,86 @@ public class MainWindowViewModelTests
         }
     }
 
+    // These eight features graduated out of Preview (#1123). The tests pin both the
+    // real-view wiring AND the graduated state (IsInDevelopment == false), so a future
+    // accidental re-flag to preview fails here.
     [Fact]
-    public void NavLeaf_TimerResolution_IsImplementedAndMarkedPreview()
+    public void NavLeaf_TimerResolution_IsImplementedAndGraduated()
     {
         var vm = new MainWindowViewModel();
         var item = vm.NavItems.First(n => n.Id == "nav-timer-resolution");
-        // Now a real view, not the WIP placeholder.
         Assert.Equal(typeof(SysManager.Views.TimerResolutionView), item.ViewType);
         Assert.IsType<TimerResolutionViewModel>(item.Content);
-        // Surfaced as PREVIEW until verified.
-        Assert.True(item.IsInDevelopment);
+        Assert.False(item.IsInDevelopment);
     }
 
     [Fact]
-    public void NavLeaf_FileLock_IsImplementedAndMarkedPreview()
+    public void NavLeaf_FileLock_IsImplementedAndGraduated()
     {
         var vm = new MainWindowViewModel();
         var item = vm.NavItems.First(n => n.Id == "nav-file-lock");
         Assert.Equal(typeof(SysManager.Views.FileLockView), item.ViewType);
         Assert.IsType<FileLockViewModel>(item.Content);
-        Assert.True(item.IsInDevelopment);
+        Assert.False(item.IsInDevelopment);
     }
 
     [Fact]
-    public void NavLeaf_DisplayProfiles_IsImplementedAndMarkedPreview()
+    public void NavLeaf_DisplayProfiles_IsImplementedAndGraduated()
     {
         var vm = new MainWindowViewModel();
         var item = vm.NavItems.First(n => n.Id == "nav-display-profiles");
         Assert.Equal(typeof(SysManager.Views.DisplayProfileView), item.ViewType);
         Assert.IsType<DisplayProfileViewModel>(item.Content);
-        Assert.True(item.IsInDevelopment);
+        Assert.False(item.IsInDevelopment);
     }
 
     [Fact]
-    public void NavLeaf_CpuAffinity_IsImplementedAndMarkedPreview()
+    public void NavLeaf_CpuAffinity_IsImplementedAndGraduated()
     {
         var vm = new MainWindowViewModel();
         var item = vm.NavItems.First(n => n.Id == "nav-cpu-affinity");
         Assert.Equal(typeof(SysManager.Views.CpuAffinityView), item.ViewType);
         Assert.IsType<CpuAffinityViewModel>(item.Content);
-        Assert.True(item.IsInDevelopment);
+        Assert.False(item.IsInDevelopment);
     }
 
     [Fact]
-    public void NavLeaf_Defender_IsImplementedAndMarkedPreview()
+    public void NavLeaf_Defender_IsImplementedAndGraduated()
     {
         var vm = new MainWindowViewModel();
         var item = vm.NavItems.First(n => n.Id == "nav-defender-tweaks");
         Assert.Equal(typeof(SysManager.Views.DefenderView), item.ViewType);
         Assert.IsType<DefenderViewModel>(item.Content);
-        Assert.True(item.IsInDevelopment);
+        Assert.False(item.IsInDevelopment);
     }
 
     [Fact]
-    public void NavLeaf_TaskScheduler_IsImplementedAndMarkedPreview()
+    public void NavLeaf_TaskScheduler_IsImplementedAndGraduated()
     {
         var vm = new MainWindowViewModel();
         var item = vm.NavItems.First(n => n.Id == "nav-task-scheduler");
         Assert.Equal(typeof(SysManager.Views.TaskSchedulerView), item.ViewType);
         Assert.IsType<TaskSchedulerViewModel>(item.Content);
-        Assert.True(item.IsInDevelopment);
+        Assert.False(item.IsInDevelopment);
     }
 
     [Fact]
-    public void NavLeaf_DarkMode_IsImplementedAndMarkedPreview()
+    public void NavLeaf_DarkMode_IsImplementedAndGraduated()
     {
         var vm = new MainWindowViewModel();
         var item = vm.NavItems.First(n => n.Id == "nav-dark-mode");
         Assert.Equal(typeof(SysManager.Views.DarkModeView), item.ViewType);
         Assert.IsType<DarkModeViewModel>(item.Content);
-        Assert.True(item.IsInDevelopment);
+        Assert.False(item.IsInDevelopment);
     }
 
     [Fact]
-    public void NavLeaf_StandbyCleaner_IsImplementedAndMarkedPreview()
+    public void NavLeaf_StandbyCleaner_IsImplementedAndGraduated()
     {
         var vm = new MainWindowViewModel();
         var item = vm.NavItems.First(n => n.Id == "nav-standby-cleaner");
         Assert.Equal(typeof(SysManager.Views.StandbyMemoryView), item.ViewType);
         Assert.IsType<StandbyMemoryViewModel>(item.Content);
-        Assert.True(item.IsInDevelopment);
+        Assert.False(item.IsInDevelopment);
     }
 }

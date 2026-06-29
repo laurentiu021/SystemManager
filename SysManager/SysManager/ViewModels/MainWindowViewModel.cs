@@ -73,15 +73,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
-    public PlaceholderViewModel WipFileLockDetector { get; private set; } = null!;
     public PlaceholderViewModel WipBandwidthMonitor { get; private set; } = null!;
 
     // Gaming & Profiles group
     public PlaceholderViewModel WipGamingProfile { get; private set; } = null!;
-    public PlaceholderViewModel WipStandbyListCleaner { get; private set; } = null!;
-    public PlaceholderViewModel WipTimerResolution { get; private set; } = null!;
-    public PlaceholderViewModel WipCpuAffinity { get; private set; } = null!;
-    public PlaceholderViewModel WipDisplayProfiles { get; private set; } = null!;
 
     // Network group — DNS Changer + Hosts Editor now fully implemented as DnsHosts
 
@@ -89,15 +84,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // Privacy & Security group (Privacy & Telemetry + Debloater + Browser Cleaner now fully implemented)
     public PlaceholderViewModel WipEdgeOneDriveRemover { get; private set; } = null!;
-    public PlaceholderViewModel WipDefenderTweaks { get; private set; } = null!;
     public PlaceholderViewModel WipNotificationBlocker { get; private set; } = null!;
 
     // Customization group (Context Menu is now fully implemented)
-    public PlaceholderViewModel WipDarkModeScheduler { get; private set; } = null!;
     public PlaceholderViewModel WipVolumeControl { get; private set; } = null!;
-
-    // System group (additions)
-    public PlaceholderViewModel WipTaskScheduler { get; private set; } = null!;
 
     /// <summary>Grouped sidebar tree (12 categories).</summary>
     public ObservableCollection<NavGroup> NavGroups { get; } = new();
@@ -262,15 +252,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // ── WIP placeholders for planned features ──────────────────────
 
         // Monitor group
-        WipFileLockDetector = new PlaceholderViewModel("File Lock Detector", "Find which process is locking a file and optionally release the handle.", "#333");
         WipBandwidthMonitor = new PlaceholderViewModel("Bandwidth Monitor", "Real-time per-app network usage with history graphs and alerts.", "#337");
 
         // Gaming & Profiles group
         WipGamingProfile = new PlaceholderViewModel("Gaming Profile", "One-click game mode: kill background processes, clear RAM, set timer resolution, auto-revert on game exit.", "#324");
-        WipStandbyListCleaner = new PlaceholderViewModel("Standby List Cleaner", "Automatic standby memory purging when free RAM drops below threshold (ISLC-style).", "#325");
-        WipTimerResolution = new PlaceholderViewModel("Timer Resolution", "Set Windows timer to 0.5ms for reduced input lag in competitive games.", "#326");
-        WipCpuAffinity = new PlaceholderViewModel("CPU Core Affinity", "Set per-game CPU affinity with P-core/E-core awareness for Intel hybrid CPUs.", "#327");
-        WipDisplayProfiles = new PlaceholderViewModel("Display Profiles", "Quick-switch refresh rate, HDR, resolution presets (Gaming/Work/Movie).", "#328");
 
         // Cleanup group (File Shredder is now fully implemented)
 
@@ -280,15 +265,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // Privacy & Security group (Privacy & Telemetry is now fully implemented)
         WipEdgeOneDriveRemover = new PlaceholderViewModel("Edge/OneDrive Remover", "Safely remove or disable Edge and OneDrive with full restore capability.", "#339");
-        WipDefenderTweaks = new PlaceholderViewModel("Defender Tweaks", "Toggle SmartScreen, manage exclusions, configure PUA and cloud protection.", "#344");
         WipNotificationBlocker = new PlaceholderViewModel("Notification Blocker", "Suppress annoying app pop-ups (update nags, trial reminders) with allowlist.", "#340");
 
         // Customization group (Context Menu is now fully implemented)
-        WipDarkModeScheduler = new PlaceholderViewModel("Dark Mode Scheduler", "Auto light/dark theme + color temperature (f.lux-style) on schedule or sunset.", "#329");
         WipVolumeControl = new PlaceholderViewModel("Volume Control", "Per-app volume mixer with output device routing and profile presets.", "#332");
 
         // System group (additions)
-        WipTaskScheduler = new PlaceholderViewModel("Task Scheduler", "Browse and toggle scheduled tasks with color-coded safety indicators.", "#334");
 
         // Advanced group
     }
@@ -515,13 +497,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         TweaksHub?.Dispose();
 
         // WIP placeholders
-        WipFileLockDetector?.Dispose();
         WipBandwidthMonitor?.Dispose();
         WipGamingProfile?.Dispose();
-        WipStandbyListCleaner?.Dispose();
-        WipTimerResolution?.Dispose();
-        WipCpuAffinity?.Dispose();
-        WipDisplayProfiles?.Dispose();
         Privacy?.Dispose();
         ContextMenu?.Dispose();
         SystemReport?.Dispose();
@@ -535,11 +512,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         PrivacyMonitor?.Dispose();
         BootAnalyzer?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
-        WipDefenderTweaks?.Dispose();
         WipNotificationBlocker?.Dispose();
-        WipDarkModeScheduler?.Dispose();
         WipVolumeControl?.Dispose();
-        WipTaskScheduler?.Dispose();
 
         GC.SuppressFinalize(this);
     }

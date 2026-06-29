@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.6] - 2026-06-29
+
+### Added
+- **Progress indicator while a tab is working.** Resource History, Scheduled Maintenance, and Tweaks Hub now show a small progress bar next to the status line during loads, applies, and schedule changes — so you can tell the app is busy instead of wondering if a click registered.
+
+### Changed
+- **Internal cleanup:** removed eight unused placeholder objects that were allocated on every launch but no longer shown anywhere (left over after those features graduated to real tabs). No user-visible change.
+
 ## [1.51.5] - 2026-06-29
 
 ### Fixed

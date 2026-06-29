@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.46.0] - 2026-06-29
+
+### Changed
+- **Clearer App Updates status.** When updating apps, each row now shows a plain-English result instead of a raw exit code — e.g. "Updated", "No applicable update found", "Update installed — restart required", or "App is running — close it and retry" — and unknown failures show a tidy hex code rather than a giant negative number. The summary line now reports successes and failures honestly ("Updated 3 of 4 · 1 failed") instead of counting every attempt as done. winget's progress bar is also suppressed (`--no-progress`), so the live output no longer fills with garbled block characters. Closes #1130.
+
 ## [1.45.3] - 2026-06-29
 
 ### Fixed

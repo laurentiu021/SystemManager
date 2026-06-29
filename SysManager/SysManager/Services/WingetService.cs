@@ -70,7 +70,7 @@ public sealed partial class WingetService
         return packages;
     }
 
-    public async Task<int> UpgradeAsync(string packageId, CancellationToken ct = default)
+    public async Task<WingetResult> UpgradeAsync(string packageId, CancellationToken ct = default)
     {
         // Validate packageId: allowlist alphanumeric, dots, hyphens, underscores,
         // forward slashes (scoped IDs), and plus signs (e.g. "Notepad++.Notepad++").
@@ -78,8 +78,11 @@ public sealed partial class WingetService
             || !PackageIdPattern().IsMatch(packageId))
             throw new ArgumentException("Invalid package ID.", nameof(packageId));
 
-        var args = $"upgrade --id \"{packageId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity --include-unknown";
-        return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
+        // --no-progress suppresses winget's animated block-character progress bar, which
+        // otherwise streams as garbled glyphs into the live console.
+        var args = $"upgrade --id \"{packageId}\" -e --silent --no-progress --accept-source-agreements --accept-package-agreements --disable-interactivity --include-unknown";
+        int code = await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
+        return WingetResult.From(code);
     }
 
     /// <summary>
@@ -95,9 +98,10 @@ public sealed partial class WingetService
     [GeneratedRegex(@"^\d+\s+(upgrades|packages|package)\s+", RegexOptions.IgnoreCase)]
     private static partial Regex UpgradeSummaryPattern();
 
-    public async Task<int> UpgradeAllAsync(CancellationToken ct = default)
+    public async Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default)
     {
-        var args = "upgrade --all --silent --accept-source-agreements --accept-package-agreements --disable-interactivity --include-unknown";
-        return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
+        var args = "upgrade --all --silent --no-progress --accept-source-agreements --accept-package-agreements --disable-interactivity --include-unknown";
+        int code = await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
+        return WingetResult.From(code);
     }
 }

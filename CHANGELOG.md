@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.45.3] - 2026-06-29
+
+### Fixed
+- **Dashboard "Recent activity" now reflects what you actually do.** Previously it only recorded a handful of Dashboard quick-action buttons, so it stayed empty for normal use. It now records the features you open and the operations you complete across the app (temp cleanup, DNS changes, app removals, restore points, standby purge, …), newest first. Closes #1132.
+
 ## [1.45.2] - 2026-06-29
 
 ### Fixed

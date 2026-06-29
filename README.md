@@ -573,8 +573,8 @@ Manage Microsoft Defender without digging through Windows Security:
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't), with live
   indicator dots.
-- **Recent Activity** — the last few actions you ran (Quick Cleanup, Update
-  All Apps, Check Updates, …) with timestamps.
+- **Recent Activity** — the last features you opened and actions you ran
+  (cleanups, DNS changes, app removals, restore points, …) with timestamps.
 - **Quick Tune-Up** — one-click wizard that cleans temp files, optionally
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays

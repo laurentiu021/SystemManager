@@ -96,6 +96,15 @@ public class CliRunnerTests
     }
 
     [Fact]
+    public void CurrentVersion_MatchesBuildVersion_NeverDrifts()
+    {
+        // Regression: the CLI version was a hardcoded const that drifted two minor
+        // releases behind the build. It must now equal the running assembly version
+        // (the csproj single source of truth), so --version can never report stale data.
+        Assert.Equal(UpdateService.CurrentVersion.ToString(3), CliRunner.CurrentVersion);
+    }
+
+    [Fact]
     public async Task Execute_VersionJson_IsJson()
     {
         var r = await new CliRunner().ExecuteAsync(new CliRequest(CliCommand.Version, Json: true));

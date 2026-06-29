@@ -22,7 +22,10 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class CliRunner
 {
-    private const string Version = "1.49.0";
+    // Derived from the running assembly's version (the single source of truth set in the
+    // csproj), so the CLI's reported version can never drift from the build — a hardcoded
+    // const here had already gone stale by two minor releases.
+    private static readonly string Version = UpdateService.CurrentVersion.ToString(3);
 
     // CLI verbs that put startup into headless mode. The elevation sentinel
     // (--relaunched-elevated) and the update-applier arg are deliberately absent, so they

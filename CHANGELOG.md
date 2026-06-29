@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.4] - 2026-06-29
+
+### Fixed
+- **`SysManager.exe --version` now reports the real version.** The command-line interface printed a hardcoded version that had fallen behind the actual build; it now reads the version from the running app, so `--version` and `--help` always match the installed release.
+
 ## [1.51.3] - 2026-06-29
 
 ### Changed

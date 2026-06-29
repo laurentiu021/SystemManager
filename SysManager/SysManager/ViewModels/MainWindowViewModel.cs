@@ -66,11 +66,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public DarkModeViewModel DarkMode { get; }
     public StandbyMemoryViewModel StandbyMemory { get; }
     public ResourceHistoryViewModel ResourceHistory { get; }
+    public SettingsWatchdogViewModel SettingsWatchdog { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
     public PlaceholderViewModel WipFileLockDetector { get; private set; } = null!;
-    public PlaceholderViewModel WipSettingsWatchdog { get; private set; } = null!;
     public PlaceholderViewModel WipBandwidthMonitor { get; private set; } = null!;
 
     // Gaming & Profiles group
@@ -176,6 +176,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             DarkMode = sp.GetRequiredService<DarkModeViewModel>();
             StandbyMemory = sp.GetRequiredService<StandbyMemoryViewModel>();
             ResourceHistory = sp.GetRequiredService<ResourceHistoryViewModel>();
+            SettingsWatchdog = sp.GetRequiredService<SettingsWatchdogViewModel>();
         }
         else
         {
@@ -246,6 +247,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             DarkMode = new DarkModeViewModel(new WindowsThemeService());
             StandbyMemory = new StandbyMemoryViewModel(new StandbyMemoryService());
             ResourceHistory = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth)));
+            SettingsWatchdog = new SettingsWatchdogViewModel(new SettingsWatchdogService());
         }
 
         InitPlaceholders();
@@ -258,7 +260,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // Monitor group
         WipFileLockDetector = new PlaceholderViewModel("File Lock Detector", "Find which process is locking a file and optionally release the handle.", "#333");
-        WipSettingsWatchdog = new PlaceholderViewModel("Settings Watchdog", "Detect when Windows Update resets your settings and offer one-click restore.", "#335");
         WipBandwidthMonitor = new PlaceholderViewModel("Bandwidth Monitor", "Real-time per-app network usage with history graphs and alerts.", "#337");
 
         // Gaming & Profiles group
@@ -341,7 +342,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-privacy-monitor",   "Camera/Mic/Location",    "", PrivacyMonitor,      typeof(Views.PrivacyMonitorView)),
             Item("nav-app-alerts",        "App Alerts",         "", AppAlerts,           typeof(Views.AppAlertsView)),
             Item("nav-file-lock",         "File Lock Detector", "", FileLock,            typeof(Views.FileLockView)),
-            Item("nav-settings-watchdog", "Settings Watchdog",  "", WipSettingsWatchdog, typeof(Views.PlaceholderView)),
+            Item("nav-settings-watchdog", "Settings Watchdog",  "", SettingsWatchdog,    typeof(Views.SettingsWatchdogView), inDevelopment: true),
             Item("nav-bandwidth-monitor", "Bandwidth Monitor",  "", WipBandwidthMonitor, typeof(Views.PlaceholderView))),
 
         Group("grp-cleanup", "Cleanup", "",
@@ -506,10 +507,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         DarkMode?.Dispose();
         StandbyMemory?.Dispose();
         ResourceHistory?.Dispose();
+        SettingsWatchdog?.Dispose();
 
         // WIP placeholders
         WipFileLockDetector?.Dispose();
-        WipSettingsWatchdog?.Dispose();
         WipBandwidthMonitor?.Dispose();
         WipGamingProfile?.Dispose();
         WipStandbyListCleaner?.Dispose();

@@ -95,7 +95,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         IsBusy = true;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
-        int done = 0;
+        int attempted = 0, succeeded = 0, failed = 0;
         UpgradeEtaText = string.Empty;
         _upgradeEta.Reset();
         try
@@ -103,23 +103,31 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
             foreach (var pkg in toUpgrade)
             {
                 if (_cts.IsCancellationRequested) break;
-                pkg.Status = "Upgrading...";
-                StatusMessage = $"Upgrading {pkg.Name} ({done + 1}/{toUpgrade.Count})";
-                Progress = (int)((done / (double)toUpgrade.Count) * 100);
+                pkg.Status = "Upgrading…";
+                StatusMessage = $"Upgrading {pkg.Name} ({attempted + 1}/{toUpgrade.Count})";
+                Progress = (int)((attempted / (double)toUpgrade.Count) * 100);
                 UpgradeEtaText = _upgradeEta.Update(Progress);
                 try
                 {
-                    var code = await _winget.UpgradeAsync(pkg.Id, _cts.Token);
-                    pkg.Status = code == 0 ? "Done" : $"Failed (exit {code})";
+                    // WingetResult carries a friendly message translated from the exit code,
+                    // so the per-app status is human-readable (never a raw "exit 0x8A15…").
+                    var result = await _winget.UpgradeAsync(pkg.Id, _cts.Token);
+                    pkg.Status = result.FriendlyMessage;
+                    if (result.Succeeded) succeeded++; else failed++;
                 }
                 catch (OperationCanceledException) { pkg.Status = "Cancelled"; break; }
-                catch (InvalidOperationException ex) { pkg.Status = $"Error: {ex.Message}"; }
-                done++;
+                catch (InvalidOperationException ex) { pkg.Status = $"Error: {ex.Message}"; failed++; }
+                attempted++;
             }
             Progress = 100;
             UpgradeEtaText = string.Empty;
-            StatusMessage = $"Completed {done}/{toUpgrade.Count}";
-            Log.Information("App upgrade batch completed: {Done}/{Total}", done, toUpgrade.Count);
+            // Honest summary: separate succeeded from failed, and only mention failures
+            // when there are any.
+            StatusMessage = failed == 0
+                ? $"Updated {succeeded} of {toUpgrade.Count}."
+                : $"Updated {succeeded} of {toUpgrade.Count} · {failed} failed.";
+            Log.Information("App upgrade batch: {Succeeded} ok, {Failed} failed of {Total}",
+                succeeded, failed, toUpgrade.Count);
         }
         finally { IsBusy = false; UpgradeEtaText = string.Empty; }
     }

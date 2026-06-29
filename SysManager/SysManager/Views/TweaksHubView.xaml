@@ -65,7 +65,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="1" Margin="28,16,28,0">
             <TextBlock Text="Tweaks Hub" Style="{StaticResource Display}"/>
-            <TextBlock Text="One place to review and apply safe, reversible optimizations that are otherwise spread across tabs. Tick the ones you want, then Apply or Undo — a System Restore point is created before the first change, and every tweak is individually reversible."
+            <TextBlock Text="One place to review and apply safe, reversible optimizations that are otherwise spread across tabs. Tick the ones you want, then Apply or Undo — SysManager tries to create a System Restore point before the first change (when running as administrator), and every tweak is individually reversible."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
         </StackPanel>
 

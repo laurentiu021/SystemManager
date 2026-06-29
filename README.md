@@ -230,8 +230,10 @@ a confirmation before it runs:
   (need administrator)
 - **Apply Selected / Undo Selected** with a live count of pending changes — nothing
   is written until you click, and each tweak is individually reversible
-- An automatic **System Restore point** is created before the first change in a
-  session, so you can always roll back
+- SysManager **tries to create a System Restore point** before the first change in a
+  session (best-effort — needs administrator and Windows' once-per-24h limit); the
+  status line tells you when one was actually created. Every tweak is also
+  individually reversible regardless
 - Each row shows whether it's currently **Applied** or at the Windows **Default**;
   it's a front-end over the same reversible operations as the Privacy & Telemetry tab
 

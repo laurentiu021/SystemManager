@@ -15,11 +15,11 @@ namespace SysManager.Services;
 /// <see cref="RestorePointService"/>) before the first change in a session. Nothing is
 /// written to the system without an explicit Apply/Undo from the user.
 /// </summary>
-public sealed class TweaksHubService
+public sealed class TweaksHubService : ITweaksHubService
 {
     private readonly PrivacyService _privacy;
     private readonly RestorePointService _restore;
-    private bool _restorePointTakenThisSession;
+    private bool _restorePointAttemptedThisSession;
 
     public TweaksHubService(PrivacyService privacy, RestorePointService restore)
     {
@@ -32,15 +32,21 @@ public sealed class TweaksHubService
         => _privacy.LoadToggles().Select(TweakItem.From).ToList();
 
     /// <summary>
-    /// Applies (enable=true) or reverts (enable=false) the given tweaks. Creates a restore
+    /// Applies (enable=true) or reverts (enable=false) the given tweaks. Attempts a restore
     /// point before the first change in the session (best-effort — a failure to snapshot does
-    /// not block the change, it's logged). Returns the items that failed to write.
+    /// not block the change). Returns the items that failed to write AND whether a restore
+    /// point was actually created, so the caller can report honestly instead of over-promising.
     /// </summary>
-    public async Task<IReadOnlyList<TweakItem>> ApplyAsync(IReadOnlyList<TweakItem> tweaks, bool enable, CancellationToken ct = default)
+    public async Task<TweakApplyResult> ApplyAsync(IReadOnlyList<TweakItem> tweaks, bool enable, CancellationToken ct = default)
     {
-        if (tweaks.Count == 0) return [];
+        if (tweaks.Count == 0) return new TweakApplyResult([], false);
 
-        await EnsureRestorePointAsync(ct).ConfigureAwait(false);
+        // ConfigureAwait(true): this is invoked from a UI-thread command and the post-await
+        // loop mutates bound TweakItem.IsApplied (and the VM's pending counts + command
+        // CanExecute). Resuming on the captured UI context keeps those mutations on the UI
+        // thread — RestorePointService.CreateAsync hops to the thread pool internally, so
+        // without this the continuation would run off-thread (a real cross-thread defect).
+        bool restorePointCreated = await EnsureRestorePointAsync(ct).ConfigureAwait(true);
 
         var failed = new List<TweakItem>();
         foreach (var item in tweaks)
@@ -51,23 +57,27 @@ public sealed class TweaksHubService
             else
                 failed.Add(item);
         }
-        return failed;
+        return new TweakApplyResult(failed, restorePointCreated);
     }
 
-    private async Task EnsureRestorePointAsync(CancellationToken ct)
+    /// <summary>
+    /// Attempts a restore point once per session. Returns true only if one was actually
+    /// created. Best-effort: System Restore needs admin and is rate-limited by Windows to one
+    /// per 24h, so a "no" is normal and must not be presented as a guaranteed safety net.
+    /// </summary>
+    private async Task<bool> EnsureRestorePointAsync(CancellationToken ct)
     {
-        if (_restorePointTakenThisSession) return;
-        // Mark first so a slow/failed snapshot isn't retried before every batch — the restore
-        // point is a best-effort safety net, not a hard gate (RestorePointService itself
-        // rate-limits to one per 24h and needs admin; a miss is logged, not surfaced as failure).
-        _restorePointTakenThisSession = true;
+        if (_restorePointAttemptedThisSession) return false;
+        // Mark attempted first so a slow/failed snapshot isn't retried before every batch.
+        _restorePointAttemptedThisSession = true;
         try
         {
-            await _restore.CreateAsync("SysManager Tweaks Hub", ct).ConfigureAwait(false);
+            return await _restore.CreateAsync("SysManager Tweaks Hub", ct).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
         {
             Log.Debug("Tweaks Hub restore point skipped: {Error}", ex.Message);
+            return false;
         }
     }
 

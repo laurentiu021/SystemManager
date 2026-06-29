@@ -224,6 +224,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
             ", cancellationToken: _tempCts.Token);
             StatusMessage = "Temp cleanup done";
             Log.Information("Temp cleanup completed");
+            ActivityLogService.Instance.Log("Quick Cleanup", "Cleared temporary files");
             await PreScanAsync();
         }
         catch (OperationCanceledException) { StatusMessage = "Temp cleanup cancelled."; }

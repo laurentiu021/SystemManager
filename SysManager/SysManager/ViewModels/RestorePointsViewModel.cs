@@ -101,6 +101,7 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
             {
                 NewDescription = "";
                 StatusMessage = "Restore point created.";
+                ActivityLogService.Instance.Log("Restore point", $"Created \"{description}\"");
                 ToastService.Instance.Show("Restore point created", description);
                 var points = await _service.ListAsync(_cts.Token).ConfigureAwait(true);
                 RestorePoints.ReplaceWith(points);

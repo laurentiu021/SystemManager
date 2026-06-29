@@ -411,6 +411,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (value is null) return;
         Log.Information("Tab navigated: {TabLabel}", value.Label);
 
+        // Record the feature the user opened in the Dashboard's "Recent activity"
+        // (skip Dashboard itself — Recent activity lives there, so logging every return
+        // to view it would just push real entries out of the list).
+        if (value.Id != "nav-dashboard")
+            ActivityLogService.Instance.Log("Opened", value.Label);
+
         // Auto-expand the parent group when a child is selected.
         var parentGroup = NavGroups.FirstOrDefault(g => g.Children.Contains(value));
         if (parentGroup is not null) parentGroup.IsExpanded = true;

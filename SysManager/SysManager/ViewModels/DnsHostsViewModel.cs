@@ -171,6 +171,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
                 StatusMessage = $"DNS set to {SelectedPreset.Name} ({SelectedPreset.Primary}, {SelectedPreset.Secondary}).");
             Log.Information("DNS changed to {Preset} ({Primary}, {Secondary})",
                 SelectedPreset.Name, SelectedPreset.Primary, SelectedPreset.Secondary);
+            ActivityLogService.Instance.Log("DNS & Hosts", $"Set DNS to {SelectedPreset.Name}");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)

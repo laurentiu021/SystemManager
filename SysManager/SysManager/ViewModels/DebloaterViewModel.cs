@@ -170,6 +170,8 @@ public sealed partial class DebloaterViewModel : ViewModelBase
                 ? $"Removed {removed} app{(removed == 1 ? "" : "s")}. Reinstall any from the Microsoft Store if needed."
                 : $"Removed {removed}; {failed} could not be removed.";
             Log.Information("Debloater: removed {Removed}, failed {Failed}", removed, failed);
+            if (removed > 0)
+                ActivityLogService.Instance.Log("Debloater", $"Removed {removed} app{(removed == 1 ? "" : "s")}");
         }
         catch (OperationCanceledException)
         {

@@ -467,4 +467,15 @@ public class MainWindowViewModelTests
         Assert.IsType<CliInterfaceViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    // Scheduled Maintenance (#10) — implemented, wired to a real view/VM, flagged PREVIEW.
+    [Fact]
+    public void NavLeaf_ScheduledMaintenance_IsImplementedAndInPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-scheduled-maintenance");
+        Assert.Equal(typeof(SysManager.Views.ScheduledMaintenanceView), item.ViewType);
+        Assert.IsType<ScheduledMaintenanceViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

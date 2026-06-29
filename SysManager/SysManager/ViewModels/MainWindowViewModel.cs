@@ -68,6 +68,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public ResourceHistoryViewModel ResourceHistory { get; }
     public SettingsWatchdogViewModel SettingsWatchdog { get; }
     public CliInterfaceViewModel CliInterface { get; }
+    public ScheduledMaintenanceViewModel ScheduledMaintenance { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -80,9 +81,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipTimerResolution { get; private set; } = null!;
     public PlaceholderViewModel WipCpuAffinity { get; private set; } = null!;
     public PlaceholderViewModel WipDisplayProfiles { get; private set; } = null!;
-
-    // Cleanup group (File Shredder is now fully implemented)
-    public PlaceholderViewModel WipScheduledMaintenance { get; private set; } = null!;
 
     // Network group — DNS Changer + Hosts Editor now fully implemented as DnsHosts
 
@@ -176,6 +174,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ResourceHistory = sp.GetRequiredService<ResourceHistoryViewModel>();
             SettingsWatchdog = sp.GetRequiredService<SettingsWatchdogViewModel>();
             CliInterface = sp.GetRequiredService<CliInterfaceViewModel>();
+            ScheduledMaintenance = sp.GetRequiredService<ScheduledMaintenanceViewModel>();
         }
         else
         {
@@ -248,6 +247,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ResourceHistory = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth)));
             SettingsWatchdog = new SettingsWatchdogViewModel(new SettingsWatchdogService());
             CliInterface = new CliInterfaceViewModel();
+            ScheduledMaintenance = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner()));
         }
 
         InitPlaceholders();
@@ -270,7 +270,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipDisplayProfiles = new PlaceholderViewModel("Display Profiles", "Quick-switch refresh rate, HDR, resolution presets (Gaming/Work/Movie).", "#328");
 
         // Cleanup group (File Shredder is now fully implemented)
-        WipScheduledMaintenance = new PlaceholderViewModel("Scheduled Maintenance", "Automate cleanup, RAM trim, and health checks on schedule or idle trigger.", "#10");
 
         // Network group — DNS Changer + Hosts Editor now fully implemented as DnsHosts
 
@@ -348,7 +347,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-cleanup",               "Quick Cleanup",         "", Cleanup,                 typeof(Views.CleanupView)),
             Item("nav-deep-cleanup",          "Deep Cleanup",          "", DeepCleanup,             typeof(Views.DeepCleanupView)),
             Item("nav-shortcut-cleaner",      "Shortcut Cleaner",      "", ShortcutCleaner,         typeof(Views.ShortcutCleanerView)),
-            Item("nav-scheduled-maintenance", "Scheduled Maintenance", "", WipScheduledMaintenance, typeof(Views.PlaceholderView))),
+            Item("nav-scheduled-maintenance", "Scheduled Maintenance", "", ScheduledMaintenance,    typeof(Views.ScheduledMaintenanceView), inDevelopment: true)),
 
         Group("grp-storage", "Storage", "",
             Item("nav-disk-analyzer", "Disk Analyzer",    "", DiskAnalyzer,  typeof(Views.DiskAnalyzerView)),
@@ -508,6 +507,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ResourceHistory?.Dispose();
         SettingsWatchdog?.Dispose();
         CliInterface?.Dispose();
+        ScheduledMaintenance?.Dispose();
 
         // WIP placeholders
         WipFileLockDetector?.Dispose();
@@ -517,7 +517,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipTimerResolution?.Dispose();
         WipCpuAffinity?.Dispose();
         WipDisplayProfiles?.Dispose();
-        WipScheduledMaintenance?.Dispose();
         Privacy?.Dispose();
         ContextMenu?.Dispose();
         SystemReport?.Dispose();

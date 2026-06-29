@@ -50,8 +50,12 @@
 
         <!-- Core grid -->
         <Border Grid.Row="3" Style="{StaticResource Card}">
-            <StackPanel>
-                <Grid Margin="0,0,0,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
@@ -67,26 +71,29 @@
                                 AutomationProperties.Name="Select all cores"/>
                     </StackPanel>
                 </Grid>
-                <ItemsControl ItemsSource="{Binding Cores}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Style="{StaticResource CardInner}" Margin="0,0,8,8" Padding="10,8" Width="120">
-                                <StackPanel>
-                                    <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Label}"
-                                              FontWeight="SemiBold"
-                                              AutomationProperties.Name="{Binding Label}"/>
-                                    <TextBlock Text="{Binding TypeLabel}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
+                <!-- Scrolls so the core tiles stay reachable on high-core-count CPUs in a short window -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding Cores}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource CardInner}" Margin="0,0,8,8" Padding="10,8" Width="120">
+                                    <StackPanel>
+                                        <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Label}"
+                                                  FontWeight="SemiBold"
+                                                  AutomationProperties.Name="{Binding Label}"/>
+                                        <TextBlock Text="{Binding TypeLabel}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
         </Border>
 
         <!-- Actions + status -->

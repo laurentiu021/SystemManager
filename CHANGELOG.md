@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.50.0] - 2026-06-29
+
+### Added
+- **Scheduled Maintenance tab (Preview).** Automate maintenance on a schedule: register one Windows scheduled task that runs SysManager in the background (via its CLI) to clean temporary files or purge standby memory, daily or weekly at a time you pick. The tab shows the task's last run, next run, and last result, and lets you update or remove the schedule (each confirmed first). It runs in your user context — no admin required — and only ever touches its own task at `\SysManager\Scheduled Maintenance`, never any other scheduled task. Built on the same safe CLI verbs, so nothing destructive is automated. Closes #10.
+
 ## [1.49.0] - 2026-06-29
 
 ### Added

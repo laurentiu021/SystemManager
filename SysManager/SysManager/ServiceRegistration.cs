@@ -82,6 +82,7 @@ public static class ServiceRegistration
         services.AddSingleton<StandbyMemoryService>();
         services.AddSingleton<ResourceHistoryService>();
         services.AddSingleton<SettingsWatchdogService>();
+        services.AddSingleton<MaintenanceSchedulerService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -137,6 +138,7 @@ public static class ServiceRegistration
         services.AddSingleton<ResourceHistoryViewModel>();
         services.AddSingleton<SettingsWatchdogViewModel>();
         services.AddSingleton<CliInterfaceViewModel>();
+        services.AddSingleton<ScheduledMaintenanceViewModel>();
 
         return services;
     }

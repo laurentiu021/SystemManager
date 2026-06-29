@@ -74,8 +74,8 @@ fully open source.
 
 ### Sidebar navigation
 The sidebar organises 57 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 51 tabs are fully
-implemented; 6 are work-in-progress placeholders marked with ⚙️:
+find what you need without scrolling through a flat list. 52 tabs are fully
+implemented; 5 are work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
@@ -83,7 +83,7 @@ implemented; 6 are work-in-progress placeholders marked with ⚙️:
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
 | 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
 | 📊 Monitor | Process Manager · Resource History · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog · Bandwidth Monitor ⚙️ |
-| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance ⚙️ |
+| 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
@@ -403,6 +403,16 @@ a confirmation before it runs:
 - Select all / deselect individual items
 - Move to Recycle Bin or permanent delete, with confirmation dialog
 - COM-based IShellLink resolution for accurate target validation
+
+### Scheduled Maintenance
+- **Automate maintenance on a schedule** — register one Windows scheduled task that
+  runs SysManager in the background (via its CLI) to clean temporary files or purge
+  standby memory, daily or weekly at a time you pick
+- See the **last run, next run, and last result** of the task at a glance
+- Update or remove the schedule any time, each with a confirmation
+- Runs in your user context (no admin required) and only ever touches its own task
+  at `\SysManager\Scheduled Maintenance` — no other scheduled tasks are affected
+- Built on the same safe CLI verbs; nothing destructive is automated
 
 ### Privacy & Telemetry
 - 12 registry-based toggles across 3 categories (Telemetry, UI Declutter, Features)

@@ -61,7 +61,9 @@ public sealed partial class EnvironmentVariableService
     // Variable names: letters, digits, underscore and a few shell-safe punctuation
     // characters; no '=', no whitespace, no control chars. Rejects the leading '='
     // used by hidden drive-current-directory pseudo-variables (=C:, =ExitCode).
-    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_.()\-]*$")]
+    // \A…\z (absolute anchors): ^…$ would accept a trailing newline in the variable
+    // name before it is used as a registry value name.
+    [GeneratedRegex(@"\A[A-Za-z_][A-Za-z0-9_.()\-]*\z")]
     private static partial Regex VariableNameRegex();
 
     /// <summary>Validates an environment-variable name. Throws <see cref="ArgumentException"/> on invalid input.</summary>

@@ -29,7 +29,9 @@ public sealed partial class DebloaterService
 
     // PackageFullName shape: letters/digits/dot/dash/underscore/tilde, plus we accept the
     // version and publisher-hash segments. Validated before being embedded in a script.
-    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._~-]{0,255}$")]
+    // \A…\z (absolute anchors): ^…$ would accept a trailing newline before the package
+    // name is embedded into the Remove-AppxPackage script.
+    [GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9._~-]{0,255}\z")]
     private static partial Regex PackageFullNameRegex();
 
     /// <summary>

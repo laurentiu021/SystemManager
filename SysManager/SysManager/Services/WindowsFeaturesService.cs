@@ -168,6 +168,8 @@ public sealed partial class WindowsFeaturesService
     /// in Enable/DisableFeatureAsync where featureName is interpolated into a command.
     /// Do NOT relax this pattern without reviewing injection implications.
     /// </summary>
-    [GeneratedRegex(@"^[\w.\-]{1,128}$")]
+    // \A…\z (absolute anchors): ^…$ would accept a trailing newline in the feature
+    // name before it is embedded into the PowerShell command.
+    [GeneratedRegex(@"\A[\w.\-]{1,128}\z")]
     private static partial Regex FeatureNamePattern();
 }

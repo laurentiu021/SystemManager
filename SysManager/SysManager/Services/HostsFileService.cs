@@ -36,7 +36,7 @@ public sealed partial class HostsFileService
     // alphanumeric with internal hyphens only (no leading/trailing hyphen). This
     // rejects consecutive dots ("a..b"), a leading/trailing dot, and over-long labels
     // that the previous looser pattern accepted.
-    [GeneratedRegex(@"^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$")]
+    [GeneratedRegex(@"\A(?=.{1,253}\z)[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\z")]
     private static partial Regex HostnameRegex();
 
     /// <summary>

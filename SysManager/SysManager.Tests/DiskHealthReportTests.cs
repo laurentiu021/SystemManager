@@ -133,7 +133,8 @@ public class DiskHealthReportTests
     [Theory]
     [InlineData(0, "#22C55E")]   // 100% health (no wear) -> green
     [InlineData(40, "#F59E0B")]  // 60% health -> amber
-    [InlineData(85, "#F87171")]  // 15% health (>=20 boundary excluded) -> light red
+    [InlineData(75, "#F87171")]  // 25% health (>=20) -> light red
+    [InlineData(85, "#EF4444")]  // 15% health (<20) -> red
     public void HealthPercentColorHex_ReturnsCorrectColor(int wear, string expected)
     {
         var r = new DiskHealthReport { WearPercent = wear, TemperatureC = 35, ReadErrors = 0, WriteErrors = 0 };

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.1] - 2026-06-30
+
+### Added
+- **Safety note in the About tab.** The legal section now explicitly states that some tools change system settings, the registry, or delete files — use them at your own risk, review each action before confirming, and back up important data first — alongside the existing reminder that SysManager creates a System Restore point where it can and keeps changes reversible.
+
 ## [1.52.0] - 2026-06-30
 
 ### Changed

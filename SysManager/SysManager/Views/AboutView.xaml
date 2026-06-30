@@ -186,6 +186,11 @@
                             All operations are local to your machine — no telemetry, no accounts. Updates are fetched from the public
                             GitHub Releases API and downloaded directly from GitHub.
                         </TextBlock>
+                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}" FontSize="12">
+                            Some tools change system settings, the registry, or delete files. Use them at your own risk: review each
+                            action before confirming, and back up important data first. Where it can, SysManager creates a System
+                            Restore point before a system-altering operation and makes changes individually reversible.
+                        </TextBlock>
                     </StackPanel>
                 </Border>
 

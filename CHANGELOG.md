@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.9] - 2026-06-30
+
+### Fixed
+- **A failed uninstaller launch no longer aborts the whole batch.** When uninstalling several apps at once, one app whose uninstaller executable could not be launched (missing, blocked, or corrupt) threw an error that stopped the entire run and surfaced a raw error dialog. The failure is now recorded on that app's row and the batch continues with the remaining apps.
+- **Defender toggles report failures cleanly instead of crashing to an error dialog.** Enabling/disabling PUA protection or Controlled Folder Access, and adding/removing scan exclusions, now catch a PowerShell runspace-level fault and show it as a status message — matching how the status refresh already behaved.
+- **System Restore actions report failures cleanly.** Creating or starting a restore now catches a runspace/WMI-level fault and shows it as a status message instead of letting it surface as a global error dialog.
+
 ## [1.51.8] - 2026-06-30
 
 ### Fixed

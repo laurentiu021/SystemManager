@@ -108,6 +108,8 @@ public sealed partial class DefenderViewModel : ViewModelBase
             Apply(status);
             ReportVerified("PUA protection", status, status.PuaProtection == target);
         }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not change PUA protection: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not change PUA protection: {ex.Message}"; }
         finally { IsBusy = false; }
     }
 
@@ -123,6 +125,8 @@ public sealed partial class DefenderViewModel : ViewModelBase
             Apply(status);
             ReportVerified("Controlled Folder Access", status, status.ControlledFolderAccess == target);
         }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not change Controlled Folder Access: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not change Controlled Folder Access: {ex.Message}"; }
         finally { IsBusy = false; }
     }
 
@@ -147,6 +151,8 @@ public sealed partial class DefenderViewModel : ViewModelBase
             Apply(status);
             ReportVerified("Exclusion", status, status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
         }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not add the exclusion: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not add the exclusion: {ex.Message}"; }
         finally { IsBusy = false; }
     }
 
@@ -164,6 +170,8 @@ public sealed partial class DefenderViewModel : ViewModelBase
             Apply(status);
             ReportVerified("Exclusion removal", status, !status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
         }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not remove the exclusion: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not remove the exclusion: {ex.Message}"; }
         finally { IsBusy = false; }
     }
 

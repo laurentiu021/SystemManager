@@ -116,4 +116,39 @@ public class DefenderViewModelTests
         Assert.Contains("was not changed", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("updated", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task TogglePua_WhenRunspaceFaults_SurfacesStatus_DoesNotThrow()
+    {
+        // Regression (idx 74): a PowerShell runspace-level fault during a mutating
+        // command (not the script RuntimeException the service catches) must be caught
+        // and surfaced as a status message, like RefreshAsync — not escape the async
+        // command to the global handler. The first RunAsync (GetStatus at init) succeeds;
+        // the Set call faults.
+        var ps = Substitute.For<IPowerShellRunner>();
+        var calls = 0;
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+          .Returns(_ => ++calls <= 1
+              ? new Collection<PSObject>()
+              : throw new System.InvalidOperationException("runspace is broken"));
+        var vm = new DefenderViewModel(new DefenderService(ps));
+        await vm.InitializationComplete;
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            // Must NOT throw — the fix adds the catch clauses.
+            await vm.TogglePuaCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+
+        Assert.False(vm.IsBusy);
+        Assert.Contains("could not change pua", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+    }
 }

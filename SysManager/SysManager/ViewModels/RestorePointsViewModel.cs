@@ -114,6 +114,11 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
             }
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        // CreateAsync runs PowerShell; a runspace/WMI-level fault would otherwise
+        // escape this async command unobserved. Surface it as a status message.
+        catch (System.Management.Automation.RuntimeException ex) { StatusMessage = $"Could not create a restore point: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not create a restore point: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not create a restore point: {ex.Message}"; }
         finally
         {
             IsBusy = false;
@@ -152,6 +157,11 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
             Log.Information("RestorePoint: restore to #{Seq} requested (ok={Ok})", point.SequenceNumber, ok);
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        // RestoreAsync runs PowerShell; a runspace/WMI-level fault would otherwise
+        // escape this async command unobserved. Surface it as a status message.
+        catch (System.Management.Automation.RuntimeException ex) { StatusMessage = $"Could not start the restore: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not start the restore: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not start the restore: {ex.Message}"; }
         finally
         {
             IsBusy = false;

@@ -182,9 +182,11 @@ public class HostsFileServiceTests
 
     [Theory]
     [InlineData("999.999.999.999")]   // out-of-range octets
-    [InlineData("1.2.3")]             // too few octets
+    [InlineData("256.1.1.1")]         // first octet out of range
     [InlineData("notanip")]
     [InlineData("")]
+    // NOTE: do NOT use "1.2.3" here — IPAddress.TryParse accepts dotted shorthand
+    // ("1.2.3" -> 1.2.0.3), so it is a VALID address, not a rejection case.
     public void AddEntry_InvalidIp_Throws(string ip)
     {
         var (svc, _, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");

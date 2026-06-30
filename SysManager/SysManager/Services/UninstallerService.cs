@@ -4,6 +4,7 @@
 
 using System.Text.RegularExpressions;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -53,25 +54,13 @@ public sealed partial class UninstallerService
     /// </summary>
     public async Task<int> UninstallAsync(string packageId, CancellationToken ct = default)
     {
-        // Validate packageId: allowlist alphanumeric, dots, hyphens, underscores,
-        // forward slashes (scoped IDs like "Microsoft.VisualStudio.2022.Community"),
-        // and plus signs (e.g. "Notepad++.Notepad++").
-        if (string.IsNullOrWhiteSpace(packageId)
-            || !PackageIdPattern().IsMatch(packageId))
+        // Validate packageId before interpolating it into the winget command line.
+        if (!WingetId.IsValid(packageId))
             throw new ArgumentException("Invalid package ID.", nameof(packageId));
 
         var args = $"uninstall --id \"{packageId}\" -e --silent --accept-source-agreements --disable-interactivity";
         return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
     }
-
-    /// <summary>
-    /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
-    /// underscores, forward slashes, plus signs, and spaces. Max 256 chars.
-    /// </summary>
-    // \A…\z (absolute anchors): ^…$ would accept a trailing newline ("pkg\n"),
-    // which could smuggle a second line into the winget argument.
-    [GeneratedRegex(@"\A[\w.\-/+ ]{1,256}\z")]
-    private static partial Regex PackageIdPattern();
 
     [GeneratedRegex(@"^\s*Name\s+Id\s+Version", RegexOptions.IgnoreCase)]
     private static partial Regex ListHeaderPattern();

@@ -85,6 +85,10 @@
                 <Button Content="Cancel" Command="{Binding CancelCommand}"
                         Style="{StaticResource GhostButton}"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                <CheckBox Content="Load app icons from the web" IsChecked="{Binding LoadWebIcons}"
+                          VerticalAlignment="Center" Margin="12,0,0,0"
+                          AutomationProperties.Name="Load app icons from the web"
+                          ToolTip="Off by default to keep SysManager fully local. When on, app icons are fetched from Google's favicon service (google.com/s2/favicons), which reveals the queried app domains to Google."/>
             </WrapPanel>
         </Border>
 

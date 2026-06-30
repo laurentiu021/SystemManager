@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Net.Http;
+using System.Text.Json;
 using System.Windows.Media.Imaging;
 using Serilog;
 
@@ -24,7 +25,20 @@ public sealed class AppIconService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SysManager", "IconCache");
 
+    private static readonly string SettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SysManager", "icon-fetch.json");
+
     private readonly HttpClient _http;
+
+    /// <summary>
+    /// Whether the service may fetch icons over the network (from the Google favicon
+    /// service). Defaults to <c>false</c> to honour the app's local-first / no-cloud
+    /// promise — the Bulk Installer renders without web icons unless the user opts in.
+    /// Cached icons (already on disk) are always loaded regardless of this flag, since
+    /// reading them touches no network. Persisted so the choice survives restarts.
+    /// </summary>
+    public bool NetworkFetchEnabled { get; private set; }
 
     /// <summary>
     /// Creates the service. Pass a custom <paramref name="handler"/> (e.g. a stub)
@@ -36,7 +50,45 @@ public sealed class AppIconService
         _http = handler is null ? new HttpClient() : new HttpClient(handler);
         _http.Timeout = TimeSpan.FromSeconds(5);
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("SysManager/1.0");
+        NetworkFetchEnabled = LoadPreference();
     }
+
+    /// <summary>
+    /// Enables or disables network icon fetching and persists the choice. Returns the
+    /// effective value. Disabling does not delete already-cached icons.
+    /// </summary>
+    public bool SetNetworkFetchEnabled(bool enabled)
+    {
+        NetworkFetchEnabled = enabled;
+        SavePreference(enabled);
+        return NetworkFetchEnabled;
+    }
+
+    private static bool LoadPreference()
+    {
+        try
+        {
+            if (!File.Exists(SettingsPath)) return false; // default: no network
+            var pref = JsonSerializer.Deserialize<IconFetchPreference>(File.ReadAllText(SettingsPath));
+            return pref?.NetworkFetchEnabled ?? false;
+        }
+        catch (IOException ex) { Log.Debug(ex, "Icon-fetch preference read failed"); return false; }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Icon-fetch preference read denied"); return false; }
+        catch (JsonException ex) { Log.Debug(ex, "Icon-fetch preference malformed"); return false; }
+    }
+
+    private static void SavePreference(bool enabled)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new IconFetchPreference(enabled)));
+        }
+        catch (IOException ex) { Log.Debug(ex, "Icon-fetch preference write failed"); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Icon-fetch preference write denied"); }
+    }
+
+    private sealed record IconFetchPreference(bool NetworkFetchEnabled);
 
     /// <summary>
     /// Gets the icon for an application by its winget ID.
@@ -59,6 +111,11 @@ public sealed class AppIconService
             catch (IOException ex) { Log.Debug(ex, "Could not delete corrupt icon cache for {AppId}", appId); }
             catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Could not delete corrupt icon cache for {AppId}", appId); }
         }
+
+        // No cached copy. A network fetch only happens when the user has opted in —
+        // otherwise we return null and the list renders without a web icon, keeping the
+        // local-first / no-cloud promise intact.
+        if (!NetworkFetchEnabled) return null;
 
         // Determine the download URL
         var url = GetFaviconUrl(appId);

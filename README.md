@@ -45,6 +45,14 @@ Event Log viewer into a single tabbed WPF app.
 
 Everything runs on the machine itself. No cloud, no telemetry, no account.
 
+> **When SysManager uses the network.** There is no background phone-home — the app
+> never sends usage data. Network access only happens for features you explicitly
+> use: the network diagnostics (ping / traceroute / speed test), checking GitHub for
+> a new release on the About tab, and downloading an app you chose to install via
+> winget. App icons in the Bulk Installer are an **opt-in** extra — off by default, and
+> only when you tick "Load app icons from the web" does it fetch them from Google's
+> favicon service. Nothing else leaves your PC.
+
 Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and streaming
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.

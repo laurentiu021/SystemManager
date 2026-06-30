@@ -145,20 +145,14 @@
                               AutomationProperties.Name="Filter by location"
                               Width="160" Margin="0,0,8,0"
                               VerticalAlignment="Center"/>
-                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                             AutomationProperties.Name="Search entries"
-                             Width="200" Margin="0,0,8,0"
-                             VerticalAlignment="Center">
-                        <TextBox.Style>
-                            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-                                <Style.Triggers>
-                                    <Trigger Property="Text" Value="">
-                                        <Setter Property="Tag" Value="Search entries..."/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBox.Style>
-                    </TextBox>
+                    <Grid Width="200" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Search entries"/>
+                        <TextBlock Text="Search entries…" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
+                                   VerticalAlignment="Center" FontSize="12"
+                                   Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                    </Grid>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             AutomationProperties.Name="Refresh entries"
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>

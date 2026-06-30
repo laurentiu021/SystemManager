@@ -115,7 +115,9 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
+            // Keep the busy indicator in sync with the monitoring state: a manual
+            // refresh must not switch off the "monitoring active" affordance.
+            IsBusy = IsMonitoring;
             IsProgressIndeterminate = false;
         }
     }

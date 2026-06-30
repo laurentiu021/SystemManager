@@ -128,6 +128,29 @@ public class DiskHealthReportTests
         Assert.Equal(0, r.HealthPercent);
     }
 
+    // ---------- Health-percent color ----------
+
+    [Theory]
+    [InlineData(0, "#22C55E")]   // 100% health (no wear) -> green
+    [InlineData(40, "#F59E0B")]  // 60% health -> amber
+    [InlineData(85, "#F87171")]  // 15% health (>=20 boundary excluded) -> light red
+    public void HealthPercentColorHex_ReturnsCorrectColor(int wear, string expected)
+    {
+        var r = new DiskHealthReport { WearPercent = wear, TemperatureC = 35, ReadErrors = 0, WriteErrors = 0 };
+        Assert.Equal(expected, r.HealthPercentColorHex);
+    }
+
+    [Fact]
+    public void HealthPercentColorHex_NoSmartData_IsNeutralGrey_NotRed()
+    {
+        // Regression: a disk with no SMART data (HealthPercent == null) must not be
+        // painted red as if it were failing — it shows the neutral "unknown" grey,
+        // consistent with TemperatureColorHex's null arm.
+        var r = new DiskHealthReport { HealthStatus = "" };
+        Assert.Null(r.HealthPercent);
+        Assert.Equal("#9AA0A6", r.HealthPercentColorHex);
+    }
+
     // ---------- Temperature color ----------
 
     [Theory]

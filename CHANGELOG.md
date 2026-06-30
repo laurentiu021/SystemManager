@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.8] - 2026-06-30
+
+### Fixed
+- **Work-in-progress tabs no longer show a doubled hash in their issue reference.** The placeholder tabs (Bandwidth Monitor, Gaming Profile, Edge/OneDrive Remover, Notification Blocker, Volume Control) rendered "Tracked in issue ##337" because the template prepended a `#` to a value that already started with one. The duplicate is removed, so they now read "Tracked in issue #337".
+- **A drive with no SMART data is no longer painted red as if it were failing.** The disk-health percentage swatch fell through to the "failing" red when SMART health data was unavailable; it now shows the neutral grey used elsewhere for unknown readings, matching the temperature swatch.
+- **The App Alerts busy indicator no longer switches off while monitoring is active.** Running a manual "refresh installed apps" while monitoring was on forced the busy/monitoring affordance off in its cleanup step; the indicator now stays in sync with the monitoring state.
+- **The Context Menu search box now shows its placeholder text.** The "Search entries…" hint was wired through a `Tag` that the default text-box template never renders, so the field appeared blank; it now uses the same in-box placeholder pattern as the Bulk Installer search.
+- **One invalid custom-theme colour no longer discards the other three.** Entering a malformed hex value in the Appearance → Custom editor silently dropped all four colour edits; each field is now parsed independently, valid values still apply, and an invalid field is flagged with red text and a tooltip.
+
 ## [1.51.7] - 2026-06-29
 
 ### Fixed

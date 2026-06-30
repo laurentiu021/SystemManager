@@ -87,6 +87,20 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         ArgumentNullException.ThrowIfNull(drift);
         if (!drift.CanRestore || drift.BaselineValue is null) return false;
 
+        // Allowlist guard: only ever write a setting that is part of our own curated
+        // catalog (matched by exact hive+path AND value name). The catalog is the single
+        // source of truth, so the writer can never be repurposed for an arbitrary
+        // registry path even if a caller hands us a hand-built drift.
+        var inCatalog = Catalog.Any(s =>
+            string.Equals(s.RegistryPath, drift.Setting.RegistryPath, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(s.ValueName, drift.Setting.ValueName, StringComparison.OrdinalIgnoreCase));
+        if (!inCatalog)
+        {
+            Log.Warning("Settings Watchdog refused to restore an out-of-catalog setting: {Path}\\{Value}",
+                drift.Setting.RegistryPath, drift.Setting.ValueName);
+            return false;
+        }
+
         try
         {
             using var key = OpenOrCreateKey(drift.Setting.RegistryPath, writable: true);

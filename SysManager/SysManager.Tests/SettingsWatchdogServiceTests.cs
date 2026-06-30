@@ -108,4 +108,33 @@ public class SettingsWatchdogServiceTests
             Assert.Matches(@"^(HKCU|HKLM)\\", s.RegistryPath);
         });
     }
+
+    // ── Restore allowlist guard (idx 175) ────────────────────────────────────
+
+    [Fact]
+    public void Restore_OutOfCatalogSetting_IsRefused_AndWritesNothing()
+    {
+        // Regression (idx 175): Restore must only ever write a setting that is part of
+        // its own curated catalog. A hand-built drift pointing at an arbitrary registry
+        // path must be refused BEFORE any registry write — so this returns false without
+        // ever touching the registry (the path below is never opened).
+        var svc = new SettingsWatchdogService();
+        var rogue = new WatchedSetting(
+            "rogue", "Rogue", "Not in catalog", "Cat",
+            @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run", "Evil",
+            new Dictionary<int, string>());
+        var drift = new SettingDrift(rogue, BaselineValue: 1, CurrentValue: 0, CanRestore: true);
+
+        Assert.False(svc.Restore(drift));
+    }
+
+    [Fact]
+    public void Restore_NonRestorableOrNoBaseline_ReturnsFalse()
+    {
+        var svc = new SettingsWatchdogService();
+        var known = svc.Catalog[0];
+        // CanRestore=false and null baseline are both early-out false paths.
+        Assert.False(svc.Restore(new SettingDrift(known, BaselineValue: 1, CurrentValue: 0, CanRestore: false)));
+        Assert.False(svc.Restore(new SettingDrift(known, BaselineValue: null, CurrentValue: 0, CanRestore: true)));
+    }
 }

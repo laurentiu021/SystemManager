@@ -246,9 +246,14 @@ public partial class App : Application
         {
             while (!ct.IsCancellationRequested)
             {
-                await using var server = new NamedPipeServerStream(
+                // Restrict the single-instance pipe to the current user only. The
+                // connection carries no payload (it is a pure "activate the window"
+                // signal), but an explicit DACL stops any other local account from
+                // poking the server, rather than relying on the default ACL.
+                await using var server = NamedPipeServerStreamAcl.Create(
                     PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous);
+                    PipeOptions.Asynchronous, inBufferSize: 0, outBufferSize: 0,
+                    CreateCurrentUserPipeSecurity());
                 await server.WaitForConnectionAsync(ct).ConfigureAwait(false);
 
                 // A second instance connected — activate our window on the UI thread
@@ -264,6 +269,27 @@ public partial class App : Application
         }
         catch (OperationCanceledException) { /* shutdown */ }
         catch (IOException) { /* pipe broken during shutdown */ }
+    }
+
+    /// <summary>
+    /// Builds a <see cref="PipeSecurity"/> that grants only the current user the right
+    /// to read/write/connect to the single-instance pipe, so no other local account can
+    /// interact with it. Returns null if the current identity can't be resolved, in
+    /// which case the caller falls back to the default ACL.
+    /// </summary>
+    private static System.IO.Pipes.PipeSecurity CreateCurrentUserPipeSecurity()
+    {
+        var security = new System.IO.Pipes.PipeSecurity();
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        var user = identity.User;
+        if (user is not null)
+        {
+            security.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
+                user,
+                System.IO.Pipes.PipeAccessRights.ReadWrite,
+                System.Security.AccessControl.AccessControlType.Allow));
+        }
+        return security;
     }
 
     private static void OnUi(object s, DispatcherUnhandledExceptionEventArgs e)

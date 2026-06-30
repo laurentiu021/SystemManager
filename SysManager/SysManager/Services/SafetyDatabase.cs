@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Frozen;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -30,7 +31,7 @@ public static class SafetyDatabase
         return (SafetyLevel.Caution, "Check documentation before modifying.");
     }
 
-    private static readonly Dictionary<string, string> SafeServices = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> SafeServices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["DiagTrack"] = "Connected User Experiences and Telemetry — sends diagnostic data to Microsoft. Disabling stops all telemetry.",
         ["dmwappushservice"] = "WAP Push Message Routing — used for telemetry delivery. Safe to disable.",
@@ -52,9 +53,9 @@ public static class SafetyDatabase
         ["TrkWks"] = "Distributed Link Tracking Client — tracks NTFS links across network. Rarely needed.",
         ["WerSvc"] = "Windows Error Reporting — sends crash reports to Microsoft.",
         ["PhoneSvc"] = "Phone Service — manages telephony state. Not needed on desktops.",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> CautionServices = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> CautionServices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["wuauserv"] = "Windows Update — handles updates. Disabling prevents security patches. Only disable temporarily.",
         ["Spooler"] = "Print Spooler — required for printing. Disable only if you never print.",
@@ -67,9 +68,9 @@ public static class SafetyDatabase
         ["LanmanServer"] = "Server — SMB file sharing. Disable if you don't share files on network.",
         ["LanmanWorkstation"] = "Workstation — SMB client. Disable if you don't access network shares.",
         ["Schedule"] = "Task Scheduler — many system tasks depend on this. Disabling can break maintenance.",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> CriticalServices = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> CriticalServices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["RpcSs"] = "Remote Procedure Call — core Windows IPC. System will not function without it.",
         ["RpcEptMapper"] = "RPC Endpoint Mapper — required by RPC. Do not disable.",
@@ -86,9 +87,9 @@ public static class SafetyDatabase
         ["Power"] = "Power — manages power policy. Disabling causes unpredictable behavior.",
         ["ProfSvc"] = "User Profile Service — loads user profiles. Disabling prevents login.",
         ["nsi"] = "Network Store Interface — network connectivity core.",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> SafeFeatures = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> SafeFeatures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["Internet-Explorer-Optional-amd64"] = "Legacy IE compatibility in Edge. Not needed unless you use old enterprise sites.",
         ["MediaPlayback"] = "Windows Media Player legacy — replaced by modern Media Player app.",
@@ -104,9 +105,9 @@ public static class SafetyDatabase
         ["DirectPlay"] = "DirectPlay — legacy gaming API. Only needed for very old games.",
         ["SimpleTCP"] = "Simple TCP/IP Services — echo, daytime servers. Never needed on workstations.",
         ["SMB1Protocol"] = "SMB 1.0 — insecure file sharing protocol. Disable unless connecting to ancient NAS.",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> CautionFeatures = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> CautionFeatures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["NetFx4-AdvSrvs"] = ".NET Framework 4.x Advanced Services — some apps depend on this.",
         ["NetFx3"] = ".NET Framework 3.5 — needed by some older applications.",
@@ -115,9 +116,9 @@ public static class SafetyDatabase
         ["SmbDirect"] = "SMB Direct (RDMA) — high-speed file transfer. Only needed with RDMA NICs.",
         ["WCF-Services45"] = "WCF Services — .NET communication framework. Some enterprise apps need it.",
         ["Microsoft-Windows-Subsystem-Linux"] = "WSL — Windows Subsystem for Linux. Needed by developers using Linux tools.",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> CriticalFeatures = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> CriticalFeatures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["Microsoft-Hyper-V-All"] = "Hyper-V — virtualization platform. Required by Docker, WSL2, Android Emulator.",
         ["Microsoft-Hyper-V"] = "Hyper-V core. Disabling breaks all VM-based tools.",
@@ -125,5 +126,5 @@ public static class SafetyDatabase
         ["HypervisorPlatform"] = "Windows Hypervisor Platform — needed by third-party VMs (VirtualBox, etc).",
         ["Containers"] = "Windows Containers — used by Docker. Disabling breaks container workloads.",
         ["Microsoft-Windows-Client-EmbeddedExp-Package"] = "Windows Sandbox — isolated test environment. Useful for security.",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 }

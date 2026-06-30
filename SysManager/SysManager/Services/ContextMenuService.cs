@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Frozen;
 using System.Diagnostics;
 using System.IO;
 using System.Security;
@@ -371,7 +372,7 @@ public sealed partial class ContextMenuService
     /// Human-readable explanations for common context menu entries.
     /// Keyed by raw registry name (case-insensitive).
     /// </summary>
-    private static readonly Dictionary<string, string> KnownExplanations = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> KnownExplanations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["open"] = "Opens the file with its default associated application",
         ["edit"] = "Opens the file in the default text editor (Notepad)",
@@ -398,12 +399,12 @@ public sealed partial class ContextMenuService
         ["Troubleshoot compatibility"] = "Runs the Program Compatibility Troubleshooter for older apps",
         ["git_bash"] = "Opens a Git Bash terminal in the current directory",
         ["git_gui"] = "Opens Git GUI for visual staging, committing and history browsing",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Explanations keyed by executable name (for entries resolved via command path).
     /// </summary>
-    private static readonly Dictionary<string, string> KnownExeExplanations = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> KnownExeExplanations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["code"] = "Opens the file or folder in Visual Studio Code editor",
         ["notepad++"] = "Opens the file in Notepad++ text editor",
@@ -416,7 +417,7 @@ public sealed partial class ContextMenuService
         ["pwsh"] = "Opens PowerShell 7 in the current folder",
         ["git-bash"] = "Opens a Git Bash terminal in the current directory",
         ["git-gui"] = "Opens Git GUI for visual staging and committing",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets the human-readable explanation for an entry based on its raw name and command.
@@ -446,7 +447,7 @@ public sealed partial class ContextMenuService
     }
 
     // Well-known registry entry names mapped to user-friendly display names
-    private static readonly Dictionary<string, string> KnownNames = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> KnownNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["cmd"] = "Command Prompt",
         ["powershell"] = "PowerShell",
@@ -471,10 +472,10 @@ public sealed partial class ContextMenuService
         ["paste"] = "Paste",
         ["delete"] = "Delete",
         ["rename"] = "Rename",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     // Known DLL resource strings mapped to friendly names
-    private static readonly Dictionary<string, string> KnownResourceStrings = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> KnownResourceStrings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["@shell32.dll,-8506"] = "Open Command Prompt",
         ["@shell32.dll,-8508"] = "Open PowerShell",
@@ -482,10 +483,10 @@ public sealed partial class ContextMenuService
         ["@shell32.dll,-8518"] = "Open PowerShell as Administrator",
         ["@shell32.dll,-31328"] = "Share",
         ["@shell32.dll,-37400"] = "Pin to Quick Access",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     // Known executable names mapped to friendly application names
-    private static readonly Dictionary<string, string> KnownExeNames = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> KnownExeNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["git-bash"] = "Git Bash",
         ["git-gui"] = "Git GUI",
@@ -502,7 +503,7 @@ public sealed partial class ContextMenuService
         ["pwsh"] = "PowerShell",
         ["cmd"] = "Command Prompt",
         ["wt"] = "Windows Terminal",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Resolves a raw registry entry name into a user-friendly display name.

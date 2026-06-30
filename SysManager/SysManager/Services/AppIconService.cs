@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Frozen;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
@@ -184,7 +185,7 @@ public sealed class AppIconService
     /// <summary>
     /// Maps winget package IDs to their associated website domain for favicon retrieval.
     /// </summary>
-    private static readonly Dictionary<string, string> AppDomains = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> AppDomains = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         // Browsers
         ["Google.Chrome"] = "google.com/chrome",
@@ -253,5 +254,5 @@ public sealed class AppIconService
         ["Microsoft.VCRedist.2015+.x64"] = "microsoft.com",
         ["Oracle.JavaRuntimeEnvironment"] = "java.com",
         ["Microsoft.DirectX"] = "microsoft.com",
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 }

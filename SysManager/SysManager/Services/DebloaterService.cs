@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using System.Text.RegularExpressions;
@@ -71,8 +72,8 @@ public sealed partial class DebloaterService
     /// Curated "commonly removed bloat" families — pre-checked safe items the preset selects.
     /// Each entry maps a name prefix to a friendly label + one-line description.
     /// </summary>
-    private static readonly Dictionary<string, (string Display, string Description)> Catalog =
-        new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, (string Display, string Description)> Catalog =
+        new Dictionary<string, (string Display, string Description)>(StringComparer.OrdinalIgnoreCase)
         {
             ["Microsoft.BingNews"] = ("Microsoft News", "Bing-powered news app."),
             ["Microsoft.BingWeather"] = ("Weather", "Bing-powered weather app."),
@@ -100,7 +101,7 @@ public sealed partial class DebloaterService
             ["Microsoft.SkypeApp"] = ("Skype", "Bundled Skype app."),
             ["Microsoft.WindowsMaps"] = ("Maps", "Offline maps app."),
             ["Microsoft.WindowsFeedbackHub"] = ("Feedback Hub", "Sends feedback to Microsoft."),
-        };
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Lists installed Store apps for the current user, newest catalog matches first.

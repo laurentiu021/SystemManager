@@ -49,6 +49,7 @@ public class AppIconServiceTests
     {
         var handler = new StubHandler((_, _) => throw new HttpRequestException("simulated offline"));
         var svc = new AppIconService(handler);
+        svc.SetNetworkFetchEnabled(true); // opt in so the download path is reached
 
         // A known mapped ID so the download path is reached, then the handler fails.
         var ex = await Record.ExceptionAsync(() => svc.GetIconAsync("Git.Git"));
@@ -65,12 +66,39 @@ public class AppIconServiceTests
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
         var svc = new AppIconService(handler);
+        svc.SetNetworkFetchEnabled(true); // opt in so the download path is reached
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         var ex = await Record.ExceptionAsync(() => svc.GetIconAsync("Git.Git", cts.Token));
 
         Assert.Null(ex); // TaskCanceledException is caught and turned into a null result
+    }
+
+    // ── Network-fetch opt-in (idx 9/10/13/14: honour the no-cloud promise) ────
+
+    [Fact]
+    public async Task GetIconAsync_WhenFetchDisabled_MakesNoNetworkRequest()
+    {
+        var handler = new StubHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK));
+        var svc = new AppIconService(handler);
+        svc.SetNetworkFetchEnabled(false); // explicit: opt-out
+
+        // A known-mapped ID that is NOT cached must still make zero network calls.
+        var icon = await svc.GetIconAsync("Git.Git." + Guid.NewGuid().ToString("N"));
+
+        Assert.Null(icon);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
+    public void SetNetworkFetchEnabled_TogglesAndReportsValue()
+    {
+        var svc = new AppIconService(new StubHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)));
+        Assert.True(svc.SetNetworkFetchEnabled(true));
+        Assert.True(svc.NetworkFetchEnabled);
+        Assert.False(svc.SetNetworkFetchEnabled(false));
+        Assert.False(svc.NetworkFetchEnabled);
     }
 
     [Fact]

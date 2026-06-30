@@ -32,6 +32,13 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     [ObservableProperty] private string _selectedCategory = "All";
     [ObservableProperty] private bool _isElevated;
 
+    /// <summary>
+    /// When on, app icons are fetched from the Google favicon service. Off by default
+    /// to honour the no-cloud promise; the user opts in via the checkbox. Toggling it
+    /// persists the choice and (when enabled) loads the icons.
+    /// </summary>
+    [ObservableProperty] private bool _loadWebIcons;
+
     public List<string> Categories { get; } =
     [
         "All",
@@ -59,6 +66,15 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     partial void OnFilterTextChanged(string value) => ApplyFilter();
     partial void OnSelectedCategoryChanged(string value) => ApplyFilter();
 
+    partial void OnLoadWebIconsChanged(bool value)
+    {
+        // Persist the opt-in, then (when turning it on) fetch the icons now so the
+        // change is visible immediately rather than only after the next visit.
+        _iconService.SetNetworkFetchEnabled(value);
+        if (value)
+            InitializeAsync(LoadIconsAsync);
+    }
+
     public BulkInstallerViewModel(BulkInstallerService service, AppIconService iconService)
     {
         _service = service;
@@ -68,6 +84,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         // click would otherwise dispose the shared CTS mid-flight).
         PropertyChanged += OnVmPropertyChanged;
         IsElevated = AdminHelper.IsElevated();
+        // Reflect the persisted opt-in WITHOUT triggering a save/reload during ctor init.
+        _loadWebIcons = _iconService.NetworkFetchEnabled;
         Apps.ReplaceWith(BuildCuratedApps());
         ApplyFilter();
 

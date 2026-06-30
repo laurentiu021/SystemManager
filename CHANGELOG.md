@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.0] - 2026-06-30
+
+### Changed
+- **App icons in the Bulk Installer are now opt-in.** SysManager no longer contacts the web for app icons by default — this keeps the "no cloud, no telemetry" promise intact out of the box. A new "Load app icons from the web" checkbox in the Bulk Installer toolbar turns the feature on; only then are icons fetched from Google's favicon service (the choice is remembered). Already-cached icons still load offline. The README now documents exactly when the app uses the network.
+
 ## [1.51.14] - 2026-06-30
 
 ### Security

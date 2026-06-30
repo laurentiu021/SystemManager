@@ -22,12 +22,15 @@ internal static partial class KnownFolders
     private static readonly Guid Music = new("4BD8D571-6D19-48D3-BE97-422220080E43");
     private static readonly Guid Videos = new("18989B1D-99B5-455B-841C-AB7C74E4DDFC");
 
-    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    // Returns the path through a CoTaskMem-allocated PWSTR that the CALLER must free.
+    // Marshalling to `out string` would copy the buffer but never release it (a native
+    // leak per call), so we take the raw pointer and free it ourselves.
+    [LibraryImport("shell32.dll")]
     private static partial int SHGetKnownFolderPath(
         in Guid rfid,
         uint dwFlags,
         nint hToken,
-        out string pszPath);
+        out nint ppszPath);
 
     /// <summary>Gets the actual Downloads folder path (respects user relocation).</summary>
     public static string GetDownloadsPath() => GetPath(Downloads);
@@ -51,15 +54,26 @@ internal static partial class KnownFolders
     {
         // The import returns the HRESULT. Because this is a plain (non-COM-interface)
         // LibraryImport, a failure does NOT throw — it returns a non-zero HRESULT and a
-        // null/empty path. Check the HRESULT (and guard the path) and fall back to the
-        // SpecialFolder equivalent on any failure.
+        // null pointer. Check the HRESULT (and guard the path) and fall back to the
+        // SpecialFolder equivalent on any failure. The returned PWSTR is CoTaskMem and
+        // MUST be freed by us.
+        nint ptr = nint.Zero;
         try
         {
-            int hr = SHGetKnownFolderPath(folderId, 0, nint.Zero, out var path);
-            if (hr >= 0 && !string.IsNullOrEmpty(path))
-                return path;
+            int hr = SHGetKnownFolderPath(folderId, 0, nint.Zero, out ptr);
+            if (hr >= 0 && ptr != nint.Zero)
+            {
+                var path = Marshal.PtrToStringUni(ptr);
+                if (!string.IsNullOrEmpty(path))
+                    return path;
+            }
         }
         catch (COMException) { /* fall through to the SpecialFolder fallback below */ }
+        finally
+        {
+            if (ptr != nint.Zero)
+                Marshal.FreeCoTaskMem(ptr);
+        }
 
         return Fallback(folderId);
     }

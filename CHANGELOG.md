@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.10] - 2026-06-30
+
+### Fixed
+- **Cancelling an update download no longer deletes a previously-downloaded copy.** If a fresh download was cancelled, the cleanup step also removed any already-cached, still-valid installer, forcing an avoidable re-download on the next launch. Cancellation now only removes the partial in-progress file.
+- **A safe-to-disable service description is no longer silently dropped.** The service safety database held two entries for Windows Audio that differed only in capitalisation; in the case-insensitive lookup the second silently overwrote the first, losing the "only disable on headless servers" guidance. The duplicate was removed so the fuller description is always shown.
+- **The default-gateway detection prefers the real physical route.** Ping/monitoring picked the first active adapter's gateway, which on a machine with a VPN or virtual adapter could be the wrong one. Tunnel adapters are now skipped and physical adapters (Ethernet/Wi-Fi, fastest first) are preferred.
+
+### Changed
+- Removed an unreachable `catch` in the Recycle Bin helper: `SHEmptyRecycleBin` reports failure through its return code, not an exception, so the failure path now reads and logs the HRESULT directly.
+
 ## [1.51.9] - 2026-06-30
 
 ### Fixed

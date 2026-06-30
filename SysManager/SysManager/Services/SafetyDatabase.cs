@@ -61,7 +61,6 @@ public static class SafetyDatabase
         ["BITS"] = "Background Intelligent Transfer — used by Windows Update and Store. Disabling may break updates.",
         ["Themes"] = "Themes — provides visual themes. Disabling gives classic look but saves minimal resources.",
         ["AudioSrv"] = "Windows Audio — disabling removes all sound. Only disable on headless servers.",
-        ["Audiosrv"] = "Windows Audio — disabling removes all sound.",
         ["Dhcp"] = "DHCP Client — auto-assigns IP. Disable only with static IP configured.",
         ["Dnscache"] = "DNS Client — caches DNS lookups. Disabling slows browsing.",
         ["EventLog"] = "Windows Event Log — disabling prevents all logging. Bad for troubleshooting.",

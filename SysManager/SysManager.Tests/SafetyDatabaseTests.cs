@@ -51,6 +51,20 @@ public class SafetyDatabaseTests
     public void GetServiceSafety_KnownService_ReturnsNonEmptyDescription()
         => Assert.False(string.IsNullOrWhiteSpace(SafetyDatabase.GetServiceSafety("wuauserv").Description));
 
+    [Theory]
+    [InlineData("AudioSrv")]
+    [InlineData("Audiosrv")]
+    [InlineData("audiosrv")]
+    public void GetServiceSafety_AudioService_KeepsRicherDescription(string service)
+    {
+        // Regression (idx 173/308): the case-insensitive dictionary previously held both
+        // "AudioSrv" and "Audiosrv"; the second silently overwrote the first, dropping the
+        // "Only disable on headless servers" guidance. The duplicate was removed, so the
+        // richer description must survive for every casing.
+        var (_, description) = SafetyDatabase.GetServiceSafety(service);
+        Assert.Contains("headless servers", description, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ---------- features ----------
 
     [Theory]

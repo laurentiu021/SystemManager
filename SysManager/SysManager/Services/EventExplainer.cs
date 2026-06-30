@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Frozen;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -16,7 +17,7 @@ public static class EventExplainer
 {
     private readonly record struct Key(string Provider, int EventId);
 
-    private static readonly Dictionary<Key, (string Explanation, string Recommendation)> Known = new()
+    private static readonly FrozenDictionary<Key, (string Explanation, string Recommendation)> Known = new Dictionary<Key, (string Explanation, string Recommendation)>
     {
         // ---------- Kernel / crashes ----------
         [new("Microsoft-Windows-Kernel-Power", 41)] = (
@@ -131,10 +132,10 @@ public static class EventExplainer
         [new("Microsoft-Windows-Power-Troubleshooter", 1)] = (
             "The system resumed from sleep.",
             "Informational."),
-    };
+    }.ToFrozenDictionary();
 
     // Fallbacks by EventId only (when provider varies or isn't known)
-    private static readonly Dictionary<int, (string Explanation, string Recommendation)> KnownById = new()
+    private static readonly FrozenDictionary<int, (string Explanation, string Recommendation)> KnownById = new Dictionary<int, (string Explanation, string Recommendation)>
     {
         [41] = ("The PC wasn't shut down cleanly — crash, freeze, or power loss.",
                 "See Reliability Monitor. Frequent = hardware/driver issue."),
@@ -142,7 +143,7 @@ public static class EventExplainer
         [1001] = ("A crash report was filed.", "See the related Application Error for details."),
         [6008] = ("The previous system shutdown was unexpected.",
                   "Often a duplicate of Kernel-Power 41. Look for a BSOD or power loss around that time."),
-    };
+    }.ToFrozenDictionary();
 
     public static void Enrich(FriendlyEventEntry entry)
     {

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Frozen;
 using System.ServiceProcess;
 using SysManager.Models;
 
@@ -17,7 +18,7 @@ public sealed partial class ServiceManagerService
     /// Gaming-oriented recommendations for common Windows services.
     /// Key = service name (case-insensitive), Value = (recommendation, reason).
     /// </summary>
-    internal static readonly Dictionary<string, (string Rec, string Reason)> GamingGuide = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly FrozenDictionary<string, (string Rec, string Reason)> GamingGuide = new Dictionary<string, (string Rec, string Reason)>(StringComparer.OrdinalIgnoreCase)
     {
         ["SysMain"] = ("safe-to-disable", "Superfetch — preloads apps into RAM. Disabling frees RAM for games and reduces disk I/O."),
         ["DiagTrack"] = ("safe-to-disable", "Connected User Experiences and Telemetry — sends usage data to Microsoft. No impact on functionality."),
@@ -44,7 +45,7 @@ public sealed partial class ServiceManagerService
         ["nsi"] = ("keep-enabled", "Network Store Interface — required for network connectivity."),
         ["Winmgmt"] = ("keep-enabled", "Windows Management Instrumentation — required by many apps and system tools."),
         ["wuauserv"] = ("keep-enabled", "Windows Update — keeps your system secure and up to date."),
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Enumerate all Windows services with their current state and gaming recommendations.

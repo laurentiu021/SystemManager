@@ -149,6 +149,89 @@ public class HostsFileServiceTests
     }
 
     [Fact]
+    public void RestoreBackup_PreservesOriginalFileIdentity_NotJustContent()
+    {
+        // Regression (idx 158, ACL/attribute loss): RestoreBackup must replace the hosts
+        // file in place (File.Replace) so the hardened DACL is preserved, not relink a new
+        // inode (File.Copy overwrite). Same creation-time proxy as the SaveHosts test:
+        // File.Replace keeps the original creation time; a fresh copy would reset it.
+        const string original = "# ORIGINAL pristine hosts\n127.0.0.1 original\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(original);
+        try
+        {
+            var stamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            File.SetCreationTimeUtc(hosts, stamp);
+
+            svc.SaveHosts(new List<HostsEntry>
+            {
+                new() { IpAddress = "9.9.9.9", Hostname = "managed", IsEnabled = true }
+            });
+            Assert.True(svc.RestoreBackup());
+
+            Assert.Equal(original, File.ReadAllText(hosts));
+            Assert.Equal(stamp, File.GetCreationTimeUtc(hosts));
+            Assert.False(File.Exists(hosts + ".sysmanager.restore.tmp"), "restore temp file left behind");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    // ---------- AddEntry validation (idx 156 + the missing negative tests) ----------
+
+    [Theory]
+    [InlineData("999.999.999.999")]   // out-of-range octets
+    [InlineData("1.2.3")]             // too few octets
+    [InlineData("notanip")]
+    [InlineData("")]
+    public void AddEntry_InvalidIp_Throws(string ip)
+    {
+        var (svc, _, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        try
+        {
+            Assert.Throws<ArgumentException>(() => svc.AddEntry(ip, "example.com"));
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Theory]
+    [InlineData("")]                  // empty
+    [InlineData("   ")]               // whitespace
+    [InlineData("bad host")]          // space
+    [InlineData("a..b")]              // consecutive dots — accepted by the old loose regex
+    [InlineData(".leadingdot")]       // leading dot
+    [InlineData("trailingdot.")]      // trailing dot
+    [InlineData("under_score")]       // underscore not allowed in DNS labels
+    [InlineData("-leadinghyphen.com")]
+    public void AddEntry_InvalidHostname_Throws(string hostname)
+    {
+        var (svc, _, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        try
+        {
+            Assert.Throws<ArgumentException>(() => svc.AddEntry("1.1.1.1", hostname));
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Theory]
+    [InlineData("example.com")]
+    [InlineData("sub.domain.example.com")]
+    [InlineData("localhost")]
+    [InlineData("a-b.example")]
+    public void AddEntry_ValidInput_Succeeds(string hostname)
+    {
+        var (svc, _, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        try
+        {
+            var entry = svc.AddEntry("1.1.1.1", hostname);
+            Assert.Equal(hostname, entry.Hostname);
+            Assert.Equal("1.1.1.1", entry.IpAddress);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
     public void SaveHosts_LeavesNoTempFileBehind()
     {
         // Regression (atomic write): SaveHosts writes to a temp file then moves it

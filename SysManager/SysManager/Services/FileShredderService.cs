@@ -209,7 +209,10 @@ public sealed partial class FileShredderService
             catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied enumerating {Dir}", dir.FullName); continue; }
             catch (IOException ex) { Log.Debug(ex, "Shredder: I/O error enumerating {Dir}", dir.FullName); continue; }
 
-            foreach (var file in files)
+            // Skip symlink/hardlink files: shredding would overwrite the LINK TARGET
+            // (which may live outside the selected folder), so only real files in the
+            // tree are collected — mirrors the reparse-point skip on directories below.
+            foreach (var file in files.Where(f => (f.Attributes & FileAttributes.ReparsePoint) == 0))
                 results.Add(file.FullName);
 
             DirectoryInfo[] subDirs;

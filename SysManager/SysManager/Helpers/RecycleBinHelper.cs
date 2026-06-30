@@ -26,17 +26,14 @@ public static partial class RecycleBinHelper
     /// </summary>
     public static bool EmptyAllDrives()
     {
-        try
-        {
-            int hr = NativeMethods.SHEmptyRecycleBin(IntPtr.Zero, null, SuppressAllFlags);
-            // S_OK (>= 0) = success, ERROR_NO_MORE_FILES = bin already empty.
-            return hr >= 0 || unchecked((uint)hr) == ErrorNoMoreFiles;
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            Log.Warning("Empty recycle bin failed: {Error}", ex.Message);
-            return false;
-        }
+        // SHEmptyRecycleBin is a LibraryImport returning an HRESULT — it reports failure
+        // through the return code, not an exception, so there is nothing to catch here.
+        int hr = NativeMethods.SHEmptyRecycleBin(IntPtr.Zero, null, SuppressAllFlags);
+        // S_OK (>= 0) = success, ERROR_NO_MORE_FILES = bin already empty.
+        bool ok = hr >= 0 || unchecked((uint)hr) == ErrorNoMoreFiles;
+        if (!ok)
+            Log.Warning("Empty recycle bin failed: HRESULT 0x{Hr:X8}", hr);
+        return ok;
     }
 
     private static partial class NativeMethods

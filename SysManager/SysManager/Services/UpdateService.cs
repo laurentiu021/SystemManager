@@ -234,8 +234,10 @@ public sealed class UpdateService
         }
         catch (OperationCanceledException)
         {
+            // Only clean the partial in-progress temp file. `target` may be a
+            // previously-downloaded, still-valid cached binary — deleting it on a
+            // cancelled re-download would force an avoidable re-download next launch.
             CleanupFile(tempFile);
-            CleanupFile(target);
             return null;
         }
         catch (HttpRequestException ex)

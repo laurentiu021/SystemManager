@@ -38,10 +38,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
 
     [ObservableProperty] private string _sfcStatus = "Idle";
     [ObservableProperty] private string _sfcVerdict = "";
-    [ObservableProperty] private string _sfcVerdictColorHex = "#9AA0A6";
+    [ObservableProperty] private string _sfcVerdictColorHex = StatusColors.Neutral;
     [ObservableProperty] private string _dismStatus = "Idle";
     [ObservableProperty] private string _dismVerdict = "";
-    [ObservableProperty] private string _dismVerdictColorHex = "#9AA0A6";
+    [ObservableProperty] private string _dismVerdictColorHex = StatusColors.Neutral;
 
     [ObservableProperty] private string _sfcEtaText = string.Empty;
     [ObservableProperty] private string _dismEtaText = string.Empty;
@@ -295,7 +295,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         SfcStatus = "Running — can take 5–15 minutes";
         SfcVerdict = "";
-        SfcVerdictColorHex = "#9AA0A6";
+        SfcVerdictColorHex = StatusColors.Neutral;
         SfcEtaText = string.Empty;
         _sfcEta.Reset();
         StatusMessage = "SFC running in background. You can keep using the app.";
@@ -326,9 +326,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
             SfcStatus = exit == 0 ? "Completed" : $"Finished (exit {exit})";
             StatusMessage = verdict;
         }
-        catch (OperationCanceledException) { SfcStatus = "Cancelled."; SfcVerdict = "Scan was cancelled."; SfcVerdictColorHex = "#9AA0A6"; StatusMessage = SfcStatus; }
-        catch (InvalidOperationException ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
-        catch (System.ComponentModel.Win32Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = "#EF4444"; StatusMessage = SfcStatus; }
+        catch (OperationCanceledException) { SfcStatus = "Cancelled."; SfcVerdict = "Scan was cancelled."; SfcVerdictColorHex = StatusColors.Neutral; StatusMessage = SfcStatus; }
+        catch (InvalidOperationException ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = StatusColors.Bad; StatusMessage = SfcStatus; }
+        catch (System.ComponentModel.Win32Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = StatusColors.Bad; StatusMessage = SfcStatus; }
         finally { _runner.LineReceived -= Collect; IsSfcRunning = false; IsProgressIndeterminate = false; SfcEtaText = string.Empty; }
     }
 
@@ -343,24 +343,24 @@ public sealed partial class CleanupViewModel : ViewModelBase
 
         // "did not find any integrity violations"
         if (all.Contains("did not find any integrity violations", StringComparison.OrdinalIgnoreCase))
-            return ("No integrity violations found — your system files are healthy.", "#22C55E");
+            return ("No integrity violations found — your system files are healthy.", StatusColors.Good);
 
         // "found corrupt files and successfully repaired them"
         if (all.Contains("successfully repaired", StringComparison.OrdinalIgnoreCase))
-            return ("Corrupted files were found and successfully repaired.", "#F59E0B");
+            return ("Corrupted files were found and successfully repaired.", StatusColors.Warning);
 
         // "found corrupt files but was unable to fix some of them"
         if (all.Contains("unable to fix", StringComparison.OrdinalIgnoreCase))
-            return ("Corrupted files found but SFC could not repair them. Try running DISM /RestoreHealth first, then SFC again.", "#EF4444");
+            return ("Corrupted files found but SFC could not repair them. Try running DISM /RestoreHealth first, then SFC again.", StatusColors.Bad);
 
         // "could not perform the requested operation"
         if (all.Contains("could not perform", StringComparison.OrdinalIgnoreCase))
-            return ("SFC could not run. Try rebooting into Safe Mode or running DISM first.", "#EF4444");
+            return ("SFC could not run. Try rebooting into Safe Mode or running DISM first.", StatusColors.Bad);
 
         // Fallback based on exit code
         return exitCode == 0
-            ? ("Scan completed successfully.", "#22C55E")
-            : ($"Scan finished with exit code {exitCode}. Check the console output for details.", "#F59E0B");
+            ? ("Scan completed successfully.", StatusColors.Good)
+            : ($"Scan finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning);
     }
 
     [RelayCommand]
@@ -394,7 +394,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         DismStatus = "Running — can take 10–30 minutes";
         DismVerdict = "";
-        DismVerdictColorHex = "#9AA0A6";
+        DismVerdictColorHex = StatusColors.Neutral;
         DismEtaText = string.Empty;
         _dismEta.Reset();
         StatusMessage = "DISM running in background. You can keep using the app.";
@@ -425,9 +425,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
             DismStatus = exit == 0 ? "Completed" : $"Finished (exit {exit})";
             StatusMessage = verdict;
         }
-        catch (OperationCanceledException) { DismStatus = "Cancelled."; DismVerdict = "Repair was cancelled."; DismVerdictColorHex = "#9AA0A6"; StatusMessage = DismStatus; }
-        catch (InvalidOperationException ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
-        catch (System.ComponentModel.Win32Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = "#EF4444"; StatusMessage = DismStatus; }
+        catch (OperationCanceledException) { DismStatus = "Cancelled."; DismVerdict = "Repair was cancelled."; DismVerdictColorHex = StatusColors.Neutral; StatusMessage = DismStatus; }
+        catch (InvalidOperationException ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = StatusColors.Bad; StatusMessage = DismStatus; }
+        catch (System.ComponentModel.Win32Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = StatusColors.Bad; StatusMessage = DismStatus; }
         finally { _runner.LineReceived -= Collect; IsDismRunning = false; IsProgressIndeterminate = false; DismEtaText = string.Empty; }
     }
 
@@ -439,17 +439,17 @@ public sealed partial class CleanupViewModel : ViewModelBase
         var all = string.Join(" ", lines);
 
         if (all.Contains("The restore operation completed successfully", StringComparison.OrdinalIgnoreCase))
-            return ("Component store is healthy — no repairs needed.", "#22C55E");
+            return ("Component store is healthy — no repairs needed.", StatusColors.Good);
 
         if (all.Contains("The component store corruption was repaired", StringComparison.OrdinalIgnoreCase))
-            return ("Component store was corrupted and has been repaired. Run SFC /scannow next.", "#F59E0B");
+            return ("Component store was corrupted and has been repaired. Run SFC /scannow next.", StatusColors.Warning);
 
         if (all.Contains("source files could not be found", StringComparison.OrdinalIgnoreCase))
-            return ("DISM could not find source files for repair. Try connecting to the internet or using a Windows ISO.", "#EF4444");
+            return ("DISM could not find source files for repair. Try connecting to the internet or using a Windows ISO.", StatusColors.Bad);
 
         return exitCode == 0
-            ? ("Repair completed successfully.", "#22C55E")
-            : ($"DISM finished with exit code {exitCode}. Check the console output for details.", "#F59E0B");
+            ? ("Repair completed successfully.", StatusColors.Good)
+            : ($"DISM finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning);
     }
 
     [RelayCommand]

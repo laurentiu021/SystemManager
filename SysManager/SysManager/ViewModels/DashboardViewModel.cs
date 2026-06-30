@@ -859,9 +859,9 @@ public sealed record DriveUsageInfo(string Letter, double UsedGB, double TotalGB
     public string DisplayUsed => $"{UsedGB:F0} / {TotalGB:F0} GB ({Percent:F0}%)";
     public string ColorHex => Percent switch
     {
-        > 90 => "#EF4444",
-        > 75 => "#F59E0B",
-        > 50 => "#3B82F6",
-        _ => "#22C55E"
+        > 90 => StatusColors.Bad,
+        > 75 => StatusColors.Warning,
+        > 50 => StatusColors.Info,
+        _ => StatusColors.Good
     };
 }

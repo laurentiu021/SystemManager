@@ -44,7 +44,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     [ObservableProperty] private int _wheaMemoryErrors;
     [ObservableProperty] private int _memoryDiagnosticResults;
     [ObservableProperty] private string _memoryHealthVerdict = "Click 'Check memory errors' to inspect.";
-    [ObservableProperty] private string _memoryHealthColorHex = "#9AA0A6";
+    [ObservableProperty] private string _memoryHealthColorHex = StatusColors.Neutral;
 
     // BIOS / firmware (read-only); populated on Scan.
     [ObservableProperty] private BiosInfo? _bios;
@@ -201,17 +201,17 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             if (summary.WheaMemoryErrors > 0)
             {
                 MemoryHealthVerdict = $"{summary.WheaMemoryErrors} hardware-error event(s) in the last 30 days. Test your RAM.";
-                MemoryHealthColorHex = "#EF4444";
+                MemoryHealthColorHex = StatusColors.Bad;
             }
             else if (summary.MemoryDiagnosticResults > 0)
             {
                 MemoryHealthVerdict = $"Memory diagnostic has run {summary.MemoryDiagnosticResults} time(s) recently. Check results.";
-                MemoryHealthColorHex = "#F59E0B";
+                MemoryHealthColorHex = StatusColors.Warning;
             }
             else
             {
                 MemoryHealthVerdict = "No memory errors reported in the last 30 days.";
-                MemoryHealthColorHex = "#22C55E";
+                MemoryHealthColorHex = StatusColors.Good;
             }
             StatusMessage = "Memory scan done.";
         }

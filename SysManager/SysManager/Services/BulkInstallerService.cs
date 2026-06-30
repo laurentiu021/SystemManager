@@ -39,6 +39,7 @@ public sealed partial class BulkInstallerService
     /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
     /// underscores, forward slashes, plus signs, and spaces. Max 256 chars.
     /// </summary>
-    [GeneratedRegex(@"^[\w.\-/+ ]{1,256}$")]
+    // \A…\z (absolute anchors): ^…$ would accept a trailing newline ("pkg\n").
+    [GeneratedRegex(@"\A[\w.\-/+ ]{1,256}\z")]
     private static partial Regex PackageIdPattern();
 }

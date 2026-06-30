@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.14] - 2026-06-30
+
+### Security
+- **Input validators that feed a command/registry boundary now reject a trailing newline.** Nine allowlist patterns (winget package IDs, service names, blocked-executable names, Appx package names, environment-variable names, Windows-feature names, event-log provider names, and hostnames) used `^…$` anchors, which in .NET match before a trailing newline — so a value like `pkg\n` slipped through and could smuggle a second line into the command. They now use absolute `\A…\z` anchors. The winget package-ID pattern additionally dropped `\s` (which allowed tabs/newlines mid-string) in favour of a literal space.
+
+### Tests
+- Added injection-rejection negative tests for the winget package-ID validators (`UpgradeAsync`, `UninstallAsync`) and the service-name/start-type validator (`SetStartupTypeAsync`), covering command separators, chaining, substitution, quotes, newlines, and over-length input.
+
 ## [1.51.13] - 2026-06-30
 
 ### Security

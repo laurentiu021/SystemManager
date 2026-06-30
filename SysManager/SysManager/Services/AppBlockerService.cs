@@ -249,6 +249,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
         return blocked;
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"^[A-Za-z0-9_\-. ]+\.exe$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    // \A…\z (absolute anchors): ^…$ would accept a trailing newline after ".exe".
+    [System.Text.RegularExpressions.GeneratedRegex(@"\A[A-Za-z0-9_\-. ]+\.exe\z", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex ExeNamePattern();
 }

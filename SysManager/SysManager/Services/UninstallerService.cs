@@ -68,7 +68,9 @@ public sealed partial class UninstallerService
     /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
     /// underscores, forward slashes, plus signs, and spaces. Max 256 chars.
     /// </summary>
-    [GeneratedRegex(@"^[\w.\-/+ ]{1,256}$")]
+    // \A…\z (absolute anchors): ^…$ would accept a trailing newline ("pkg\n"),
+    // which could smuggle a second line into the winget argument.
+    [GeneratedRegex(@"\A[\w.\-/+ ]{1,256}\z")]
     private static partial Regex PackageIdPattern();
 
     [GeneratedRegex(@"^\s*Name\s+Id\s+Version", RegexOptions.IgnoreCase)]

@@ -19,7 +19,7 @@ public sealed partial class EventLogService
 {
     // Conservative allowlist for Windows event-log provider names:
     // letters, digits, space, dot, dash, underscore. Anything else is rejected.
-    [GeneratedRegex(@"^[A-Za-z0-9 ._-]{1,255}$")]
+    [GeneratedRegex(@"\A[A-Za-z0-9 ._-]{1,255}\z")]
     private static partial Regex ProviderNameRegex();
 
     /// <summary>

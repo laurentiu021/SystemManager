@@ -89,7 +89,11 @@ public sealed partial class WingetService
     /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
     /// underscores, forward slashes, plus signs, and spaces. Max 256 chars.
     /// </summary>
-    [GeneratedRegex(@"^[\w.\-/+\s]{1,256}$")]
+    // \A…\z (absolute anchors) rather than ^…$: ^/$ would let a trailing newline
+    // through ("pkg\n" matches as "pkg"), which could smuggle a second line into the
+    // argument. \z anchors at the true end of input. Also dropped \s (which allowed
+    // tabs/newlines mid-string) in favour of a literal space.
+    [GeneratedRegex(@"\A[\w.\-/+ ]{1,256}\z")]
     private static partial Regex PackageIdPattern();
 
     [GeneratedRegex(@"^\s*Name\s+Id\s+Version\s+Available", RegexOptions.IgnoreCase)]

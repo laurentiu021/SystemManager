@@ -107,4 +107,38 @@ public class ServiceManagerServiceTests
         Assert.Contains("Status", changed);
         Assert.Contains("StartType", changed);
     }
+
+    // ── SetStartupTypeAsync input validation (idx 174 — negative tests) ───────
+    // The validation throws BEFORE sc.exe is ever launched, so a real runner can be
+    // passed safely: these rejection paths never spawn a process.
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("bad;name")]      // command separator
+    [InlineData("name&calc")]     // command chaining
+    [InlineData("name|pipe")]
+    [InlineData("name\"quote")]
+    [InlineData("name\nnewline")]
+    public async Task SetStartupTypeAsync_InvalidServiceName_Throws(string serviceName)
+    {
+        var ps = new PowerShellRunner();
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => ServiceManagerService.SetStartupTypeAsync(serviceName, "demand", ps));
+    }
+
+    [Theory]
+    [InlineData("totally-bogus")]
+    [InlineData("AUTOMATIC")]   // the sc.exe token is "auto", not the .NET name
+    [InlineData("")]
+    [InlineData("enabled")]
+    public async Task SetStartupTypeAsync_InvalidStartType_Throws(string startType)
+    {
+        // Valid service name, invalid start type → rejected before sc.exe is launched.
+        // (We deliberately never call it with a VALID type here — that would spawn
+        // sc.exe and mutate a real service.)
+        var ps = new PowerShellRunner();
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => ServiceManagerService.SetStartupTypeAsync("Winmgmt", startType, ps));
+    }
 }

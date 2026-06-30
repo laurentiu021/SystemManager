@@ -221,6 +221,8 @@ public sealed partial class ServiceManagerService
         catch (UnauthorizedAccessException) { return ""; }
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"^[\w \-.$]+$")]
+    // \A…\z (absolute anchors): ^…$ would accept a trailing newline in the service
+    // name, which is then interpolated into the sc.exe command line.
+    [System.Text.RegularExpressions.GeneratedRegex(@"\A[\w \-.$]+\z")]
     private static partial System.Text.RegularExpressions.Regex ServiceNamePattern();
 }

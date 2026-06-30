@@ -32,7 +32,11 @@ public sealed partial class HostsFileService
         BackupPath = HostsPath + ".bak";
     }
 
-    [GeneratedRegex(@"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$")]
+    // One or more DNS labels separated by single dots. Each label is 1–63 chars,
+    // alphanumeric with internal hyphens only (no leading/trailing hyphen). This
+    // rejects consecutive dots ("a..b"), a leading/trailing dot, and over-long labels
+    // that the previous looser pattern accepted.
+    [GeneratedRegex(@"^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$")]
     private static partial Regex HostnameRegex();
 
     /// <summary>
@@ -165,7 +169,31 @@ public sealed partial class HostsFileService
     public bool RestoreBackup()
     {
         if (!File.Exists(BackupPath)) return false;
-        File.Copy(BackupPath, HostsPath, overwrite: true);
+
+        // Preserve the hardened hosts-file DACL the same way SaveHosts does: stage the
+        // backup content in a temp file then File.Replace it in, which copies the
+        // existing target's security descriptor onto the replacement. A plain
+        // File.Copy(overwrite:true) would relink a new inode that inherits only the
+        // directory's default ACL, silently weakening the file.
+        var tempPath = HostsPath + ".sysmanager.restore.tmp";
+        try
+        {
+            File.Copy(BackupPath, tempPath, overwrite: true);
+
+            if (File.Exists(HostsPath))
+                File.Replace(tempPath, HostsPath, destinationBackupFileName: null);
+            else
+                File.Move(tempPath, HostsPath, overwrite: false);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); }
+                catch (IOException) { /* best-effort temp cleanup */ }
+                catch (UnauthorizedAccessException) { /* best-effort temp cleanup */ }
+            }
+        }
         return true;
     }
 

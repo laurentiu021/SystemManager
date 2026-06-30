@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.12] - 2026-06-30
+
+### Fixed
+- **File shredder no longer follows symlinked files out of the selected folder.** When shredding a folder, the file walk skipped reparse-point directories but still included reparse-point files, so a symlink/hardlink file could cause its link target — possibly outside the folder — to be overwritten. Symlinked files are now skipped, matching the existing directory behaviour.
+- **Restoring the hosts file backup preserves the file's security descriptor.** Restore used a plain overwrite-copy, which relinks a new file that inherits only the folder's default permissions; it now replaces the file in place (like Save does), keeping the hardened hosts-file ACL.
+- **Hostname validation for new hosts entries is stricter.** The validator accepted malformed names such as consecutive dots (`a..b`), a leading/trailing dot, and over-long labels. It now enforces proper DNS label rules (1–63 chars per label, no consecutive or edge dots).
+
 ## [1.51.11] - 2026-06-30
 
 ### Fixed

@@ -2,7 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Text.RegularExpressions;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -10,7 +10,7 @@ namespace SysManager.Services;
 /// <summary>
 /// Wraps winget.exe to install packages by their winget ID.
 /// </summary>
-public sealed partial class BulkInstallerService
+public sealed class BulkInstallerService
 {
     private readonly IPowerShellRunner _runner;
 
@@ -27,19 +27,11 @@ public sealed partial class BulkInstallerService
     /// </summary>
     public async Task<int> InstallAsync(string wingetId, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(wingetId)
-            || !PackageIdPattern().IsMatch(wingetId))
+        // Validate wingetId before interpolating it into the winget command line.
+        if (!WingetId.IsValid(wingetId))
             throw new ArgumentException("Invalid package ID.", nameof(wingetId));
 
         var args = $"install --id \"{wingetId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity";
         return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
     }
-
-    /// <summary>
-    /// Matches valid winget package IDs: alphanumeric, dots, hyphens,
-    /// underscores, forward slashes, plus signs, and spaces. Max 256 chars.
-    /// </summary>
-    // \A…\z (absolute anchors): ^…$ would accept a trailing newline ("pkg\n").
-    [GeneratedRegex(@"\A[\w.\-/+ ]{1,256}\z")]
-    private static partial Regex PackageIdPattern();
 }

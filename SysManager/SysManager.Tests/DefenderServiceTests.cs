@@ -51,6 +51,24 @@ public class DefenderServiceTests
     public void ClampTri_KeepsZeroToTwo(int input, int expected)
         => Assert.Equal(expected, DefenderService.ClampTri(input));
 
+    // ── Exclusion-path validation at the service boundary (idx 151) ───────────
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("relative\\path")]   // not rooted
+    [InlineData(@"C:\Games\*")]       // wildcard
+    [InlineData(@"C:\Games\?")]       // wildcard
+    public void IsValidExclusionPath_RejectsBadInput(string? path)
+        => Assert.False(DefenderService.IsValidExclusionPath(path!));
+
+    [Theory]
+    [InlineData(@"C:\Games")]
+    [InlineData(@"D:\Steam\steamapps")]
+    public void IsValidExclusionPath_AcceptsRootedNonWildcardPath(string path)
+        => Assert.True(DefenderService.IsValidExclusionPath(path));
+
     [Fact]
     public void ParseStatus_NormalizesInvertedRealtimeBoolean()
     {

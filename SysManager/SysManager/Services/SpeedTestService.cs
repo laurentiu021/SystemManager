@@ -423,16 +423,34 @@ public sealed class SpeedTestService
         try
         {
 #pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete — no direct replacement for Authenticode verification
-            var cert = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
+            var signer = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
 #pragma warning restore SYSLIB0057
-            if (cert is null || !cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
+            using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(signer);
+
+            if (!cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
             {
-                Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert?.Subject ?? "none");
+                Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert.Subject);
                 TryDeleteExe(exe);
                 throw new InvalidOperationException(
-                    $"Ookla speedtest.exe failed Authenticode verification (subject: {cert?.Subject ?? "none"}). Binary deleted for security.");
+                    $"Ookla speedtest.exe failed Authenticode verification (subject: {cert.Subject}). Binary deleted for security.");
             }
-            Log.Information("Ookla speedtest.exe Authenticode verified: {Subject}", cert.Subject);
+
+            // Subject alone is forgeable (anyone can issue a self-signed "Ookla" cert),
+            // so also build and validate the full certificate chain to a trusted root,
+            // with online revocation. Fail closed if the chain does not validate.
+            using var chain = new System.Security.Cryptography.X509Certificates.X509Chain();
+            chain.ChainPolicy.RevocationMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.Online;
+            chain.ChainPolicy.RevocationFlag = System.Security.Cryptography.X509Certificates.X509RevocationFlag.ExcludeRoot;
+            chain.ChainPolicy.VerificationFlags = System.Security.Cryptography.X509Certificates.X509VerificationFlags.NoFlag;
+            if (!chain.Build(cert))
+            {
+                var statuses = string.Join(", ", chain.ChainStatus.Select(s => s.Status.ToString()));
+                Log.Warning("Ookla speedtest.exe certificate chain did not validate: {Status}", statuses);
+                TryDeleteExe(exe);
+                throw new InvalidOperationException(
+                    $"Ookla speedtest.exe certificate chain failed validation ({statuses}). Binary deleted for security.");
+            }
+            Log.Information("Ookla speedtest.exe Authenticode chain verified: {Subject}", cert.Subject);
         }
         catch (System.Security.Cryptography.CryptographicException ex)
         {

@@ -4,6 +4,7 @@
 
 using System.Buffers;
 using System.Diagnostics.Eventing.Reader;
+using System.Text.RegularExpressions;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -14,8 +15,13 @@ namespace SysManager.Services;
 /// FriendlyEventEntry model. Filtering is done with XPath to keep the OS-side
 /// query fast and avoid pulling millions of rows into memory.
 /// </summary>
-public sealed class EventLogService
+public sealed partial class EventLogService
 {
+    // Conservative allowlist for Windows event-log provider names:
+    // letters, digits, space, dot, dash, underscore. Anything else is rejected.
+    [GeneratedRegex(@"^[A-Za-z0-9 ._-]{1,255}$")]
+    private static partial Regex ProviderNameRegex();
+
     /// <summary>
     /// Queries a single log. Security requires admin; we silently skip on
     /// UnauthorizedAccessException so the rest of the dashboard still works.
@@ -157,22 +163,13 @@ public sealed class EventLogService
 
         if (!string.IsNullOrWhiteSpace(opt.ProviderName))
         {
-            // SEC-003: Strip XPath metacharacters to prevent injection.
-            var safe = opt.ProviderName
-                .Replace("'", "")
-                .Replace("\"", "")
-                .Replace("[", "")
-                .Replace("]", "")
-                .Replace("/", "")
-                .Replace("\\", "")
-                .Replace("|", "")
-                .Replace("(", "")
-                .Replace(")", "")
-                .Replace("@", "")
-                .Replace("*", "")
-                .Replace("<", "")
-                .Replace(">", "");
-            clauses.Add($"Provider[@Name='{safe}']");
+            // SEC-003: Allowlist rather than strip. A real Windows provider name is
+            // letters/digits/dot/dash/underscore plus spaces. If it matches, use it
+            // verbatim; if not, skip the provider clause entirely instead of silently
+            // deleting metacharacters — which could mangle a legitimate name into a
+            // different, wrong filter that quietly returns zero rows.
+            if (ProviderNameRegex().IsMatch(opt.ProviderName))
+                clauses.Add($"Provider[@Name='{opt.ProviderName}']");
         }
 
         if (opt.EventId.HasValue)

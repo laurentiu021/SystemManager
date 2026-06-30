@@ -90,7 +90,25 @@ public sealed class DefenderService
 
     /// <summary>Add a folder exclusion (additive — never replaces the array). Verifies.</summary>
     public Task<DefenderStatus> AddExclusionPathAsync(string path, CancellationToken ct = default)
-        => ApplyAndVerifyAsync("Add-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
+    {
+        // Trust-boundary validation at the service (the UI validates too, but the service
+        // is public): reject empty, non-rooted, and wildcard paths so an over-broad
+        // exclusion ("*", "C:\?") can never weaken Defender, even via a non-UI caller.
+        if (!IsValidExclusionPath(path))
+            throw new ArgumentException("Exclusion path must be a rooted path without wildcards.", nameof(path));
+        return ApplyAndVerifyAsync("Add-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
+    }
+
+    /// <summary>
+    /// A valid exclusion path is non-empty, rooted, free of wildcards, and within the
+    /// Win32 path length limit. Existence is intentionally NOT required here — the path
+    /// may legitimately not exist yet on the service boundary; the UI checks existence.
+    /// </summary>
+    internal static bool IsValidExclusionPath(string path)
+        => !string.IsNullOrWhiteSpace(path)
+           && System.IO.Path.IsPathRooted(path)
+           && !path.Contains('*') && !path.Contains('?')
+           && path.Length <= 260;
 
     /// <summary>Remove a folder exclusion. Verifies.</summary>
     public Task<DefenderStatus> RemoveExclusionPathAsync(string path, CancellationToken ct = default)

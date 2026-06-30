@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.13] - 2026-06-30
+
+### Security
+- **Settings Watchdog restore is now allowlisted to its own catalog.** The restore path verified the hive but not the full setting; it now only ever writes a setting present in the watchdog's curated catalog (matched by exact path and value name), so it can never be repurposed to write an arbitrary registry key.
+- **Defender exclusion paths are validated at the service boundary.** Adding a scan exclusion now rejects empty, non-rooted, and wildcard (`*`/`?`) paths at the service itself (not just the UI), so an over-broad exclusion can't weaken Defender via any caller.
+- **The downloaded Ookla speed-test CLI now has its full certificate chain validated.** Verification previously checked only that the Authenticode subject contained "Ookla"; it now also builds and validates the certificate chain to a trusted root with online revocation, failing closed (and deleting the binary) if the chain is not valid.
+- **Event-log provider filtering uses an allowlist instead of character stripping.** A provider name with unexpected characters is now rejected outright rather than silently stripped (which could mangle a legitimate name into a different, wrong filter); injection remains blocked.
+- **The single-instance named pipe is restricted to the current user.** The activation pipe is now created with an explicit ACL granting only the current user connect rights, instead of relying on the default permissions.
+
 ## [1.51.12] - 2026-06-30
 
 ### Fixed

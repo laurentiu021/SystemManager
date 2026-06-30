@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.11] - 2026-06-30
+
+### Fixed
+- **A native string buffer was leaked on every Known-Folder lookup.** The Downloads/Documents/Desktop/Pictures/Music/Videos path resolver marshalled the Win32 result as a managed string but never freed the underlying COM-allocated buffer; it now takes the raw pointer and frees it, so repeated lookups (cleanup scans, etc.) no longer leak memory.
+- **Two power-plan changes could corrupt a concurrent power-query's output.** The power-plan/processor-state/hibernation writers shared the same process runner as the readers that parse `powercfg` output, but ran without the reader's serialization gate; a write running during a read could interleave the output stream. The writers now take the same gate.
+- **Listing installed apps could drop or corrupt a line under a thread race.** The winget-list output collector used a plain list that both the stdout and stderr reader threads wrote to concurrently; it now uses a thread-safe queue, matching the upgrade-list path.
+
 ## [1.51.10] - 2026-06-30
 
 ### Fixed

@@ -230,7 +230,15 @@ public sealed partial class PerformanceService : IDisposable
     /// <summary>Activate a power plan by GUID.</summary>
     public async Task SetActivePlanAsync(string guid, CancellationToken ct = default)
     {
-        await _ps.RunProcessAsync("powercfg.exe", $"/setactive {guid}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+        // Serialize on the same gate the readers use: they own the shared
+        // _ps.LineReceived while parsing, and a concurrent powercfg call on the
+        // same runner would interleave their output stream.
+        await _psGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _ps.RunProcessAsync("powercfg.exe", $"/setactive {guid}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+        }
+        finally { _psGate.Release(); }
     }
 
     /// <summary>
@@ -528,11 +536,17 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     public async Task SetProcessorMinStateAsync(int percent, CancellationToken ct = default)
     {
-        await _ps.RunProcessAsync("powercfg.exe",
-            $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
-        await _ps.RunProcessAsync("powercfg.exe",
-            $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
-        await _ps.RunProcessAsync("powercfg.exe", "/setactive SCHEME_CURRENT", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+        // Serialize on the shared gate — see SetActivePlanAsync.
+        await _psGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _ps.RunProcessAsync("powercfg.exe",
+                $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+            await _ps.RunProcessAsync("powercfg.exe",
+                $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+            await _ps.RunProcessAsync("powercfg.exe", "/setactive SCHEME_CURRENT", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+        }
+        finally { _psGate.Release(); }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -608,7 +622,13 @@ public sealed partial class PerformanceService : IDisposable
     public async Task SetHibernationAsync(bool enabled, CancellationToken ct = default)
     {
         var arg = enabled ? "/hibernate on" : "/hibernate off";
-        await _ps.RunProcessAsync("powercfg.exe", arg, ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+        // Serialize on the shared gate — see SetActivePlanAsync.
+        await _psGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _ps.RunProcessAsync("powercfg.exe", arg, ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+        }
+        finally { _psGate.Release(); }
     }
 
     // ═══════════════════════════════════════════════════════════════

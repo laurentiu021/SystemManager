@@ -118,10 +118,14 @@ public class DiskHealthReportEdgeCaseTests
     }
 
     [Fact]
-    public void HealthPercentColorHex_NullHealth_Red()
+    public void HealthPercentColorHex_NullHealth_IsNeutralGrey()
     {
+        // When no SMART data is available HealthPercent is null; the swatch must show
+        // the neutral "unknown" grey, not the failing red — consistent with
+        // TemperatureColorHex's null arm below.
         var report = new DiskHealthReport { HealthStatus = "SomethingUnknown" };
-        Assert.Equal("#EF4444", report.HealthPercentColorHex);
+        Assert.Null(report.HealthPercent);
+        Assert.Equal("#9AA0A6", report.HealthPercentColorHex);
     }
 
     [Fact]

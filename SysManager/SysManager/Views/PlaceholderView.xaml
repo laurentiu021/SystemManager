@@ -30,7 +30,7 @@
             <!-- Issue reference -->
             <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
                        HorizontalAlignment="Center" Margin="0,12,0,0">
-                <Run Text="Tracked in issue #"/><Run Text="{Binding IssueNumber, Mode=OneTime}"/>
+                <Run Text="Tracked in issue "/><Run Text="{Binding IssueNumber, Mode=OneTime}"/>
             </TextBlock>
         </StackPanel>
     </Grid>

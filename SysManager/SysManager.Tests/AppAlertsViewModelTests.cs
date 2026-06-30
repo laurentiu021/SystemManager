@@ -47,6 +47,33 @@ public class AppAlertsViewModelTests
     }
 
     [Fact]
+    public async Task RefreshInstalledApps_WhenNotMonitoring_LeavesBusyOff()
+    {
+        using var vm = new AppAlertsViewModel(new Services.AppAlertService());
+
+        await vm.RefreshInstalledAppsCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsMonitoring);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task RefreshInstalledApps_WhileMonitoring_KeepsBusyInSyncWithMonitoring()
+    {
+        // Regression (idx 235): a manual refresh must not switch off the busy/monitoring
+        // affordance while monitoring is active — IsBusy has to track IsMonitoring.
+        using var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        vm.StartMonitoringCommand.Execute(null);
+        Assert.True(vm.IsMonitoring);
+        Assert.True(vm.IsBusy);
+
+        await vm.RefreshInstalledAppsCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsMonitoring);
+        Assert.True(vm.IsBusy); // was incorrectly forced to false before the fix
+    }
+
+    [Fact]
     public void AppInstallEntry_DefaultValues()
     {
         var entry = new AppInstallEntry();

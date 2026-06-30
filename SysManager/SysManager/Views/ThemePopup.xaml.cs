@@ -217,23 +217,41 @@ public partial class ThemePopup : UserControl
 
     private void ApplyCustomFromInputs()
     {
+        // Parse each field independently so one invalid hex doesn't discard the
+        // other three valid edits. An unparseable field keeps its last-good colour
+        // (from its preview swatch) and is flagged visibly instead of failing silently.
+        var accent = ResolveHex(CustomAccentHex, CustomAccentPreview);
+        var bg = ResolveHex(CustomBgHex, CustomBgPreview);
+        var surface = ResolveHex(CustomSurfaceHex, CustomSurfacePreview);
+        var text = ResolveHex(CustomTextHex, CustomTextPreview);
+
+        CustomAccentPreview.Background = new SolidColorBrush(accent);
+        CustomBgPreview.Background = new SolidColorBrush(bg);
+        CustomSurfacePreview.Background = new SolidColorBrush(surface);
+        CustomTextPreview.Background = new SolidColorBrush(text);
+
+        ThemeService.Instance.SetCustom(accent, bg, surface, text);
+    }
+
+    /// <summary>
+    /// Parses a hex TextBox; on success clears the invalid flag and returns the colour,
+    /// on failure flags the box (red text + tooltip) and returns the swatch's current colour.
+    /// </summary>
+    private static Color ResolveHex(TextBox box, Border swatch)
+    {
         try
         {
-            var accent = (Color)ColorConverter.ConvertFromString(CustomAccentHex.Text);
-            var bg = (Color)ColorConverter.ConvertFromString(CustomBgHex.Text);
-            var surface = (Color)ColorConverter.ConvertFromString(CustomSurfaceHex.Text);
-            var text = (Color)ColorConverter.ConvertFromString(CustomTextHex.Text);
-
-            CustomAccentPreview.Background = new SolidColorBrush(accent);
-            CustomBgPreview.Background = new SolidColorBrush(bg);
-            CustomSurfacePreview.Background = new SolidColorBrush(surface);
-            CustomTextPreview.Background = new SolidColorBrush(text);
-
-            ThemeService.Instance.SetCustom(accent, bg, surface, text);
+            var color = (Color)ColorConverter.ConvertFromString(box.Text);
+            box.ClearValue(ForegroundProperty);
+            box.ClearValue(ToolTipProperty);
+            return color;
         }
         catch (FormatException ex)
         {
-            Serilog.Log.Debug(ex, "Theme custom hex parse failed");
+            Serilog.Log.Debug(ex, "Theme custom hex parse failed for {Field}", box.Tag);
+            box.Foreground = Brushes.IndianRed;
+            box.ToolTip = "Invalid colour — use a hex value like #1E2530.";
+            return (swatch.Background as SolidColorBrush)?.Color ?? Colors.Gray;
         }
     }
 }

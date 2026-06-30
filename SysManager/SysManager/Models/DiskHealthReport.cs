@@ -95,6 +95,7 @@ public sealed partial class DiskHealthReport : ObservableObject
     /// <summary>Color hex for the health percentage gauge.</summary>
     public string HealthPercentColorHex => HealthPercent switch
     {
+        null => "#9AA0A6",
         >= 80 => "#22C55E",
         >= 50 => "#F59E0B",
         >= 20 => "#F87171",

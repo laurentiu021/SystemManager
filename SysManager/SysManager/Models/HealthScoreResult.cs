@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -16,9 +18,9 @@ public sealed class HealthScoreResult
     /// <summary>Color hex for the gauge arc.</summary>
     public string ColorHex => Score switch
     {
-        >= 80 => "#22C55E",  // green
-        >= 50 => "#F59E0B",  // amber
-        _ => "#EF4444"       // red
+        >= 80 => StatusColors.Good,  // green
+        >= 50 => StatusColors.Warning,  // amber
+        _ => StatusColors.Bad       // red
     };
 
     /// <summary>Human-readable label for the score.</summary>
@@ -50,5 +52,5 @@ public sealed class HealthRecommendation
     public required string Severity { get; init; }  // "warning" or "critical"
 
     public string IconGlyph => Severity == "critical" ? "\uE783" : "\uE7BA";
-    public string ColorHex => Severity == "critical" ? "#EF4444" : "#F59E0B";
+    public string ColorHex => Severity == "critical" ? StatusColors.Bad : StatusColors.Warning;
 }

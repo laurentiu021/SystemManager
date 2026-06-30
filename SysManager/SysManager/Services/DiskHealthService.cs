@@ -6,6 +6,8 @@ using System.Management;
 using Serilog;
 using SysManager.Models;
 
+using SysManager.Helpers;
+
 namespace SysManager.Services;
 
 /// <summary>
@@ -136,13 +138,13 @@ public sealed class DiskHealthService
         if (r.HealthStatus == "Unhealthy")
         {
             r.Verdict = "Drive is failing — back up now and replace it.";
-            r.VerdictColorHex = "#EF4444";
+            r.VerdictColorHex = StatusColors.Bad;
             return;
         }
         if (r.HealthStatus == "Warning")
         {
             r.Verdict = "Drive is warning of problems. Back up soon.";
-            r.VerdictColorHex = "#F59E0B";
+            r.VerdictColorHex = StatusColors.Warning;
             return;
         }
 
@@ -150,19 +152,19 @@ public sealed class DiskHealthService
         if (r.WearPercent is >= 90)
         {
             r.Verdict = $"SSD {r.WearPercent}% worn out — plan a replacement.";
-            r.VerdictColorHex = "#F59E0B";
+            r.VerdictColorHex = StatusColors.Warning;
             return;
         }
         if (r.TemperatureC is >= 70)
         {
             r.Verdict = $"Running hot ({r.TemperatureC:F0} °C). Check cooling / airflow.";
-            r.VerdictColorHex = "#F59E0B";
+            r.VerdictColorHex = StatusColors.Warning;
             return;
         }
         if ((r.ReadErrors ?? 0) > 0 || (r.WriteErrors ?? 0) > 0)
         {
             r.Verdict = $"{(r.ReadErrors ?? 0) + (r.WriteErrors ?? 0)} I/O errors logged. Monitor closely.";
-            r.VerdictColorHex = "#F59E0B";
+            r.VerdictColorHex = StatusColors.Warning;
             return;
         }
 
@@ -174,7 +176,7 @@ public sealed class DiskHealthService
         r.Verdict = bits.Count > 0
             ? "Healthy — " + string.Join(" · ", bits)
             : "Healthy.";
-        r.VerdictColorHex = "#22C55E";
+        r.VerdictColorHex = StatusColors.Good;
     }
 
     // ---------- helpers ----------

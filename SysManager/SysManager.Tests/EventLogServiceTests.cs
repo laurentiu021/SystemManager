@@ -99,12 +99,26 @@ public class EventLogServiceTests
     }
 
     [Fact]
-    public void BuildXPath_ProviderWithQuotes_SanitizesInput()
+    public void BuildXPath_ProviderWithMetacharacters_IsRejectedNotMangled()
     {
+        // idx 214: a provider name containing XPath metacharacters is now REJECTED via
+        // an allowlist (the clause is dropped) rather than silently stripped into a
+        // different name. Injection is still impossible AND we never build a wrong filter.
         var opt = new EventLogQueryOptions { ProviderName = "test'injection" };
         var result = InvokeBuildXPath(opt);
-        Assert.DoesNotContain("'injection", result);
-        Assert.Contains("testinjection", result);
+        Assert.DoesNotContain("'injection", result);   // no injection
+        Assert.DoesNotContain("Provider", result);      // clause dropped, not mangled-in
+        Assert.DoesNotContain("testinjection", result); // not silently rewritten
+    }
+
+    [Fact]
+    public void BuildXPath_ProviderWithSpacesAndDots_IsAccepted()
+    {
+        // Real provider names like "Microsoft-Windows-Kernel-Power" or "Service Control
+        // Manager" must pass the allowlist verbatim.
+        var opt = new EventLogQueryOptions { ProviderName = "Microsoft-Windows-Kernel-Power" };
+        var result = InvokeBuildXPath(opt);
+        Assert.Contains("Provider[@Name='Microsoft-Windows-Kernel-Power']", result);
     }
 
     // ---------- MapLevel ----------

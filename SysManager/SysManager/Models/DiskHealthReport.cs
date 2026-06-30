@@ -3,6 +3,7 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Helpers;
 
 namespace SysManager.Models;
 
@@ -52,7 +53,7 @@ public sealed partial class DiskHealthReport : ObservableObject
     private long? _writeErrors;
     [ObservableProperty] private long? _startStopCount;
     [ObservableProperty] private string _verdict = "";         // plain-English summary
-    [ObservableProperty] private string _verdictColorHex = "#9AA0A6";
+    [ObservableProperty] private string _verdictColorHex = StatusColors.Neutral;
 
     /// <summary>
     /// Overall health score 0–100 (100 = perfect). Computed from wear, temperature,
@@ -95,21 +96,21 @@ public sealed partial class DiskHealthReport : ObservableObject
     /// <summary>Color hex for the health percentage gauge.</summary>
     public string HealthPercentColorHex => HealthPercent switch
     {
-        null => "#9AA0A6",
-        >= 80 => "#22C55E",
-        >= 50 => "#F59E0B",
-        >= 20 => "#F87171",
-        _ => "#EF4444"
+        null => StatusColors.Neutral,
+        >= 80 => StatusColors.Good,
+        >= 50 => StatusColors.Warning,
+        >= 20 => StatusColors.Elevated,
+        _ => StatusColors.Bad
     };
 
     /// <summary>Color hex for the temperature reading.</summary>
     public string TemperatureColorHex => TemperatureC switch
     {
-        null => "#9AA0A6",
-        <= 40 => "#22C55E",
-        <= 50 => "#F59E0B",
-        <= 60 => "#F87171",
-        _ => "#EF4444"
+        null => StatusColors.Neutral,
+        <= 40 => StatusColors.Good,
+        <= 50 => StatusColors.Warning,
+        <= 60 => StatusColors.Elevated,
+        _ => StatusColors.Bad
     };
 
     /// <summary>Temperature as a 0–100 gauge value (0 °C = 0, 80 °C = 100).</summary>
@@ -125,11 +126,11 @@ public sealed partial class DiskHealthReport : ObservableObject
     /// <summary>Color hex for the wear gauge.</summary>
     public string WearColorHex => WearPercent switch
     {
-        null => "#9AA0A6",
-        <= 20 => "#22C55E",
-        <= 50 => "#F59E0B",
-        <= 80 => "#F87171",
-        _ => "#EF4444"
+        null => StatusColors.Neutral,
+        <= 20 => StatusColors.Good,
+        <= 50 => StatusColors.Warning,
+        <= 80 => StatusColors.Elevated,
+        _ => StatusColors.Bad
     };
 
     /// <summary>Friendly power-on time display.</summary>

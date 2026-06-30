@@ -62,9 +62,9 @@ public sealed class TuneUpResult
 
     public string OverallColorHex => WarningCount switch
     {
-        0 => "#22C55E",
-        <= 2 => "#F59E0B",
-        _ => "#EF4444"
+        0 => StatusColors.Good,
+        <= 2 => StatusColors.Warning,
+        _ => StatusColors.Bad
     };
 }
 

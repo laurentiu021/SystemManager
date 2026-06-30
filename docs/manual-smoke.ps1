@@ -32,7 +32,8 @@ $navIds = @(
     'nav-system-health',
     'nav-cleanup',
     'nav-deep-cleanup',
-    'nav-network',
+    'nav-ping',
+    'nav-network-repair',
     'nav-drivers',
     'nav-logs',
     'nav-about'

@@ -158,6 +158,10 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 }
                 catch (OperationCanceledException) { app.Status = "Cancelled"; break; }
                 catch (InvalidOperationException ex) { app.Status = $"Error: {ex.Message}"; }
+                // A failed uninstaller launch (missing/blocked exe) must not abort the
+                // whole batch — record it on the row and continue with the next app.
+                catch (System.ComponentModel.Win32Exception ex) { app.Status = $"Error: {ex.Message}"; }
+                catch (System.IO.IOException ex) { app.Status = $"Error: {ex.Message}"; }
                 done++;
             }
 

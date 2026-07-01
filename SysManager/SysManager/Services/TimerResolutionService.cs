@@ -27,9 +27,6 @@ public sealed partial class TimerResolutionService : ITimerResolutionService
 {
     private bool _enabledByApp;
 
-    /// <summary>0.5 ms expressed in 100-nanosecond units — the common gaming target.</summary>
-    public const uint HalfMilliInHundredNs = 5000;
-
     /// <summary>Read the achievable range and the resolution currently in effect.</summary>
     public TimerResolutionStatus Query()
     {
@@ -51,17 +48,17 @@ public sealed partial class TimerResolutionService : ITimerResolutionService
     }
 
     /// <summary>
-    /// Request the finest achievable timer resolution (clamped to the device's
-    /// reported minimum). Returns the status after re-querying the effective value.
+    /// Request the finest achievable timer resolution reported by the device.
+    /// Returns the status after re-querying the effective value.
     /// </summary>
     public TimerResolutionStatus Enable()
     {
         var status = Query();
         if (status.FinestHundredNs == 0) return status; // query failed; nothing to set
 
-        // Never request finer than the hardware allows.
-        uint target = Math.Max(status.FinestHundredNs, HalfMilliInHundredNs);
-        if (target > status.FinestHundredNs) target = status.FinestHundredNs;
+        // FinestHundredNs is the smallest (finest) interval the hardware reports, so
+        // it is already the finest we can legitimately request.
+        uint target = status.FinestHundredNs;
 
         try
         {

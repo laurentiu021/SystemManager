@@ -186,7 +186,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             var speedTest = new SpeedTestService();
             var netRepair = new NetworkRepairService(runner);
 
-            Dashboard = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth));
+            Dashboard = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget);
             AppUpdates = new AppUpdatesViewModel(winget);
             WindowsUpdate = new WindowsUpdateViewModel(runner, new WindowsUpdateService(), new WindowsUpdatePolicyService());
             SystemHealth = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService());

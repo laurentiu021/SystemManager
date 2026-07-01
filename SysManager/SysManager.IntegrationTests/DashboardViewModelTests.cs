@@ -18,7 +18,8 @@ public class DashboardViewModelTests
             sys,
             new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
-            new TemperatureService(diskHealth, skipHardwareInit: true));
+            new TemperatureService(diskHealth, skipHardwareInit: true),
+            new WingetService(new PowerShellRunner()));
     }
 
     [Fact]

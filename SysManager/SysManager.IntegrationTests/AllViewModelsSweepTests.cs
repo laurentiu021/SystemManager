@@ -16,7 +16,7 @@ namespace SysManager.IntegrationTests;
 [Collection("Network")]
 public class AllViewModelsSweepTests
 {
-    [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true)));
+    [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner())));
     [Fact] public void AppUpdates_Constructs() => Assert.NotNull(new AppUpdatesViewModel(new WingetService(new PowerShellRunner())));
     [Fact] public void WindowsUpdate_Constructs() => Assert.NotNull(new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService()));
     [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService()));
@@ -29,7 +29,7 @@ public class AllViewModelsSweepTests
 
     [Fact]
     public void Dashboard_HasNonEmptySummaryOrEmpty()
-        => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true)));
+        => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner())));
 
     [Fact]
     public void AppUpdates_HasCollections()

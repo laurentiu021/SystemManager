@@ -4,6 +4,7 @@
 
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Text.RegularExpressions;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -325,54 +326,47 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         var output = proc.StandardOutput.ReadToEnd();
         proc.WaitForExit(30_000);
 
-        // Parse the tabular output from winget search.
-        // The output has a header line with column names, a separator line of dashes,
-        // then data rows. Columns are: Name, Id, Version, [Match], Source
-        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        return ParseSearchResults(output);
+    }
 
-        // Find the separator line (all dashes and spaces)
-        var separatorIndex = -1;
-        for (var i = 0; i < lines.Length; i++)
+    /// <summary>
+    /// Parses <c>winget search</c> tabular output into installable-app rows. Pure and
+    /// process-free so it can be unit-tested with captured payloads. Routes through the
+    /// shared <see cref="WingetTableParser"/> instead of re-implementing column slicing,
+    /// so a header-layout change (wide/CJK names, extra columns) is handled in one place.
+    /// </summary>
+    internal static List<InstallableApp> ParseSearchResults(string output)
+    {
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var rows = WingetTableParser.Parse(lines, SearchHeaderPattern(), SearchSummaryPattern());
+
+        List<InstallableApp> results = [];
+        foreach (var row in rows)
         {
-            if (lines[i].TrimEnd().All(c => c == '-' || c == ' ') && lines[i].Contains("--"))
-            {
-                separatorIndex = i;
-                break;
-            }
-        }
-
-        if (separatorIndex < 1 || separatorIndex + 1 >= lines.Length) return results;
-
-        // Determine column positions from the header line
-        var header = lines[separatorIndex - 1];
-        var idStart = header.IndexOf("Id", StringComparison.Ordinal);
-        var versionStart = header.IndexOf("Version", StringComparison.Ordinal);
-
-        if (idStart < 0 || versionStart < 0) return results;
-
-        // Parse data rows
-        for (var i = separatorIndex + 1; i < lines.Length && results.Count < 30; i++)
-        {
-            var line = lines[i];
-            if (line.Length < versionStart) continue;
-
-            var name = line[..idStart].TrimEnd();
-            var id = line[idStart..versionStart].TrimEnd();
-
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(id)) continue;
+            if (results.Count >= 30) break;
+            if (string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Id)) continue;
 
             results.Add(new InstallableApp
             {
-                Name = name,
-                WingetId = id,
+                Name = row.Name,
+                WingetId = row.Id,
                 Category = "Custom",
-                Description = $"winget: {id}",
+                Description = $"winget: {row.Id}",
                 IconGlyph = GlyphForCategory("Custom"),
             });
         }
 
         return results;
     }
+
+    // winget search header: "Name  Id  Version  [Match]  Source".
+    [GeneratedRegex(@"^\s*Name\s+Id\s+Version", RegexOptions.IgnoreCase)]
+    private static partial Regex SearchHeaderPattern();
+
+    // winget search has no numeric footer, so this pattern is intentionally
+    // unmatchable — parsing runs to the end of the captured lines.
+    [GeneratedRegex(@"(?!)")]
+    private static partial Regex SearchSummaryPattern();
 
     private void ApplyFilter()
     {

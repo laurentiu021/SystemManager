@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.2] - 2026-06-30
+
+### Fixed
+- **App-update count on the Dashboard is now accurate.** The dashboard alert used a fragile "count non-blank winget lines minus two" heuristic that mis-counted whenever winget's header/footer layout shifted. It now reuses the same parsed upgrade list the App Updates tab shows (rows that actually have an available version), so the two surfaces always agree.
+- **Bulk Installer search results parse reliably for wide or non-Latin app names.** The search parser previously used fixed character offsets that mis-sliced rows containing wide/CJK characters. It now routes through the shared winget table parser (the same one the upgrade list uses), so column detection is handled in one place.
+
 ## [1.52.1] - 2026-06-30
 
 ### Added

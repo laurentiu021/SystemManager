@@ -19,6 +19,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private readonly TuneUpService _tuneUp;
     private readonly HealthScoreService _healthScore;
     private readonly TemperatureService _temps;
+    private readonly WingetService _winget;
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _pollingCts;
 
@@ -86,12 +87,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private bool _isActive;
 
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
-        HealthScoreService healthScore, TemperatureService temps)
+        HealthScoreService healthScore, TemperatureService temps, WingetService winget)
     {
         _sys = sys;
         _tuneUp = tuneUp;
         _healthScore = healthScore;
         _temps = temps;
+        _winget = winget;
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
@@ -427,16 +429,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
     {
         try
         {
-            var runner = new PowerShellRunner();
-            var output = new System.Text.StringBuilder();
-            runner.LineReceived += l => { if (l.Kind == OutputKind.Output) output.AppendLine(l.Text); };
-
-            await runner.RunScriptViaPwshAsync(
-                "winget upgrade --include-unknown 2>$null | Select-String -Pattern '^\\S' | Measure-Object | Select-Object -ExpandProperty Count",
-                CancellationToken.None);
-
-            var countText = output.ToString().Trim();
-            var count = int.TryParse(countText, out var n) ? Math.Max(n - 2, 0) : 0;
+            // Reuse the shared, column-parsed upgrade list instead of a fragile
+            // "count non-blank lines minus the header/separator" heuristic — the
+            // latter mis-counted whenever winget's header/footer layout shifted.
+            var upgradable = await _winget.ListUpgradableAsync(CancellationToken.None);
+            var count = upgradable.Count;
 
             var (title, severity) = ClassifyAppUpdates(count);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>

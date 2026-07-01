@@ -48,8 +48,11 @@ public class PingMonitorStressTests
         };
         svc.AddOrUpdate(new PingTarget("base", Unreachable, "#111"));
         svc.Start();
+        Assert.True(svc.IsRunning);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        // The churn deliberately never touches "base" — only 192.0.2.2-253 hosts — so
+        // it survives as a fixed point we can assert on after the storm settles.
         var churn = Task.Run(() =>
         {
             var rnd = new Random(42);
@@ -61,11 +64,18 @@ public class PingMonitorStressTests
             }
         });
 
+        // A concurrency fault inside the loop faults this Task, so awaiting it here
+        // rethrows and fails the test — no separate exception plumbing needed.
         await churn;
         svc.Stop();
 
-        // If we got here without an exception, the concurrent access is safe.
-        Assert.True(true);
+        // Concrete post-conditions after concurrent add/remove: the service stopped
+        // cleanly, its target map is still coherent, and the untouched "base" target
+        // is intact (a corrupt ConcurrentDictionary would drop or duplicate it).
+        Assert.False(svc.IsRunning);
+        Assert.True(svc.Targets.ContainsKey(Unreachable));
+        Assert.Equal("base", svc.Targets[Unreachable].Name);
+        Assert.All(svc.Targets.Keys, Assert.NotNull);
     }
 
     [Fact]

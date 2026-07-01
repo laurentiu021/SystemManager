@@ -115,9 +115,13 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 ## Services
 
 Thin wrappers around the underlying platform. Each service is designed to be
-unit-testable. The key seam interfaces are `IPowerShellRunner` (PowerShellRunner),
-`IAppBlockerService` (AppBlockerService), and `IDialogService` (DialogService) —
-substitutable in tests (see `ServiceRegistration.cs`).
+unit-testable. Services that a view-model needs to substitute in tests sit behind
+an interface seam — currently `IPowerShellRunner` (PowerShellRunner),
+`IAppBlockerService` (AppBlockerService), `IDialogService` (DialogService),
+`ICpuAffinityService`, `IFileLockService`, `ISettingsWatchdogService`,
+`ITimerResolutionService`, `ITweaksHubService`, and `IWindowsThemeService` — each
+registered against its implementation and mock-substitutable (see
+`ServiceRegistration.cs`).
 
 Key services:
 - `PingMonitorService` / `TracerouteService` / `TracerouteMonitorService` —
@@ -159,6 +163,8 @@ Key services:
   pagefile, hiberfil, System Volume Information.
 - `UpdateService` — GitHub Releases API client with explicit
   `SocketsHttpHandler`, retry, and surfaced error messages.
+- `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the
+  old one and restart, before any DI/UI is built (see the Updates flow below).
 - `StartupService` — enumerate and toggle startup programs via registry
   Run / RunOnce keys.
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →

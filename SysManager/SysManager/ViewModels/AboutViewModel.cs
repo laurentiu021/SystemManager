@@ -504,10 +504,12 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        // Step 1b: Verify Authenticode signature (detects tampered binaries).
+        // Step 1b: Authenticode check. Integrity is already guaranteed by the SHA256
+        // step above; this only rejects a file whose signature data is present but
+        // unreadable. Unsigned builds (SysManager ships unsigned) are allowed.
         if (!UpdateService.VerifyAuthenticode(DownloadedPath))
         {
-            DownloadStatus = "Update binary has an invalid digital signature — possible tampering. Download aborted.";
+            DownloadStatus = "Update binary's signature could not be read. Download aborted.";
             return;
         }
 

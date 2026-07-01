@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.4] - 2026-07-01
+
+### Fixed
+- **In-app updater no longer aborts every update as "possible tampering."** The Authenticode check treated an *unsigned* download as an invalid signature and cancelled the install — but SysManager ships unsigned builds, so the About-tab "Download → Install" flow was blocked for every release. (Most people update through winget, so this went unnoticed.) An unsigned binary is now correctly accepted; file integrity is still enforced by the SHA256 verification that runs first, and the check now only rejects a file whose signature data is genuinely unreadable.
+
 ## [1.52.3] - 2026-07-01
 
 ### Fixed

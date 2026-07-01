@@ -316,10 +316,24 @@ public sealed class UpdateService
         }
     }
 
+    // CryptographicException HResult raised by CreateFromSignedFile when the file
+    // carries NO embedded Authenticode signature at all. On .NET this surfaces as
+    // CRYPT_E_NO_MATCH (0x80092009) — "Cannot find the requested object". SysManager's
+    // own builds are unsigned (no code-signing certificate yet), so this is the normal,
+    // expected case and must NOT be treated as tampering.
+    private const int CryptENoMatch = unchecked((int)0x80092009);
+
     /// <summary>
-    /// Verifies the Authenticode signature on a downloaded update binary.
-    /// Returns true if the binary is signed or unsigned (open-source builds).
-    /// Returns false only if the signature is present but INVALID (tampered).
+    /// Reports the Authenticode state of a downloaded update binary. Returns true when
+    /// the binary is validly embedded-signed OR carries no signature at all (SysManager
+    /// ships unsigned open-source builds). Returns false only when reading the signature
+    /// fails for a reason other than "no signature present".
+    ///
+    /// This is NOT the integrity gate: file integrity is enforced by the SHA256 check
+    /// (<see cref="VerifyHashAsync"/>) against the published .sha256, which runs first in
+    /// the install flow. <c>CreateFromSignedFile</c> extracts the signer certificate but
+    /// does not by itself validate the file against the signature, so it cannot detect a
+    /// tampered signed binary — the SHA256 comparison is what catches a modified download.
     /// </summary>
     public static bool VerifyAuthenticode(string filePath)
     {
@@ -329,19 +343,24 @@ public sealed class UpdateService
             var cert = System.Security.Cryptography.X509Certificates.X509Certificate
                 .CreateFromSignedFile(filePath);
 #pragma warning restore SYSLIB0057
-            if (cert is not null)
-            {
-                Serilog.Log.Information("Update binary Authenticode verified: {Subject}", cert.Subject);
-                return true;
-            }
-            // Unsigned binary — acceptable for open-source GitHub Actions builds.
+            // A non-null cert means an embedded Authenticode signature was found and its
+            // signer certificate could be read. (Unsigned files throw below rather than
+            // returning null, so this branch is the signed case.)
+            Serilog.Log.Information("Update binary is Authenticode-signed: {Subject}", cert.Subject);
+            return true;
+        }
+        catch (System.Security.Cryptography.CryptographicException ex) when (ex.HResult == CryptENoMatch)
+        {
+            // No embedded signature — expected for SysManager's unsigned builds. Allow it;
+            // integrity is already guaranteed by the SHA256 verification step.
             Serilog.Log.Information("Update binary has no Authenticode signature (expected for unsigned builds)");
             return true;
         }
-        catch (System.Security.Cryptography.CryptographicException)
+        catch (System.Security.Cryptography.CryptographicException ex)
         {
-            // Invalid/tampered signature — file HAS a signature but it's broken.
-            Serilog.Log.Warning("Update binary has INVALID Authenticode signature — possible tampering: {File}", LogService.SanitizePath(filePath));
+            // Signature data present but could not be read/parsed — treat as suspect.
+            Serilog.Log.Warning(ex, "Update binary Authenticode signature could not be read (HResult 0x{HResult:X8}): {File}",
+                ex.HResult, LogService.SanitizePath(filePath));
             return false;
         }
     }

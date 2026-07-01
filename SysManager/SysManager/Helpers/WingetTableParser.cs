@@ -112,49 +112,68 @@ internal static partial class WingetTableParser
         return -1;
     }
 
+    // Column titles winget prints, by column, across its shipped UI languages. A 4-column
+    // table is ambiguous by position alone (Name/Id/Version/Source for `list` vs
+    // Name/Id/Version/Available for a source-less `upgrade`), so we identify each optional
+    // column by matching its header word against these known localized titles — never by
+    // its ordinal position. Lower-cased for case-insensitive comparison.
+    private static readonly string[] IdTitles = ["id", "kennung", "identifiant", "identificador", "identificatore", "識別子", "标识符", "식별자"];
+    private static readonly string[] VersionTitles = ["version", "versione", "versión", "versão", "バージョン", "版本", "버전"];
+    private static readonly string[] AvailableTitles = ["available", "verfügbar", "disponible", "disponibile", "disponível", "利用可能", "可用", "사용 가능"];
+    private static readonly string[] SourceTitles = ["source", "quelle", "origine", "fuente", "fonte", "ソース", "源", "소스"];
+    // "Match" (winget search) is not consumed by any caller; we don't need to localize it.
+
     // Column titles are localized (de-DE: "Name Kennung Version Verfügbar Quelle"), but the
-    // column ORDER is stable across every winget UI language, so we map columns POSITIONALLY
-    // by the start offset of each whitespace-delimited header token, never by the English word.
-    // The layouts winget emits:
-    //   list:    Name  Id  Version  Source                 (4 cols, NO Available)
-    //   upgrade: Name  Id  Version  Available  Source       (5 cols)
-    //   search:  Name  Id  Version  Match      Source       (5 cols; token[3] unused by callers)
-    // Source is ALWAYS the last column; the optional 4th-of-5 token is Available/Match. Mapping
-    // the 4th token to Available only when there are >=5 columns keeps the 4-column list table
-    // from mis-reading its Source column as Available (which left Source empty).
+    // column ORDER is stable. We locate each column by matching its header token against the
+    // known localized titles above, so both the layout (which optional columns exist) and the
+    // positions are correct on any UI language — without the position-only ambiguity of a
+    // 4-column table. Name is always the first column; Id is the second column (its title set
+    // is only used to confirm, falling back to the second token).
     private static ColumnLayout DetectColumns(string header)
     {
-        var starts = TokenStarts(header);
+        var tokens = HeaderTokens(header);
         // Fewer than 3 columns is not a winget package table (need at least Name/Id/Version).
-        if (starts.Count < 3)
+        if (tokens.Count < 3)
             return new ColumnLayout { Name = 0, Id = -1, Version = -1, Available = -1, Source = -1 };
 
-        int last = starts.Count - 1;
+        int id = FindStart(tokens, IdTitles);
+        int version = FindStart(tokens, VersionTitles);
+
         return new ColumnLayout
         {
-            Name = starts[0],
-            Id = starts[1],
-            Version = starts[2],
-            // Available/Match only exists when there's a distinct column between Version and the
-            // final Source column (i.e. 5+ columns). A 4-column list table has no Available.
-            Available = starts.Count >= 5 ? starts[3] : -1,
-            // Source is the last column, present once there's a column beyond Version (>=4).
-            Source = last >= 3 ? starts[last] : -1
+            Name = tokens[0].Start,
+            // Fall back to the 2nd/3rd token when a title isn't in our set (unknown locale):
+            // the Name/Id/Version order is invariant, so position is a safe last resort here.
+            Id = id >= 0 ? id : tokens[1].Start,
+            Version = version >= 0 ? version : tokens[2].Start,
+            Available = FindStart(tokens, AvailableTitles),
+            Source = FindStart(tokens, SourceTitles)
         };
     }
 
-    // Start offsets of each run of non-whitespace in the header line (one per column title).
-    private static List<int> TokenStarts(string header)
+    // Start offset of the first header token whose (lower-cased) word is in titles, else -1.
+    private static int FindStart(List<(int Start, string Word)> tokens, string[] titles)
     {
-        List<int> starts = [];
-        bool inToken = false;
-        for (int i = 0; i < header.Length; i++)
+        foreach (var (start, word) in tokens)
+            if (titles.Contains(word.ToLowerInvariant()))
+                return start;
+        return -1;
+    }
+
+    // Header tokens as (start offset, word). A "word" is a run of non-whitespace; note winget
+    // titles are single words in every shipped locale, so one token == one column.
+    private static List<(int Start, string Word)> HeaderTokens(string header)
+    {
+        List<(int, string)> tokens = [];
+        int i = 0;
+        while (i < header.Length)
         {
-            bool ws = char.IsWhiteSpace(header[i]);
-            if (!ws && !inToken) { starts.Add(i); inToken = true; }
-            else if (ws) inToken = false;
+            if (char.IsWhiteSpace(header[i])) { i++; continue; }
+            int start = i;
+            while (i < header.Length && !char.IsWhiteSpace(header[i])) i++;
+            tokens.Add((start, header[start..i]));
         }
-        return starts;
+        return tokens;
     }
 
     private static string Slice(string line, int start, int end)

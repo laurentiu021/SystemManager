@@ -1,4 +1,6 @@
-// SysManager · DiskHealthReport edge-case tests
+// SysManager · DiskHealthReportEdgeCaseTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
 using SysManager.Models;
 
 namespace SysManager.Tests;

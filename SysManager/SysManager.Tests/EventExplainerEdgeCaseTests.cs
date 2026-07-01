@@ -1,4 +1,6 @@
-// SysManager · EventExplainer — coverage for generic fallback and known lookups
+// SysManager · EventExplainerEdgeCaseTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
 using SysManager.Models;
 using SysManager.Services;
 

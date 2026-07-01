@@ -1,4 +1,4 @@
-// SysManager — Windows system monitoring toolkit
+// SysManager · App
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 

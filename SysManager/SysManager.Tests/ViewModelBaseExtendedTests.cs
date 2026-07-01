@@ -1,4 +1,6 @@
-// SysManager · ViewModelBase dispose and state transition tests
+// SysManager · ViewModelBaseExtendedTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;

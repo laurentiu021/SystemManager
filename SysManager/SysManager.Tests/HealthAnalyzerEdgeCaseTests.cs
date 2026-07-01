@@ -1,4 +1,6 @@
-// SysManager · HealthAnalyzer edge-case and boundary tests
+// SysManager · HealthAnalyzerEdgeCaseTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
 using SysManager.Models;
 using SysManager.Services;
 using static SysManager.Services.HealthAnalyzer;

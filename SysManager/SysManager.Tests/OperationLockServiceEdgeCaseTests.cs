@@ -1,4 +1,6 @@
-// SysManager · OperationLockService concurrency and edge-case tests
+// SysManager · OperationLockServiceEdgeCaseTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
 using SysManager.Services;
 
 namespace SysManager.Tests;

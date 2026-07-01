@@ -384,18 +384,27 @@ public sealed partial class PerformanceService : IDisposable
     }
 
     /// <summary>
-    /// Enable or disable Xbox Game Bar overlay and Game DVR.
-    /// Reversible: call with true to re-enable.
+    /// Enable or disable Xbox Game Bar overlay and Game DVR together — the user-facing
+    /// toggle sets both keys to the same state. Reversible: call with true to re-enable.
     /// </summary>
-    public static void SetXboxGameBar(bool enabled)
+    public static void SetXboxGameBar(bool enabled) => SetXboxGameBar(enabled, enabled);
+
+    /// <summary>
+    /// Sets the two independent Xbox registry values separately. Used by snapshot restore,
+    /// where <c>AppCaptureEnabled</c> (Game Bar) and <c>GameDVR_Enabled</c> (per-game DVR)
+    /// can legitimately differ — a user may have one on and the other off. Collapsing them
+    /// into a single value (e.g. <c>barEnabled &amp;&amp; dvrEnabled</c>) would leave one key in
+    /// the wrong state on restore, breaking the "revert to the exact snapshot" contract.
+    /// </summary>
+    public static void SetXboxGameBar(bool appCaptureEnabled, bool gameDvrEnabled)
     {
         using var dvrKey = Registry.CurrentUser.CreateSubKey(GameDvrKey);
-        dvrKey.SetValue("AppCaptureEnabled", enabled ? 1 : 0, RegistryValueKind.DWord);
+        dvrKey.SetValue("AppCaptureEnabled", appCaptureEnabled ? 1 : 0, RegistryValueKind.DWord);
 
         using var configKey = Registry.CurrentUser.CreateSubKey(GameConfigStoreKey);
-        configKey.SetValue("GameDVR_Enabled", enabled ? 1 : 0, RegistryValueKind.DWord);
-        Log.Information("Registry: Xbox Game Bar {Action} (AppCaptureEnabled={Value}, GameDVR_Enabled={Value})",
-            enabled ? "enabled" : "disabled", enabled ? 1 : 0, enabled ? 1 : 0);
+        configKey.SetValue("GameDVR_Enabled", gameDvrEnabled ? 1 : 0, RegistryValueKind.DWord);
+        Log.Information("Registry: Xbox Game Bar set (AppCaptureEnabled={Bar}, GameDVR_Enabled={Dvr})",
+            appCaptureEnabled ? 1 : 0, gameDvrEnabled ? 1 : 0);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -651,8 +660,9 @@ public sealed partial class PerformanceService : IDisposable
         // Game Mode
         SetGameMode(snapshot.GameModeEnabled);
 
-        // Xbox Game Bar
-        SetXboxGameBar(snapshot.XboxGameBarEnabled && snapshot.XboxGameDvrEnabled);
+        // Xbox Game Bar — restore each key from its own snapshot value; the two are
+        // independent (Game Bar overlay vs per-game DVR) and must not be collapsed.
+        SetXboxGameBar(snapshot.XboxGameBarEnabled, snapshot.XboxGameDvrEnabled);
 
         // GPU
         if (snapshot.NvidiaSubKey is not null)

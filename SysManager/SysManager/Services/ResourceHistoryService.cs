@@ -342,7 +342,7 @@ public sealed class ResourceHistoryService : IDisposable
             var cfg = JsonSerializer.Deserialize<RetentionConfig>(File.ReadAllText(ConfigPath));
             return cfg is not null && RetentionOptions.Contains(cfg.RetentionDays) ? cfg.RetentionDays : 7;
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Log.Debug("Resource history config load failed: {Error}", ex.Message);
             return 7;

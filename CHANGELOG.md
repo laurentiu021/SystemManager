@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.6] - 2026-07-01
+
+### Fixed
+- **`--json` now stays machine-readable on CLI errors.** When an unknown flag or a bare usage error was hit together with `--json`, the CLI printed the human help text instead of JSON — so piping the output to a JSON parser (`SysManager.exe --bogus --json | ConvertFrom-Json`) broke. Both error paths now emit valid JSON: an unknown flag returns `{"error": "..."}` and a bare usage error returns the machine-readable command catalog.
+- **Headless CLI reports a runtime fault as an error (exit 1), not a usage error (exit 2).** If a CLI command threw unexpectedly the process exited with code 2, which conventionally means "you typed the command wrong." An unexpected fault is now logged and exits with code 1 (general error), so scripts can distinguish a bad invocation from a genuine failure.
+- **Startup crashes are now logged instead of vanishing.** The unhandled-exception handlers were registered *after* the dependency container, tray icon, and resource-history sampler were built — so a failure during that early startup surfaced as a bare Windows crash with no log entry. The handlers are now wired first, so any startup fault is captured in the log.
+- **Resource-history retention config load no longer risks an unhandled exception at startup.** Reading the retention setting caught malformed JSON and I/O errors but not an access-denied error; since it runs during construction, that gap could throw in the unprotected startup window. It now degrades to the 7-day default on access-denied too.
+
 ## [1.52.5] - 2026-07-01
 
 ### Fixed

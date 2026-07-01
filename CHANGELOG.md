@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.8] - 2026-07-01
+
+### Fixed
+- **App Updates, Uninstaller, and Bulk Installer now work on non-English Windows.** These tabs read winget's table output by matching the English column headers ("Name / Id / Version / Available / Source"). On a localized Windows, winget translates those titles (e.g. German "Name / Kennung / Version / Verfügbar / Quelle"), so the match failed and every list came back **empty** — App Updates showed no updates, the Uninstaller showed no apps, and Bulk Installer search returned nothing. The parser now locates the table via the dashes separator row that winget prints in every language and maps the columns by position instead of by the English words, so it works regardless of the Windows display language. The English fast-path is unchanged.
+
 ## [1.52.7] - 2026-07-01
 
 ### Fixed

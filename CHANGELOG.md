@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.3] - 2026-07-01
+
+### Fixed
+- **Performance tab "Restore" no longer mis-reverts Xbox Game Bar.** Restore captured the Game Bar overlay (`AppCaptureEnabled`) and per-game DVR (`GameDVR_Enabled`) as two independent settings but then wrote a single combined value to both keys — so if you had one on and the other off, restoring forced both off and silently lost the on state. Each setting is now restored to exactly what the snapshot captured.
+
 ## [1.52.2] - 2026-06-30
 
 ### Fixed

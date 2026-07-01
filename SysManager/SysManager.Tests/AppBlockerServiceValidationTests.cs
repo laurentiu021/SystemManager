@@ -1,4 +1,6 @@
-// SysManager · AppBlockerService input validation tests (no registry access)
+// SysManager · AppBlockerServiceValidationTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
 using SysManager.Services;
 
 namespace SysManager.Tests;

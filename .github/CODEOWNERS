@@ -22,4 +22,5 @@
 # Source code
 /SysManager/SysManager/                 @laurentiu021
 /SysManager/SysManager.Tests/           @laurentiu021
+/SysManager/SysManager.IntegrationTests/ @laurentiu021
 /SysManager/SysManager.UITests/         @laurentiu021

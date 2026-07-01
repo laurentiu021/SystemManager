@@ -1,4 +1,6 @@
-// SysManager · BatteryInfo computed property edge-case tests
+// SysManager · BatteryInfoEdgeCaseTests
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
 using SysManager.Models;
 
 namespace SysManager.Tests;

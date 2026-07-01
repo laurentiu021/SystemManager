@@ -113,9 +113,15 @@ internal static partial class WingetTableParser
     }
 
     // Column titles are localized (de-DE: "Name Kennung Version Verfügbar Quelle"), but the
-    // column ORDER is stable across every winget UI language: Name, Id, Version, then the
-    // optional Available (upgrade) / Match (search) and Source. So we map columns POSITIONALLY
+    // column ORDER is stable across every winget UI language, so we map columns POSITIONALLY
     // by the start offset of each whitespace-delimited header token, never by the English word.
+    // The layouts winget emits:
+    //   list:    Name  Id  Version  Source                 (4 cols, NO Available)
+    //   upgrade: Name  Id  Version  Available  Source       (5 cols)
+    //   search:  Name  Id  Version  Match      Source       (5 cols; token[3] unused by callers)
+    // Source is ALWAYS the last column; the optional 4th-of-5 token is Available/Match. Mapping
+    // the 4th token to Available only when there are >=5 columns keeps the 4-column list table
+    // from mis-reading its Source column as Available (which left Source empty).
     private static ColumnLayout DetectColumns(string header)
     {
         var starts = TokenStarts(header);
@@ -123,14 +129,17 @@ internal static partial class WingetTableParser
         if (starts.Count < 3)
             return new ColumnLayout { Name = 0, Id = -1, Version = -1, Available = -1, Source = -1 };
 
-        int Col(int i) => i < starts.Count ? starts[i] : -1;
+        int last = starts.Count - 1;
         return new ColumnLayout
         {
             Name = starts[0],
-            Id = Col(1),
-            Version = Col(2),
-            Available = Col(3),
-            Source = Col(4)
+            Id = starts[1],
+            Version = starts[2],
+            // Available/Match only exists when there's a distinct column between Version and the
+            // final Source column (i.e. 5+ columns). A 4-column list table has no Available.
+            Available = starts.Count >= 5 ? starts[3] : -1,
+            // Source is the last column, present once there's a column beyond Version (>=4).
+            Source = last >= 3 ? starts[last] : -1
         };
     }
 

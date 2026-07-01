@@ -153,6 +153,30 @@ public class CliRunnerTests
         Assert.Contains("Usage:", r.Output);
     }
 
+    [Fact]
+    public async Task Execute_UnknownJson_EmitsParseableJsonError()
+    {
+        // Regression: the usage-error arm ignored --json and emitted plain help text, so
+        // `--bogus --json | ConvertFrom-Json` fed a JSON consumer non-JSON. It must now
+        // return a structured {"error": ...} and NOT leak the help prose.
+        var r = await new CliRunner().ExecuteAsync(new CliRequest(CliCommand.Unknown, Json: true, UnknownArg: "--nope"));
+        Assert.Equal(CliResult.UsageError, r.ExitCode);
+        var doc = System.Text.Json.JsonDocument.Parse(r.Output); // throws if not valid JSON
+        Assert.Contains("--nope", doc.RootElement.GetProperty("error").GetString());
+        Assert.DoesNotContain("Usage:", r.Output);
+    }
+
+    [Fact]
+    public async Task Execute_NoneJson_EmitsMachineReadableHelp()
+    {
+        // The bare-usage arm must also honor --json (machine-readable command catalog),
+        // not dump the human help text to a JSON consumer.
+        var r = await new CliRunner().ExecuteAsync(new CliRequest(CliCommand.None, Json: true));
+        Assert.Equal(CliResult.UsageError, r.ExitCode);
+        var doc = System.Text.Json.JsonDocument.Parse(r.Output); // throws if not valid JSON
+        Assert.True(doc.RootElement.TryGetProperty("commands", out _));
+    }
+
     // ── Help text / command catalog ─────────────────────────────────────────
 
     [Fact]

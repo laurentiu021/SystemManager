@@ -130,9 +130,10 @@ public sealed class CliRunner
             CliCommand.Health => await RunHealthAsync(request, ct).ConfigureAwait(false),
             CliCommand.Cleanup => await RunCleanupAsync(request, ct).ConfigureAwait(false),
             CliCommand.TrimRam => RunTrimRam(request),
-            CliCommand.Unknown => new CliResult(CliResult.UsageError,
-                $"Unknown option '{request.UnknownArg}'.\n\n{BuildHelp(false)}"),
-            _ => new CliResult(CliResult.UsageError, BuildHelp(false)),
+            CliCommand.Unknown => new CliResult(CliResult.UsageError, request.Json
+                ? Json(new { error = $"Unknown option '{request.UnknownArg}'." })
+                : $"Unknown option '{request.UnknownArg}'.\n\n{BuildHelp(false)}"),
+            _ => new CliResult(CliResult.UsageError, BuildHelp(request.Json)),
         };
     }
 

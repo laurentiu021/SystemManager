@@ -105,6 +105,13 @@ public partial class App : Application
 
         LogService.Init();
 
+        // Wire the crash handlers FIRST — before the DI build, tray, and resource-history
+        // start below — so a throw anywhere in the remaining startup is logged rather than
+        // surfacing as a bare Windows Error Reporting crash with no diagnostic trail.
+        DispatcherUnhandledException += OnUi;
+        AppDomain.CurrentDomain.UnhandledException += OnDomain;
+        TaskScheduler.UnobservedTaskException += OnTask;
+
         // ── Build DI container ─────────────────────────────────────────
         var serviceCollection = new ServiceCollection();
         serviceCollection.ConfigureServices();
@@ -121,9 +128,6 @@ public partial class App : Application
         // service is disposed with the DI container on exit (stops the loop).
         Services.GetRequiredService<ResourceHistoryService>().Start();
 
-        DispatcherUnhandledException += OnUi;
-        AppDomain.CurrentDomain.UnhandledException += OnDomain;
-        TaskScheduler.UnobservedTaskException += OnTask;
         base.OnStartup(e);
 
         ThemeService.Instance.Initialize();
@@ -144,7 +148,10 @@ public partial class App : Application
     {
         var request = CliRunner.Parse(args);
         bool attached = AttachConsole(AttachParentProcess);
-        int exitCode = CliResult.UsageError;
+        // Default to the error code (1), not the usage code (2): ExecuteAsync sets the
+        // real code for every known command, so the only way we keep this default is an
+        // unexpected throw — which is a runtime error, not a usage mistake.
+        int exitCode = CliResult.Error;
         try
         {
             var result = new CliRunner().ExecuteAsync(request).GetAwaiter().GetResult();
@@ -152,6 +159,17 @@ public partial class App : Application
             bool suppress = request.Silent && result.ExitCode == CliResult.Ok;
             if (attached && !suppress && !string.IsNullOrEmpty(result.Output))
                 Console.Out.WriteLine(result.Output);
+        }
+        catch (Exception ex)
+        {
+            // A known command never throws (CliRunner reports failures in the result),
+            // so reaching here means an unexpected fault. Report it as an error (exit 1)
+            // and, if a JSON payload was requested, keep the output machine-readable.
+            LogService.Logger?.Error(ex, "CLI command threw unexpectedly");
+            if (attached)
+                Console.Error.WriteLine(request.Json
+                    ? $"{{\"error\":\"{ex.Message.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"}}"
+                    : $"Error: {ex.Message}");
         }
         finally
         {

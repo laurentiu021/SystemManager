@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.7] - 2026-07-01
+
+### Fixed
+- **Chart text is now readable on the light themes.** The Ping/Traceroute latency chart and the Resource History usage/temperature charts painted their axis labels, legend, and tooltip in a fixed near-white color that was set once and never updated when you switched themes. On any of the six light presets that meant white-on-white — the axis values, time labels, and legend were effectively invisible. The chart text now follows the active theme (dark-on-light on light presets, light-on-dark on dark presets) and repaints instantly when you change the theme. The previously-unused theme-change signal is now wired up to drive this.
+- **Update banner and toast notification follow the theme.** Both used a fixed dark background, so on a light preset the update banner was a dark box clashing with the light UI and the toast's title could render dark-on-dark. They now use the theme's elevated surface color and stay legible on every preset.
+
 ## [1.52.6] - 2026-07-01
 
 ### Fixed

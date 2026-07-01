@@ -86,6 +86,12 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         TemperatureXAxes = [BuildTimeAxis()];
         TemperatureYAxes = [BuildTempAxis()];
 
+        // Paint chart labels/legend/tooltip from the active theme and keep them in sync,
+        // so axis text stays readable on the light presets (a hardcoded near-white was
+        // invisible on a white background). Unsubscribed in Dispose(bool).
+        ApplyChartTheme();
+        ThemeService.Instance.ThemeChanged += ApplyChartTheme;
+
         UsageSeries.Add(BuildLine("CPU", "#60A5FA", _cpuBuffer));
         UsageSeries.Add(BuildLine("RAM", "#A78BFA", _ramBuffer));
         UsageSeries.Add(BuildLine("GPU", "#34D399", _gpuBuffer));
@@ -223,10 +229,20 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         NameTextSize = 14
     };
 
+    /// <summary>
+    /// Repaints the chart labels, legend, and tooltip from the current app theme. Wired to
+    /// <see cref="ThemeService.ThemeChanged"/> so switching to a light preset makes the axis
+    /// text dark-on-light (readable) instead of the previous hardcoded near-white.
+    /// </summary>
+    private void ApplyChartTheme() => ChartTheme.Apply(
+        LegendTextPaint, TooltipTextPaint, TooltipBackgroundPaint,
+        [.. UsageXAxes, .. UsageYAxes, .. TemperatureXAxes, .. TemperatureYAxes]);
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            ThemeService.Instance.ThemeChanged -= ApplyChartTheme;
             foreach (var s in UsageSeries) DisposeSeries(s);
             foreach (var s in TemperatureSeries) DisposeSeries(s);
             DisposeAxisPaints(UsageXAxes);

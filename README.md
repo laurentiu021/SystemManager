@@ -776,7 +776,14 @@ Manage Microsoft Defender without digging through Windows Security:
 <a href="docs/screenshots/27-shortcut-cleaner.png"><img src="docs/screenshots/27-shortcut-cleaner.png" width="280" alt="Shortcut Cleaner"></a>
 </p>
 <p>
-<a href="docs/screenshots/28-scheduled-maintenance.png"><img src="docs/screenshots/28-scheduled-maintenance.png" width="280" alt="Scheduled Maintenance"></a>&nbsp;
+<a href="docs/screenshots/28-scheduled-maintenance.png"><img src="docs/screenshots/28-scheduled-maintenance.png" width="280" alt="Scheduled Maintenance"></a>
+</p>
+</details>
+
+<details>
+<summary><strong>💾 Storage</strong> — Disk Analyzer · Duplicate Finder</summary>
+<br>
+<p>
 <a href="docs/screenshots/29-disk-analyzer.png"><img src="docs/screenshots/29-disk-analyzer.png" width="280" alt="Disk Analyzer"></a>
 </p>
 </details>
@@ -804,7 +811,7 @@ Manage Microsoft Defender without digging through Windows Security:
 </details>
 
 <details>
-<summary><strong>🔒 Privacy &amp; Security</strong> — Privacy &amp; Telemetry · File Shredder · App Blocker · Debloater · Browser Cleaner · Defender</summary>
+<summary><strong>🛡️ Privacy &amp; Security</strong> — Privacy &amp; Telemetry · File Shredder · App Blocker · Debloater · Browser Cleaner · Defender</summary>
 <br>
 <p>
 <a href="docs/screenshots/39-privacy-telemetry.png"><img src="docs/screenshots/39-privacy-telemetry.png" width="280" alt="Privacy &amp; Telemetry"></a>&nbsp;

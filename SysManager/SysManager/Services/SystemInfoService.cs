@@ -18,6 +18,7 @@ public sealed class SystemInfoService
     private OsInfo? _cachedOs;
     private CpuInfo? _cachedCpuStatic;
     private List<DiskInfo>? _cachedDisks;
+    private IReadOnlyList<MemoryModule>? _cachedModules;
     private readonly Lock _cacheLock = new();
 
     public Task<SystemSnapshot> CaptureAsync(CancellationToken ct = default)
@@ -43,9 +44,14 @@ public sealed class SystemInfoService
             // Disk info is static (models don't change at runtime).
             _cachedDisks ??= QueryDisks();
             disks = _cachedDisks;
+
+            // Physical memory modules (bank/manufacturer/capacity/speed/part) are static
+            // hardware — enumerate the DIMMs once. Only the dynamic totals refresh below,
+            // so the Dashboard's 300 ms vitals poll no longer re-queries Win32_PhysicalMemory.
+            _cachedModules ??= QueryMemoryModules();
         }
 
-        var mem = QueryMemory();
+        var mem = QueryMemory(_cachedModules);
         return new SystemSnapshot(os, cpu, mem, disks, DateTime.Now);
     }
 
@@ -128,7 +134,9 @@ public sealed class SystemInfoService
         return 0;
     }
 
-    private static MemoryInfo QueryMemory()
+    // Dynamic RAM totals (refreshed every poll) combined with the pre-enumerated,
+    // cached static DIMM modules. Only Win32_OperatingSystem is queried here.
+    private static MemoryInfo QueryMemory(IReadOnlyList<MemoryModule> modules)
     {
         double totalKb = 0, freeKb = 0;
         using (var s = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem"))
@@ -148,25 +156,30 @@ public sealed class SystemInfoService
         double usedGB = totalGB - freeGB;
         double pct = totalGB > 0 ? usedGB / totalGB * 100.0 : 0;
 
+        return new MemoryInfo(totalGB, freeGB, usedGB, pct, modules);
+    }
+
+    // Physical DIMM inventory — static hardware, enumerated once and cached. Kept
+    // separate from QueryMemory so the per-poll path never re-scans Win32_PhysicalMemory.
+    private static List<MemoryModule> QueryMemoryModules()
+    {
         List<MemoryModule> modules = [];
-        using (var s = new ManagementObjectSearcher("SELECT BankLabel,Manufacturer,Capacity,Speed,PartNumber FROM Win32_PhysicalMemory"))
+        using var s = new ManagementObjectSearcher("SELECT BankLabel,Manufacturer,Capacity,Speed,PartNumber FROM Win32_PhysicalMemory");
+        using var modCollection = s.Get();
+        foreach (ManagementObject mo in modCollection)
         {
-            using var modCollection = s.Get();
-            foreach (ManagementObject mo in modCollection)
+            using (mo)
             {
-                using (mo)
-                {
-                    double capBytes = Convert.ToDouble(mo["Capacity"] ?? 0);
-                    modules.Add(new MemoryModule(
-                        mo["BankLabel"]?.ToString() ?? "",
-                        mo["Manufacturer"]?.ToString()?.Trim() ?? "",
-                        capBytes / 1024d / 1024d / 1024d,
-                        Convert.ToUInt32(mo["Speed"] ?? 0u),
-                        mo["PartNumber"]?.ToString()?.Trim() ?? ""));
-                }
+                double capBytes = Convert.ToDouble(mo["Capacity"] ?? 0);
+                modules.Add(new MemoryModule(
+                    mo["BankLabel"]?.ToString() ?? "",
+                    mo["Manufacturer"]?.ToString()?.Trim() ?? "",
+                    capBytes / 1024d / 1024d / 1024d,
+                    Convert.ToUInt32(mo["Speed"] ?? 0u),
+                    mo["PartNumber"]?.ToString()?.Trim() ?? ""));
             }
         }
-        return new MemoryInfo(totalGB, freeGB, usedGB, pct, modules);
+        return modules;
     }
 
     private static List<DiskInfo> QueryDisks()

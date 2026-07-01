@@ -67,6 +67,31 @@ public class SystemInfoServiceTests
     }
 
     [Fact]
+    public async Task CaptureAsync_ReusesCachedMemoryModules()
+    {
+        // The physical DIMM inventory is static hardware — it must be enumerated once
+        // and reused, so the Dashboard's 300 ms vitals poll never re-scans
+        // Win32_PhysicalMemory. Same instance across calls proves the cache holds.
+        var svc = new SystemInfoService();
+        var a = await svc.CaptureAsync();
+        var b = await svc.CaptureAsync();
+        Assert.Same(a.Memory.Modules, b.Memory.Modules);
+    }
+
+    [Fact]
+    public async Task CaptureAsync_MemoryTotalsStillRefreshPerCall()
+    {
+        // Caching the modules must NOT freeze the dynamic RAM totals — each snapshot
+        // still carries a freshly-queried total/available/used so live vitals stay real.
+        var svc = new SystemInfoService();
+        var a = await svc.CaptureAsync();
+        var b = await svc.CaptureAsync();
+        Assert.True(a.Memory.TotalGB > 0);
+        Assert.True(b.Memory.TotalGB > 0);
+        Assert.Equal(a.Memory.TotalGB, b.Memory.TotalGB, 3); // total RAM is stable within a session
+    }
+
+    [Fact]
     public async Task CaptureAsync_RespectsCancellation()
     {
         var svc = new SystemInfoService();

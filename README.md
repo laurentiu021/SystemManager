@@ -86,9 +86,10 @@ fully open source.
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 58 feature tabs into 12 collapsible groups so you can
-find what you need without scrolling through a flat list. 53 tabs are fully
-implemented; 5 are work-in-progress placeholders marked with ⚙️:
+The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
+plus a flat top-level Dashboard entry — so you can find what you need without
+scrolling through a flat list. 53 tabs are fully implemented; 5 are
+work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|

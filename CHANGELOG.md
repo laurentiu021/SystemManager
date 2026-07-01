@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.5] - 2026-07-01
+
+### Fixed
+- **Dashboard vitals polling no longer re-scans the RAM hardware inventory every 300 ms.** The live CPU/RAM/GPU snapshot the Dashboard refreshes ~3× a second was re-enumerating the physical memory modules (bank, manufacturer, capacity, speed, part number) via WMI on every tick, even though that inventory is fixed hardware that never changes while the app runs. The DIMM list is now read once and cached — matching how OS, CPU, and disk info were already cached — so only the dynamic RAM totals are refreshed per poll. Lower background CPU/WMI overhead with no change to what's displayed.
+
 ## [1.52.4] - 2026-07-01
 
 ### Fixed

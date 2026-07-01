@@ -150,12 +150,17 @@ public sealed class BrowserCleanerServiceTests : IDisposable
 
         var items = await _svc.ScanAsync();
         var cache = items.FirstOrDefault(i => i.Browser == "Google Chrome" && i.Category == "Cache");
-        // The junctioned cache must not contribute the victim's bytes/files to the scan.
-        if (cache is not null)
-        {
-            Assert.Equal(0, cache.SizeBytes);
-            Assert.Equal(0, cache.FileCount);
-        }
+
+        // The reparse-point guard makes the junctioned cache measure as (0 bytes, 0 files),
+        // so the scan drops the empty category entirely (ScanAsync skips size==0 && files==0).
+        // Either way it must NEVER surface with the victim's 4096 bytes — a followed junction
+        // would show up here as a non-zero Cache item. Asserting null is correct-by-design.
+        Assert.Null(cache);
+
+        // No scanned item anywhere may have absorbed the victim's bytes through the junction.
+        Assert.DoesNotContain(items, i => i.SizeBytes >= 4096);
+
+        // And the out-of-tree victim data is untouched by the scan.
         Assert.True(File.Exists(Path.Combine(victimDir, "secret.dat")));
     }
 

@@ -105,6 +105,12 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         TraceXAxes = [BuildHopAxis()];
         TraceYAxes = [BuildValueAxis("Latency (ms)")];
 
+        // Paint chart labels/legend/tooltip from the active theme and keep them in sync,
+        // so axis text stays readable on the light presets (a hardcoded near-white was
+        // invisible on a white background). The seam is unsubscribed in Dispose().
+        ApplyChartTheme();
+        ThemeService.Instance.ThemeChanged += ApplyChartTheme;
+
         Pinger.SampleReceived += OnSample;
         TraceMonitor.RouteCompleted += OnRouteCompleted;
 
@@ -527,6 +533,17 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         else Dispatcher.BeginInvoke(DispatcherPriority.Background, action);
     }
 
+    // ── Chart theming ──
+
+    /// <summary>
+    /// Repaints the chart labels, legend, and tooltip from the current app theme. Wired to
+    /// <see cref="ThemeService.ThemeChanged"/> so switching to a light preset makes the axis
+    /// text dark-on-light (readable) instead of the previous hardcoded near-white.
+    /// </summary>
+    private void ApplyChartTheme() => Helpers.ChartTheme.Apply(
+        LegendTextPaint, TooltipTextPaint, TooltipBackgroundPaint,
+        [.. LatencyXAxes, .. LatencyYAxes, .. TraceXAxes, .. TraceYAxes]);
+
     // ── Axis factories ──
 
     internal static Axis BuildTimeAxis() => new()
@@ -567,6 +584,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
 
+        ThemeService.Instance.ThemeChanged -= ApplyChartTheme;
         Pinger.SampleReceived -= OnSample;
         TraceMonitor.RouteCompleted -= OnRouteCompleted;
         // Stop, do not Dispose: Pinger / TraceMonitor are DI singletons the container

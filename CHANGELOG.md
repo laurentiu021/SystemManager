@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.9] - 2026-07-03
+
+### Fixed
+- **Disk Analyzer no longer crashes when "Top files" is set to 0.** The large-file scanner takes a "keep the top N" count from the Deep Cleanup input. If that value was 0 (or negative), the scan threw an internal error the moment it found its first file and the operation faulted. The scanner now treats a non-positive count as "nothing to keep" and returns an empty result instead of crashing.
+
 ## [1.52.8] - 2026-07-01
 
 ### Fixed

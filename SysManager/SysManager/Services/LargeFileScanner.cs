@@ -43,6 +43,14 @@ public sealed class LargeFileScanner
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
             return [];
 
+        // A non-positive Top has no meaning (nothing to keep) and would crash the
+        // eviction path: on the first eligible file, heap.Count (0) < top (<=0) is
+        // false, so heap.Min on the empty set returns default ((0, null)) and
+        // meta.Remove(null) throws ArgumentNullException. TopCount is bound from an
+        // unvalidated UI textbox, so guard it here at the boundary.
+        if (top <= 0)
+            return [];
+
         var heap = new SortedSet<(long Size, string Path)>(Comparer<(long, string)>.Create(
             (a, b) =>
             {

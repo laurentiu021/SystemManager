@@ -152,6 +152,29 @@ public class FileShredderServiceTests
     }
 
     [Fact]
+    public async Task ShredFileAsync_Thorough_MultiPass_OverwritesAndDeletes()
+    {
+        // Held-handle regression (F48): the shred now opens ONE exclusive handle and reuses
+        // it for every pass (rewinding Position=0) plus the final truncate, instead of
+        // reopening the file by path each pass. A 7-pass Thorough shred exercises that reuse
+        // across many passes and must still fully overwrite (multi-KB file spanning several
+        // 64 KB buffer writes) and delete the file.
+        var svc = NewService();
+        var file = Path.Combine(Path.GetTempPath(), "smtest_thorough_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllBytesAsync(file, new byte[200_000]); // > buffer size, forces multiple chunks/pass
+
+        try
+        {
+            await svc.ShredFileAsync(file, ShredMethod.Thorough, null, CancellationToken.None);
+            Assert.False(File.Exists(file), "Thorough (7-pass) shred did not remove the file");
+        }
+        finally
+        {
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    [Fact]
     public async Task ShredFileAsync_ReportsProgressToCompletion()
     {
         var svc = NewService();

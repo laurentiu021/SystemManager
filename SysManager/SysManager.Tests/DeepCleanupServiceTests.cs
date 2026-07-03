@@ -79,6 +79,28 @@ public class DeepCleanupServiceTests
     }
 
     [Fact]
+    public async Task ScanAsync_CancelledMidScan_Throws_DoesNotReturnPartial()
+    {
+        // Regression (F12): a scan cancelled AFTER it starts used to `break` out of its
+        // loops and fall through to report "Done" + return the partial category list, so
+        // the ViewModel showed a success toast for a cancelled scan. It must now throw
+        // OperationCanceledException instead. Deterministic (no wall-clock): the progress
+        // callback fires synchronously inside the scan loop, so cancelling on the first
+        // report cancels mid-scan reliably.
+        var s = new DeepCleanupService();
+        using var cts = new CancellationTokenSource();
+        var progress = new CancelOnFirstReport(cts);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => s.ScanAsync(progress, cts.Token));
+    }
+
+    private sealed class CancelOnFirstReport(CancellationTokenSource cts) : IProgress<DeepCleanupService.ScanProgress>
+    {
+        public void Report(DeepCleanupService.ScanProgress value) => cts.Cancel();
+    }
+
+    [Fact]
     public async Task ScanAsync_IncludesNvidiaCategory()
     {
         var s = new DeepCleanupService();

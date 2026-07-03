@@ -58,6 +58,13 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         File.WriteAllBytes(full, new byte[bytes]);
     }
 
+    private void WriteRoamingFile(string relUnderRoaming, int bytes)
+    {
+        var full = Path.Combine(_roaming, relUnderRoaming);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllBytes(full, new byte[bytes]);
+    }
+
     [Fact]
     public async Task Scan_NoBrowsers_ReturnsEmpty()
         => Assert.Empty(await _svc.ScanAsync());
@@ -190,6 +197,38 @@ public sealed class BrowserCleanerServiceTests : IDisposable
 
         Assert.Equal(0, deleted);
         Assert.True(File.Exists(secret), "Clean must not delete files through a junction.");
+    }
+
+    // --- Opera: Chromium-based but no "\Default\" profile segment, and its Cookies/History/
+    // Sessions live under Roaming (only Cache is under Local). Regression for the silent no-op
+    // where Opera was routed through ChromiumDefs (all paths under a non-existent \Default\). ---
+
+    [Fact]
+    public async Task Scan_FindsOperaCache_UnderLocal_NoDefaultSegment()
+    {
+        // Real Opera layout: cache directly under "Opera Software\Opera Stable\Cache" in Local,
+        // with NO "\Default\" segment.
+        WriteFile(@"Opera Software\Opera Stable\Cache\data_0", 4096);
+
+        var items = await _svc.ScanAsync();
+        var cache = items.FirstOrDefault(i => i.Browser == "Opera" && i.Category == "Cache");
+        Assert.NotNull(cache);                       // was null before the fix (wrong \Default\ path)
+        Assert.Equal(4096, cache!.SizeBytes);
+        Assert.False(cache.IsSensitive);
+        Assert.All(cache.Paths, p => Assert.DoesNotContain(@"\Default\", p));
+    }
+
+    [Fact]
+    public async Task Scan_FindsOperaCookies_UnderRoaming_AndSensitive()
+    {
+        // Opera keeps Cookies/History/Sessions under Roaming AppData, not Local.
+        WriteRoamingFile(@"Opera Software\Opera Stable\Network\Cookies", 512);
+
+        var items = await _svc.ScanAsync();
+        var cookies = items.FirstOrDefault(i => i.Browser == "Opera" && i.Category == "Cookies");
+        Assert.NotNull(cookies);                     // was null before the fix
+        Assert.True(cookies!.IsSensitive);
+        Assert.False(cookies.IsSelected);            // never auto-selected
     }
 
     [Fact]

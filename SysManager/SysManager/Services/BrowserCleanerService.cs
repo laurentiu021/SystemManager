@@ -30,7 +30,7 @@ public sealed class BrowserCleanerService
 
     private sealed record Def(string Browser, string Category, string Description, bool Sensitive, string[] RelativePaths, bool Roaming = false);
 
-    // Chromium "Default" profile layout is shared by Chrome/Edge/Brave/Opera.
+    // Chrome/Edge/Brave keep per-profile data under "<UserData>\Default\..." in LocalAppData.
     private static Def[] ChromiumDefs(string browser, string userDataRel) =>
     [
         new(browser, "Cache", "Cached images and files.", false,
@@ -43,13 +43,38 @@ public sealed class BrowserCleanerService
             [$@"{userDataRel}\Default\Sessions", $@"{userDataRel}\Default\Session Storage"]),
     ];
 
+    // Opera Stable is Chromium-based but does NOT use a "\Default\" profile segment: the
+    // profile lives directly under "Opera Software\Opera Stable". It also splits its data
+    // across two roots — the cache is under LocalAppData, but Cookies/History/Sessions live
+    // under Roaming AppData. Routing it through ChromiumDefs pointed every path at a
+    // "\Default\" folder Opera never creates, so scan/clean silently matched nothing.
+    // NOTE: each Def's Roaming flag applies to ALL its RelativePaths, so cache paths (local)
+    // and the roaming data paths must stay in separate Defs.
+    private static Def[] OperaDefs()
+    {
+        const string profileRel = @"Opera Software\Opera Stable";
+        return
+        [
+            // Cache lives under LocalAppData (Roaming: false).
+            new("Opera", "Cache", "Cached images and files.", false,
+                [$@"{profileRel}\Cache", $@"{profileRel}\Code Cache", $@"{profileRel}\GPUCache"]),
+            // Cookies/History/Sessions live under Roaming AppData (Roaming: true).
+            new("Opera", "History", "Browsing and download history.", false,
+                [$@"{profileRel}\History", $@"{profileRel}\History-journal"], Roaming: true),
+            new("Opera", "Cookies", "Cookies — clearing these signs you out of websites.", true,
+                [$@"{profileRel}\Network\Cookies", $@"{profileRel}\Network\Cookies-journal"], Roaming: true),
+            new("Opera", "Sessions", "Open tabs / session restore data.", true,
+                [$@"{profileRel}\Sessions", $@"{profileRel}\Session Storage"], Roaming: true),
+        ];
+    }
+
     private List<Def> BuildDefs()
     {
         List<Def> defs = [];
         defs.AddRange(ChromiumDefs("Google Chrome", @"Google\Chrome\User Data"));
         defs.AddRange(ChromiumDefs("Microsoft Edge", @"Microsoft\Edge\User Data"));
         defs.AddRange(ChromiumDefs("Brave", @"BraveSoftware\Brave-Browser\User Data"));
-        defs.AddRange(ChromiumDefs("Opera", @"Opera Software\Opera Stable"));
+        defs.AddRange(OperaDefs());
         // Firefox keeps profiles in roaming AppData, but the cache lives under LocalAppData
         // in per-profile "<profile>\cache2" folders. We target the cache2 subfolders only —
         // never the Profiles root, which holds prefs.js, logins.json, key4.db and bookmarks.

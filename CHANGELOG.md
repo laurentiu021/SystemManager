@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.10] - 2026-07-03
+
+### Fixed
+- **Browser Cleaner now actually cleans Opera.** Opera was listed as a supported browser but its cleanup silently did nothing: the paths were built for the Chromium `\Default\` profile layout that Chrome/Edge/Brave use, while Opera Stable stores its profile directly under `Opera Software\Opera Stable` (no `\Default\`) and keeps cookies/history/sessions under Roaming AppData rather than Local. Every Opera path missed, so scan found nothing and clean freed nothing. Opera now uses its real on-disk layout; Chrome, Edge, Brave, and Firefox are unchanged.
+
 ## [1.52.9] - 2026-07-03
 
 ### Fixed

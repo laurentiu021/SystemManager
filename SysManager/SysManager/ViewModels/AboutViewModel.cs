@@ -326,16 +326,20 @@ public sealed partial class AboutViewModel : ViewModelBase
             try
             {
                 using var gpuSearch = new System.Management.ManagementObjectSearcher(
-                    "SELECT Name,DriverVersion,AdapterRAM FROM Win32_VideoController");
+                    "SELECT Name,DriverVersion,AdapterRAM,PNPDeviceID FROM Win32_VideoController");
                 using var gpuResults = gpuSearch.Get();
                 foreach (System.Management.ManagementObject mo in gpuResults)
                     using (mo)
                     {
                         var name = mo["Name"]?.ToString()?.Trim() ?? "unknown";
                         var driver = mo["DriverVersion"]?.ToString() ?? "";
-                        var vram = mo["AdapterRAM"] as uint? ?? 0;
+                        // AdapterRAM is a uint32 that caps near 4 GiB; the shared helper prefers the
+                        // driver's 64-bit qwMemorySize so >4 GB cards report their true VRAM.
+                        var pnpId = mo["PNPDeviceID"]?.ToString();
+                        ulong? adapterRam = mo["AdapterRAM"] is { } ram ? Convert.ToUInt64(ram) : null;
+                        var vramGB = SysManager.Helpers.GpuVramHelper.ResolveVramGB(pnpId, adapterRam);
                         sb.Append("GPU: ").Append(name);
-                        if (vram > 0) sb.Append($" ({vram / 1024.0 / 1024.0 / 1024.0:F1} GB VRAM)");
+                        if (vramGB is > 0) sb.Append($" ({vramGB:F1} GB VRAM)");
                         if (!string.IsNullOrEmpty(driver)) sb.Append($" driver {driver}");
                         sb.AppendLine();
                     }

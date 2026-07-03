@@ -139,13 +139,13 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
             if (string.IsNullOrWhiteSpace(output)) return;
 
-            var lines = output.Split('\n');
+            var installedIds = ParseInstalledIds(output);
 
             App.Current?.Dispatcher.Invoke(() =>
             {
                 foreach (var app in Apps)
                 {
-                    if (lines.Any(line => line.Contains(app.WingetId, StringComparison.OrdinalIgnoreCase)))
+                    if (installedIds.Contains(app.WingetId))
                         app.IsInstalled = true;
                 }
             });
@@ -155,6 +155,36 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             Log.Debug(ex, "Could not determine installed apps via winget list");
         }
     }
+
+    /// <summary>
+    /// Extracts the exact package Ids from <c>winget list</c> output. Routes through the shared
+    /// <see cref="WingetTableParser"/> and returns Ids as a case-insensitive set, so installed
+    /// detection is an EXACT Id match rather than a substring scan of the raw row. The old
+    /// <c>line.Contains(id)</c> gave a false "Installed" badge whenever one curated Id was a
+    /// substring of an installed one (e.g. <c>Microsoft.Teams</c> ⊂ <c>Microsoft.Teams.Classic</c>).
+    /// Pure and process-free so it can be unit-tested with captured payloads.
+    /// </summary>
+    internal static HashSet<string> ParseInstalledIds(string output)
+    {
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var rows = WingetTableParser.Parse(lines, ListHeaderPattern(), ListSummaryPattern());
+
+        HashSet<string> ids = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+            if (!string.IsNullOrWhiteSpace(row.Id))
+                ids.Add(row.Id);
+        return ids;
+    }
+
+    // winget list header: "Name  Id  Version  [Available]  Source". The parser also falls back
+    // to the dashes-separator line when this English pattern doesn't match a localized winget.
+    [GeneratedRegex(@"^\s*Name\s+Id\s+Version", RegexOptions.IgnoreCase)]
+    private static partial Regex ListHeaderPattern();
+
+    // winget list ends with a numeric footer ("N packages"/"N upgrades available"); stop there
+    // so the trailing summary line is never mistaken for a data row.
+    [GeneratedRegex(@"^\d+\s+(package|packages|upgrade|upgrades)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex ListSummaryPattern();
 
     [RelayCommand]
     private void RelaunchAsAdmin()

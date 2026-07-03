@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.32] - 2026-07-04
+
+### Fixed
+- **System Logs severity cards and the "missing folder" tag stay legible on the Light themes.** The System Logs Critical/Errors/Warnings/Info cards used hardcoded translucent backgrounds, slate-gray labels and a fixed white card border; the Environment Variables "missing folder" tag used a fixed light-red. These now use the app's theme-aware brushes, so they render correctly on every theme. (The Critical card keeps its distinct brighter-red hue so it stays visually separable from Error, and the glow effects are unchanged.)
+
 ## [1.52.31] - 2026-07-04
 
 ### Fixed

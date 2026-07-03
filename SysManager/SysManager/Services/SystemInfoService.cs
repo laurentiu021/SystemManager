@@ -57,79 +57,109 @@ public sealed class SystemInfoService
 
     private static OsInfo QueryOsStatic()
     {
-        using var searcher = new ManagementObjectSearcher("SELECT Caption,Version,BuildNumber,OSArchitecture,LastBootUpTime FROM Win32_OperatingSystem");
-        using var osCollection = searcher.Get();
-        foreach (ManagementObject mo in osCollection)
+        // A WMI fault (service down, corrupt repository) must degrade to a safe default, not
+        // propagate out of Capture() and surface as an error dialog — mirrors QueryDisks.
+        try
         {
-            using (mo)
+            using var searcher = new ManagementObjectSearcher("SELECT Caption,Version,BuildNumber,OSArchitecture,LastBootUpTime FROM Win32_OperatingSystem");
+            using var osCollection = searcher.Get();
+            foreach (ManagementObject mo in osCollection)
             {
-                var caption = mo["Caption"]?.ToString() ?? "Windows";
-                var version = mo["Version"]?.ToString() ?? "";
-                var build = mo["BuildNumber"]?.ToString() ?? "";
-                var arch = mo["OSArchitecture"]?.ToString() ?? "";
-                var lastBootRaw = mo["LastBootUpTime"]?.ToString();
-                var uptime = TimeSpan.Zero;
-                if (!string.IsNullOrEmpty(lastBootRaw))
+                using (mo)
                 {
-                    try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
-                    catch (FormatException) { /* WMI date string malformed — keep zero uptime */ }
-                    catch (InvalidCastException) { /* WMI returned unexpected type — keep zero uptime */ }
+                    var caption = mo["Caption"]?.ToString() ?? "Windows";
+                    var version = mo["Version"]?.ToString() ?? "";
+                    var build = mo["BuildNumber"]?.ToString() ?? "";
+                    var arch = mo["OSArchitecture"]?.ToString() ?? "";
+                    var lastBootRaw = mo["LastBootUpTime"]?.ToString();
+                    var uptime = TimeSpan.Zero;
+                    if (!string.IsNullOrEmpty(lastBootRaw))
+                    {
+                        try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
+                        catch (FormatException) { /* WMI date string malformed — keep zero uptime */ }
+                        catch (InvalidCastException) { /* WMI returned unexpected type — keep zero uptime */ }
+                    }
+                    return new OsInfo(caption, version, build, uptime, arch);
                 }
-                return new OsInfo(caption, version, build, uptime, arch);
             }
+        }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            /* WMI unavailable — degrade to defaults (mirrors QueryDisks) */
         }
         return new OsInfo("Windows", "", "", TimeSpan.Zero, "");
     }
 
     private static TimeSpan QueryUptime()
     {
-        using var searcher = new ManagementObjectSearcher("SELECT LastBootUpTime FROM Win32_OperatingSystem");
-        using var osCollection = searcher.Get();
-        foreach (ManagementObject mo in osCollection)
+        try
         {
-            using (mo)
+            using var searcher = new ManagementObjectSearcher("SELECT LastBootUpTime FROM Win32_OperatingSystem");
+            using var osCollection = searcher.Get();
+            foreach (ManagementObject mo in osCollection)
             {
-                var lastBootRaw = mo["LastBootUpTime"]?.ToString();
-                if (!string.IsNullOrEmpty(lastBootRaw))
+                using (mo)
                 {
-                    try { return DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
-                    catch (FormatException) { /* WMI date string malformed — fall through to zero */ }
-                    catch (InvalidCastException) { /* WMI returned unexpected type — fall through to zero */ }
+                    var lastBootRaw = mo["LastBootUpTime"]?.ToString();
+                    if (!string.IsNullOrEmpty(lastBootRaw))
+                    {
+                        try { return DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
+                        catch (FormatException) { /* WMI date string malformed — fall through to zero */ }
+                        catch (InvalidCastException) { /* WMI returned unexpected type — fall through to zero */ }
+                    }
                 }
             }
+        }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            /* WMI unavailable — degrade to zero uptime */
         }
         return TimeSpan.Zero;
     }
 
     private static CpuInfo QueryCpuStatic()
     {
-        using var searcher = new ManagementObjectSearcher("SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
-        using var cpuCollection = searcher.Get();
-        foreach (ManagementObject mo in cpuCollection)
+        try
         {
-            using (mo)
+            using var searcher = new ManagementObjectSearcher("SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
+            using var cpuCollection = searcher.Get();
+            foreach (ManagementObject mo in cpuCollection)
             {
-                return new CpuInfo(
-                    mo["Name"]?.ToString()?.Trim() ?? "Unknown CPU",
-                    Convert.ToUInt32(mo["NumberOfCores"] ?? 0u),
-                    Convert.ToUInt32(mo["NumberOfLogicalProcessors"] ?? 0u),
-                    Convert.ToUInt32(mo["MaxClockSpeed"] ?? 0u),
-                    0);
+                using (mo)
+                {
+                    return new CpuInfo(
+                        mo["Name"]?.ToString()?.Trim() ?? "Unknown CPU",
+                        Convert.ToUInt32(mo["NumberOfCores"] ?? 0u),
+                        Convert.ToUInt32(mo["NumberOfLogicalProcessors"] ?? 0u),
+                        Convert.ToUInt32(mo["MaxClockSpeed"] ?? 0u),
+                        0);
+                }
             }
+        }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            /* WMI unavailable — degrade to defaults */
         }
         return new CpuInfo("Unknown", 0, 0, 0, 0);
     }
 
     private static double QueryCpuLoad()
     {
-        using var searcher = new ManagementObjectSearcher("SELECT LoadPercentage FROM Win32_Processor");
-        using var cpuCollection = searcher.Get();
-        foreach (ManagementObject mo in cpuCollection)
+        try
         {
-            using (mo)
+            using var searcher = new ManagementObjectSearcher("SELECT LoadPercentage FROM Win32_Processor");
+            using var cpuCollection = searcher.Get();
+            foreach (ManagementObject mo in cpuCollection)
             {
-                return Convert.ToDouble(mo["LoadPercentage"] ?? 0.0);
+                using (mo)
+                {
+                    return Convert.ToDouble(mo["LoadPercentage"] ?? 0.0);
+                }
             }
+        }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            /* WMI unavailable — degrade to zero load */
         }
         return 0;
     }
@@ -139,8 +169,9 @@ public sealed class SystemInfoService
     private static MemoryInfo QueryMemory(IReadOnlyList<MemoryModule> modules)
     {
         double totalKb = 0, freeKb = 0;
-        using (var s = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem"))
+        try
         {
+            using var s = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem");
             using var memCollection = s.Get();
             foreach (ManagementObject mo in memCollection)
             {
@@ -150,6 +181,10 @@ public sealed class SystemInfoService
                     freeKb = Convert.ToDouble(mo["FreePhysicalMemory"] ?? 0);
                 }
             }
+        }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            /* WMI unavailable — degrade to zeroed totals (modules still shown) */
         }
         double totalGB = totalKb / 1024d / 1024d;
         double freeGB = freeKb / 1024d / 1024d;
@@ -164,20 +199,27 @@ public sealed class SystemInfoService
     private static List<MemoryModule> QueryMemoryModules()
     {
         List<MemoryModule> modules = [];
-        using var s = new ManagementObjectSearcher("SELECT BankLabel,Manufacturer,Capacity,Speed,PartNumber FROM Win32_PhysicalMemory");
-        using var modCollection = s.Get();
-        foreach (ManagementObject mo in modCollection)
+        try
         {
-            using (mo)
+            using var s = new ManagementObjectSearcher("SELECT BankLabel,Manufacturer,Capacity,Speed,PartNumber FROM Win32_PhysicalMemory");
+            using var modCollection = s.Get();
+            foreach (ManagementObject mo in modCollection)
             {
-                double capBytes = Convert.ToDouble(mo["Capacity"] ?? 0);
-                modules.Add(new MemoryModule(
-                    mo["BankLabel"]?.ToString() ?? "",
-                    mo["Manufacturer"]?.ToString()?.Trim() ?? "",
-                    capBytes / 1024d / 1024d / 1024d,
-                    Convert.ToUInt32(mo["Speed"] ?? 0u),
-                    mo["PartNumber"]?.ToString()?.Trim() ?? ""));
+                using (mo)
+                {
+                    double capBytes = Convert.ToDouble(mo["Capacity"] ?? 0);
+                    modules.Add(new MemoryModule(
+                        mo["BankLabel"]?.ToString() ?? "",
+                        mo["Manufacturer"]?.ToString()?.Trim() ?? "",
+                        capBytes / 1024d / 1024d / 1024d,
+                        Convert.ToUInt32(mo["Speed"] ?? 0u),
+                        mo["PartNumber"]?.ToString()?.Trim() ?? ""));
+                }
             }
+        }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            /* WMI unavailable — return whatever modules enumerated before the fault */
         }
         return modules;
     }

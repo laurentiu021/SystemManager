@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.18] - 2026-07-03
+
+### Fixed
+- **A broken WMI service no longer throws an error dialog when reading system info.** The OS, CPU, and memory queries weren't guarded, so on a machine with a damaged or stopped WMI service the Dashboard/System Report could surface a raw error. Each query now degrades to safe defaults (matching how the disk query already behaved), so the app keeps working with whatever information is available instead of failing.
+
 ## [1.52.17] - 2026-07-03
 
 ### Fixed

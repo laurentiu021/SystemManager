@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.15] - 2026-07-03
+
+### Fixed
+- **One invalid entry no longer aborts a whole batch upgrade or uninstall.** In App Updates and the Uninstaller, if a single package had an Id that failed validation (e.g. an Add/Remove-Programs GUID), the error thrown before that item even started would abort the entire remaining batch. Each item's error is now recorded on its own row and the batch continues with the rest.
+- **Single-instance activation is more robust.** The background listener that focuses the existing window when you launch a second copy wrapped its whole loop in one try/catch, so a single unexpected error could stop it permanently for the rest of the session. Each iteration now handles its own errors and keeps listening.
+
 ## [1.52.14] - 2026-07-03
 
 ### Security

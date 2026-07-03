@@ -260,9 +260,9 @@ public partial class App : Application
     {
         _pipeCts = new CancellationTokenSource();
         var ct = _pipeCts.Token;
-        try
+        while (!ct.IsCancellationRequested)
         {
-            while (!ct.IsCancellationRequested)
+            try
             {
                 // Restrict the single-instance pipe to the current user only. The
                 // connection carries no payload (it is a pure "activate the window"
@@ -284,9 +284,17 @@ public partial class App : Application
                     }
                 });
             }
+            catch (OperationCanceledException) { break; }   // shutdown
+            catch (IOException) { break; }                  // pipe broken during shutdown
+            // A transient per-iteration fault (e.g. the OS refuses a pipe instance, or an
+            // ObjectDisposedException on a torn-down handle) must NOT permanently kill
+            // single-instance activation for the rest of the session — the old single-try
+            // wrapping the whole loop did exactly that. Log it and keep listening.
+            catch (Exception ex)
+            {
+                LogService.Logger?.Warning(ex, "Single-instance pipe listener iteration failed; continuing to listen");
+            }
         }
-        catch (OperationCanceledException) { /* shutdown */ }
-        catch (IOException) { /* pipe broken during shutdown */ }
     }
 
     /// <summary>

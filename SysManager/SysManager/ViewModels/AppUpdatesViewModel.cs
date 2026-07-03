@@ -117,6 +117,10 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
                 }
                 catch (OperationCanceledException) { pkg.Status = "Cancelled"; break; }
                 catch (InvalidOperationException ex) { pkg.Status = $"Error: {ex.Message}"; failed++; }
+                // A single invalid package Id throws ArgumentException from UpgradeAsync
+                // BEFORE any process runs; record it on the row and keep upgrading the rest
+                // rather than aborting the whole batch.
+                catch (ArgumentException ex) { pkg.Status = $"Error: {ex.Message}"; failed++; }
                 attempted++;
             }
             Progress = 100;

@@ -42,8 +42,6 @@ public sealed class PrivacyService
     {
         ArgumentNullException.ThrowIfNull(toggle);
 
-        var valueToWrite = toggle.IsEnabled ? toggle.EnabledValue : toggle.DisabledValue;
-
         try
         {
             using var key = OpenOrCreateKey(toggle.RegistryPath, writable: true);
@@ -54,9 +52,26 @@ public sealed class PrivacyService
                 return false;
             }
 
-            key.SetValue(toggle.ValueName, valueToWrite, RegistryValueKind.DWord);
-            Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
-                toggle.Name, valueToWrite, toggle.RegistryPath, toggle.ValueName);
+            if (toggle.IsEnabled)
+            {
+                // Privacy ON → enforce our protection value.
+                key.SetValue(toggle.ValueName, toggle.EnabledValue, RegistryValueKind.DWord);
+                Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
+                    toggle.Name, toggle.EnabledValue, toggle.RegistryPath, toggle.ValueName);
+            }
+            else
+            {
+                // Privacy OFF (revert) → REMOVE our value so Windows falls back to its own
+                // default, rather than WRITING DisabledValue. Writing DisabledValue was wrong:
+                // for policy-backed toggles it materialises an enforced GPO the machine may
+                // never have had (e.g. AllowTelemetry=3 = Full telemetry ENFORCED), which is
+                // strictly worse than the value being absent. Deleting is the correct undo of
+                // an enforcement. DeleteValue(name, throwOnMissingValue: false) is a no-op when
+                // the value is already absent, so revert is idempotent.
+                key.DeleteValue(toggle.ValueName, throwOnMissingValue: false);
+                Log.Information("Privacy toggle reverted (value removed): {Name} at {Path}\\{ValueName}",
+                    toggle.Name, toggle.RegistryPath, toggle.ValueName);
+            }
             return true;
         }
         catch (UnauthorizedAccessException ex)

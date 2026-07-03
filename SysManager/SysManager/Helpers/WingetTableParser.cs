@@ -138,6 +138,21 @@ internal static partial class WingetTableParser
 
         int id = FindStart(tokens, IdTitles);
         int version = FindStart(tokens, VersionTitles);
+        int available = FindStart(tokens, AvailableTitles);
+        int source = FindStart(tokens, SourceTitles);
+
+        // Positional fallback for the Available/Source columns on an unlisted locale, but ONLY
+        // for the UNAMBIGUOUS 5-column shape (Name Id Version Available Source). Without this,
+        // an upgrade table in a locale we don't have titles for leaves Available = -1, so every
+        // row's Available comes back blank and WingetService drops it — App Updates shows zero
+        // upgrades. A 4-column table is deliberately left alone: it's ambiguous by position
+        // (list = Name/Id/Version/Source vs source-less upgrade = Name/Id/Version/Available),
+        // and prior fixes proved position can't disambiguate it — so we don't guess there.
+        if (tokens.Count >= 5)
+        {
+            if (available < 0) available = tokens[3].Start;
+            if (source < 0) source = tokens[4].Start;
+        }
 
         return new ColumnLayout
         {
@@ -146,8 +161,8 @@ internal static partial class WingetTableParser
             // the Name/Id/Version order is invariant, so position is a safe last resort here.
             Id = id >= 0 ? id : tokens[1].Start,
             Version = version >= 0 ? version : tokens[2].Start,
-            Available = FindStart(tokens, AvailableTitles),
-            Source = FindStart(tokens, SourceTitles)
+            Available = available,
+            Source = source
         };
     }
 

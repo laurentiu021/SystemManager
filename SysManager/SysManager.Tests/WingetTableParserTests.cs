@@ -235,4 +235,58 @@ public class WingetTableParserTests
         Assert.Equal("winget", result[0].Source);
         Assert.Equal("", result[0].Available);
     }
+
+    // ── F03 regression: unlisted locale, 5-column upgrade table ──────────────
+    // The German/French tests above pass because those locales ARE in the title lists.
+    // The real gap: a locale whose Available/Source WORDS we don't know. Id/Version fell
+    // back to position, but Available/Source stayed -1 → every row's Available came back
+    // blank → WingetService dropped every row → App Updates showed ZERO upgrades. For the
+    // UNAMBIGUOUS 5-column shape we now map Available/Source positionally.
+
+    [Fact]
+    public void Parse_UnlistedLocale_FiveColumnUpgrade_MapsAvailableAndSourcePositionally()
+    {
+        // A fabricated locale whose column words are in NONE of the title lists. Only the
+        // Name/Id/Version/Available/Source ORDER (and the dashes separator) are relied on.
+        var lines = new List<string>
+        {
+            "Naimŭ                        Ident                        Verzia    Dostupny    Zdroj",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+            "Node.js                      OpenJS.NodeJS                  20.11.0   22.1.0      winget"
+        };
+
+        var result = WingetTableParser.Parse(lines, NeverMatches, SummaryPattern);
+
+        Assert.Equal(2, result.Count);
+        // The whole point: Available is populated (not blank), so these upgrades are NOT dropped.
+        Assert.Equal("2.48.0", result[0].Available);
+        Assert.Equal("winget", result[0].Source);
+        Assert.Equal("Git.Git", result[0].Id);
+        Assert.Equal("22.1.0", result[1].Available);
+    }
+
+    [Fact]
+    public void Parse_UnlistedLocale_FourColumn_DoesNotGuessAvailableOrSource()
+    {
+        // A 4-column table in an unlisted locale is genuinely ambiguous by position
+        // (list=…/Source vs source-less upgrade=…/Available), so the positional fallback
+        // deliberately only fires at >=5 columns and does NOT guess the ambiguous 4th column.
+        // Id still resolves positionally so the row is not lost. (Version can bleed into the
+        // trailing column here — that's pre-existing 4-column behavior this fix doesn't touch.)
+        var lines = new List<string>
+        {
+            "Naimŭ                        Ident                        Verzia    Stĺpec4",
+            "-------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    winget"
+        };
+
+        var result = WingetTableParser.Parse(lines, NeverMatches, SummaryPattern);
+
+        Assert.Single(result);
+        Assert.Equal("Git.Git", result[0].Id);
+        // The key invariant: neither ambiguous column is falsely populated.
+        Assert.Equal("", result[0].Available);
+        Assert.Equal("", result[0].Source);
+    }
 }

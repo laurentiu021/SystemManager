@@ -66,6 +66,35 @@ public class EventLogServiceTests
     }
 
     [Fact]
+    public void BuildXPath_Since_UsesInvariantTimeSeparator_OnDotSeparatorCulture()
+    {
+        // Regression (F16): the SystemTime timestamp was formatted without a culture, so on a
+        // locale whose TimeSeparator is '.' (e.g. fi-FI) the ':' in the format became '.',
+        // producing an invalid SystemTime like "10.30.00" — EventLogQuery then threw and the
+        // Logs tab came back empty. Force such a culture and assert the ISO ':' survives.
+        var original = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture =
+                System.Globalization.CultureInfo.GetCultureInfo("fi-FI");
+
+            var opt = new EventLogQueryOptions
+            {
+                Since = new DateTime(2026, 1, 15, 10, 30, 45, DateTimeKind.Utc)
+            };
+            var result = InvokeBuildXPath(opt);
+
+            // Valid ISO 8601 time uses ':' regardless of the OS display language.
+            Assert.Contains("T10:30:45", result);
+            Assert.DoesNotContain("10.30.45", result);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Fact]
     public void BuildXPath_WithProvider_IncludesProviderName()
     {
         var opt = new EventLogQueryOptions { ProviderName = "disk" };

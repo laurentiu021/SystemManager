@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.28] - 2026-07-04
+
+### Fixed
+- **Ping target cards and Context Menu preview tooltips are now theme-aware on the Light themes.** The per-target cards on the Ping tab used a hardcoded translucent-white border and fixed slate-gray metric labels (LATENCY/AVG/JITTER/LOSS) that were nearly invisible on the light presets; the Context Menu style-preview tooltips used fixed `Gray`/`DimGray` text. Both now use the app's theme text and border brushes, so they stay legible on every theme. On the dark themes the look is unchanged.
+
 ## [1.52.27] - 2026-07-04
 
 ### Fixed

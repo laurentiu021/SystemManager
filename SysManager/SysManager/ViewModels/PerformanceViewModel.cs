@@ -363,7 +363,9 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         try
         {
             await EnsureSnapshotAsync();
-            var target = WantProcessorMaxState ? 100 : _snapshot!.ProcessorMinPercentAc;
+            // "Restore default" targets the captured original; if it couldn't be read
+            // (null), fall back to the Windows default of 5% for this explicit user action.
+            var target = WantProcessorMaxState ? 100 : (_snapshot!.ProcessorMinPercentAc ?? 5);
             await _service.SetProcessorMinStateAsync(target);
             await RefreshAsync();
             StatusMessage = $"Processor min state set to {target}%.";
@@ -500,7 +502,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             + $"• Visual effects → {(_snapshot.UiEffectsEnabled ? "Normal" : "Reduced")}\n"
             + $"• Game Mode → {(_snapshot.GameModeEnabled ? "ON" : "OFF")}\n"
             + $"• Xbox Game Bar → {(_snapshot.XboxGameBarEnabled ? "ON" : "OFF")}\n"
-            + $"• Processor min state → {_snapshot.ProcessorMinPercentAc}%\n"
+            + $"• Processor min state → {(_snapshot.ProcessorMinPercentAc is int p ? $"{p}%" : "unchanged")}\n"
             + (gpuWasChanged ? "• GPU → Dynamic P-state (reboot needed)\n" : "")
             + "\nContinue?",
             "Restore Original Settings — Confirm")) return;

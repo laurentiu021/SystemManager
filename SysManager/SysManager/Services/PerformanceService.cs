@@ -79,7 +79,7 @@ public sealed partial class PerformanceService : IDisposable
         bool XboxGameBarEnabled,
         bool XboxGameDvrEnabled,
         bool GpuDynamicPstate,       // true = dynamic (default), false = disabled
-        int ProcessorMinPercentAc,
+        int? ProcessorMinPercentAc,  // null = couldn't read (don't restore rather than guess)
         string? NvidiaSubKey);       // null = no NVIDIA GPU
 
     /// <summary>
@@ -179,7 +179,10 @@ public sealed partial class PerformanceService : IDisposable
             profile.GpuMaxPerformance = ReadGpuMaxPerformance(nvidiaKey);
         }
 
-        var minPct = await ReadProcessorMinPercentAsync(ct).ConfigureAwait(false);
+        // Display-only profile: if the value can't be read, fall back to the Windows default
+        // (5) for the UI — unchanged from before. The RESTORE path (snapshot) keeps the true
+        // null so it never writes back a guessed value.
+        var minPct = await ReadProcessorMinPercentAsync(ct).ConfigureAwait(false) ?? 5;
         profile.ProcessorMinPercent = minPct;
         profile.ProcessorMaxState = minPct >= 100;
 
@@ -203,24 +206,31 @@ public sealed partial class PerformanceService : IDisposable
         return ParseActivePlan(lines);
     }
 
+    // Canonical GUID token (8-4-4-4-12 hex). powercfg prints the active plan's GUID in this
+    // exact form in EVERY display language, so anchoring on it makes the parse locale-agnostic.
+    [System.Text.RegularExpressions.GeneratedRegex(
+        "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")]
+    private static partial System.Text.RegularExpressions.Regex PowerPlanGuidRegex();
+
     /// <summary>
-    /// Parses powercfg /getactivescheme output.
-    /// Format: "Power Scheme GUID: 381b4222-...  (Balanced)"
+    /// Parses powercfg /getactivescheme output. Example (en-US):
+    /// "Power Scheme GUID: 381b4222-...  (Balanced)".
+    /// Locale-agnostic: the English label ("Power Scheme GUID:") is translated on non-English
+    /// Windows, so we anchor on the canonical GUID token itself (stable in every language)
+    /// rather than the label. The friendly name is read from the trailing parentheses when
+    /// present (localized, display-only); otherwise the GUID stands in.
     /// </summary>
     internal static (string Name, string Guid) ParseActivePlan(IList<string> lines)
     {
         foreach (var line in lines)
         {
-            var guidIdx = line.IndexOf("GUID:", StringComparison.OrdinalIgnoreCase);
-            if (guidIdx < 0) continue;
-            var afterGuid = line[(guidIdx + 5)..].Trim();
-            var spaceIdx = afterGuid.IndexOf(' ');
-            if (spaceIdx < 0) continue;
-            var guid = afterGuid[..spaceIdx].Trim();
-            var parenStart = afterGuid.IndexOf('(');
-            var parenEnd = afterGuid.IndexOf(')');
+            var m = PowerPlanGuidRegex().Match(line);
+            if (!m.Success) continue;
+            var guid = m.Value;
+            var parenStart = line.IndexOf('(');
+            var parenEnd = line.IndexOf(')');
             var name = parenStart >= 0 && parenEnd > parenStart
-                ? afterGuid[(parenStart + 1)..parenEnd]
+                ? line[(parenStart + 1)..parenEnd].Trim()
                 : guid;
             return (name, guid);
         }
@@ -508,8 +518,12 @@ public sealed partial class PerformanceService : IDisposable
     //  PROCESSOR STATE — powercfg (instant, no reboot)
     // ═══════════════════════════════════════════════════════════════
 
-    /// <summary>Read the current processor minimum state percentage (AC).</summary>
-    internal async Task<int> ReadProcessorMinPercentAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Read the current processor minimum state percentage (AC), or null if it can't be
+    /// parsed. Callers that persist it for restore MUST keep the null (never substitute a
+    /// default), so a snapshot on a machine we couldn't read doesn't write back a wrong value.
+    /// </summary>
+    internal async Task<int?> ReadProcessorMinPercentAsync(CancellationToken ct = default)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         List<string> lines = [];
@@ -525,18 +539,36 @@ public sealed partial class PerformanceService : IDisposable
         return ParseProcessorMinPercent(lines);
     }
 
-    internal static int ParseProcessorMinPercent(IList<string> lines)
+    internal static int? ParseProcessorMinPercent(IList<string> lines)
     {
-        // Look for "Current AC Power Setting Index: 0x00000064" (100 = 0x64)
+        // The query is PROCTHROTTLEMIN only, so powercfg prints exactly two hex values:
+        // "Current AC Power Setting Index: 0x…" then "Current DC Power Setting Index: 0x…"
+        // (AC always first, in every language). We want the AC value.
+        //
+        // Fast path (en-US, unchanged): match the English AC label exactly.
+        // Locale-agnostic fallback: the label is translated on non-English Windows, so fall
+        // back to the FIRST "0x…" token in the output — which is the AC index by powercfg's
+        // fixed AC-before-DC ordering. Return null when nothing parses: the caller must NOT
+        // invent a value, or a snapshot/restore would fabricate a wrong minimum (the bug this
+        // fixes — the old code returned 5, which "Restore" then wrote back on non-English boxes).
         foreach (var line in lines.Where(l => l.Contains("Current AC Power Setting Index", StringComparison.OrdinalIgnoreCase)))
         {
-            var hexIdx = line.IndexOf("0x", StringComparison.OrdinalIgnoreCase);
-            if (hexIdx < 0) continue;
-            var hex = line[(hexIdx + 2)..].Trim();
-            if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var val))
-                return val;
+            if (TryParseHexToken(line, out var acVal)) return acVal;
         }
-        return 5; // Windows default
+        foreach (var line in lines)
+        {
+            if (TryParseHexToken(line, out var val)) return val;
+        }
+        return null; // couldn't read — do not guess
+    }
+
+    private static bool TryParseHexToken(string line, out int value)
+    {
+        value = 0;
+        var hexIdx = line.IndexOf("0x", StringComparison.OrdinalIgnoreCase);
+        if (hexIdx < 0) return false;
+        var hex = line[(hexIdx + 2)..].Trim();
+        return int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out value);
     }
 
     /// <summary>
@@ -668,8 +700,11 @@ public sealed partial class PerformanceService : IDisposable
         if (snapshot.NvidiaSubKey is not null)
             SetGpuMaxPerformance(snapshot.NvidiaSubKey, !snapshot.GpuDynamicPstate);
 
-        // Processor state
-        await SetProcessorMinStateAsync(snapshot.ProcessorMinPercentAc, ct).ConfigureAwait(false);
+        // Processor state — only restore if we captured a real value. A null means the
+        // snapshot couldn't read the original minimum (e.g. an unparseable powercfg output),
+        // so writing anything would fabricate state; leaving it untouched is the safe choice.
+        if (snapshot.ProcessorMinPercentAc is int minPct)
+            await SetProcessorMinStateAsync(minPct, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

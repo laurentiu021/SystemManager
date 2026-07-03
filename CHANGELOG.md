@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.14] - 2026-07-03
+
+### Security
+- **File Shredder now overwrites through a single locked handle, closing a path-swap race.** The shredder validated the target path, then reopened the file by name for each overwrite pass and the final truncate. Between the validation and those reopens, a reparse point (junction/symlink) swapped in at the path could have redirected the overwrite to a different file — a time-of-check/time-of-use race. The shredder now opens the file once with an exclusive (no-sharing) handle, re-verifies *that handle's* real resolved path against the protected-folder denylist before writing anything, and reuses the same handle for every pass and the truncate — so nothing can redirect the operation once it starts. The existing symlink/junction protections are unchanged.
+
 ## [1.52.13] - 2026-07-03
 
 ### Fixed

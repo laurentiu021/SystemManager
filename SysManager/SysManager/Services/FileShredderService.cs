@@ -57,61 +57,84 @@ public sealed partial class FileShredderService
         if (!File.Exists(filePath))
             throw new FileNotFoundException("File not found.", filePath);
 
-        var fileLength = new FileInfo(filePath).Length;
         var totalPasses = (int)method;
         var patterns = GetPatterns(method);
 
-        for (var pass = 0; pass < totalPasses; pass++)
+        // Open the file ONCE with an exclusive (FileShare.None) write handle and keep it open
+        // for every pass and the final truncate. This closes the validate-by-path/act-by-path
+        // TOCTOU: ValidatePath above checks a path STRING, but the destructive writes must act
+        // on the exact object we validated. By holding one exclusive handle and re-verifying
+        // THAT HANDLE's canonical path (GetFinalPathNameByHandle) against the protected roots
+        // before writing a byte, a reparse point swapped in after ValidatePath can no longer
+        // redirect the overwrite — the handle is already bound to the resolved object, and
+        // FileShare.None blocks anyone from moving/replacing it mid-shred.
+        var stream = new FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Write,
+            FileShare.None,
+            BufferSize,
+            FileOptions.WriteThrough | FileOptions.SequentialScan);
+
+        try
         {
-            ct.ThrowIfCancellationRequested();
+            // Re-validate the identity of the object we actually hold. If the resolved path
+            // sits under a protected root (a reparse point swapped in between ValidatePath and
+            // this open pointed us there), refuse — the exclusive handle guarantees this is the
+            // same object we will overwrite, so there is no residual race.
+            var heldCanonical = GetFinalPathFromHandle(stream.SafeFileHandle);
+            if (heldCanonical is not null)
+                ThrowIfProtected(ExpandShortPath(heldCanonical));
 
-            await using var stream = new FileStream(
-                filePath,
-                FileMode.Open,
-                FileAccess.Write,
-                FileShare.None,
-                BufferSize,
-                FileOptions.WriteThrough | FileOptions.SequentialScan);
+            var fileLength = stream.Length;
 
-            var buffer = new byte[BufferSize];
-            var pattern = patterns[pass];
-
-            if (pattern is null)
-            {
-                // Random pass — use cryptographic PRNG for secure overwrite
-                RandomNumberGenerator.Fill(buffer);
-            }
-            else
-            {
-                Array.Fill(buffer, pattern.Value);
-            }
-
-            var bytesRemaining = fileLength;
-            while (bytesRemaining > 0)
+            for (var pass = 0; pass < totalPasses; pass++)
             {
                 ct.ThrowIfCancellationRequested();
 
-                var writeSize = (int)Math.Min(BufferSize, bytesRemaining);
+                stream.Position = 0; // rewind for this pass (same handle, no reopen)
 
-                // Re-randomize buffer each chunk for random passes
+                var buffer = new byte[BufferSize];
+                var pattern = patterns[pass];
+
                 if (pattern is null)
-                    RandomNumberGenerator.Fill(buffer.AsSpan(0, writeSize));
+                {
+                    // Random pass — use cryptographic PRNG for secure overwrite
+                    RandomNumberGenerator.Fill(buffer);
+                }
+                else
+                {
+                    Array.Fill(buffer, pattern.Value);
+                }
 
-                await stream.WriteAsync(buffer.AsMemory(0, writeSize), ct).ConfigureAwait(false);
-                bytesRemaining -= writeSize;
+                var bytesRemaining = fileLength;
+                while (bytesRemaining > 0)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var writeSize = (int)Math.Min(BufferSize, bytesRemaining);
+
+                    // Re-randomize buffer each chunk for random passes
+                    if (pattern is null)
+                        RandomNumberGenerator.Fill(buffer.AsSpan(0, writeSize));
+
+                    await stream.WriteAsync(buffer.AsMemory(0, writeSize), ct).ConfigureAwait(false);
+                    bytesRemaining -= writeSize;
+                }
+
+                await stream.FlushAsync(ct).ConfigureAwait(false);
+
+                var overallProgress = (int)((pass + 1) * 100.0 / totalPasses);
+                progress?.Report(overallProgress);
             }
 
+            // Final truncate on the SAME held handle — no by-path reopen.
+            stream.SetLength(0);
             await stream.FlushAsync(ct).ConfigureAwait(false);
-
-            var overallProgress = (int)((pass + 1) * 100.0 / totalPasses);
-            progress?.Report(overallProgress);
         }
-
-        // Final cleanup: truncate, flush, close, then delete
-        await using (var finalStream = new FileStream(filePath, FileMode.Open, FileAccess.Write, FileShare.None))
+        finally
         {
-            finalStream.SetLength(0);
-            await finalStream.FlushAsync(ct).ConfigureAwait(false);
+            await stream.DisposeAsync().ConfigureAwait(false);
         }
 
         // The file contents are already securely overwritten and truncated to zero at
@@ -308,6 +331,17 @@ public sealed partial class FileShredderService
         if (handle.IsInvalid)
             return null;
 
+        return GetFinalPathFromHandle(handle);
+    }
+
+    /// <summary>
+    /// Returns the fully-resolved canonical path for an ALREADY-OPEN handle (every reparse
+    /// point collapsed), or null if the name can't be read. Used to verify the identity of the
+    /// exact handle we hold for the overwrite — closing the validate-by-path / act-by-path
+    /// TOCTOU window, since the check is on the same object we then write.
+    /// </summary>
+    private static string? GetFinalPathFromHandle(SafeFileHandle handle)
+    {
         // First call with a zero-length buffer returns the required length (incl. NUL).
         uint needed = NativeMethods.GetFinalPathNameByHandle(handle, [], 0, 0);
         if (needed == 0)

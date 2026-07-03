@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Warning, success and info banners are now readable on the Light themes.** Semantic status text (the amber "a finer timer wakes the CPU…" note on Timer Resolution, the "Running as administrator" banners, and similar warning/success/info messages across the app) used pale colors tuned for the dark themes. On the six light presets those washed out to near-invisible against the light banner — the amber warning text measured only ~1.4:1 contrast (WCAG AA needs 4.5:1). The theme engine now recomputes all status colors per theme, using darker, saturated tones on the light presets, so every banner stays legible on every theme. On the dark themes nothing changes.
+
 ## [1.52.22] - 2026-07-03
 
 ### Fixed

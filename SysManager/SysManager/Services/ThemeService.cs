@@ -158,8 +158,51 @@ public sealed class ThemeService
         SetColor(res, "AccentHoverColor", Lighten(theme.Accent, 0.15));
         SetColor(res, "AccentPressedColor", Darken(theme.Accent, 0.12));
 
+        ApplyStatusBrushes(res, theme.IsDark);
+
         ThemeChanged?.Invoke();
     }
+
+    /// <summary>
+    /// Recomputes the semantic status brushes (Warning / Success / Info / Danger) for the current
+    /// mode. The App.xaml defaults are calibrated for dark surfaces — pale, high-lightness text
+    /// (e.g. WarningText #FCD34D) that reads on a near-black banner but washes out to illegible on a
+    /// light preset's near-white surface. On light themes we swap to darker, saturated text colors
+    /// that meet WCAG AA on white, and lift the subtle background tints so the banner is still
+    /// distinguishable. On dark themes we restore the original palette so nothing changes there.
+    /// This is the single seam that fixes every hardcoded-warning-banner contrast defect at once.
+    /// </summary>
+    private static void ApplyStatusBrushes(ResourceDictionary res, bool isDark)
+    {
+        foreach (var (key, color) in StatusPalette(isDark))
+            SetBrush(res, key, color);
+    }
+
+    /// <summary>
+    /// Pure color decision for the semantic status brushes, split out so it is unit-testable without
+    /// a WPF Application (the actual brush assignment writes into Application.Current.Resources).
+    /// Dark values mirror the App.xaml defaults; light values are darker, saturated text that meets
+    /// WCAG AA against a near-white surface, with tints lifted so the banner still reads as coloured.
+    /// </summary>
+    public static IReadOnlyList<(string Key, Color Color)> StatusPalette(bool isDark) => isDark
+        ?
+        [
+            ("WarningText", C("#FCD34D")), ("WarningBgSubtle", C("#1AFBBF24")),
+            ("WarningBg", C("#40FBBF24")), ("WarningStripe", C("#FBBF24")),
+            ("SuccessText", C("#4ADE80")), ("SuccessBgSubtle", C("#1A22C55E")), ("SuccessBorder", C("#3322C55E")),
+            ("InfoText", C("#7DD3FC")), ("InfoBgSubtle", C("#1A38BDF8")), ("InfoBorder", C("#3338BDF8")),
+            ("DangerText", C("#F87171")), ("DangerBgSubtle", C("#1AEF4444")), ("DangerBorder", C("#33EF4444")),
+        ]
+        :
+        [
+            ("WarningText", C("#92400E")), ("WarningBgSubtle", C("#26FBBF24")),   // amber-800 text — AA on white
+            ("WarningBg", C("#40FBBF24")), ("WarningStripe", C("#D97706")),
+            ("SuccessText", C("#15803D")), ("SuccessBgSubtle", C("#2622C55E")), ("SuccessBorder", C("#5522C55E")),
+            ("InfoText", C("#0369A1")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
+            ("DangerText", C("#B91C1C")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
+        ];
+
+    private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);
 
     private static void SetBrush(ResourceDictionary res, string key, Color color)
     {

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.31] - 2026-07-04
+
+### Fixed
+- **Screen readers now announce a clear label for the action buttons on System Health, Network Repair and Windows Features.** Several buttons (Scan, Check memory errors, Run SMART check, chkdsk scan/cancel, Flush DNS, Reset Winsock, Reset TCP/IP, Run as administrator) had no accessibility name, so assistive tech only had the raw content to read. They now carry a descriptive `AutomationProperties.Name`, matching the pattern already used elsewhere in those views.
+
 ## [1.52.30] - 2026-07-04
 
 ### Fixed

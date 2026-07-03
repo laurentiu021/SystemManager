@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.11] - 2026-07-03
+
+### Fixed
+- **Performance tab now reverts correctly on non-English Windows.** Two power settings were read by matching English text that Windows translates in other display languages, so on a non-English system the "Restore" path misbehaved:
+  - The **active power plan** was located by the English "GUID:" label. On a localized Windows that label is translated, so the plan couldn't be read and Restore silently skipped restoring it. The plan is now identified by its GUID (identical in every language), so it restores correctly regardless of display language.
+  - The **processor minimum state** was read by an English label and fell back to a fabricated 5% when the label didn't match — which then got **written back** as the "restored" value on non-English machines. It now returns "unknown" when it genuinely can't be read, and Restore leaves the setting untouched rather than forcing a wrong value. The English fast-path is unchanged.
+
 ## [1.52.10] - 2026-07-03
 
 ### Fixed

@@ -76,6 +76,25 @@ public class PerformanceServiceTests
         Assert.Equal("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", guid);
     }
 
+    [Fact]
+    public void ParseActivePlan_NonEnglishLabel_StillParsesGuid()
+    {
+        // Regression for the locale bug: the old parser keyed off the English "GUID:"
+        // substring, which is translated on non-English Windows, so it returned ("Unknown", "")
+        // and Restore then skipped the power-plan restore entirely. The parser now anchors on
+        // the canonical GUID token, which powercfg prints identically in every language.
+        // German example ("Energieschema-GUID:"):
+        var lines = new List<string>
+        {
+            "Energieschema-GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Ausbalanciert)"
+        };
+
+        var (name, guid) = PerformanceService.ParseActivePlan(lines);
+
+        Assert.Equal("381b4222-f694-41f0-9685-ff5bb260df2e", guid);
+        Assert.Equal("Ausbalanciert", name);
+    }
+
     // ── ParsePlanGuidByName ──
 
     [Fact]
@@ -160,18 +179,40 @@ public class PerformanceServiceTests
     }
 
     [Fact]
-    public void ParseProcessorMinPercent_EmptyInput_ReturnsDefault5()
+    public void ParseProcessorMinPercent_EmptyInput_ReturnsNull()
     {
+        // Behavior change (bug fix): the parser used to return a fabricated 5 when it
+        // couldn't read the value. That caused Restore to WRITE 5% back on machines where
+        // the read failed (non-English powercfg output). It now returns null = "unknown",
+        // and the snapshot/restore path treats null as "leave the setting untouched".
         var result = PerformanceService.ParseProcessorMinPercent(new List<string>());
-        Assert.Equal(5, result);
+        Assert.Null(result);
     }
 
     [Fact]
-    public void ParseProcessorMinPercent_NoMatchingLine_ReturnsDefault5()
+    public void ParseProcessorMinPercent_NoMatchingLine_ReturnsNull()
     {
         var lines = new List<string> { "some random text" };
         var result = PerformanceService.ParseProcessorMinPercent(lines);
-        Assert.Equal(5, result);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ParseProcessorMinPercent_NonEnglishLabel_StillParsesFirstHex()
+    {
+        // Regression for the locale bug: on non-English Windows the "Current AC Power
+        // Setting Index" label is translated, so the old English-label match failed and the
+        // parser returned the fabricated 5. powercfg still prints the AC value first as a
+        // "0x…" token in every language, so the fallback now reads it. German example:
+        var lines = new List<string>
+        {
+            "  Index für aktuelle Wechselstromeinstellung: 0x00000032",
+            "  Index für aktuelle Gleichstromeinstellung: 0x00000019",
+        };
+
+        var result = PerformanceService.ParseProcessorMinPercent(lines);
+
+        Assert.Equal(0x32, result); // 50 — the AC value, not the DC value, not a fabricated 5
     }
 
     [Fact]

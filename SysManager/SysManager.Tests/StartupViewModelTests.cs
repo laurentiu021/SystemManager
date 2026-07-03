@@ -2,6 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
+using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -9,7 +12,10 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="StartupViewModel"/>. Verifies initial state,
 /// commands, and scan summary logic.
+/// Serialized under the DialogService collection: the confirm-gate test swaps the
+/// process-wide static <see cref="DialogService.Instance"/>.
 /// </summary>
+[Collection("DialogService")]
 public class StartupViewModelTests
 {
     [Fact]
@@ -124,6 +130,63 @@ public class StartupViewModelTests
     }
 
     // ── re-entrancy guard (regression: overlapping registry writes) ──
+
+    // ── confirmation gate (regression: bulk Enable All is a system change, must confirm) ──
+
+    [Fact]
+    public async Task EnableAll_WhenUserDeclinesConfirm_DoesNotEnableAndLeavesEntriesDisabled()
+    {
+        // Regression: "Enable All" re-arms every disabled startup item (registry/task writes)
+        // and adds boot time, so it must ask first. Declining must short-circuit BEFORE any
+        // write — proven here by the entry staying disabled (SetEnabledAsync is never reached).
+        var vm = new StartupViewModel(new StartupService());
+        // Let the ctor's auto-scan settle so it can't overwrite our seeded entry mid-test.
+        for (int i = 0; i < 30 && vm.IsBusy; i++) await Task.Delay(200);
+
+        vm.Entries.Clear();
+        var disabled = new StartupEntry { Name = "Seeded", Command = "c:\\x.exe", IsEnabled = false };
+        vm.Entries.Add(disabled);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.EnableAllCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.False(disabled.IsEnabled); // never enabled — the write path was not taken
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public async Task EnableAll_WithNoDisabledEntries_DoesNotPrompt()
+    {
+        // Nothing to enable → no confirmation dialog (and no write). Guards against nagging.
+        var vm = new StartupViewModel(new StartupService());
+        for (int i = 0; i < 30 && vm.IsBusy; i++) await Task.Delay(200);
+
+        vm.Entries.Clear();
+        vm.Entries.Add(new StartupEntry { Name = "On", Command = "c:\\y.exe", IsEnabled = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.EnableAllCommand.ExecuteAsync(null);
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
 
     [Fact]
     public void StateChangingCommands_DisabledWhileBusy()

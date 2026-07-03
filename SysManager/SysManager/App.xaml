@@ -316,16 +316,19 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
+                            <!-- Border uses the theme-adaptive Border1/Border2 brushes (updated per
+                                 preset by ThemeService.Apply) instead of hardcoded translucent white,
+                                 which was invisible on the six light presets (white border on white). -->
                             <Border x:Name="Bd" Background="Transparent" CornerRadius="8"
                                     Padding="{TemplateBinding Padding}"
-                                    BorderThickness="1" BorderBrush="#1AFFFFFF">
+                                    BorderThickness="1" BorderBrush="{DynamicResource Border1}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   TextBlock.Foreground="{TemplateBinding Foreground}"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface3}"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#33FFFFFF"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Border2}"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
@@ -333,7 +336,7 @@
                                 </Trigger>
                                 <Trigger Property="IsKeyboardFocused" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface3}"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#33FFFFFF"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Border2}"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">

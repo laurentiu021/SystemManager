@@ -150,16 +150,25 @@ public sealed partial class StartupViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task EnableAllAsync()
     {
+        var toEnable = Entries.Where(e => !e.IsEnabled).ToList();
+        if (toEnable.Count == 0)
+        {
+            StatusMessage = "All startup items are already enabled.";
+            return;
+        }
+
+        // Enabling every disabled item at once re-arms programs the user (or another tool)
+        // deliberately turned off, and each one adds boot time. Confirm the bulk change first —
+        // matching the confirm-before-bulk-write pattern used across the app (AppBlocker, Cleanup).
+        if (!DialogService.Instance.Confirm(
+                $"Re-enable {toEnable.Count} disabled startup item(s)?\n\n" +
+                "Each will run again at the next boot. You can disable any of them again individually.",
+                "Enable All Startup Items — Confirm"))
+            return;
+
         IsBusy = true;
         try
         {
-            var toEnable = Entries.Where(e => !e.IsEnabled).ToList();
-            if (toEnable.Count == 0)
-            {
-                StatusMessage = "All startup items are already enabled.";
-                return;
-            }
-
             // Report the outcome honestly: SetEnabledAsync returns false (and sets the
             // entry's StatusText) when a registry/task write fails, e.g. an item that
             // needs elevation. Previously every failure was swallowed and the status

@@ -6,7 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.52.21] - 2026-07-03
+## [1.52.22] - 2026-07-03
+
+### Fixed
+- **Outline buttons are now visible on the light themes.** "Ghost" buttons (e.g. Export text / Copy on the System Report tab, and similar secondary actions elsewhere) drew their border in a translucent white that was invisible against the light presets' pale backgrounds — the buttons looked borderless. They now use the theme's own border color, so they're clearly outlined on every theme.
+- **Startup Manager asks before re-enabling everything.** The "Enable All" button immediately re-enabled every disabled startup item — a bulk system change that adds boot time — with no confirmation. It now asks first (showing how many items will be affected), matching the confirm-before-bulk-change behavior used elsewhere in the app.
 
 ### Fixed
 - **Editing the hosts file no longer erases your own comments.** When you added, removed, or toggled an entry on the DNS & Hosts tab, SysManager rewrote the file from just the address mappings — silently dropping any standalone comment lines or blank spacing you'd written (section notes, documentation). Those comment and blank lines are now preserved through an edit, kept above the entries. Repeated saves stay stable (no duplicated headers), and a file with no comments is written exactly as before.

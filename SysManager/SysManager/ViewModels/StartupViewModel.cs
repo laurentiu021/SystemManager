@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 public sealed partial class StartupViewModel : ViewModelBase
 {
     private readonly StartupService _service;
-    private readonly List<StartupEntry> _allEntries = new();
+    private readonly List<StartupEntry> _allEntries = [];
 
     public BulkObservableCollection<StartupEntry> Entries { get; } = new();
 

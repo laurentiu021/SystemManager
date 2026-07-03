@@ -64,12 +64,12 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         foreach (var d in DriveInfo.GetDrives().Where(x => x.DriveType == DriveType.Fixed && x.IsReady))
             result.Add(d.RootDirectory.FullName);
 
-        var special = new[]
-        {
+        string[] special =
+        [
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-        };
+        ];
         foreach (var p in special.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x) && !result.Contains(x)))
             result.Add(p);
 

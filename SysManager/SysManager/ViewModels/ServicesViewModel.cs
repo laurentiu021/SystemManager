@@ -20,7 +20,7 @@ namespace SysManager.ViewModels;
 public sealed partial class ServicesViewModel : ViewModelBase
 {
     private readonly PowerShellRunner _ps;
-    private List<ServiceEntry> _allServices = new();
+    private List<ServiceEntry> _allServices = [];
 
     public BulkObservableCollection<ServiceEntry> Services { get; } = new();
 

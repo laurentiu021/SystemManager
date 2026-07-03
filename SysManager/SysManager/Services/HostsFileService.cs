@@ -21,6 +21,13 @@ public sealed partial class HostsFileService
     private readonly string HostsPath;
     private readonly string BackupPath;
 
+    // SysManager's own managed-header lines. Kept as constants because SaveHosts both EMITS them
+    // and must EXCLUDE them when preserving the user's standalone comments — otherwise the header
+    // would be recaptured and re-emitted on every save, growing without bound (a singleton service
+    // rewrites the whole file each time). One source of truth keeps emit and capture in lock-step.
+    private const string ManagedHeaderLine1 = "# This file is managed by SysManager";
+    private const string ManagedHeaderLine2 = "# Entries marked with # at the start are disabled";
+
     /// <summary>
     /// Creates the service against the real system hosts file. The optional
     /// <paramref name="hostsPath"/> override exists for testing so the backup /
@@ -96,6 +103,55 @@ public sealed partial class HostsFileService
         return entries;
     }
 
+    /// <summary>
+    /// Extracts the user's standalone comment and blank lines from the current hosts file so
+    /// <see cref="SaveHosts"/> can re-emit them. A line is preserved when it is a pure comment
+    /// (starts with '#') that is NOT a commented-out IP entry (those round-trip as disabled
+    /// <see cref="HostsEntry"/> objects) and NOT one of SysManager's managed-header lines
+    /// (excluding them keeps repeated saves from accumulating duplicate headers). Interior blank
+    /// lines are kept for readability; leading/trailing blanks are trimmed so the block is a fixed
+    /// point. Returns an empty list when the file is absent — so a file with no comments produces
+    /// output byte-identical to the previous behaviour.
+    /// </summary>
+    private List<string> ReadStandaloneCommentLines()
+    {
+        List<string> preserved = [];
+        if (!File.Exists(HostsPath)) return preserved;
+
+        string[] rawLines;
+        try { rawLines = File.ReadAllLines(HostsPath); }
+        catch (IOException) { return preserved; }
+        catch (UnauthorizedAccessException) { return preserved; }
+
+        foreach (var raw in rawLines)
+        {
+            var line = raw.Trim();
+
+            if (line.Length == 0)
+            {
+                // Keep blank lines only once we've started collecting content, so leading blanks
+                // (and the gap under our header) are dropped; trailing blanks are trimmed below.
+                if (preserved.Count > 0) preserved.Add("");
+                continue;
+            }
+
+            if (!line.StartsWith('#')) continue;                       // an IP entry — carried by `entries`
+            if (line == ManagedHeaderLine1 || line == ManagedHeaderLine2) continue; // our own header
+
+            // A '#' followed by something IP-shaped is a disabled entry, already represented as a
+            // HostsEntry with IsEnabled=false — skip it here so it isn't duplicated.
+            if (LooksLikeIpStart(line[1..].TrimStart())) continue;
+
+            preserved.Add(line);
+        }
+
+        // Trim trailing blank lines so the preserved block ends cleanly (fixed point).
+        while (preserved.Count > 0 && preserved[^1].Length == 0)
+            preserved.RemoveAt(preserved.Count - 1);
+
+        return preserved;
+    }
+
     /// <summary>True if a pristine pre-SysManager backup of the hosts file exists.</summary>
     public bool HasBackup => File.Exists(BackupPath);
 
@@ -108,6 +164,11 @@ public sealed partial class HostsFileService
     /// overwritten on every save, which meant that after the first save the ".bak"
     /// already contained SysManager's own output — losing the pristine original and
     /// defeating <see cref="RestoreBackup"/>.
+    ///
+    /// Standalone comments and blank lines the user wrote (documentation, section headers)
+    /// are preserved verbatim above the entries, so an edit through the UI no longer strips
+    /// them. SysManager's own managed-header lines are excluded from that capture, making the
+    /// rewrite a fixed point — repeated saves don't accumulate duplicate headers or blanks.
     /// </remarks>
     public void SaveHosts(List<HostsEntry> entries)
     {
@@ -117,10 +178,20 @@ public sealed partial class HostsFileService
 
         var lines = new List<string>
         {
-            "# This file is managed by SysManager",
-            "# Entries marked with # at the start are disabled",
+            ManagedHeaderLine1,
+            ManagedHeaderLine2,
             ""
         };
+
+        // Re-emit the user's own standalone comments/blank lines (not IP mappings — those are
+        // carried by `entries`). Without this, editing one entry through the UI silently deleted
+        // every hand-written comment on the next save.
+        var preserved = ReadStandaloneCommentLines();
+        if (preserved.Count > 0)
+        {
+            lines.AddRange(preserved);
+            lines.Add("");
+        }
 
         foreach (var entry in entries)
         {

@@ -57,7 +57,7 @@ public class HostsFileServiceTests
     [Fact]
     public void RestoreBackup_RestoresPristineOriginal()
     {
-        const string original = "# ORIGINAL pristine hosts\n127.0.0.1 original\n";
+        const string original = "# ORIGINAL pristine hosts\n127.0.0.1 originalhost\n";
         var (svc, hosts, dir) = NewServiceWithTempHosts(original);
         try
         {
@@ -65,7 +65,10 @@ public class HostsFileServiceTests
             {
                 new() { IpAddress = "9.9.9.9", Hostname = "managed", IsEnabled = true }
             });
-            Assert.DoesNotContain("ORIGINAL pristine hosts", File.ReadAllText(hosts));
+            // The original IP MAPPING is replaced by the managed one. (The standalone comment is
+            // now legitimately preserved by F40, so we assert on the mapping, not the comment.)
+            Assert.DoesNotContain("originalhost", File.ReadAllText(hosts));
+            Assert.Contains("managed", File.ReadAllText(hosts));
 
             Assert.True(svc.HasBackup);
             Assert.True(svc.RestoreBackup());
@@ -229,6 +232,106 @@ public class HostsFileServiceTests
             var entry = svc.AddEntry("1.1.1.1", hostname);
             Assert.Equal(hostname, entry.Hostname);
             Assert.Equal("1.1.1.1", entry.IpAddress);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    // ---------- F40: standalone comment / blank-line preservation ----------
+
+    [Fact]
+    public async Task SaveHosts_PreservesStandaloneComments_ThroughReadEditSaveRoundTrip()
+    {
+        // Regression (F40): editing one entry through the UI rewrote the whole file from the
+        // parsed entries only, silently deleting the user's hand-written comments. A read →
+        // (edit) → save round trip must keep those comment lines.
+        const string original =
+            "# My custom block list\n" +
+            "# Managed by hand — do not delete\n" +
+            "0.0.0.0\tads.example.com\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(original);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();     // parses the one mapping
+            svc.SaveHosts(entries);                       // save without changing anything
+
+            var saved = File.ReadAllText(hosts);
+            Assert.Contains("# My custom block list", saved);
+            Assert.Contains("# Managed by hand — do not delete", saved);
+            Assert.Contains("ads.example.com", saved);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public async Task SaveHosts_IsFixedPoint_RepeatedSavesDoNotAccumulate()
+    {
+        // The service is a singleton doing a canonical whole-file rewrite: preserving comments
+        // naively would re-capture SysManager's own header and blank lines every save, growing
+        // the file without bound. Two consecutive save cycles must produce identical output.
+        const string original =
+            "# Section A\n" +
+            "127.0.0.1\tlocalhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(original);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            svc.SaveHosts(entries);
+            var afterFirst = File.ReadAllText(hosts);
+
+            var entries2 = await svc.ReadHostsAsync();
+            svc.SaveHosts(entries2);
+            var afterSecond = File.ReadAllText(hosts);
+
+            Assert.Equal(afterFirst, afterSecond);
+            // And the managed header appears exactly once, not once per save.
+            var headerCount = afterSecond.Split("# This file is managed by SysManager").Length - 1;
+            Assert.Equal(1, headerCount);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public void SaveHosts_NoComments_OutputUnchangedFromCanonicalForm()
+    {
+        // A file with no standalone comments must produce exactly the canonical header + entries
+        // (byte-for-byte the previous behaviour) — the preservation logic adds nothing here.
+        var (svc, hosts, dir) = NewServiceWithTempHosts("127.0.0.1\tlocalhost\n");
+        try
+        {
+            svc.SaveHosts(new List<HostsEntry>
+            {
+                new() { IpAddress = "127.0.0.1", Hostname = "localhost", IsEnabled = true }
+            });
+            var expected =
+                "# This file is managed by SysManager" + Environment.NewLine +
+                "# Entries marked with # at the start are disabled" + Environment.NewLine +
+                Environment.NewLine +
+                "127.0.0.1\tlocalhost" + Environment.NewLine;
+            Assert.Equal(expected, File.ReadAllText(hosts));
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public async Task SaveHosts_CommentedOutEntry_NotDuplicatedAsStandaloneComment()
+    {
+        // A disabled entry ("# 0.0.0.0 blocked") round-trips as a HostsEntry with IsEnabled=false,
+        // so it must NOT also be re-emitted as a standalone comment line — that would duplicate it.
+        const string original =
+            "# a real note\n" +
+            "# 0.0.0.0\tblocked.example.com\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(original);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            Assert.Contains(entries, e => e.Hostname == "blocked.example.com" && !e.IsEnabled);
+
+            svc.SaveHosts(entries);
+            var saved = File.ReadAllText(hosts);
+
+            var blockedCount = saved.Split("blocked.example.com").Length - 1;
+            Assert.Equal(1, blockedCount);                 // exactly one (the disabled entry)
+            Assert.Contains("# a real note", saved);       // the genuine comment survives
         }
         finally { try { Directory.Delete(dir, recursive: true); } catch { } }
     }

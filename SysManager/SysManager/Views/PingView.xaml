@@ -63,7 +63,7 @@
                         <StackPanel>
                             <TextBlock Text="AVG PING" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding Shared.Health.AveragePingMs, StringFormat={}{0:F0} ms}"
-                                       Style="{StaticResource Metric}" Foreground="#60A5FA"/>
+                                       Style="{StaticResource Metric}" Foreground="{DynamicResource Info}"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource CardInner}" Margin="8,0" Padding="16,8" MinWidth="110">
@@ -77,7 +77,7 @@
                         <StackPanel>
                             <TextBlock Text="WORST JITTER" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding Shared.Health.WorstJitterMs, StringFormat={}{0:F0} ms}"
-                                       Style="{StaticResource Metric}" Foreground="#F472B6"/>
+                                       Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -131,7 +131,7 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding LastLatencyMs, StringFormat={}{0:F0} ms, FallbackValue=—}"
-                                                           Foreground="#60A5FA" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource Info}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="LATENCY" Foreground="#475569" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
@@ -141,7 +141,7 @@
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding JitterMs, StringFormat={}{0:F0}, FallbackValue=—}"
-                                                           Foreground="#F472B6" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource Warning}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="JITTER" Foreground="#475569" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel HorizontalAlignment="Center">

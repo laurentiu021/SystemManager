@@ -29,8 +29,12 @@ public partial class ThemePopup : UserControl
         if (_initialized) return;
         _initialized = true;
 
-        BuildPresetCards();
+        // Sync the mode radios to the persisted theme BEFORE building the preset cards:
+        // BuildPresetCards() reads DarkMode.IsChecked to decide which presets to list, and at
+        // Loaded time that is still the XAML default (Dark). A user who persisted a Light or
+        // Custom theme would otherwise see the Dark preset list until they interacted with the UI.
         SyncUiToService();
+        BuildPresetCards();
 
         DarkMode.Checked += Mode_Changed;
         LightMode.Checked += Mode_Changed;

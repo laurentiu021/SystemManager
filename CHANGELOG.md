@@ -6,7 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.52.19] - 2026-07-03
+## [1.52.20] - 2026-07-03
+
+### Fixed
+- **The theme picker now opens on your saved theme's presets.** If you'd set a Light or Custom theme, the theme popup initially built its preset list from the default Dark mode and only corrected itself once you clicked something — so it briefly showed the wrong set of presets. It now reads your saved mode first, so the correct presets appear immediately.
+- **Ping and System Logs numbers are now readable on the Light themes.** The average-ping / jitter / latency figures on the Network Ping tab and the severity counts (Critical, Errors, Warnings, Info) on the System Logs tab used fixed pale colors that nearly disappeared against the light preset backgrounds. They now use the app's semantic status colors, so they stay legible on every theme.
 
 ### Fixed
 - **Recycle Bin size estimates now match what emptying actually frees.** Both Quick Cleanup and Deep Cleanup summed the whole hidden `$Recycle.Bin` folder on every drive — which, on a shared PC (especially when running as administrator), also counts *other users'* deleted files. But emptying the bin only ever clears the current user's items, so the "X MB in Recycle Bin" figure could be far larger than what actually gets freed. The estimate now measures only the current user's Recycle Bin, so the number is honest.

@@ -151,6 +151,19 @@ public class LargeFileScannerTests : IDisposable
         Assert.Empty(result);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task Scan_NonPositiveTop_ReturnsEmpty(int top)
+    {
+        // Regression: a non-positive Top (reachable from the unvalidated TopCount
+        // textbox) used to reach the eviction path and throw ArgumentNullException
+        // via meta.Remove(null) once an eligible file was found. Now guarded → empty.
+        CreateFile("big.bin", 2000);
+        var result = await _scanner.ScanAsync(_root, minSizeBytes: 500, top: top);
+        Assert.Empty(result);
+    }
+
     // ---------- cancellation ----------
 
     [Fact]

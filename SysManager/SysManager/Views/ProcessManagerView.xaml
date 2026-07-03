@@ -182,7 +182,7 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"
-                                        Background="#10FFFFFF" BorderThickness="1" BorderBrush="#0AFFFFFF">
+                                        Background="{DynamicResource Surface3}" BorderThickness="1" BorderBrush="{DynamicResource Border1}">
                                     <Grid>
                                         <Border Width="3" HorizontalAlignment="Left" CornerRadius="2"
                                                 Margin="-8,-4,0,-4"

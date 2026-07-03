@@ -168,14 +168,14 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"
-                                        BorderThickness="1" BorderBrush="#0AFFFFFF"
+                                        BorderThickness="1" BorderBrush="{DynamicResource Border1}"
                                         HorizontalAlignment="Center">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Source}" Value="">
-                                                    <Setter Property="Background" Value="#14FBBF24"/>
+                                                    <Setter Property="Background" Value="{DynamicResource WarningBgSubtle}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -212,11 +212,11 @@
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Text" Value="{Binding Source}"/>
-                                                        <Setter Property="Foreground" Value="#A78BFA"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Source}" Value="">
                                                                 <Setter Property="Text" Value="Local"/>
-                                                                <Setter Property="Foreground" Value="#FDE68A"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
                                                                 <Setter Property="ToolTip" Value="Not from winget — uses registry uninstall command"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -234,14 +234,14 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,4"
-                                        Background="#14475569" BorderBrush="#0AFFFFFF" BorderThickness="1"
+                                        Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                         VerticalAlignment="Center" Margin="4,0"
                                         Visibility="{Binding Status, Converter={StaticResource FlexVis}}"
                                         ToolTip="{Binding Status}">
                                     <Grid>
-                                        <Border Background="#475569" Width="3" HorizontalAlignment="Left"
+                                        <Border Background="{DynamicResource TextMuted}" Width="3" HorizontalAlignment="Left"
                                                 CornerRadius="2" Margin="-8,-4,0,-4"/>
-                                        <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#94A3B8"
+                                        <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                                    FontWeight="SemiBold" Margin="4,0,0,0"
                                                    TextTrimming="CharacterEllipsis" MaxWidth="160"/>
                                     </Grid>

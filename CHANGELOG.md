@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.25] - 2026-07-04
+
+### Fixed
+- **Status badges (Startup, Windows Features, Uninstaller, Process Manager) are now readable on the Light themes.** The colored status pills — "Enabled"/"Disabled" on Startup Manager, "Done"/"Failed"/"Reboot required" on Windows Features, the "winget"/"Local" source tag and status on Uninstaller, and the process-state pill — used hardcoded colors tuned for the dark themes (pale green/amber text, translucent-white borders). On the six light presets they washed out to near-invisible (green-on-green text, no visible border). They now use the app's theme-aware status colors, so they stay legible on every theme. The "Irreversible" badge on Deep Cleanup was migrated the same way. On the dark themes the look is unchanged.
+
 ## [1.52.24] - 2026-07-04
 
 ### Fixed

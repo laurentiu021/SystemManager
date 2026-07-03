@@ -151,7 +151,7 @@
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsEnabled}" Value="True">
                                                     <Setter Property="Text" Value="Enabled"/>
-                                                    <Setter Property="Foreground" Value="#4ADE80"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource SuccessText}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -178,21 +178,21 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"
-                                        BorderThickness="1" BorderBrush="#0AFFFFFF"
+                                        BorderThickness="1" BorderBrush="{DynamicResource Border1}"
                                         Visibility="{Binding Status, Converter={StaticResource FlexVis}}"
                                         ToolTip="{Binding Status}">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#14475569"/>
+                                            <Setter Property="Background" Value="{DynamicResource Surface3}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Status}" Value="Done">
-                                                    <Setter Property="Background" Value="#1422C55E"/>
+                                                    <Setter Property="Background" Value="{DynamicResource SuccessBgSubtle}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                                    <Setter Property="Background" Value="#14EF4444"/>
+                                                    <Setter Property="Background" Value="{DynamicResource DangerBgSubtle}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Status}" Value="Reboot required">
-                                                    <Setter Property="Background" Value="#14F59E0B"/>
+                                                    <Setter Property="Background" Value="{DynamicResource WarningBgSubtle}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -202,7 +202,7 @@
                                                 Margin="-8,-4,0,-4">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#475569"/>
+                                                    <Setter Property="Background" Value="{DynamicResource TextMuted}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Status}" Value="Done">
                                                             <Setter Property="Background" Value="{DynamicResource Success}"/>
@@ -221,7 +221,7 @@
                                             <Ellipse Width="6" Height="6" VerticalAlignment="Center">
                                                 <Ellipse.Style>
                                                     <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="#475569"/>
+                                                        <Setter Property="Fill" Value="{DynamicResource TextMuted}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Status}" Value="Done">
                                                                 <Setter Property="Fill" Value="{DynamicResource Success}"/>
@@ -241,16 +241,16 @@
                                                        TextTrimming="CharacterEllipsis">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="#94A3B8"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Status}" Value="Done">
-                                                                <Setter Property="Foreground" Value="#86EFAC"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource SuccessText}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                                                <Setter Property="Foreground" Value="#FCA5A5"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource DangerText}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Status}" Value="Reboot required">
-                                                                <Setter Property="Foreground" Value="#FDE68A"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>

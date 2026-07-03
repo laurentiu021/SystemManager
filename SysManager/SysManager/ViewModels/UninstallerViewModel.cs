@@ -162,6 +162,9 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 // whole batch — record it on the row and continue with the next app.
                 catch (System.ComponentModel.Win32Exception ex) { app.Status = $"Error: {ex.Message}"; }
                 catch (System.IO.IOException ex) { app.Status = $"Error: {ex.Message}"; }
+                // An unparseable package Id (e.g. an ARP GUID) throws ArgumentException from
+                // UninstallAsync before any process runs; record it and continue the batch.
+                catch (ArgumentException ex) { app.Status = $"Error: {ex.Message}"; }
                 done++;
             }
 

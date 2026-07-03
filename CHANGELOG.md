@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.26] - 2026-07-04
+
+### Fixed
+- **Long task names and paths on the Task Scheduler tab now truncate with an ellipsis.** The Task and Path columns rendered long text clipped hard at the column edge with no "…" indicator, unlike the other data tables in the app (Services, Drivers, Uninstaller, etc.) which trim cleanly. Both columns now use the same character-ellipsis trimming, so overflowing text ends in "…" and the layout stays tidy.
+
 ## [1.52.25] - 2026-07-04
 
 ### Fixed

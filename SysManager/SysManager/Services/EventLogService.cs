@@ -157,7 +157,13 @@ public sealed partial class EventLogService
 
         if (opt.Since.HasValue)
         {
-            var iso = opt.Since.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+            // InvariantCulture is REQUIRED: the ':' in the format string is replaced by the
+            // current culture's TimeSeparator, which is '.' on locales like fi-FI, producing
+            // "12.30.45" — an invalid SystemTime that makes EventLogQuery throw (caught → the
+            // Logs tab comes back empty). The Event Log XPath schema requires ISO-8601 with
+            // ':' regardless of the OS display language.
+            var iso = opt.Since.Value.ToUniversalTime()
+                .ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture);
             clauses.Add($"TimeCreated[@SystemTime>='{iso}']");
         }
 

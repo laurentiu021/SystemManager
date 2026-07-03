@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.17] - 2026-07-03
+
+### Fixed
+- **System Logs no longer come back empty on some non-English regional settings.** The Event Log query built its time filter with the OS's regional time separator, so on a region that uses `.` instead of `:` in times (e.g. Finnish) the timestamp became invalid and the query silently failed — the Logs tab showed nothing. The timestamp is now always formatted in the culture-independent ISO form, so log filtering works regardless of regional settings.
+
 ## [1.52.16] - 2026-07-03
 
 ### Fixed

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.12] - 2026-07-03
+
+### Fixed
+- **Turning a privacy toggle off now removes the setting instead of forcing the opposite.** When you switched a privacy protection back off (or used Undo in the Tweaks hub), SysManager wrote the "off" value into the registry — for the policy-backed toggles this **created an enforced Group Policy the machine may never have had**. The worst case was "Disable diagnostic data": reverting it wrote `AllowTelemetry = 3`, which is *enforced Full telemetry* — strictly worse than the value simply being absent. Reverting a toggle now **deletes** our registry value so Windows falls back to its own default, which is the correct meaning of "undo". This applies to both the Privacy & Telemetry tab and the Tweaks hub's Undo.
+
 ## [1.52.11] - 2026-07-03
 
 ### Fixed

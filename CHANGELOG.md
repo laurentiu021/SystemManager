@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.29] - 2026-07-04
+
+### Fixed
+- **Toggle switches and safety filter chips now follow the theme on the Light presets.** The "off" state of every toggle switch (Privacy toggles, feature switches, etc.) used a hardcoded dark-slate track that looked nearly black on the light themes; the safety filter chips (Safe / Caution / Critical) used hardcoded translucent status colors. Both now use the app's theme-aware brushes, so the off-toggle reads as a soft muted track and the chips stay legible on every theme. On the dark themes the look is unchanged.
+
 ## [1.52.28] - 2026-07-04
 
 ### Fixed

@@ -373,7 +373,7 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="ToggleButton">
                             <Grid>
-                                <Border x:Name="Track" CornerRadius="11" Background="#374151"/>
+                                <Border x:Name="Track" CornerRadius="11" Background="{DynamicResource TextMuted}"/>
                                 <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9"
                                         Background="White" HorizontalAlignment="Left" Margin="2,2,0,2"
                                         VerticalAlignment="Center">
@@ -408,17 +408,17 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
                             <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
-                                    Background="#1522C55E" BorderBrush="#3022C55E" BorderThickness="1"
+                                    Background="{DynamicResource SuccessBgSubtle}" BorderBrush="{DynamicResource SuccessBorder}" BorderThickness="1"
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
-                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="#22C55E" Margin="0,0,5,0"/>
+                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource Success}" Margin="0,0,5,0"/>
                                     <ContentPresenter VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#3022C55E"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#6022C55E"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SuccessBorder}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Success}"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
@@ -427,28 +427,28 @@
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
-                <Setter Property="Foreground" Value="#4ADE80"/>
+                <Setter Property="Foreground" Value="{DynamicResource SuccessText}"/>
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="FontWeight" Value="Medium"/>
             </Style>
 
             <Style x:Key="FilterChipCaution" TargetType="RadioButton" BasedOn="{StaticResource FilterChip}">
-                <Setter Property="Foreground" Value="#FBBF24"/>
+                <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
                             <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
-                                    Background="#15F59E0B" BorderBrush="#30F59E0B" BorderThickness="1"
+                                    Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningStripe}" BorderThickness="1"
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
-                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="#F59E0B" Margin="0,0,5,0"/>
+                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource Warning}" Margin="0,0,5,0"/>
                                     <ContentPresenter VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#30F59E0B"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#60F59E0B"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource WarningBg}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource WarningStripe}"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
@@ -460,22 +460,22 @@
             </Style>
 
             <Style x:Key="FilterChipCritical" TargetType="RadioButton" BasedOn="{StaticResource FilterChip}">
-                <Setter Property="Foreground" Value="#F87171"/>
+                <Setter Property="Foreground" Value="{DynamicResource DangerText}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
                             <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
-                                    Background="#15EF4444" BorderBrush="#30EF4444" BorderThickness="1"
+                                    Background="{DynamicResource DangerBgSubtle}" BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1"
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
-                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="#EF4444" Margin="0,0,5,0"/>
+                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource Danger}" Margin="0,0,5,0"/>
                                     <ContentPresenter VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#30EF4444"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#60EF4444"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DangerBorder}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Danger}"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>

@@ -56,7 +56,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding CriticalCount}" FontSize="20" FontWeight="Bold"
-                                   Foreground="#FF6B6B" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                   Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <!-- Bold + ▲ glyph distinguish Critical from Error without relying on hue
                              (both are reds — a colorblind-safe, non-color cue). -->
                         <TextBlock FontSize="12" Foreground="#64748B" FontWeight="SemiBold"
@@ -79,7 +79,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding ErrorCount}" FontSize="20" FontWeight="Bold"
-                                   Foreground="#FCA5A5" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                   Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <TextBlock FontSize="12" Foreground="#64748B"
                                    VerticalAlignment="Center" Margin="10,0,0,0">
                             <Run Text="&#x25CF; Errors"/>
@@ -104,7 +104,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding WarningCount}" FontSize="20" FontWeight="Bold"
-                                   Foreground="#FDE68A" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                   Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <TextBlock Text="Warnings" FontSize="12" Foreground="#64748B"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
@@ -123,7 +123,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding InfoCount}" FontSize="20" FontWeight="Bold"
-                                   Foreground="#7DD3FC" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                   Foreground="{DynamicResource Info}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <TextBlock Text="Info" FontSize="12" Foreground="#64748B"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>

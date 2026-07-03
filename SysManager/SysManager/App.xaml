@@ -72,6 +72,12 @@
             <SolidColorBrush x:Key="Danger" Color="#EF4444"/>
             <SolidColorBrush x:Key="Info" Color="#38BDF8"/>
 
+            <!-- Dashboard metric identity colors (CPU=Success green, MEM=blue, GPU=purple).
+                 Named so the metric cards reference brushes instead of copy-pasting the same hex;
+                 the mid-tone blue/purple stay legible on both dark and light presets. -->
+            <SolidColorBrush x:Key="MetricBlue" Color="#3B82F6"/>
+            <SolidColorBrush x:Key="MetricPurple" Color="#A855F7"/>
+
             <!-- Warning category surface (admin elevation banner, etc.) -->
             <SolidColorBrush x:Key="WarningBgSubtle" Color="#1AFBBF24"/>
             <SolidColorBrush x:Key="WarningBg" Color="#40FBBF24"/>

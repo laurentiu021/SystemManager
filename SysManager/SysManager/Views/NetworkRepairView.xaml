@@ -20,6 +20,7 @@
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        AutomationProperties.Name="Relaunch as administrator"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -72,6 +73,7 @@
                                        Text="When you visit a website, Windows caches its IP address. If the site moves or your DNS provider updates, the stale cache causes failures. This clears all cached lookups so fresh queries occur."/>
                         </StackPanel>
                         <Button Content="Flush DNS" Command="{Binding FlushDnsCommand}" Style="{StaticResource SecondaryButton}"
+                                AutomationProperties.Name="Flush DNS resolver cache"
                                 HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
                                 IsEnabled="{Binding IsRepairing, Converter={StaticResource BoolInvert}}"/>
                     </DockPanel>
@@ -98,6 +100,7 @@
                                        Text="Winsock is the low-level API all network applications use. Broken VPN drivers, malware, or corrupted LSP providers can break it. This resets the network catalog to factory defaults."/>
                         </StackPanel>
                         <Button Content="Reset Winsock" Command="{Binding ResetWinsockCommand}" Style="{StaticResource SecondaryButton}"
+                                AutomationProperties.Name="Reset Winsock catalog"
                                 HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
                                 IsEnabled="{Binding IsRepairing, Converter={StaticResource BoolInvert}}"/>
                     </DockPanel>
@@ -124,6 +127,7 @@
                                        Text="Completely rebuilds TCP/IP stack registry keys. Use only when other fixes fail — this resets all custom IP configurations, routes, and adapter settings to Windows defaults."/>
                         </StackPanel>
                         <Button Content="Reset TCP/IP" Command="{Binding ResetTcpIpCommand}" Style="{StaticResource SecondaryButton}"
+                                AutomationProperties.Name="Reset TCP/IP stack"
                                 HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="18,8"
                                 IsEnabled="{Binding IsRepairing, Converter={StaticResource BoolInvert}}"/>
                     </DockPanel>

@@ -16,6 +16,7 @@
                                    Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                     </StackPanel>
                     <Button Content="Scan" Command="{Binding ScanCommand}" Style="{StaticResource PrimaryButton}"
+                            AutomationProperties.Name="Scan system health"
                             HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                 </DockPanel>
 
@@ -25,6 +26,7 @@
                         Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
                     <DockPanel>
                         <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                                AutomationProperties.Name="Relaunch as administrator"
                                 Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -104,8 +106,10 @@
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="Check memory errors" Command="{Binding CheckMemoryErrorsCommand}"
+                                    AutomationProperties.Name="Check memory errors"
                                     Style="{StaticResource PrimaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                             <Button Content="Run MemTest (reboot)" Command="{Binding ScheduleMemoryTestCommand}"
+                                    AutomationProperties.Name="Schedule a memory test on next reboot"
                                     Style="{StaticResource SecondaryButton}" Padding="14,8"/>
                         </StackPanel>
                     </Grid>
@@ -172,6 +176,7 @@
                         <DockPanel>
                             <TextBlock Text="Disk health (SMART)" Style="{StaticResource SectionTitle}"/>
                             <Button Content="Run SMART check" Command="{Binding CheckDiskHealthCommand}"
+                                    AutomationProperties.Name="Run SMART disk health check"
                                     Style="{StaticResource PrimaryButton}"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                         </DockPanel>
@@ -264,11 +269,14 @@
                             <TextBlock Text="File-system scan (chkdsk)" Style="{StaticResource SectionTitle}"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                                 <Button Content="Refresh drives" Command="{Binding RefreshDrivesCommand}"
+                                        AutomationProperties.Name="Refresh drive list"
                                         Style="{StaticResource GhostButton}"/>
                                 <Button Content="Scan selected" Command="{Binding RunChkdskOnSelectedCommand}"
+                                        AutomationProperties.Name="Run chkdsk on selected drive"
                                         Style="{StaticResource PrimaryButton}" Margin="6,0,0,0"
                                         IsEnabled="{Binding IsChkdskRunning, Converter={StaticResource BoolInvert}}"/>
                                 <Button Content="Cancel" Command="{Binding CancelScanCommand}"
+                                        AutomationProperties.Name="Cancel disk scan"
                                         Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                             </StackPanel>
                         </DockPanel>
@@ -337,6 +345,7 @@
                                             <Button Grid.Column="3" Content="Scan"
                                                     Command="{Binding DataContext.RunChkdskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding Letter}"
+                                                    AutomationProperties.Name="{Binding Letter, StringFormat='Run chkdsk on drive {0}'}"
                                                     Style="{StaticResource SecondaryButton}" Padding="12,6"
                                                     IsEnabled="{Binding DataContext.IsChkdskRunning, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolInvert}}"/>
                                         </Grid>

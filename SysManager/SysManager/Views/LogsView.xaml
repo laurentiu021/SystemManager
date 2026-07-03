@@ -14,7 +14,7 @@
             <Setter Property="CornerRadius" Value="14"/>
             <Setter Property="Padding" Value="16,12"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#0FFFFFFF"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
         </Style>
     </UserControl.Resources>
 
@@ -59,7 +59,7 @@
                                    Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <!-- Bold + ▲ glyph distinguish Critical from Error without relying on hue
                              (both are reds — a colorblind-safe, non-color cue). -->
-                        <TextBlock FontSize="12" Foreground="#64748B" FontWeight="SemiBold"
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}" FontWeight="SemiBold"
                                    VerticalAlignment="Center" Margin="10,0,0,0">
                             <Run Text="&#x25B2; Critical"/>
                         </TextBlock>
@@ -67,20 +67,20 @@
                 </Grid>
             </Border>
             <!-- Errors -->
-            <Border Style="{StaticResource GlassCard}" Background="#14F87171" Margin="0,0,12,0"
+            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource DangerBgSubtle}" Margin="0,0,12,0"
                     AutomationProperties.Name="{Binding ErrorCount, StringFormat='Errors: {0}'}">
                 <Grid>
-                    <Border Background="#F87171" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                    <Border Background="{DynamicResource Danger}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
                     <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#F87171">
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Danger}">
                             <Ellipse.Effect>
                                 <DropShadowEffect Color="#F87171" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding ErrorCount}" FontSize="20" FontWeight="Bold"
                                    Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock FontSize="12" Foreground="#64748B"
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0">
                             <Run Text="&#x25CF; Errors"/>
                         </TextBlock>
@@ -88,7 +88,7 @@
                 </Grid>
             </Border>
             <!-- Warnings -->
-            <Border Style="{StaticResource GlassCard}" Background="#14FBBF24" Margin="0,0,12,0"
+            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource WarningBgSubtle}" Margin="0,0,12,0"
                     AutomationProperties.Name="{Binding WarningCount, StringFormat='Warnings: {0}'}">
                 <Grid>
                     <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
@@ -105,13 +105,13 @@
                         </Ellipse>
                         <TextBlock Text="{Binding WarningCount}" FontSize="20" FontWeight="Bold"
                                    Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock Text="Warnings" FontSize="12" Foreground="#64748B"
+                        <TextBlock Text="Warnings" FontSize="12" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </Grid>
             </Border>
             <!-- Info -->
-            <Border Style="{StaticResource GlassCard}" Background="#1438BDF8"
+            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource InfoBgSubtle}"
                     AutomationProperties.Name="{Binding InfoCount, StringFormat='Info events: {0}'}">
                 <Grid>
                     <Border Background="{DynamicResource Info}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
@@ -124,7 +124,7 @@
                         </Ellipse>
                         <TextBlock Text="{Binding InfoCount}" FontSize="20" FontWeight="Bold"
                                    Foreground="{DynamicResource Info}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock Text="Info" FontSize="12" Foreground="#64748B"
+                        <TextBlock Text="Info" FontSize="12" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </Grid>

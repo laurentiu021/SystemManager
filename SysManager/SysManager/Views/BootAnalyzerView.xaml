@@ -109,7 +109,13 @@
                               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="100"/>
-                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="120">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                             <DataGridTextColumn Header="Delay" Binding="{Binding DurationDisplay}" Width="80"/>
                         </DataGrid.Columns>
                     </DataGrid>

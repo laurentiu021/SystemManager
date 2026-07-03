@@ -11,9 +11,8 @@
                        HorizontalAlignment="Center" Margin="0,0,0,16"/>
 
             <!-- Feature name -->
-            <TextBlock Text="{Binding FeatureName}" FontSize="28" FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center"
-                       TextWrapping="Wrap" TextAlignment="Center"/>
+            <TextBlock Text="{Binding FeatureName}" Style="{StaticResource Display}"
+                       HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
 
             <!-- WIP badge -->
             <Border Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="12,6"

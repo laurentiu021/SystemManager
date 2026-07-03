@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.33] - 2026-07-04
+
+### Fixed
+- **Long names in the Boot Analyzer and Shortcut Cleaner tables now truncate with an ellipsis.** Their free-text columns clipped long values hard at the column edge with no "…", unlike the other data tables in the app. Both now trim consistently. Also aligned the Work-in-Progress placeholder title to the app's shared "Display" heading style instead of a one-off inline font, so all headings stay uniform.
+
 ## [1.52.32] - 2026-07-04
 
 ### Fixed

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.24] - 2026-07-04
+
+### Fixed
+- **Dropdowns (combo boxes) now match the theme and stay readable on the Light themes.** The folder/path pickers on Duplicate Finder and Disk Analyzer, and other dropdowns across the app, used the default Windows combo-box look — a fixed white popup with near-black text that ignored the selected theme. On the dark themes it clashed; on the light themes the editable text and dropdown items were low-contrast. Combo boxes now use a theme-aware style (matching the app's text fields — themed surface, border, rounded corners, accent focus, and a properly styled dropdown list), so they look consistent and stay legible on every theme.
+
 ## [1.52.23] - 2026-07-03
 
 ### Fixed

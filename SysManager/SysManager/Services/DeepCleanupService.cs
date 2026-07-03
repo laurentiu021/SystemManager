@@ -115,10 +115,7 @@ public sealed class DeepCleanupService
 
             new("Recycle Bin (all drives)",
                 "Emptying the recycle bin on every fixed drive.",
-                DriveInfo.GetDrives()
-                    .Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
-                    .Select(d => Path.Combine(d.RootDirectory.FullName, "$Recycle.Bin"))
-                    .ToArray(),
+                RecycleBinHelper.CurrentUserBinPaths(),
                 IsRecycleBin: true),
 
             new("Steam — browser & depot cache",

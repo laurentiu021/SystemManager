@@ -121,12 +121,12 @@ public sealed partial class CleanupViewModel : ViewModelBase
                 try
                 {
                     long binBytes = 0;
-                    // The Recycle Bin lives in a hidden $Recycle.Bin folder on EVERY fixed
-                    // drive, not just C:. Sum them all so the estimate isn't drive-bound.
-                    foreach (var drive in DriveInfo.GetDrives())
+                    // The Recycle Bin lives in a hidden $Recycle.Bin folder on EVERY fixed drive,
+                    // one per-SID subfolder per user. Empty (SHEmptyRecycleBin) only clears the
+                    // CURRENT user's bin, so size only THIS user's per-SID folders — summing the
+                    // whole tree over-reports what emptying can actually free on a multi-user box.
+                    foreach (var recyclePath in RecycleBinHelper.CurrentUserBinPaths())
                     {
-                        if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
-                        var recyclePath = Path.Combine(drive.RootDirectory.FullName, "$Recycle.Bin");
                         if (!Directory.Exists(recyclePath)) continue;
                         foreach (var f in Directory.EnumerateFiles(recyclePath, "*", SearchOption.AllDirectories))
                         {

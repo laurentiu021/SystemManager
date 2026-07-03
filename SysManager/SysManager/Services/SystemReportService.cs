@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -101,20 +102,21 @@ public sealed class SystemReportService
         try
         {
             using var searcher = new ManagementObjectSearcher(
-                "SELECT Name, AdapterRAM, DriverVersion FROM Win32_VideoController");
+                "SELECT Name, AdapterRAM, DriverVersion, PNPDeviceID FROM Win32_VideoController");
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
             {
                 using (mo)
                 {
                     var name = mo["Name"]?.ToString()?.Trim() ?? "Unknown GPU";
-                    double? vram = null;
-                    if (mo["AdapterRAM"] is { } ram)
-                    {
-                        var bytes = Convert.ToUInt64(ram);
-                        if (bytes > 0) vram = bytes / 1024.0 / 1024.0 / 1024.0;
-                    }
+                    // Win32_VideoController.AdapterRAM is a uint32 (CIM_UINT32) and saturates
+                    // at ~4 GiB, so it mis-reports every modern >4 GB GPU. The true size lives
+                    // in the driver's registry key as a 64-bit qwMemorySize; prefer it and fall
+                    // back to AdapterRAM only when the registry value is missing/zero.
                     var driver = mo["DriverVersion"]?.ToString()?.Trim() ?? "";
+                    var pnpId = mo["PNPDeviceID"]?.ToString();
+                    ulong? adapterRam = mo["AdapterRAM"] is { } ram ? Convert.ToUInt64(ram) : null;
+                    var vram = GpuVramHelper.ResolveVramGB(pnpId, adapterRam);
                     gpus.Add(new GpuReportInfo(name, vram, driver));
                 }
             }

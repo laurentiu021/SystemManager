@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.19] - 2026-07-03
+
+### Fixed
+- **Recycle Bin size estimates now match what emptying actually frees.** Both Quick Cleanup and Deep Cleanup summed the whole hidden `$Recycle.Bin` folder on every drive — which, on a shared PC (especially when running as administrator), also counts *other users'* deleted files. But emptying the bin only ever clears the current user's items, so the "X MB in Recycle Bin" figure could be far larger than what actually gets freed. The estimate now measures only the current user's Recycle Bin, so the number is honest.
+- **Installed-app detection no longer mislabels similarly-named apps.** In the Bulk Installer, an app was marked "Installed" if its winget Id appeared anywhere in a `winget list` row — so an app whose Id is a prefix of another (e.g. `Microsoft.Teams` vs. an installed `Microsoft.Teams.Classic`) was wrongly shown as already installed. Detection now compares exact winget Ids.
+- **System Report and About page now show the correct VRAM for GPUs over 4 GB.** Video memory was read from a 32-bit WMI field that caps at ~4 GiB, so an 8 GB or 12 GB card was reported as ~4 GB. The true size is now read from the graphics driver's 64-bit registry value, falling back to the old field only when that isn't available.
+
 ## [1.52.18] - 2026-07-03
 
 ### Fixed

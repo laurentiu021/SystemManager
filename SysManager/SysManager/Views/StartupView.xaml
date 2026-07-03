@@ -135,13 +135,13 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="8" Padding="8,5" VerticalAlignment="Center" Margin="4,0"
-                                        BorderThickness="1" BorderBrush="#0AFFFFFF">
+                                        BorderThickness="1" BorderBrush="{DynamicResource Border1}">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#1422C55E"/>
+                                            <Setter Property="Background" Value="{DynamicResource SuccessBgSubtle}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                    <Setter Property="Background" Value="#14475569"/>
+                                                    <Setter Property="Background" Value="{DynamicResource Surface3}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -154,7 +154,7 @@
                                                     <Setter Property="Background" Value="{DynamicResource Success}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                            <Setter Property="Background" Value="#475569"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TextMuted}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -167,7 +167,7 @@
                                                         <Setter Property="Fill" Value="{DynamicResource Success}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                                <Setter Property="Fill" Value="#475569"/>
+                                                                <Setter Property="Fill" Value="{DynamicResource TextMuted}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -177,10 +177,10 @@
                                                        VerticalAlignment="Center" Margin="6,0,0,0">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="#86EFAC"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource SuccessText}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                                <Setter Property="Foreground" Value="#94A3B8"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>

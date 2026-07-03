@@ -76,9 +76,9 @@
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimary}"/>
                                                     <Border Margin="10,0,0,0" Padding="8,2" CornerRadius="999"
-                                                            Background="#5C1B1B" BorderBrush="{DynamicResource Danger}" BorderThickness="1"
+                                                            Background="{DynamicResource DangerBgSubtle}" BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1"
                                                             Visibility="{Binding IsDestructiveHint, Converter={StaticResource BoolToVis}}">
-                                                        <TextBlock Text="Irreversible" Foreground="#FCA5A5" FontSize="11" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="Irreversible" Foreground="{DynamicResource DangerText}" FontSize="11" FontWeight="SemiBold"/>
                                                     </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding Description}" Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>

@@ -91,8 +91,20 @@
                       Background="Transparent" BorderThickness="0" GridLinesVisibility="None"
                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Task" Binding="{Binding Name}" Width="2*"/>
-                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*"/>
+                    <DataGridTextColumn Header="Task" Binding="{Binding Name}" Width="2*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn Header="Type" Binding="{Binding CategoryLabel}" Width="110"/>
                     <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90"/>
                     <DataGridTextColumn Header="Last run" Binding="{Binding LastRunDisplay}" Width="140"/>

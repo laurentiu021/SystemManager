@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.13] - 2026-07-03
+
+### Fixed
+- **App Updates now shows upgrades on Windows display languages we don't have column titles for.** The winget table parser identifies the "Available" and "Source" columns by matching their header word against a list of known translations. On a language not in that list (e.g. Russian, Korean), those two columns weren't found, so every upgrade row came back with a blank "Available" version and was silently dropped — App Updates showed **no upgrades at all**. For the standard five-column upgrade table the parser now falls back to the fixed column order when a title isn't recognized, so upgrades appear regardless of display language. Four-column tables stay ambiguous by design and are left untouched (they can't be disambiguated by position).
+
 ## [1.52.12] - 2026-07-03
 
 ### Fixed

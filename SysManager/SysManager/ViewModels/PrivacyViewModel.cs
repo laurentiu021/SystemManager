@@ -49,8 +49,6 @@ public sealed partial class PrivacyViewModel : ViewModelBase
         LoadToggles(loaded);
     }
 
-    private void LoadToggles() => LoadToggles(_service.LoadToggles());
-
     private void LoadToggles(List<PrivacyToggle> loaded)
     {
         // Unsubscribe from old toggles
@@ -171,9 +169,13 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Refresh()
+    private async Task RefreshAsync()
     {
-        LoadToggles();
+        // Read the registry off the UI thread — the service reads every privacy key
+        // synchronously, which froze the UI when Refresh ran directly on the dispatcher.
+        // Mirrors the async initial load (LoadTogglesAsync).
+        var loaded = await Task.Run(_service.LoadToggles).ConfigureAwait(true);
+        LoadToggles(loaded);
         StatusMessage = "Toggles refreshed from registry.";
         Log.Information("Privacy: refreshed toggle states from registry");
     }

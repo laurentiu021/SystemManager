@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.30] - 2026-07-04
+
+### Fixed
+- **Refreshing the Privacy & Telemetry tab no longer briefly freezes the window.** The "Refresh" button read every privacy registry key synchronously on the UI thread, so the app hitched while the toggles reloaded. The refresh now reads the registry on a background thread (matching how the tab loads initially) and updates the UI when done, keeping the window responsive.
+
 ## [1.52.29] - 2026-07-04
 
 ### Fixed

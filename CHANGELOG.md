@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.16] - 2026-07-03
+
+### Fixed
+- **Cancelling a Deep Cleanup scan or clean now reports "cancelled", not "complete".** A scan or clean stopped partway through cancellation still reported success (and fired a "complete" notification) with partial results. Cancelling now correctly ends the operation as cancelled.
+- **Driver list can't be started twice at once.** The "List drivers" button had no busy-guard (unlike the other scan tabs), so a second click during a scan could corrupt the collected output. It's now disabled while a scan is running, matching the App Updates / Uninstaller tabs.
+- **Hardened Performance-tab power queries against a threading race.** The four `powercfg` reads collected output into a plain list from a callback that fires on two reader threads at once, which could corrupt the captured lines. They now use a thread-safe queue, matching the winget service.
+
 ## [1.52.15] - 2026-07-03
 
 ### Fixed

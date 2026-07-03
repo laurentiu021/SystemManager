@@ -28,11 +28,25 @@ public sealed partial class DriversViewModel : ViewModelBase
     public DriversViewModel(PowerShellRunner runner)
     {
         _runner = runner;
+        // Re-evaluate ListDrivers' CanExecute when IsBusy flips. Without this gate a second
+        // click while a scan runs double-subscribes the LineReceived capture (concatenated
+        // JSON → JsonException) and recreates the shared _cts the first run is still awaiting.
+        // Mirrors AppUpdates/Uninstaller/WindowsUpdate.
+        PropertyChanged += OnVmPropertyChanged;
+    }
+
+    /// <summary>Gate for the long-running scan command; Cancel stays enabled.</summary>
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        ListDriversCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnHideSystemDriversChanged(bool value) => ApplyFilter();
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ListDriversAsync()
     {
         IsBusy = true;
@@ -82,6 +96,7 @@ public sealed partial class DriversViewModel : ViewModelBase
     {
         if (disposing)
         {
+            PropertyChanged -= OnVmPropertyChanged;
             _cts?.Dispose();
         }
         base.Dispose(disposing);

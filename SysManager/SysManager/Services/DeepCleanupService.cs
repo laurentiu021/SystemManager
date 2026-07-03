@@ -243,6 +243,12 @@ public sealed class DeepCleanupService
             });
         }
 
+        // A cancelled scan exits the loops above with partial results; reporting "Done" and
+        // returning them would let the caller show a success toast for a cancelled op. Throw
+        // so the ViewModel's OperationCanceledException arm reports "cancelled" instead.
+        // Matches LargeFileScanner.
+        ct.ThrowIfCancellationRequested();
+
         progress?.Report(new ScanProgress(total, total, "Done"));
         return results;
     }
@@ -392,6 +398,12 @@ public sealed class DeepCleanupService
                 }
             }
         }
+
+        // A cancelled clean stops mid-way with partial deletions (already done + logged);
+        // reporting "Done" + returning a result would fire a success toast for a cancelled
+        // op. Throw so the ViewModel reports "Clean cancelled" instead. The work already
+        // performed is real and logged — throwing only changes the outcome message.
+        ct.ThrowIfCancellationRequested();
 
         progress?.Report(new ScanProgress(total, total, "Done"));
         return new CleanupResult { BytesFreed = freed, FilesDeleted = filesDeleted, Errors = errors };

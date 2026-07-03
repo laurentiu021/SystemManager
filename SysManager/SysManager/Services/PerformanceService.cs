@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security;
@@ -197,13 +198,15 @@ public sealed partial class PerformanceService : IDisposable
     public async Task<(string Name, string Guid)> GetActivePlanAsync(CancellationToken ct = default)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
-        List<string> lines = [];
-        void OnLine(PowerShellLine l) => lines.Add(l.Text);
+        // ConcurrentQueue: LineReceived fires from BOTH the stdout and stderr reader threads,
+        // so a plain List<string>.Add could interleave and corrupt/throw. Matches WingetService.
+        ConcurrentQueue<string> lines = new();
+        void OnLine(PowerShellLine l) => lines.Enqueue(l.Text);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", "/getactivescheme", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
-        return ParseActivePlan(lines);
+        return ParseActivePlan([.. lines]);
     }
 
     // Canonical GUID token (8-4-4-4-12 hex). powercfg prints the active plan's GUID in this
@@ -259,8 +262,10 @@ public sealed partial class PerformanceService : IDisposable
         var existingGuid = await FindPlanGuidByNameAsync("Ultimate Performance", ct).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(existingGuid)) return existingGuid;
 
-        List<string> lines = [];
-        void OnLine(PowerShellLine l) => lines.Add(l.Text);
+        // ConcurrentQueue: LineReceived fires from BOTH the stdout and stderr reader threads,
+        // so a plain List<string>.Add could interleave and corrupt/throw. Matches WingetService.
+        ConcurrentQueue<string> lines = new();
+        void OnLine(PowerShellLine l) => lines.Enqueue(l.Text);
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", $"-duplicatescheme {UltimatePerfScheme}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
@@ -283,13 +288,15 @@ public sealed partial class PerformanceService : IDisposable
     public async Task<string?> FindPlanGuidByNameAsync(string nameSubstring, CancellationToken ct = default)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
-        List<string> lines = [];
-        void OnLine(PowerShellLine l) => lines.Add(l.Text);
+        // ConcurrentQueue: LineReceived fires from BOTH the stdout and stderr reader threads,
+        // so a plain List<string>.Add could interleave and corrupt/throw. Matches WingetService.
+        ConcurrentQueue<string> lines = new();
+        void OnLine(PowerShellLine l) => lines.Enqueue(l.Text);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
-        return ParsePlanGuidByName(lines, nameSubstring);
+        return ParsePlanGuidByName([.. lines], nameSubstring);
     }
 
     internal static string? ParsePlanGuidByName(IList<string> lines, string nameSubstring)
@@ -526,8 +533,10 @@ public sealed partial class PerformanceService : IDisposable
     internal async Task<int?> ReadProcessorMinPercentAsync(CancellationToken ct = default)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
-        List<string> lines = [];
-        void OnLine(PowerShellLine l) => lines.Add(l.Text);
+        // ConcurrentQueue: LineReceived fires from BOTH the stdout and stderr reader threads,
+        // so a plain List<string>.Add could interleave and corrupt/throw. Matches WingetService.
+        ConcurrentQueue<string> lines = new();
+        void OnLine(PowerShellLine l) => lines.Enqueue(l.Text);
         _ps.LineReceived += OnLine;
         try
         {
@@ -536,7 +545,7 @@ public sealed partial class PerformanceService : IDisposable
         }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
-        return ParseProcessorMinPercent(lines);
+        return ParseProcessorMinPercent([.. lines]);
     }
 
     internal static int? ParseProcessorMinPercent(IList<string> lines)

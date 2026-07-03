@@ -78,12 +78,18 @@
             <SolidColorBrush x:Key="WarningStripe" Color="#FBBF24"/>
             <SolidColorBrush x:Key="WarningText" Color="#FCD34D"/>
 
-            <!-- Info / Success category surfaces (low-alpha tints layer over any
-                 theme surface, so they stay readable on light and dark presets). -->
+            <!-- Info / Success / Danger category surfaces + text. These defaults are dark-calibrated;
+                 ThemeService.ApplyStatusBrushes() recomputes ALL of them per preset so light themes
+                 get WCAG-AA-legible text (pale dark-theme text washes out on near-white surfaces). -->
             <SolidColorBrush x:Key="InfoBgSubtle" Color="#1A38BDF8"/>
             <SolidColorBrush x:Key="InfoBorder" Color="#3338BDF8"/>
+            <SolidColorBrush x:Key="InfoText" Color="#7DD3FC"/>
             <SolidColorBrush x:Key="SuccessBgSubtle" Color="#1A22C55E"/>
             <SolidColorBrush x:Key="SuccessBorder" Color="#3322C55E"/>
+            <SolidColorBrush x:Key="SuccessText" Color="#4ADE80"/>
+            <SolidColorBrush x:Key="DangerBgSubtle" Color="#1AEF4444"/>
+            <SolidColorBrush x:Key="DangerBorder" Color="#33EF4444"/>
+            <SolidColorBrush x:Key="DangerText" Color="#F87171"/>
 
             <!-- Console output coloring (legacy) -->
             <SolidColorBrush x:Key="OutErrorBrush"   Color="#F87171" />

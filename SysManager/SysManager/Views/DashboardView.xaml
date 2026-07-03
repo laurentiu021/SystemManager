@@ -147,9 +147,9 @@
                         <DockPanel Margin="0,0,0,8">
                             <TextBlock Text="MEMORY" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
-                            <Ellipse Width="6" Height="6" Fill="#3B82F6" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricBlue}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
-                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="#3B82F6">
+                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="{DynamicResource MetricBlue}">
                             <Run Text="{Binding RamPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
                         <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0">
@@ -165,7 +165,7 @@
                             <Run Text="{Binding RamType, Mode=OneWay}"/>
                         </TextBlock>
                         <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding RamPercent, Mode=OneWay}"
-                                     Foreground="#3B82F6" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
+                                     Foreground="{DynamicResource MetricBlue}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
                     </StackPanel>
                 </Border>
 
@@ -175,16 +175,16 @@
                         <DockPanel Margin="0,0,0,8">
                             <TextBlock Text="GPU" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
-                            <Ellipse Width="6" Height="6" Fill="#A855F7" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricPurple}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
-                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="#A855F7">
+                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="{DynamicResource MetricPurple}">
                             <Run Text="{Binding GpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
                         <TextBlock Text="{Binding GpuName}" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                    TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                         <TextBlock Text="{Binding GpuVram}" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                         <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding GpuPercent, Mode=OneWay}"
-                                     Foreground="#A855F7" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
+                                     Foreground="{DynamicResource MetricPurple}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -202,13 +202,13 @@
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border x:Name="Bd" CornerRadius="4" Padding="{TemplateBinding Padding}"
-                                                Background="#10FBBF24" BorderBrush="#30FBBF24" BorderThickness="1">
+                                                Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningStripe}" BorderThickness="1">
                                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="#20FBBF24"/>
-                                                <Setter TargetName="Bd" Property="BorderBrush" Value="#60FBBF24"/>
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource WarningBg}"/>
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource WarningStripe}"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
@@ -342,18 +342,18 @@
                                                DockPanel.Dock="Left" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding QuickActionStatus}" FontSize="11"
                                                DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                               Foreground="#3B82F6"/>
+                                               Foreground="{DynamicResource MetricBlue}"/>
                                 </DockPanel>
                                 <ProgressBar Height="4" Minimum="0" Maximum="100"
                                              Value="{Binding QuickActionProgress, Mode=OneWay}"
-                                             Foreground="#3B82F6" Background="{DynamicResource Surface3}" Margin="0,0,0,6"/>
+                                             Foreground="{DynamicResource MetricBlue}" Background="{DynamicResource Surface3}" Margin="0,0,0,6"/>
                                 <TextBlock Text="{Binding QuickActionDetail}" FontSize="11"
                                            Foreground="{DynamicResource TextMuted}" Margin="0,0,0,8"
                                            Visibility="{Binding QuickActionDetail, Converter={StaticResource FlexVis}}"/>
                                 <Button Content="{Binding QuickActionNavigateLabel}"
                                         Command="{Binding NavigateToQuickActionTabCommand}"
                                         Style="{StaticResource GhostButton}" Padding="8,4" FontSize="11"
-                                        Foreground="#3B82F6" HorizontalAlignment="Left"
+                                        Foreground="{DynamicResource MetricBlue}" HorizontalAlignment="Left"
                                         Visibility="{Binding IsQuickActionDone, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </Border>

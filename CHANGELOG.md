@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.27] - 2026-07-04
+
+### Fixed
+- **Dashboard "Run as admin" pill now follows the theme.** When SysManager isn't elevated, the small amber "Run as admin for all sensors" pill on the Dashboard used hardcoded amber tints that didn't adapt to the theme (and were tuned for dark). It now uses the app's theme-aware warning colors, so it stays legible on the light presets too.
+
+### Changed
+- **Dashboard metric colors are now named theme brushes.** The MEMORY (blue) and GPU (purple) accent colors were copy-pasted hex values repeated across the metric cards and quick-action list. They're now defined once as named `MetricBlue`/`MetricPurple` brushes and referenced everywhere — no visual change, just a single source of truth (matching how the CPU card already used a named brush).
+
 ## [1.52.26] - 2026-07-04
 
 ### Fixed

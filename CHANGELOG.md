@@ -9,6 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - **Introduced a design-token foundation for the ongoing UI refresh.** Corner radii, spacing, and motion timings are now defined once as named tokens (a 4/8/12/16/999 radius scale, a 4px spacing rhythm, and 150/200/300 ms motion durations) and referenced by the shared control styles, instead of being hardcoded per style. This removes small inconsistencies that had crept in — cards, inputs, checkboxes and chips each used slightly different corner radii — so every surface now rounds on the same scale. The only visible effect is that cards round very slightly more (10 → 12 px) and inputs/checkboxes very slightly less (to 4 px). No behavior change.
 
+### Fixed
+- **Muted label text now meets WCAG AA contrast on every theme.** On six presets (Midnight Indigo, Deep Ocean, Violet Night, Clean Indigo, Sky Breeze, Mint Fresh) the muted/secondary label color sat just below the 4.5:1 accessibility bar against the lighter card surfaces (e.g. table column headers, captions) — a subtle legibility gap. The muted color on those presets is nudged a hair toward the primary text color so it clears AA on every layered surface, with a perceptual shift small enough to be invisible. A new automated contrast test now checks all twelve presets on every surface so this can't silently regress.
+
 ## [1.52.37] - 2026-07-04
 
 ### Fixed

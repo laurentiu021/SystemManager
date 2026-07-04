@@ -316,10 +316,10 @@ public sealed record ThemePreset(
     {
         ["midnight-indigo"] = new("midnight-indigo", "Midnight Indigo", true,
             C("#6366F1"), C("#070A0F"), C("#0E1218"), C("#151A23"), C("#1F2633"),
-            C("#F1F3F7"), C("#A3ADBF"), C("#6B7489")),
+            C("#F1F3F7"), C("#A3ADBF"), C("#7B8396")), // muted: WCAG AA on Surface2 (was #6B7489, 3.72)
         ["deep-ocean"] = new("deep-ocean", "Deep Ocean", true,
             C("#3B82F6"), C("#050D1A"), C("#0A1628"), C("#0F1D33"), C("#1A2D4D"),
-            C("#E2E8F0"), C("#94A3B8"), C("#64748B")),
+            C("#E2E8F0"), C("#94A3B8"), C("#78879B")), // muted: WCAG AA on Surface2 (was #64748B, 3.55)
         ["dark-forest"] = new("dark-forest", "Dark Forest", true,
             C("#10B981"), C("#020F0A"), C("#021A12"), C("#03261A"), C("#0A3D2A"),
             C("#D1FAE5"), C("#6EE7B7"), C("#34D399")),
@@ -328,22 +328,22 @@ public sealed record ThemePreset(
             C("#FDF2F8"), C("#F9A8D4"), C("#F472B6")),
         ["violet-night"] = new("violet-night", "Violet Night", true,
             C("#A855F7"), C("#0A0515"), C("#0F0A1A"), C("#160F26"), C("#2D1B4E"),
-            C("#F3E8FF"), C("#C4B5FD"), C("#8B5CF6")),
+            C("#F3E8FF"), C("#C4B5FD"), C("#8E60F6")), // muted: WCAG AA on Surface2 (was #8B5CF6, 4.39)
         ["warm-ember"] = new("warm-ember", "Warm Ember", true,
             C("#F59E0B"), C("#0F0A04"), C("#1A1008"), C("#24180C"), C("#3D2A12"),
             C("#FEF3C7"), C("#FCD34D"), C("#FBBF24")),
         ["clean-indigo"] = new("clean-indigo", "Clean Indigo", false,
             C("#6366F1"), C("#FFFFFF"), C("#F8FAFC"), C("#F1F5F9"), C("#E2E8F0"),
-            C("#1E1B4B"), C("#4338CA"), C("#6366F1")),
+            C("#1E1B4B"), C("#4338CA"), C("#5D5FE2")), // muted: WCAG AA on Surface2 (was #6366F1, 4.08)
         ["sky-breeze"] = new("sky-breeze", "Sky Breeze", false,
             C("#0EA5E9"), C("#F8FAFC"), C("#F0F9FF"), C("#E0F2FE"), C("#BAE6FD"),
-            C("#0C4A6E"), C("#0369A1"), C("#0284C7")),
+            C("#0C4A6E"), C("#0369A1"), C("#0572AB")), // muted: WCAG AA on Surface2 (was #0284C7, 3.57)
         ["warm-sand"] = new("warm-sand", "Warm Sand", false,
             C("#D97706"), C("#FFFBEB"), C("#FEF3C7"), C("#FDE68A"), C("#FCD34D"),
             C("#451A03"), C("#78350F"), C("#92400E")),
         ["mint-fresh"] = new("mint-fresh", "Mint Fresh", false,
             C("#16A34A"), C("#F0FDF4"), C("#DCFCE7"), C("#BBF7D0"), C("#86EFAC"),
-            C("#14532D"), C("#166534"), C("#15803D")),
+            C("#14532D"), C("#166534"), C("#15783A")), // muted: WCAG AA on Surface2 (was #15803D, 4.14)
         ["soft-blossom"] = new("soft-blossom", "Soft Blossom", false,
             C("#DB2777"), C("#FDF2F8"), C("#FCE7F3"), C("#FBCFE8"), C("#F9A8D4"),
             C("#500724"), C("#831843"), C("#9D174D")),

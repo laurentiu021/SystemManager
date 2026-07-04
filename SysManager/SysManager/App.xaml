@@ -54,7 +54,7 @@
             <!-- Text -->
             <SolidColorBrush x:Key="TextPrimary" Color="#F1F3F7"/>
             <SolidColorBrush x:Key="TextSecondary" Color="#A3ADBF"/>
-            <SolidColorBrush x:Key="TextMuted" Color="#6B7489"/>
+            <SolidColorBrush x:Key="TextMuted" Color="#7B8396"/>
             <SolidColorBrush x:Key="TextDisabled" Color="#4A5266"/>
 
             <!-- Accent (primary action) -->

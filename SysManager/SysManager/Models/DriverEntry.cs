@@ -7,7 +7,7 @@ namespace SysManager.Models;
 /// <summary>
 /// Represents an installed Windows driver from Win32_PnPSignedDriver.
 /// </summary>
-public sealed class DriverEntry
+public sealed record DriverEntry
 {
     public string DeviceName { get; init; } = "";
     public string Manufacturer { get; init; } = "";

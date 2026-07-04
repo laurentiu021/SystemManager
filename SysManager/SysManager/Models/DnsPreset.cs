@@ -9,7 +9,7 @@ namespace SysManager.Models;
 /// filtering variants (ad/malware/family blocking) and IPv6 resolvers configured
 /// alongside the IPv4 pair when the provider offers them.
 /// </summary>
-public sealed class DnsPreset
+public sealed record DnsPreset
 {
     public required string Name { get; init; }
     public required string Primary { get; init; }

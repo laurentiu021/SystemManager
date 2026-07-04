@@ -4,7 +4,7 @@
 
 namespace SysManager.Models;
 
-public sealed class MemoryModuleHealth
+public sealed record MemoryModuleHealth
 {
     public string Slot { get; init; } = "";
     public string Manufacturer { get; init; } = "";

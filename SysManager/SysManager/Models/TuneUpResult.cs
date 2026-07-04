@@ -10,7 +10,7 @@ namespace SysManager.Models;
 /// Aggregated results from a Quick Tune-Up run.
 /// Each step populates its own section; null means the step was skipped.
 /// </summary>
-public sealed class TuneUpResult
+public sealed record TuneUpResult
 {
     // ── Temp cleanup ───────────────────────────────────────────────────
     public long TempBytesFreed { get; init; }
@@ -69,7 +69,7 @@ public sealed class TuneUpResult
 }
 
 /// <summary>Per-disk summary for the Tune-Up result card.</summary>
-public sealed class DiskHealthSummary
+public sealed record DiskHealthSummary
 {
     public required string Name { get; init; }
     public required string Verdict { get; init; }

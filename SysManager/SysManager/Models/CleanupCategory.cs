@@ -35,7 +35,7 @@ public sealed partial class CleanupCategory : ObservableObject
     public string CountDisplay => SkippedCount > 0 ? $"{FileCount:N0} files · {SkippedCount:N0} skipped" : $"{FileCount:N0} files";
 }
 
-public sealed class CleanupResult
+public sealed record CleanupResult
 {
     public long BytesFreed { get; init; }
     public int FilesDeleted { get; init; }
@@ -46,7 +46,7 @@ public sealed class CleanupResult
 }
 
 /// <summary>Single large file surfaced by the size scanner.</summary>
-public sealed class LargeFileEntry
+public sealed record LargeFileEntry
 {
     public required string Path { get; init; }
     public required string Name { get; init; }

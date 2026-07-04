@@ -10,7 +10,7 @@ namespace SysManager.Models;
 /// Aggregated health score (0–100) combining disk health, RAM usage,
 /// uptime, and battery wear. Higher is better.
 /// </summary>
-public sealed class HealthScoreResult
+public sealed record HealthScoreResult
 {
     /// <summary>Overall score 0–100 (100 = perfect health).</summary>
     public int Score { get; init; }
@@ -46,7 +46,7 @@ public sealed class HealthScoreResult
 }
 
 /// <summary>A single health recommendation shown below the gauge.</summary>
-public sealed class HealthRecommendation
+public sealed record HealthRecommendation
 {
     public required string Message { get; init; }
     public required string Severity { get; init; }  // "warning" or "critical"

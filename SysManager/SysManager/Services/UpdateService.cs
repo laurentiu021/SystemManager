@@ -255,6 +255,21 @@ public sealed class UpdateService
     }
 
     /// <summary>
+    /// Extracts the expected SHA-256 from a <c>.sha256</c> file body, which is either
+    /// <c>"HASH  filename"</c> or a bare <c>"HASH"</c>. Returns the 64+ char hex token, or
+    /// <c>null</c> when the body is empty/whitespace or the first token isn't a plausible
+    /// hash — so a blank or malformed file becomes a verification failure, never a crash.
+    /// Pure so it can be unit-tested without the network.
+    /// </summary>
+    internal static string? ParseExpectedHash(string? hashText)
+    {
+        var expectedHash = hashText?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
+        if (string.IsNullOrWhiteSpace(expectedHash) || expectedHash.Length < 64)
+            return null;
+        return expectedHash;
+    }
+
+    /// <summary>
     /// Downloads the .sha256 file for a release and verifies the local file matches.
     /// Returns true if the hash matches, false if mismatch or if the .sha256 file
     /// is unavailable (verification is best-effort — network errors don't block install).
@@ -267,9 +282,8 @@ public sealed class UpdateService
             var sha256Url = $"https://github.com/{Owner}/{Repo}/releases/download/{rel.Tag}/SysManager-{rel.Tag}.exe.sha256";
             var hashText = await Http.GetStringAsync(sha256Url, ct).ConfigureAwait(false);
 
-            // .sha256 file format: "HASH  filename" or just "HASH"
-            var expectedHash = hashText.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0].Trim();
-            if (string.IsNullOrWhiteSpace(expectedHash) || expectedHash.Length < 64)
+            var expectedHash = ParseExpectedHash(hashText);
+            if (expectedHash is null)
                 return (false, null, null);
 
             var actualHash = await Task.Run(() =>

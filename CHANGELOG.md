@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.34] - 2026-07-04
+
+### Fixed
+- **A blank or malformed update checksum file no longer crashes the update check.** When verifying a downloaded update, SysManager reads the release's `.sha256` file; if that file came back empty or whitespace-only, parsing it threw an unhandled error instead of simply reporting the checksum as unverified. It now degrades cleanly to a verification failure (the update is treated as unverified rather than crashing), matching how a missing checksum file is already handled.
+
 ## [1.52.33] - 2026-07-04
 
 ### Fixed

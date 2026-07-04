@@ -61,6 +61,8 @@
                 <GradientStop Color="#33405A" Offset="0"/>
                 <GradientStop Color="#1F2633" Offset="0.5"/>
             </LinearGradientBrush>
+            <!-- Subtle neutral row-hover, distinct from accent selection. Dark fallback; ThemeService derives per preset. -->
+            <SolidColorBrush x:Key="RowHover" Color="#1A1F2A"/>
 
             <!-- Text -->
             <SolidColorBrush x:Key="TextPrimary" Color="#F1F3F7"/>
@@ -1019,13 +1021,22 @@
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="BorderThickness" Value="0"/>
                 <Style.Triggers>
+                    <!-- Hover = subtle neutral tint; selection = accent tint. Distinct now (both were AccentSoft). -->
                     <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                        <Setter Property="Background" Value="{DynamicResource RowHover}"/>
                     </Trigger>
                     <Trigger Property="IsSelected" Value="True">
                         <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
                         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                     </Trigger>
+                    <!-- Selected AND hovered: keep the accent (don't let neutral hover override it). -->
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsSelected" Value="True"/>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                        </MultiTrigger.Conditions>
+                        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                    </MultiTrigger>
                 </Style.Triggers>
             </Style>
 

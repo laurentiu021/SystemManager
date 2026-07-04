@@ -51,6 +51,17 @@
             <SolidColorBrush x:Key="Border2" Color="#2A3244"/>
             <SolidColorBrush x:Key="BorderAccent" Color="#3B4A66"/>
 
+            <!-- Card depth brushes — static dark-preset fallbacks so cards never flash a null brush
+                 before ThemeService.Apply() replaces them per preset at startup (see ThemeService.Apply). -->
+            <LinearGradientBrush x:Key="CardSurface" StartPoint="0.5,0" EndPoint="0.5,1">
+                <GradientStop Color="#12161E" Offset="0"/>
+                <GradientStop Color="#0E1218" Offset="0.55"/>
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="CardRim" StartPoint="0.5,0" EndPoint="0.5,1">
+                <GradientStop Color="#33405A" Offset="0"/>
+                <GradientStop Color="#1F2633" Offset="0.5"/>
+            </LinearGradientBrush>
+
             <!-- Text -->
             <SolidColorBrush x:Key="TextPrimary" Color="#F1F3F7"/>
             <SolidColorBrush x:Key="TextSecondary" Color="#A3ADBF"/>
@@ -268,9 +279,13 @@
             <!-- ============================================================ -->
             <!-- Card — reusable container                                      -->
             <!-- ============================================================ -->
+            <!-- Card — the primary content surface. Background + border are theme-derived depth
+                 brushes (CardSurface = top sheen fading to Surface1; CardRim = top-lit hairline
+                 fading to Border1), built by ThemeService per preset. Pure gradients, no shadow
+                 (PERF-008-safe on repeated cards). This is the revamp's signature "glass depth". -->
             <Style x:Key="Card" TargetType="Border">
-                <Setter Property="Background" Value="{DynamicResource Surface1}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
+                <Setter Property="Background" Value="{DynamicResource CardSurface}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource CardRim}"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}"/>
                 <Setter Property="Padding" Value="16"/>

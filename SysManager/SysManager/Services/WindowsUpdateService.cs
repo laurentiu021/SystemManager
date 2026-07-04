@@ -166,7 +166,10 @@ public sealed class WindowsUpdateService
                                 Emit($"  Download failed (code {dlCode}).");
                                 entry.Status = "Failed (download)";
                                 failed++;
-                                Marshal.FinalReleaseComObject(coll);
+                                // Do NOT release `coll` here: `continue` still runs the outer
+                                // finally, which releases it. Releasing it twice separates the
+                                // RCW and the finally's second call throws InvalidComObjectException,
+                                // aborting the whole install run on the first failed download.
                                 continue;
                             }
                         }

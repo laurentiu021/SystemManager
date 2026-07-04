@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.35] - 2026-07-04
+
+### Fixed
+- **Installing Windows updates no longer aborts the whole batch when one update fails to download.** In the install loop, a failed download released its update collection early and then `continue`d — but the loop's cleanup block always releases that same collection too, so it was released twice. The second release threw an error that stopped the entire install run on the first failed download. The redundant early release is removed; the collection is now released exactly once by the cleanup block, so the batch continues to the next update.
+
 ## [1.52.34] - 2026-07-04
 
 ### Fixed

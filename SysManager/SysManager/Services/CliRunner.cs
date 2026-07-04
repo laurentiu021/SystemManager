@@ -50,11 +50,7 @@ public sealed class CliRunner
     /// to their own branches. Bare non-flag tokens never trigger CLI mode.</summary>
     public static bool IsCliInvocation(string[] args)
     {
-        foreach (var raw in args)
-        {
-            var a = raw.Trim();
-            if (NonCliSentinels.Contains(a)) return false;
-        }
+        if (args.Any(a => NonCliSentinels.Contains(a.Trim()))) return false;
         return args.Any(a => IsCliToken(a.Trim()));
     }
 

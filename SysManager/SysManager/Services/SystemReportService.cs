@@ -68,21 +68,15 @@ public sealed class SystemReportService
     private static SystemReportData BuildData(SystemSnapshot snapshot, IReadOnlyList<DiskHealthReport> diskHealth)
     {
         // Prefer the richer SMART/health disks; fall back to the basic snapshot disks.
-        List<DiskReportInfo> disks;
-        if (diskHealth.Count > 0)
-        {
-            disks = diskHealth.Select(d => new DiskReportInfo(
+        List<DiskReportInfo> disks = diskHealth.Count > 0
+            ? diskHealth.Select(d => new DiskReportInfo(
                 d.FriendlyName, d.MediaType, d.BusType, d.SizeGB, d.HealthStatus,
                 string.IsNullOrWhiteSpace(d.Verdict) ? null : d.Verdict,
                 d.TemperatureC, d.WearPercent,
-                d.PowerOnHours.HasValue ? d.PowerOnDisplay : null)).ToList();
-        }
-        else
-        {
-            disks = snapshot.Disks.Select(d => new DiskReportInfo(
+                d.PowerOnHours.HasValue ? d.PowerOnDisplay : null)).ToList()
+            : snapshot.Disks.Select(d => new DiskReportInfo(
                 d.FriendlyName, d.MediaType, d.BusType, d.SizeGB, d.HealthStatus,
                 null, d.TemperatureC, d.WearPercent, null)).ToList();
-        }
 
         return new SystemReportData(
             GeneratedAt: DateTime.Now,

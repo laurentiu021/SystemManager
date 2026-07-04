@@ -121,7 +121,7 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
     [RelayCommand]
     private void SelectPerformanceCores()
     {
-        foreach (var c in Cores) c.IsSelected = IsHybrid ? c.Core.IsPerformance : true;
+        foreach (var c in Cores) c.IsSelected = !IsHybrid || c.Core.IsPerformance;
         StatusMessage = IsHybrid ? "Selected P-cores." : "Selected all cores.";
     }
 

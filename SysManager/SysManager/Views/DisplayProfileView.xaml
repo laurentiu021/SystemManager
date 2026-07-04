@@ -52,7 +52,7 @@
 
         <!-- Auto-revert confirmation bar -->
         <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,12"
+                BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="0,0,0,12"
                 Visibility="{Binding IsAwaitingConfirm, Converter={StaticResource FlexVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>

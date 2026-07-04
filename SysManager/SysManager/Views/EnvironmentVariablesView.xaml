@@ -44,7 +44,7 @@
 
         <!-- Elevation banner: elevated -->
         <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
-                CornerRadius="10" Padding="12,8" Margin="0,0,0,12"
+                CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
             <Grid>
                 <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
@@ -176,7 +176,7 @@
                         <ItemsControl ItemsSource="{Binding PathEntries}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Margin="0,2" Padding="8,6" CornerRadius="6" BorderThickness="1"
+                                    <Border Margin="0,2" Padding="8,6" CornerRadius="8" BorderThickness="1"
                                             Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>

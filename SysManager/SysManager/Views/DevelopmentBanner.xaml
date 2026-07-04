@@ -8,7 +8,7 @@
          status. Distinct from the WIP placeholder (which means "not built yet"):
          this means "built and working, pending verification". -->
     <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Info}"
-            BorderThickness="1" CornerRadius="10" Padding="12,10">
+            BorderThickness="1" CornerRadius="12" Padding="12,10">
         <Grid>
             <!-- Left accent stripe, mirrors the elevated-admin banner pattern -->
             <Border Background="{DynamicResource Info}" Width="4" HorizontalAlignment="Left"

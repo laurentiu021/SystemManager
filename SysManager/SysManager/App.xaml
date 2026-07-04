@@ -486,32 +486,34 @@
                 </Setter>
             </Style>
 
-            <!-- Admin: golden glass button for elevation requests -->
+            <!-- Admin: golden glass button for elevation requests. Uses the theme-aware
+                 Warning* brushes (recomputed per preset by ThemeService) so the text stays
+                 legible on light presets — hardcoded amber (#FCD34D) washed out on white. -->
             <Style x:Key="AdminButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-                <Setter Property="Foreground" Value="#FCD34D"/>
+                <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="Bd" CornerRadius="10" Padding="{TemplateBinding Padding}"
-                                    Background="#14FBBF24" BorderBrush="#30FBBF24" BorderThickness="1">
+                                    Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningStripe}" BorderThickness="1">
                                 <Grid>
-                                    <Border Background="#FBBF24" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                                    <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                                             Margin="-14,-8,0,-8" x:Name="Bar"/>
                                     <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
                                         <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
                                         <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
-                                                          TextBlock.Foreground="#FCD34D" TextBlock.FontWeight="SemiBold"/>
+                                                          TextBlock.Foreground="{DynamicResource WarningText}" TextBlock.FontWeight="SemiBold"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#60FBBF24"/>
-                                    <Setter TargetName="Bd" Property="Background" Value="#20FBBF24"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource WarningStripe}"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource WarningBg}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#28FBBF24"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource WarningBg}"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.4"/>

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.37] - 2026-07-04
+
+### Fixed
+- **The "Run as administrator" button is now legible on the Light themes.** Its golden-amber styling used fixed dark-theme colors (pale yellow text), so on a light preset the label washed out against the near-white button. It now uses the same theme-aware warning colors as the rest of the app, which switch to a dark amber on light themes — matching the elevation banners that were already fixed.
+
 ## [1.52.36] - 2026-07-04
 
 ### Fixed

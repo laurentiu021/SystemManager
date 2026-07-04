@@ -75,7 +75,7 @@
 
         <!-- Drift summary banner (warning) -->
         <Border Grid.Row="4" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="28,12,28,0"
+                BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="28,12,28,0"
                 Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"

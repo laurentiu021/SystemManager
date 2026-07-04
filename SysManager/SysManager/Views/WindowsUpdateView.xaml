@@ -46,7 +46,7 @@
 
         <!-- Elevation banner: elevated -->
         <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
-                CornerRadius="10" Padding="12,8" Margin="28,12,28,0"
+                CornerRadius="12" Padding="12,8" Margin="28,12,28,0"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
             <Grid>
                 <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
@@ -236,7 +236,7 @@
                     <DataGridTemplateColumn Header="Category" Width="130" MinWidth="100" SortMemberPath="Category">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Border CornerRadius="6" Padding="8,3" HorizontalAlignment="Left"
+                                <Border CornerRadius="8" Padding="8,3" HorizontalAlignment="Left"
                                         BorderThickness="1">
                                     <Border.Style>
                                         <Style TargetType="Border">

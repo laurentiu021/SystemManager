@@ -64,7 +64,7 @@
                         <TextBlock Text="CUSTOM COLORS" Style="{StaticResource SectionLabel}" Margin="0,0,0,10"/>
 
                         <!-- Accent picker -->
-                        <Border Background="{DynamicResource Surface0}" CornerRadius="10"
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="12"
                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                 Padding="12,8" Margin="0,0,0,8">
                             <Grid>
@@ -76,7 +76,7 @@
                                 <TextBlock Text="Accent" Foreground="{DynamicResource TextSecondary}"
                                            FontSize="12" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" x:Name="CustomAccentPreview"
-                                        Width="24" Height="24" CornerRadius="6" Background="#6366F1"
+                                        Width="24" Height="24" CornerRadius="8" Background="#6366F1"
                                         Margin="0,0,10,0" Cursor="Hand"
                                         MouseLeftButtonUp="CustomAccent_Click"/>
                                 <TextBox Grid.Column="2" x:Name="CustomAccentHex" Text="#6366F1"
@@ -89,7 +89,7 @@
                         </Border>
 
                         <!-- Background picker -->
-                        <Border Background="{DynamicResource Surface0}" CornerRadius="10"
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="12"
                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                 Padding="12,8" Margin="0,0,0,8">
                             <Grid>
@@ -101,7 +101,7 @@
                                 <TextBlock Text="Background" Foreground="{DynamicResource TextSecondary}"
                                            FontSize="12" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" x:Name="CustomBgPreview"
-                                        Width="24" Height="24" CornerRadius="6" Background="#070A0F"
+                                        Width="24" Height="24" CornerRadius="8" Background="#070A0F"
                                         Margin="0,0,10,0" Cursor="Hand"
                                         MouseLeftButtonUp="CustomBg_Click"/>
                                 <TextBox Grid.Column="2" x:Name="CustomBgHex" Text="#070A0F"
@@ -114,7 +114,7 @@
                         </Border>
 
                         <!-- Surface picker -->
-                        <Border Background="{DynamicResource Surface0}" CornerRadius="10"
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="12"
                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                 Padding="12,8" Margin="0,0,0,8">
                             <Grid>
@@ -126,7 +126,7 @@
                                 <TextBlock Text="Surface" Foreground="{DynamicResource TextSecondary}"
                                            FontSize="12" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" x:Name="CustomSurfacePreview"
-                                        Width="24" Height="24" CornerRadius="6" Background="#0E1218"
+                                        Width="24" Height="24" CornerRadius="8" Background="#0E1218"
                                         Margin="0,0,10,0" Cursor="Hand"
                                         MouseLeftButtonUp="CustomSurface_Click"/>
                                 <TextBox Grid.Column="2" x:Name="CustomSurfaceHex" Text="#0E1218"
@@ -139,7 +139,7 @@
                         </Border>
 
                         <!-- Text picker -->
-                        <Border Background="{DynamicResource Surface0}" CornerRadius="10"
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="12"
                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                 Padding="12,8">
                             <Grid>
@@ -151,7 +151,7 @@
                                 <TextBlock Text="Text" Foreground="{DynamicResource TextSecondary}"
                                            FontSize="12" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" x:Name="CustomTextPreview"
-                                        Width="24" Height="24" CornerRadius="6" Background="#F1F3F7"
+                                        Width="24" Height="24" CornerRadius="8" Background="#F1F3F7"
                                         Margin="0,0,10,0" Cursor="Hand"
                                         MouseLeftButtonUp="CustomText_Click"/>
                                 <TextBox Grid.Column="2" x:Name="CustomTextHex" Text="#F1F3F7"

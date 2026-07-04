@@ -13,7 +13,7 @@
     <UserControl.Resources>
         <!-- One reviewable tweak row: select checkbox + name/description + applied-state pill. -->
         <DataTemplate x:Key="TweakRow">
-            <Border Margin="0,2" Padding="12,10" CornerRadius="6" BorderThickness="1"
+            <Border Margin="0,2" Padding="12,10" CornerRadius="8" BorderThickness="1"
                     Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}">
                 <Grid>
                     <Grid.ColumnDefinitions>

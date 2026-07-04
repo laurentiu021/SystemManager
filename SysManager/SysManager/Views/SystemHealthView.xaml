@@ -39,7 +39,7 @@
 
                 <!-- Elevation banner: elevated -->
                 <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
-                        CornerRadius="10" Padding="12,8" Margin="0,12,0,0"
+                        CornerRadius="12" Padding="12,8" Margin="0,12,0,0"
                         Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
                     <Grid>
                         <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"

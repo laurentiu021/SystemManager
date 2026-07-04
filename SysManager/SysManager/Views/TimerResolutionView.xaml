@@ -36,7 +36,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CurrentDisplay}" FontSize="30" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}"/>
-                    <Border CornerRadius="6" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center"
+                    <Border CornerRadius="8" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center"
                             Background="{DynamicResource Surface3}"
                             Visibility="{Binding IsHighResolution, Converter={StaticResource FlexVis}}">
                         <TextBlock Text="HIGH RESOLUTION" FontSize="11" FontWeight="Bold"
@@ -68,7 +68,7 @@
 
         <!-- Power warning -->
         <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,16">
+                BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="0,0,0,16">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#xE9CE;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                            FontSize="14" Foreground="{DynamicResource WarningText}"

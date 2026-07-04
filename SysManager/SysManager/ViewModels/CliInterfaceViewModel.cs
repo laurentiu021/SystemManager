@@ -50,9 +50,11 @@ public sealed partial class CliInterfaceViewModel : ViewModelBase
             Clipboard.SetText(text);
             StatusMessage = $"Copied: {text}";
         }
-        catch (System.Runtime.InteropServices.COMException)
+        catch (System.Runtime.InteropServices.ExternalException)
         {
             // The clipboard can be transiently locked by another process; report, don't crash.
+            // Clipboard.SetText throws ExternalException (COMException is only one subtype), so
+            // catch the base type to match the other clipboard-copy sites across the app.
             StatusMessage = "Could not access the clipboard — try again.";
         }
     }

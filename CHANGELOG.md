@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.36] - 2026-07-04
+
+### Fixed
+- **Copying a command from the CLI Interface tab no longer risks an unhandled error if the clipboard is briefly unavailable.** The copy handler only caught one specific clipboard failure type; a different (but related) clipboard error would have gone unhandled. It now catches the documented base error type — matching every other copy-to-clipboard action in the app — so a locked or unavailable clipboard always shows the friendly "try again" message instead.
+
 ## [1.52.35] - 2026-07-04
 
 ### Fixed

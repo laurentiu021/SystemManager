@@ -110,6 +110,34 @@
             <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI, Inter, Arial</FontFamily>
 
             <!-- ============================================================ -->
+            <!-- Design tokens — radius / spacing / motion (single source)     -->
+            <!-- Radius scale 4/8/12/16/999 · spacing 4px grid · motion         -->
+            <!-- 150/200/300ms. These do NOT vary per preset, so StaticResource -->
+            <!-- (cheap, no theme-swap). Colors stay DynamicResource. This kills -->
+            <!-- the per-style radius drift (was 5/6/8/10/999 scattered).        -->
+            <!-- ============================================================ -->
+            <CornerRadius x:Key="RadiusSm">4</CornerRadius>
+            <CornerRadius x:Key="RadiusMd">8</CornerRadius>
+            <CornerRadius x:Key="RadiusLg">12</CornerRadius>
+            <CornerRadius x:Key="RadiusXl">16</CornerRadius>
+            <CornerRadius x:Key="RadiusPill">999</CornerRadius>
+
+            <!-- Spacing rhythm on a 4px base. Defined here as the single source;
+                 the per-view rollout migrates raw margins/paddings to these. -->
+            <Thickness x:Key="Space4">4</Thickness>
+            <Thickness x:Key="Space8">8</Thickness>
+            <Thickness x:Key="Space12">12</Thickness>
+            <Thickness x:Key="Space16">16</Thickness>
+            <Thickness x:Key="Space24">24</Thickness>
+            <Thickness x:Key="Space32">32</Thickness>
+
+            <!-- Motion vocabulary: Fast=hover/focus/selection, Mid=view transitions,
+                 Slow=theme-background fade. ease-out, no bounce (see brief §1.5). -->
+            <Duration x:Key="DurFast">0:0:0.15</Duration>
+            <Duration x:Key="DurMid">0:0:0.2</Duration>
+            <Duration x:Key="DurSlow">0:0:0.3</Duration>
+
+            <!-- ============================================================ -->
             <!-- Sidebar Expander — smooth slide animation                      -->
             <!-- ============================================================ -->
             <Style x:Key="SidebarExpander" TargetType="Expander">
@@ -190,7 +218,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Border x:Name="Bd" Padding="7,6" CornerRadius="10" Background="Transparent"
+                            <Border x:Name="Bd" Padding="7,6" CornerRadius="{StaticResource RadiusMd}" Background="Transparent"
                                     Cursor="Hand" HorizontalAlignment="Stretch">
                                 <TextBlock x:Name="Txt" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold"
                                            HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
@@ -244,7 +272,7 @@
                 <Setter Property="Background" Value="{DynamicResource Surface1}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="CornerRadius" Value="10"/>
+                <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}"/>
                 <Setter Property="Padding" Value="16"/>
                 <Setter Property="SnapsToDevicePixels" Value="True"/>
             </Style>
@@ -257,7 +285,7 @@
 
             <Style x:Key="CardInner" TargetType="Border" BasedOn="{StaticResource Card}">
                 <Setter Property="Background" Value="{DynamicResource Surface2}"/>
-                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}"/>
                 <Setter Property="Padding" Value="12"/>
             </Style>
 
@@ -280,7 +308,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8"
+                                    CornerRadius="{StaticResource RadiusMd}"
                                     Padding="{TemplateBinding Padding}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   TextBlock.Foreground="{TemplateBinding Foreground}"/>
@@ -331,7 +359,7 @@
                             <!-- Border uses the theme-adaptive Border1/Border2 brushes (updated per
                                  preset by ThemeService.Apply) instead of hardcoded translucent white,
                                  which was invisible on the six light presets (white border on white). -->
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="8"
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusMd}"
                                     Padding="{TemplateBinding Padding}"
                                     BorderThickness="1" BorderBrush="{DynamicResource Border1}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -407,7 +435,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
+                            <Border x:Name="Bd" CornerRadius="{StaticResource RadiusPill}" Padding="8,4"
                                     Background="{DynamicResource SuccessBgSubtle}" BorderBrush="{DynamicResource SuccessBorder}" BorderThickness="1"
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
@@ -437,7 +465,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
+                            <Border x:Name="Bd" CornerRadius="{StaticResource RadiusPill}" Padding="8,4"
                                     Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningStripe}" BorderThickness="1"
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
@@ -464,7 +492,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Border x:Name="Bd" CornerRadius="999" Padding="8,4"
+                            <Border x:Name="Bd" CornerRadius="{StaticResource RadiusPill}" Padding="8,4"
                                     Background="{DynamicResource DangerBgSubtle}" BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1"
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
@@ -495,7 +523,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" CornerRadius="10" Padding="{TemplateBinding Padding}"
+                            <Border x:Name="Bd" CornerRadius="{StaticResource RadiusMd}" Padding="{TemplateBinding Padding}"
                                     Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningStripe}" BorderThickness="1">
                                 <Grid>
                                     <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
@@ -554,7 +582,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8">
+                                    CornerRadius="{StaticResource RadiusMd}">
                                 <ScrollViewer x:Name="PART_ContentHost"
                                               Padding="{TemplateBinding Padding}"
                                               VerticalAlignment="Center"/>
@@ -607,7 +635,7 @@
                                         Background="{TemplateBinding Background}"
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}"
-                                        CornerRadius="8">
+                                        CornerRadius="{StaticResource RadiusMd}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -648,7 +676,7 @@
                                        PopupAnimation="Fade">
                                     <Border Background="{DynamicResource Surface1}"
                                             BorderBrush="{DynamicResource Border2}" BorderThickness="1"
-                                            CornerRadius="8" Margin="0,4,0,0"
+                                            CornerRadius="{StaticResource RadiusMd}" Margin="0,4,0,0"
                                             MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                                             MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                         <ScrollViewer>
@@ -682,7 +710,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ComboBoxItem">
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="6"
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusSm}"
                                     Padding="{TemplateBinding Padding}" Margin="4,2">
                                 <ContentPresenter/>
                             </Border>
@@ -757,7 +785,7 @@
                         <ControlTemplate TargetType="TabItem">
                             <Border x:Name="Bd"
                                     Background="Transparent"
-                                    CornerRadius="8"
+                                    CornerRadius="{StaticResource RadiusMd}"
                                     Margin="10,2"
                                     Padding="14,10">
                                 <Grid>
@@ -797,7 +825,7 @@
             <!-- ============================================================ -->
             <Style x:Key="Badge" TargetType="Border">
                 <Setter Property="Background" Value="{DynamicResource Surface3}"/>
-                <Setter Property="CornerRadius" Value="999"/>
+                <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}"/>
                 <Setter Property="Padding" Value="10,3"/>
             </Style>
 
@@ -819,7 +847,7 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="CheckBox">
                             <StackPanel Orientation="Horizontal">
-                                <Border x:Name="Box" Width="18" Height="18" CornerRadius="5"
+                                <Border x:Name="Box" Width="18" Height="18" CornerRadius="{StaticResource RadiusSm}"
                                         Background="{DynamicResource Surface2}"
                                         BorderBrush="{DynamicResource Border2}" BorderThickness="1.5"
                                         VerticalAlignment="Center">
@@ -867,7 +895,7 @@
                         <ControlTemplate TargetType="TabItem">
                             <Border x:Name="Bd"
                                     Background="Transparent"
-                                    CornerRadius="999"
+                                    CornerRadius="{StaticResource RadiusPill}"
                                     Margin="0,0,6,0"
                                     Padding="16,7">
                                 <ContentPresenter ContentSource="Header" VerticalAlignment="Center" HorizontalAlignment="Center"

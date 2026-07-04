@@ -158,9 +158,42 @@ public sealed class ThemeService
         SetColor(res, "AccentHoverColor", Lighten(theme.Accent, 0.15));
         SetColor(res, "AccentPressedColor", Darken(theme.Accent, 0.12));
 
+        // Card depth (the revamp's signature "glass depth"): a subtle top sheen + a top-lit rim.
+        // Both are theme-DERIVED so they survive all 12 presets + custom + shade, and both are pure
+        // gradient fills (no DropShadowEffect) so they stay PERF-008-safe on the many repeated cards.
+        //  - Sheen: a vertical gradient whose top is a hair lifted off the surface, fading to the flat
+        //    surface by 55% — reads as "lit from above". Lifted on dark, tinted-down on light, matching
+        //    the approved mockup's cardgrad (white-alpha on dark / dark-alpha on light).
+        //  - Rim: a vertical border gradient, brighter/darker at the very top (Lerp toward TextPrimary)
+        //    fading to the normal border by mid-height — the 1px contour highlight without a shadow.
+        var sheenTop = theme.IsDark ? Lighten(theme.Surface, 0.05) : Darken(theme.Surface, 0.02);
+        SetBrush(res, "CardSurface", VGradient((sheenTop, 0.0), (theme.Surface, 0.55)));
+        var rim = Lerp(theme.Border, theme.TextPrimary, 0.22);
+        SetBrush(res, "CardRim", VGradient((rim, 0.0), (theme.Border, 0.5)));
+
         ApplyStatusBrushes(res, theme.IsDark);
 
         ThemeChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Builds a frozen top-to-bottom <see cref="LinearGradientBrush"/> from the given color/offset
+    /// stops (StartPoint 0.5,0 → EndPoint 0.5,1). Used for the card sheen + rim-light; the last stop's
+    /// color holds to the bottom edge. Frozen so it is shareable and cheap across many cards.
+    /// </summary>
+    private static LinearGradientBrush VGradient(params (Color Color, double Offset)[] stops)
+    {
+        var brush = new LinearGradientBrush { StartPoint = new(0.5, 0), EndPoint = new(0.5, 1) };
+        foreach (var (color, offset) in stops)
+            brush.GradientStops.Add(new GradientStop(color, offset));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static void SetBrush(ResourceDictionary res, string key, Brush brush)
+    {
+        if (brush.CanFreeze) brush.Freeze();
+        res[key] = brush;
     }
 
     /// <summary>

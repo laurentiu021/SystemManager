@@ -171,6 +171,12 @@ public sealed class ThemeService
         var rim = Lerp(theme.Border, theme.TextPrimary, 0.22);
         SetBrush(res, "CardRim", VGradient((rim, 0.0), (theme.Border, 0.5)));
 
+        // Row hover — a SUBTLE neutral tint, deliberately distinct from the accent-tinted selection
+        // (AccentSoft). Before, DataGrid rows used AccentSoft for BOTH hover and selection, so hovering
+        // any row made it look selected. This is a faint lift off the surface (toward TextPrimary),
+        // theme-derived so it works on light presets too.
+        SetBrush(res, "RowHover", Lerp(theme.Surface, theme.TextPrimary, 0.05));
+
         ApplyStatusBrushes(res, theme.IsDark);
 
         ThemeChanged?.Invoke();

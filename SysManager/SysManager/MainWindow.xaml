@@ -329,15 +329,24 @@
                             <TextBlock Text="{Binding About.CurrentVersion, StringFormat=v{0}}" Style="{StaticResource Caption}"/>
                             <TextBlock Text="by laurentiu021" Style="{StaticResource Caption}" Opacity="0.7" Margin="0,2,0,0"/>
                         </StackPanel>
-                        <!-- Theme button -->
+                        <!-- Theme button — a Border rather than a Button (to keep the compact
+                             28x28 chip visual), so it needs explicit accessibility: a UIA name,
+                             a tab stop, keyboard focus, and Enter/Space activation, matching what
+                             a real Button would give screen-reader and keyboard users. -->
                         <Border Grid.Column="1" x:Name="ThemeBtn" Width="28" Height="28" CornerRadius="8"
                                 Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border1}"
                                 BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="ThemeBtn_Click"
+                                KeyDown="ThemeBtn_KeyDown"
+                                Focusable="True" KeyboardNavigation.IsTabStop="True"
+                                AutomationProperties.Name="Appearance"
                                 ToolTip="Appearance" VerticalAlignment="Center">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsKeyboardFocused" Value="True">
                                             <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
                                         </Trigger>
                                     </Style.Triggers>

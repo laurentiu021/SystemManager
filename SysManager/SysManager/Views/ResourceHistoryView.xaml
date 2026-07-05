@@ -34,6 +34,7 @@
                 <TextBlock Text="Range" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                 <ComboBox ItemsSource="{Binding RangeOptions}"
                           SelectedItem="{Binding SelectedRange, Mode=TwoWay}" Width="150" Margin="8,0,0,0"
+                          TextSearch.TextPath="Label"
                           AutomationProperties.Name="History time range">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>

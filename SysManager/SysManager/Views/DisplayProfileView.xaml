@@ -39,7 +39,7 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="DISPLAY" Style="{StaticResource SectionLabel}"/>
                     <ComboBox ItemsSource="{Binding Displays}" SelectedItem="{Binding SelectedDisplay}"
-                              Margin="0,4,0,0" Padding="8,6" FontSize="13"
+                              Margin="0,4,0,0" Padding="8,6" FontSize="13" TextSearch.TextPath="Display"
                               AutomationProperties.Name="Display to configure">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>

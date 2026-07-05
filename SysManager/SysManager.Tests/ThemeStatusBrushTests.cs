@@ -24,6 +24,12 @@ public class ThemeStatusBrushTests
     private static readonly Color LightSurface = C("#FFFFFF");
     private static readonly Color DarkSurface = C("#070A0F");
 
+    // The WORST-CASE light card surface: the most-tinted layered surface across all light presets
+    // (soft-blossom Surface2 = #FBCFE8). Small semantic/console text renders on the tinted Surface1/2
+    // of the coloured presets, NOT on pure white — asserting only against #FFFFFF let sub-AA values
+    // through on the pastel presets. This is the real worst case for the base + console tones.
+    private static readonly Color LightTintedSurface = C("#FBCFE8");
+
     [Theory]
     [InlineData("WarningText")]
     [InlineData("SuccessText")]
@@ -82,11 +88,13 @@ public class ThemeStatusBrushTests
     [InlineData("Success")]
     [InlineData("Warning")]
     [InlineData("Danger")]
-    public void LightPalette_BaseSemantic_MeetsWcagAaOnWhite(string key)
+    public void LightPalette_BaseSemantic_MeetsWcagAaOnTintedSurface(string key)
     {
-        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), LightSurface);
+        // Assert against the most-tinted light surface (not just white) — that is where these tones
+        // actually render as small text on the coloured presets, and where they previously dipped sub-AA.
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), LightTintedSurface);
         Assert.True(ratio >= 4.5,
-            $"Light-theme base '{key}' brush must meet WCAG AA (4.5:1) as small text on the near-white surface; got {ratio:F2}:1.");
+            $"Light-theme base '{key}' brush must meet WCAG AA (4.5:1) as small text on the most-tinted light card surface; got {ratio:F2}:1.");
     }
 
     // Console output palette (Out*Brush) — same class: static-only before, so light-theme consoles
@@ -100,11 +108,11 @@ public class ThemeStatusBrushTests
     [InlineData("OutErrorBrush")]
     [InlineData("OutDebugBrush")]
     [InlineData("OutProgressBrush")]
-    public void LightPalette_ConsolePalette_MeetsWcagAaOnWhite(string key)
+    public void LightPalette_ConsolePalette_MeetsWcagAaOnTintedSurface(string key)
     {
-        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), LightSurface);
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), LightTintedSurface);
         Assert.True(ratio >= 4.5,
-            $"Light-theme console '{key}' must meet WCAG AA (4.5:1) on the near-white console card; got {ratio:F2}:1.");
+            $"Light-theme console '{key}' must meet WCAG AA (4.5:1) on the most-tinted light console card; got {ratio:F2}:1.");
     }
 
     [Fact]

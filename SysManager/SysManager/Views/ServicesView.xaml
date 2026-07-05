@@ -131,8 +131,22 @@
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200" MinWidth="120" SortMemberPath="DisplayName"/>
-                <DataGridTextColumn Header="Service" Binding="{Binding Name}" Width="160" MinWidth="100" SortMemberPath="Name"/>
+                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200" MinWidth="120" SortMemberPath="DisplayName">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Setter Property="ToolTip" Value="{Binding DisplayName}"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn Header="Service" Binding="{Binding Name}" Width="160" MinWidth="100" SortMemberPath="Name">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Setter Property="ToolTip" Value="{Binding Name}"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
                 <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80" MinWidth="70" SortMemberPath="Status"/>
                 <DataGridTextColumn Header="Startup" Binding="{Binding StartType}" Width="90" MinWidth="80" SortMemberPath="StartType"/>
                 <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" MinWidth="100" SortMemberPath="Description">

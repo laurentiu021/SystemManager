@@ -127,6 +127,10 @@
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
+                                <!-- Ellipsize a long publisher in the fixed-width column and expose the
+                                     full value on hover, instead of hard-clipping mid-token. -->
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                <Setter Property="ToolTip" Value="{Binding Publisher}"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>

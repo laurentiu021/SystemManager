@@ -314,7 +314,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-tweaks-hub",      "Tweaks Hub",       "", TweaksHub,        typeof(Views.TweaksHubView), inDevelopment: true)),
 
         Group("grp-gaming", "Gaming & Profiles", "",
-            Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView)),
+            Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView), inDevelopment: true),
             Item("nav-standby-cleaner",  "Standby List Cleaner", "", StandbyMemory,         typeof(Views.StandbyMemoryView)),
             Item("nav-timer-resolution", "Timer Resolution",     "", TimerResolution,       typeof(Views.TimerResolutionView)),
             Item("nav-cpu-affinity",     "CPU Core Affinity",    "", CpuAffinity,           typeof(Views.CpuAffinityView)),
@@ -327,7 +327,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-app-alerts",        "App Alerts",         "", AppAlerts,           typeof(Views.AppAlertsView)),
             Item("nav-file-lock",         "File Lock Detector", "", FileLock,            typeof(Views.FileLockView)),
             Item("nav-settings-watchdog", "Settings Watchdog",  "", SettingsWatchdog,    typeof(Views.SettingsWatchdogView), inDevelopment: true),
-            Item("nav-bandwidth-monitor", "Bandwidth Monitor",  "", WipBandwidthMonitor, typeof(Views.PlaceholderView))),
+            Item("nav-bandwidth-monitor", "Bandwidth Monitor",  "", WipBandwidthMonitor, typeof(Views.PlaceholderView), inDevelopment: true)),
 
         Group("grp-cleanup", "Cleanup", "",
             Item("nav-cleanup",               "Quick Cleanup",         "", Cleanup,                 typeof(Views.CleanupView)),
@@ -357,14 +357,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-app-blocker",          "App Blocker",           "", AppBlocker,             typeof(Views.AppBlockerView)),
             Item("nav-debloater",            "Debloater & Ads",       "", Debloater,             typeof(Views.DebloaterView)),
             Item("nav-browser-cleaner",      "Browser Cleaner",       "", BrowserCleaner,         typeof(Views.BrowserCleanerView)),
-            Item("nav-edge-onedrive",        "Edge/OneDrive Remover", "", WipEdgeOneDriveRemover, typeof(Views.PlaceholderView)),
+            Item("nav-edge-onedrive",        "Edge/OneDrive Remover", "", WipEdgeOneDriveRemover, typeof(Views.PlaceholderView), inDevelopment: true),
             Item("nav-defender-tweaks",      "Defender Tweaks",       "", Defender,               typeof(Views.DefenderView)),
-            Item("nav-notification-blocker", "Notification Blocker",  "", WipNotificationBlocker, typeof(Views.PlaceholderView))),
+            Item("nav-notification-blocker", "Notification Blocker",  "", WipNotificationBlocker, typeof(Views.PlaceholderView), inDevelopment: true)),
 
         Group("grp-customization", "Customization", "",
             Item("nav-context-menu",   "Context Menu",          "", ContextMenu,          typeof(Views.ContextMenuView)),
             Item("nav-dark-mode",      "Dark Mode Scheduler",   "", DarkMode,             typeof(Views.DarkModeView)),
-            Item("nav-volume-control", "Volume Control",        "", WipVolumeControl,     typeof(Views.PlaceholderView))),
+            Item("nav-volume-control", "Volume Control",        "", WipVolumeControl,     typeof(Views.PlaceholderView), inDevelopment: true)),
 
         Group("grp-info", "Info", "",
             Item("nav-drivers",       "Drivers",        "", Drivers,        typeof(Views.DriversView)),

@@ -38,9 +38,15 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="PROCESS" Style="{StaticResource SectionLabel}"/>
                     <ComboBox ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}"
-                              DisplayMemberPath="Display" Margin="0,4,0,0" Padding="8,6" FontSize="13"
+                              Margin="0,4,0,0" Padding="8,6" FontSize="13"
                               MaxDropDownHeight="320"
-                              AutomationProperties.Name="Process to set affinity for"/>
+                              AutomationProperties.Name="Process to set affinity for">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </StackPanel>
                 <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshProcessesCommand}"
                         Style="{StaticResource GhostButton}" Margin="8,0,0,0" Padding="14,8" VerticalAlignment="Bottom"

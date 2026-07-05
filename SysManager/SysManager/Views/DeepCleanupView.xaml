@@ -155,7 +155,13 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Location:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox Grid.Column="1" AutomationProperties.Name="Scan location" ItemsSource="{Binding ScanLocations}" SelectedItem="{Binding SelectedLocation, Mode=TwoWay}"
-                                      DisplayMemberPath="Label" MaxWidth="380" HorizontalAlignment="Left"/>
+                                      MaxWidth="380" HorizontalAlignment="Left">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                             <TextBlock Grid.Column="2" Text="Min size (MB):" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
                             <TextBox Grid.Column="3" AutomationProperties.Name="Minimum file size in megabytes" Text="{Binding MinSizeMB, Mode=TwoWay}" Width="80"/>
                             <TextBlock Grid.Column="4" Text="Top:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>

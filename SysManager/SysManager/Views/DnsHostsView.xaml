@@ -80,9 +80,14 @@
                             AutomationProperties.Name="Undo DNS change, restore previous DNS servers"/>
                     <ComboBox ItemsSource="{Binding Presets}"
                               SelectedItem="{Binding SelectedPreset}"
-                              DisplayMemberPath="Name"
                               MinWidth="200" VerticalAlignment="Center"
-                              AutomationProperties.Name="DNS server preset"/>
+                              AutomationProperties.Name="DNS server preset">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </DockPanel>
 
                 <TextBlock Text="{Binding SelectedPreset.Description}" Style="{StaticResource Subtle}"

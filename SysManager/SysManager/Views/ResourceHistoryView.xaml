@@ -32,9 +32,15 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                         DockPanel.Dock="Right" VerticalAlignment="Center">
                 <TextBlock Text="Range" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                <ComboBox ItemsSource="{Binding RangeOptions}" DisplayMemberPath="Label"
+                <ComboBox ItemsSource="{Binding RangeOptions}"
                           SelectedItem="{Binding SelectedRange, Mode=TwoWay}" Width="150" Margin="8,0,0,0"
-                          AutomationProperties.Name="History time range"/>
+                          AutomationProperties.Name="History time range">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
                 <TextBlock Text="Keep" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
                 <ComboBox ItemsSource="{Binding RetentionOptions}"
                           SelectedItem="{Binding RetentionDays, Mode=TwoWay}" Width="64" Margin="8,0,0,0"

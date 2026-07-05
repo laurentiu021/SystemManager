@@ -554,6 +554,10 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     {
         Labeler = v => new DateTime((long)v).ToString("HH:mm:ss"),
         TextSize = 12,
+        // One tick per second minimum. Without it, an empty pre-run series makes LiveCharts
+        // synthesise many sub-second ticks that the HH:mm:ss labeler collapses to a row of
+        // identical "00:00:00" labels along the idle axis.
+        MinStep = TimeSpan.FromSeconds(1).Ticks,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))

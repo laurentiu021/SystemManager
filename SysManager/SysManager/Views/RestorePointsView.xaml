@@ -61,10 +61,16 @@
         <!-- Toolbar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
-                <TextBox Text="{Binding NewDescription, UpdateSourceTrigger=PropertyChanged}"
-                         AutomationProperties.Name="New restore point description"
-                         Width="240" Margin="0,0,8,0" VerticalContentAlignment="Center"
-                         ToolTip="Optional description for the new restore point."/>
+                <Grid Width="240" Margin="0,0,8,0">
+                    <TextBox Text="{Binding NewDescription, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="New restore point description"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Optional description for the new restore point."/>
+                    <TextBlock Text="Describe this restore point…" IsHitTestVisible="False"
+                               Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
+                               VerticalAlignment="Center" FontSize="12"
+                               Visibility="{Binding NewDescription, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
                 <Button Content="Create restore point" Command="{Binding CreateCommand}"
                         AutomationProperties.Name="Create a restore point"
                         Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"

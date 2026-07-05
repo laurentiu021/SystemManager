@@ -48,10 +48,16 @@
                         Style="{StaticResource DangerButton}" Margin="0,0,16,0"
                         ToolTip="Uninstall the ticked apps for the current user (reversible via the Store)."/>
 
-                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                         AutomationProperties.Name="Search apps" Width="220"
-                         VerticalContentAlignment="Center" VerticalAlignment="Center"
-                         ToolTip="Filter by name or publisher."/>
+                <Grid Width="220" VerticalAlignment="Center">
+                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Search apps"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Filter by name or publisher."/>
+                    <TextBlock Text="Search apps…" IsHitTestVisible="False"
+                               Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
+                               VerticalAlignment="Center" FontSize="12"
+                               Visibility="{Binding SearchText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
             </WrapPanel>
         </Border>
 

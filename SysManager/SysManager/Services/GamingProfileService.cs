@@ -76,6 +76,13 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     public int? BoundGamePid { get; private set; }
     public bool HasPendingRecovery => !IsActive && LoadStore().ActiveSession is not null;
 
+    /// <summary>
+    /// Test seam: seed a live applied step so a test can exercise RevertAsync's gate-held path
+    /// (and the Dispose-during-revert deadlock regression) without a real Apply. Not for
+    /// production use — the normal path populates <c>_appliedSteps</c> through ApplyAsync.
+    /// </summary>
+    internal void SeedAppliedStepForTest(IGamingTweak step) => _appliedSteps.Add(step);
+
     public event EventHandler? SessionAutoReverted;
 
     // ── The engine (pure, unit-testable with fake IGamingTweak steps) ──────────
@@ -166,7 +173,10 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            outcomes = await RunApplyAsync(steps, _isElevated, appliedThisRun, ct).ConfigureAwait(true);
+            // ConfigureAwait(false) under the gate (same reason as RevertAsync): nothing here
+            // touches the UI thread, and pinning the gate-held continuation to the UI thread is
+            // what would let Dispose's blocking _gate.Wait() deadlock at shutdown.
+            outcomes = await RunApplyAsync(steps, _isElevated, appliedThisRun, ct).ConfigureAwait(false);
             _appliedSteps.AddRange(appliedThisRun);
             BoundGamePid = game?.ProcessId;
             BindAutoRevert(game);
@@ -204,7 +214,12 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             {
                 var applied = _appliedSteps.ToList();
                 _appliedSteps.Clear();
-                await RunRevertAsync(applied, ct).ConfigureAwait(true);
+                // ConfigureAwait(false): nothing under the gate touches the UI thread (the tweak
+                // reverts are off-thread powercfg/registry/service calls). Resuming on the UI
+                // context here would post the gate-releasing continuation back to the UI thread —
+                // which Dispose()'s blocking _gate.Wait() (also on the UI thread at shutdown) would
+                // deadlock against. Keeping the continuation off the UI thread breaks that cycle.
+                await RunRevertAsync(applied, ct).ConfigureAwait(false);
                 Log.Information("Gaming Profile reverted {Count} step(s)", applied.Count);
             }
 
@@ -449,12 +464,17 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        // Detach the Process.Exited handler under the gate so it can't race an in-flight revert,
-        // then release the gate. Note: applied tweaks are intentionally left in effect on Dispose
-        // (the app is closing); the on-disk marker lets the next launch offer to restore them.
-        _gate.Wait();
-        try { UnbindAutoRevertLocked(); }
-        finally { _gate.Release(); }
+        // Detach the Process.Exited handler under the gate so it can't race an in-flight revert.
+        // Bounded wait: the release continuation of a gate-held revert runs off the UI thread
+        // (ConfigureAwait(false)), so this should acquire immediately — but cap it anyway so a
+        // shutdown never hangs on this even if a revert step is mid-flight (the process is exiting;
+        // leaving the handler attached briefly is harmless). Applied tweaks are intentionally left
+        // in effect on Dispose; the on-disk marker lets the next launch offer to restore them.
+        if (_gate.Wait(TimeSpan.FromSeconds(2)))
+        {
+            try { UnbindAutoRevertLocked(); }
+            finally { _gate.Release(); }
+        }
         _gate.Dispose();
     }
 }

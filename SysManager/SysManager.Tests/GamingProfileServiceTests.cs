@@ -377,4 +377,63 @@ public class GamingProfileServiceTests
         Assert.Equal(1, result.SkippedForAdminCount);
         Assert.Equal(1, result.FailedCount); // the no-op is NOT counted as failed
     }
+
+    // ── Audit-2 fix: RevertAsync must not pin its gate-release continuation to the caller's
+    //    SynchronizationContext (the shutdown UI-thread deadlock the SemaphoreSlim fix introduced) ─
+
+    // A SynchronizationContext that queues posted callbacks but NEVER runs them — it stands in
+    // for a UI Dispatcher thread that is blocked (as it is when Dispose does _gate.Wait() at
+    // shutdown). If RevertAsync captured this context for its gate-release continuation, the
+    // revert Task would never complete.
+    private sealed class NonPumpingSyncContext : SynchronizationContext
+    {
+        public int PostCount;
+        public override void Post(SendOrPostCallback d, object? state) => Interlocked.Increment(ref PostCount);
+        public override void Send(SendOrPostCallback d, object? state) => Interlocked.Increment(ref PostCount);
+    }
+
+    // A step whose RevertAsync genuinely suspends off-thread, so RevertAsync's `await
+    // RunRevertAsync(...)` is forced to schedule a continuation (which carries _gate.Release()).
+    private sealed class SuspendingRevertTweak : IGamingTweak
+    {
+        public string Label => "suspending";
+        public bool RequiresAdmin => false;
+        public Task<GamingTweakResult> ApplyAsync(CancellationToken ct) => Task.FromResult(GamingTweakResult.Applied);
+        public async Task RevertAsync(CancellationToken ct)
+            => await Task.Run(() => Thread.Sleep(80), ct).ConfigureAwait(false);
+    }
+
+    [Fact]
+    public void RevertAsync_GateReleaseContinuation_DoesNotDependOnCallerSyncContext()
+    {
+        // Reproduces the Audit-2 deadlock scenario deterministically: run RevertAsync on a thread
+        // whose SynchronizationContext is never pumped (a stand-in for the shutdown-blocked UI
+        // thread). With the ConfigureAwait(true) regression, the gate-release continuation is
+        // posted to this context and the revert Task never completes → the wait below times out.
+        // With the ConfigureAwait(false) fix, the continuation runs off-thread and it completes.
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-dl-{Guid.NewGuid():N}.json");
+        bool completed = false;
+        var worker = new Thread(() =>
+        {
+            var ctx = new NonPumpingSyncContext();
+            SynchronizationContext.SetSynchronizationContext(ctx);
+
+            var svc = StoreOnlyService(path);
+            svc.SeedAppliedStepForTest(new SuspendingRevertTweak()); // IsActive is now true
+
+            var revert = svc.RevertAsync();      // gate acquired inline; step suspends off-thread
+            completed = revert.Wait(3000);       // no pump on this thread — fix makes it complete anyway
+        });
+        worker.IsBackground = true;
+        worker.Start();
+        worker.Join(6000);
+
+        try
+        {
+            Assert.True(completed,
+                "RevertAsync did not complete without pumping the caller's SynchronizationContext — " +
+                "its gate-release continuation is pinned to the (blockable) caller thread (the Audit-2 deadlock).");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
 }

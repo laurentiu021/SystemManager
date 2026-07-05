@@ -28,6 +28,18 @@ public sealed partial class DebloaterViewModel : ViewModelBase
     [ObservableProperty] private string _searchText = "";
     [ObservableProperty] private bool _hasApps;
 
+    // Distinguishes "never scanned" from "scanned, zero results" so the centered empty
+    // state stops telling the user to Refresh after a scan that already returned nothing
+    // (which contradicted the status bar's "No Store apps found").
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
+    private bool _hasScanned;
+
+    public string EmptyTitle => HasScanned ? "No Store apps found" : "No apps loaded";
+    public string EmptyMessage => HasScanned
+        ? "There are no removable Store apps on this system."
+        : "Press Refresh to scan installed Store apps.";
+
     public DebloaterViewModel(DebloaterService service)
     {
         _service = service;
@@ -85,6 +97,7 @@ public sealed partial class DebloaterViewModel : ViewModelBase
             var apps = await _service.ListAsync(_cts.Token).ConfigureAwait(true);
             Apps.ReplaceWith(apps);
             HasApps = apps.Count > 0;
+            HasScanned = true;
             ApplyFilter();
             var removable = apps.Count(a => !a.IsProtected);
             StatusMessage = apps.Count == 0

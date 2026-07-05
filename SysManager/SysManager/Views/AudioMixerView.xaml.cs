@@ -25,11 +25,19 @@ public partial class AudioMixerView : UserControl
     // clobber) is unit-testable without a rendered window.
     internal static bool ComputeAdjusting(bool dragging, bool keyboardFocused) => dragging || keyboardFocused;
 
-    private static void Recompute(Slider slider)
+    // Applies the combined guard to a row from the two independent sources. Extracted (internal)
+    // so a test can drive the exact event orderings the four handlers produce — in particular the
+    // Audit-3 regression: drag ends (dragging=false) while the slider still holds keyboard focus,
+    // which must leave the row STILL adjusting. This is the wiring that actually held the bug, so
+    // it is what needs coverage — not just the terminal OR.
+    internal static void ApplyAdjustingState(AudioSessionRowViewModel? row, bool dragging, bool keyboardFocused)
     {
-        if (slider.DataContext is not AudioSessionRowViewModel row) return;
-        row.IsUserAdjusting = ComputeAdjusting(slider.Tag is true, slider.IsKeyboardFocusWithin);
+        if (row is not null) row.IsUserAdjusting = ComputeAdjusting(dragging, keyboardFocused);
     }
+
+    private static void Recompute(Slider slider) =>
+        ApplyAdjustingState(slider.DataContext as AudioSessionRowViewModel,
+            slider.Tag is true, slider.IsKeyboardFocusWithin);
 
     private void VolumeSlider_DragStarted(object sender, DragStartedEventArgs e)
     {

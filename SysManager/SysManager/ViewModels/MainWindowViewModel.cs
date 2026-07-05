@@ -365,7 +365,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Group("grp-customization", "Customization", "",
             Item("nav-context-menu",   "Context Menu",          "", ContextMenu,          typeof(Views.ContextMenuView)),
             Item("nav-dark-mode",      "Dark Mode Scheduler",   "", DarkMode,             typeof(Views.DarkModeView)),
-            Item("nav-volume-control", "Volume Control",        "", AudioMixer,           typeof(Views.AudioMixerView), inDevelopment: true)),
+            Item("nav-volume-control", "Volume Control",        "", AudioMixer,           typeof(Views.AudioMixerView))),
 
         Group("grp-info", "Info", "",
             Item("nav-drivers",       "Drivers",        "", Drivers,        typeof(Views.DriversView)),

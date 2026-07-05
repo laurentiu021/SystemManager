@@ -25,12 +25,19 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     // callbacks don't turn an external/refresh update into a redundant write back.
     private bool _suppressPropagation;
 
-    /// <summary>Stable session-instance key used to correlate this row across refreshes.</summary>
+    // The exe path the current Icon was extracted from — lets ApplyUpdate detect when a row's
+    // resolved identity changed and re-extract the icon rather than showing a stale one.
+    private string _iconSourcePath;
+
+    /// <summary>
+    /// Per-app group key (derived from the session-instance identifier, PID-reuse-proof) used to
+    /// correlate this row across refreshes. See <see cref="AudioSessionInfo.SessionId"/>.
+    /// </summary>
     public string SessionId { get; }
 
-    public uint ProcessId { get; }
     public bool IsSystemSounds { get; }
 
+    [ObservableProperty] private uint _processId;
     [ObservableProperty] private string _displayName;
     [ObservableProperty] private ImageSource? _icon;
     [ObservableProperty] private bool _isActive;
@@ -41,6 +48,13 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
 
     [ObservableProperty] private bool _isMuted;
     [ObservableProperty] private float _peakLevel;
+
+    /// <summary>
+    /// True while the user is actively dragging the volume slider. A background refresh must NOT
+    /// overwrite <see cref="Volume"/> during a drag, or a stale snapshot value would fight the
+    /// thumb. Set by the view on Thumb.DragStarted/DragCompleted.
+    /// </summary>
+    [ObservableProperty] private bool _isUserAdjusting;
 
     /// <summary>Volume as a friendly percentage, e.g. "65%".</summary>
     public string VolumeDisplay => $"{Volume * 100:F0}%";
@@ -57,15 +71,22 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
         _isMuted = info.IsMuted;
         _peakLevel = info.PeakLevel;
         IsActive = info.State == AudioSessionState.Active;
-        Icon = info.IsSystemSounds
+        _iconSourcePath = info.ExePath;
+        Icon = ResolveIcon(info);
+    }
+
+    private static ImageSource? ResolveIcon(AudioSessionInfo info) =>
+        info.IsSystemSounds
             ? IconExtractorService.WindowsIcon
             : IconExtractorService.GetProcessIcon(info.ExePath, info.DisplayName);
-    }
 
     /// <summary>
     /// Update this row in place from a fresh service snapshot (a refresh tick). Volume and
     /// mute are written under the re-entrancy guard so a change that originated in the
-    /// system — not the user — is not written straight back to the service.
+    /// system — not the user — is not written straight back to the service. Volume is left
+    /// untouched while the user is dragging the slider (see <see cref="IsUserAdjusting"/>).
+    /// The icon is re-extracted only when the resolved identity actually changed, so a row that
+    /// somehow rebinds to a different process shows the correct icon rather than a stale one.
     /// </summary>
     public void ApplyUpdate(AudioSessionInfo info)
     {
@@ -73,9 +94,17 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
         try
         {
             DisplayName = info.DisplayName;
-            Volume = info.Volume;
+            if (!IsUserAdjusting) Volume = info.Volume;
             IsMuted = info.IsMuted;
             IsActive = info.State == AudioSessionState.Active;
+
+            if (info.ProcessId != ProcessId ||
+                !string.Equals(info.ExePath, _iconSourcePath, StringComparison.OrdinalIgnoreCase))
+            {
+                ProcessId = info.ProcessId;
+                _iconSourcePath = info.ExePath;
+                Icon = ResolveIcon(info);
+            }
         }
         finally
         {

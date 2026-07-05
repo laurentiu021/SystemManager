@@ -9,11 +9,14 @@ namespace SysManager.Models;
 /// endpoint, returned by <c>IAudioMixerService</c>. Carries no COM types so the mixer
 /// ViewModel and its tests never touch Core Audio directly.
 ///
-/// <para><see cref="SessionId"/> is the session <em>instance</em> identifier — a string
-/// that stays stable across refreshes for the same stream, so it is the correlation key
-/// the ViewModel reconciles rows by (not the PID, which is reused and shared between
-/// multiple sessions of one app). <see cref="Volume"/> and <see cref="PeakLevel"/> are
-/// normalized 0.0–1.0.</para>
+/// <para><see cref="SessionId"/> is a per-app group key derived from the Core Audio session
+/// <em>instance</em> identifier (with the trailing per-stream GUID stripped so all of one
+/// process's streams collapse to a single row). It stays stable across refreshes and — unlike
+/// the raw PID, which Windows recycles — it will not map two different apps onto the same row,
+/// so it is the correlation key the ViewModel reconciles rows by. (When the instance id is
+/// unavailable it falls back to <c>"pid:&lt;pid&gt;"</c>, and the system-sounds pseudo-session
+/// uses the fixed <c>"system-sounds"</c> sentinel.) <see cref="Volume"/> and
+/// <see cref="PeakLevel"/> are normalized 0.0–1.0.</para>
 /// </summary>
 public sealed record AudioSessionInfo(
     string SessionId,

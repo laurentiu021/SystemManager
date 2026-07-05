@@ -51,109 +51,157 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     /// <inheritdoc/>
     public IReadOnlyList<AudioSessionInfo> GetSessions()
     {
+        // Two phases, so the slow work never runs under the COM gate (which the UI thread's
+        // GetPeak/SetVolume also take): (1) under _gate, do ONLY the fast COM reads and cache
+        // the control RCWs; (2) after releasing the lock, resolve each app's name/icon-path
+        // (Process/MainModule — potentially multi-ms) off the lock, cached per PID.
+        List<GroupAccumulator> groups;
         lock (_gate)
         {
             if (_disposed) return [];
 
-            var results = new List<AudioSessionInfo>();
+            groups = EnumerateGroupsLocked();
+        }
+
+        // Identity resolution is pure Process API — touches no audio COM object — so it is
+        // safe (and correct) to run it outside _gate. Cached per PID to pay it once per app.
+        var results = new List<AudioSessionInfo>(groups.Count);
+        foreach (var g in groups)
+        {
+            var (name, path) = g.IsSystemSounds
+                ? ("System Sounds", string.Empty)
+                : ResolveProcessCached(g.ProcessId);
+            results.Add(g.ToInfo(name, path));
+        }
+
+        // Stable order so the reconcile diff is deterministic: system sounds last,
+        // apps alphabetical.
+        results.Sort(static (a, b) =>
+        {
+            if (a.IsSystemSounds != b.IsSystemSounds) return a.IsSystemSounds ? 1 : -1;
+            return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
+        });
+        return results;
+    }
+
+    /// <summary>
+    /// Phase 1 (under <see cref="_gate"/>): enumerate the render sessions, cache each session's
+    /// control RCW keyed by its stable session-instance identifier, and read the fast COM values
+    /// (volume/mute/state/peak/pid). Does NOT resolve process identity — that slow work is done by
+    /// the caller after the lock is released. Returns the per-app accumulators.
+    /// </summary>
+    private List<GroupAccumulator> EnumerateGroupsLocked()
+    {
+        var acc = new Dictionary<string, GroupAccumulator>(StringComparer.Ordinal);
+        try
+        {
+            if (!EnsureManager()) return [];
+
+            var mgr = (IAudioSessionManager2)_manager!;
+            if (mgr.GetSessionEnumerator(out var sessionEnum) != 0 || sessionEnum is null)
+                return [];
+
+            // Fresh enumeration → the old cached control RCWs are stale; release them.
+            ReleaseGroups();
+
             try
             {
-                if (!EnsureManager()) return [];
+                if (sessionEnum.GetCount(out int count) != 0) return [];
 
-                var mgr = (IAudioSessionManager2)_manager!;
-                if (mgr.GetSessionEnumerator(out var sessionEnum) != 0 || sessionEnum is null)
-                    return [];
-
-                // Fresh enumeration → the old cached control RCWs are stale; release them.
-                ReleaseGroups();
-
-                try
+                for (int i = 0; i < count; i++)
                 {
-                    if (sessionEnum.GetCount(out int count) != 0) return [];
+                    if (sessionEnum.GetSession(i, out var control) != 0 || control is null)
+                        continue;
 
-                    // Accumulate per-group data as we walk the (unordered) session list.
-                    var acc = new Dictionary<string, GroupAccumulator>(StringComparer.Ordinal);
-
-                    for (int i = 0; i < count; i++)
+                    if (control is not IAudioSessionControl2 ctl2)
                     {
-                        if (sessionEnum.GetSession(i, out var control) != 0 || control is null)
-                            continue;
-
-                        if (control is not IAudioSessionControl2 ctl2)
-                        {
-                            Release(control);
-                            continue;
-                        }
-
-                        // Drop dead streams; keep active + inactive.
-                        if (ctl2.GetState(out int rawState) == 0 &&
-                            (AudioSessionState)rawState == AudioSessionState.Expired)
-                        {
-                            Release(control);
-                            continue;
-                        }
-
-                        bool isSystemSounds = ctl2.IsSystemSoundsSession() == 0; // S_OK == true
-                        uint pid = 0;
-                        ctl2.GetProcessId(out pid);
-
-                        string key = isSystemSounds ? "system-sounds" : pid.ToString();
-
-                        // Read this session's controls (same underlying COM object, so we keep
-                        // ONE RCW per session and cast to the sibling interfaces on demand).
-                        float volume = 0f;
-                        bool muted = false;
-                        if (control is ISimpleAudioVolume vol)
-                        {
-                            vol.GetMasterVolume(out volume);
-                            vol.GetMute(out muted);
-                        }
-                        float peak = 0f;
-                        if (control is IAudioMeterInformation meter)
-                            meter.GetPeakValue(out peak);
-
-                        var state = (AudioSessionState)rawState;
-
-                        if (!acc.TryGetValue(key, out var group))
-                        {
-                            var (name, path) = isSystemSounds
-                                ? ("System Sounds", string.Empty)
-                                : ResolveProcess(pid);
-                            group = new GroupAccumulator(key, pid, name, path, isSystemSounds);
-                            acc[key] = group;
-                            _groups[key] = [];
-                        }
-
-                        _groups[key].Add(control);          // cache the RCW for set/get later
-                        group.Absorb(volume, muted, state, peak);
+                        Release(control);
+                        continue;
                     }
 
-                    foreach (var g in acc.Values)
-                        results.Add(g.ToInfo());
-                }
-                finally
-                {
-                    Release(sessionEnum);
-                }
-            }
-            catch (COMException ex)
-            {
-                // A transient device/session fault (e.g. device invalidated, RDP reconnect)
-                // must not crash the tab — reset the handle so the next poll rebuilds it.
-                Log.Debug("Audio session enumeration failed: {Error}", ex.Message);
-                ResetManager();
-                return [];
-            }
+                    // Drop dead streams; keep active + inactive.
+                    if (ctl2.GetState(out int rawState) == 0 &&
+                        (AudioSessionState)rawState == AudioSessionState.Expired)
+                    {
+                        Release(control);
+                        continue;
+                    }
 
-            // Stable order so the reconcile diff is deterministic: system sounds last,
-            // apps alphabetical.
-            results.Sort(static (a, b) =>
+                    bool isSystemSounds = ctl2.IsSystemSoundsSession() == 0; // S_OK == true
+                    uint pid = 0;
+                    ctl2.GetProcessId(out pid);
+
+                    // Key on the session-INSTANCE identifier (stable per stream, PID-reuse-proof)
+                    // rather than the recyclable PID. All of an app's streams still collapse into
+                    // one row: sessions of the same process share a common prefix in the instance
+                    // id, so we group by the "…|<pid>|…%b<GUID>" up to the trailing per-stream GUID.
+                    string key = isSystemSounds
+                        ? "system-sounds"
+                        : GroupKeyFor(ctl2, pid);
+
+                    // Read this session's controls (same underlying COM object, so we keep
+                    // ONE RCW per session and cast to the sibling interfaces on demand).
+                    float volume = 0f;
+                    bool muted = false;
+                    if (control is ISimpleAudioVolume vol)
+                    {
+                        vol.GetMasterVolume(out volume);
+                        vol.GetMute(out muted);
+                    }
+                    float peak = 0f;
+                    if (control is IAudioMeterInformation meter)
+                        meter.GetPeakValue(out peak);
+
+                    var state = (AudioSessionState)rawState;
+
+                    if (!acc.TryGetValue(key, out var group))
+                    {
+                        group = new GroupAccumulator(key, pid, isSystemSounds);
+                        acc[key] = group;
+                        _groups[key] = [];
+                    }
+
+                    _groups[key].Add(control);          // cache the RCW for set/get later
+                    group.Absorb(volume, muted, state, peak);
+                }
+            }
+            finally
             {
-                if (a.IsSystemSounds != b.IsSystemSounds) return a.IsSystemSounds ? 1 : -1;
-                return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
-            });
-            return results;
+                Release(sessionEnum);
+            }
         }
+        catch (COMException ex)
+        {
+            // A transient device/session fault (e.g. device invalidated, RDP reconnect)
+            // must not crash the tab — reset the handle so the next poll rebuilds it.
+            Log.Debug("Audio session enumeration failed: {Error}", ex.Message);
+            ResetManager();
+            return [];
+        }
+
+        return [.. acc.Values];
+    }
+
+    /// <summary>
+    /// Group key for an app session: the session-instance identifier with its trailing per-stream
+    /// GUID stripped, so every stream of one process maps to one row (Windows Volume Mixer model)
+    /// while remaining stable across refreshes and immune to PID reuse. Falls back to the PID when
+    /// the instance id is unavailable.
+    /// </summary>
+    private static string GroupKeyFor(IAudioSessionControl2 ctl2, uint pid)
+    {
+        try
+        {
+            if (ctl2.GetSessionInstanceIdentifier(out string id) == 0 && !string.IsNullOrEmpty(id))
+            {
+                // The instance id looks like "…|…%b{stream-guid}" — the part before the final
+                // "%b" is stable per app+session-group; drop the per-stream suffix to group.
+                int marker = id.LastIndexOf("%b", StringComparison.Ordinal);
+                return marker > 0 ? id[..marker] : id;
+            }
+        }
+        catch (COMException) { /* fall back to PID below */ }
+        return "pid:" + pid;
     }
 
     /// <inheritdoc/>
@@ -281,9 +329,26 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         }
     }
 
-    private static (string Name, string Path) ResolveProcess(uint pid)
+    // Per-PID (name, path) cache so the slow MainModule walk is paid once per process, not on
+    // every ~1 s reconcile. Bounded so a long-running session with lots of short-lived audio
+    // apps can't grow it without limit; entries are cheap and stale-safe (a reused PID just
+    // re-resolves on the next miss after eviction).
+    private readonly Dictionary<uint, (string Name, string Path)> _identityCache = new();
+    private const int IdentityCacheMax = 256;
+
+    private (string Name, string Path) ResolveProcessCached(uint pid)
     {
         if (pid == 0) return ("System Sounds", string.Empty);
+        if (_identityCache.TryGetValue(pid, out var cached)) return cached;
+
+        var resolved = ResolveProcess(pid);
+        if (_identityCache.Count >= IdentityCacheMax) _identityCache.Clear();
+        _identityCache[pid] = resolved;
+        return resolved;
+    }
+
+    private static (string Name, string Path) ResolveProcess(uint pid)
+    {
         try
         {
             using var p = Process.GetProcessById((int)pid);
@@ -306,14 +371,21 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         catch (InvalidOperationException) { return ($"PID {pid}", string.Empty); }
     }
 
-    /// <summary>Mutable per-app aggregate built while walking the flat session list.</summary>
-    private sealed class GroupAccumulator(string key, uint pid, string name, string path, bool isSystemSounds)
+    /// <summary>
+    /// Mutable per-app aggregate built while walking the flat session list under the COM gate.
+    /// Holds only the fast COM values; the display name/path are supplied later by
+    /// <see cref="ToInfo"/> once identity is resolved outside the lock.
+    /// </summary>
+    private sealed class GroupAccumulator(string key, uint pid, bool isSystemSounds)
     {
         private bool _first = true;
         private float _volume;
         private bool _muted;
         private AudioSessionState _state = AudioSessionState.Inactive;
         private float _peak;
+
+        public uint ProcessId => pid;
+        public bool IsSystemSounds => isSystemSounds;
 
         public void Absorb(float volume, bool muted, AudioSessionState state, float peak)
         {
@@ -324,7 +396,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             if (peak > _peak) _peak = peak;
         }
 
-        public AudioSessionInfo ToInfo() =>
+        public AudioSessionInfo ToInfo(string name, string path) =>
             new(key, pid, name, path, _volume, _muted, _state, isSystemSounds, _peak);
     }
 

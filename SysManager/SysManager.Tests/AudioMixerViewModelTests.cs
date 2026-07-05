@@ -17,9 +17,12 @@ namespace SysManager.Tests;
 /// hardware is touched. Coverage targets the ViewModel logic that matters: the in-place
 /// reconcile (surviving rows keep their instance, adds/removes without a collection Reset
 /// — pinning the "ReplaceWith drops the dragged slider" trap), volume/mute propagation to
-/// the service with an echo-suppression guard on external updates, the peak-meter update
-/// path, the <c>IsActive</c> visibility gate, the empty-state flag, and deterministic
-/// disposal. The COM enumeration/grouping itself lives in <see cref="AudioMixerService"/>
+/// the service with an echo-suppression guard on external updates, the mid-drag guard, the
+/// identity refresh, the peak-meter update path, the empty-state flag, and deterministic
+/// disposal. The <c>IsActive</c> gate is verified only for the peak-meter half (the timer
+/// start/stop + peak zeroing); the reconcile loop's 1&#160;s pause-when-hidden branch is
+/// timer-driven and is not unit-tested (it would need a time seam). The COM enumeration and
+/// grouping itself lives in <see cref="AudioMixerService"/>
 /// (not unit-tested here — it needs a real endpoint), so these tests treat the service's
 /// filtering (expired dropped, system-sounds flagged) as a contract at the seam.
 /// </summary>
@@ -249,18 +252,64 @@ public class AudioMixerViewModelTests
         Assert.Equal(["Audacity", "Zoom", "System Sounds"], order);
     }
 
+    // ── Mid-drag guard: a refresh must not clobber the slider being dragged ─
+
+    [Fact]
+    public void MergeInto_WhileUserDragging_DoesNotOverwriteVolume()
+    {
+        var vm = NewVm(ServiceWith(Session("s1", volume: 0.5f)));
+        var row = vm.Sessions.Single();
+
+        // User grabs the thumb and drags to 0.9 (view sets IsUserAdjusting during the drag).
+        row.IsUserAdjusting = true;
+        row.Volume = 0.9f;
+
+        // A reconcile tick arrives carrying a stale snapshot (0.5). It must NOT snap the thumb back.
+        vm.MergeInto([Session("s1", volume: 0.5f)]);
+        Assert.Equal(0.9f, row.Volume);
+
+        // After the drag ends, a later refresh applies external changes normally again.
+        row.IsUserAdjusting = false;
+        vm.MergeInto([Session("s1", volume: 0.3f)]);
+        Assert.Equal(0.3f, row.Volume);
+    }
+
+    // ── Identity refresh: a row that rebinds to a different exe re-extracts its icon ─
+
+    [Fact]
+    public void MergeInto_IdentityChange_UpdatesProcessId()
+    {
+        var vm = NewVm(ServiceWith(Session("k", pid: 100, name: "AppA")));
+        var row = vm.Sessions.Single();
+        Assert.Equal(100u, row.ProcessId);
+
+        // Same stable key, but the resolved process changed (new pid + exe). The row is kept
+        // (in place) and its identity fields are refreshed rather than showing stale ones.
+        vm.MergeInto([new AudioSessionInfo("k", 200, "AppB", ExePath: "", 0.5f, false, AudioSessionState.Active, false, 0f)]);
+
+        Assert.Same(row, vm.Sessions.Single());
+        Assert.Equal(200u, row.ProcessId);
+        Assert.Equal("AppB", row.DisplayName);
+    }
+
     // ── Deterministic disposal ─────────────────────────────────────────────
 
     [Fact]
-    public void Dispose_IsIdempotent_AndStopsTheMeter()
+    public void Dispose_IsIdempotent_AndZeroesTheMeter()
     {
-        var vm = NewVm(ServiceWith(Session("s1")));
-        vm.IsActive = true; // meter timer running
+        var service = ServiceWith(Session("s1"));
+        service.GetPeak("s1").Returns(0.7f);
+        var vm = NewVm(service);
+        vm.IsActive = true;
+        vm.UpdatePeaks(); // light the meter so zeroing is observable
+        Assert.Equal(0.7f, vm.Sessions.Single().PeakLevel);
 
         vm.Dispose();
         vm.Dispose(); // double dispose must be a no-op, not throw (base _disposed guard)
 
-        Assert.True(true); // reaching here without an exception is the guarantee
+        // Behavioral post-condition: Dispose stopped the meter and zeroed the lit bar (it must
+        // not leave a stale level frozen on screen). The double-Dispose above proves idempotency.
+        Assert.Equal(0f, vm.Sessions.Single().PeakLevel);
     }
 
     // ── Input validation at the trust boundary (real service, no COM) ──────

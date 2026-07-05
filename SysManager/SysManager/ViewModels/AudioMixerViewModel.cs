@@ -156,6 +156,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         if (disposing)
         {
             _peakTimer.Stop();
+            foreach (var row in Sessions) row.PeakLevel = 0f; // don't leave stale lit meters
             _reconcileCts?.Cancel();
             _reconcileCts?.Dispose();
             _reconcileCts = null; // idempotent: a second Dispose() must not re-Cancel a disposed CTS

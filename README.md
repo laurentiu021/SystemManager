@@ -300,7 +300,7 @@ a confirmation before it runs:
   design — the strongest action is a bounded pause, so the machine is never left
   permanently unpatched.
 
-### App updates (winget)
+### App Updates (winget)
 - Scan for upgradable packages
 - Sort by name, ID, version, or source via clickable column headers
 - Select all or individual packages, bulk upgrade with per-package status

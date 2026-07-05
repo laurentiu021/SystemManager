@@ -29,7 +29,7 @@
             <StackPanel>
                 <TextBlock Text="Settings Watchdog" Style="{StaticResource Display}"/>
                 <TextBlock Text="Save a baseline of the Windows settings that feature updates tend to reset — telemetry, web search, widgets, lock-screen ads — and the watchdog will flag anything that drifts, with one-click restore."
-                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                         DockPanel.Dock="Right" VerticalAlignment="Center">

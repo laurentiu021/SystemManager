@@ -139,22 +139,22 @@
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding LastLatencyMs, StringFormat={}{0:F0} ms, FallbackValue=—}"
                                                            Foreground="{DynamicResource Info}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="LATENCY" Foreground="{DynamicResource TextMuted}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                                <TextBlock Text="LATENCY" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding AverageMs, StringFormat={}{0:F1}, FallbackValue=—}"
                                                            Foreground="{DynamicResource TextSecondary}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="AVG" Foreground="{DynamicResource TextMuted}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                                <TextBlock Text="AVG" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding JitterMs, StringFormat={}{0:F0}, FallbackValue=—}"
                                                            Foreground="{DynamicResource Warning}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="JITTER" Foreground="{DynamicResource TextMuted}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                                <TextBlock Text="JITTER" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding LossPercent, StringFormat={}{0:F0}%}"
                                                            Foreground="{DynamicResource WarningText}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="LOSS" Foreground="{DynamicResource TextMuted}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                                <TextBlock Text="LOSS" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                         </StackPanel>
                                     </DockPanel>

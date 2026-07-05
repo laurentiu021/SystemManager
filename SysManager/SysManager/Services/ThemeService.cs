@@ -253,14 +253,17 @@ public sealed class ThemeService
             ("InfoText", C("#0369A1")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
             ("DangerText", C("#B91C1C")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
 
-            // Light: darker, saturated tones that meet WCAG AA against a near-white surface (same family
-            // as the *Text values above). Fixes the washed-out cyan/green/amber/red small text + dots.
-            ("Info", C("#0369A1")), ("Success", C("#15803D")), ("Warning", C("#B45309")), ("Danger", C("#B91C1C")),
+            // Light: darker, saturated tones that meet WCAG AA as SMALL text — not just on pure white,
+            // but on the most-tinted light preset card surface (soft-blossom Surface2 #FBCFE8 is the
+            // worst case). Info #075985 / Success #166534 / Warning #9A3412 all clear 4.5:1 there;
+            // Danger #B91C1C already did. (Earlier values passed on #FFFFFF but dipped to ~3.6-4.3 on
+            // the pastel presets — see ThemeStatusBrushTests, which now asserts against the tinted surface.)
+            ("Info", C("#075985")), ("Success", C("#166534")), ("Warning", C("#9A3412")), ("Danger", C("#B91C1C")),
 
             // Console on light: dark-on-white body/verbose text; semantic lines reuse the AA light tones.
-            ("OutOutputBrush", C("#1E1B4B")), ("OutVerboseBrush", C("#64748B")),
-            ("OutInfoBrush", C("#0369A1")), ("OutWarnBrush", C("#B45309")), ("OutErrorBrush", C("#B91C1C")),
-            ("OutDebugBrush", C("#6D28D9")), ("OutProgressBrush", C("#15803D")),
+            ("OutOutputBrush", C("#1E1B4B")), ("OutVerboseBrush", C("#475569")),
+            ("OutInfoBrush", C("#075985")), ("OutWarnBrush", C("#9A3412")), ("OutErrorBrush", C("#B91C1C")),
+            ("OutDebugBrush", C("#6D28D9")), ("OutProgressBrush", C("#166534")),
         ];
 
     private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);

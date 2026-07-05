@@ -155,7 +155,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Location:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox Grid.Column="1" AutomationProperties.Name="Scan location" ItemsSource="{Binding ScanLocations}" SelectedItem="{Binding SelectedLocation, Mode=TwoWay}"
-                                      MaxWidth="380" HorizontalAlignment="Left">
+                                      MaxWidth="380" HorizontalAlignment="Left" TextSearch.TextPath="Label">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>

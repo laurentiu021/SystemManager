@@ -93,6 +93,7 @@
                         <TextBlock Text="Preset" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <ComboBox ItemsSource="{Binding Shared.Presets}"
                                   SelectedItem="{Binding Shared.SelectedPreset, Mode=TwoWay}" Width="200"
+                                  TextSearch.TextPath="Name"
                                   AutomationProperties.Name="Target preset">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>

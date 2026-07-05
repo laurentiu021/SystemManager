@@ -39,7 +39,7 @@
                     <TextBlock Text="PROCESS" Style="{StaticResource SectionLabel}"/>
                     <ComboBox ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}"
                               Margin="0,4,0,0" Padding="8,6" FontSize="13"
-                              MaxDropDownHeight="320"
+                              MaxDropDownHeight="320" TextSearch.TextPath="Display"
                               AutomationProperties.Name="Process to set affinity for">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>

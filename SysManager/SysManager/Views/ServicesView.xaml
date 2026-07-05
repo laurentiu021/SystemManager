@@ -9,20 +9,6 @@
              mc:Ignorable="d"
              Background="{DynamicResource Surface0}">
 
-    <UserControl.Resources>
-        <!-- Stop/Disable on a row marked Critical are refused (a boot/logon-critical
-             service can freeze the session or force a reboot). Tint their label with the
-             danger colour on Critical rows so the risk is visible before the click, while
-             Safe/Caution rows keep the neutral ghost styling. -->
-        <Style x:Key="CriticalAwareRowButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SafetyLevel}" Value="Critical">
-                    <Setter Property="Foreground" Value="{DynamicResource DangerText}"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-    </UserControl.Resources>
-
     <Grid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -187,12 +173,12 @@
                                         CommandParameter="{Binding}"
                                         AutomationProperties.Name="{Binding DisplayName, StringFormat='Start {0}'}"/>
                                 <Button Content="Stop" Padding="8,2" Margin="0,0,4,0"
-                                        Style="{StaticResource CriticalAwareRowButton}"
+                                        Style="{StaticResource GhostButton}"
                                         Command="{Binding DataContext.StopServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}"
                                         AutomationProperties.Name="{Binding DisplayName, StringFormat='Stop {0}'}"/>
                                 <Button Content="Disable" Padding="8,2" Margin="0,0,4,0"
-                                        Style="{StaticResource CriticalAwareRowButton}"
+                                        Style="{StaticResource GhostButton}"
                                         Command="{Binding DataContext.DisableServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}"
                                         AutomationProperties.Name="{Binding DisplayName, StringFormat='Disable {0}'}"/>

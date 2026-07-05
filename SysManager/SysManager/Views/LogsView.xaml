@@ -80,10 +80,11 @@
                         </Ellipse>
                         <TextBlock Text="{Binding ErrorCount}" FontSize="20" FontWeight="Bold"
                                    Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
-                                   VerticalAlignment="Center" Margin="10,0,0,0">
-                            <Run Text="&#x25CF; Errors"/>
-                        </TextBlock>
+                        <!-- Plain "Errors" — the coloured SevDot already marks the row; the leading
+                             glyph is reserved for Critical (▲) as its colourblind-safe "most severe red"
+                             cue, so Errors/Warnings/Info stay glyph-free for a consistent set. -->
+                        <TextBlock Text="Errors" FontSize="12" Foreground="{DynamicResource TextMuted}"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </Grid>
             </Border>

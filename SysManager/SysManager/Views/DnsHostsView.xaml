@@ -164,25 +164,25 @@
                            Visibility="{Binding HostEntries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
 
-                <!-- Add entry row -->
-                <DockPanel Grid.Row="2" Margin="0,12,0,0">
-                    <Button Content="Add" Command="{Binding AddEntryCommand}"
-                            Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right"
-                            Padding="18,8" Margin="8,0,0,0"
-                            AutomationProperties.Name="Add host entry"/>
-                    <TextBox Text="{Binding NewHostname, UpdateSourceTrigger=PropertyChanged}"
-                             DockPanel.Dock="Right" MinWidth="200" Margin="8,0,0,0"
-                             VerticalAlignment="Center"
-                             AutomationProperties.Name="New host entry hostname"/>
-                    <TextBlock Text="Hostname:" DockPanel.Dock="Right" VerticalAlignment="Center"
-                               Style="{StaticResource Subtle}" Margin="12,0,4,0"/>
+                <!-- Add entry row — a single left-to-right labelled group so both inputs read in
+                     order (IP: [ip]  Hostname: [hostname]  [Add]) instead of one unlabelled box
+                     floating at the far left with the rest docked right. -->
+                <WrapPanel Grid.Row="2" Margin="0,12,0,0">
+                    <TextBlock Text="IP:" VerticalAlignment="Center"
+                               Style="{StaticResource Subtle}" Margin="0,0,4,0"/>
                     <TextBox Text="{Binding NewIp, UpdateSourceTrigger=PropertyChanged}"
                              MinWidth="140" VerticalAlignment="Center"
                              AutomationProperties.Name="New host entry IP address"/>
-                    <TextBlock Text="IP:" VerticalAlignment="Center"
-                               Style="{StaticResource Subtle}" Margin="0,0,4,0"
-                               Visibility="Collapsed"/>
-                </DockPanel>
+                    <TextBlock Text="Hostname:" VerticalAlignment="Center"
+                               Style="{StaticResource Subtle}" Margin="12,0,4,0"/>
+                    <TextBox Text="{Binding NewHostname, UpdateSourceTrigger=PropertyChanged}"
+                             MinWidth="200" VerticalAlignment="Center"
+                             AutomationProperties.Name="New host entry hostname"/>
+                    <Button Content="Add" Command="{Binding AddEntryCommand}"
+                            Style="{StaticResource PrimaryButton}"
+                            Padding="18,8" Margin="12,0,0,0"
+                            AutomationProperties.Name="Add host entry"/>
+                </WrapPanel>
 
                 <!-- Status -->
                 <TextBlock Grid.Row="3" Text="{Binding HostsStatus}" Style="{StaticResource Subtle}"

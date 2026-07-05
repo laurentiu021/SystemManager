@@ -12,8 +12,9 @@
     <Grid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -25,7 +26,7 @@
         </StackPanel>
 
         <!-- Export card -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="16" VerticalAlignment="Top">
+        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="16">
             <StackPanel>
                 <TextBlock Text="Export" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock Text="Choose which settings to include, then save them as a portable JSON profile."
@@ -72,7 +73,7 @@
         </Border>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
             <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>

@@ -242,32 +242,45 @@
                                                                    RadiusX="2" RadiusY="2"
                                                                    Margin="-28,0,0,0"
                                                                    Visibility="Collapsed"/>
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="{Binding Glyph}"
+                                                        <!-- DockPanel (not a horizontal StackPanel): a StackPanel gives its
+                                                             children infinite width, so the label's grid never constrained and the
+                                                             PREVIEW pill overflowed the 220px sidebar. Docking the glyph left lets
+                                                             the content fill the real remaining width, so the label ellipsizes and
+                                                             the pill always shows. -->
+                                                        <DockPanel>
+                                                            <TextBlock Text="{Binding Glyph}" DockPanel.Dock="Left"
                                                                        FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                                        FontSize="13" Margin="0,0,10,0"
                                                                        VerticalAlignment="Center"
                                                                        Foreground="{DynamicResource TextSecondary}"/>
                                                             <StackPanel VerticalAlignment="Center">
-                                                                <StackPanel Orientation="Horizontal">
-                                                                    <TextBlock Text="{Binding Label}"
+                                                                <!-- Label + PREVIEW pill in a 2-column grid (label = *, pill = Auto):
+                                                                     a horizontal StackPanel measured with infinite width, so on a long
+                                                                     label the pill was pushed past the 220px sidebar edge and clipped to
+                                                                     "PR". The label now ellipsizes and the pill always renders in full. -->
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Grid.Column="0" Text="{Binding Label}"
                                                                                FontFamily="{StaticResource UiFont}"
                                                                                FontSize="13" FontWeight="Medium"
-                                                                               VerticalAlignment="Center"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                                                Foreground="{DynamicResource TextSecondary}"/>
                                                                     <!-- PREVIEW pill: implemented but not yet QA-verified -->
-                                                                    <Border Background="{DynamicResource AccentSoft}" CornerRadius="4"
+                                                                    <Border Grid.Column="1" Background="{DynamicResource AccentSoft}" CornerRadius="4"
                                                                             Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
                                                                             Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
                                                                         <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
                                                                                    Foreground="{DynamicResource Info}"/>
                                                                     </Border>
-                                                                </StackPanel>
+                                                                </Grid>
                                                                 <ProgressBar Height="2" Margin="0,3,0,0"
                                                                              IsIndeterminate="True"
                                                                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                                                             </StackPanel>
-                                                        </StackPanel>
+                                                        </DockPanel>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>

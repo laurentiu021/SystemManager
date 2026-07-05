@@ -13,6 +13,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Corner radii are now consistent across every tab.** Individual views still used a mix of slightly different corner radii on their banners, cards, and chips; these are now snapped to the same shared scale as the rest of the app (cards to 12 px, chips to 8 px), so panels no longer round by subtly different amounts from one tab to the next. Purely visual, no behavior change. Part of the ongoing UI refresh.
 
 ### Fixed
+- **A round of small UI polish across several tabs.**
+  - **Restore Points / Debloater** — the toolbar text boxes were blank with no hint of their purpose; they now show placeholder text ("Describe this restore point…", "Search apps…") like the other search/filter boxes.
+  - **Sidebar "PREVIEW" badge** — on longer nav labels (Settings Watchdog) the badge was clipped to "PR" because it overflowed the fixed-width sidebar; the label now ellipsizes and the badge always shows in full.
+  - **Profile Export/Import** — the Import card was pinned to the bottom of the tab with a large empty gap above it; the two cards now stack naturally from the top.
+  - **DNS & Hosts** — the "add entry" row had an unlabelled IP box floating at the far left with the rest of the controls docked right; it now reads left-to-right as "IP: [ ] Hostname: [ ] Add".
+  - **Defender Tweaks** — the three protection-status values used three different colours for the same kind of value (green / blue / grey), which read as inconsistent; they now share one neutral colour.
+  - **System Logs** — the four severity summary cards had inconsistent leading glyphs; the redundant one on Errors is removed (the coloured dot already marks each card), leaving Critical's distinct marker as its colourblind-safe cue.
+  - **Privacy & Telemetry** — removed a dead grouping style that never rendered (the list isn't view-grouped; each row already shows its category).
 - **A batch of small correctness and wording fixes across tabs.**
   - **Speed Test** — the info banner read "Ooklameasures…" and "HTTPtests…" (a missing space after the bold labels); it now reads "Ookla measures…" and "HTTP tests…".
   - **About** — the "What's new" release notes rendered raw Markdown: code-fence markers (```` ``` ````, with the language tag) and horizontal-rule dashes (`---`) showed up as literal text. The lightweight Markdown renderer now formats fenced code blocks as monospace and drops rule lines, matching how it already handles headings and bold.

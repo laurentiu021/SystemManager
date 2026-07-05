@@ -84,21 +84,10 @@
             </WrapPanel>
         </Border>
 
-        <!-- Toggle list grouped by category -->
+        <!-- Toggle list (each row shows its own category label; the list is flat, not view-grouped) -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,12">
                 <ItemsControl ItemsSource="{Binding FilteredToggles}">
-                    <ItemsControl.GroupStyle>
-                        <GroupStyle>
-                            <GroupStyle.HeaderTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="14"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               Margin="0,16,0,8"/>
-                                </DataTemplate>
-                            </GroupStyle.HeaderTemplate>
-                        </GroupStyle>
-                    </ItemsControl.GroupStyle>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border Margin="0,2" Padding="12,10" CornerRadius="8"

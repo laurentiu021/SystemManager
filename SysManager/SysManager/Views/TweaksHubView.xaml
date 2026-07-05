@@ -125,12 +125,17 @@
                 <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
                            Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <!-- Content is bound via an inner TextBlock: StringFormat on a ContentControl's
+                         Content (an int) isn't applied without ContentStringFormat on the template, so
+                         the button showed a bare "0"; StringFormat on TextBlock.Text always applies. -->
                     <Button Command="{Binding ApplySelectedCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
-                            Content="{Binding PendingApply, StringFormat='Apply Selected ({0})'}"
-                            AutomationProperties.Name="Apply selected tweaks"/>
+                            AutomationProperties.Name="Apply selected tweaks">
+                        <TextBlock Text="{Binding PendingApply, StringFormat='Apply Selected ({0})'}"/>
+                    </Button>
                     <Button Command="{Binding UndoSelectedCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
-                            Content="{Binding PendingUndo, StringFormat='Undo Selected ({0})'}"
-                            AutomationProperties.Name="Undo selected tweaks"/>
+                            AutomationProperties.Name="Undo selected tweaks">
+                        <TextBlock Text="{Binding PendingUndo, StringFormat='Undo Selected ({0})'}"/>
+                    </Button>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}" Style="{StaticResource GhostButton}"
                             AutomationProperties.Name="Refresh tweak states"/>
                 </StackPanel>

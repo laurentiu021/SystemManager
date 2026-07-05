@@ -12,16 +12,12 @@
     <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Preview banner -->
-        <v:DevelopmentBanner Grid.Row="0" Margin="28,24,28,0"/>
-
         <!-- Header -->
-        <StackPanel Grid.Row="1" Margin="28,16,28,0">
+        <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Volume Control" Style="{StaticResource Display}"/>
             <TextBlock Text="Set the volume and mute for each app playing sound, with a live level meter. Shows apps on your default playback device — per-app output routing and saved presets are coming in a later update."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"
@@ -29,7 +25,7 @@
         </StackPanel>
 
         <!-- App mixer list -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
             <Grid>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8"
                               Visibility="{Binding HasSessions, Converter={StaticResource FlexVis}}">
@@ -127,7 +123,7 @@
         </Border>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="3" Margin="28,12,28,24">
+        <DockPanel Grid.Row="2" Margin="28,12,28,24">
             <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>

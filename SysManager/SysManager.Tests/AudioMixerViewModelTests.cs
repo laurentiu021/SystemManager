@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.Specialized;
+using System.Reflection;
 using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
@@ -301,12 +302,11 @@ public class AudioMixerViewModelTests
     // ── Deterministic disposal ─────────────────────────────────────────────
 
     [Fact]
-    public async Task Dispose_RacingInit_CompletesCleanly()
+    public async Task Dispose_RacingInit_LeavesNoLiveReconcileLoop()
     {
-        // Dispose the VM BEFORE its async init has completed. Because the CTS is now created
-        // before the first await, Dispose can cancel it and init bails without starting an
-        // orphan loop. The guarantee here is that init still COMPLETES (no unobserved exception,
-        // no ObjectDisposedException from the assign-after-await race) and dispose stays idempotent.
+        // Dispose the VM BEFORE its async init has completed. Because the CTS is created before
+        // the first await, Dispose cancels+disposes+nulls it, and InitAsync's post-await guard
+        // sees the null/cancelled token and starts NO reconcile loop.
         var service = ServiceWith(Session("s1"));
         var vm = new AudioMixerViewModel(service);
 
@@ -315,6 +315,15 @@ public class AudioMixerViewModelTests
         vm.Dispose();                    // still idempotent after init resolves
 
         Assert.True(vm.InitializationComplete.IsCompletedSuccessfully);
+
+        // Discriminating assertion (pins the fix, not just "init ran"): after a disposed init the
+        // CTS field is null — the loop is not running. In the OLD assign-after-await ordering,
+        // InitAsync would recreate a LIVE CTS after Dispose ran, leaving this non-null (an orphan
+        // loop). Reflection mirrors DriversViewModelTests' _cts pattern.
+        var cts = typeof(AudioMixerViewModel)
+            .GetField("_reconcileCts", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(vm);
+        Assert.Null(cts);
     }
 
     [Fact]
@@ -408,5 +417,32 @@ public class AudioMixerViewModelTests
     public void ComputeAdjusting_IsTrueWhileDraggingOrKeyboardFocused(bool dragging, bool focused, bool expected)
     {
         Assert.Equal(expected, AudioMixerView.ComputeAdjusting(dragging, focused));
+    }
+
+    [Fact]
+    public void ApplyAdjustingState_DragEndsWhileStillFocused_StaysAdjusting()
+    {
+        // Drives the actual guard WIRING (not just the terminal OR) through the exact event
+        // sequence that held the Audit-3 bug: GotKeyboardFocus → DragStarted → DragCompleted,
+        // with focus never lost. The row must remain adjusting after the drag ends, so a reconcile
+        // cannot clobber a subsequent arrow-key nudge. Unconditionally clearing on DragCompleted
+        // (the old bug) would flip this to false.
+        var vm = NewVm(ServiceWith(Session("s1")));
+        var row = vm.Sessions.Single();
+
+        AudioMixerView.ApplyAdjustingState(row, dragging: false, keyboardFocused: true);  // GotKeyboardFocus
+        AudioMixerView.ApplyAdjustingState(row, dragging: true, keyboardFocused: true);   // DragStarted
+        AudioMixerView.ApplyAdjustingState(row, dragging: false, keyboardFocused: true);  // DragCompleted (still focused)
+        Assert.True(row.IsUserAdjusting); // the regression pin
+
+        AudioMixerView.ApplyAdjustingState(row, dragging: false, keyboardFocused: false); // LostKeyboardFocus
+        Assert.False(row.IsUserAdjusting); // fully released → refreshes resume
+    }
+
+    [Fact]
+    public void ApplyAdjustingState_NullRow_DoesNotThrow()
+    {
+        // Recycled/blank DataContext must be a safe no-op (the handlers pass DataContext-as-row).
+        AudioMixerView.ApplyAdjustingState(null, dragging: true, keyboardFocused: true);
     }
 }

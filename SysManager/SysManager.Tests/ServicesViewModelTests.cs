@@ -273,4 +273,39 @@ public class ServicesViewModelTests
         var ex = await Record.ExceptionAsync(() => vm.DisableServiceCommand.ExecuteAsync(null));
         Assert.Null(ex);
     }
+
+    // ── StopService: boot-critical guard (regression) ──
+
+    [Fact]
+    public async Task StopService_CriticalService_IsRefusedAndNotMutated()
+    {
+        // Stopping a boot/logon-critical service (RpcSs, DcomLaunch, …) is as dangerous
+        // as disabling it — it can freeze the session or force a reboot. Stop must refuse
+        // a Critical service outright, before any elevation/confirm/PowerShell call, and
+        // leave its running state untouched (mirrors the Disable-Critical guard).
+        var critical = new ServiceEntry
+        {
+            Name = "RpcSs",
+            DisplayName = "Remote Procedure Call (RPC)",
+            Status = "Running",
+            StartType = "Automatic",
+            SafetyLevel = Models.SafetyLevel.Critical,
+            SafetyDescription = "Core Windows IPC. System will not function without it."
+        };
+        var vm = CreateWithData(new List<ServiceEntry> { critical });
+
+        await vm.StopServiceCommand.ExecuteAsync(critical);
+
+        Assert.Contains("cannot be stopped", vm.StatusMessage);
+        // The service must be left running — the refused command never touched it.
+        Assert.Equal("Running", critical.Status);
+    }
+
+    [Fact]
+    public async Task StopService_NullEntry_DoesNotThrow()
+    {
+        var vm = CreateWithData();
+        var ex = await Record.ExceptionAsync(() => vm.StopServiceCommand.ExecuteAsync(null));
+        Assert.Null(ex);
+    }
 }

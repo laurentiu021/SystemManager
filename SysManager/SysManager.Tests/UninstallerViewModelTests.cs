@@ -238,7 +238,10 @@ public class UninstallerViewModelGateTests
         // Scan and UninstallSelected both recreate the shared _cts. Without the NotBusy gate,
         // triggering one while the other runs would dispose the CTS still being awaited
         // (ObjectDisposedException). Cancel must stay enabled so an in-flight run can stop.
+        // Uninstall additionally requires a populated list (HasApps) — see the empty-list
+        // gate test below — so seed apps first to isolate the busy-gate behavior here.
         var vm = NewVm();
+        Seed(vm, 3);
         Assert.True(vm.ScanCommand.CanExecute(null));
         Assert.True(vm.UninstallSelectedCommand.CanExecute(null));
 
@@ -250,5 +253,25 @@ public class UninstallerViewModelGateTests
         vm.IsBusy = false;
         Assert.True(vm.ScanCommand.CanExecute(null));
         Assert.True(vm.UninstallSelectedCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void ListCommands_DisabledOnEmptyList_EnabledAfterScanPopulates()
+    {
+        // Uninstall / Select all / Deselect act on the listed apps, so on a fresh (unscanned)
+        // list they must be disabled — a destructive Uninstall must never be clickable with
+        // nothing to act on. Scan is the entry point and stays enabled.
+        var vm = NewVm();
+        Assert.Equal(0, vm.AppCount);
+        Assert.True(vm.ScanCommand.CanExecute(null));
+        Assert.False(vm.UninstallSelectedCommand.CanExecute(null));
+        Assert.False(vm.SelectAllCommand.CanExecute(null));
+        Assert.False(vm.DeselectAllCommand.CanExecute(null));
+
+        Seed(vm, 3); // populates AllApps and refreshes AppCount via ApplyFilter
+        Assert.True(vm.AppCount > 0);
+        Assert.True(vm.UninstallSelectedCommand.CanExecute(null));
+        Assert.True(vm.SelectAllCommand.CanExecute(null));
+        Assert.True(vm.DeselectAllCommand.CanExecute(null));
     }
 }

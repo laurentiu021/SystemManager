@@ -56,6 +56,14 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     public long TotalSelectedBytes => Categories.Where(c => c.IsSelected).Sum(c => c.TotalSizeBytes);
     public string TotalSelectedDisplay => FormatHelper.FormatSize(TotalSelectedBytes);
 
+    /// <summary>
+    /// Clean is only valid when at least one category is ticked and no clean is
+    /// already running. Gating CanExecute (rather than early-returning inside the
+    /// command) keeps the button visibly disabled at 0 B selected, so an empty
+    /// destructive action is never presented as clickable.
+    /// </summary>
+    private bool CanClean => !IsCleaning && Categories.Any(c => c.IsSelected);
+
     public string LargeBytesScannedDisplay => FormatHelper.FormatSize(LargeBytesScanned);
 
     public DeepCleanupViewModel(DeepCleanupService cleanup, LargeFileScanner largeFiles, FixedDriveService drives)
@@ -112,7 +120,11 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
 
     // Forward any running state to IsBusy so the sidebar progress indicator works
     partial void OnIsScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
-    partial void OnIsCleaningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
+    partial void OnIsCleaningChanged(bool value)
+    {
+        IsBusy = IsScanning || IsCleaning || IsLargeScanning;
+        CleanCommand.NotifyCanExecuteChanged();
+    }
     partial void OnIsLargeScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
 
     private void OnCategoryPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -121,6 +133,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         {
             OnPropertyChanged(nameof(TotalSelectedBytes));
             OnPropertyChanged(nameof(TotalSelectedDisplay));
+            CleanCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -199,7 +212,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         finally { IsScanning = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanClean))]
     private async Task CleanAsync()
     {
         if (IsCleaning || !Categories.Any(c => c.IsSelected)) return;

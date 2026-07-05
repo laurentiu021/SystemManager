@@ -116,6 +116,19 @@ public sealed partial class ServicesViewModel : ViewModelBase
     private async Task StopServiceAsync(ServiceEntry? entry)
     {
         if (entry is null) return;
+
+        // Stopping a boot/logon-critical service (RpcSs, DcomLaunch, ProfSvc, lsass, …)
+        // can freeze the session or force a reboot just as surely as disabling it, so it
+        // gets the same unconditional refusal as DisableServiceAsync rather than the
+        // neutral "may affect system functionality" confirm. Checked before the elevation
+        // guard — it can never proceed regardless of admin.
+        if (entry.SafetyLevel == SafetyLevel.Critical)
+        {
+            StatusMessage = $"⛔ \"{entry.DisplayName}\" is critical and cannot be stopped — {entry.SafetyDescription}";
+            Log.Warning("Refused to stop critical service: {ServiceName} ({DisplayName})", entry.Name, entry.DisplayName);
+            return;
+        }
+
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Stopping services requires admin."; return; }
 
         if (!DialogService.Instance.Confirm(

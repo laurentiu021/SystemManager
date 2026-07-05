@@ -151,10 +151,18 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (UnauthorizedAccessException ex) { Log.Debug("Pre-scan access denied: {Error}", ex.Message); }
     }
 
-    partial void OnIsTempRunningChanged(bool value) => OnPropertyChanged(nameof(IsAnyRunning));
-    partial void OnIsBinRunningChanged(bool value) => OnPropertyChanged(nameof(IsAnyRunning));
-    partial void OnIsSfcRunningChanged(bool value) => OnPropertyChanged(nameof(IsAnyRunning));
-    partial void OnIsDismRunningChanged(bool value) => OnPropertyChanged(nameof(IsAnyRunning));
+    // Each running flag feeds IsAnyRunning; re-evaluate Cancel's CanExecute too so the
+    // button is disabled when nothing is running and enabled the moment a task starts.
+    partial void OnIsTempRunningChanged(bool value) => OnAnyRunningChanged();
+    partial void OnIsBinRunningChanged(bool value) => OnAnyRunningChanged();
+    partial void OnIsSfcRunningChanged(bool value) => OnAnyRunningChanged();
+    partial void OnIsDismRunningChanged(bool value) => OnAnyRunningChanged();
+
+    private void OnAnyRunningChanged()
+    {
+        OnPropertyChanged(nameof(IsAnyRunning));
+        CancelCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand]
     private void RelaunchAsAdmin()
@@ -452,7 +460,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
             : ($"DISM finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsAnyRunning))]
     private void Cancel()
     {
         _tempCts?.Cancel();

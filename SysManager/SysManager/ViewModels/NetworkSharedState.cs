@@ -188,7 +188,10 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             LineSmoothness = 0,
             Stroke = new SolidColorPaint(skColor, 2),
             GeometryStroke = new SolidColorPaint(skColor, 2),
-            GeometryFill = new SolidColorPaint(SKColor.Parse("0B0D10")),
+            // Marker centre = the theme surface (a "hollow-on-surface" dot ringed by the series colour).
+            // Was a hardcoded near-black, which stayed black on the light presets and read as black dots
+            // with a faint colour rim on the white legend. Re-themed in ChartTheme.Apply on theme change.
+            GeometryFill = new SolidColorPaint(Helpers.ChartTheme.Sk(ThemeService.Instance.CurrentTheme.Surface)),
             AnimationsSpeed = TimeSpan.Zero
         });
 
@@ -542,7 +545,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     /// </summary>
     private void ApplyChartTheme() => Helpers.ChartTheme.Apply(
         LegendTextPaint, TooltipTextPaint, TooltipBackgroundPaint,
-        [.. LatencyXAxes, .. LatencyYAxes, .. TraceXAxes, .. TraceYAxes]);
+        [.. LatencyXAxes, .. LatencyYAxes, .. TraceXAxes, .. TraceYAxes],
+        TraceSeries);
 
     // ── Axis factories ──
 

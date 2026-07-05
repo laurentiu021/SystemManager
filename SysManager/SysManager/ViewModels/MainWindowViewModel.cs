@@ -70,6 +70,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public CliInterfaceViewModel CliInterface { get; }
     public ScheduledMaintenanceViewModel ScheduledMaintenance { get; }
     public TweaksHubViewModel TweaksHub { get; }
+    public AudioMixerViewModel AudioMixer { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
@@ -86,8 +87,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public PlaceholderViewModel WipEdgeOneDriveRemover { get; private set; } = null!;
     public PlaceholderViewModel WipNotificationBlocker { get; private set; } = null!;
 
-    // Customization group (Context Menu is now fully implemented)
-    public PlaceholderViewModel WipVolumeControl { get; private set; } = null!;
+    // Customization group (Context Menu + Volume Control now implemented; Volume Control is PREVIEW)
 
     /// <summary>Grouped sidebar tree (12 categories).</summary>
     public ObservableCollection<NavGroup> NavGroups { get; } = new();
@@ -167,6 +167,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             CliInterface = sp.GetRequiredService<CliInterfaceViewModel>();
             ScheduledMaintenance = sp.GetRequiredService<ScheduledMaintenanceViewModel>();
             TweaksHub = sp.GetRequiredService<TweaksHubViewModel>();
+            AudioMixer = sp.GetRequiredService<AudioMixerViewModel>();
         }
         else
         {
@@ -241,6 +242,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             CliInterface = new CliInterfaceViewModel();
             ScheduledMaintenance = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner()));
             TweaksHub = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), restorePoints));
+            AudioMixer = new AudioMixerViewModel(new AudioMixerService());
         }
 
         InitPlaceholders();
@@ -267,8 +269,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WipEdgeOneDriveRemover = new PlaceholderViewModel("Edge/OneDrive Remover", "Safely remove or disable Edge and OneDrive with full restore capability.", "#339");
         WipNotificationBlocker = new PlaceholderViewModel("Notification Blocker", "Suppress annoying app pop-ups (update nags, trial reminders) with allowlist.", "#340");
 
-        // Customization group (Context Menu is now fully implemented)
-        WipVolumeControl = new PlaceholderViewModel("Volume Control", "Per-app volume mixer with output device routing and profile presets.", "#332");
+        // Customization group (Context Menu + Volume Control now implemented; Volume Control ships as PREVIEW)
 
         // System group (additions)
 
@@ -364,7 +365,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Group("grp-customization", "Customization", "",
             Item("nav-context-menu",   "Context Menu",          "", ContextMenu,          typeof(Views.ContextMenuView)),
             Item("nav-dark-mode",      "Dark Mode Scheduler",   "", DarkMode,             typeof(Views.DarkModeView)),
-            Item("nav-volume-control", "Volume Control",        "", WipVolumeControl,     typeof(Views.PlaceholderView), inDevelopment: true)),
+            Item("nav-volume-control", "Volume Control",        "", AudioMixer,           typeof(Views.AudioMixerView), inDevelopment: true)),
 
         Group("grp-info", "Info", "",
             Item("nav-drivers",       "Drivers",        "", Drivers,        typeof(Views.DriversView)),
@@ -407,9 +408,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var parentGroup = NavGroups.FirstOrDefault(g => g.Children.Contains(value));
         if (parentGroup is not null) parentGroup.IsExpanded = true;
 
-        // Pause/resume the process manager auto-refresh loop based on tab visibility.
+        // Pause/resume per-tab poll loops based on visibility (reconcile loops + the volume
+        // mixer's peak-meter timer only run while their tab is the one on screen).
         ProcessManager.IsActive = ReferenceEquals(value.Content, ProcessManager);
         Dashboard.IsActive = ReferenceEquals(value.Content, Dashboard);
+        AudioMixer.IsActive = ReferenceEquals(value.Content, AudioMixer);
     }
 
     /// <summary>Select a nav item by its automation id.</summary>
@@ -495,6 +498,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         CliInterface?.Dispose();
         ScheduledMaintenance?.Dispose();
         TweaksHub?.Dispose();
+        AudioMixer?.Dispose();
 
         // WIP placeholders
         WipBandwidthMonitor?.Dispose();
@@ -513,7 +517,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         BootAnalyzer?.Dispose();
         WipEdgeOneDriveRemover?.Dispose();
         WipNotificationBlocker?.Dispose();
-        WipVolumeControl?.Dispose();
 
         GC.SuppressFinalize(this);
     }

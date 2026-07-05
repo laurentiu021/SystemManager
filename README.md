@@ -88,7 +88,7 @@ fully open source.
 ### Sidebar navigation
 The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
-scrolling through a flat list. 53 tabs are fully implemented; 5 are
+scrolling through a flat list. 54 tabs are fully implemented; 4 are
 work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
@@ -102,7 +102,7 @@ work-in-progress placeholders marked with ⚙️:
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks · Notification Blocker ⚙️ |
-| 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control ⚙️ |
+| 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control 🔬 |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface 🔬 · Environment Variables |
 

@@ -51,21 +51,12 @@
                     <!-- Battery cards (visible only when battery exists) -->
                     <StackPanel Visibility="{Binding Battery.HasBattery, Converter={StaticResource BoolToVis}}">
 
-                        <!-- Charge -->
+                        <!-- Charge — label-above-value layout so the big number sits flush-left
+                             at the same x as the Health/Wear values below, instead of indented. -->
                         <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="160"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-
-                                <TextBlock Grid.Column="0" Grid.Row="0" Text="Charge"
-                                           Style="{StaticResource Subtle}" FontSize="12"/>
-                                <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal">
+                            <StackPanel>
+                                <TextBlock Text="Charge" Style="{StaticResource Subtle}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                     <TextBlock FontSize="28" FontWeight="Bold">
                                         <Run Text="{Binding Battery.ChargePercent, Mode=OneWay}"/><Run Text="%"/>
                                     </TextBlock>
@@ -73,10 +64,10 @@
                                                Margin="12,0,0,0" Style="{StaticResource Subtle}"/>
                                 </StackPanel>
 
-                                <ProgressBar AutomationProperties.Name="Progress" Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1"
+                                <ProgressBar AutomationProperties.Name="Progress"
                                              Value="{Binding Battery.ChargePercent}" Maximum="100"
                                              Height="8" Margin="0,8,0,0"/>
-                            </Grid>
+                            </StackPanel>
                         </Border>
 
                         <!-- Health & Wear -->

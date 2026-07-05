@@ -64,7 +64,7 @@
                 <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                         Margin="-12,-8,0,-8"/>
                 <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
-                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center" Foreground="{DynamicResource WarningText}"/>
                     <TextBlock Text="Running as administrator — you can start, stop, and configure services."
                                Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
@@ -118,8 +118,10 @@
             </StackPanel>
         </Border>
 
-        <!-- Services list -->
-        <Grid Grid.Row="3">
+        <!-- Services list — wrapped in a Card so the data grid gets the same rim-bordered
+             elevation as the sibling grid views (Process Manager, Startup, Uninstaller, …). -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+        <Grid>
         <DataGrid AutomationProperties.Name="Windows services" ItemsSource="{Binding Services}"
                   SelectedItem="{Binding SelectedService}"
                   AutoGenerateColumns="False" HeadersVisibility="Column"
@@ -212,6 +214,7 @@
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Visibility="{Binding Services.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
         </Grid>
+        </Border>
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">

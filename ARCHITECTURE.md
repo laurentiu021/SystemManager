@@ -49,7 +49,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `DefenderViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Notification Blocker) |
-| Customization | `ContextMenuViewModel` · `DarkModeViewModel` · `PlaceholderViewModel` (Volume Control) |
+| Customization | `ContextMenuViewModel` · `DarkModeViewModel` · `AudioMixerViewModel` |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
 | Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `CliInterfaceViewModel` |
 
@@ -103,6 +103,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject).
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back.
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
+- `AudioMixerViewModel` — per-app volume mixer (Volume Control tab, Preview): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Membership reconciles on a ~1&#160;s loop and a shared DispatcherTimer drives the meters, both paused while the tab is hidden (`IsActive`). Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Per-app output-device routing and volume presets are intentionally out of scope for the preview. Row VMs (`AudioSessionRowViewModel`) propagate volume/mute to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back.
 - `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
@@ -119,9 +120,9 @@ unit-testable. Services that a view-model needs to substitute in tests sit behin
 an interface seam — currently `IPowerShellRunner` (PowerShellRunner),
 `IAppBlockerService` (AppBlockerService), `IDialogService` (DialogService),
 `ICpuAffinityService`, `IFileLockService`, `ISettingsWatchdogService`,
-`ITimerResolutionService`, `ITweaksHubService`, and `IWindowsThemeService` — each
-registered against its implementation and mock-substitutable (see
-`ServiceRegistration.cs`).
+`ITimerResolutionService`, `ITweaksHubService`, `IWindowsThemeService`, and
+`IAudioMixerService` — each registered against its implementation and
+mock-substitutable (see `ServiceRegistration.cs`).
 
 Key services:
 - `PingMonitorService` / `TracerouteService` / `TracerouteMonitorService` —
@@ -261,6 +262,17 @@ Key services:
   and detects P-core/E-core topology via kernel32 `GetLogicalProcessorInformationEx`
   (variable-length buffer walked by each record's `Size`). The mask helpers
   (build/test/all-cores) are pure, unit-tested static methods.
+- `AudioMixerService` (`IAudioMixerService`) — per-app volume/mute/peak on the default
+  render endpoint via Windows Core Audio, using raw `[ComImport]` interop for the six
+  documented interfaces (`IMMDeviceEnumerator` → `IAudioSessionManager2` →
+  `IAudioSessionEnumerator` → `IAudioSessionControl2` / `ISimpleAudioVolume` /
+  `IAudioMeterInformation`) — no NuGet audio dependency, keeping the portable single .exe.
+  Groups sessions by owning process (Volume Mixer mental model), resolves name/icon from
+  the PID (fallback-safe for protected processes), drops expired sessions, and flags the
+  system-sounds pseudo-session. Holds the manager/enumerator handle open across polls and
+  releases every COM RCW deterministically in `Dispose` (never finalizer-only, since the
+  tab is created/destroyed on navigation). All COM types stay inside the concrete class;
+  the interface exposes only plain models so the VM unit-tests with no audio hardware.
 - `DefenderService` — Microsoft Defender via the Defender PowerShell module
   (`Get-MpPreference` / `Set-MpPreference` / `Add`/`Remove-MpPreference`) through
   `IPowerShellRunner`. Normalizes the inverted `Disable*` booleans; exclusion paths are

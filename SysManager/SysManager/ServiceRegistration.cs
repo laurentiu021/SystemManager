@@ -84,6 +84,7 @@ public static class ServiceRegistration
         services.AddSingleton<ISettingsWatchdogService, SettingsWatchdogService>();
         services.AddSingleton<MaintenanceSchedulerService>();
         services.AddSingleton<ITweaksHubService, TweaksHubService>();
+        services.AddSingleton<IAudioMixerService, AudioMixerService>();
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -141,6 +142,7 @@ public static class ServiceRegistration
         services.AddSingleton<CliInterfaceViewModel>();
         services.AddSingleton<ScheduledMaintenanceViewModel>();
         services.AddSingleton<TweaksHubViewModel>();
+        services.AddSingleton<AudioMixerViewModel>();
 
         return services;
     }

@@ -99,8 +99,8 @@
 
             <!-- Empty state -->
             <v:EmptyState Glyph="&#xE896;"
-                          Title="No updates available"
-                          Message="All detected packages are up to date. Run a check to refresh."
+                          Title="{Binding EmptyTitle}"
+                          Message="{Binding EmptyMessage}"
                           Visibility="{Binding Packages.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>

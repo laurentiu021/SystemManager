@@ -41,9 +41,28 @@ public static partial class MarkdownTextBlock
 
         var lines = md.Split('\n').Select(l => l.TrimEnd('\r'));
         var isFirst = true;
+        var inFence = false;
 
         foreach (var line in lines)
         {
+            var trimmed = line.Trim();
+
+            // ``` fenced code block toggle — swallow the fence marker line itself
+            // (with or without a language tag, e.g. ```powershell). While inside a
+            // fence, every line renders verbatim as monospace, no inline parsing.
+            if (trimmed.StartsWith("```"))
+            {
+                inFence = !inFence;
+                continue;
+            }
+            if (inFence)
+            {
+                if (!isFirst)
+                    tb.Inlines.Add(new LineBreak());
+                isFirst = false;
+                tb.Inlines.Add(new Run(line) { FontFamily = CodeFontFamily });
+                continue;
+            }
 
             // Skip blank lines — insert a small paragraph break instead
             if (string.IsNullOrWhiteSpace(line))
@@ -52,6 +71,15 @@ public static partial class MarkdownTextBlock
                 {
                     tb.Inlines.Add(new LineBreak());
                 }
+                continue;
+            }
+
+            // Horizontal rule (--- / *** / ___, 3+ of the same char) → render nothing
+            // rather than leaking the literal dashes as text. Treated as a paragraph break.
+            if (IsHorizontalRule(trimmed))
+            {
+                if (!isFirst)
+                    tb.Inlines.Add(new LineBreak());
                 continue;
             }
 
@@ -83,6 +111,12 @@ public static partial class MarkdownTextBlock
 
     [GeneratedRegex(@"\*\*(.+?)\*\*|`([^`]+)`")]
     private static partial Regex InlineFormattingRegex();
+
+    // A markdown horizontal rule: 3+ of the SAME char among -, *, _ (strict, so a real
+    // sentence like "a - b" is not mistaken for a rule).
+    private static bool IsHorizontalRule(string trimmed)
+        => trimmed.Length >= 3
+           && (trimmed.All(c => c == '-') || trimmed.All(c => c == '*') || trimmed.All(c => c == '_'));
 
     // PERF-007: Cache FontFamily to avoid allocating a new instance per code span render.
     private static readonly FontFamily CodeFontFamily = new("Consolas");

@@ -34,6 +34,19 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     [ObservableProperty] private string _scanSummary = "Select a folder and click Scan.";
     [ObservableProperty] private string _currentFile = "";
 
+    // Distinguishes the un-run state from a completed zero-result scan so the big empty-state overlay
+    // doesn't claim "No duplicates found" before the user has ever scanned. Set true only after a scan
+    // actually completes (see ScanAsync); a cancelled/failed scan leaves it as-is.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private bool _hasScanned;
+
+    public string EmptyTitle => HasScanned ? "No duplicates found" : "No scan yet";
+    public string EmptyMessage => HasScanned
+        ? "No files with identical content in the selected folder."
+        : "Pick a folder and scan to find files with identical content.";
+
     public DuplicateFileViewModel(DuplicateFileService service)
     {
         _service = service;
@@ -118,6 +131,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             DuplicateFileCount = Groups.Sum(g => g.Files.Count);
             TotalWasted = Groups.Sum(g => g.WastedBytes);
 
+            HasScanned = true;
             ScanSummary = GroupCount == 0
                 ? "No duplicates found."
                 : $"{GroupCount} groups · {DuplicateFileCount} files · {FormatSize(TotalWasted)} wasted";

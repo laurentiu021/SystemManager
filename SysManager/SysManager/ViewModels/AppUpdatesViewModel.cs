@@ -26,6 +26,19 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     [ObservableProperty] private string _upgradeEtaText = string.Empty;
     [ObservableProperty] private bool _isElevated;
 
+    // Distinguishes the un-run state from a completed zero-result scan so the empty-state overlay
+    // doesn't assert "No updates available — all packages are up to date" before the user has ever
+    // scanned. Set true only after a scan completes (see ScanAsync).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private bool _hasScanned;
+
+    public string EmptyTitle => HasScanned ? "No updates available" : "Not scanned yet";
+    public string EmptyMessage => HasScanned
+        ? "All detected packages are up to date."
+        : "Run a check to scan for winget upgrades.";
+
     public AppUpdatesViewModel(WingetService winget)
     {
         _winget = winget;
@@ -79,6 +92,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         {
             var list = await _winget.ListUpgradableAsync(_cts.Token);
             Packages.ReplaceWith(list);
+            HasScanned = true;
             StatusMessage = $"{Packages.Count} upgradable package(s) found";
         }
         catch (OperationCanceledException) { StatusMessage = "Scan cancelled."; }

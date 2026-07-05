@@ -27,7 +27,7 @@
             <StackPanel>
                 <TextBlock Text="Resource History" Style="{StaticResource Display}"/>
                 <TextBlock Text="Historical CPU, RAM, GPU usage and temperatures. Samples are recorded every 10 seconds while the app runs — scroll back through hours or days, then export to CSV."
-                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                         DockPanel.Dock="Right" VerticalAlignment="Center">

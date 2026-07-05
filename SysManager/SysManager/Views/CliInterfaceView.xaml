@@ -26,7 +26,7 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="CLI Interface" Style="{StaticResource Display}"/>
             <TextBlock Text="SysManager accepts command-line flags so you can automate safe maintenance from scripts, Task Scheduler, or deployment tools. Read-only or non-destructive actions only — anything that changes the system irreversibly stays in the app behind a confirmation."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
         </StackPanel>
 
         <!-- Example -->

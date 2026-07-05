@@ -257,12 +257,17 @@ public class AudioMixerViewModelTests
     [Fact]
     public void MergeInto_WhileUserDragging_DoesNotOverwriteVolume()
     {
-        var vm = NewVm(ServiceWith(Session("s1", volume: 0.5f)));
+        var service = ServiceWith(Session("s1", volume: 0.5f));
+        var vm = NewVm(service);
         var row = vm.Sessions.Single();
+        service.ClearReceivedCalls();
 
         // User grabs the thumb and drags to 0.9 (view sets IsUserAdjusting during the drag).
         row.IsUserAdjusting = true;
         row.Volume = 0.9f;
+        // The live drag still propagates the user's value to the service (the guard only blocks
+        // REFRESH writes, never the user's own change).
+        service.Received(1).SetVolume("s1", 0.9f);
 
         // A reconcile tick arrives carrying a stale snapshot (0.5). It must NOT snap the thumb back.
         vm.MergeInto([Session("s1", volume: 0.5f)]);
@@ -305,10 +310,13 @@ public class AudioMixerViewModelTests
         Assert.Equal(0.7f, vm.Sessions.Single().PeakLevel);
 
         vm.Dispose();
-        vm.Dispose(); // double dispose must be a no-op, not throw (base _disposed guard)
+        // Idempotent: the derived Dispose(bool) body is itself safe to run twice (the CTS is
+        // nulled after disposal and the peaks are simply re-zeroed) — not merely because the base
+        // _disposed guard blocks the base body.
+        vm.Dispose();
 
         // Behavioral post-condition: Dispose stopped the meter and zeroed the lit bar (it must
-        // not leave a stale level frozen on screen). The double-Dispose above proves idempotency.
+        // not leave a stale level frozen on screen).
         Assert.Equal(0f, vm.Sessions.Single().PeakLevel);
     }
 
@@ -334,5 +342,37 @@ public class AudioMixerViewModelTests
         Assert.False(service.SetVolume("s1", 0.5f));
         Assert.False(service.SetMute("s1", true));
         Assert.Equal(0f, service.GetPeak("s1"));
+    }
+
+    // ── StripStreamGuid: the load-bearing PID-reuse group-key derivation ───
+
+    [Theory]
+    // Two streams of one app share everything before the final "%b<guid>" → same group key.
+    [InlineData(@"{0.0.0.00000000}.{guid}|\Device\...|MyApp%b{stream-A}", @"{0.0.0.00000000}.{guid}|\Device\...|MyApp")]
+    [InlineData(@"{0.0.0.00000000}.{guid}|\Device\...|MyApp%b{stream-B}", @"{0.0.0.00000000}.{guid}|\Device\...|MyApp")]
+    // No "%b" marker → returned unchanged.
+    [InlineData("plain-identifier-no-marker", "plain-identifier-no-marker")]
+    // Marker at the very start (index 0) → not stripped (marker > 0 guard), returned unchanged.
+    [InlineData("%bleadingmarker", "%bleadingmarker")]
+    public void StripStreamGuid_DropsTrailingStreamGuid(string input, string expected)
+    {
+        Assert.Equal(expected, AudioMixerService.StripStreamGuid(input));
+    }
+
+    [Fact]
+    public void StripStreamGuid_TwoStreamsOfSameApp_ProduceSameKey()
+    {
+        const string prefix = @"{0.0.0.00000000}.{abc}|\Device\Harddisk\chrome.exe";
+        var a = AudioMixerService.StripStreamGuid(prefix + "%b{11111111-1111-1111-1111-111111111111}");
+        var b = AudioMixerService.StripStreamGuid(prefix + "%b{22222222-2222-2222-2222-222222222222}");
+        Assert.Equal(a, b); // both collapse to one row
+        Assert.Equal(prefix, a);
+    }
+
+    [Fact]
+    public void StripStreamGuid_EmptyOrNull_ReturnedAsIs()
+    {
+        Assert.Equal("", AudioMixerService.StripStreamGuid(""));
+        Assert.Null(AudioMixerService.StripStreamGuid(null!));
     }
 }

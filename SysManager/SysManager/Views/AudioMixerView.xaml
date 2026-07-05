@@ -66,12 +66,15 @@
                                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
                                                            FontSize="13" TextTrimming="CharacterEllipsis"/>
                                             </DockPanel>
-                                            <!-- Thumb.DragStarted/Completed set IsUserAdjusting so a
-                                                 background refresh won't overwrite the value mid-drag. -->
+                                            <!-- Drag (Thumb.DragStarted/Completed) and keyboard focus
+                                                 both set IsUserAdjusting so a background refresh won't
+                                                 overwrite the value while the user is adjusting it. -->
                                             <Slider Minimum="0" Maximum="1" Value="{Binding Volume}"
                                                     VerticalAlignment="Center" IsMoveToPointEnabled="True"
                                                     Thumb.DragStarted="VolumeSlider_DragStarted"
                                                     Thumb.DragCompleted="VolumeSlider_DragCompleted"
+                                                    GotKeyboardFocus="VolumeSlider_GotKeyboardFocus"
+                                                    LostKeyboardFocus="VolumeSlider_LostKeyboardFocus"
                                                     AutomationProperties.Name="{Binding DisplayName, StringFormat='{}{0} volume'}"/>
                                             <!-- Live peak meter (0..1 mapped onto the slider width). Decorative
                                                  and unnamed — the named Slider already conveys the level to screen

@@ -54,7 +54,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         // Two phases, so the slow work never runs under the COM gate (which the UI thread's
         // GetPeak/SetVolume also take): (1) under _gate, do ONLY the fast COM reads and cache
         // the control RCWs; (2) after releasing the lock, resolve each app's name/icon-path
-        // (Process/MainModule — potentially multi-ms) off the lock, cached per PID.
+        // (Process/MainModule — potentially multi-ms) off the lock, cached by group key.
         List<GroupAccumulator> groups;
         lock (_gate)
         {
@@ -64,13 +64,14 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         }
 
         // Identity resolution is pure Process API — touches no audio COM object — so it is
-        // safe (and correct) to run it outside _gate. Cached per PID to pay it once per app.
+        // safe (and correct) to run it outside _gate. GetSessions is only ever called from the
+        // single serialized reconcile loop, so _identityCache needs no extra synchronization.
         var results = new List<AudioSessionInfo>(groups.Count);
         foreach (var g in groups)
         {
             var (name, path) = g.IsSystemSounds
                 ? ("System Sounds", string.Empty)
-                : ResolveProcessCached(g.ProcessId);
+                : ResolveIdentityCached(g.GroupKey, g.ProcessId, g.PidKnown);
             results.Add(g.ToInfo(name, path));
         }
 
@@ -128,8 +129,11 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
                     }
 
                     bool isSystemSounds = ctl2.IsSystemSoundsSession() == 0; // S_OK == true
-                    uint pid = 0;
-                    ctl2.GetProcessId(out pid);
+                    // Honor the HRESULT: on FAILURE (hr < 0) leave pid unknown so a genuine app
+                    // whose PID couldn't be read isn't later mislabeled "System Sounds". Note any
+                    // SUCCESS code counts — including AUDCLNT_S_NO_SINGLE_PROCESS (0x0008900F),
+                    // returned for a session spanning several processes, where pid IS still valid.
+                    bool pidKnown = ctl2.GetProcessId(out uint pid) >= 0;
 
                     // Key on the session-INSTANCE identifier (stable per stream, PID-reuse-proof)
                     // rather than the recyclable PID. All of an app's streams still collapse into
@@ -156,7 +160,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
 
                     if (!acc.TryGetValue(key, out var group))
                     {
-                        group = new GroupAccumulator(key, pid, isSystemSounds);
+                        group = new GroupAccumulator(key, pid, pidKnown, isSystemSounds);
                         acc[key] = group;
                         _groups[key] = [];
                     }
@@ -193,15 +197,25 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         try
         {
             if (ctl2.GetSessionInstanceIdentifier(out string id) == 0 && !string.IsNullOrEmpty(id))
-            {
-                // The instance id looks like "…|…%b{stream-guid}" — the part before the final
-                // "%b" is stable per app+session-group; drop the per-stream suffix to group.
-                int marker = id.LastIndexOf("%b", StringComparison.Ordinal);
-                return marker > 0 ? id[..marker] : id;
-            }
+                return StripStreamGuid(id);
         }
         catch (COMException) { /* fall back to PID below */ }
         return "pid:" + pid;
+    }
+
+    /// <summary>
+    /// Reduces a Core Audio session-instance identifier to a per-app-group key by dropping the
+    /// trailing per-stream GUID. The identifier looks like <c>"…|…%b{stream-guid}"</c>; the part
+    /// before the final <c>"%b"</c> is stable per app+session-group, so every stream of one
+    /// process collapses to one row. Returns the input unchanged when there is no <c>"%b"</c>
+    /// marker (or it is at the start). Extracted + internal so the load-bearing PID-reuse fix is
+    /// unit-testable without a live audio endpoint.
+    /// </summary>
+    internal static string StripStreamGuid(string instanceId)
+    {
+        if (string.IsNullOrEmpty(instanceId)) return instanceId;
+        int marker = instanceId.LastIndexOf("%b", StringComparison.Ordinal);
+        return marker > 0 ? instanceId[..marker] : instanceId;
     }
 
     /// <inheritdoc/>
@@ -329,26 +343,30 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         }
     }
 
-    // Per-PID (name, path) cache so the slow MainModule walk is paid once per process, not on
-    // every ~1 s reconcile. Bounded so a long-running session with lots of short-lived audio
-    // apps can't grow it without limit; entries are cheap and stale-safe (a reused PID just
-    // re-resolves on the next miss after eviction).
-    private readonly Dictionary<uint, (string Name, string Path)> _identityCache = new();
+    // (name, path) cache keyed by the stable GROUP KEY — NOT the recyclable PID. Keying on the
+    // group key (session-instance-derived) means a reused PID that opens a new session gets a new
+    // key and therefore misses the cache and re-resolves, so a row can never show a prior process's
+    // stale name/icon. Bounded so a long session with many short-lived audio apps can't grow it
+    // without limit. The slow MainModule walk is thus paid once per app-session-group, not per tick.
+    private readonly Dictionary<string, (string Name, string Path)> _identityCache = new(StringComparer.Ordinal);
     private const int IdentityCacheMax = 256;
 
-    private (string Name, string Path) ResolveProcessCached(uint pid)
+    private (string Name, string Path) ResolveIdentityCached(string groupKey, uint pid, bool pidKnown)
     {
-        if (pid == 0) return ("System Sounds", string.Empty);
-        if (_identityCache.TryGetValue(pid, out var cached)) return cached;
+        if (_identityCache.TryGetValue(groupKey, out var cached)) return cached;
 
-        var resolved = ResolveProcess(pid);
+        var resolved = ResolveProcess(pid, pidKnown);
         if (_identityCache.Count >= IdentityCacheMax) _identityCache.Clear();
-        _identityCache[pid] = resolved;
+        _identityCache[groupKey] = resolved;
         return resolved;
     }
 
-    private static (string Name, string Path) ResolveProcess(uint pid)
+    private static (string Name, string Path) ResolveProcess(uint pid, bool pidKnown)
     {
+        // A non-system session whose PID couldn't be read (GetProcessId failed → pid 0) must not
+        // be mislabeled "System Sounds" (that name is reserved for the real system-sounds session,
+        // routed via GroupAccumulator.IsSystemSounds). Give it a neutral label instead.
+        if (!pidKnown || pid == 0) return ("Unknown app", string.Empty);
         try
         {
             using var p = Process.GetProcessById((int)pid);
@@ -376,7 +394,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     /// Holds only the fast COM values; the display name/path are supplied later by
     /// <see cref="ToInfo"/> once identity is resolved outside the lock.
     /// </summary>
-    private sealed class GroupAccumulator(string key, uint pid, bool isSystemSounds)
+    private sealed class GroupAccumulator(string key, uint pid, bool pidKnown, bool isSystemSounds)
     {
         private bool _first = true;
         private float _volume;
@@ -384,7 +402,9 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         private AudioSessionState _state = AudioSessionState.Inactive;
         private float _peak;
 
+        public string GroupKey => key;
         public uint ProcessId => pid;
+        public bool PidKnown => pidKnown;
         public bool IsSystemSounds => isSystemSounds;
 
         public void Absorb(float volume, bool muted, AudioSessionState state, float peak)

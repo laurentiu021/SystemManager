@@ -130,7 +130,20 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Ellipse Grid.Column="0" Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource Success}"/>
+                        <!-- Status dot: green normally, red when the last check failed to reach GitHub,
+                             so the colour agrees with the error message instead of always reading success. -->
+                        <Ellipse Grid.Column="0" Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource Success}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding UpdateCheckFailed}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource Danger}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
                         <TextBlock Grid.Column="1" Text="{Binding UpdateStatus}" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" TextWrapping="Wrap"/>
                         <Button Grid.Column="2" Content="Retry" Command="{Binding CheckForUpdatesCommand}"

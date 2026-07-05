@@ -71,13 +71,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public ScheduledMaintenanceViewModel ScheduledMaintenance { get; }
     public TweaksHubViewModel TweaksHub { get; }
     public AudioMixerViewModel AudioMixer { get; }
+    public GamingProfileViewModel GamingProfile { get; }
 
     // ── Placeholder ViewModels for planned features (WIP) ──────────
     // Monitor group
     public PlaceholderViewModel WipBandwidthMonitor { get; private set; } = null!;
 
-    // Gaming & Profiles group
-    public PlaceholderViewModel WipGamingProfile { get; private set; } = null!;
+    // Gaming & Profiles group (Gaming Profile now implemented as PREVIEW)
 
     // Network group — DNS Changer + Hosts Editor now fully implemented as DnsHosts
 
@@ -168,6 +168,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ScheduledMaintenance = sp.GetRequiredService<ScheduledMaintenanceViewModel>();
             TweaksHub = sp.GetRequiredService<TweaksHubViewModel>();
             AudioMixer = sp.GetRequiredService<AudioMixerViewModel>();
+            GamingProfile = sp.GetRequiredService<GamingProfileViewModel>();
         }
         else
         {
@@ -243,6 +244,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ScheduledMaintenance = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner()));
             TweaksHub = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), restorePoints));
             AudioMixer = new AudioMixerViewModel(new AudioMixerService());
+            var gamingCpu = new CpuAffinityService();
+            GamingProfile = new GamingProfileViewModel(
+                new GamingProfileService(
+                    new PerformanceService(runner, restorePoints),
+                    new TimerResolutionService(), gamingCpu,
+                    new StandbyMemoryService(), restorePoints,
+                    Helpers.AdminHelper.IsElevated()),
+                gamingCpu);
         }
 
         InitPlaceholders();
@@ -256,8 +265,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Monitor group
         WipBandwidthMonitor = new PlaceholderViewModel("Bandwidth Monitor", "Real-time per-app network usage with history graphs and alerts.", "#337");
 
-        // Gaming & Profiles group
-        WipGamingProfile = new PlaceholderViewModel("Gaming Profile", "One-click game mode: kill background processes, clear RAM, set timer resolution, auto-revert on game exit.", "#324");
+        // Gaming & Profiles group — Gaming Profile now implemented as PREVIEW (see nav)
 
         // Cleanup group (File Shredder is now fully implemented)
 
@@ -315,7 +323,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Item("nav-tweaks-hub",      "Tweaks Hub",       "", TweaksHub,        typeof(Views.TweaksHubView), inDevelopment: true)),
 
         Group("grp-gaming", "Gaming & Profiles", "",
-            Item("nav-gaming-profile",   "Gaming Profile",       "", WipGamingProfile,      typeof(Views.PlaceholderView), inDevelopment: true),
+            Item("nav-gaming-profile",   "Gaming Profile",       "", GamingProfile,         typeof(Views.GamingProfileView), inDevelopment: true),
             Item("nav-standby-cleaner",  "Standby List Cleaner", "", StandbyMemory,         typeof(Views.StandbyMemoryView)),
             Item("nav-timer-resolution", "Timer Resolution",     "", TimerResolution,       typeof(Views.TimerResolutionView)),
             Item("nav-cpu-affinity",     "CPU Core Affinity",    "", CpuAffinity,           typeof(Views.CpuAffinityView)),
@@ -499,10 +507,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ScheduledMaintenance?.Dispose();
         TweaksHub?.Dispose();
         AudioMixer?.Dispose();
+        GamingProfile?.Dispose();
 
         // WIP placeholders
         WipBandwidthMonitor?.Dispose();
-        WipGamingProfile?.Dispose();
         Privacy?.Dispose();
         ContextMenu?.Dispose();
         SystemReport?.Dispose();

@@ -5,7 +5,7 @@
 namespace SysManager.UITests;
 
 /// <summary>
-/// Breadth smoke coverage for EVERY navigable tab (all 57). For each tab this
+/// Breadth smoke coverage for EVERY navigable tab (all 58). For each tab this
 /// asserts the app can navigate to it and the content area renders the tab's
 /// expected page header — i.e. the view loaded rather than crashing or showing
 /// a blank/wrong page. This is the regression net that catches a tab that stops

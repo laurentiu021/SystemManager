@@ -42,7 +42,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` · `TweaksHubViewModel` |
-| Gaming & Profiles | `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` · `PlaceholderViewModel` (Gaming Profile) |
+| Gaming & Profiles | `GamingProfileViewModel` · `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` |
 | Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `SettingsWatchdogViewModel` · `PlaceholderViewModel` (Bandwidth Monitor) |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `ScheduledMaintenanceViewModel` |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
@@ -105,6 +105,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
 - `AudioMixerViewModel` — per-app volume mixer (Volume Control tab, Preview): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Membership reconciles on a ~1&#160;s loop and a shared DispatcherTimer drives the meters, both paused while the tab is hidden (`IsActive`). Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Per-app output-device routing and volume presets are intentionally out of scope for the preview. Row VMs (`AudioSessionRowViewModel`) propagate volume/mute to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back.
 - `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin.
+- `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -120,9 +121,9 @@ unit-testable. Services that a view-model needs to substitute in tests sit behin
 an interface seam — currently `IPowerShellRunner` (PowerShellRunner),
 `IAppBlockerService` (AppBlockerService), `IDialogService` (DialogService),
 `ICpuAffinityService`, `IFileLockService`, `ISettingsWatchdogService`,
-`ITimerResolutionService`, `ITweaksHubService`, `IWindowsThemeService`, and
-`IAudioMixerService` — each registered against its implementation and
-mock-substitutable (see `ServiceRegistration.cs`).
+`ITimerResolutionService`, `ITweaksHubService`, `IWindowsThemeService`,
+`IAudioMixerService`, and `IGamingProfileService` — each registered against its
+implementation and mock-substitutable (see `ServiceRegistration.cs`).
 
 Key services:
 - `PingMonitorService` / `TracerouteService` / `TracerouteMonitorService` —
@@ -273,6 +274,18 @@ Key services:
   releases every COM RCW deterministically in `Dispose` (never finalizer-only, since the
   tab is created/destroyed on navigation). All COM types stay inside the concrete class;
   the interface exposes only plain models so the VM unit-tests with no audio hardware.
+- `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
+  Profile tab: it composes the already-audited services (`PerformanceService`,
+  `ITimerResolutionService`, `ICpuAffinityService`, `StandbyMemoryService`,
+  `ServiceManagerService`, and the HKCU notifications key) into an ordered set of
+  reversible `IGamingTweak` steps and applies/reverts them as a unit — it never
+  reimplements a tweak. A machine-wide `GamingSnapshot` is captured before the first change
+  and persisted to its OWN `gaming-profiles.json` (never the Performance tab's snapshot);
+  revert undoes each applied step in reverse order, and a leftover on-disk session is
+  offered for restore on next launch (crash recovery). The apply/revert engine (order,
+  admin-skip, failure-isolation, reverse-revert) is an internal static method exercised by
+  unit tests with fake steps — no real system call. `CpuAffinityService` gained a small
+  `Get`/`TrySetPriority` capability (behind `ICpuAffinityService`) for the game's priority.
 - `DefenderService` — Microsoft Defender via the Defender PowerShell module
   (`Get-MpPreference` / `Set-MpPreference` / `Add`/`Remove-MpPreference`) through
   `IPowerShellRunner`. Normalizes the inverted `Disable*` booleans; exclusion paths are

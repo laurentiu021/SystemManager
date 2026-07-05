@@ -31,6 +31,8 @@ public class AdminBannerUiTests
         new object[] { "nav-defender-tweaks" },
         new object[] { "nav-file-lock" },
         new object[] { "nav-shortcut-cleaner" },
+        // Gaming Profile (Preview) — freeing standby memory + pausing indexing need admin
+        new object[] { "nav-gaming-profile" },
     };
 
     [Theory]

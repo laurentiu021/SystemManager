@@ -7,6 +7,7 @@ using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
+using SysManager.Views;
 
 namespace SysManager.Tests;
 
@@ -300,6 +301,23 @@ public class AudioMixerViewModelTests
     // ── Deterministic disposal ─────────────────────────────────────────────
 
     [Fact]
+    public async Task Dispose_RacingInit_CompletesCleanly()
+    {
+        // Dispose the VM BEFORE its async init has completed. Because the CTS is now created
+        // before the first await, Dispose can cancel it and init bails without starting an
+        // orphan loop. The guarantee here is that init still COMPLETES (no unobserved exception,
+        // no ObjectDisposedException from the assign-after-await race) and dispose stays idempotent.
+        var service = ServiceWith(Session("s1"));
+        var vm = new AudioMixerViewModel(service);
+
+        vm.Dispose();                    // races the fire-and-forget InitAsync
+        await vm.InitializationComplete; // must complete, not fault
+        vm.Dispose();                    // still idempotent after init resolves
+
+        Assert.True(vm.InitializationComplete.IsCompletedSuccessfully);
+    }
+
+    [Fact]
     public void Dispose_IsIdempotent_AndZeroesTheMeter()
     {
         var service = ServiceWith(Session("s1"));
@@ -374,5 +392,21 @@ public class AudioMixerViewModelTests
     {
         Assert.Equal("", AudioMixerService.StripStreamGuid(""));
         Assert.Null(AudioMixerService.StripStreamGuid(null!));
+    }
+
+    // ── Mid-adjust guard: drag OR keyboard-focus (regression: drag-then-arrow-key) ─
+
+    // dragging=false + focused=true is the Audit #3 regression case: a mouse drag has ENDED but
+    // the slider still holds keyboard focus (drag-then-arrow-key fine-tune), so it must STILL read
+    // as adjusting — a reconcile tick must not clobber the value. DragCompleted clearing the flag
+    // unconditionally (the old bug) would make this false.
+    [Theory]
+    [InlineData(false, false, false)] // idle → not adjusting
+    [InlineData(true, false, true)]   // mouse dragging → adjusting
+    [InlineData(false, true, true)]   // focused only (arrow-key / track-click / post-drag) → adjusting
+    [InlineData(true, true, true)]    // both → adjusting
+    public void ComputeAdjusting_IsTrueWhileDraggingOrKeyboardFocused(bool dragging, bool focused, bool expected)
+    {
+        Assert.Equal(expected, AudioMixerView.ComputeAdjusting(dragging, focused));
     }
 }

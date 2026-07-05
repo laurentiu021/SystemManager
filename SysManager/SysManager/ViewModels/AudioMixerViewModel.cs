@@ -48,9 +48,17 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
     private async Task InitAsync()
     {
-        await ReconcileAsync();
+        // Create the CTS BEFORE the first await so a Dispose() that races this init can see and
+        // cancel it (otherwise Dispose's _reconcileCts?.Cancel() would no-op on a still-null CTS,
+        // and the loop below would start uncancellable). If Dispose already ran, Dispose() nulled
+        // the field back out — so re-check and don't start an orphan loop.
         _reconcileCts = new CancellationTokenSource();
-        _ = ReconcileLoopAsync(_reconcileCts.Token);
+        var ct = _reconcileCts.Token;
+
+        await ReconcileAsync();
+
+        if (_reconcileCts is null || ct.IsCancellationRequested) return; // disposed during init
+        _ = ReconcileLoopAsync(ct);
     }
 
     private async Task ReconcileLoopAsync(CancellationToken ct)

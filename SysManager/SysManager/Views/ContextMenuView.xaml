@@ -165,7 +165,7 @@
                            Style="{StaticResource Subtle}">
                     <Run Text="{Binding EnabledCount, Mode=OneWay}"/> enabled ·
                     <Run Text="{Binding DisabledCount, Mode=OneWay}"/> disabled ·
-                    <Run Text="{Binding TotalCount, Mode=OneWay}"/> total
+                    <Run Text="{Binding TotalCount, Mode=OneWay}"/> shown
                 </TextBlock>
             </DockPanel>
         </Border>

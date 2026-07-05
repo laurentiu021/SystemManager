@@ -125,4 +125,43 @@ public class MarkdownTextBlockTests
         Assert.True(inlines.Count >= 3);
         Assert.True(inlines.Count(i => i is LineBreak) >= 2);
     }
+
+    // Regression: fenced code blocks used to leak their ``` markers (and the language tag) as literal
+    // text because there was no rule for them; the content also wasn't rendered monospace.
+    [StaFact]
+    public void FencedCodeBlock_SwallowsFences_AndRendersContentMonospace()
+    {
+        var tb = new TextBlock();
+        MarkdownTextBlock.SetMarkdown(tb, "```powershell\nGet-FileHash file.exe\n```");
+        var runs = tb.Inlines.OfType<Run>().ToList();
+        // No inline should contain the fence marker or the language tag.
+        Assert.DoesNotContain(runs, r => r.Text.Contains("```"));
+        Assert.DoesNotContain(runs, r => r.Text.Contains("powershell"));
+        // The code line renders, in the monospace code font.
+        var codeRun = runs.FirstOrDefault(r => r.Text.Contains("Get-FileHash"));
+        Assert.NotNull(codeRun);
+        Assert.Equal("Consolas", codeRun!.FontFamily.Source);
+    }
+
+    // Regression: a horizontal-rule line (---) used to render as three literal dashes.
+    [StaFact]
+    public void HorizontalRule_DoesNotLeakLiteralDashes()
+    {
+        var tb = new TextBlock();
+        MarkdownTextBlock.SetMarkdown(tb, "Above\n\n---\n\nBelow");
+        var runs = tb.Inlines.OfType<Run>().ToList();
+        Assert.DoesNotContain(runs, r => r.Text.Trim() == "---");
+        // The surrounding content still renders.
+        Assert.Contains(runs, r => r.Text.Contains("Above"));
+        Assert.Contains(runs, r => r.Text.Contains("Below"));
+    }
+
+    // A real sentence containing a dash must NOT be swallowed as a horizontal rule.
+    [StaFact]
+    public void DashInSentence_IsNotTreatedAsRule()
+    {
+        var tb = new TextBlock();
+        MarkdownTextBlock.SetMarkdown(tb, "a - b");
+        Assert.Contains(tb.Inlines.OfType<Run>(), r => r.Text.Contains("a - b"));
+    }
 }

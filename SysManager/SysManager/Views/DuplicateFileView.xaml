@@ -138,8 +138,8 @@
 
             <!-- Empty state -->
             <v:EmptyState Glyph="&#xE946;"
-                          Title="No duplicates found"
-                          Message="Pick a folder and scan to find files with identical content."
+                          Title="{Binding EmptyTitle}"
+                          Message="{Binding EmptyMessage}"
                           Visibility="{Binding Groups.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>

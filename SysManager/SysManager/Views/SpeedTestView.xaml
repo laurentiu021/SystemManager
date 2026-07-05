@@ -90,8 +90,8 @@
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                    FontSize="14" Foreground="{DynamicResource Info}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                         <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" FontSize="12">
-                            <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">Ookla</Run><Run> measures raw TCP throughput to a nearby server — most accurate for ISP bandwidth. </Run>
-                            <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">HTTP</Run><Run> tests download/upload via Cloudflare CDN — reflects real web browsing speed but may show lower results due to HTTP overhead and CDN routing.</Run>
+                            <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">Ookla</Run><Run Text=" measures raw TCP throughput to a nearby server — most accurate for ISP bandwidth. "/>
+                            <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">HTTP</Run><Run Text=" tests download/upload via Cloudflare CDN — reflects real web browsing speed but may show lower results due to HTTP overhead and CDN routing."/>
                         </TextBlock>
                     </StackPanel>
                 </Border>

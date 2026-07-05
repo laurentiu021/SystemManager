@@ -105,7 +105,31 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="Type" Binding="{Binding CategoryLabel}" Width="110"/>
+                    <!-- Type is colour-coded by category (the header promises this): System = danger,
+                         Telemetry = warning, Third-party = secondary. Uses theme-derived brushes so the
+                         coding holds on both dark and light. SortMemberPath keeps the column sortable. -->
+                    <DataGridTemplateColumn Header="Type" Width="110" SortMemberPath="CategoryLabel">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding CategoryLabel}" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CategoryLabel}" Value="System">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding CategoryLabel}" Value="Telemetry">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Warning}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90"/>
                     <DataGridTextColumn Header="Last run" Binding="{Binding LastRunDisplay}" Width="140"/>
                 </DataGrid.Columns>

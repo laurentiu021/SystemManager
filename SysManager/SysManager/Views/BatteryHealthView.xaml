@@ -153,7 +153,7 @@
                                 <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Battery.RuntimeDisplay}"
                                            Margin="0,0,0,8"/>
 
-                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Manufacturer / ID"
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Device ID"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                                 <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Battery.Manufacturer}"
                                            TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>

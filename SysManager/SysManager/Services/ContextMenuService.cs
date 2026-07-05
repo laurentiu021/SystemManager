@@ -609,11 +609,46 @@ public sealed partial class ContextMenuService
     }
 
     /// <summary>
+    /// Removes a Windows menu accelerator ampersand from a label. A single '&amp;' before
+    /// a character is the mnemonic marker and is dropped; a literal "&amp;&amp;" collapses to one
+    /// '&amp;'. Used because context-menu labels render in a plain TextBlock, which shows
+    /// '&amp;' verbatim rather than treating it as an accelerator.
+    /// </summary>
+    internal static string StripMnemonic(string input)
+    {
+        if (string.IsNullOrEmpty(input) || !input.Contains('&')) return input;
+        // Single left-to-right scan: a doubled "&&" is a literal ampersand
+        // (emit one), a lone "&" is the accelerator marker (dropped).
+        var sb = new System.Text.StringBuilder(input.Length);
+        for (var i = 0; i < input.Length; i++)
+        {
+            if (input[i] == '&')
+            {
+                if (i + 1 < input.Length && input[i + 1] == '&')
+                {
+                    sb.Append('&');
+                    i++;
+                }
+            }
+            else
+            {
+                sb.Append(input[i]);
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Splits a CamelCase or PascalCase string into separate words.
     /// </summary>
     private static string SplitCamelCase(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return input;
+
+        // Strip Windows accelerator ampersands (e.g. "&Open", "Scan with Microsoft
+        // &Defender") — a plain TextBlock renders '&' literally, so a shell-verb name
+        // carrying a mnemonic would otherwise show the '&' mid-word.
+        input = StripMnemonic(input);
 
         // Remove leading dots, @ signs
         input = input.TrimStart('.', '@');

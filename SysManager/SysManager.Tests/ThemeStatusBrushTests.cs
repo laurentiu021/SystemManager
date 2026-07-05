@@ -73,6 +73,50 @@ public class ThemeStatusBrushTests
         }
     }
 
+    // Base semantic brushes (Info/Success/Warning/Danger) are used directly as small-text Foreground
+    // across the app (e.g. Cleanup's TEMP-folders stat). They were static App.xaml resources that never
+    // recomputed per mode, so their light-cyan/green/amber/red washed out on near-white light surfaces.
+    // Now theme-derived — pin AA on white for light, legible on dark for dark.
+    [Theory]
+    [InlineData("Info")]
+    [InlineData("Success")]
+    [InlineData("Warning")]
+    [InlineData("Danger")]
+    public void LightPalette_BaseSemantic_MeetsWcagAaOnWhite(string key)
+    {
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), LightSurface);
+        Assert.True(ratio >= 4.5,
+            $"Light-theme base '{key}' brush must meet WCAG AA (4.5:1) as small text on the near-white surface; got {ratio:F2}:1.");
+    }
+
+    // Console output palette (Out*Brush) — same class: static-only before, so light-theme consoles
+    // rendered near-invisible pale-grey body text on a near-white card. OutOutput/OutVerbose are neutral
+    // text tones; the semantic console lines reuse the AA light tones. All must clear AA on white for light.
+    [Theory]
+    [InlineData("OutOutputBrush")]
+    [InlineData("OutVerboseBrush")]
+    [InlineData("OutInfoBrush")]
+    [InlineData("OutWarnBrush")]
+    [InlineData("OutErrorBrush")]
+    [InlineData("OutDebugBrush")]
+    [InlineData("OutProgressBrush")]
+    public void LightPalette_ConsolePalette_MeetsWcagAaOnWhite(string key)
+    {
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), LightSurface);
+        Assert.True(ratio >= 4.5,
+            $"Light-theme console '{key}' must meet WCAG AA (4.5:1) on the near-white console card; got {ratio:F2}:1.");
+    }
+
+    [Fact]
+    public void BaseAndConsole_LightAndDark_Diverge()
+    {
+        // Mode-awareness guard: if a base/console brush is identical in both modes it was never
+        // recomputed and the light regression would silently return.
+        foreach (var key in new[] { "Info", "Success", "Warning", "Danger", "OutOutputBrush", "OutInfoBrush" })
+            Assert.NotEqual(Lookup(ThemeService.StatusPalette(true), key),
+                            Lookup(ThemeService.StatusPalette(false), key));
+    }
+
     private static Color Lookup(IReadOnlyList<(string Key, Color Color)> palette, string key)
         => palette.First(p => p.Key == key).Color;
 

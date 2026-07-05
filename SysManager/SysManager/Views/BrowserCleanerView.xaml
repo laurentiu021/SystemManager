@@ -76,7 +76,7 @@
                                             <Border Background="{DynamicResource Surface3}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{Binding IsSensitive, Converter={StaticResource FlexVis}}">
-                                                <TextBlock Text="signs you out" FontSize="10" Foreground="{DynamicResource WarningStripe}"/>
+                                                <TextBlock Text="signs you out" FontSize="10" Foreground="{DynamicResource WarningText}"/>
                                             </Border>
                                         </StackPanel>
                                         <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}"

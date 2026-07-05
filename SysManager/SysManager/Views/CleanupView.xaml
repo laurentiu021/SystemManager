@@ -69,7 +69,7 @@
                         <StackPanel>
                             <TextBlock Text="RECYCLE BIN" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding RecycleBinLabel}" FontSize="16" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource WarningStripe}" Margin="0,4,0,0"/>
+                                       Foreground="{DynamicResource WarningText}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                 </Grid>

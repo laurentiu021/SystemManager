@@ -231,6 +231,19 @@ public sealed class ThemeService
             ("SuccessText", C("#4ADE80")), ("SuccessBgSubtle", C("#1A22C55E")), ("SuccessBorder", C("#3322C55E")),
             ("InfoText", C("#7DD3FC")), ("InfoBgSubtle", C("#1A38BDF8")), ("InfoBorder", C("#3338BDF8")),
             ("DangerText", C("#F87171")), ("DangerBgSubtle", C("#1AEF4444")), ("DangerBorder", C("#33EF4444")),
+
+            // Base semantic brushes (used directly as small-text Foreground / dot Fill across the app,
+            // e.g. Cleanup's TEMP-folders stat). These were static App.xaml resources that never
+            // recomputed per mode, so their light-cyan/green/amber/red washed out on near-white light
+            // surfaces. Dark values mirror the App.xaml defaults exactly (no visual change on dark).
+            ("Info", C("#38BDF8")), ("Success", C("#22C55E")), ("Warning", C("#F59E0B")), ("Danger", C("#EF4444")),
+
+            // Console output palette (ConsoleView). Also static-only before, so light-theme consoles
+            // rendered near-invisible pale-grey body text on their near-white card. Dark values mirror
+            // the App.xaml defaults (no visual change on dark).
+            ("OutOutputBrush", C("#E6E6E6")), ("OutVerboseBrush", C("#9AA0A6")),
+            ("OutInfoBrush", C("#38BDF8")), ("OutWarnBrush", C("#FBBF24")), ("OutErrorBrush", C("#F87171")),
+            ("OutDebugBrush", C("#B388FF")), ("OutProgressBrush", C("#4ADE80")),
         ]
         :
         [
@@ -239,6 +252,15 @@ public sealed class ThemeService
             ("SuccessText", C("#15803D")), ("SuccessBgSubtle", C("#2622C55E")), ("SuccessBorder", C("#5522C55E")),
             ("InfoText", C("#0369A1")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
             ("DangerText", C("#B91C1C")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
+
+            // Light: darker, saturated tones that meet WCAG AA against a near-white surface (same family
+            // as the *Text values above). Fixes the washed-out cyan/green/amber/red small text + dots.
+            ("Info", C("#0369A1")), ("Success", C("#15803D")), ("Warning", C("#B45309")), ("Danger", C("#B91C1C")),
+
+            // Console on light: dark-on-white body/verbose text; semantic lines reuse the AA light tones.
+            ("OutOutputBrush", C("#1E1B4B")), ("OutVerboseBrush", C("#64748B")),
+            ("OutInfoBrush", C("#0369A1")), ("OutWarnBrush", C("#B45309")), ("OutErrorBrush", C("#B91C1C")),
+            ("OutDebugBrush", C("#6D28D9")), ("OutProgressBrush", C("#15803D")),
         ];
 
     private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);

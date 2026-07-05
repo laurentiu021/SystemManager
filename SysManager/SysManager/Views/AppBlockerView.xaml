@@ -22,7 +22,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Application Blocker" Style="{StaticResource Display}" />
+            <TextBlock Text="App Blocker" Style="{StaticResource Display}" />
             <TextBlock Text="{Binding BlockStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0" />
         </StackPanel>
 

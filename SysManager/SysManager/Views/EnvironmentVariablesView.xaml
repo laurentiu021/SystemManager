@@ -143,9 +143,9 @@
                         <DataGridTemplateColumn Header="" Width="Auto">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Content="Remove" Command="{Binding DataContext.DeleteVariableCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    <Button Content="Delete" Command="{Binding DataContext.DeleteVariableCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
-                                            AutomationProperties.Name="{Binding Name, StringFormat='Remove variable {0}'}"
+                                            AutomationProperties.Name="{Binding Name, StringFormat='Delete variable {0}'}"
                                             Style="{StaticResource GhostButton}" Padding="8,4" Margin="4,2"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>

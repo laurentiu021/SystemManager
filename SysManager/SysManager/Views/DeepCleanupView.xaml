@@ -42,7 +42,7 @@
                                         IsEnabled="{Binding IsScanning, Converter={StaticResource BoolInvert}}"/>
                                 <Button Content="Select all safe" Command="{Binding SelectAllCommand}" CommandParameter="{StaticResource TrueValue}"
                                         Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
-                                <Button Content="Clear" Command="{Binding SelectAllCommand}" CommandParameter="{StaticResource FalseValue}"
+                                <Button Content="Deselect All" Command="{Binding SelectAllCommand}" CommandParameter="{StaticResource FalseValue}"
                                         Style="{StaticResource GhostButton}" Margin="8,0,0,0"/>
                             </StackPanel>
                         </DockPanel>

@@ -68,7 +68,7 @@
                         <StackPanel>
                             <TextBlock Text="Flush DNS Cache" FontWeight="SemiBold" FontSize="14"/>
                             <TextBlock Text="Clears the local DNS resolver cache. Fixes stale DNS entries. Safe, instant, no reboot."
-                                       Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600"/>
+                                       Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600" HorizontalAlignment="Left"/>
                             <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                                        Text="When you visit a website, Windows caches its IP address. If the site moves or your DNS provider updates, the stale cache causes failures. This clears all cached lookups so fresh queries occur."/>
                         </StackPanel>
@@ -95,7 +95,7 @@
                         <StackPanel>
                             <TextBlock Text="Reset Winsock Catalog" FontWeight="SemiBold" FontSize="14"/>
                             <TextBlock Text="Resets the Windows socket API. Fixes corrupted network drivers. Requires admin + reboot."
-                                       Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600"/>
+                                       Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600" HorizontalAlignment="Left"/>
                             <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                                        Text="Winsock is the low-level API all network applications use. Broken VPN drivers, malware, or corrupted LSP providers can break it. This resets the network catalog to factory defaults."/>
                         </StackPanel>
@@ -122,7 +122,7 @@
                         <StackPanel>
                             <TextBlock Text="Reset TCP/IP Stack" FontWeight="SemiBold" FontSize="14"/>
                             <TextBlock Text="Restores all TCP/IP settings to defaults. Nuclear option. Requires admin + reboot."
-                                       Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600"/>
+                                       Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600" HorizontalAlignment="Left"/>
                             <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                                        Text="Completely rebuilds TCP/IP stack registry keys. Use only when other fixes fail — this resets all custom IP configurations, routes, and adapter settings to Windows defaults."/>
                         </StackPanel>

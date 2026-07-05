@@ -31,6 +31,9 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private string _updateStatus = "Ready.";
     [ObservableProperty] private bool _isCheckingForUpdates;
     [ObservableProperty] private bool _updateAvailable;
+    // True when the last update check failed to reach GitHub — drives the status dot to an error colour
+    // instead of the success green (the dot previously stayed green even on a hard 403/network error).
+    [ObservableProperty] private bool _updateCheckFailed;
     [ObservableProperty] private string _latestVersionLabel = string.Empty;
     [ObservableProperty] private string _latestPublishedLabel = string.Empty;
     [ObservableProperty] private string _latestNotes = string.Empty;
@@ -101,6 +104,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     {
         if (IsCheckingForUpdates) return;
         IsCheckingForUpdates = true;
+        UpdateCheckFailed = false;
         UpdateStatus = "Contacting GitHub...";
         try
         {
@@ -110,6 +114,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 var detail = string.IsNullOrWhiteSpace(_updates.LastError) ? "Unknown error." : _updates.LastError;
                 UpdateStatus = $"Couldn't reach GitHub — {detail} Click Retry to try again.";
                 UpdateAvailable = false;
+                UpdateCheckFailed = true;
                 return;
             }
 
@@ -135,11 +140,13 @@ public sealed partial class AboutViewModel : ViewModelBase
         {
             UpdateStatus = $"Network error — could not reach GitHub: {ex.Message}. Click Retry to try again.";
             UpdateAvailable = false;
+            UpdateCheckFailed = true;
         }
         catch (TaskCanceledException ex)
         {
             UpdateStatus = $"Request timed out: {ex.Message}. Click Retry to try again.";
             UpdateAvailable = false;
+            UpdateCheckFailed = true;
         }
         finally { IsCheckingForUpdates = false; }
     }

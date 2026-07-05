@@ -134,8 +134,12 @@
                     <Button Grid.Column="1" Content="Add folder…" Command="{Binding AddExclusionCommand}"
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" Padding="12,6"
                             AutomationProperties.Name="Add an exclusion folder"/>
+                    <!-- Removing an exclusion makes Defender scan that folder again — it
+                         strengthens protection, so it is neutral list-management, not a
+                         destructive action. Reserve DangerButton for actions that weaken
+                         protection or delete data. -->
                     <Button Grid.Column="2" Content="Remove" Command="{Binding RemoveExclusionCommand}"
-                            Style="{StaticResource DangerButton}" Padding="12,6"
+                            Style="{StaticResource SecondaryButton}" Padding="12,6"
                             AutomationProperties.Name="Remove the selected exclusion"/>
                 </Grid>
                 <Grid>

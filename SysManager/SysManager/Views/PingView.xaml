@@ -91,9 +91,15 @@
                     <TextBlock Text="Targets" Style="{StaticResource SectionTitle}"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
                         <TextBlock Text="Preset" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <ComboBox ItemsSource="{Binding Shared.Presets}" DisplayMemberPath="Name"
+                        <ComboBox ItemsSource="{Binding Shared.Presets}"
                                   SelectedItem="{Binding Shared.SelectedPreset, Mode=TwoWay}" Width="200"
-                                  AutomationProperties.Name="Target preset"/>
+                                  AutomationProperties.Name="Target preset">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </StackPanel>
                 </DockPanel>
                 <TextBlock Text="{Binding Shared.SelectedPreset.Description}"

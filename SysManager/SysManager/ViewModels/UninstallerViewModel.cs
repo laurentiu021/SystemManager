@@ -53,11 +53,30 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     /// </summary>
     private bool NotBusy => !IsBusy;
 
+    /// <summary>
+    /// True once a scan has listed at least one app. Select-all / deselect / uninstall
+    /// act on the list, so they stay disabled on an empty (unscanned) list rather than
+    /// appearing operable with nothing to act on.
+    /// </summary>
+    private bool HasApps => AppCount > 0;
+
+    /// <summary>Uninstall needs both a populated list and no long-running command in flight.</summary>
+    private bool CanUninstall => NotBusy && HasApps;
+
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(IsBusy)) return;
         ScanCommand.NotifyCanExecuteChanged();
         UninstallSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    // AppCount is refreshed by ApplyFilter; re-evaluate the list-dependent commands
+    // whenever it changes so their enabled state tracks the (un)populated list.
+    partial void OnAppCountChanged(int value)
+    {
+        UninstallSelectedCommand.NotifyCanExecuteChanged();
+        SelectAllCommand.NotifyCanExecuteChanged();
+        DeselectAllCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -103,7 +122,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand(CanExecute = nameof(NotBusy))]
+    [RelayCommand(CanExecute = nameof(CanUninstall))]
     private async Task UninstallSelectedAsync()
     {
         var toRemove = FilteredApps.Where(a => a.IsSelected).ToList();
@@ -196,7 +215,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         base.Dispose(disposing);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasApps))]
     private void SelectAll()
     {
         if (FilteredApps.Count > 20
@@ -211,7 +230,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         foreach (var app in FilteredApps) app.IsSelected = true;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasApps))]
     private void DeselectAll()
     {
         foreach (var app in FilteredApps) app.IsSelected = false;

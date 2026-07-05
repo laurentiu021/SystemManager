@@ -38,9 +38,16 @@ public sealed partial class DebloaterViewModel : ViewModelBase
 
     private bool NotBusy => !IsBusy;
 
+    /// <summary>
+    /// Remove/select/clear only make sense once a scan has produced apps. Gating
+    /// CanExecute on <see cref="HasApps"/> keeps the destructive DangerButton visibly
+    /// disabled on an empty list instead of red-and-clickable with nothing to act on.
+    /// </summary>
+    private bool CanActOnApps => NotBusy && HasApps;
+
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(IsBusy))
+        if (e.PropertyName is nameof(IsBusy) or nameof(HasApps))
         {
             RefreshCommand.NotifyCanExecuteChanged();
             RemoveSelectedCommand.NotifyCanExecuteChanged();
@@ -92,7 +99,7 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand(CanExecute = nameof(NotBusy))]
+    [RelayCommand(CanExecute = nameof(CanActOnApps))]
     private void SelectCommonBloat()
     {
         var n = 0;
@@ -104,14 +111,14 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         StatusMessage = $"Selected {n} commonly-removed app{(n == 1 ? "" : "s")}. Review, then Remove selected.";
     }
 
-    [RelayCommand(CanExecute = nameof(NotBusy))]
+    [RelayCommand(CanExecute = nameof(CanActOnApps))]
     private void ClearSelection()
     {
         foreach (var app in Apps) app.IsSelected = false;
         StatusMessage = "Selection cleared.";
     }
 
-    [RelayCommand(CanExecute = nameof(NotBusy))]
+    [RelayCommand(CanExecute = nameof(CanActOnApps))]
     private async Task RemoveSelectedAsync()
     {
         // Protected packages can never be selected for removal, even if a binding tries.

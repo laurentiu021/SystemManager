@@ -107,8 +107,7 @@
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button Content="Clean selected" Command="{Binding CleanCommand}"
-                                            Style="{StaticResource PrimaryButton}"
-                                            IsEnabled="{Binding IsCleaning, Converter={StaticResource BoolInvert}}"/>
+                                            Style="{StaticResource PrimaryButton}"/>
                                     <Button Content="Cancel" AutomationProperties.Name="Cancel cleanup" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Grid>

@@ -189,7 +189,7 @@
                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                     <TextBlock Text="missing folder" FontSize="10" Foreground="{DynamicResource DangerText}" Margin="0,0,10,0"
                                                                Visibility="{Binding IsMissing, Converter={StaticResource FlexVis}}"/>
-                                                    <TextBlock Text="duplicate" FontSize="10" Foreground="{DynamicResource WarningStripe}"
+                                                    <TextBlock Text="duplicate" FontSize="10" Foreground="{DynamicResource WarningText}"
                                                                Visibility="{Binding IsDuplicate, Converter={StaticResource FlexVis}}"/>
                                                 </StackPanel>
                                             </StackPanel>

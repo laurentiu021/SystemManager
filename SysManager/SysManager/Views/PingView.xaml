@@ -70,7 +70,7 @@
                         <StackPanel>
                             <TextBlock Text="WORST LOSS" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Text="{Binding Shared.Health.WorstLossPercent, StringFormat={}{0:F1}%}"
-                                       Style="{StaticResource Metric}" Foreground="{DynamicResource WarningStripe}"/>
+                                       Style="{StaticResource Metric}" Foreground="{DynamicResource WarningText}"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource CardInner}" Margin="8,0" Padding="16,8" MinWidth="110">
@@ -152,7 +152,7 @@
                                             </StackPanel>
                                             <StackPanel HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding LossPercent, StringFormat={}{0:F0}%}"
-                                                           Foreground="{DynamicResource WarningStripe}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource WarningText}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="LOSS" Foreground="{DynamicResource TextMuted}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                         </StackPanel>

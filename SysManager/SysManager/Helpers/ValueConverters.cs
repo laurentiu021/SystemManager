@@ -167,13 +167,18 @@ public sealed class SafetyLevelToBrushConverter : IValueConverter
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        return value is SafetyLevel level ? level switch
+        // Resolve the theme-derived *Text brush (recomputed per mode by ThemeService.StatusPalette)
+        // so the Safety chip text/dot stays WCAG-AA-legible on light presets, where the old static
+        // dark-calibrated pale red/amber washed out on the near-white chip. Fall back to the frozen
+        // dark brushes only when there is no live Application (e.g. design-time / unit tests).
+        var (key, fallback) = value is SafetyLevel level ? level switch
         {
-            SafetyLevel.Safe => SafeBrush,
-            SafetyLevel.Caution => CautionBrush,
-            SafetyLevel.Critical => CriticalBrush,
-            _ => CriticalBrush
-        } : CriticalBrush;
+            SafetyLevel.Safe => ("SuccessText", SafeBrush),
+            SafetyLevel.Caution => ("WarningText", CautionBrush),
+            SafetyLevel.Critical => ("DangerText", CriticalBrush),
+            _ => ("DangerText", CriticalBrush)
+        } : ("DangerText", CriticalBrush);
+        return Application.Current?.TryFindResource(key) is Brush b ? b : fallback;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

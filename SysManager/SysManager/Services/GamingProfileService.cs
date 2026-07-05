@@ -44,6 +44,10 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     // Steps of the live session, in apply order (reverted in reverse). Empty when inactive.
     private readonly List<IGamingTweak> _appliedSteps = new();
+    // Serializes apply/revert/auto-revert on this app-lifetime singleton: manual Stop runs on the
+    // UI thread while Process.Exited fires OnGameExited on a thread-pool thread — both mutate
+    // _appliedSteps and _boundGame, so they must not overlap.
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private Process? _boundGame;
     private bool _restorePointAttemptedThisSession;
     private bool _disposed;
@@ -98,16 +102,22 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
             try
             {
-                bool ok = await step.ApplyAsync(ct).ConfigureAwait(false);
-                if (ok)
+                var result = await step.ApplyAsync(ct).ConfigureAwait(false);
+                switch (result)
                 {
-                    applied.Add(step);
-                    outcomes.Add(new GamingStepOutcome(step.Label, GamingStepStatus.Applied));
-                }
-                else
-                {
-                    outcomes.Add(new GamingStepOutcome(step.Label, GamingStepStatus.Failed,
-                        "Could not be applied."));
+                    case GamingTweakResult.Applied:
+                        applied.Add(step); // only a real change is tracked for revert
+                        outcomes.Add(new GamingStepOutcome(step.Label, GamingStepStatus.Applied));
+                        break;
+                    case GamingTweakResult.NoChange:
+                        // Benign no-op — nothing changed, nothing to revert; not an error.
+                        outcomes.Add(new GamingStepOutcome(step.Label, GamingStepStatus.SkippedNoChange,
+                            "Already in the desired state."));
+                        break;
+                    default:
+                        outcomes.Add(new GamingStepOutcome(step.Label, GamingStepStatus.Failed,
+                            "Could not be applied."));
+                        break;
                 }
             }
             catch (Exception ex)
@@ -146,20 +156,35 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
         bool restorePointCreated = await EnsureRestorePointAsync(ct).ConfigureAwait(true);
 
-        // Capture the machine-wide baseline BEFORE any change, and persist it so a crash
-        // mid-game is still recoverable.
+        // Capture the machine-wide baseline BEFORE any change.
         var snapshot = await CaptureSnapshotAsync(profile, ct).ConfigureAwait(true);
-        SaveStore(LoadStore() with { ActiveSession = new GamingSessionRecord(profile, snapshot) });
+        var steps = BuildMachineWideSteps(profile, snapshot);
+        steps.AddRange(BuildPerGameSteps(profile, game));
 
-        var steps = BuildSteps(profile, game, snapshot);
-        var outcomes = await RunApplyAsync(steps, _isElevated, _appliedSteps, ct).ConfigureAwait(true);
+        List<GamingStepOutcome> outcomes;
+        List<IGamingTweak> appliedThisRun = new();
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            outcomes = await RunApplyAsync(steps, _isElevated, appliedThisRun, ct).ConfigureAwait(true);
+            _appliedSteps.AddRange(appliedThisRun);
+            BoundGamePid = game?.ProcessId;
+            BindAutoRevert(game);
 
-        BoundGamePid = game?.ProcessId;
-        BindAutoRevert(game);
+            // Persist the crash-recovery marker ONLY when machine-wide changes actually went live,
+            // and record the EFFECTIVE machine-wide profile (only the steps that applied) so the
+            // next-launch recovery sweep replays exactly those — never a step that was skipped for
+            // admin or was a no-op (which is how a WSearch we never stopped could get restarted).
+            var effective = EffectiveMachineWideProfile(profile, appliedThisRun);
+            if (effective.HasAnyEnabled)
+                SaveStore(LoadStore() with { ActiveSession = new GamingSessionRecord(effective, snapshot) });
+        }
+        finally { _gate.Release(); }
 
-        Log.Information("Gaming Profile applied: {Applied} applied, {Admin} need admin, {Failed} failed",
+        Log.Information("Gaming Profile applied: {Applied} applied, {Admin} need admin, {NoChange} no-op, {Failed} failed",
             outcomes.Count(o => o.Status == GamingStepStatus.Applied),
             outcomes.Count(o => o.Status == GamingStepStatus.SkippedNeedsAdmin),
+            outcomes.Count(o => o.Status == GamingStepStatus.SkippedNoChange),
             outcomes.Count(o => o.Status == GamingStepStatus.Failed));
 
         return new GamingApplyResult(outcomes, restorePointCreated);
@@ -167,21 +192,28 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public async Task RevertAsync(CancellationToken ct = default)
     {
-        UnbindAutoRevert();
-        BoundGamePid = null;
-
-        if (_appliedSteps.Count > 0)
+        // Serialize with ApplyAsync and the auto-revert path: manual Stop (UI thread) and
+        // OnGameExited (thread-pool) both mutate _appliedSteps + _boundGame on this singleton.
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            var applied = _appliedSteps.ToList();
-            _appliedSteps.Clear();
-            await RunRevertAsync(applied, ct).ConfigureAwait(true);
-            Log.Information("Gaming Profile reverted {Count} step(s)", applied.Count);
-        }
+            UnbindAutoRevertLocked();
+            BoundGamePid = null;
 
-        // Clear the persisted active-session marker (whether or not steps were live).
-        var store = LoadStore();
-        if (store.ActiveSession is not null)
-            SaveStore(store with { ActiveSession = null });
+            if (_appliedSteps.Count > 0)
+            {
+                var applied = _appliedSteps.ToList();
+                _appliedSteps.Clear();
+                await RunRevertAsync(applied, ct).ConfigureAwait(true);
+                Log.Information("Gaming Profile reverted {Count} step(s)", applied.Count);
+            }
+
+            // Clear the persisted active-session marker (whether or not steps were live).
+            var store = LoadStore();
+            if (store.ActiveSession is not null)
+                SaveStore(store with { ActiveSession = null });
+        }
+        finally { _gate.Release(); }
     }
 
     public GamingProfile LoadLastConfig() => LoadStore().LastConfig;
@@ -223,35 +255,56 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         };
     }
 
-    /// <summary>Build every enabled step in apply order (machine-wide first, then per-game).</summary>
-    private List<IGamingTweak> BuildSteps(GamingProfile profile, GameTarget? game, GamingSnapshot snapshot)
+    /// <summary>Per-game steps (affinity/priority) — only when a game target was chosen.</summary>
+    private List<IGamingTweak> BuildPerGameSteps(GamingProfile profile, GameTarget? game)
     {
-        var steps = BuildMachineWideSteps(profile, snapshot);
+        var steps = new List<IGamingTweak>();
+        if (game is not { } g) return steps;
 
-        // Per-game steps only when a game target was chosen.
-        if (game is { } g)
+        if (profile.PinGameToPerformanceCores)
         {
-            if (profile.PinGameToPerformanceCores)
-            {
-                long target = PerformanceCoreMask(_cpu.GetCores());
-                long? original = _cpu.GetAffinity(g.ProcessId);
-                steps.Add(new GameAffinityTweak(_cpu, g.ProcessId, target, original));
-            }
-            if (profile.HighGameCpuPriority)
-            {
-                var original = _cpu.GetPriority(g.ProcessId);
-                steps.Add(new GamePriorityTweak(_cpu, g.ProcessId, original));
-            }
+            long target = PerformanceCoreMask(_cpu.GetCores());
+            long? original = _cpu.GetAffinity(g.ProcessId);
+            steps.Add(new GameAffinityTweak(_cpu, g.ProcessId, target, original));
         }
-
+        if (profile.HighGameCpuPriority)
+        {
+            var original = _cpu.GetPriority(g.ProcessId);
+            steps.Add(new GamePriorityTweak(_cpu, g.ProcessId, original));
+        }
         return steps;
+    }
+
+    /// <summary>
+    /// The machine-wide profile a crash-recovery sweep can safely replay — the intersection of
+    /// what was requested and what actually applied this run. Per-game affinity/priority are NOT
+    /// machine-wide (they target a volatile PID) and are never part of it.
+    /// </summary>
+    internal static GamingProfile EffectiveMachineWideProfile(GamingProfile requested, IReadOnlyList<IGamingTweak> applied)
+    {
+        var kinds = applied.Select(s => s.GetType()).ToHashSet();
+        return new GamingProfile
+        {
+            UltimatePerformancePlan = requested.UltimatePerformancePlan && kinds.Contains(typeof(PowerPlanTweak)),
+            DisableVisualEffects = requested.DisableVisualEffects && kinds.Contains(typeof(VisualEffectsTweak)),
+            FinestTimerResolution = requested.FinestTimerResolution && kinds.Contains(typeof(TimerResolutionTweak)),
+            PurgeStandbyMemory = requested.PurgeStandbyMemory && kinds.Contains(typeof(StandbyPurgeTweak)),
+            PauseSearchIndexing = requested.PauseSearchIndexing && kinds.Contains(typeof(SearchIndexingTweak)),
+            SilenceNotifications = requested.SilenceNotifications && kinds.Contains(typeof(NotificationsTweak)),
+            // Per-game toggles are intentionally left false — never replayed on recovery.
+        };
     }
 
     /// <summary>The machine-wide steps — the ones the crash-recovery sweep can safely replay.</summary>
     private List<IGamingTweak> BuildMachineWideSteps(GamingProfile profile, GamingSnapshot snapshot)
     {
         var steps = new List<IGamingTweak>();
-        if (profile.UltimatePerformancePlan) steps.Add(new PowerPlanTweak(_performance, snapshot.OriginalPowerPlanGuid));
+        // NEVER switch the power plan if we couldn't read the original to restore it: a single
+        // powercfg /getactivescheme read failure (empty GUID) would otherwise strand the machine
+        // on Ultimate Performance with no revert. Mirrors PerformanceService.RestoreFromSnapshotAsync's
+        // guard. When skipped, the power-plan toggle simply doesn't take effect this session.
+        if (profile.UltimatePerformancePlan && !string.IsNullOrEmpty(snapshot.OriginalPowerPlanGuid))
+            steps.Add(new PowerPlanTweak(_performance, snapshot.OriginalPowerPlanGuid));
         if (profile.DisableVisualEffects) steps.Add(new VisualEffectsTweak(snapshot.OriginalUiEffectsEnabled));
         if (profile.FinestTimerResolution) steps.Add(new TimerResolutionTweak(_timer));
         if (profile.PurgeStandbyMemory) steps.Add(new StandbyPurgeTweak(_standby));
@@ -298,15 +351,26 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     // ── Auto-revert on game exit (Process.Exited, NOT a poll loop) ─────────────
 
+    // Called from ApplyAsync while holding _gate, so it mutates _boundGame safely.
     private void BindAutoRevert(GameTarget? game)
     {
         if (game is null) return;
         try
         {
             var proc = Process.GetProcessById(game.ProcessId);
-            proc.EnableRaisingEvents = true;
+            // Subscribe BEFORE enabling events: if the process exits in the gap between the two,
+            // the reverse order latches the one-shot Exited with no subscriber and it never fires.
             proc.Exited += OnGameExited;
+            proc.EnableRaisingEvents = true;
             _boundGame = proc;
+
+            // Closes the race where the game exits between GetProcessById and the subscription:
+            // if it's already gone, drive the revert ourselves (Exited may never fire).
+            if (proc.HasExited)
+            {
+                proc.Exited -= OnGameExited;
+                _ = OnGameExitedAsync();
+            }
         }
         // The game may have already exited between selection and bind, or be inaccessible —
         // leave the session unbound (manual revert still works) rather than crash.
@@ -314,20 +378,27 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         catch (InvalidOperationException ex) { Log.Debug("Gaming Profile could not bind auto-revert: {Error}", ex.Message); }
     }
 
-    private void UnbindAutoRevert()
+    // Must be called while holding _gate (from RevertAsync / Dispose).
+    private void UnbindAutoRevertLocked()
     {
-        if (_boundGame is null) return;
-        try { _boundGame.Exited -= OnGameExited; } catch (InvalidOperationException) { }
-        _boundGame.Dispose();
+        var proc = _boundGame;
+        if (proc is null) return;
         _boundGame = null;
+        try { proc.Exited -= OnGameExited; } catch (InvalidOperationException) { }
+        proc.Dispose();
     }
 
-    private async void OnGameExited(object? sender, EventArgs e)
+    private async void OnGameExited(object? sender, EventArgs e) => await OnGameExitedAsync().ConfigureAwait(false);
+
+    private async Task OnGameExitedAsync()
     {
         try
         {
+            // RevertAsync serializes on _gate, so this pool-thread revert can't race a UI-thread Stop.
+            // If Stop already reverted, _appliedSteps is empty and this is a harmless no-op.
+            bool wasActive = IsActive;
             await RevertAsync().ConfigureAwait(true);
-            SessionAutoReverted?.Invoke(this, EventArgs.Empty);
+            if (wasActive) SessionAutoReverted?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
@@ -378,6 +449,12 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        UnbindAutoRevert();
+        // Detach the Process.Exited handler under the gate so it can't race an in-flight revert,
+        // then release the gate. Note: applied tweaks are intentionally left in effect on Dispose
+        // (the app is closing); the on-disk marker lets the next launch offer to restore them.
+        _gate.Wait();
+        try { UnbindAutoRevertLocked(); }
+        finally { _gate.Release(); }
+        _gate.Dispose();
     }
 }

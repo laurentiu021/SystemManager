@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Text.Json;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -23,13 +24,13 @@ public class GamingProfileServiceTests
 {
     /// <summary>A fake step that records apply/revert order into a shared log.</summary>
     private sealed class FakeTweak(string label, List<string> log,
-        bool requiresAdmin = false, bool applyResult = true, bool throwOnApply = false) : IGamingTweak
+        bool requiresAdmin = false, GamingTweakResult applyResult = GamingTweakResult.Applied, bool throwOnApply = false) : IGamingTweak
     {
         public string Label => label;
         public bool RequiresAdmin => requiresAdmin;
         public bool Reverted { get; private set; }
 
-        public Task<bool> ApplyAsync(CancellationToken ct)
+        public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
         {
             if (throwOnApply) throw new InvalidOperationException("boom");
             log.Add($"apply:{label}");
@@ -85,13 +86,27 @@ public class GamingProfileServiceTests
     }
 
     [Fact]
-    public async Task RunApply_NoOpStep_IsNotTrackedForRevert()
+    public async Task RunApply_NoOpStep_IsSkippedNoChange_NotFailed_NotTracked()
     {
         var log = new List<string>();
         var applied = new List<IGamingTweak>();
-        // applyResult=false = "already in the desired state / no-op" → reported failed-to-apply
-        // and NOT queued for revert (there's nothing to undo).
-        var steps = new IGamingTweak[] { new FakeTweak("noop", log, applyResult: false) };
+        // NoChange = "already in the desired state" → reported SkippedNoChange (NOT Failed — the
+        // audit-1 fix) and NOT queued for revert (there's nothing to undo).
+        var steps = new IGamingTweak[] { new FakeTweak("noop", log, applyResult: GamingTweakResult.NoChange) };
+
+        var outcomes = await GamingProfileService.RunApplyAsync(steps, isElevated: true, applied, default);
+
+        Assert.Equal(GamingStepStatus.SkippedNoChange, outcomes[0].Status);
+        Assert.Empty(applied);
+    }
+
+    [Fact]
+    public async Task RunApply_FailedStep_IsFailed_NotTracked()
+    {
+        var log = new List<string>();
+        var applied = new List<IGamingTweak>();
+        // Failed = a genuine non-fatal failure → reported Failed and NOT queued for revert.
+        var steps = new IGamingTweak[] { new FakeTweak("fail", log, applyResult: GamingTweakResult.Failed) };
 
         var outcomes = await GamingProfileService.RunApplyAsync(steps, isElevated: true, applied, default);
 
@@ -161,7 +176,7 @@ public class GamingProfileServiceTests
     {
         public string Label => label;
         public bool RequiresAdmin => false;
-        public Task<bool> ApplyAsync(CancellationToken ct) => Task.FromResult(true);
+        public Task<GamingTweakResult> ApplyAsync(CancellationToken ct) => Task.FromResult(GamingTweakResult.Applied);
         public Task RevertAsync(CancellationToken ct) => throw new InvalidOperationException("revert boom");
     }
 
@@ -295,5 +310,71 @@ public class GamingProfileServiceTests
             Assert.Equal(GamingProfile.Default, cfg);
         }
         finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    // ── Audit-1 fix: crash-recovery replays ONLY what actually applied ─────
+
+    [Fact]
+    public void EffectiveMachineWideProfile_OnlyIncludesAppliedMachineWideSteps()
+    {
+        // Requested everything, but only visual-effects + timer-resolution actually applied
+        // (e.g. the admin-only WSearch + standby steps were skipped when unelevated). The
+        // recovery profile must reflect ONLY what applied, so the next-launch sweep never
+        // restarts a WSearch this run never stopped (the Audit-1 over-revert defect).
+        var requested = new GamingProfile
+        {
+            UltimatePerformancePlan = true, DisableVisualEffects = true, FinestTimerResolution = true,
+            PurgeStandbyMemory = true, PauseSearchIndexing = true, SilenceNotifications = true,
+        };
+        var applied = new IGamingTweak[]
+        {
+            new VisualEffectsTweak(true),
+            new TimerResolutionTweak(Substitute.For<ITimerResolutionService>()),
+        };
+
+        var effective = GamingProfileService.EffectiveMachineWideProfile(requested, applied);
+
+        Assert.True(effective.DisableVisualEffects);
+        Assert.True(effective.FinestTimerResolution);
+        Assert.False(effective.PauseSearchIndexing);   // was requested but skipped → NOT replayed
+        Assert.False(effective.PurgeStandbyMemory);
+        Assert.False(effective.UltimatePerformancePlan);
+        Assert.False(effective.SilenceNotifications);
+    }
+
+    [Fact]
+    public void EffectiveMachineWideProfile_NeverIncludesPerGameSteps()
+    {
+        var requested = new GamingProfile { HighGameCpuPriority = true, PinGameToPerformanceCores = true };
+        var cpu = Substitute.For<ICpuAffinityService>();
+        var applied = new IGamingTweak[]
+        {
+            new GamePriorityTweak(cpu, 1234, System.Diagnostics.ProcessPriorityClass.Normal),
+            new GameAffinityTweak(cpu, 1234, 0b11L, 0b01L),
+        };
+
+        var effective = GamingProfileService.EffectiveMachineWideProfile(requested, applied);
+
+        // Per-game toggles are never machine-wide → never in the recovery profile (a recycled
+        // PID must never be touched on next launch).
+        Assert.False(effective.HasAnyEnabled);
+    }
+
+    // ── Audit-1 fix: no-op is not counted as a failure in the result summary ─
+
+    [Fact]
+    public void GamingApplyResult_Counts_SeparateNoChangeFromFailed()
+    {
+        var result = new GamingApplyResult(
+        [
+            new GamingStepOutcome("a", GamingStepStatus.Applied),
+            new GamingStepOutcome("b", GamingStepStatus.SkippedNoChange),
+            new GamingStepOutcome("c", GamingStepStatus.SkippedNeedsAdmin),
+            new GamingStepOutcome("d", GamingStepStatus.Failed),
+        ], RestorePointCreated: false);
+
+        Assert.Equal(1, result.AppliedCount);
+        Assert.Equal(1, result.SkippedForAdminCount);
+        Assert.Equal(1, result.FailedCount); // the no-op is NOT counted as failed
     }
 }

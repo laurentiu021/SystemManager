@@ -5,6 +5,24 @@
 namespace SysManager.Services;
 
 /// <summary>
+/// The result of applying a single <see cref="IGamingTweak"/> — distinguishes a genuine
+/// change (track it for revert) from a benign no-op (nothing to do / already in the desired
+/// state — do NOT report as a failure) from a real non-fatal failure. Modelling all three
+/// keeps the engine from surfacing a harmless no-op to the user as "could not be applied".
+/// </summary>
+public enum GamingTweakResult
+{
+    /// <summary>The tweak changed system state — track it so revert can undo it.</summary>
+    Applied,
+
+    /// <summary>Nothing to do (already in the desired state / empty target) — benign, not a failure.</summary>
+    NoChange,
+
+    /// <summary>The tweak was attempted but could not be applied for a non-fatal reason.</summary>
+    Failed,
+}
+
+/// <summary>
 /// One reversible optimization in a game-mode profile (power plan, visual effects, timer
 /// resolution, CPU affinity/priority, standby purge, search indexing, notifications). A tweak
 /// is constructed with the ORIGINAL state to restore (machine-wide originals come from the
@@ -29,12 +47,14 @@ public interface IGamingTweak
     bool RequiresAdmin { get; }
 
     /// <summary>
-    /// Apply the optimization. Returns true if applied; false if it was a no-op (already in
-    /// the desired state) or could not be applied for a non-fatal reason. Must not throw for
-    /// expected failures — return false. A throwing step is isolated by the engine (logged;
-    /// the batch continues) so one bad step never aborts the rest or the revert.
+    /// Apply the optimization. Returns <see cref="GamingTweakResult.Applied"/> when it changed
+    /// state (the engine tracks it for revert), <see cref="GamingTweakResult.NoChange"/> for a
+    /// benign no-op (already in the desired state / nothing to target — NOT surfaced as an
+    /// error), or <see cref="GamingTweakResult.Failed"/> for a non-fatal failure. Must not throw
+    /// for expected failures. A throwing step is isolated by the engine (logged; the batch
+    /// continues) so one bad step never aborts the rest or the revert.
     /// </summary>
-    Task<bool> ApplyAsync(CancellationToken ct);
+    Task<GamingTweakResult> ApplyAsync(CancellationToken ct);
 
     /// <summary>
     /// Undo the optimization, restoring the original state this tweak was given. Idempotent:

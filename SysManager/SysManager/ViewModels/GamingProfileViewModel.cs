@@ -29,7 +29,13 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
     public BulkObservableCollection<RunningProcess> Processes { get; } = new();
 
     [ObservableProperty] private bool _isElevated;
-    [ObservableProperty] private RunningProcess? _selectedGame;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedGame))]
+    private RunningProcess? _selectedGame;
+
+    /// <summary>True when a game target is chosen — gates the per-game optimization toggles.</summary>
+    public bool HasSelectedGame => SelectedGame is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanApply))]

@@ -19,17 +19,20 @@ internal sealed class PowerPlanTweak(PerformanceService performance, string? ori
     public string Label => "Ultimate Performance power plan";
     public bool RequiresAdmin => false;
 
-    public async Task<bool> ApplyAsync(CancellationToken ct)
+    public async Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
     {
         var guid = await performance.EnsureUltimatePerformancePlanAsync(ct).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(guid)) return false;
+        // Couldn't find/create the Ultimate Performance scheme — a genuine non-fatal failure.
+        if (string.IsNullOrEmpty(guid)) return GamingTweakResult.Failed;
         await performance.SetActivePlanAsync(guid, ct).ConfigureAwait(false);
-        return true;
+        return GamingTweakResult.Applied;
     }
 
     public async Task RevertAsync(CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(originalPlanGuid)) return; // nothing captured → no-op
+        // The engine never builds this step without a captured original (see BuildMachineWideSteps),
+        // but stay defensive: restore nothing if the original is unknown.
+        if (string.IsNullOrEmpty(originalPlanGuid)) return;
         await performance.SetActivePlanAsync(originalPlanGuid, ct).ConfigureAwait(false);
     }
 }
@@ -40,10 +43,12 @@ internal sealed class VisualEffectsTweak(bool originalEnabled) : IGamingTweak
     public string Label => "Reduce visual effects";
     public bool RequiresAdmin => false;
 
-    public Task<bool> ApplyAsync(CancellationToken ct)
+    public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
     {
+        // Already reduced → no-op (nothing to change, nothing to restore beyond the captured state).
+        if (!originalEnabled) return Task.FromResult(GamingTweakResult.NoChange);
         PerformanceService.SetUiEffects(false);
-        return Task.FromResult(true);
+        return Task.FromResult(GamingTweakResult.Applied);
     }
 
     public Task RevertAsync(CancellationToken ct)
@@ -62,10 +67,10 @@ internal sealed class TimerResolutionTweak(ITimerResolutionService timer) : IGam
     public string Label => "Finest timer resolution (~0.5 ms)";
     public bool RequiresAdmin => false;
 
-    public Task<bool> ApplyAsync(CancellationToken ct)
+    public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
     {
         timer.Enable();
-        return Task.FromResult(true);
+        return Task.FromResult(GamingTweakResult.Applied);
     }
 
     public Task RevertAsync(CancellationToken ct)
@@ -81,8 +86,10 @@ internal sealed class GamePriorityTweak(ICpuAffinityService cpu, int gamePid, Pr
     public string Label => "High game CPU priority";
     public bool RequiresAdmin => false;
 
-    public Task<bool> ApplyAsync(CancellationToken ct)
-        => Task.FromResult(cpu.TrySetPriority(gamePid, ProcessPriorityClass.High, out _));
+    public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
+        => Task.FromResult(cpu.TrySetPriority(gamePid, ProcessPriorityClass.High, out _)
+            ? GamingTweakResult.Applied
+            : GamingTweakResult.Failed);
 
     public Task RevertAsync(CancellationToken ct)
     {
@@ -100,10 +107,13 @@ internal sealed class GameAffinityTweak(ICpuAffinityService cpu, int gamePid, lo
     public string Label => "Pin game to performance cores";
     public bool RequiresAdmin => false;
 
-    public Task<bool> ApplyAsync(CancellationToken ct)
+    public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
     {
-        if (targetMask == 0) return Task.FromResult(false);
-        return Task.FromResult(cpu.TrySetAffinity(gamePid, targetMask, out _));
+        // No performance cores to target (unknown topology) → benign no-op, not a failure.
+        if (targetMask == 0) return Task.FromResult(GamingTweakResult.NoChange);
+        return Task.FromResult(cpu.TrySetAffinity(gamePid, targetMask, out _)
+            ? GamingTweakResult.Applied
+            : GamingTweakResult.Failed);
     }
 
     public Task RevertAsync(CancellationToken ct)
@@ -122,8 +132,12 @@ internal sealed class StandbyPurgeTweak(StandbyMemoryService standby) : IGamingT
     public string Label => "Free standby memory";
     public bool RequiresAdmin => true;
 
-    public Task<bool> ApplyAsync(CancellationToken ct)
-        => Task.FromResult(standby.TryPurgeStandbyList(out _));
+    public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
+        // A successful purge IS a real action (RAM freed) so it counts as Applied and is shown to
+        // the user; it simply has no revert counterpart (its RevertAsync below is a no-op).
+        => Task.FromResult(standby.TryPurgeStandbyList(out _)
+            ? GamingTweakResult.Applied
+            : GamingTweakResult.Failed);
 
     public Task RevertAsync(CancellationToken ct) => Task.CompletedTask; // one-shot, nothing to undo
 }
@@ -139,10 +153,13 @@ internal sealed class SearchIndexingTweak(bool wasRunning) : IGamingTweak
     public string Label => "Pause search indexing";
     public bool RequiresAdmin => true;
 
-    public async Task<bool> ApplyAsync(CancellationToken ct)
+    public async Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
     {
+        // The indexer was already stopped before apply → nothing to stop, nothing to restart on
+        // revert. A no-op keeps us from restarting a service the user had intentionally stopped.
+        if (!wasRunning) return GamingTweakResult.NoChange;
         await ServiceManagerService.StopServiceAsync(ServiceName).ConfigureAwait(false);
-        return true;
+        return GamingTweakResult.Applied;
     }
 
     public async Task RevertAsync(CancellationToken ct)
@@ -182,12 +199,14 @@ internal sealed class NotificationsTweak(int? originalToastEnabled) : IGamingTwe
         catch (UnauthorizedAccessException) { return null; }
     }
 
-    public Task<bool> ApplyAsync(CancellationToken ct)
+    public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
     {
+        // Toasts already suppressed (ToastEnabled == 0) → no-op; nothing to change or restore.
+        if (originalToastEnabled == 0) return Task.FromResult(GamingTweakResult.NoChange);
         using var key = Registry.CurrentUser.CreateSubKey(PushKeyPath, writable: true);
         key.SetValue(ToastValueName, 0, RegistryValueKind.DWord);
         Log.Information("Gaming Profile: notifications silenced (ToastEnabled=0)");
-        return Task.FromResult(true);
+        return Task.FromResult(GamingTweakResult.Applied);
     }
 
     public Task RevertAsync(CancellationToken ct)

@@ -73,6 +73,12 @@ public enum GamingStepStatus
     /// <summary>Skipped because it needs administrator and the app is not elevated.</summary>
     SkippedNeedsAdmin,
 
+    /// <summary>
+    /// A no-op — the system was already in the desired state (or the step had nothing to do).
+    /// Not a failure: nothing changed and nothing needs reverting, so it is not surfaced as an error.
+    /// </summary>
+    SkippedNoChange,
+
     /// <summary>Attempted but failed (message in <see cref="GamingStepOutcome.Message"/>).</summary>
     Failed,
 }

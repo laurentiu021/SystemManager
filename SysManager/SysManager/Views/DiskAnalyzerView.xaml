@@ -3,6 +3,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:v="clr-namespace:SysManager.Views"
              d:DataContext="{d:DesignInstance vm:DiskAnalyzerViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -148,10 +149,10 @@
             </ListView>
 
             <!-- Empty state -->
-            <TextBlock Text="No results yet — pick a folder and scan to see what's using space."
-                       Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            <v:EmptyState Glyph="&#xE838;"
+                          Title="No results yet"
+                          Message="Pick a folder and analyze to see what's using space."
+                          Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>
 

@@ -100,10 +100,10 @@
                 </DataGrid>
 
                 <!-- Empty state -->
-                <TextBlock Text="No results yet — scan a path to see what's using it."
-                           Foreground="{DynamicResource TextMuted}" FontSize="13"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Visibility="{Binding HasScanned, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                <v:EmptyState Glyph="&#xE838;"
+                              Title="No results yet"
+                              Message="Scan a path to see what's using it."
+                              Visibility="{Binding HasScanned, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>
 

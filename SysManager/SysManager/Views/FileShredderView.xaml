@@ -105,8 +105,9 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- Empty state -->
-        <v:EmptyState Grid.Row="2" Glyph="&#xE7BA;"
+        <!-- Empty state — neutral glyph; the warning triangle is reserved for the
+             actual SSD warning banner, not this idle "nothing queued yet" state. -->
+        <v:EmptyState Grid.Row="2" Glyph="&#xE74C;"
                       Title="No files queued"
                       Message="Add files above to securely erase them beyond recovery."
                       Visibility="{Binding Items.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

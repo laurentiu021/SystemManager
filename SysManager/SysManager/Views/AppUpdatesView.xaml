@@ -15,7 +15,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
-            <TextBlock Text="App updates" Style="{StaticResource Display}"/>
+            <TextBlock Text="App Updates" Style="{StaticResource Display}"/>
             <TextBlock Text="Scan for winget upgrades and install them in bulk."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
@@ -57,7 +57,7 @@
                 <Button Content="Scan for updates" Command="{Binding ScanCommand}" AutomationProperties.Name="Scan for updates" Style="{StaticResource PrimaryButton}"/>
                 <Button Content="Upgrade selected" Command="{Binding UpgradeSelectedCommand}" AutomationProperties.Name="Upgrade selected packages" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}" AutomationProperties.Name="Cancel update operation" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
-                <CheckBox Content="Select all" IsChecked="{Binding SelectAll}" AutomationProperties.Name="Select all packages" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                <CheckBox Content="Select All" IsChecked="{Binding SelectAll}" AutomationProperties.Name="Select all packages" Margin="16,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 

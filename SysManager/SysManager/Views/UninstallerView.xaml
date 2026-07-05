@@ -78,9 +78,9 @@
                                VerticalAlignment="Center" FontSize="12"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
-                <Button Content="Select all" Command="{Binding SelectAllCommand}"
+                <Button Content="Select All" Command="{Binding SelectAllCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
-                <Button Content="Deselect" Command="{Binding DeselectAllCommand}"
+                <Button Content="Deselect All" Command="{Binding DeselectAllCommand}"
                         Style="{StaticResource GhostButton}"/>
             </WrapPanel>
         </Border>

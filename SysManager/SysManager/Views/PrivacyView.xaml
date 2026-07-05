@@ -20,7 +20,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Privacy Toggles" Style="{StaticResource Display}"/>
+            <TextBlock Text="Privacy &amp; Telemetry" Style="{StaticResource Display}"/>
             <TextBlock Text="Control telemetry, ads, and unwanted features. Toggle ON = privacy protection active."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>

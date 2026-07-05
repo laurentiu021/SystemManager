@@ -32,8 +32,8 @@
                         AutomationProperties.Name="Select commonly removed apps"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
                         ToolTip="Pre-select the curated set of commonly-removed apps."/>
-                <Button Content="Clear selection" Command="{Binding ClearSelectionCommand}"
-                        AutomationProperties.Name="Clear selection"
+                <Button Content="Deselect All" Command="{Binding ClearSelectionCommand}"
+                        AutomationProperties.Name="Deselect all apps"
                         Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
                 <Button Content="Refresh" Command="{Binding RefreshCommand}"
                         AutomationProperties.Name="Refresh app list"

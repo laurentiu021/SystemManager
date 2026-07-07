@@ -14,7 +14,7 @@ namespace SysManager.ViewModels;
 
 public sealed partial class AppUpdatesViewModel : ViewModelBase
 {
-    private readonly WingetService _winget;
+    private readonly IWingetService _winget;
     private readonly EtaCalculator _upgradeEta = new();
     private CancellationTokenSource? _cts;
     private readonly Action<PowerShellLine> _lineHandler;
@@ -39,7 +39,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         ? "All detected packages are up to date."
         : "Run a check to scan for winget upgrades.";
 
-    public AppUpdatesViewModel(WingetService winget)
+    public AppUpdatesViewModel(IWingetService winget)
     {
         _winget = winget;
         _lineHandler = line => Console.Append(line);

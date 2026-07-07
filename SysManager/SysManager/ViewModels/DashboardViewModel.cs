@@ -19,7 +19,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private readonly TuneUpService _tuneUp;
     private readonly HealthScoreService _healthScore;
     private readonly TemperatureService _temps;
-    private readonly WingetService _winget;
+    private readonly IWingetService _winget;
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _pollingCts;
 
@@ -87,7 +87,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private bool _isActive;
 
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
-        HealthScoreService healthScore, TemperatureService temps, WingetService winget)
+        HealthScoreService healthScore, TemperatureService temps, IWingetService winget)
     {
         _sys = sys;
         _tuneUp = tuneUp;
@@ -629,14 +629,16 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             QuickActionDetail = "Checking for upgrades...";
             QuickActionProgress = 30;
-            var runner = new PowerShellRunner();
-            var output = new System.Text.StringBuilder();
-            runner.LineReceived += l => { if (l.Kind == OutputKind.Output) output.AppendLine(l.Text); };
-
-            await runner.RunScriptViaPwshAsync("winget upgrade --all --silent --accept-package-agreements --accept-source-agreements 2>$null | Out-String", CancellationToken.None);
+            // Delegate to the injected WingetService (the IPowerShellRunner-backed seam) so the
+            // Dashboard's one-click "Update All Apps" uses the SAME winget invocation as the App
+            // Updates tab. A hand-rolled command here had drifted — it was missing
+            // --no-progress / --disable-interactivity / --include-unknown and reported success
+            // even when winget failed.
+            var result = await _winget.UpgradeAllAsync(CancellationToken.None);
             QuickActionProgress = 100;
-            QuickActionDetail = "All apps updated";
-            ActivityLogService.Instance.Log("App Updates", "Upgrade all completed");
+            QuickActionDetail = result.Succeeded ? "All apps updated" : result.FriendlyMessage;
+            ActivityLogService.Instance.Log("App Updates",
+                result.Succeeded ? "Upgrade all completed" : $"Upgrade all: {result.FriendlyMessage}");
         });
     }
 

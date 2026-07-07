@@ -24,7 +24,7 @@ public static class ServiceRegistration
         services.AddTransient<PowerShellRunner>();
         services.AddTransient<IPowerShellRunner, PowerShellRunner>();
         services.AddSingleton<SystemInfoService>();
-        services.AddSingleton<WingetService>();
+        services.AddSingleton<IWingetService, WingetService>();
         services.AddSingleton<TrayIconService>();
         services.AddSingleton<UpdateService>();
         services.AddSingleton<ShortcutCleanerService>();

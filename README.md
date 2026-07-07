@@ -88,14 +88,14 @@ fully open source.
 ### Sidebar navigation
 The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
-scrolling through a flat list. 54 tabs are fully implemented; 4 are
+scrolling through a flat list. 55 tabs are fully implemented; 3 are
 work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes · Tweaks Hub 🔬 |
-| 🎮 Gaming & Profiles | Gaming Profile ⚙️ · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
+| 🎮 Gaming & Profiles | Gaming Profile 🔬 · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
 | 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog 🔬 · Bandwidth Monitor ⚙️ |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance 🔬 |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
@@ -558,6 +558,24 @@ Manage Microsoft Defender without digging through Windows Security:
 - Select/deselect all, batch uninstall with confirmation dialog
 - Local app support — uninstalls apps not in winget via registry UninstallString
 - Live console output from winget
+
+### Gaming Profile 🔬
+- **One-click "game mode"** — apply a bundle of reversible optimizations together,
+  then restore them automatically when the game exits (or with a single Stop)
+- **Optionally target a running game** — its CPU priority is raised to High and it's
+  pinned to the performance cores, and its exit is what triggers the automatic revert
+- **System-wide optimizations** — Ultimate Performance power plan, reduced visual
+  effects, finest (~0.5 ms) timer resolution, freeing standby memory, pausing Windows
+  Search indexing, and silencing notifications — each ticked individually
+- **Fully reversible & snapshot-based** — the original state (power plan, visual
+  effects, indexing, notifications) is captured before any change and restored exactly;
+  SysManager also tries a System Restore point first (best-effort, needs administrator)
+- **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game the
+  system-wide changes are offered for restore on next launch
+- **Honest about admin** — freeing standby memory and pausing indexing need
+  administrator; without it they're clearly skipped, not silently failed
+- 🔬 Preview — fully reversible today; closing background apps and saved per-game
+  profiles are planned for a later update
 
 ### Timer Resolution
 - **Lower input latency for games** — requests the finest Windows timer

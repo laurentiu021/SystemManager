@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -40,4 +41,19 @@ public interface ICpuAffinityService
     /// "OS decides", which is not what an explicit selection means).
     /// </summary>
     bool TrySetAffinity(int processId, long mask, out string error);
+
+    /// <summary>
+    /// Read the current scheduling priority class for a process, or null if unavailable
+    /// (exited / access denied). Used by Gaming Profile to capture the original priority
+    /// before raising it, so revert can restore the exact prior value.
+    /// </summary>
+    ProcessPriorityClass? GetPriority(int processId);
+
+    /// <summary>
+    /// Set a process's scheduling priority class. Returns true on success; on failure sets
+    /// <paramref name="error"/>. Your own processes need no admin; another user's / an
+    /// elevated process raises access-denied, surfaced cleanly (mirrors
+    /// <see cref="TrySetAffinity"/>).
+    /// </summary>
+    bool TrySetPriority(int processId, ProcessPriorityClass priority, out string error);
 }

@@ -11,7 +11,7 @@ namespace SysManager.Services;
 /// <summary>
 /// Wraps winget.exe to list upgradable packages and install updates with live streaming.
 /// </summary>
-public sealed partial class WingetService
+public sealed partial class WingetService : IWingetService
 {
     private readonly PowerShellRunner _runner;
 

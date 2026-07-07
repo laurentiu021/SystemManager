@@ -67,29 +67,40 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
 
     private async void Tick()
     {
-        var status = _service.GetMemoryStatus();
-        TotalDisplay = status.TotalDisplay;
-        AvailableDisplay = status.AvailableDisplay;
-        LoadDisplay = status.LoadDisplay;
-
-        // Auto-purge off the UI thread (same reason as PurgeAsync). _autoPurgeInFlight
-        // guards against the 2s timer stacking a second purge on top of one still running.
-        if (AutoPurgeEnabled && IsElevated && !_autoPurgeInFlight
-            && ShouldAutoPurge(status.AvailableMb, ThresholdMb))
+        try
         {
-            _autoPurgeInFlight = true;
-            try
+            var status = _service.GetMemoryStatus();
+            TotalDisplay = status.TotalDisplay;
+            AvailableDisplay = status.AvailableDisplay;
+            LoadDisplay = status.LoadDisplay;
+
+            // Auto-purge off the UI thread (same reason as PurgeAsync). _autoPurgeInFlight
+            // guards against the 2s timer stacking a second purge on top of one still running.
+            if (AutoPurgeEnabled && IsElevated && !_autoPurgeInFlight
+                && ShouldAutoPurge(status.AvailableMb, ThresholdMb))
             {
-                var avail = status.AvailableMb;
-                var purged = await Task.Run(() => _service.TryPurgeStandbyList(out _)).ConfigureAwait(true);
-                if (purged)
+                _autoPurgeInFlight = true;
+                try
                 {
-                    Log.Information("Auto-purged standby list (available {Avail:F0} MB < {Threshold:F0} MB)", avail, ThresholdMb);
-                    StatusMessage = $"Auto-purged — available RAM was below {ThresholdMb:F0} MB.";
-                    Refresh();
+                    var avail = status.AvailableMb;
+                    var purged = await Task.Run(() => _service.TryPurgeStandbyList(out _)).ConfigureAwait(true);
+                    if (purged)
+                    {
+                        Log.Information("Auto-purged standby list (available {Avail:F0} MB < {Threshold:F0} MB)", avail, ThresholdMb);
+                        StatusMessage = $"Auto-purged — available RAM was below {ThresholdMb:F0} MB.";
+                        Refresh();
+                    }
                 }
+                finally { _autoPurgeInFlight = false; }
             }
-            finally { _autoPurgeInFlight = false; }
+        }
+        catch (Exception ex)
+        {
+            // Last-resort net: Tick is an async-void timer handler, so any escaping exception
+            // (an unexpected memory-status or purge fault) would crash the whole process.
+            // Swallow and log — a failed auto-refresh must never take the app down. Mirrors
+            // TrayIconService.OnTimerTick.
+            Log.Warning(ex, "Standby memory auto-refresh tick failed");
         }
     }
 

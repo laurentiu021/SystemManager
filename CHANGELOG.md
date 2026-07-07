@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.39] - 2026-07-07
+
+### Fixed
+- **Context-menu entry names capitalize correctly on Turkish Windows.** The first letter of a cleaned-up context-menu entry name was upper-cased using the current culture, so on a Turkish (tr-TR) system a leading "i" became "İ" (dotted capital I) rather than "I", subtly corrupting names. It now upper-cases invariantly, since these are program and shell-verb identifiers rather than locale-sensitive prose.
+- **The resource-history file is now rewritten atomically.** When trimming samples past the retention window, the usage-history file was rewritten in place with a single full-file write; a crash or power loss mid-write could leave it truncated or corrupt. It is now written to a temporary file and swapped in atomically, so an interrupted prune can never damage the existing history.
+- **The Standby List Cleaner's background auto-refresh can no longer crash the app.** Its two-second timer tick ran without a top-level guard, so an unexpected fault while reading memory status or auto-purging would surface as an unhandled background exception and take the whole app down. The tick now catches and logs any such fault, matching the guard the tray-icon timer already uses.
+
 ## [1.52.38] - 2026-07-07
 
 ### Fixed

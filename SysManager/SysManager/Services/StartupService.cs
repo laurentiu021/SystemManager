@@ -122,18 +122,7 @@ public sealed class StartupService
                     }
                 }
 
-                results.Add(new StartupEntry
-                {
-                    Name = name,
-                    Command = command,
-                    Location = locationLabel,
-                    Source = StartupSource.StartupFolder,
-                    RegistryKey = "",
-                    ValueName = name,
-                    IsEnabled = true,
-                    Publisher = ExtractPublisher(command),
-                    StatusText = "Enabled"
-                });
+                results.Add(BuildStartupFolderEntry(file, command, locationLabel));
             }
         }
         catch (UnauthorizedAccessException ex)
@@ -145,6 +134,30 @@ public sealed class StartupService
             Log.Debug("Startup folder I/O error {Folder}: {Error}", folderPath, ex.Message);
         }
     }
+
+    /// <summary>
+    /// Builds a startup-folder <see cref="StartupEntry"/> from a resolved file. The display
+    /// <see cref="StartupEntry.Name"/> drops the extension, but <see cref="StartupEntry.ValueName"/>
+    /// keeps the FULL filename (with extension) because that is the key Windows uses in
+    /// <c>...\Explorer\StartupApproved\StartupFolder</c>. Keying the approved-state read/write by
+    /// the extension-stripped name (as this did before) meant a disabled item read back as
+    /// enabled and, worse, a "disable" wrote a blob under a name Windows ignores — so the toggle
+    /// silently did nothing. Registry Run entries and scheduled tasks are unaffected (they key by
+    /// their own value/task name).
+    /// </summary>
+    internal static StartupEntry BuildStartupFolderEntry(string file, string command, string locationLabel) =>
+        new()
+        {
+            Name = System.IO.Path.GetFileNameWithoutExtension(file),
+            Command = command,
+            Location = locationLabel,
+            Source = StartupSource.StartupFolder,
+            RegistryKey = "",
+            ValueName = System.IO.Path.GetFileName(file),
+            IsEnabled = true,
+            Publisher = ExtractPublisher(command),
+            StatusText = "Enabled"
+        };
 
     private static void ReadScheduledTasks(List<StartupEntry> results)
     {

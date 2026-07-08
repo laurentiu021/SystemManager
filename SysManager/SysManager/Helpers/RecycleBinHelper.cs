@@ -49,7 +49,13 @@ public static partial class RecycleBinHelper
     public static string[] CurrentUserBinPaths()
     {
         string? sid;
-        try { sid = WindowsIdentity.GetCurrent().User?.Value; }
+        try
+        {
+            // WindowsIdentity owns a native token handle — dispose it deterministically
+            // (matches AdminHelper.IsElevated / App.xaml.cs) instead of waiting for the finalizer.
+            using var identity = WindowsIdentity.GetCurrent();
+            sid = identity.User?.Value;
+        }
         catch (System.Security.SecurityException) { sid = null; }
         if (string.IsNullOrEmpty(sid)) return [];
 

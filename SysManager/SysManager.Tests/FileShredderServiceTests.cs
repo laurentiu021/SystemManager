@@ -402,6 +402,54 @@ public class FileShredderServiceTests
     }
 
     [Fact]
+    public async Task ShredFolderAsync_WithUnshreddableFile_LeavesItAndReportsFailure()
+    {
+        // Regression: a file the shredder cannot securely overwrite (here a hard-linked file,
+        // which ShredFileAsync refuses) must be LEFT in place, never plain-deleted by a recursive
+        // folder delete — otherwise the caller believes a recoverable file was securely shredded.
+        // The folder shred must report the failure (throw) rather than claim success.
+        var svc = NewService();
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_guarantee_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var normal = Path.Combine(dir, "normal.dat");
+        var linkTarget = Path.Combine(Path.GetTempPath(), "smtest_gtarget_" + Guid.NewGuid().ToString("N") + ".dat");
+        var hardlink = Path.Combine(dir, "hardlink.dat");
+        await File.WriteAllTextAsync(normal, "shred me");
+        await File.WriteAllTextAsync(linkTarget, "shared data");
+
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /H \"{hardlink}\" \"{linkTarget}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !File.Exists(hardlink))
+                    return; // environment can't create a hard link — nothing to assert
+            }
+
+            await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.False(File.Exists(normal), "the shreddable file should have been securely shredded and removed");
+            Assert.True(File.Exists(hardlink), "the hard-linked file must be LEFT in place, not plain-deleted");
+            Assert.Equal("shared data", await File.ReadAllTextAsync(linkTarget));
+            Assert.True(Directory.Exists(dir), "the folder holding the un-shreddable file must remain");
+        }
+        finally
+        {
+            if (File.Exists(hardlink)) File.Delete(hardlink);
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            if (File.Exists(linkTarget)) File.Delete(linkTarget);
+        }
+    }
+
+    [Fact]
     public void ResolveFinalPath_MissingPath_ReturnsNull()
     {
         // A path that can't be opened must return null so ValidatePath falls back to the

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.42] - 2026-07-08
+
+### Fixed
+- **On non-English Windows, the processor "minimum state" could be saved as 0% and later restored as 0%.** Before applying a performance tweak, SysManager takes a safety snapshot that records your current processor *minimum state* (read from Windows' `powercfg`). On English Windows it read the right value, but on a translated Windows the label it searched for was in another language, so it fell back to the first number in `powercfg`'s output — which is the fixed "minimum possible" value (0%), not your actual setting. That wrong 0% went into the snapshot, so a later "Restore All" wrote 0% back as if it were your original minimum. It now reads the correct value in any display language (the real setting is always the second-to-last value `powercfg` prints), so snapshots and restores are accurate on every Windows locale.
+
 ## [1.52.41] - 2026-07-08
 
 ### Fixed

@@ -550,25 +550,31 @@ public sealed partial class PerformanceService : IDisposable
 
     internal static int? ParseProcessorMinPercent(IList<string> lines)
     {
-        // The query is PROCTHROTTLEMIN only, so powercfg prints exactly two hex values:
-        // "Current AC Power Setting Index: 0x…" then "Current DC Power Setting Index: 0x…"
-        // (AC always first, in every language). We want the AC value.
+        // powercfg /query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN prints, in an order that
+        // is identical in every display language, up to five hex values:
+        //   Minimum Possible Setting, Maximum Possible Setting, Possible Settings increment,
+        //   Current AC Power Setting Index, Current DC Power Setting Index.
+        // Only the LABELS are translated; the AC-before-DC ordering and the fact that the two
+        // "current index" lines come LAST never change — so the AC index we want is always the
+        // second-to-last hex token in the output, and DC the last.
         //
-        // Fast path (en-US, unchanged): match the English AC label exactly.
-        // Locale-agnostic fallback: the label is translated on non-English Windows, so fall
-        // back to the FIRST "0x…" token in the output — which is the AC index by powercfg's
-        // fixed AC-before-DC ordering. Return null when nothing parses: the caller must NOT
-        // invent a value, or a snapshot/restore would fabricate a wrong minimum (the bug this
-        // fixes — the old code returned 5, which "Restore" then wrote back on non-English boxes).
+        // Fast path (en-US): match the English AC label exactly — cheap and unambiguous.
         foreach (var line in lines.Where(l => l.Contains("Current AC Power Setting Index", StringComparison.OrdinalIgnoreCase)))
         {
             if (TryParseHexToken(line, out var acVal)) return acVal;
         }
+        // Locale-agnostic fallback: on non-English Windows the label above is translated, so the
+        // fast path misses. Collect every hex token in order and take the second-to-last (AC).
+        // The previous fallback returned the FIRST hex token — "Minimum Possible Setting" (0x0) —
+        // so on non-English Windows it read 0, and a later "Restore" wrote 0% back as the minimum.
+        List<int> hexValues = [];
         foreach (var line in lines)
         {
-            if (TryParseHexToken(line, out var val)) return val;
+            if (TryParseHexToken(line, out var val)) hexValues.Add(val);
         }
-        return null; // couldn't read — do not guess
+        // Need both current-index tokens (AC + DC) to trust the ordering; AC is second-to-last.
+        // Fewer than two = ambiguous, so return null rather than guess — never fabricate a value.
+        return hexValues.Count >= 2 ? hexValues[^2] : null;
     }
 
     private static bool TryParseHexToken(string line, out int value)

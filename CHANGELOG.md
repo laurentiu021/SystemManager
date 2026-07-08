@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.44] - 2026-07-08
+
+### Fixed
+- **Cancelling a duplicate-file scan now reports it as cancelled instead of showing partial results as "Complete."** If you stopped a duplicate scan between files (rather than while a file was being hashed), the scan quietly finished and presented whatever it had found so far as a completed result. It now treats cancellation consistently — the scan reports as cancelled and no partial list is shown as if it were the full result — matching how the Large Files scan already behaves.
+
 ## [1.52.43] - 2026-07-08
 
 ### Fixed

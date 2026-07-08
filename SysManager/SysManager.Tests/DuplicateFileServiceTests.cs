@@ -238,6 +238,27 @@ public class DuplicateFileServiceTests : IDisposable
             () => _service.ScanAsync(_root, ct: cts.Token));
     }
 
+    [Fact]
+    public void Scan_CancelledBeforeFinalize_Throws_NotReportComplete()
+    {
+        // Regression: the outer scan loops BREAK on cancellation (only the mid-hash hashing
+        // throws), so a scan cancelled between files used to fall through to the "Complete"
+        // progress report and return partial results. It must throw instead, so the VM's cancel
+        // branch shows "Scan cancelled." — mirroring LargeFileScanner's finalize. We invoke the
+        // private Scan directly with a pre-cancelled token: ScanAsync's Task.Run(ct) would
+        // short-circuit before the body ran, so it cannot exercise this finalize path.
+        var scan = typeof(DuplicateFileService)
+            .GetMethod("Scan", BindingFlags.NonPublic | BindingFlags.Static)!;
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var ex = Record.Exception(() => scan.Invoke(null, new object?[] { _root, 1L, null, cts.Token }));
+
+        Assert.NotNull(ex);
+        // Reflection wraps the thrown exception; the underlying one must be a cancellation.
+        Assert.IsAssignableFrom<OperationCanceledException>(ex!.InnerException);
+    }
+
     // ── Progress reporting ──
 
     [Fact]

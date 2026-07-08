@@ -125,6 +125,10 @@ public sealed class ProcessManagerService
         catch (ArgumentException) { return false; }
         catch (InvalidOperationException) { return false; }
         catch (System.ComponentModel.Win32Exception) { return false; }
+        // Kill(entireProcessTree: true) throws AggregateException when one or more descendants
+        // could not be terminated. Report the failure through the bool contract like the rest,
+        // rather than letting it escape to the (synchronous) Kill command and crash the app.
+        catch (AggregateException) { return false; }
     }
 
     /// <summary>

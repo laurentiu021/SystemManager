@@ -49,7 +49,8 @@ follows, and what to expect when you open a pull request.
 ```powershell
 git clone https://github.com/laurentiu021/SystemManager.git
 cd SystemManager
-# There is no solution file — build the project explicitly (matches CI).
+# Build the app project directly — this is what CI does. A SysManager.sln also
+# exists (SysManager/SysManager.sln) if you prefer the full solution in Visual Studio / Rider.
 dotnet build SysManager/SysManager/SysManager.csproj -c Debug
 ```
 

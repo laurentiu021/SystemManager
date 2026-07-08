@@ -102,7 +102,7 @@ work-in-progress placeholders marked with ⚙️:
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks · Notification Blocker ⚙️ |
-| 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control |
+| 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control 🔬 |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface 🔬 · Environment Variables |
 
@@ -156,6 +156,17 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Applies immediately with no sign-out, no admin needed, and is fully reversible
 - **Honest about its limits** — the schedule runs while SysManager (or its tray)
   is open; it's not a background Windows service
+
+### Volume Control 🔬
+- **Per-app volume mixer** — lists every app currently playing on your default
+  playback device, each with its own volume slider, mute toggle, and a live peak meter
+- **Live and lightweight** — the app list reconciles on a ~1-second loop and the meters
+  update on a shared timer, both paused while the tab is hidden so it costs nothing in
+  the background
+- **Real names and icons** — resolved from each audio session's process (with a safe
+  fallback for protected processes), including the Windows "system sounds" session
+- 🔬 Preview — per-app output-device routing and saved volume presets are intentionally
+  out of scope for now, planned for a later update
 
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.56] - 2026-07-08
+
+### Fixed
+- **Applying and restoring Environment Variables can no longer run at the same time and leave a mixed result.** Since 1.52.51 the slow parts of Apply and Restore run off the UI thread, which keeps the window responsive — but it also meant that starting a Restore and then pressing Apply (or the reverse) could rewrite the user and system variables from both operations at once, leaving the environment in an unpredictable mix of the two. Apply and Restore now take the same app-wide system-modification lock the SFC/DISM tools use, so one waits with a clear message until the other finishes. Introduced in 1.52.51.
+
 ## [1.52.55] - 2026-07-08
 
 ### Fixed

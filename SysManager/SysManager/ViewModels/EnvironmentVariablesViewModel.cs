@@ -85,8 +85,6 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         Load(loaded);
     }
 
-    private void Load() => Load(_service.ReadAll());
-
     private void Load(List<EnvVariable> loaded)
     {
         foreach (var v in Variables)
@@ -316,6 +314,17 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             return;
         }
 
+        // Apply and Restore both rewrite the same HKCU/HKLM environment keys. Since 1.52.51 their
+        // slow parts run off the UI thread, so without a shared gate a Restore in progress and an
+        // Apply (or vice-versa) could write at once and leave a nondeterministic mix. Take the
+        // app-wide system-modification lock, exactly like the SFC/DISM operations do.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply environment changes");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot apply now — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         var touchesMachine = ChangedVariables().Any(v => v.Scope == EnvVarScope.Machine)
             || DeletedEntries().Any(e => e.scope == EnvVarScope.Machine);
         if (touchesMachine && !IsElevated)
@@ -408,6 +417,15 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         if (!_service.HasBackup)
         {
             StatusMessage = "There is no backup to restore yet — it is created the first time you apply changes.";
+            return;
+        }
+
+        // Serialize against Apply (and other system-modification operations) so the two can't
+        // rewrite the same environment keys concurrently — see ApplyChanges for the full note.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Restore environment backup");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot restore now — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
 

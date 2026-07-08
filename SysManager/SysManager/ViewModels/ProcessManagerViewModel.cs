@@ -91,7 +91,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             var existingPids = Processes.Select(p => p.Pid).ToHashSet();
             var enriched = await Task.Run(async () =>
             {
-                var snapshot = await _service.SnapshotAsync();
+                var snapshot = await _service.SnapshotAsync(existingPids);
                 foreach (var p in snapshot)
                 {
                     // Only the volatile metrics change per tick; identity/description are

@@ -72,7 +72,7 @@ public class ProcessManagerServiceTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _service.SnapshotAsync(cts.Token));
+            () => _service.SnapshotAsync(ct: cts.Token));
     }
 
     // ── KillProcess ──

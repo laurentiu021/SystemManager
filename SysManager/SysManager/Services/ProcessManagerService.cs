@@ -15,10 +15,13 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class ProcessManagerService
 {
-    public Task<IReadOnlyList<ProcessEntry>> SnapshotAsync(CancellationToken ct = default)
-        => Task.Run(() => Snapshot(ct), ct);
+    // knownPids: PIDs the caller already shows. Their identity (description/path) is static and the
+    // view model keeps it on the surviving entry (ReconcileInto), so for those PIDs we skip the
+    // expensive MainModule/FileVersionInfo/File.Exists reads and refresh only the volatile metrics.
+    public Task<IReadOnlyList<ProcessEntry>> SnapshotAsync(IReadOnlySet<int>? knownPids = null, CancellationToken ct = default)
+        => Task.Run(() => Snapshot(knownPids, ct), ct);
 
-    private static IReadOnlyList<ProcessEntry> Snapshot(CancellationToken ct)
+    private static IReadOnlyList<ProcessEntry> Snapshot(IReadOnlySet<int>? knownPids, CancellationToken ct)
     {
         List<ProcessEntry> results = [];
         Process[] procs;
@@ -71,16 +74,22 @@ public sealed class ProcessManagerService
                         catch (System.ComponentModel.Win32Exception) { /* process may have exited */ }
                     }
 
-                    try
+                    // Identity (description/path) is static per process and the view model keeps it
+                    // for a PID it already tracks, so only pay the expensive MainModule /
+                    // FileVersionInfo / File.Exists cost for a PID we haven't seen yet.
+                    if (knownPids is null || !knownPids.Contains(p.Id))
                     {
-                        var module = p.MainModule;
-                        entry.Description = module?.FileVersionInfo.FileDescription ?? "";
-                        entry.FilePath = module?.FileName ?? "";
+                        try
+                        {
+                            var module = p.MainModule;
+                            entry.Description = module?.FileVersionInfo.FileDescription ?? "";
+                            entry.FilePath = module?.FileName ?? "";
+                        }
+                        catch (InvalidOperationException) { /* access denied or process exited */ }
+                        catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
+                        entry.CanOpenFileLocation = !string.IsNullOrWhiteSpace(entry.FilePath)
+                                                   && System.IO.File.Exists(entry.FilePath);
                     }
-                    catch (InvalidOperationException) { /* access denied or process exited */ }
-                    catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
-                    entry.CanOpenFileLocation = !string.IsNullOrWhiteSpace(entry.FilePath)
-                                               && System.IO.File.Exists(entry.FilePath);
                     try { entry.StartTime = p.StartTime; }
                     catch (InvalidOperationException) { /* access denied or process exited */ }
                     catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.54] - 2026-07-08
+
+### Fixed
+- **The Process Manager stops re-reading each program's static details every second.** On every 1-second refresh the process list read each process's description, executable path and file-existence check — even for the (often hundreds of) processes it was already showing and whose details it keeps unchanged. It now reads those static details only for processes that have just appeared and refreshes only the live metrics (CPU, memory, threads, status) for the rest, cutting the per-tick work substantially on machines with many processes.
+
 ## [1.52.53] - 2026-07-08
 
 ### Fixed

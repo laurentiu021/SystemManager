@@ -453,7 +453,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             Directory.CreateDirectory(dir);
             var json = JsonSerializer.Serialize(
                 store with { SchemaVersion = CurrentSchemaVersion },
-                new JsonSerializerOptions { WriteIndented = true });
+                JsonDefaults.Indented);
             File.WriteAllText(_storePath, json);
         }
         catch (IOException ex) { Log.Warning(ex, "Failed to save gaming profile store"); }

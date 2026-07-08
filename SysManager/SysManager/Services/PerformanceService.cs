@@ -119,7 +119,7 @@ public sealed partial class PerformanceService : IDisposable
         {
             var dir = Path.GetDirectoryName(SnapshotPath)!;
             Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(snapshot, JsonDefaults.Indented);
             File.WriteAllText(SnapshotPath, json);
             Log.Information("Performance snapshot saved to {Path}", SnapshotPath);
         }

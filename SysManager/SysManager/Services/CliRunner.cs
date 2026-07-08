@@ -206,7 +206,7 @@ public sealed class CliRunner
     }
 
     private static string Json(object value)
-        => JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
+        => JsonSerializer.Serialize(value, JsonDefaults.Indented);
 
     internal static string CurrentVersion => Version;
 }

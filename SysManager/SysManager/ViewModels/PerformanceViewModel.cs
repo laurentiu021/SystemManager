@@ -209,10 +209,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             $"{action} visual effects (animations, fades, shadows)?",
             "Visual Effects — Confirm")) { SyncTogglesFromProfile(); return; }
 
+        IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             await EnsureSnapshotAsync();
-            PerformanceService.SetUiEffects(!WantVisualEffectsReduced);
+            // Registry write + SystemParametersInfo broadcast off the UI thread so the window
+            // stays responsive, busy-gated like ApplyPowerPlanAsync.
+            await Task.Run(() => PerformanceService.SetUiEffects(!WantVisualEffectsReduced)).ConfigureAwait(true);
             await RefreshAsync();
             StatusMessage = $"Visual effects {(WantVisualEffectsReduced ? "reduced" : "restored")}.";
             Log.Information("Visual effects {Action}", WantVisualEffectsReduced ? "reduced" : "restored");
@@ -220,6 +224,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         catch (InvalidOperationException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -241,10 +246,12 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             $"{action} Game Mode?",
             "Game Mode — Confirm")) { SyncTogglesFromProfile(); return; }
 
+        IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             await EnsureSnapshotAsync();
-            PerformanceService.SetGameMode(enabling);
+            await Task.Run(() => PerformanceService.SetGameMode(enabling)).ConfigureAwait(true);
             await RefreshAsync();
             StatusMessage = $"Game Mode {(enabling ? "enabled" : "disabled")}.";
             Log.Information("Game Mode {Action}", enabling ? "enabled" : "disabled");
@@ -252,6 +259,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         catch (InvalidOperationException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -273,10 +281,12 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             $"{action} Xbox Game Bar and Game DVR overlay?",
             "Xbox Game Bar — Confirm")) { SyncTogglesFromProfile(); return; }
 
+        IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             await EnsureSnapshotAsync();
-            PerformanceService.SetXboxGameBar(!disabling);
+            await Task.Run(() => PerformanceService.SetXboxGameBar(!disabling)).ConfigureAwait(true);
             await RefreshAsync();
             StatusMessage = $"Xbox Game Bar {(disabling ? "disabled" : "enabled")}.";
             Log.Information("Xbox Game Bar {Action}", disabling ? "disabled" : "enabled");
@@ -285,6 +295,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         catch (SecurityException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
         catch (System.IO.IOException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -311,13 +322,22 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             + "⚠ This change requires a REBOOT to take effect.",
             "GPU Performance — Confirm")) { SyncTogglesFromProfile(); return; }
 
+        IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             await EnsureSnapshotAsync();
-            var nvidiaKey = PerformanceService.FindNvidiaSubKey();
-            if (nvidiaKey is not null)
+            // FindNvidiaSubKey + the registry write run off the UI thread; the UI updates below
+            // resume on it (ConfigureAwait true), busy-gated like ApplyPowerPlanAsync.
+            var (found, ok) = await Task.Run(() =>
             {
-                var ok = PerformanceService.SetGpuMaxPerformance(nvidiaKey, WantGpuMaxPerformance);
+                var nvidiaKey = PerformanceService.FindNvidiaSubKey();
+                return nvidiaKey is null
+                    ? (Found: false, Ok: false)
+                    : (Found: true, Ok: PerformanceService.SetGpuMaxPerformance(nvidiaKey, WantGpuMaxPerformance));
+            }).ConfigureAwait(true);
+            if (found)
+            {
                 if (ok)
                 {
                     NeedsReboot = true;
@@ -332,6 +352,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         catch (InvalidOperationException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     // ═══════════════════════════════════════════════════════════════

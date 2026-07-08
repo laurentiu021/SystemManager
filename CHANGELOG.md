@@ -4,7 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.52.61] - 2026-07-08
+## [1.52.62] - 2026-07-08
+
+### Fixed
+- **The Performance tab no longer briefly freezes when you apply Visual Effects, Game Mode, Xbox Game Bar, or GPU settings.** These four toggles wrote to the registry (and, for visual effects, broadcast a system-wide settings change) directly on the UI thread, so the window could hang for a moment while the change was applied. They now run that work off the UI thread and show the progress/busy indicator while they do — matching how the Power Plan and Processor State toggles on the same tab already behave. What each toggle does is unchanged.
 
 ### Fixed
 - **The Process Manager can no longer show — or end — the wrong process when Windows reuses a process ID.** The list refreshes every second and matched rows by process ID (PID) alone, but Windows recycles PIDs, so between two refreshes the same PID can belong to a different program. When that happened, the row kept the old program's name and icon while showing the new program's activity — and because Kill targets the PID, confirming "End task" on that row would have ended the new program instead. Rows are now matched by PID together with the process start time, so a recycled PID is treated as a new process (old row removed, new one shown) and End task always acts on the process you see.

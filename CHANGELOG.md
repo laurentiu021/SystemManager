@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.49] - 2026-07-08
+
+### Fixed
+- **GPU temperature polling no longer re-initializes the NVIDIA API every couple of seconds — and no longer throws once per poll on PCs without an NVIDIA GPU.** The temperature reader called NVIDIA's `Initialize()` and re-enumerated GPUs on every poll (about every 2 seconds). On a machine with no NVIDIA GPU that raised and swallowed an exception on every single poll; on NVIDIA machines it redid the one-time setup each time. SysManager now initializes the NVIDIA API at most once, remembers whether an NVIDIA GPU is present, and skips the read entirely afterwards when there isn't one — so there's no per-poll exception and no repeated setup. GPU temperatures on NVIDIA machines are unchanged.
+
 ## [1.52.48] - 2026-07-08
 
 ### Fixed

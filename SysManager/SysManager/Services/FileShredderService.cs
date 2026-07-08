@@ -236,7 +236,15 @@ public sealed partial class FileShredderService
         // directory that still holds a file we could NOT shred is left in place (with the file).
         // We only ever remove EMPTY directories (recursive:false), so this can never plain-delete
         // an un-overwritten file — the bug this replaces (the old recursive delete did).
-        foreach (var dir in Directory.EnumerateDirectories(folderPath, "*", SearchOption.AllDirectories)
+        //
+        // The directory list comes from EnumerateDirectoriesSafe, which skips junctions and
+        // symlinks exactly like EnumerateFilesSafe. The framework's recursive enumerator
+        // (Directory.EnumerateDirectories with AllDirectories) would instead DESCEND THROUGH a
+        // child junction and hand TryRemoveIfEmpty a path at the link's target, letting
+        // Directory.Delete remove an empty directory OUTSIDE the selected folder. Sharing the
+        // file walk's reparse boundary confines cleanup to the real tree; a folder that contains
+        // a child junction is intentionally left in place rather than descended into.
+        foreach (var dir in EnumerateDirectoriesSafe(folderPath)
                      .OrderByDescending(d => d.Count(c => c == Path.DirectorySeparatorChar)))
         {
             TryRemoveIfEmpty(dir);
@@ -306,6 +314,41 @@ public sealed partial class FileShredderService
             // Skip junctions/symlinks to avoid following reparse points out of the tree.
             foreach (var sub in subDirs.Where(s => (s.Attributes & FileAttributes.ReparsePoint) == 0))
             {
+                stack.Push(sub);
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Recursively enumerates sub-directories while skipping junctions and symlinks
+    /// (reparse points), mirroring <see cref="EnumerateFilesSafe"/>. Used to clean up the
+    /// emptied directory structure after a folder shred WITHOUT ever descending through a
+    /// reparse point: a child junction is left untouched, so the deepest-first
+    /// <see cref="TryRemoveIfEmpty"/> pass can never reach — and delete — an empty directory
+    /// at the link's target, outside the selected folder.
+    /// </summary>
+    private static List<string> EnumerateDirectoriesSafe(string rootPath)
+    {
+        List<string> results = [];
+        Stack<DirectoryInfo> stack = [];
+        stack.Push(new DirectoryInfo(rootPath));
+
+        while (stack.Count > 0)
+        {
+            var dir = stack.Pop();
+
+            DirectoryInfo[] subDirs;
+            try { subDirs = dir.GetDirectories(); }
+            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied enumerating {Dir}", dir.FullName); continue; }
+            catch (IOException ex) { Log.Debug(ex, "Shredder: I/O error enumerating {Dir}", dir.FullName); continue; }
+
+            // Skip junctions/symlinks — never descend through a reparse point (identical
+            // boundary to EnumerateFilesSafe, so cleanup honors the exact scope that was shredded).
+            foreach (var sub in subDirs.Where(s => (s.Attributes & FileAttributes.ReparsePoint) == 0))
+            {
+                results.Add(sub.FullName);
                 stack.Push(sub);
             }
         }

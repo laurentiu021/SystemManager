@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.59] - 2026-07-08
+
+### Fixed
+- **Cancelling a PowerShell-backed operation now ends cleanly instead of risking a stray error.** Two cases: cancelling an in-process PowerShell run reported the stop as a low-level pipeline error rather than a normal "cancelled", so callers watching for cancellation could treat it as a failure; and when cancelling an external PowerShell process, the attempt to stop its process tree only handled one of the errors it can raise, so an access-denied or partially-failed stop could surface as an unhandled error. Both now resolve to the standard "operation cancelled" outcome and swallow the expected stop-time errors.
+
 ## [1.52.58] - 2026-07-08
 
 ### Fixed

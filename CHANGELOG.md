@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.43] - 2026-07-08
+
+### Fixed
+- **Disabling a Startup-folder program from the Startup Manager now actually stops it from launching.** For items that live in the Windows Startup *folder* (as opposed to the registry Run keys), SysManager identified the item by its name without the file extension, but Windows tracks the enabled/disabled state under the item's full filename (for example `Spotify.lnk`). Because of that mismatch, a Startup-folder item that was already disabled showed as enabled, and turning one off wrote the "disabled" flag under a name Windows ignores — so the program kept starting. SysManager now uses the full filename for these items, so their on/off state reads correctly and disabling one takes effect. (Registry Run entries and scheduled-task entries were unaffected.)
+
 ## [1.52.42] - 2026-07-08
 
 ### Fixed

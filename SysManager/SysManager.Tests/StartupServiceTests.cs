@@ -111,4 +111,38 @@ public class StartupServiceTests
             _ = entry.IsEnabled; // should not throw
         }
     }
+
+    // ── BuildStartupFolderEntry (pure — the StartupApproved key-name toggle bug) ──
+
+    [Theory]
+    [InlineData(@"C:\Users\aunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\Spotify.lnk", "Spotify", "Spotify.lnk")]
+    [InlineData(@"C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\Backup Tool.exe", "Backup Tool", "Backup Tool.exe")]
+    public void BuildStartupFolderEntry_KeepsExtensionInValueName_DropsItInName(
+        string file, string expectedName, string expectedValueName)
+    {
+        // Regression: the StartupApproved\StartupFolder registry key is keyed by the file's FULL
+        // name (with extension). Keying by the extension-stripped name (the old behavior) made a
+        // disabled item read back as enabled, and made "disable" write its blob under a name
+        // Windows ignores — so the program kept launching. ValueName must retain the extension.
+        var entry = StartupService.BuildStartupFolderEntry(file, command: file, locationLabel: "User Startup Folder");
+
+        Assert.Equal(expectedName, entry.Name);           // display: extension stripped
+        Assert.Equal(expectedValueName, entry.ValueName);  // StartupApproved key: full filename
+        Assert.Equal(StartupSource.StartupFolder, entry.Source);
+    }
+
+    [Fact]
+    public void BuildStartupFolderEntry_NameAndValueName_DoNotCollapse()
+    {
+        // Name (display) and ValueName (registry key) must stay distinct for an extensioned file,
+        // so a shortcut and a same-stem executable cannot collide on the approved-state key.
+        var entry = StartupService.BuildStartupFolderEntry(
+            @"C:\Users\aunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\OneDrive.lnk",
+            command: @"C:\Program Files\OneDrive\OneDrive.exe",
+            locationLabel: "User Startup Folder");
+
+        Assert.NotEqual(entry.Name, entry.ValueName);
+        Assert.Equal("OneDrive", entry.Name);
+        Assert.Equal("OneDrive.lnk", entry.ValueName);
+    }
 }

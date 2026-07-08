@@ -54,7 +54,7 @@ public sealed class ActivityLogService
             var json = File.ReadAllText(FilePath);
             _entries = JsonSerializer.Deserialize<List<ActivityEntry>>(json) ?? [];
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Serilog.Log.Debug("ActivityLog load failed: {Error}", ex.Message);
             _entries = [];
@@ -70,7 +70,7 @@ public sealed class ActivityLogService
             var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = false });
             File.WriteAllText(FilePath, json);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Serilog.Log.Debug("ActivityLog save failed: {Error}", ex.Message);
         }

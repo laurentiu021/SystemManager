@@ -126,6 +126,12 @@ public sealed class FixedDriveService
             // scope.Connect() can throw COMException when the Storage WMI namespace is
             // unavailable (older/headless Windows). Non-fatal — leave media/bus empty.
         }
+        catch (UnauthorizedAccessException)
+        {
+            // WMI namespace access can be denied on locked-down/enterprise Windows. Non-fatal —
+            // return the enumerated drives WITHOUT media/bus enrichment rather than discarding
+            // the whole list (matches DiskHealthService's degrade-don't-throw handling).
+        }
 
         return drives;
     }

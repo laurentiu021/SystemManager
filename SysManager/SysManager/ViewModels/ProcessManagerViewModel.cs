@@ -159,11 +159,13 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         foreach (var fresh in snapshot)
         {
             seen.Add(fresh.Pid);
-            if (existing.TryGetValue(fresh.Pid, out var current))
+            // Match on PID AND start time: a PID alone is not a stable identity because Windows
+            // reuses PIDs, so the same number can belong to a different process between polls.
+            if (existing.TryGetValue(fresh.Pid, out var current) && current.StartTime == fresh.StartTime)
             {
-                // Update only the volatile metrics on the existing instance; identity fields
+                // Same process instance — update only the volatile metrics; identity fields
                 // (Name, FilePath, Icon, PlainDescription, Category, SafetyLevel, StartTime)
-                // are stable for a given PID and stay as they were.
+                // are stable for a given process and stay as they were.
                 current.CpuPercent = fresh.CpuPercent;
                 current.MemoryBytes = fresh.MemoryBytes;
                 current.ThreadCount = fresh.ThreadCount;
@@ -172,6 +174,11 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             }
             else
             {
+                // A brand-new PID, or a PID the OS reused for a DIFFERENT process (its start time
+                // changed). In the reuse case the existing row still carries the OLD process's
+                // identity, so keeping it would show — and let the user kill — the wrong process.
+                // Drop the stale row and add the fresh entry.
+                if (current is not null) target.Remove(current);
                 target.Add(fresh);
             }
         }

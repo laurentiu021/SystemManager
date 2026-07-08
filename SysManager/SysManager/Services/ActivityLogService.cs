@@ -67,7 +67,9 @@ public sealed class ActivityLogService
         {
             var dir = Path.GetDirectoryName(FilePath)!;
             Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = false });
+            // WriteIndented = false is the default, so no options object is needed — allocating
+            // one per save would only defeat System.Text.Json's per-options metadata cache.
+            var json = JsonSerializer.Serialize(snapshot);
             File.WriteAllText(FilePath, json);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

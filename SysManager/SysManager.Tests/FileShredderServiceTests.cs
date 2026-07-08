@@ -449,6 +449,74 @@ public class FileShredderServiceTests
         }
     }
 
+    // ---------- child-junction cleanup regression (out-of-scope directory deletion) ----------
+
+    [Fact]
+    public async Task ShredFolderAsync_WithChildJunction_DoesNotDeleteThroughIt()
+    {
+        // Regression: the empty-directory cleanup after a folder shred must skip junctions and
+        // symlinks, exactly like the file walk. A child junction inside the selected folder used
+        // to be FOLLOWED by the recursive directory enumerator, so an empty directory at the
+        // junction's target — OUTSIDE the selected folder — was deleted by the cleanup pass.
+        // Nothing beyond the selected folder may be touched.
+        var svc = NewService();
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_childjunc_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        // An external target, outside the shred folder, holding an EMPTY sub-directory that must
+        // survive. recursive:false can only ever delete an EMPTY directory, so the empty one is
+        // precisely what was at risk of deletion through the junction.
+        var external = Path.Combine(Path.GetTempPath(), "smtest_external_" + Guid.NewGuid().ToString("N"));
+        var victim = Path.Combine(external, "keep_me");
+        Directory.CreateDirectory(victim);
+
+        await File.WriteAllTextAsync(Path.Combine(dir, "normal.dat"), "shred me");
+        var junction = Path.Combine(dir, "linkout");
+
+        try
+        {
+            // mklink /J creates a directory junction; no admin rights required. If the environment
+            // can't create one, skip rather than fail on an environment limitation.
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{junction}\" \"{external}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !IsReparse(junction))
+                    return; // environment can't create junctions (rare) — nothing to assert
+            }
+
+            // Shredding the folder must not descend through the junction: the normal in-scope file
+            // is shredded, but the empty directory behind the junction (outside the folder) remains.
+            await svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
+
+            Assert.True(Directory.Exists(victim),
+                "an empty directory at the junction's target, outside the selected folder, was deleted through the junction");
+            Assert.True(Directory.Exists(external), "the junction's external target directory was removed");
+            Assert.False(File.Exists(Path.Combine(dir, "normal.dat")),
+                "the normal in-scope file should still have been securely shredded");
+        }
+        finally
+        {
+            // Remove the junction link itself first (Directory.Delete on a junction removes the
+            // link, not its target), then both trees.
+            try { Directory.Delete(junction); } catch { /* ignore */ }
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+            try { Directory.Delete(external, recursive: true); } catch { /* ignore */ }
+        }
+
+        static bool IsReparse(string p)
+        {
+            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
+            catch { return false; }
+        }
+    }
+
     [Fact]
     public void ResolveFinalPath_MissingPath_ReturnsNull()
     {

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.55] - 2026-07-08
+
+### Fixed
+- **Shredding a folder that contains a junction or symlink can no longer delete an empty directory outside the folder you selected.** When removing the emptied directories after a folder shred, SysManager listed sub-directories with a recursive scan that follows junctions and symbolic links — so a link inside the selected folder that pointed elsewhere was followed, and an empty directory at its target (outside your selection) could be removed. The cleanup now skips junctions and symlinks exactly like the file-shredding pass already does: it never descends through a link and only ever removes empty directories inside the folder you chose. Introduced in 1.52.47 with the folder-shred cleanup rewrite; no file contents were ever at risk — only empty directories, and only through a link located inside the selected folder.
+
 ## [1.52.54] - 2026-07-08
 
 ### Fixed

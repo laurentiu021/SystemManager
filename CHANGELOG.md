@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.53] - 2026-07-08
+
+### Fixed
+- **System-info refreshes now make one Windows query instead of two.** Each refresh read the current uptime and the memory totals with two separate WMI queries against the same OS object; they are now fetched in a single query, one fewer round-trip per poll. No visible change — the same uptime and memory figures.
+
 ## [1.52.52] - 2026-07-08
 
 ### Fixed

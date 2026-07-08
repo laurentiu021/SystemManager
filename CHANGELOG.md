@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.41] - 2026-07-08
+
+### Fixed
+- **Four background operations no longer risk an unhandled error when Windows denies file or system access.** Saving and loading the activity log, enriching the drive list with disk media/bus details, downloading an update, and caching an app icon each already handled ordinary I/O errors but not an "access denied" (UnauthorizedAccess) error from a locked-down or permission-restricted system — which could surface as an unhandled exception (and, for the activity log, on the UI thread). Each now treats access-denied like the I/O errors it already handled: the activity log and icon cache degrade quietly, the drive list is still returned (just without the extra media/bus detail rather than coming back empty), and a denied update download reports failure cleanly so the About tab falls back to opening the download in your browser.
+
 ## [1.52.40] - 2026-07-08
 
 ### Fixed

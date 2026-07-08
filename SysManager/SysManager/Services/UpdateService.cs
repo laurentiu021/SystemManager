@@ -155,7 +155,6 @@ public sealed class UpdateService
         var dir = Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysManager", "updates");
-        Directory.CreateDirectory(dir);
         var target = Path.Join(dir, $"SysManager-{rel.Version}.exe");
 
         // SEC-M2: Skip re-download only if we have a cached hash that matches.
@@ -191,6 +190,7 @@ public sealed class UpdateService
         var tempFile = target + ".tmp";
         try
         {
+            Directory.CreateDirectory(dir);
             using var resp = await Http.GetAsync(rel.AssetUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             resp.EnsureSuccessStatusCode();
             var total = resp.Content.Headers.ContentLength ?? rel.AssetSize;
@@ -249,6 +249,15 @@ public sealed class UpdateService
         catch (IOException ex)
         {
             Serilog.Log.Warning(ex, "Failed to write release asset to disk");
+            CleanupFile(tempFile);
+            return null;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // Documented contract is "null on failure" — a denied updates-dir create/write or
+            // a locked target must degrade to null (the About tab then keeps the browser
+            // download fallback), not escape as an unhandled exception.
+            Serilog.Log.Warning(ex, "Failed to write release asset (access denied)");
             CleanupFile(tempFile);
             return null;
         }

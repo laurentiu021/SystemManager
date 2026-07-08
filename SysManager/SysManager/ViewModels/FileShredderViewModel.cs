@@ -32,7 +32,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         Items.CollectionChanged += (_, _) => ShredAllCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void AddFiles()
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -67,7 +67,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void AddFolder()
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
@@ -105,7 +105,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void RemoveItem(ShredItem? item)
     {
         if (item is not null)
@@ -137,12 +137,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
         try
         {
-            // Process items sequentially
-            for (var i = Items.Count - 1; i >= 0; i--)
+            // Shred a SNAPSHOT of the queue, not the live collection: indexing Items across the
+            // per-file awaits would race a concurrent Add/Remove. (Those commands are also
+            // disabled while shredding via CanEditQueue; the snapshot is the belt-and-suspenders.)
+            foreach (var item in Items.ToArray())
             {
                 ct.ThrowIfCancellationRequested();
 
-                var item = Items[i];
                 var totalPasses = (int)SelectedMethod;
 
                 var itemProgress = new Progress<int>(p =>
@@ -219,7 +220,15 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     partial void OnIsShreddingChanged(bool value)
     {
         ShredAllCommand.NotifyCanExecuteChanged();
+        // The queue must not change mid-shred (the shred iterates a snapshot), so disable the
+        // add/remove commands while shredding and re-enable them when it finishes.
+        AddFilesCommand.NotifyCanExecuteChanged();
+        AddFolderCommand.NotifyCanExecuteChanged();
+        RemoveItemCommand.NotifyCanExecuteChanged();
     }
+
+    // Add/remove are disabled while a shred runs so the queue can't be mutated mid-operation.
+    private bool CanEditQueue => !IsShredding;
 
     protected override void Dispose(bool disposing)
     {

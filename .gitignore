@@ -71,23 +71,6 @@ _ReSharper*/
 !.vscode/extensions.json
 .commitmsg
 
-# Local working artifacts — review reports, scratch notes, and temp scratch that
-# tooling generates next to the source tree. These are never part of the project
-# and must never be committed.
-*_REPORT.json
-*_AUDIT.json
-*-REVIEW*.json
-*_REVIEW.json
-AUDIT-*.md
-audit-findings/
-temp_releases/
-temp_bugs.json
-pr-body.md
-pr_body.md
-mockup-*.html
-ui-test-results.txt
-*-results.txt
-
 # Temp / scratch files (any tmp_ or .tmp_ prefix, scratch query files)
 tmp_*.json
 .tmp_*

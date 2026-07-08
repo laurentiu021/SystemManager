@@ -153,6 +153,7 @@ public sealed partial class PerformanceService : IDisposable
             return JsonSerializer.Deserialize<OriginalSnapshot>(json);
         }
         catch (IOException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
         catch (JsonException ex) { Log.Warning(ex, "Failed to parse performance snapshot"); return null; }
     }
 

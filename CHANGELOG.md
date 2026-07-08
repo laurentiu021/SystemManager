@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.57] - 2026-07-08
+
+### Fixed
+- **Three background operations now fail safely instead of risking an unhandled error.** Ending a process could throw an unhandled error when part of its child-process tree refused to close — the Process Manager now reports that as a normal "couldn't end it" result. And loading the saved Speed Test history or the stored performance-tweak baseline could throw if the file was momentarily unreadable (locked or permission-denied) rather than access-denied being treated like any other read error; both now fall back cleanly (empty history / fresh baseline), matching how saving already behaves.
+
 ## [1.52.56] - 2026-07-08
 
 ### Fixed

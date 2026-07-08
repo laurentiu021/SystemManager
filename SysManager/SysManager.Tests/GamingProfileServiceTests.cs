@@ -392,47 +392,84 @@ public class GamingProfileServiceTests
         public override void Send(SendOrPostCallback d, object? state) => Interlocked.Increment(ref PostCount);
     }
 
-    // A step whose RevertAsync genuinely suspends off-thread, so RevertAsync's `await
-    // RunRevertAsync(...)` is forced to schedule a continuation (which carries _gate.Release()).
-    private sealed class SuspendingRevertTweak : IGamingTweak
+    // A step whose RevertAsync suspends on a signal the test controls (no wall-clock sleep), so
+    // RevertAsync's `await RunRevertAsync(...)` is forced to schedule a real off-thread
+    // continuation (the one that carries _gate.Release()). Deterministic: the test decides exactly
+    // when the revert resumes, so the outcome never depends on timing or thread-pool scheduling.
+    private sealed class GatedRevertTweak : IGamingTweak
     {
-        public string Label => "suspending";
+        private readonly TaskCompletionSource _resume = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Completes once RevertAsync has begun awaiting this step (it is now suspended).</summary>
+        public Task Entered => _entered.Task;
+
+        /// <summary>Releases the suspended RevertAsync so its gate-release continuation runs.</summary>
+        public void Resume() => _resume.TrySetResult();
+
+        public string Label => "gated";
         public bool RequiresAdmin => false;
         public Task<GamingTweakResult> ApplyAsync(CancellationToken ct) => Task.FromResult(GamingTweakResult.Applied);
         public async Task RevertAsync(CancellationToken ct)
-            => await Task.Run(() => Thread.Sleep(80), ct).ConfigureAwait(false);
+        {
+            _entered.TrySetResult();
+            await _resume.Task.ConfigureAwait(false);
+        }
+    }
+
+    // Awaits <paramref name="task"/>, returning false instead of hanging if it does not finish
+    // within the deadlock backstop — the async, non-blocking equivalent of Task.Wait(timeout)
+    // (so the xUnit1031 "no blocking task operations in tests" analyzer stays satisfied).
+    private static async Task<bool> CompletesWithinAsync(Task task, int ms = 10_000)
+    {
+        try { await task.WaitAsync(TimeSpan.FromMilliseconds(ms)).ConfigureAwait(false); return true; }
+        catch (TimeoutException) { return false; }
     }
 
     [Fact]
-    public void RevertAsync_GateReleaseContinuation_DoesNotDependOnCallerSyncContext()
+    public async Task RevertAsync_GateReleaseContinuation_DoesNotDependOnCallerSyncContext()
     {
-        // Reproduces the Audit-2 deadlock scenario deterministically: run RevertAsync on a thread
+        // Reproduces the Audit-2 deadlock scenario deterministically: RevertAsync runs on a thread
         // whose SynchronizationContext is never pumped (a stand-in for the shutdown-blocked UI
-        // thread). With the ConfigureAwait(true) regression, the gate-release continuation is
-        // posted to this context and the revert Task never completes → the wait below times out.
-        // With the ConfigureAwait(false) fix, the continuation runs off-thread and it completes.
+        // thread). With the ConfigureAwait(true) regression the gate-release continuation is posted
+        // to that context — PostCount rises and the revert Task never completes; with the
+        // ConfigureAwait(false) fix the continuation runs off-thread, nothing is posted, and it
+        // completes. The suspension is signalled (no Thread.Sleep), so the pass path is near-instant
+        // and not thread-pool-timing dependent — the only timeout is the genuine-deadlock backstop.
         var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-dl-{Guid.NewGuid():N}.json");
-        bool completed = false;
+        var ctx = new NonPumpingSyncContext();
+        var tweak = new GatedRevertTweak();
+        Task? revert = null;
+
         var worker = new Thread(() =>
         {
-            var ctx = new NonPumpingSyncContext();
             SynchronizationContext.SetSynchronizationContext(ctx);
-
             var svc = StoreOnlyService(path);
-            svc.SeedAppliedStepForTest(new SuspendingRevertTweak()); // IsActive is now true
-
-            var revert = svc.RevertAsync();      // gate acquired inline; step suspends off-thread
-            completed = revert.Wait(3000);       // no pump on this thread — fix makes it complete anyway
+            svc.SeedAppliedStepForTest(tweak);   // IsActive is now true
+            revert = svc.RevertAsync();          // gate acquired inline; the step suspends on _resume
         });
         worker.IsBackground = true;
         worker.Start();
-        worker.Join(6000);
+        // RevertAsync returns an incomplete Task synchronously (it awaits, it does not block), so the
+        // worker returns promptly; a successful Join also publishes the `revert` write to this thread.
+        Assert.True(worker.Join(10_000),
+            "worker did not return — RevertAsync blocked synchronously instead of suspending");
 
         try
         {
-            Assert.True(completed,
+            // Deterministic handshake: wait until RevertAsync is actually parked inside the step,
+            // then release it. The continuation that follows is the one carrying _gate.Release().
+            Assert.True(await CompletesWithinAsync(tweak.Entered), "RevertAsync never reached the suspending step");
+            tweak.Resume();
+
+            Assert.NotNull(revert);
+            // A genuine ConfigureAwait(true) regression posts the continuation to the never-pumped
+            // ctx, so the Task hangs and this wait fails; the fix completes it in milliseconds.
+            Assert.True(await CompletesWithinAsync(revert!),
                 "RevertAsync did not complete without pumping the caller's SynchronizationContext — " +
                 "its gate-release continuation is pinned to the (blockable) caller thread (the Audit-2 deadlock).");
+            // And prove it directly: nothing was ever posted back to the caller's context.
+            Assert.Equal(0, ctx.PostCount);
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }

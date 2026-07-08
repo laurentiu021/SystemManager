@@ -126,7 +126,17 @@ public sealed class PowerShellRunner : IPowerShellRunner
             ps.BeginInvoke<PSObject, PSObject>(null, output),
             ar => ps.EndInvoke(ar));
 
-        await task.ConfigureAwait(false);
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch (PipelineStoppedException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation calls ps.Stop(), which makes EndInvoke throw PipelineStoppedException.
+            // Surface the standard cancellation signal so callers that catch OperationCanceledException
+            // treat a cancelled in-process run as cancelled rather than as an error.
+            throw new OperationCanceledException(cancellationToken);
+        }
 
         return new Collection<PSObject>(output.ToList());
     }
@@ -209,7 +219,15 @@ public sealed class PowerShellRunner : IPowerShellRunner
             proc.BeginErrorReadLine();
         }).ConfigureAwait(false);
 
-        using var reg = cancellationToken.Register(() => { try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } });
+        using var reg = cancellationToken.Register(() =>
+        {
+            // Kill(entireProcessTree: true) can throw Win32Exception (access denied) or
+            // AggregateException (a descendant couldn't be terminated) as well as
+            // InvalidOperationException — swallow all three so a failed cancel-kill never
+            // escapes out of cts.Cancel() to whoever requested cancellation.
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException) { }
+        });
         await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
         // WaitForExitAsync returns when the process exits, but the asynchronous

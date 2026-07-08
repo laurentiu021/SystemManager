@@ -308,7 +308,7 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ApplyChanges()
+    private async Task ApplyChanges()
     {
         if (PendingChangeCount == 0)
         {
@@ -371,7 +371,9 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         }
 
         // Broadcast once so running processes (Explorer, new shells) pick up the changes.
-        if (applied > 0) EnvironmentVariableService.BroadcastSettingChange();
+        // The broadcast waits up to 5 s for windows to respond, so run it OFF the UI thread —
+        // the registry writes above are fast and stay on-thread (they own the change bookkeeping).
+        if (applied > 0) await Task.Run(EnvironmentVariableService.BroadcastSettingChange);
 
         RecomputePending();
 
@@ -401,7 +403,7 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     public bool HasBackup => _service.HasBackup;
 
     [RelayCommand]
-    private void RestoreBackup()
+    private async Task RestoreBackup()
     {
         if (!_service.HasBackup)
         {
@@ -434,9 +436,11 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             return;
         }
 
-        var r = _service.RestoreFromBackup();
-        if (r.Restored > 0 || r.Removed > 0) EnvironmentVariableService.BroadcastSettingChange();
-        Load();
+        // Restore rewrites many variables and then broadcasts (up to 5 s) — both run off the
+        // UI thread; the list is re-read off-thread too via LoadAsync so the window stays live.
+        var r = await Task.Run(_service.RestoreFromBackup);
+        if (r.Restored > 0 || r.Removed > 0) await Task.Run(EnvironmentVariableService.BroadcastSettingChange);
+        await LoadAsync();
 
         StatusMessage = r.Failed == 0
             ? $"Restored {r.Restored} variable{(r.Restored == 1 ? "" : "s")}" +
@@ -445,16 +449,16 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void DiscardChanges()
+    private async Task DiscardChanges()
     {
-        Load();
+        await LoadAsync();
         StatusMessage = "Pending changes discarded.";
     }
 
     [RelayCommand]
-    private void Refresh()
+    private async Task Refresh()
     {
-        Load();
+        await LoadAsync();
         StatusMessage = "Variables refreshed.";
         Log.Information("Environment: refreshed variable list");
     }

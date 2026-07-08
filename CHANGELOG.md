@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.51] - 2026-07-08
+
+### Fixed
+- **The Environment Variables tab no longer freezes the app while applying, restoring, or refreshing.** Applying changes broadcasts a system-wide "settings changed" message that waits up to 5 seconds for other windows to respond, and restoring or refreshing re-reads every user and system variable — all of which ran on the UI thread, freezing the whole window until they finished. The slow parts (the broadcast, the restore, and the full re-read) now run off the UI thread, so the app stays responsive; the actual variable writes are unchanged.
+
 ## [1.52.50] - 2026-07-08
 
 ### Fixed

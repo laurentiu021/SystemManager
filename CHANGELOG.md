@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.50] - 2026-07-08
+
+### Fixed
+- **The Dashboard does less redundant work at startup and while polling.** Two efficiency fixes, both leaving what you see unchanged: (1) the live GPU tile re-enumerated all physical GPUs through the NVIDIA API on every 300 ms poll — it now resolves the GPU once and reads usage/memory from that cached handle each tick; (2) the health score's heavy disk-SMART/memory/battery computation ran three times at startup (the Dashboard's own load plus the SMART and memory alert scans, two of them at once) — the alert scans now reuse the score the Dashboard already computed, falling back to a fresh computation only if that load failed.
+
 ## [1.52.49] - 2026-07-08
 
 ### Fixed

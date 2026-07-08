@@ -140,8 +140,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **Outline buttons are now visible on the light themes.** "Ghost" buttons (e.g. Export text / Copy on the System Report tab, and similar secondary actions elsewhere) drew their border in a translucent white that was invisible against the light presets' pale backgrounds — the buttons looked borderless. They now use the theme's own border color, so they're clearly outlined on every theme.
 - **Startup Manager asks before re-enabling everything.** The "Enable All" button immediately re-enabled every disabled startup item — a bulk system change that adds boot time — with no confirmation. It now asks first (showing how many items will be affected), matching the confirm-before-bulk-change behavior used elsewhere in the app.
-
-### Fixed
 - **Editing the hosts file no longer erases your own comments.** When you added, removed, or toggled an entry on the DNS & Hosts tab, SysManager rewrote the file from just the address mappings — silently dropping any standalone comment lines or blank spacing you'd written (section notes, documentation). Those comment and blank lines are now preserved through an edit, kept above the entries. Repeated saves stay stable (no duplicated headers), and a file with no comments is written exactly as before.
 
 ## [1.52.20] - 2026-07-03
@@ -149,8 +147,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **The theme picker now opens on your saved theme's presets.** If you'd set a Light or Custom theme, the theme popup initially built its preset list from the default Dark mode and only corrected itself once you clicked something — so it briefly showed the wrong set of presets. It now reads your saved mode first, so the correct presets appear immediately.
 - **Ping and System Logs numbers are now readable on the Light themes.** The average-ping / jitter / latency figures on the Network Ping tab and the severity counts (Critical, Errors, Warnings, Info) on the System Logs tab used fixed pale colors that nearly disappeared against the light preset backgrounds. They now use the app's semantic status colors, so they stay legible on every theme.
-
-### Fixed
 - **Recycle Bin size estimates now match what emptying actually frees.** Both Quick Cleanup and Deep Cleanup summed the whole hidden `$Recycle.Bin` folder on every drive — which, on a shared PC (especially when running as administrator), also counts *other users'* deleted files. But emptying the bin only ever clears the current user's items, so the "X MB in Recycle Bin" figure could be far larger than what actually gets freed. The estimate now measures only the current user's Recycle Bin, so the number is honest.
 - **Installed-app detection no longer mislabels similarly-named apps.** In the Bulk Installer, an app was marked "Installed" if its winget Id appeared anywhere in a `winget list` row — so an app whose Id is a prefix of another (e.g. `Microsoft.Teams` vs. an installed `Microsoft.Teams.Classic`) was wrongly shown as already installed. Detection now compares exact winget Ids.
 - **System Report and About page now show the correct VRAM for GPUs over 4 GB.** Video memory was read from a 32-bit WMI field that caps at ~4 GiB, so an 8 GB or 12 GB card was reported as ~4 GB. The true size is now read from the graphics driver's 64-bit registry value, falling back to the old field only when that isn't available.
@@ -3843,8 +3839,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Codecov coverage tracking** — unit-test coverage uploaded on every CI run;
   badge in README reflects latest `main` result.
 - **App screenshots** — all major tabs captured under `docs/screenshots/`.
-
-### Added
 - **Repository hygiene** — `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
   `SECURITY.md`, `SUPPORT.md`, `.editorconfig`, and a full
   `.github/` folder (issue + PR templates, CI + release workflows,

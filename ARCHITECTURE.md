@@ -31,7 +31,7 @@ SysManager/
 
 ## Tabs (view models)
 
-The sidebar organises tabs into 12 collapsible groups via `NavGroup` →
+The sidebar organises tabs into 12 groups (11 collapsible + a flat top-level Dashboard) via `NavGroup` →
 `NavItem` hierarchy built by `BuildNavGroups()` using `Group()` and
 `Item()` helper methods. Dashboard renders as a flat top-level entry.
 Collapsed groups show a child count badge, subtitle (auto-generated
@@ -118,7 +118,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam — currently `IPowerShellRunner` (PowerShellRunner),
+an interface seam — currently `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `IAppBlockerService` (AppBlockerService), `IDialogService` (DialogService),
 `ICpuAffinityService`, `IFileLockService`, `ISettingsWatchdogService`,
 `ITimerResolutionService`, `ITweaksHubService`, `IWindowsThemeService`,
@@ -361,7 +361,7 @@ Key services:
 
 ## Helpers
 
-Utility classes that don't fit neatly into Services or ViewModels:
+Key utility classes that don't fit neatly into Services or ViewModels (not an exhaustive list):
 
 - `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch.
 - `BulkObservableCollection<T>` — `ObservableCollection` subclass that

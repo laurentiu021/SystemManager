@@ -4,7 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.52.60] - 2026-07-08
+## [1.52.61] - 2026-07-08
+
+### Fixed
+- **The Process Manager can no longer show — or end — the wrong process when Windows reuses a process ID.** The list refreshes every second and matched rows by process ID (PID) alone, but Windows recycles PIDs, so between two refreshes the same PID can belong to a different program. When that happened, the row kept the old program's name and icon while showing the new program's activity — and because Kill targets the PID, confirming "End task" on that row would have ended the new program instead. Rows are now matched by PID together with the process start time, so a recycled PID is treated as a new process (old row removed, new one shown) and End task always acts on the process you see.
 
 ### Fixed
 - **The live resource-history charts no longer leak a small amount of memory each time they're rebuilt.** Each chart axis uses a "Segoe UI" font handle; when the chart was torn down and re-created (for example on a theme change), those font handles weren't released — only the paint objects were. They're now freed alongside the paints, the same way the chart legend's font already was.

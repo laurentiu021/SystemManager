@@ -99,6 +99,33 @@ public class ProcessManagerViewModelTests
         Assert.DoesNotContain(dead, target);
     }
 
+    [Fact]
+    public void ReconcileInto_ReusedPid_ReplacesStaleIdentity()
+    {
+        // Regression: a PID alone is not a stable identity — Windows reuses PIDs, so the same
+        // number can belong to a DIFFERENT process between 1 Hz polls. Reconcile must not keep the
+        // old process's identity (name/icon) on that row, or the Kill confirm would name the old
+        // process while KillProcess(entry.Pid) terminates the new one (a mis-kill).
+        var target = new BulkObservableCollection<ProcessEntry>();
+        var old = Proc(100, mem: 10, cpu: 1);
+        old.Name = "old-process";
+        old.StartTime = new DateTime(2020, 1, 1);
+        target.Add(old);
+
+        // Same PID 100, but a different start time → the OS reused the PID for a new process.
+        var fresh = Proc(100, mem: 50, cpu: 5);
+        fresh.Name = "new-process";
+        fresh.StartTime = new DateTime(2021, 6, 1);
+
+        ProcessManagerViewModel.ReconcileInto(target, new List<ProcessEntry> { fresh });
+
+        Assert.Single(target);                              // no duplicate PID row
+        Assert.Same(fresh, target[0]);                      // stale instance dropped, fresh kept
+        Assert.Equal("new-process", target[0].Name);        // correct identity shown
+        Assert.Equal(new DateTime(2021, 6, 1), target[0].StartTime);
+        Assert.DoesNotContain(old, target);
+    }
+
     // ── SyncOrdered (regression: filtered view reorders without a Reset) ──
 
     [Fact]

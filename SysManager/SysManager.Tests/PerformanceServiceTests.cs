@@ -198,12 +198,35 @@ public class PerformanceServiceTests
     }
 
     [Fact]
-    public void ParseProcessorMinPercent_NonEnglishLabel_StillParsesFirstHex()
+    public void ParseProcessorMinPercent_NonEnglishLabel_RealPowercfgShape_ReturnsAcValue()
     {
-        // Regression for the locale bug: on non-English Windows the "Current AC Power
-        // Setting Index" label is translated, so the old English-label match failed and the
-        // parser returned the fabricated 5. powercfg still prints the AC value first as a
-        // "0x…" token in every language, so the fallback now reads it. German example:
+        // Regression for the locale bug (completes an earlier, incomplete fix). REAL powercfg
+        // output for PROCTHROTTLEMIN prints Minimum/Maximum/increment hex values BEFORE the two
+        // current-index lines, and on non-English Windows the "Current AC/DC" labels are
+        // translated, so the English-label fast path misses. The previous fallback then returned
+        // the FIRST hex token — "Minimum Possible Setting" = 0x0 — so it read 0 (not the AC
+        // value), and a later Restore wrote 0% back. The AC index is always the second-to-last
+        // hex token (AC-before-DC, current-index lines last, in every language). German example
+        // (the labels are illustrative; the value ordering is what powercfg guarantees):
+        var lines = new List<string>
+        {
+            "  Mögliche Mindesteinstellung: 0x00000000",
+            "  Mögliche Höchsteinstellung: 0x00000064",
+            "  Inkrement für mögliche Einstellungen: 0x00000001",
+            "  Index für aktuelle Wechselstromeinstellung: 0x00000032",
+            "  Index für aktuelle Gleichstromeinstellung: 0x00000019",
+        };
+
+        var result = PerformanceService.ParseProcessorMinPercent(lines);
+
+        Assert.Equal(0x32, result); // 50 — AC (2nd-to-last), NOT Minimum-Possible 0x0 or DC 0x19
+    }
+
+    [Fact]
+    public void ParseProcessorMinPercent_NonEnglishLabel_TwoTokensOnly_ReturnsAcNotDc()
+    {
+        // Minimal non-English shape (no Min/Max/increment lines): the AC index is still the
+        // second-to-last hex token, so the parser must return AC (50), never the trailing DC (25).
         var lines = new List<string>
         {
             "  Index für aktuelle Wechselstromeinstellung: 0x00000032",
@@ -212,7 +235,7 @@ public class PerformanceServiceTests
 
         var result = PerformanceService.ParseProcessorMinPercent(lines);
 
-        Assert.Equal(0x32, result); // 50 — the AC value, not the DC value, not a fabricated 5
+        Assert.Equal(0x32, result); // 50 (AC), not 0x19 = 25 (DC)
     }
 
     [Fact]

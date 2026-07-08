@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.45] - 2026-07-08
+
+### Fixed
+- **The System Info snapshot no longer risks an unhandled error on systems where the modern disk-info source is unavailable.** When the Windows Storage management interface cannot be reached (some older or minimal Windows installations), SysManager falls back to the classic disk query — but that fallback ran without its own error handling, so a second failure there (or a malformed size value from one drive) could surface as an unhandled error instead of simply showing the disk list it managed to read. The fallback is now guarded like every other hardware query: a fault degrades to the partial disk list, and a single unreadable drive is skipped rather than aborting the whole snapshot.
+
 ## [1.52.44] - 2026-07-08
 
 ### Fixed

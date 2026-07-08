@@ -285,19 +285,36 @@ public sealed class SystemInfoService
         {
             // Fallback to Win32_DiskDrive if MSFT_PhysicalDisk / the Storage WMI namespace
             // isn't available (older/headless Windows — scope.Connect() throws COMException).
-            using var s = new ManagementObjectSearcher("SELECT Model,Size,Status FROM Win32_DiskDrive");
-            using var fallbackCollection = s.Get();
-            foreach (ManagementObject mo in fallbackCollection)
+            // This fallback runs precisely when WMI is already degraded, so it needs its own
+            // guard: a fault here (or a malformed Size) must degrade to the partial list, not
+            // propagate out of Capture() and surface as an error — mirroring every other method.
+            try
             {
-                using (mo)
+                using var s = new ManagementObjectSearcher("SELECT Model,Size,Status FROM Win32_DiskDrive");
+                using var fallbackCollection = s.Get();
+                foreach (ManagementObject mo in fallbackCollection)
                 {
-                    var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
-                    list.Add(new DiskInfo(
-                        mo["Model"]?.ToString() ?? "Disk",
-                        "Unknown", "Unknown", size,
-                        mo["Status"]?.ToString() ?? "Unknown",
-                        "Unknown", null, null));
+                    using (mo)
+                    {
+                        try
+                        {
+                            var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
+                            list.Add(new DiskInfo(
+                                mo["Model"]?.ToString() ?? "Disk",
+                                "Unknown", "Unknown", size,
+                                mo["Status"]?.ToString() ?? "Unknown",
+                                "Unknown", null, null));
+                        }
+                        catch (Exception exItem) when (exItem is FormatException or OverflowException or InvalidCastException)
+                        {
+                            /* malformed Size on this disk — skip it, keep the rest */
+                        }
+                    }
                 }
+            }
+            catch (Exception exFallback) when (exFallback is ManagementException or System.Runtime.InteropServices.COMException)
+            {
+                /* Win32_DiskDrive also unavailable — return whatever enumerated (mirrors the other WMI methods) */
             }
         }
         return list;

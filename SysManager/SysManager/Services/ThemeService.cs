@@ -321,7 +321,7 @@ public sealed class ThemeService
             var data = new ThemeSettings(CurrentPresetId, CurrentMode, ShadePosition,
                 CurrentTheme.Accent.ToString(), CurrentTheme.Background.ToString(),
                 CurrentTheme.Surface.ToString(), CurrentTheme.TextPrimary.ToString());
-            var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(data, JsonDefaults.Indented);
             File.WriteAllText(SettingsPath, json);
         }
         catch (Exception ex) { Log.Debug("Theme save failed: {Error}", ex.Message); }

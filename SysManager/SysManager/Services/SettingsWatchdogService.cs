@@ -183,8 +183,7 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(BaselinePath)!);
-            File.WriteAllText(BaselinePath, JsonSerializer.Serialize(snapshot,
-                new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(BaselinePath, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented));
         }
         catch (IOException ex) { Log.Debug("Settings baseline save failed: {Error}", ex.Message); }
     }

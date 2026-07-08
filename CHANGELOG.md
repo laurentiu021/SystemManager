@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.47] - 2026-07-08
+
+### Fixed
+- **Shredding a folder no longer plain-deletes (leaving recoverable) any file it could not securely overwrite.** When shredding a folder, a file that could not be securely overwritten — for example a locked or permission-denied file, or a hard-linked file the shredder now refuses — was still removed by the final recursive folder delete. That plain delete leaves the data recoverable while the operation reported success, so you could believe such a file had been securely erased. SysManager now leaves any file it could not securely overwrite in place (removing only the emptied folders around the files it did shred) and reports how many were left, so the outcome is honest.
+
 ## [1.52.46] - 2026-07-08
 
 ### Fixed

@@ -197,6 +197,12 @@ public sealed partial class FileShredderService
         var files = EnumerateFilesSafe(folderPath);
         var totalFiles = files.Count;
 
+        // Files whose secure overwrite did NOT complete (denied, locked, hard-linked, …). We
+        // must never fall back to a plain delete for these: the caller believes a shredded file
+        // was securely overwritten, so a plain-deleted (recoverable) file would silently break
+        // that guarantee. We leave them on disk and report them instead of force-deleting.
+        List<string> failedFiles = [];
+
         for (var i = 0; i < totalFiles; i++)
         {
             ct.ThrowIfCancellationRequested();
@@ -213,34 +219,58 @@ public sealed partial class FileShredderService
             catch (UnauthorizedAccessException ex)
             {
                 Log.Warning(ex, "Access denied while shredding file: {Path}", files[i]);
+                failedFiles.Add(files[i]);
             }
             catch (IOException ex)
             {
                 Log.Warning(ex, "I/O error while shredding file: {Path}", files[i]);
+                failedFiles.Add(files[i]);
             }
 
             var overallProgress = (int)((i + 1) * 100.0 / totalFiles);
             progress?.Report(overallProgress);
         }
 
-        // Remove empty directories bottom-up
-        try
+        // Remove now-empty directories deepest-first. A securely-shredded file was already
+        // deleted by ShredFileAsync, so its directory becomes empty and is removed here; a
+        // directory that still holds a file we could NOT shred is left in place (with the file).
+        // We only ever remove EMPTY directories (recursive:false), so this can never plain-delete
+        // an un-overwritten file — the bug this replaces (the old recursive delete did).
+        foreach (var dir in Directory.EnumerateDirectories(folderPath, "*", SearchOption.AllDirectories)
+                     .OrderByDescending(d => d.Count(c => c == Path.DirectorySeparatorChar)))
         {
-            Directory.Delete(folderPath, recursive: true);
+            TryRemoveIfEmpty(dir);
         }
-        catch (IOException ex)
+        TryRemoveIfEmpty(folderPath);
+
+        if (failedFiles.Count > 0)
         {
-            Log.Warning(ex, "Could not fully remove folder structure: {Path}", folderPath);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            // A read-only/locked entry can deny the final structure removal AFTER every file
-            // was already securely overwritten — log and treat the shred as done rather than
-            // surfacing a failure for work that completed.
-            Log.Warning(ex, "Access denied removing folder structure: {Path}", folderPath);
+            // Honest partial failure: the folder was NOT fully shredded. Report which files were
+            // left in place so the caller (and the user) never believe a file that could not be
+            // securely overwritten was destroyed.
+            var sample = string.Join(", ", failedFiles.Take(5).Select(Path.GetFileName));
+            var more = failedFiles.Count > 5 ? $", and {failedFiles.Count - 5} more" : string.Empty;
+            throw new IOException(
+                $"{failedFiles.Count} of {totalFiles} file(s) could not be securely shredded and were left in place (not deleted): {sample}{more}.");
         }
 
         Log.Information("Folder shredded successfully: {Path} ({Method})", folderPath, method);
+    }
+
+    /// <summary>
+    /// Removes <paramref name="dir"/> only when it is empty, swallowing the expected
+    /// "not empty / denied / already gone" faults. Used to clean up the emptied directory
+    /// structure after a folder shred WITHOUT ever force-deleting a file that remains in it.
+    /// </summary>
+    private static void TryRemoveIfEmpty(string dir)
+    {
+        try
+        {
+            if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                Directory.Delete(dir, recursive: false);
+        }
+        catch (IOException ex) { Log.Debug(ex, "Shredder: could not remove directory {Dir}", dir); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied removing directory {Dir}", dir); }
     }
 
     /// <summary>

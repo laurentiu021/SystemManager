@@ -351,6 +351,56 @@ public class FileShredderServiceTests
         }
     }
 
+    // ---------- hard-link shred refusal (data shared outside the selected scope) ----------
+
+    [Fact]
+    public async Task ShredFileAsync_FileWithHardLink_Refuses_AndPreservesData()
+    {
+        // Regression: overwriting a hard-linked file destroys the data for EVERY name that
+        // points at it — links outside the selected scope, or a link a standard user placed to
+        // share a protected file's data (the path guard sees only the opened name, and
+        // GetFinalPathNameByHandle resolves symlinks/junctions but NOT hard links). The shredder
+        // must refuse a multi-link file rather than destroy the shared data.
+        var svc = NewService();
+        var target = Path.Combine(Path.GetTempPath(), "smtest_hltarget_" + Guid.NewGuid().ToString("N") + ".dat");
+        var link = Path.Combine(Path.GetTempPath(), "smtest_hllink_" + Guid.NewGuid().ToString("N") + ".dat");
+        const string content = "shared data behind two hard links";
+        await File.WriteAllTextAsync(target, content);
+
+        try
+        {
+            // mklink /H creates a hard link on the same volume; no admin required. If the
+            // environment can't create one, skip rather than fail on an environment limitation.
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /H \"{link}\" \"{target}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !File.Exists(link))
+                    return; // couldn't create a hard link here — nothing to assert
+            }
+
+            // Shredding through the link must be refused (IOException), and BOTH names plus the
+            // shared data must remain intact.
+            await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFileAsync(link, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.True(File.Exists(target), "target destroyed despite the hard-link refusal");
+            Assert.True(File.Exists(link), "link destroyed despite the hard-link refusal");
+            Assert.Equal(content, await File.ReadAllTextAsync(target));
+        }
+        finally
+        {
+            if (File.Exists(link)) File.Delete(link);
+            if (File.Exists(target)) File.Delete(target);
+        }
+    }
+
     [Fact]
     public void ResolveFinalPath_MissingPath_ReturnsNull()
     {

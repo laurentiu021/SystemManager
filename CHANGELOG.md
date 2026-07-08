@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.46] - 2026-07-08
+
+### Fixed
+- **The File Shredder now refuses to shred a file that has more than one hard link, instead of destroying data shared with other locations.** A file can have several names (hard links) that all point at the same data — including names outside the folder you selected, or a link that shares a protected system file's data. Overwriting the file's bytes to "shred" it would have destroyed that shared data everywhere, and the safety check that blocks system paths only sees the name you picked (it cannot tell the data is shared). The shredder now detects multiple hard links up front and refuses with a clear message, leaving every copy intact; remove the extra links first, or delete the file normally.
+
 ## [1.52.45] - 2026-07-08
 
 ### Fixed

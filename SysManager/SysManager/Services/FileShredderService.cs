@@ -171,6 +171,16 @@ public sealed partial class FileShredderService
         if (!Directory.Exists(folderPath))
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
+        // A junction/symlink AT THE ROOT would make EnumerateFilesSafe follow it into the
+        // link target and shred files OUTSIDE the selected folder — the reparse-point skip in
+        // EnumerateFilesSafe only guards CHILD entries, never the root it starts enumerating
+        // from. Refuse a reparse-point root; the user must select the real target folder to
+        // shred it. (SecurityException is already the shred services' "not allowed" signal and
+        // is handled by the caller.)
+        if ((new DirectoryInfo(folderPath).Attributes & FileAttributes.ReparsePoint) != 0)
+            throw new SecurityException(
+                $"The selected folder is a junction or symlink; shredding it would destroy data at its target outside the selected location: {folderPath}");
+
         var files = EnumerateFilesSafe(folderPath);
         var totalFiles = files.Count;
 
@@ -208,6 +218,13 @@ public sealed partial class FileShredderService
         catch (IOException ex)
         {
             Log.Warning(ex, "Could not fully remove folder structure: {Path}", folderPath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // A read-only/locked entry can deny the final structure removal AFTER every file
+            // was already securely overwritten — log and treat the shred as done rather than
+            // surfacing a failure for work that completed.
+            Log.Warning(ex, "Access denied removing folder structure: {Path}", folderPath);
         }
 
         Log.Information("Folder shredded successfully: {Path} ({Method})", folderPath, method);

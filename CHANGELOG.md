@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.40] - 2026-07-08
+
+### Fixed
+- **Shredding a folder that is a junction or symlink no longer destroys data outside it.** If the folder you picked for "Shred Folder" was itself a junction or symbolic link (for example, one that points at another drive or folder), the shredder followed it and securely erased the files at the *link's target* — data outside the folder you actually selected. It now refuses to shred a folder that is a junction/symlink and asks you to pick the real target folder instead; the existing protection that skips links found *inside* the folder is unchanged.
+- **A folder shred no longer reports failure after it has actually finished.** Removing the emptied folder structure at the end of a shred handled only one kind of error; if a leftover read-only or locked entry denied that final cleanup, the whole operation reported failure even though every file had already been securely overwritten. That cleanup denial is now logged and the shred is reported as completed.
+
 ## [1.52.39] - 2026-07-07
 
 ### Fixed

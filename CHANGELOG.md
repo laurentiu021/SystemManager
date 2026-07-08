@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.63] - 2026-07-08
+
+### Fixed
+- **The App Updates console no longer shows winget output from other tabs.** App Updates listened for winget output for as long as the app was open, and it shares one winget engine with the rest of the app — so running "Update All Apps" from the Dashboard (or any other winget action) quietly appended that output to the App Updates console. It now listens only while its own Check-for-updates or Update runs, so the console shows only what you started from that tab.
+
 ## [1.52.62] - 2026-07-08
 
 ### Fixed

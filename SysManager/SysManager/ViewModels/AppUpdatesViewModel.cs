@@ -43,7 +43,10 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     {
         _winget = winget;
         _lineHandler = line => Console.Append(line);
-        _winget.LineReceived += _lineHandler;
+        // NOTE: the WingetService is a singleton shared with other tabs (e.g. the Dashboard's
+        // "Update All Apps"). LineReceived is subscribed only for the duration of THIS tab's own
+        // Scan/UpgradeSelected operations (see below), not for the VM's lifetime, so another tab's
+        // winget output never bleeds into this console.
         // Re-evaluate the long-running commands' CanExecute when IsBusy flips. Scan and
         // UpgradeSelected both recreate the shared _cts; without this gate a second
         // command could dispose the CTS the first is still awaiting (ObjectDisposedException).
@@ -88,6 +91,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         Packages.Clear();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
+        _winget.LineReceived += _lineHandler; // op-scoped subscription (see constructor note)
         try
         {
             var list = await _winget.ListUpgradableAsync(_cts.Token);
@@ -97,7 +101,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         }
         catch (OperationCanceledException) { StatusMessage = "Scan cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        finally { _winget.LineReceived -= _lineHandler; IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
@@ -112,6 +116,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         int attempted = 0, succeeded = 0, failed = 0;
         UpgradeEtaText = string.Empty;
         _upgradeEta.Reset();
+        _winget.LineReceived += _lineHandler; // op-scoped subscription (see constructor note)
         try
         {
             foreach (var pkg in toUpgrade)
@@ -147,7 +152,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
             Log.Information("App upgrade batch: {Succeeded} ok, {Failed} failed of {Total}",
                 succeeded, failed, toUpgrade.Count);
         }
-        finally { IsBusy = false; UpgradeEtaText = string.Empty; }
+        finally { _winget.LineReceived -= _lineHandler; IsBusy = false; UpgradeEtaText = string.Empty; }
     }
 
     [RelayCommand]

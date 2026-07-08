@@ -103,7 +103,9 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
         try
         {
-            await ServiceManagerService.StartServiceAsync(entry.Name).ConfigureAwait(false);
+            // Resume on the UI thread (no ConfigureAwait(false)): the continuation updates
+            // bound state (RefreshStatus + StatusMessage), matching Enable/DisableServiceAsync.
+            await ServiceManagerService.StartServiceAsync(entry.Name);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} started.";
             Log.Information("Service started: {ServiceName}", entry.Name);
@@ -137,7 +139,8 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
         try
         {
-            await ServiceManagerService.StopServiceAsync(entry.Name).ConfigureAwait(false);
+            // Resume on the UI thread — see StartServiceAsync.
+            await ServiceManagerService.StopServiceAsync(entry.Name);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} stopped.";
             Log.Information("Service stopped: {ServiceName}", entry.Name);

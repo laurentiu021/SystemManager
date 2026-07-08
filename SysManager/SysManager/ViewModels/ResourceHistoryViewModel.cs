@@ -271,6 +271,11 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     {
         foreach (var axis in axes)
         {
+            // Free the native SKTypeface handles before the paints, mirroring how the legend
+            // typeface is released in Dispose — SolidColorPaint.Dispose does not free them, so the
+            // per-axis "Segoe UI" typefaces (BuildTimeAxis/BuildPercentAxis/BuildTempAxis) leak.
+            (axis.NamePaint as SolidColorPaint)?.SKTypeface?.Dispose();
+            (axis.LabelsPaint as SolidColorPaint)?.SKTypeface?.Dispose();
             (axis.NamePaint as IDisposable)?.Dispose();
             (axis.LabelsPaint as IDisposable)?.Dispose();
             (axis.SeparatorsPaint as IDisposable)?.Dispose();

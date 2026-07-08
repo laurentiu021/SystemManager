@@ -4,7 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.52.59] - 2026-07-08
+## [1.52.60] - 2026-07-08
+
+### Fixed
+- **The live resource-history charts no longer leak a small amount of memory each time they're rebuilt.** Each chart axis uses a "Segoe UI" font handle; when the chart was torn down and re-created (for example on a theme change), those font handles weren't released — only the paint objects were. They're now freed alongside the paints, the same way the chart legend's font already was.
+- **Selecting a task in Task Scheduler no longer runs its "last run / next run" lookup twice.** Picking a task looked up its run details, and updating the row with those details re-triggered the selection handler, firing the same lookup a second time. The selection update is now guarded so the lookup runs once per selection.
 
 ### Fixed
 - **Cancelling a PowerShell-backed operation now ends cleanly instead of risking a stray error.** Two cases: cancelling an in-process PowerShell run reported the stop as a low-level pipeline error rather than a normal "cancelled", so callers watching for cancellation could treat it as a failure; and when cancelling an external PowerShell process, the attempt to stop its process tree only handled one of the errors it can raise, so an access-denied or partially-failed stop could surface as an unhandled error. Both now resolve to the standard "operation cancelled" outcome and swallow the expected stop-time errors.

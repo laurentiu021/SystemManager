@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -165,26 +166,40 @@ public class AppUpdatesViewModelTests
         Assert.True(vm.UpgradeSelectedCommand.CanExecute(null));
     }
 
-    // ---------- runner plumbing ----------
+    // ---------- console subscription is op-scoped (regression: cross-tab winget output leak) ----------
 
     [Fact]
-    public void WingetLineReceived_AppendsToConsole()
+    public async Task WingetLineReceived_DuringScan_AppendsToConsole()
     {
-        var runner = new PowerShellRunner();
-        var winget = new WingetService(runner);
+        // While THIS tab's scan runs, its own winget output must reach its console. The scan
+        // subscribes to LineReceived for the operation, so a line raised during the underlying
+        // ListUpgradableAsync call is captured.
+        var winget = Substitute.For<IWingetService>();
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                winget.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output("scan line"));
+                return Task.FromResult(new List<AppPackage>());
+            });
         var vm = new AppUpdatesViewModel(winget);
 
-        // WingetService.LineReceived delegates to runner.LineReceived,
-        // so firing the runner event should propagate to the VM console.
-        var ev = typeof(PowerShellRunner)
-            .GetField(nameof(PowerShellRunner.LineReceived),
-                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-        var del = (MulticastDelegate?)ev?.GetValue(runner);
-        Assert.NotNull(del);
+        await vm.ScanCommand.ExecuteAsync(null);
 
-        del!.DynamicInvoke(PowerShellLine.Output("winget test"));
+        Assert.Contains(vm.Console.Lines, l => l.Text == "scan line");
+    }
 
-        Assert.True(vm.Console.Lines.Count >= 1);
-        Assert.Equal("winget test", vm.Console.Lines[^1].Text);
+    [Fact]
+    public void WingetLineReceived_OutsideOperation_DoesNotAppend()
+    {
+        // Regression: WingetService is a singleton shared with other tabs (e.g. the Dashboard's
+        // "Update All Apps"). If this VM stayed subscribed to LineReceived for its whole lifetime,
+        // another tab's winget output would bleed into the App Updates console. With no scan or
+        // upgrade running, firing LineReceived must NOT touch this console.
+        var winget = Substitute.For<IWingetService>();
+        var vm = new AppUpdatesViewModel(winget);
+
+        winget.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output("from another tab"));
+
+        Assert.Empty(vm.Console.Lines);
     }
 }

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.48] - 2026-07-08
+
+### Fixed
+- **Starting or stopping a Windows service from the Services tab no longer risks a cross-thread error.** After a start/stop completed, SysManager refreshed the service row and the on-screen status from a background thread — unlike the Enable/Disable actions in the same tab, which correctly resume on the UI thread. Updating UI-bound state off the UI thread can raise a cross-thread exception. Start and Stop now resume on the UI thread just like Enable and Disable, so the row and status update safely.
+
 ## [1.52.47] - 2026-07-08
 
 ### Fixed

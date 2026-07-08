@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.52] - 2026-07-08
+
+### Fixed
+- **The File Shredder queue can no longer be changed while a shred is running.** During a shred, the Add Files, Add Folder and Remove buttons stayed active, and the shred walked the live queue by index across each file's overwrite — so adding or removing an item mid-shred could skip an item, act on the wrong one, or error. The shred now works on a snapshot of the queue taken when it starts, and the add/remove buttons are disabled until it finishes.
+
 ## [1.52.51] - 2026-07-08
 
 ### Fixed

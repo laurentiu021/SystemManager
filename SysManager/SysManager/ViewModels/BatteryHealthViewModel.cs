@@ -24,7 +24,15 @@ public sealed partial class BatteryHealthViewModel : ViewModelBase
     public BatteryHealthViewModel(BatteryService service)
     {
         _service = service;
+        PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(InitAsync);
+    }
+
+    private bool NotBusy => !IsBusy;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IsBusy)) RefreshCommand.NotifyCanExecuteChanged();
     }
 
     private async Task InitAsync()
@@ -34,7 +42,7 @@ public sealed partial class BatteryHealthViewModel : ViewModelBase
         catch (InvalidOperationException ex) { Log.Warning("Battery auto-scan failed: {Error}", ex.Message); }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
         IsBusy = true;

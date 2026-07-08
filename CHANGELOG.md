@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.58] - 2026-07-08
+
+### Fixed
+- **The Tweaks Hub no longer reads its settings on the UI thread while the app is starting.** The tab builds its Essential/Advanced tweak lists from registry-backed values; that read ran synchronously as the app started (the tab is created eagerly), adding to startup delay. It now runs off the UI thread and fills the list when ready — matching the Privacy Toggles tab — so there's no visible change, just a smoother start. Refresh runs off-thread too.
+- **The Battery Health tab can no longer start a second read on top of its own startup scan.** The tab reads battery data automatically when it opens, but the Refresh button stayed enabled during that first read, so pressing it could run two reads at once. Refresh is now disabled while a read is in progress, matching the other tabs.
+
 ## [1.52.57] - 2026-07-08
 
 ### Fixed

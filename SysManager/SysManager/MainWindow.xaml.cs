@@ -44,7 +44,7 @@ public partial class MainWindow : Window
         ToastOverlay.BeginAnimation(OpacityProperty, fade);
     }
 
-    private void DismissToast_Click(object sender, MouseButtonEventArgs e)
+    private void DismissToast_Click(object sender, RoutedEventArgs e)
     {
         ToastService.Instance.Dismiss();
     }

@@ -306,8 +306,11 @@
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                         <Style.Triggers>
+                                            <!-- Elevated cue uses the amber/gold admin colour (WarningStripe),
+                                                 matching AdminButton and the elevation banners. Purple (Accent)
+                                                 is reserved for primary actions, so it is not used for admin. -->
                                             <DataTrigger Binding="{Binding IsElevated}" Value="True">
-                                                <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource WarningStripe}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -405,9 +408,12 @@
             </Grid>
         </Border>
 
-        <!-- Glass toast notification overlay -->
+        <!-- Glass toast notification overlay. LiveSetting makes screen readers announce the
+             toast when it appears (it carries operation-completion feedback and auto-dismisses,
+             so Assertive ensures the announcement lands before it fades). -->
         <Border x:Name="ToastOverlay" Grid.Column="1"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                AutomationProperties.LiveSetting="Assertive"
                 Margin="0,0,20,20" Visibility="Collapsed">
             <Border Background="{DynamicResource Surface2}" CornerRadius="10"
                     BorderBrush="#4022C55E" BorderThickness="1"
@@ -433,13 +439,24 @@
                         <TextBlock x:Name="ToastDetail" FontSize="11"
                                    Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"/>
                     </StackPanel>
-                    <Border Grid.Column="2" Margin="14,0,0,0" Cursor="Hand"
-                            MouseLeftButtonUp="DismissToast_Click"
-                            Background="Transparent" Padding="4">
+                    <!-- Real Button so the dismiss is keyboard-focusable and Enter/Space-activatable
+                         (the previous Border handled MouseLeftButtonUp only). Minimal transparent
+                         template keeps the bare glyph look; the default focus adorner gives a focus cue. -->
+                    <Button Grid.Column="2" Margin="14,0,0,0" Cursor="Hand"
+                            Click="DismissToast_Click"
+                            AutomationProperties.Name="Dismiss notification"
+                            Background="Transparent" BorderThickness="0" Padding="4">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
                         <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                    FontSize="12" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center"/>
-                    </Border>
+                    </Button>
                 </Grid>
             </Border>
         </Border>

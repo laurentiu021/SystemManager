@@ -564,6 +564,14 @@
                                 <Trigger Property="IsPressed" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource WarningBg}"/>
                                 </Trigger>
+                                <!-- Keyboard focus ring (a11y): AdminButton omitted the IsKeyboardFocused
+                                     trigger the other button styles carry, so it had no visible focus cue.
+                                     Uses the brighter amber (WarningText) + a thicker border, staying within
+                                     the admin/gold palette rather than the purple Accent the other buttons use. -->
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource WarningText}"/>
+                                    <Setter TargetName="Bd" Property="BorderThickness" Value="1.5"/>
+                                </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.4"/>
                                 </Trigger>

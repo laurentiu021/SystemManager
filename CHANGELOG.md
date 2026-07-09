@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.67] - 2026-07-09
+
+### Changed
+- **The sidebar "administrator" badge now uses the amber/gold admin colour instead of purple.** When SysManager runs elevated, the shield in the sidebar footer turned purple — but purple is the app's primary-action colour, while the admin/elevation cue is amber everywhere else (the "Run as administrator" buttons and banners). The shield now matches that amber, so the elevation cue is consistent across the app.
+- **The Logs cards now use the shared large corner-radius token** instead of a slightly different hard-coded value, so their rounding matches the other cards.
+
+### Added
+- **The "Run as administrator" buttons now show a keyboard-focus outline.** They were missing the focus cue the other buttons already have, so keyboard users couldn't tell when one was focused; they now show an amber focus ring that matches the button's colour.
+- **Completion notifications (toasts) are now announced by screen readers and can be dismissed with the keyboard.** The toast is now a live region — assistive technologies read it aloud when it appears — and its close control is a real button (keyboard-focusable, Enter/Space to dismiss) rather than a mouse-only target.
+
 ## [1.52.66] - 2026-07-09
 
 ### Fixed

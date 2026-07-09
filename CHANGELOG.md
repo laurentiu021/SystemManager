@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.64] - 2026-07-09
+
+### Fixed
+- **The System Fixes output now uses the same live console as the rest of the app.** Its repair output was rendered with a slower approach that rebuilt the entire text on every new line and updated the UI thread line-by-line. It now uses the shared, capped, timestamped console control that the App Updates, Windows Update, and Cleanup tabs already use — smoother during long repairs, and consistent with those tabs (same Clear / Copy / Auto-scroll controls).
+
 ## [1.52.63] - 2026-07-08
 
 ### Fixed

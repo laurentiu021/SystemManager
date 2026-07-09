@@ -111,22 +111,9 @@
             </StackPanel>
         </Border>
 
-        <!-- Output console -->
+        <!-- Output console — shared ConsoleView (same control the other repair/scan tabs use) -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
-            <Grid>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14,12">
-                    <TextBox Text="{Binding Output, Mode=OneWay}"
-                             AutomationProperties.Name="Repair output"
-                             IsReadOnly="True" TextWrapping="Wrap"
-                             Background="Transparent" BorderThickness="0"
-                             FontFamily="{StaticResource MonoFont}" FontSize="12"
-                             Foreground="{DynamicResource TextPrimary}"/>
-                </ScrollViewer>
-                <v:EmptyState Glyph="&#xE756;"
-                              Title="No repair run yet"
-                              Message="Run a fix above to see its output here."
-                              Visibility="{Binding Output.Length, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
-            </Grid>
+            <v:ConsoleView DataContext="{Binding Console}"/>
         </Border>
 
         <!-- Status bar -->

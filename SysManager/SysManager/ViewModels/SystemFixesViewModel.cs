@@ -26,7 +26,9 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     private CancellationTokenSource? _cts;
 
     [ObservableProperty] private bool _isElevated;
-    [ObservableProperty] private string _output = "";
+
+    /// <summary>Shared, capped, thread-safe console — same control the other repair/scan tabs use.</summary>
+    public ConsoleViewModel Console { get; } = new();
 
     public SystemFixesViewModel(SystemFixService service)
     {
@@ -48,12 +50,9 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         }
     }
 
-    private void OnLine(PowerShellLine line)
-    {
-        var text = line.Text;
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            Output += (Output.Length == 0 ? "" : Environment.NewLine) + text);
-    }
+    // ConsoleViewModel.Append marshals to the UI thread, locks, and caps the line count —
+    // replacing the old per-line synchronous Dispatcher.Invoke + O(n^2) string concatenation.
+    private void OnLine(PowerShellLine line) => Console.Append(line);
 
     [RelayCommand(CanExecute = nameof(CanRunFix))]
     private Task ResetWindowsUpdateAsync() => RunFixAsync(
@@ -80,7 +79,7 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
 
         IsBusy = true;
         IsProgressIndeterminate = true;
-        Output = "";
+        Console.ClearCommand.Execute(null);
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.66] - 2026-07-09
+
+### Fixed
+- **The Windows Update tab no longer lets a module action run at the same time as another update operation.** Its "Check module" and "Install PSWindowsUpdate module" actions share the tab's single background engine and console with the Check-for-updates / History / Install-updates operations, but — unlike those — their buttons stayed enabled while another operation was running, so starting one could interleave its output on the shared console. They are now disabled while any update operation is in progress, matching the rest of the tab.
+
 ## [1.52.65] - 2026-07-09
 
 ### Fixed

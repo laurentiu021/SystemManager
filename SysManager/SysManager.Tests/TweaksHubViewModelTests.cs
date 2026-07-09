@@ -33,6 +33,16 @@ public class TweaksHubViewModelTests
         return svc;
     }
 
+    // Construct the VM and wait for its fire-and-forget async load to finish, so the tweak lists
+    // are populated deterministically before a test observes them (the tab now loads off the UI
+    // thread). Mirrors AppBlockerViewModelTests / AudioMixerViewModelTests.
+    private static TweaksHubViewModel NewVm(ITweaksHubService service)
+    {
+        var vm = new TweaksHubViewModel(service);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
     // ── Apply confirm gate ─────────────────────────────────────────────────
 
     [Fact]
@@ -41,7 +51,7 @@ public class TweaksHubViewModelTests
         var item = Tweak("a", "HKCU", applied: false);
         item.IsSelected = true;
         var svc = NewService(item);
-        var vm = new TweaksHubViewModel(svc);
+        var vm = NewVm(svc);
 
         var prev = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -63,7 +73,7 @@ public class TweaksHubViewModelTests
         var already = Tweak("b", "HKCU", applied: true); already.IsSelected = true; // applied → not pending-apply
         var unsel = Tweak("c", "HKCU", applied: false); // not selected
         var svc = NewService(sel, already, unsel);
-        var vm = new TweaksHubViewModel(svc);
+        var vm = NewVm(svc);
 
         var prev = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -87,7 +97,7 @@ public class TweaksHubViewModelTests
     {
         var item = Tweak("a", "HKCU", applied: true); item.IsSelected = true;
         var svc = NewService(item);
-        var vm = new TweaksHubViewModel(svc);
+        var vm = NewVm(svc);
 
         var prev = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -108,7 +118,7 @@ public class TweaksHubViewModelTests
     {
         // An applied + selected item is pending-UNDO, not pending-APPLY.
         var item = Tweak("a", "HKCU", applied: true); item.IsSelected = true;
-        var vm = new TweaksHubViewModel(NewService(item));
+        var vm = NewVm(NewService(item));
         Assert.False(vm.ApplySelectedCommand.CanExecute(null));
         Assert.True(vm.UndoSelectedCommand.CanExecute(null));
     }
@@ -117,7 +127,7 @@ public class TweaksHubViewModelTests
     public void SelectingItem_UpdatesPendingApply_AndEnablesCommand()
     {
         var item = Tweak("a", "HKCU", applied: false);
-        var vm = new TweaksHubViewModel(NewService(item));
+        var vm = NewVm(NewService(item));
         Assert.Equal(0, vm.PendingApply);
         Assert.False(vm.ApplySelectedCommand.CanExecute(null));
 
@@ -132,7 +142,7 @@ public class TweaksHubViewModelTests
     {
         var hkcu = Tweak("a", "HKCU", applied: false);
         var hklm = Tweak("b", "HKLM", applied: false);
-        var vm = new TweaksHubViewModel(NewService(hkcu, hklm));
+        var vm = NewVm(NewService(hkcu, hklm));
         Assert.Single(vm.Essential);
         Assert.Single(vm.Advanced);
     }

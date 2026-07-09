@@ -72,6 +72,11 @@ public sealed class SpeedTestHistoryService : IDisposable
             Log.Warning(ex, "Failed to parse speed test history JSON");
             return [];
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Access denied loading speed test history");
+            return [];
+        }
     }
 
     /// <summary>

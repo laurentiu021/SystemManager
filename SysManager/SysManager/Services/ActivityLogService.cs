@@ -54,7 +54,7 @@ public sealed class ActivityLogService
             var json = File.ReadAllText(FilePath);
             _entries = JsonSerializer.Deserialize<List<ActivityEntry>>(json) ?? [];
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Serilog.Log.Debug("ActivityLog load failed: {Error}", ex.Message);
             _entries = [];
@@ -67,10 +67,12 @@ public sealed class ActivityLogService
         {
             var dir = Path.GetDirectoryName(FilePath)!;
             Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = false });
+            // WriteIndented = false is the default, so no options object is needed — allocating
+            // one per save would only defeat System.Text.Json's per-options metadata cache.
+            var json = JsonSerializer.Serialize(snapshot);
             File.WriteAllText(FilePath, json);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Serilog.Log.Debug("ActivityLog save failed: {Error}", ex.Message);
         }

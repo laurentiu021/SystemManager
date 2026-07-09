@@ -18,7 +18,7 @@ namespace SysManager.Tests;
 [Collection("DialogService")]
 public class DashboardViewModelTests
 {
-    private static DashboardViewModel NewVm()
+    private static DashboardViewModel NewVm(IWingetService? winget = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -26,7 +26,7 @@ public class DashboardViewModelTests
             new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
             new TemperatureService(diskHealth, skipHardwareInit: true),
-            new WingetService(new PowerShellRunner()));
+            winget ?? new WingetService(new PowerShellRunner()));
     }
 
     // ---------- construction & defaults ----------
@@ -283,6 +283,33 @@ public class DashboardViewModelTests
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
             Assert.False(vm.IsQuickActionRunning);
             Assert.False(vm.IsQuickActionDone);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public async Task QuickUpdateApps_WhenConfirmed_DelegatesToInjectedWingetService()
+    {
+        // Regression: the Dashboard's one-click "Update All Apps" must call the INJECTED
+        // WingetService (the single winget source of truth), not shell a hand-rolled winget
+        // command. Before the fix it spawned a raw PowerShellRunner and never touched the
+        // injected service, so this Received(1) assertion failed.
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
+        var vm = NewVm(winget);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user confirms
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+
+            await winget.Received(1).UpgradeAllAsync(Arg.Any<CancellationToken>());
         }
         finally
         {

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -30,5 +31,23 @@ public class ContextMenuServiceTests
     {
         Assert.Equal("", ContextMenuService.StripMnemonic(""));
         Assert.Null(ContextMenuService.StripMnemonic(null!));
+    }
+
+    [Fact]
+    public void SplitCamelCase_CapitalizesInvariantly_OnTurkishCulture()
+    {
+        // Regression: char.ToUpper on the first letter is culture-sensitive — under tr-TR it
+        // maps 'i' → 'İ' (dotted capital I), corrupting entry names. ToUpperInvariant keeps
+        // shell-verb / app identifiers ASCII-cased regardless of the user's locale.
+        var prev = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("tr-TR");
+        try
+        {
+            Assert.Equal("Iexplore", ContextMenuService.SplitCamelCase("iexplore"));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = prev;
+        }
     }
 }

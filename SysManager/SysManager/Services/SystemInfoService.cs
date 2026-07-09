@@ -26,16 +26,16 @@ public sealed class SystemInfoService
 
     private SystemSnapshot Capture()
     {
-        OsInfo os;
+        OsInfo osStatic;
         CpuInfo cpu;
         List<DiskInfo> disks;
+        IReadOnlyList<MemoryModule> modules;
 
         lock (_cacheLock)
         {
-            // Static OS info (caption, version, build, arch) — cache it.
-            // Uptime is dynamic, so we always refresh it.
+            // Static OS info (caption, version, build, arch) — cache it; uptime refreshes below.
             _cachedOs ??= QueryOsStatic();
-            os = _cachedOs with { Uptime = QueryUptime() };
+            osStatic = _cachedOs;
 
             // CPU name/cores/threads/clock are static; only LoadPercentage is dynamic.
             _cachedCpuStatic ??= QueryCpuStatic();
@@ -49,9 +49,13 @@ public sealed class SystemInfoService
             // hardware — enumerate the DIMMs once. Only the dynamic totals refresh below,
             // so the Dashboard's 300 ms vitals poll no longer re-queries Win32_PhysicalMemory.
             _cachedModules ??= QueryMemoryModules();
+            modules = _cachedModules;
         }
 
-        var mem = QueryMemory(_cachedModules);
+        // One Win32_OperatingSystem query for BOTH the dynamic uptime and memory totals —
+        // previously two separate round-trips (QueryUptime + QueryMemory) to the same class.
+        var (uptime, mem) = QueryDynamicOs(modules);
+        var os = osStatic with { Uptime = uptime };
         return new SystemSnapshot(os, cpu, mem, disks, DateTime.Now);
     }
 
@@ -90,11 +94,17 @@ public sealed class SystemInfoService
         return new OsInfo("Windows", "", "", TimeSpan.Zero, "");
     }
 
-    private static TimeSpan QueryUptime()
+    // Single Win32_OperatingSystem query for BOTH the dynamic uptime and the memory totals, so
+    // the per-poll path makes one round-trip instead of two (QueryUptime + QueryMemory previously
+    // queried the same class separately). The static DIMM modules are passed through unchanged.
+    private static (TimeSpan Uptime, MemoryInfo Memory) QueryDynamicOs(IReadOnlyList<MemoryModule> modules)
     {
+        var uptime = TimeSpan.Zero;
+        double totalKb = 0, freeKb = 0;
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT LastBootUpTime FROM Win32_OperatingSystem");
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT LastBootUpTime,TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem");
             using var osCollection = searcher.Get();
             foreach (ManagementObject mo in osCollection)
             {
@@ -103,18 +113,25 @@ public sealed class SystemInfoService
                     var lastBootRaw = mo["LastBootUpTime"]?.ToString();
                     if (!string.IsNullOrEmpty(lastBootRaw))
                     {
-                        try { return DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
-                        catch (FormatException) { /* WMI date string malformed — fall through to zero */ }
-                        catch (InvalidCastException) { /* WMI returned unexpected type — fall through to zero */ }
+                        try { uptime = DateTime.Now - ManagementDateTimeConverter.ToDateTime(lastBootRaw); }
+                        catch (FormatException) { /* WMI date string malformed — keep zero uptime */ }
+                        catch (InvalidCastException) { /* WMI returned unexpected type — keep zero uptime */ }
                     }
+                    totalKb = Convert.ToDouble(mo["TotalVisibleMemorySize"] ?? 0);
+                    freeKb = Convert.ToDouble(mo["FreePhysicalMemory"] ?? 0);
                 }
             }
         }
         catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
-            /* WMI unavailable — degrade to zero uptime */
+            /* WMI unavailable — degrade to zero uptime + zeroed totals (modules still shown) */
         }
-        return TimeSpan.Zero;
+
+        double totalGB = totalKb / 1024d / 1024d;
+        double freeGB = freeKb / 1024d / 1024d;
+        double usedGB = totalGB - freeGB;
+        double pct = totalGB > 0 ? usedGB / totalGB * 100.0 : 0;
+        return (uptime, new MemoryInfo(totalGB, freeGB, usedGB, pct, modules));
     }
 
     private static CpuInfo QueryCpuStatic()
@@ -164,38 +181,8 @@ public sealed class SystemInfoService
         return 0;
     }
 
-    // Dynamic RAM totals (refreshed every poll) combined with the pre-enumerated,
-    // cached static DIMM modules. Only Win32_OperatingSystem is queried here.
-    private static MemoryInfo QueryMemory(IReadOnlyList<MemoryModule> modules)
-    {
-        double totalKb = 0, freeKb = 0;
-        try
-        {
-            using var s = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem");
-            using var memCollection = s.Get();
-            foreach (ManagementObject mo in memCollection)
-            {
-                using (mo)
-                {
-                    totalKb = Convert.ToDouble(mo["TotalVisibleMemorySize"] ?? 0);
-                    freeKb = Convert.ToDouble(mo["FreePhysicalMemory"] ?? 0);
-                }
-            }
-        }
-        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
-        {
-            /* WMI unavailable — degrade to zeroed totals (modules still shown) */
-        }
-        double totalGB = totalKb / 1024d / 1024d;
-        double freeGB = freeKb / 1024d / 1024d;
-        double usedGB = totalGB - freeGB;
-        double pct = totalGB > 0 ? usedGB / totalGB * 100.0 : 0;
-
-        return new MemoryInfo(totalGB, freeGB, usedGB, pct, modules);
-    }
-
-    // Physical DIMM inventory — static hardware, enumerated once and cached. Kept
-    // separate from QueryMemory so the per-poll path never re-scans Win32_PhysicalMemory.
+    // Physical DIMM inventory — static hardware, enumerated once and cached. Kept separate
+    // from the dynamic OS query so the per-poll path never re-scans Win32_PhysicalMemory.
     private static List<MemoryModule> QueryMemoryModules()
     {
         List<MemoryModule> modules = [];
@@ -285,19 +272,36 @@ public sealed class SystemInfoService
         {
             // Fallback to Win32_DiskDrive if MSFT_PhysicalDisk / the Storage WMI namespace
             // isn't available (older/headless Windows — scope.Connect() throws COMException).
-            using var s = new ManagementObjectSearcher("SELECT Model,Size,Status FROM Win32_DiskDrive");
-            using var fallbackCollection = s.Get();
-            foreach (ManagementObject mo in fallbackCollection)
+            // This fallback runs precisely when WMI is already degraded, so it needs its own
+            // guard: a fault here (or a malformed Size) must degrade to the partial list, not
+            // propagate out of Capture() and surface as an error — mirroring every other method.
+            try
             {
-                using (mo)
+                using var s = new ManagementObjectSearcher("SELECT Model,Size,Status FROM Win32_DiskDrive");
+                using var fallbackCollection = s.Get();
+                foreach (ManagementObject mo in fallbackCollection)
                 {
-                    var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
-                    list.Add(new DiskInfo(
-                        mo["Model"]?.ToString() ?? "Disk",
-                        "Unknown", "Unknown", size,
-                        mo["Status"]?.ToString() ?? "Unknown",
-                        "Unknown", null, null));
+                    using (mo)
+                    {
+                        try
+                        {
+                            var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
+                            list.Add(new DiskInfo(
+                                mo["Model"]?.ToString() ?? "Disk",
+                                "Unknown", "Unknown", size,
+                                mo["Status"]?.ToString() ?? "Unknown",
+                                "Unknown", null, null));
+                        }
+                        catch (Exception exItem) when (exItem is FormatException or OverflowException or InvalidCastException)
+                        {
+                            /* malformed Size on this disk — skip it, keep the rest */
+                        }
+                    }
                 }
+            }
+            catch (Exception exFallback) when (exFallback is ManagementException or System.Runtime.InteropServices.COMException)
+            {
+                /* Win32_DiskDrive also unavailable — return whatever enumerated (mirrors the other WMI methods) */
             }
         }
         return list;

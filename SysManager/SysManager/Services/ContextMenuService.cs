@@ -641,7 +641,7 @@ public sealed partial class ContextMenuService
     /// <summary>
     /// Splits a CamelCase or PascalCase string into separate words.
     /// </summary>
-    private static string SplitCamelCase(string input)
+    internal static string SplitCamelCase(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return input;
 
@@ -660,9 +660,11 @@ public sealed partial class ContextMenuService
         result = ConsecutiveUpperPattern().Replace(result, " $1");
         result = MultiSpacePattern().Replace(result, " ").Trim();
 
-        // Capitalize first letter
+        // Capitalize first letter. Invariant on purpose: these are shell-verb / app
+        // identifiers, not locale-sensitive prose — char.ToUpper maps 'i'→'İ' on tr-TR
+        // and would corrupt entry names for Turkish users.
         if (result.Length > 0)
-            result = char.ToUpper(result[0]) + result[1..];
+            result = char.ToUpperInvariant(result[0]) + result[1..];
 
         return result;
     }

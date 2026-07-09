@@ -99,7 +99,7 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SchedulePath)!);
-            string json = JsonSerializer.Serialize(schedule, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(schedule, JsonDefaults.Indented);
             File.WriteAllText(SchedulePath, json);
         }
         catch (IOException ex) { Log.Warning("Dark-mode schedule save failed: {Error}", ex.Message); }

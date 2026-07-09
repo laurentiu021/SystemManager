@@ -287,6 +287,26 @@ public class CleanupViewModelTests
         Assert.Equal(100, vm.Progress);
     }
 
+    // ---------- shared-runner mutual exclusion ----------
+
+    // Temp Cleanup, SFC, and DISM all stream through the single shared PowerShellRunner
+    // into the one Console. Their per-category OperationLockService locks (Temp = Disk,
+    // SFC/DISM = SystemModification) don't exclude Temp from SFC/DISM, so an intra-VM guard
+    // does. This pins that guard's mutual-exclusion contract directly; the full command path
+    // is gated behind elevation (SFC/DISM) or a live disk lock — both skipped or contended
+    // under CI — so testing the primitive is the deterministic sibling of the
+    // SystemModificationLock_IsMutuallyExclusive test below.
+    [Fact]
+    public void ConsoleRunnerGuard_IsMutuallyExclusive()
+    {
+        var vm = NewVm();
+        Assert.True(vm.TryBeginConsoleOp());   // e.g. SFC claims the shared runner
+        Assert.False(vm.TryBeginConsoleOp());  // Temp / DISM blocked while it is held
+        vm.EndConsoleOp();
+        Assert.True(vm.TryBeginConsoleOp());    // released — free to claim again
+        vm.EndConsoleOp();
+    }
+
     // ---------- base class properties (exercise ViewModelBase setters) ----------
 
     [Fact]

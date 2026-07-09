@@ -34,7 +34,9 @@ public sealed partial class TweaksHubViewModel : ViewModelBase
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();
-        Load();
+        // Read the registry-backed tweaks off the UI thread so the eagerly-built VM doesn't
+        // block startup; the UI update runs back on the UI thread (ConfigureAwait true).
+        InitializeAsync(LoadAsync);
     }
 
     private IEnumerable<TweakItem> AllTweaks => Essential.Concat(Advanced);
@@ -47,14 +49,19 @@ public sealed partial class TweaksHubViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Refresh() => Load();
+    private Task Refresh() => LoadAsync();
 
-    private void Load()
+    private async Task LoadAsync()
+    {
+        var tweaks = await Task.Run(_service.LoadTweaks).ConfigureAwait(true);
+        ApplyTweaks(tweaks);
+    }
+
+    private void ApplyTweaks(IReadOnlyList<TweakItem> tweaks)
     {
         // Detach old selection-change handlers before replacing the items.
         foreach (var t in AllTweaks) t.PropertyChanged -= OnTweakChanged;
 
-        var tweaks = _service.LoadTweaks();
         Essential.ReplaceWith(tweaks.Where(t => t.Tier == TweakTier.Essential));
         Advanced.ReplaceWith(tweaks.Where(t => t.Tier == TweakTier.Advanced));
 

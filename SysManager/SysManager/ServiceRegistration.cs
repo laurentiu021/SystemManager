@@ -24,7 +24,7 @@ public static class ServiceRegistration
         services.AddTransient<PowerShellRunner>();
         services.AddTransient<IPowerShellRunner, PowerShellRunner>();
         services.AddSingleton<SystemInfoService>();
-        services.AddSingleton<WingetService>();
+        services.AddSingleton<IWingetService, WingetService>();
         services.AddSingleton<TrayIconService>();
         services.AddSingleton<UpdateService>();
         services.AddSingleton<ShortcutCleanerService>();
@@ -85,6 +85,15 @@ public static class ServiceRegistration
         services.AddSingleton<MaintenanceSchedulerService>();
         services.AddSingleton<ITweaksHubService, TweaksHubService>();
         services.AddSingleton<IAudioMixerService, AudioMixerService>();
+        // Gaming Profile orchestrates the audited services above; it needs the process's
+        // elevation state at construction (a value DI can't resolve), hence the factory.
+        services.AddSingleton<IGamingProfileService>(sp => new GamingProfileService(
+            sp.GetRequiredService<PerformanceService>(),
+            sp.GetRequiredService<ITimerResolutionService>(),
+            sp.GetRequiredService<ICpuAffinityService>(),
+            sp.GetRequiredService<StandbyMemoryService>(),
+            sp.GetRequiredService<RestorePointService>(),
+            Helpers.AdminHelper.IsElevated()));
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
@@ -143,6 +152,7 @@ public static class ServiceRegistration
         services.AddSingleton<ScheduledMaintenanceViewModel>();
         services.AddSingleton<TweaksHubViewModel>();
         services.AddSingleton<AudioMixerViewModel>();
+        services.AddSingleton<GamingProfileViewModel>();
 
         return services;
     }

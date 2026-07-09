@@ -125,6 +125,51 @@ public sealed class CpuAffinityService : ICpuAffinityService
         }
     }
 
+    /// <summary>Read the current scheduling priority class for a process, or null if unavailable.</summary>
+    public ProcessPriorityClass? GetPriority(int processId)
+    {
+        try
+        {
+            using var p = Process.GetProcessById(processId);
+            p.Refresh();
+            return p.PriorityClass;
+        }
+        catch (ArgumentException) { return null; }
+        catch (InvalidOperationException) { return null; }
+        catch (Win32Exception) { return null; }
+    }
+
+    /// <summary>
+    /// Set a process's scheduling priority class. Returns true on success; on failure sets
+    /// <paramref name="error"/> (mirrors <see cref="TrySetAffinity"/>'s error idiom).
+    /// </summary>
+    public bool TrySetPriority(int processId, ProcessPriorityClass priority, out string error)
+    {
+        error = "";
+        try
+        {
+            using var p = Process.GetProcessById(processId);
+            p.PriorityClass = priority;
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            error = "That process is no longer running.";
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            error = "That process has exited.";
+            return false;
+        }
+        catch (Win32Exception ex)
+        {
+            Log.Debug("Set priority for {Pid} failed: {Error}", processId, ex.Message);
+            error = "Couldn't change this process — it may belong to another user and need administrator rights.";
+            return false;
+        }
+    }
+
     /// <summary>Bitmask with the low <paramref name="count"/> bits set (all logical CPUs).</summary>
     public static long AllCoresMask(int count) => count >= 64 ? -1L : (1L << count) - 1;
 

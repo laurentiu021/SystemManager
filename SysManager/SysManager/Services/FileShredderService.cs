@@ -86,6 +86,19 @@ public sealed partial class FileShredderService
             if (heldCanonical is not null)
                 ThrowIfProtected(ExpandShortPath(heldCanonical));
 
+            // Refuse to overwrite a file that has more than one hard link. Overwriting the
+            // bytes destroys the data for EVERY name that points at this file — including links
+            // outside the selected scope, or a hard link a standard user placed at an unprotected
+            // path that shares its data with a protected file (the path guard sees only the name
+            // we opened, and GetFinalPathNameByHandle resolves symlinks/junctions but NOT hard
+            // links). Unlinking a single name is not a secure shred either — the data survives via
+            // the other links — so refuse outright. Best-effort: if the query fails we proceed
+            // (a normal single-link file is the overwhelming case), never blocking a real shred.
+            if (NativeMethods.GetFileInformationByHandle(stream.SafeFileHandle, out var info) && info.NumberOfLinks > 1)
+                throw new IOException(
+                    $"This file has {info.NumberOfLinks} hard links, so its data is shared with other locations. " +
+                    "Securely shredding it would destroy that shared data — remove the extra links first, or delete it normally.");
+
             var fileLength = stream.Length;
 
             for (var pass = 0; pass < totalPasses; pass++)
@@ -171,8 +184,24 @@ public sealed partial class FileShredderService
         if (!Directory.Exists(folderPath))
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
+        // A junction/symlink AT THE ROOT would make EnumerateFilesSafe follow it into the
+        // link target and shred files OUTSIDE the selected folder — the reparse-point skip in
+        // EnumerateFilesSafe only guards CHILD entries, never the root it starts enumerating
+        // from. Refuse a reparse-point root; the user must select the real target folder to
+        // shred it. (SecurityException is already the shred services' "not allowed" signal and
+        // is handled by the caller.)
+        if ((new DirectoryInfo(folderPath).Attributes & FileAttributes.ReparsePoint) != 0)
+            throw new SecurityException(
+                $"The selected folder is a junction or symlink; shredding it would destroy data at its target outside the selected location: {folderPath}");
+
         var files = EnumerateFilesSafe(folderPath);
         var totalFiles = files.Count;
+
+        // Files whose secure overwrite did NOT complete (denied, locked, hard-linked, …). We
+        // must never fall back to a plain delete for these: the caller believes a shredded file
+        // was securely overwritten, so a plain-deleted (recoverable) file would silently break
+        // that guarantee. We leave them on disk and report them instead of force-deleting.
+        List<string> failedFiles = [];
 
         for (var i = 0; i < totalFiles; i++)
         {
@@ -190,27 +219,66 @@ public sealed partial class FileShredderService
             catch (UnauthorizedAccessException ex)
             {
                 Log.Warning(ex, "Access denied while shredding file: {Path}", files[i]);
+                failedFiles.Add(files[i]);
             }
             catch (IOException ex)
             {
                 Log.Warning(ex, "I/O error while shredding file: {Path}", files[i]);
+                failedFiles.Add(files[i]);
             }
 
             var overallProgress = (int)((i + 1) * 100.0 / totalFiles);
             progress?.Report(overallProgress);
         }
 
-        // Remove empty directories bottom-up
-        try
+        // Remove now-empty directories deepest-first. A securely-shredded file was already
+        // deleted by ShredFileAsync, so its directory becomes empty and is removed here; a
+        // directory that still holds a file we could NOT shred is left in place (with the file).
+        // We only ever remove EMPTY directories (recursive:false), so this can never plain-delete
+        // an un-overwritten file — the bug this replaces (the old recursive delete did).
+        //
+        // The directory list comes from EnumerateDirectoriesSafe, which skips junctions and
+        // symlinks exactly like EnumerateFilesSafe. The framework's recursive enumerator
+        // (Directory.EnumerateDirectories with AllDirectories) would instead DESCEND THROUGH a
+        // child junction and hand TryRemoveIfEmpty a path at the link's target, letting
+        // Directory.Delete remove an empty directory OUTSIDE the selected folder. Sharing the
+        // file walk's reparse boundary confines cleanup to the real tree; a folder that contains
+        // a child junction is intentionally left in place rather than descended into.
+        foreach (var dir in EnumerateDirectoriesSafe(folderPath)
+                     .OrderByDescending(d => d.Count(c => c == Path.DirectorySeparatorChar)))
         {
-            Directory.Delete(folderPath, recursive: true);
+            TryRemoveIfEmpty(dir);
         }
-        catch (IOException ex)
+        TryRemoveIfEmpty(folderPath);
+
+        if (failedFiles.Count > 0)
         {
-            Log.Warning(ex, "Could not fully remove folder structure: {Path}", folderPath);
+            // Honest partial failure: the folder was NOT fully shredded. Report which files were
+            // left in place so the caller (and the user) never believe a file that could not be
+            // securely overwritten was destroyed.
+            var sample = string.Join(", ", failedFiles.Take(5).Select(Path.GetFileName));
+            var more = failedFiles.Count > 5 ? $", and {failedFiles.Count - 5} more" : string.Empty;
+            throw new IOException(
+                $"{failedFiles.Count} of {totalFiles} file(s) could not be securely shredded and were left in place (not deleted): {sample}{more}.");
         }
 
         Log.Information("Folder shredded successfully: {Path} ({Method})", folderPath, method);
+    }
+
+    /// <summary>
+    /// Removes <paramref name="dir"/> only when it is empty, swallowing the expected
+    /// "not empty / denied / already gone" faults. Used to clean up the emptied directory
+    /// structure after a folder shred WITHOUT ever force-deleting a file that remains in it.
+    /// </summary>
+    private static void TryRemoveIfEmpty(string dir)
+    {
+        try
+        {
+            if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                Directory.Delete(dir, recursive: false);
+        }
+        catch (IOException ex) { Log.Debug(ex, "Shredder: could not remove directory {Dir}", dir); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied removing directory {Dir}", dir); }
     }
 
     /// <summary>
@@ -246,6 +314,41 @@ public sealed partial class FileShredderService
             // Skip junctions/symlinks to avoid following reparse points out of the tree.
             foreach (var sub in subDirs.Where(s => (s.Attributes & FileAttributes.ReparsePoint) == 0))
             {
+                stack.Push(sub);
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Recursively enumerates sub-directories while skipping junctions and symlinks
+    /// (reparse points), mirroring <see cref="EnumerateFilesSafe"/>. Used to clean up the
+    /// emptied directory structure after a folder shred WITHOUT ever descending through a
+    /// reparse point: a child junction is left untouched, so the deepest-first
+    /// <see cref="TryRemoveIfEmpty"/> pass can never reach — and delete — an empty directory
+    /// at the link's target, outside the selected folder.
+    /// </summary>
+    private static List<string> EnumerateDirectoriesSafe(string rootPath)
+    {
+        List<string> results = [];
+        Stack<DirectoryInfo> stack = [];
+        stack.Push(new DirectoryInfo(rootPath));
+
+        while (stack.Count > 0)
+        {
+            var dir = stack.Pop();
+
+            DirectoryInfo[] subDirs;
+            try { subDirs = dir.GetDirectories(); }
+            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied enumerating {Dir}", dir.FullName); continue; }
+            catch (IOException ex) { Log.Debug(ex, "Shredder: I/O error enumerating {Dir}", dir.FullName); continue; }
+
+            // Skip junctions/symlinks — never descend through a reparse point (identical
+            // boundary to EnumerateFilesSafe, so cleanup honors the exact scope that was shredded).
+            foreach (var sub in subDirs.Where(s => (s.Attributes & FileAttributes.ReparsePoint) == 0))
+            {
+                results.Add(sub.FullName);
                 stack.Push(sub);
             }
         }
@@ -424,5 +527,35 @@ public sealed partial class FileShredderService
             [Out] char[] lpszFilePath,
             uint cchFilePath,
             uint dwFlags);
+
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool GetFileInformationByHandle(
+            SafeFileHandle hFile,
+            out ByHandleFileInformation lpFileInformation);
+
+        // Layout must match the native BY_HANDLE_FILE_INFORMATION exactly. All fields are plain
+        // 4-byte DWORDs — each FILETIME is two DWORDs, expanded here — so the struct is fully
+        // blittable. LibraryImport rejects a struct that needs runtime marshalling (SYSLIB1051),
+        // and enabling assembly-wide DisableRuntimeMarshalling would break the classic
+        // [DllImport] surfaces that DO rely on it. Expanding keeps NumberOfLinks at its native
+        // offset (40) with no padding.
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct ByHandleFileInformation
+        {
+            public uint FileAttributes;
+            public uint CreationTimeLow;
+            public uint CreationTimeHigh;
+            public uint LastAccessTimeLow;
+            public uint LastAccessTimeHigh;
+            public uint LastWriteTimeLow;
+            public uint LastWriteTimeHigh;
+            public uint VolumeSerialNumber;
+            public uint FileSizeHigh;
+            public uint FileSizeLow;
+            public uint NumberOfLinks;
+            public uint FileIndexHigh;
+            public uint FileIndexLow;
+        }
     }
 }

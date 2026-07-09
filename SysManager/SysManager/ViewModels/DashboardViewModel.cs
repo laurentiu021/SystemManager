@@ -19,7 +19,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private readonly TuneUpService _tuneUp;
     private readonly HealthScoreService _healthScore;
     private readonly TemperatureService _temps;
-    private readonly WingetService _winget;
+    private readonly IWingetService _winget;
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _pollingCts;
 
@@ -29,6 +29,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // query), instead of re-initialising and re-querying on every tick.
     private bool _nvApiInitTried;
     private bool _nvApiAvailable;
+    // Cached NVIDIA GPU handle, resolved once during init instead of re-enumerating every
+    // 300ms poll — matches the "resolve static hardware once" pattern used for the GPU name.
+    private NvAPIWrapper.GPU.PhysicalGPU? _gpu;
     private bool _gpuNameResolved;
 
     // ── Real-time vitals (300ms polling) ──────────────────────────────────
@@ -87,7 +90,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private bool _isActive;
 
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
-        HealthScoreService healthScore, TemperatureService temps, WingetService winget)
+        HealthScoreService healthScore, TemperatureService temps, IWingetService winget)
     {
         _sys = sys;
         _tuneUp = tuneUp;
@@ -179,7 +182,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
             try
             {
                 NvAPIWrapper.NVIDIA.Initialize();
-                _nvApiAvailable = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs().Length > 0;
+                // Resolve the GPU handle ONCE and cache it; each poll then reads live usage and
+                // memory off this handle instead of re-enumerating all physical GPUs every tick.
+                var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
+                _gpu = gpus.Length > 0 ? gpus[0] : null;
+                _nvApiAvailable = _gpu is not null;
             }
             catch (Exception ex)
             {
@@ -188,27 +195,23 @@ public sealed partial class DashboardViewModel : ViewModelBase
             }
         }
 
-        if (_nvApiAvailable)
+        if (_nvApiAvailable && _gpu is not null)
         {
             try
             {
-                var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
-                if (gpus.Length > 0)
-                {
-                    var gpu = gpus[0];
-                    var usage = gpu.UsageInformation.GPU.Percentage;
-                    var memTotal = gpu.MemoryInformation.DedicatedVideoMemoryInkB / 1024.0 / 1024.0;
-                    var memUsed = (gpu.MemoryInformation.DedicatedVideoMemoryInkB -
-                                   gpu.MemoryInformation.AvailableDedicatedVideoMemoryInkB) / 1024.0 / 1024.0;
+                var usage = _gpu.UsageInformation.GPU.Percentage;
+                var memTotal = _gpu.MemoryInformation.DedicatedVideoMemoryInkB / 1024.0 / 1024.0;
+                var memUsed = (_gpu.MemoryInformation.DedicatedVideoMemoryInkB -
+                               _gpu.MemoryInformation.AvailableDedicatedVideoMemoryInkB) / 1024.0 / 1024.0;
+                var name = _gpu.FullName;
 
-                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-                    {
-                        GpuPercent = usage;
-                        GpuName = gpu.FullName;
-                        GpuVram = $"{memUsed:F1} / {memTotal:F1} GB VRAM";
-                    });
-                    return;
-                }
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    GpuPercent = usage;
+                    GpuName = name;
+                    GpuVram = $"{memUsed:F1} / {memTotal:F1} GB VRAM";
+                });
+                return;
             }
             catch (Exception ex)
             {
@@ -403,8 +406,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private async Task ScanSmartHealthAsync(DashboardAlert alert)
     {
-        var result = await _healthScore.ComputeAsync();
-        var diskScore = result.DiskScore;
+        // Reuse the score LoadHealthScoreAsync already computed (it runs before the alert
+        // scans) instead of recomputing the heavy WMI/SMART/battery work; fall back to a fresh
+        // compute only if that load produced nothing (e.g. it failed).
+        var diskScore = (HealthResult ?? await _healthScore.ComputeAsync()).DiskScore;
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
             if (diskScore >= 90)
@@ -461,7 +466,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private async Task ScanMemoryHealthAsync(DashboardAlert alert)
     {
-        var result = await _healthScore.ComputeAsync();
+        // Reuse the already-computed score (see ScanSmartHealthAsync) rather than recomputing.
+        var result = HealthResult ?? await _healthScore.ComputeAsync();
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
             if (result.RamScore >= 90)
@@ -629,14 +635,16 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             QuickActionDetail = "Checking for upgrades...";
             QuickActionProgress = 30;
-            var runner = new PowerShellRunner();
-            var output = new System.Text.StringBuilder();
-            runner.LineReceived += l => { if (l.Kind == OutputKind.Output) output.AppendLine(l.Text); };
-
-            await runner.RunScriptViaPwshAsync("winget upgrade --all --silent --accept-package-agreements --accept-source-agreements 2>$null | Out-String", CancellationToken.None);
+            // Delegate to the injected WingetService (the IPowerShellRunner-backed seam) so the
+            // Dashboard's one-click "Update All Apps" uses the SAME winget invocation as the App
+            // Updates tab. A hand-rolled command here had drifted — it was missing
+            // --no-progress / --disable-interactivity / --include-unknown and reported success
+            // even when winget failed.
+            var result = await _winget.UpgradeAllAsync(CancellationToken.None);
             QuickActionProgress = 100;
-            QuickActionDetail = "All apps updated";
-            ActivityLogService.Instance.Log("App Updates", "Upgrade all completed");
+            QuickActionDetail = result.Succeeded ? "All apps updated" : result.FriendlyMessage;
+            ActivityLogService.Instance.Log("App Updates",
+                result.Succeeded ? "Upgrade all completed" : $"Upgrade all: {result.FriendlyMessage}");
         });
     }
 

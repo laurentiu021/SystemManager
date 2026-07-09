@@ -4,52 +4,148 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-- **Volume Control — a per-app volume mixer.** The Customization group's Volume Control tab is now a working mixer instead of a placeholder: it lists each application currently playing sound on your default playback device with its own volume slider, a mute button, and a live level meter, so you can turn one app down (or mute it) without touching the master volume or digging through the Windows mixer. It reads and controls audio through the documented Windows Core Audio APIs directly — no extra dependency is bundled — and does no background work while the tab isn't open. This version covers apps on the default output device; per-app output-device routing (send one app to your headset, another to speakers) and saved volume presets are planned for a later update.
-
-### Changed
-- **Introduced a design-token foundation for the ongoing UI refresh.** Corner radii, spacing, and motion timings are now defined once as named tokens (a 4/8/12/16/999 radius scale, a 4px spacing rhythm, and 150/200/300 ms motion durations) and referenced by the shared control styles, instead of being hardcoded per style. This removes small inconsistencies that had crept in — cards, inputs, checkboxes and chips each used slightly different corner radii — so every surface now rounds on the same scale. The only visible effect is that cards round very slightly more (10 → 12 px) and inputs/checkboxes very slightly less (to 4 px). No behavior change.
-- **Cards now have subtle depth.** Content cards carry a faint top-lit sheen and a 1px top-edge highlight on their border, giving a gentle "raised" feel instead of reading flat. It's a light touch — no drop shadows (kept intentionally for performance across the many cards on a page) — and it's theme-derived, so it adapts to every preset and the custom-color theme automatically (a light highlight on dark themes, a soft darker edge on light themes). Part of the ongoing UI refresh.
-- **Table rows now show a distinct hover.** In every data table (Services, Processes, Updates, and the rest) hovering a row previously used the same accent tint as a selected row, so pointing at a row made it look selected. Hover now uses a subtle neutral tint and selection keeps the accent tint, so the two states are clearly different. Part of the ongoing UI refresh.
-- **Corner radii are now consistent across every tab.** Individual views still used a mix of slightly different corner radii on their banners, cards, and chips; these are now snapped to the same shared scale as the rest of the app (cards to 12 px, chips to 8 px), so panels no longer round by subtly different amounts from one tab to the next. Purely visual, no behavior change. Part of the ongoing UI refresh.
-- **Destructive action buttons now disable themselves when there is nothing to act on.** Several actions stayed clickable in states where they could do nothing but looked operable: Deep Cleanup's "Clean selected" was enabled with 0 bytes selected, the Debloater's red "Remove selected" and the Uninstaller's "Uninstall / Select all / Deselect" were enabled on an empty (unscanned) list, and Quick Cleanup's "Cancel" was enabled with nothing running. Each of these now enables only when its action is actually available — a selection exists, the list is populated, or an operation is running — so a destructive button is never presented as clickable with no effect.
-- **The red "danger" button styling is now applied consistently to irreversible actions.** Equivalent destructive actions had drifted to three different button styles: the File Shredder's "Shred All" and the Debloater's "Remove selected" were red, but the Uninstaller's "Uninstall selected" was a neutral secondary button and Deep Cleanup's "Clean selected" (which deletes files without sending them to the Recycle Bin) was styled as the accent primary action. Uninstall and Clean are now red like the others, so any action that permanently removes software or data reads as destructive at a glance. Conversely, Defender's "Remove" exclusion button was red even though removing an exclusion makes Defender scan that folder *again* (it strengthens protection); it is now a neutral button, with the red styling reserved for actions that reduce protection or delete data. (In the Services list, a service marked **Critical** already shows a red "Critical" safety badge, and Stop/Disable on it are refused outright — see the boot-critical guard below.)
+## [1.52.65] - 2026-07-09
 
 ### Fixed
-- **Three runtime display glitches on Ping and File Shredder are fixed.** The **Ping** latency chart drew a row of ~20 identical "00:00:00" tick labels along its time axis before you pressed Start (an empty-axis artifact) — the axis now stays clean until the first sample arrives. On the **Violet Night** theme, the per-target Ping mini-labels (LATENCY / AVG / JITTER / LOSS) used a saturated violet that measured ~4.4:1 against the card (just under the readability bar); they now use the lighter secondary-text colour (~9.7:1). And the **File Shredder**'s disabled "Shred All" button rendered as faded white-on-pink (~1.2:1, effectively invisible on the Light themes); a disabled destructive button now greys out to a neutral surface with legible text (~12:1). All three were verified by on-screen measurement.
-- **Work-in-progress tabs now carry the "PREVIEW" badge like the other unfinished tabs.** Four placeholder tabs (Gaming Profile, Bandwidth Monitor, Edge/OneDrive Remover, Notification Blocker) showed no badge in the sidebar, so they looked indistinguishable from finished tabs even though they open an empty placeholder. They now show the same "PREVIEW" pill the other in-development tabs already carry, setting the expectation before you click. (Volume Control also carried this placeholder badge until it was implemented as a working mixer — see the Volume Control entry above.)
-- **Data grids, the admin banner, and the Battery card now look consistent across tabs.** The Services list rendered its table flush against the page while every other list view (Process Manager, Startup, Uninstaller, Drivers, System Logs) wraps its grid in a bordered card — the Services grid now uses the same card. The "Running as administrator" banner drew its shield with a colour emoji on three tabs and a theme-coloured Fluent glyph on Process Manager; all tabs now use the theme-coloured glyph, so the shield adapts to the theme instead of standing out. And on the Battery Health tab the Charge percentage was indented while the Health and Wear numbers below it sat flush-left; Charge now uses the same layout, so all three big numbers line up.
-- **Tab titles, button labels, and verbs are now consistent across the app.** Several page titles no longer matched their sidebar label: the App Blocker page was headed "Application Blocker", DNS & Hosts was "DNS & Hosts Editor", Privacy & Telemetry was "Privacy Toggles", and the App Updates tab was the lone lowercase "App updates" — each page title now matches its sidebar label. The multi-select actions were labelled four different ways ("Deselect", "Deselect all", "Clear", "Clear selection"); they are now uniformly "Select All" / "Deselect All". And the Environment Variables row button said "Remove" while its action deletes the variable — it now reads "Delete", matching the verb convention (Delete for entries, Uninstall for apps, Shred for secure-erase).
-- **Context-menu entries no longer show a stray "&" in their names.** Windows shell verbs often store their label with an accelerator ampersand (e.g. "&Open", "Scan with Microsoft &Defender"). Because the Context Menu tab renders each name in a plain text block, that "&" appeared literally mid-word. The name cleanup now strips a lone accelerator ampersand and collapses an escaped "&&" to a single "&", so names read cleanly. Covered by unit tests.
-- **Empty scan/list tabs now share one consistent empty-state look, and none are blank voids.** Several tabs drew their "nothing here yet" state in their own ad-hoc way (or not at all): Disk Analyzer, File Lock and the Uninstaller used hand-rolled one-off text, and the Drivers and System Fixes panels showed a blank bordered area with no message on first load. All of these now use the shared empty-state control (icon + title + hint), matching the tabs that already did. The File Shredder's idle empty state also swapped its warning-triangle icon for a neutral one (the triangle is reserved for the real SSD warning). And the Debloater's centered message no longer says "Press Refresh to scan" after a scan that already returned nothing — it switches to "No Store apps found", matching the status bar. (The Speed Test history hints were already consistent and were left as-is.)
-- **A boot-critical Windows service can no longer be stopped from the Services tab.** Disabling a critical service (RpcSs, DcomLaunch, and the like) was already refused outright, but *stopping* one only showed the same neutral "this may affect system functionality" confirm — yet stopping a boot/logon-critical service can freeze the session or force a reboot just as surely. Stopping a service marked Critical is now refused with a clear message, matching the existing disable guard, before any elevation prompt or action. Covered by a regression test.
-- **Long values in data tables now ellipsize instead of hard-clipping mid-word.** A few fixed-width table columns cut their text off at the cell edge with no "…" and no way to read the rest: the Startup Manager **Publisher** column, the Environment Variables **Value** column (a long PATH ran under the Remove button), and the Services **Name** and **Service** columns (which clipped while the Description column beside them had free space). Each now trims with an ellipsis and shows the full value in a tooltip on hover, matching the Services Description column that already did this. The Environment Variables value is still shown in full when you edit the row.
-- **The sidebar "Appearance" (theme) button is now keyboard- and screen-reader-accessible.** The small theme-palette chip at the bottom of the sidebar was a plain click target with no accessible name, no keyboard focus, and no tab stop, so it was invisible to assistive technology and unreachable without a mouse. It now exposes an "Appearance" name, takes keyboard focus (with a visible focus ring), and opens on Enter/Space like any button.
-- **Network Repair action descriptions now align under their titles.** In each of the three rows (Flush DNS Cache, Reset Winsock Catalog, Reset TCP/IP Stack) the first description line was width-capped and drifted to the right while the second line sat flush-left, giving a ragged look; the first line now left-aligns with the rest of the row.
-- **The About update-status dot now turns red when a check fails.** The little status dot beside the "Check for updates" message stayed green even when the check reported a hard error (e.g. GitHub unreachable), so its colour contradicted the message; it now shows red on a failed check and green otherwise.
-- **Type-to-select works again in the fixed dropdowns.** When the six dropdowns were switched to render friendly labels (above), they lost keyboard type-ahead — typing a letter to jump to a matching item silently matched nothing, because the match fell back to the item's internal object text. Each now declares which field to search (Display / Label / Name), restoring type-to-select and keeping the dropdowns fully keyboard-operable.
-- **A round of small UI polish across several tabs.**
-  - **Restore Points / Debloater** — the toolbar text boxes were blank with no hint of their purpose; they now show placeholder text ("Describe this restore point…", "Search apps…") like the other search/filter boxes.
-  - **Sidebar "PREVIEW" badge** — on longer nav labels (Settings Watchdog) the badge was clipped to "PR" because it overflowed the fixed-width sidebar; the label now ellipsizes and the badge always shows in full.
-  - **Profile Export/Import** — the Import card was pinned to the bottom of the tab with a large empty gap above it; the two cards now stack naturally from the top.
-  - **DNS & Hosts** — the "add entry" row had an unlabelled IP box floating at the far left with the rest of the controls docked right; it now reads left-to-right as "IP: [ ] Hostname: [ ] Add".
-  - **Defender Tweaks** — the three protection-status values used three different colours for the same kind of value (green / blue / grey), which read as inconsistent; they now share one neutral colour.
-  - **System Logs** — the four severity summary cards had inconsistent leading glyphs; the redundant one on Errors is removed (the coloured dot already marks each card), leaving Critical's distinct marker as its colourblind-safe cue.
-  - **Privacy & Telemetry** — removed a dead grouping style that never rendered (the list isn't view-grouped; each row already shows its category).
-- **A batch of small correctness and wording fixes across tabs.**
-  - **Speed Test** — the info banner read "Ooklameasures…" and "HTTPtests…" (a missing space after the bold labels); it now reads "Ookla measures…" and "HTTP tests…".
-  - **About** — the "What's new" release notes rendered raw Markdown: code-fence markers (```` ``` ````, with the language tag) and horizontal-rule dashes (`---`) showed up as literal text. The lightweight Markdown renderer now formats fenced code blocks as monospace and drops rule lines, matching how it already handles headings and bold.
-  - **Task Scheduler** — the header says tasks are "color-coded by type", but the Type column was plain text. It is now colour-coded (System, Telemetry, Third-party) using theme-aware colours, and the column stays sortable.
-  - **Battery Health** — the "Manufacturer / ID" row only ever showed the raw device ID (Windows doesn't expose a separate battery manufacturer), so it read as one run-together string. The label is now simply "Device ID".
-  - **Duplicate Finder / App Updates** — before running a scan, the big empty-state message claimed "No duplicates found" / "No updates available", implying a finished zero-result scan. It now shows a neutral "No scan yet" / "Not scanned yet" until a scan actually completes.
-  - **Context Menu** — the toolbar counter labelled its number "total" while the footer reported a larger "Found N entries" (system entries are hidden by default), which read as a contradiction. The toolbar now says "shown".
-- **Tab subtitles now sit directly under their title again.** On six tabs (Tweaks Hub, Deep Cleanup, Scheduled Maintenance, CLI Interface, Resource History, Settings Watchdog) the descriptive subtitle line drifted to the centre-right of the header instead of stacking left under the title, leaving an awkward gap. The subtitle is width-capped for readability, and without an explicit left alignment WPF centred that capped box in the header row. Each now pins left, matching the header layout used everywhere else. Purely visual. Part of the ongoing UI refresh.
-- **Sliders, toggles, tooltips and the traceroute legend now render correctly on the Light themes.** Four shared controls kept dark-calibrated visuals on the Light presets: the **Slider** track (Standby List Cleaner's threshold, the theme shade slider) had a rail so pale it was invisible, leaving the handle floating; the **toggle switch** OFF state used the muted-text colour, which on Light is an accent-family tint, so an OFF toggle looked almost identical to an ON one — OFF now uses a neutral grey track that stays clearly distinct in both themes; **tooltips** drew dark text on a dark panel (the panel hadn't adapted to the theme) and are now a theme-surface panel with matching text; and the **Traceroute** chart legend markers rendered as solid black dots instead of hollow rings in the series colour. All four now derive their colours from the active theme. Part of the ongoing UI refresh.
-- **Coloured status text and console output are now legible on the Light themes.** A group of colour tokens were fixed dark-theme values that never adapted per theme, so on the near-white Light presets they washed out: the semantic Info/Success/Warning/Danger colours used as small stat text (e.g. Quick Cleanup's "MB can be freed" / "in Recycle Bin" figures), the Services "Critical"/"Caution" safety chips, a few warning badges (Browser Cleaner's "signs you out", Env Variables' "duplicate", Ping's loss figures), and — most visibly — the entire **Live output console** body text (App Updates, Cleanup, and every console view), which had rendered as near-invisible pale grey on white. All of these now derive their colour from the theme, switching to darker, WCAG-AA-legible tones on Light while staying identical on Dark. Automated contrast tests assert the semantic and console palettes against the most-tinted light card surface (not just pure white) so this can't silently regress. Part of the ongoing UI refresh.
-- **Dropdowns no longer show raw object text in the closed box.** On six dropdowns (Display Profiles' display picker, CPU Core Affinity's process picker, Deep Cleanup's scan-location picker, DNS & Hosts' preset picker, Ping's target-preset picker, and Resource History's range picker) the open list showed friendly names correctly, but once you picked an item the *closed* box printed a raw object dump (e.g. `DisplayDevice { DeviceName = …, FriendlyName = … }`) instead of the friendly label. The shared dropdown styling didn't carry the display formatting through to the selection box; each of these now renders the intended label (e.g. "Generic PnP Monitor (primary)", "Last 24 hours", "Global") in both the list and the closed box. Part of the ongoing UI refresh.
-- **Muted label text now meets WCAG AA contrast on every theme.** On six presets (Midnight Indigo, Deep Ocean, Violet Night, Clean Indigo, Sky Breeze, Mint Fresh) the muted/secondary label color sat just below the 4.5:1 accessibility bar against the lighter card surfaces (e.g. table column headers, captions) — a subtle legibility gap. The muted color on those presets is nudged a hair toward the primary text color so it clears AA on every layered surface, with a perceptual shift small enough to be invisible. A new automated contrast test now checks all twelve presets on every surface so this can't silently regress.
+- **The Cleanup tab no longer lets two repairs use its console at the same time.** Temp Cleanup and the SFC / DISM system repairs all stream their output into the tab's single console, but only SFC and DISM were stopped from running together — Temp Cleanup could still be started while SFC or DISM was running (they use different internal locks), so their output could interleave in the console. Starting any of the three while another is using the console is now declined with a clear message until the first finishes. (Emptying the Recycle Bin is unaffected — it doesn't use the console.)
+- **Dragging the theme shade (background-brightness) slider no longer rewrites the theme file on every tick.** Each tiny movement saved the theme settings to disk; the shade still updates instantly, but the save now happens once you settle on a position instead of many times during a single drag.
+
+### Added
+- **Dashboard buttons now expose their names to screen readers.** The Quick Tune-Up button, the four Quick Actions (Run Quick Cleanup, Update All Apps, Check Windows Updates, Run Speed Test), and the temperature "Run as administrator" button are icon-and-text buttons that didn't carry an accessible name; they now do, so assistive technologies announce what each button does.
+
+## [1.52.64] - 2026-07-09
+
+### Fixed
+- **The System Fixes output now uses the same live console as the rest of the app.** Its repair output was rendered with a slower approach that rebuilt the entire text on every new line and updated the UI thread line-by-line. It now uses the shared, capped, timestamped console control that the App Updates, Windows Update, and Cleanup tabs already use — smoother during long repairs, and consistent with those tabs (same Clear / Copy / Auto-scroll controls).
+
+## [1.52.63] - 2026-07-08
+
+### Fixed
+- **The App Updates console no longer shows winget output from other tabs.** App Updates listened for winget output for as long as the app was open, and it shares one winget engine with the rest of the app — so running "Update All Apps" from the Dashboard (or any other winget action) quietly appended that output to the App Updates console. It now listens only while its own Check-for-updates or Update runs, so the console shows only what you started from that tab.
+
+## [1.52.62] - 2026-07-08
+
+### Fixed
+- **The Performance tab no longer briefly freezes when you apply Visual Effects, Game Mode, Xbox Game Bar, or GPU settings.** These four toggles wrote to the registry (and, for visual effects, broadcast a system-wide settings change) directly on the UI thread, so the window could hang for a moment while the change was applied. They now run that work off the UI thread and show the progress/busy indicator while they do — matching how the Power Plan and Processor State toggles on the same tab already behave. What each toggle does is unchanged.
+
+### Fixed
+- **The Process Manager can no longer show — or end — the wrong process when Windows reuses a process ID.** The list refreshes every second and matched rows by process ID (PID) alone, but Windows recycles PIDs, so between two refreshes the same PID can belong to a different program. When that happened, the row kept the old program's name and icon while showing the new program's activity — and because Kill targets the PID, confirming "End task" on that row would have ended the new program instead. Rows are now matched by PID together with the process start time, so a recycled PID is treated as a new process (old row removed, new one shown) and End task always acts on the process you see.
+
+### Fixed
+- **The live resource-history charts no longer leak a small amount of memory each time they're rebuilt.** Each chart axis uses a "Segoe UI" font handle; when the chart was torn down and re-created (for example on a theme change), those font handles weren't released — only the paint objects were. They're now freed alongside the paints, the same way the chart legend's font already was.
+- **Selecting a task in Task Scheduler no longer runs its "last run / next run" lookup twice.** Picking a task looked up its run details, and updating the row with those details re-triggered the selection handler, firing the same lookup a second time. The selection update is now guarded so the lookup runs once per selection.
+
+### Fixed
+- **Cancelling a PowerShell-backed operation now ends cleanly instead of risking a stray error.** Two cases: cancelling an in-process PowerShell run reported the stop as a low-level pipeline error rather than a normal "cancelled", so callers watching for cancellation could treat it as a failure; and when cancelling an external PowerShell process, the attempt to stop its process tree only handled one of the errors it can raise, so an access-denied or partially-failed stop could surface as an unhandled error. Both now resolve to the standard "operation cancelled" outcome and swallow the expected stop-time errors.
+
+## [1.52.58] - 2026-07-08
+
+### Fixed
+- **The Tweaks Hub no longer reads its settings on the UI thread while the app is starting.** The tab builds its Essential/Advanced tweak lists from registry-backed values; that read ran synchronously as the app started (the tab is created eagerly), adding to startup delay. It now runs off the UI thread and fills the list when ready — matching the Privacy Toggles tab — so there's no visible change, just a smoother start. Refresh runs off-thread too.
+- **The Battery Health tab can no longer start a second read on top of its own startup scan.** The tab reads battery data automatically when it opens, but the Refresh button stayed enabled during that first read, so pressing it could run two reads at once. Refresh is now disabled while a read is in progress, matching the other tabs.
+
+## [1.52.57] - 2026-07-08
+
+### Fixed
+- **Three background operations now fail safely instead of risking an unhandled error.** Ending a process could throw an unhandled error when part of its child-process tree refused to close — the Process Manager now reports that as a normal "couldn't end it" result. And loading the saved Speed Test history or the stored performance-tweak baseline could throw if the file was momentarily unreadable (locked or permission-denied) rather than access-denied being treated like any other read error; both now fall back cleanly (empty history / fresh baseline), matching how saving already behaves.
+
+## [1.52.56] - 2026-07-08
+
+### Fixed
+- **Applying and restoring Environment Variables can no longer run at the same time and leave a mixed result.** Since 1.52.51 the slow parts of Apply and Restore run off the UI thread, which keeps the window responsive — but it also meant that starting a Restore and then pressing Apply (or the reverse) could rewrite the user and system variables from both operations at once, leaving the environment in an unpredictable mix of the two. Apply and Restore now take the same app-wide system-modification lock the SFC/DISM tools use, so one waits with a clear message until the other finishes. Introduced in 1.52.51.
+
+## [1.52.55] - 2026-07-08
+
+### Fixed
+- **Shredding a folder that contains a junction or symlink can no longer delete an empty directory outside the folder you selected.** When removing the emptied directories after a folder shred, SysManager listed sub-directories with a recursive scan that follows junctions and symbolic links — so a link inside the selected folder that pointed elsewhere was followed, and an empty directory at its target (outside your selection) could be removed. The cleanup now skips junctions and symlinks exactly like the file-shredding pass already does: it never descends through a link and only ever removes empty directories inside the folder you chose. Introduced in 1.52.47 with the folder-shred cleanup rewrite; no file contents were ever at risk — only empty directories, and only through a link located inside the selected folder.
+
+## [1.52.54] - 2026-07-08
+
+### Fixed
+- **The Process Manager stops re-reading each program's static details every second.** On every 1-second refresh the process list read each process's description, executable path and file-existence check — even for the (often hundreds of) processes it was already showing and whose details it keeps unchanged. It now reads those static details only for processes that have just appeared and refreshes only the live metrics (CPU, memory, threads, status) for the rest, cutting the per-tick work substantially on machines with many processes.
+
+## [1.52.53] - 2026-07-08
+
+### Fixed
+- **System-info refreshes now make one Windows query instead of two.** Each refresh read the current uptime and the memory totals with two separate WMI queries against the same OS object; they are now fetched in a single query, one fewer round-trip per poll. No visible change — the same uptime and memory figures.
+
+## [1.52.52] - 2026-07-08
+
+### Fixed
+- **The File Shredder queue can no longer be changed while a shred is running.** During a shred, the Add Files, Add Folder and Remove buttons stayed active, and the shred walked the live queue by index across each file's overwrite — so adding or removing an item mid-shred could skip an item, act on the wrong one, or error. The shred now works on a snapshot of the queue taken when it starts, and the add/remove buttons are disabled until it finishes.
+
+## [1.52.51] - 2026-07-08
+
+### Fixed
+- **The Environment Variables tab no longer freezes the app while applying, restoring, or refreshing.** Applying changes broadcasts a system-wide "settings changed" message that waits up to 5 seconds for other windows to respond, and restoring or refreshing re-reads every user and system variable — all of which ran on the UI thread, freezing the whole window until they finished. The slow parts (the broadcast, the restore, and the full re-read) now run off the UI thread, so the app stays responsive; the actual variable writes are unchanged.
+
+## [1.52.50] - 2026-07-08
+
+### Fixed
+- **The Dashboard does less redundant work at startup and while polling.** Two efficiency fixes, both leaving what you see unchanged: (1) the live GPU tile re-enumerated all physical GPUs through the NVIDIA API on every 300 ms poll — it now resolves the GPU once and reads usage/memory from that cached handle each tick; (2) the health score's heavy disk-SMART/memory/battery computation ran three times at startup (the Dashboard's own load plus the SMART and memory alert scans, two of them at once) — the alert scans now reuse the score the Dashboard already computed, falling back to a fresh computation only if that load failed.
+
+## [1.52.49] - 2026-07-08
+
+### Fixed
+- **GPU temperature polling no longer re-initializes the NVIDIA API every couple of seconds — and no longer throws once per poll on PCs without an NVIDIA GPU.** The temperature reader called NVIDIA's `Initialize()` and re-enumerated GPUs on every poll (about every 2 seconds). On a machine with no NVIDIA GPU that raised and swallowed an exception on every single poll; on NVIDIA machines it redid the one-time setup each time. SysManager now initializes the NVIDIA API at most once, remembers whether an NVIDIA GPU is present, and skips the read entirely afterwards when there isn't one — so there's no per-poll exception and no repeated setup. GPU temperatures on NVIDIA machines are unchanged.
+
+## [1.52.48] - 2026-07-08
+
+### Fixed
+- **Starting or stopping a Windows service from the Services tab no longer risks a cross-thread error.** After a start/stop completed, SysManager refreshed the service row and the on-screen status from a background thread — unlike the Enable/Disable actions in the same tab, which correctly resume on the UI thread. Updating UI-bound state off the UI thread can raise a cross-thread exception. Start and Stop now resume on the UI thread just like Enable and Disable, so the row and status update safely.
+
+## [1.52.47] - 2026-07-08
+
+### Fixed
+- **Shredding a folder no longer plain-deletes (leaving recoverable) any file it could not securely overwrite.** When shredding a folder, a file that could not be securely overwritten — for example a locked or permission-denied file, or a hard-linked file the shredder now refuses — was still removed by the final recursive folder delete. That plain delete leaves the data recoverable while the operation reported success, so you could believe such a file had been securely erased. SysManager now leaves any file it could not securely overwrite in place (removing only the emptied folders around the files it did shred) and reports how many were left, so the outcome is honest.
+
+## [1.52.46] - 2026-07-08
+
+### Fixed
+- **The File Shredder now refuses to shred a file that has more than one hard link, instead of destroying data shared with other locations.** A file can have several names (hard links) that all point at the same data — including names outside the folder you selected, or a link that shares a protected system file's data. Overwriting the file's bytes to "shred" it would have destroyed that shared data everywhere, and the safety check that blocks system paths only sees the name you picked (it cannot tell the data is shared). The shredder now detects multiple hard links up front and refuses with a clear message, leaving every copy intact; remove the extra links first, or delete the file normally.
+
+## [1.52.45] - 2026-07-08
+
+### Fixed
+- **The System Info snapshot no longer risks an unhandled error on systems where the modern disk-info source is unavailable.** When the Windows Storage management interface cannot be reached (some older or minimal Windows installations), SysManager falls back to the classic disk query — but that fallback ran without its own error handling, so a second failure there (or a malformed size value from one drive) could surface as an unhandled error instead of simply showing the disk list it managed to read. The fallback is now guarded like every other hardware query: a fault degrades to the partial disk list, and a single unreadable drive is skipped rather than aborting the whole snapshot.
+
+## [1.52.44] - 2026-07-08
+
+### Fixed
+- **Cancelling a duplicate-file scan now reports it as cancelled instead of showing partial results as "Complete."** If you stopped a duplicate scan between files (rather than while a file was being hashed), the scan quietly finished and presented whatever it had found so far as a completed result. It now treats cancellation consistently — the scan reports as cancelled and no partial list is shown as if it were the full result — matching how the Large Files scan already behaves.
+
+## [1.52.43] - 2026-07-08
+
+### Fixed
+- **Disabling a Startup-folder program from the Startup Manager now actually stops it from launching.** For items that live in the Windows Startup *folder* (as opposed to the registry Run keys), SysManager identified the item by its name without the file extension, but Windows tracks the enabled/disabled state under the item's full filename (for example `Spotify.lnk`). Because of that mismatch, a Startup-folder item that was already disabled showed as enabled, and turning one off wrote the "disabled" flag under a name Windows ignores — so the program kept starting. SysManager now uses the full filename for these items, so their on/off state reads correctly and disabling one takes effect. (Registry Run entries and scheduled-task entries were unaffected.)
+
+## [1.52.42] - 2026-07-08
+
+### Fixed
+- **On non-English Windows, the processor "minimum state" could be saved as 0% and later restored as 0%.** Before applying a performance tweak, SysManager takes a safety snapshot that records your current processor *minimum state* (read from Windows' `powercfg`). On English Windows it read the right value, but on a translated Windows the label it searched for was in another language, so it fell back to the first number in `powercfg`'s output — which is the fixed "minimum possible" value (0%), not your actual setting. That wrong 0% went into the snapshot, so a later "Restore All" wrote 0% back as if it were your original minimum. It now reads the correct value in any display language (the real setting is always the second-to-last value `powercfg` prints), so snapshots and restores are accurate on every Windows locale.
+
+## [1.52.41] - 2026-07-08
+
+### Fixed
+- **Four background operations no longer risk an unhandled error when Windows denies file or system access.** Saving and loading the activity log, enriching the drive list with disk media/bus details, downloading an update, and caching an app icon each already handled ordinary I/O errors but not an "access denied" (UnauthorizedAccess) error from a locked-down or permission-restricted system — which could surface as an unhandled exception (and, for the activity log, on the UI thread). Each now treats access-denied like the I/O errors it already handled: the activity log and icon cache degrade quietly, the drive list is still returned (just without the extra media/bus detail rather than coming back empty), and a denied update download reports failure cleanly so the About tab falls back to opening the download in your browser.
+
+## [1.52.40] - 2026-07-08
+
+### Fixed
+- **Shredding a folder that is a junction or symlink no longer destroys data outside it.** If the folder you picked for "Shred Folder" was itself a junction or symbolic link (for example, one that points at another drive or folder), the shredder followed it and securely erased the files at the *link's target* — data outside the folder you actually selected. It now refuses to shred a folder that is a junction/symlink and asks you to pick the real target folder instead; the existing protection that skips links found *inside* the folder is unchanged.
+- **A folder shred no longer reports failure after it has actually finished.** Removing the emptied folder structure at the end of a shred handled only one kind of error; if a leftover read-only or locked entry denied that final cleanup, the whole operation reported failure even though every file had already been securely overwritten. That cleanup denial is now logged and the shred is reported as completed.
+
+## [1.52.39] - 2026-07-07
+
+### Fixed
+- **Context-menu entry names capitalize correctly on Turkish Windows.** The first letter of a cleaned-up context-menu entry name was upper-cased using the current culture, so on a Turkish (tr-TR) system a leading "i" became "İ" (dotted capital I) rather than "I", subtly corrupting names. It now upper-cases invariantly, since these are program and shell-verb identifiers rather than locale-sensitive prose.
+- **The resource-history file is now rewritten atomically.** When trimming samples past the retention window, the usage-history file was rewritten in place with a single full-file write; a crash or power loss mid-write could leave it truncated or corrupt. It is now written to a temporary file and swapped in atomically, so an interrupted prune can never damage the existing history.
+- **The Standby List Cleaner's background auto-refresh can no longer crash the app.** Its two-second timer tick ran without a top-level guard, so an unexpected fault while reading memory status or auto-purging would surface as an unhandled background exception and take the whole app down. The tick now catches and logs any such fault, matching the guard the tray-icon timer already uses.
+
+## [1.52.38] - 2026-07-07
+
+### Fixed
+- **The Dashboard's "Update All Apps" quick action now uses the app's shared, reliable updater.** The one-click "Update All Apps" button on the Dashboard ran its own hand-written winget command that had drifted from the one the App Updates tab uses — it was missing the flags that suppress winget's interactive prompts and its garbled progress animation and that include packages whose installed version winget can't read, and it always reported "All apps updated" even when the update actually failed. It now calls the same shared updater the App Updates tab uses, so a one-click update behaves identically to the full tab and reports the real outcome.
 
 ## [1.52.37] - 2026-07-04
 
@@ -134,8 +230,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **Outline buttons are now visible on the light themes.** "Ghost" buttons (e.g. Export text / Copy on the System Report tab, and similar secondary actions elsewhere) drew their border in a translucent white that was invisible against the light presets' pale backgrounds — the buttons looked borderless. They now use the theme's own border color, so they're clearly outlined on every theme.
 - **Startup Manager asks before re-enabling everything.** The "Enable All" button immediately re-enabled every disabled startup item — a bulk system change that adds boot time — with no confirmation. It now asks first (showing how many items will be affected), matching the confirm-before-bulk-change behavior used elsewhere in the app.
-
-### Fixed
 - **Editing the hosts file no longer erases your own comments.** When you added, removed, or toggled an entry on the DNS & Hosts tab, SysManager rewrote the file from just the address mappings — silently dropping any standalone comment lines or blank spacing you'd written (section notes, documentation). Those comment and blank lines are now preserved through an edit, kept above the entries. Repeated saves stay stable (no duplicated headers), and a file with no comments is written exactly as before.
 
 ## [1.52.20] - 2026-07-03
@@ -143,8 +237,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **The theme picker now opens on your saved theme's presets.** If you'd set a Light or Custom theme, the theme popup initially built its preset list from the default Dark mode and only corrected itself once you clicked something — so it briefly showed the wrong set of presets. It now reads your saved mode first, so the correct presets appear immediately.
 - **Ping and System Logs numbers are now readable on the Light themes.** The average-ping / jitter / latency figures on the Network Ping tab and the severity counts (Critical, Errors, Warnings, Info) on the System Logs tab used fixed pale colors that nearly disappeared against the light preset backgrounds. They now use the app's semantic status colors, so they stay legible on every theme.
-
-### Fixed
 - **Recycle Bin size estimates now match what emptying actually frees.** Both Quick Cleanup and Deep Cleanup summed the whole hidden `$Recycle.Bin` folder on every drive — which, on a shared PC (especially when running as administrator), also counts *other users'* deleted files. But emptying the bin only ever clears the current user's items, so the "X MB in Recycle Bin" figure could be far larger than what actually gets freed. The estimate now measures only the current user's Recycle Bin, so the number is honest.
 - **Installed-app detection no longer mislabels similarly-named apps.** In the Bulk Installer, an app was marked "Installed" if its winget Id appeared anywhere in a `winget list` row — so an app whose Id is a prefix of another (e.g. `Microsoft.Teams` vs. an installed `Microsoft.Teams.Classic`) was wrongly shown as already installed. Detection now compares exact winget Ids.
 - **System Report and About page now show the correct VRAM for GPUs over 4 GB.** Video memory was read from a 32-bit WMI field that caps at ~4 GiB, so an 8 GB or 12 GB card was reported as ~4 GB. The true size is now read from the graphics driver's 64-bit registry value, falling back to the old field only when that isn't available.
@@ -258,8 +350,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 - **Input validators that feed a command/registry boundary now reject a trailing newline.** Nine allowlist patterns (winget package IDs, service names, blocked-executable names, Appx package names, environment-variable names, Windows-feature names, event-log provider names, and hostnames) used `^…$` anchors, which in .NET match before a trailing newline — so a value like `pkg\n` slipped through and could smuggle a second line into the command. They now use absolute `\A…\z` anchors. The winget package-ID pattern additionally dropped `\s` (which allowed tabs/newlines mid-string) in favour of a literal space.
-
-### Tests
 - Added injection-rejection negative tests for the winget package-ID validators (`UpgradeAsync`, `UninstallAsync`) and the service-name/start-type validator (`SetStartupTypeAsync`), covering command separators, chaining, substitution, quotes, newlines, and over-length input.
 
 ## [1.51.13] - 2026-06-30
@@ -3839,8 +3929,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Codecov coverage tracking** — unit-test coverage uploaded on every CI run;
   badge in README reflects latest `main` result.
 - **App screenshots** — all major tabs captured under `docs/screenshots/`.
-
-### Added
 - **Repository hygiene** — `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
   `SECURITY.md`, `SUPPORT.md`, `.editorconfig`, and a full
   `.github/` folder (issue + PR templates, CI + release workflows,

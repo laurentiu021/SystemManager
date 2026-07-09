@@ -192,6 +192,12 @@ public sealed class DuplicateFileService
                 }
         }
 
+        // A cancelled scan exits the loops above with partial results (they break on
+        // cancellation rather than throwing, unlike the mid-hash ThrowIfCancellationRequested).
+        // Surfacing those as "Complete" would mislead the user; throw so the caller's cancel
+        // branch shows "Scan cancelled." — mirroring LargeFileScanner's finalize.
+        ct.ThrowIfCancellationRequested();
+
         progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, "Done", "Complete"));
 
         // Only return groups with 2+ files (actual duplicates).

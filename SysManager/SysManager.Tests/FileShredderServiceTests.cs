@@ -351,6 +351,172 @@ public class FileShredderServiceTests
         }
     }
 
+    // ---------- hard-link shred refusal (data shared outside the selected scope) ----------
+
+    [Fact]
+    public async Task ShredFileAsync_FileWithHardLink_Refuses_AndPreservesData()
+    {
+        // Regression: overwriting a hard-linked file destroys the data for EVERY name that
+        // points at it — links outside the selected scope, or a link a standard user placed to
+        // share a protected file's data (the path guard sees only the opened name, and
+        // GetFinalPathNameByHandle resolves symlinks/junctions but NOT hard links). The shredder
+        // must refuse a multi-link file rather than destroy the shared data.
+        var svc = NewService();
+        var target = Path.Combine(Path.GetTempPath(), "smtest_hltarget_" + Guid.NewGuid().ToString("N") + ".dat");
+        var link = Path.Combine(Path.GetTempPath(), "smtest_hllink_" + Guid.NewGuid().ToString("N") + ".dat");
+        const string content = "shared data behind two hard links";
+        await File.WriteAllTextAsync(target, content);
+
+        try
+        {
+            // mklink /H creates a hard link on the same volume; no admin required. If the
+            // environment can't create one, skip rather than fail on an environment limitation.
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /H \"{link}\" \"{target}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !File.Exists(link))
+                    return; // couldn't create a hard link here — nothing to assert
+            }
+
+            // Shredding through the link must be refused (IOException), and BOTH names plus the
+            // shared data must remain intact.
+            await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFileAsync(link, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.True(File.Exists(target), "target destroyed despite the hard-link refusal");
+            Assert.True(File.Exists(link), "link destroyed despite the hard-link refusal");
+            Assert.Equal(content, await File.ReadAllTextAsync(target));
+        }
+        finally
+        {
+            if (File.Exists(link)) File.Delete(link);
+            if (File.Exists(target)) File.Delete(target);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFolderAsync_WithUnshreddableFile_LeavesItAndReportsFailure()
+    {
+        // Regression: a file the shredder cannot securely overwrite (here a hard-linked file,
+        // which ShredFileAsync refuses) must be LEFT in place, never plain-deleted by a recursive
+        // folder delete — otherwise the caller believes a recoverable file was securely shredded.
+        // The folder shred must report the failure (throw) rather than claim success.
+        var svc = NewService();
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_guarantee_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var normal = Path.Combine(dir, "normal.dat");
+        var linkTarget = Path.Combine(Path.GetTempPath(), "smtest_gtarget_" + Guid.NewGuid().ToString("N") + ".dat");
+        var hardlink = Path.Combine(dir, "hardlink.dat");
+        await File.WriteAllTextAsync(normal, "shred me");
+        await File.WriteAllTextAsync(linkTarget, "shared data");
+
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /H \"{hardlink}\" \"{linkTarget}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !File.Exists(hardlink))
+                    return; // environment can't create a hard link — nothing to assert
+            }
+
+            await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.False(File.Exists(normal), "the shreddable file should have been securely shredded and removed");
+            Assert.True(File.Exists(hardlink), "the hard-linked file must be LEFT in place, not plain-deleted");
+            Assert.Equal("shared data", await File.ReadAllTextAsync(linkTarget));
+            Assert.True(Directory.Exists(dir), "the folder holding the un-shreddable file must remain");
+        }
+        finally
+        {
+            if (File.Exists(hardlink)) File.Delete(hardlink);
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            if (File.Exists(linkTarget)) File.Delete(linkTarget);
+        }
+    }
+
+    // ---------- child-junction cleanup regression (out-of-scope directory deletion) ----------
+
+    [Fact]
+    public async Task ShredFolderAsync_WithChildJunction_DoesNotDeleteThroughIt()
+    {
+        // Regression: the empty-directory cleanup after a folder shred must skip junctions and
+        // symlinks, exactly like the file walk. A child junction inside the selected folder used
+        // to be FOLLOWED by the recursive directory enumerator, so an empty directory at the
+        // junction's target — OUTSIDE the selected folder — was deleted by the cleanup pass.
+        // Nothing beyond the selected folder may be touched.
+        var svc = NewService();
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_childjunc_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        // An external target, outside the shred folder, holding an EMPTY sub-directory that must
+        // survive. recursive:false can only ever delete an EMPTY directory, so the empty one is
+        // precisely what was at risk of deletion through the junction.
+        var external = Path.Combine(Path.GetTempPath(), "smtest_external_" + Guid.NewGuid().ToString("N"));
+        var victim = Path.Combine(external, "keep_me");
+        Directory.CreateDirectory(victim);
+
+        await File.WriteAllTextAsync(Path.Combine(dir, "normal.dat"), "shred me");
+        var junction = Path.Combine(dir, "linkout");
+
+        try
+        {
+            // mklink /J creates a directory junction; no admin rights required. If the environment
+            // can't create one, skip rather than fail on an environment limitation.
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{junction}\" \"{external}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || !IsReparse(junction))
+                    return; // environment can't create junctions (rare) — nothing to assert
+            }
+
+            // Shredding the folder must not descend through the junction: the normal in-scope file
+            // is shredded, but the empty directory behind the junction (outside the folder) remains.
+            await svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
+
+            Assert.True(Directory.Exists(victim),
+                "an empty directory at the junction's target, outside the selected folder, was deleted through the junction");
+            Assert.True(Directory.Exists(external), "the junction's external target directory was removed");
+            Assert.False(File.Exists(Path.Combine(dir, "normal.dat")),
+                "the normal in-scope file should still have been securely shredded");
+        }
+        finally
+        {
+            // Remove the junction link itself first (Directory.Delete on a junction removes the
+            // link, not its target), then both trees.
+            try { Directory.Delete(junction); } catch { /* ignore */ }
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+            try { Directory.Delete(external, recursive: true); } catch { /* ignore */ }
+        }
+
+        static bool IsReparse(string p)
+        {
+            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
+            catch { return false; }
+        }
+    }
+
     [Fact]
     public void ResolveFinalPath_MissingPath_ReturnsNull()
     {

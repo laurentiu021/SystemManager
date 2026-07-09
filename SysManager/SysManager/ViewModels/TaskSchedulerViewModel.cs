@@ -82,9 +82,14 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
         ToggleEnabledCommand.NotifyCanExecuteChanged();
     }
 
+    // Guards the in-place re-selection below (SelectedTask = withInfo): without it, that
+    // reassignment re-enters OnSelectedTaskChanged and fires a second per-task run-info query.
+    private bool _reassigningSelection;
+
     partial void OnSelectedTaskChanged(ScheduledTaskInfo? value)
     {
         ToggleEnabledCommand.NotifyCanExecuteChanged();
+        if (_reassigningSelection) return;
         if (value is not null) _ = LoadRunInfoAsync(value);
     }
 
@@ -95,8 +100,13 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
         if (ReferenceEquals(SelectedTask, task))
         {
             int idx = Tasks.IndexOf(task);
-            if (idx >= 0) Tasks[idx] = withInfo;
-            SelectedTask = withInfo;
+            _reassigningSelection = true;
+            try
+            {
+                if (idx >= 0) Tasks[idx] = withInfo;
+                SelectedTask = withInfo;
+            }
+            finally { _reassigningSelection = false; }
         }
     }
 

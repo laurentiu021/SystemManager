@@ -98,7 +98,6 @@ public sealed class AppIconService
     /// </summary>
     public async Task<BitmapImage?> GetIconAsync(string appId, CancellationToken ct = default)
     {
-        Directory.CreateDirectory(CacheDir);
         var cachePath = Path.Combine(CacheDir, $"{SanitizeFileName(appId)}.png");
 
         // Return cached icon if it exists and is not empty. If the file is present
@@ -127,6 +126,7 @@ public sealed class AppIconService
             var bytes = await _http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
             if (bytes.Length == 0) return null;
 
+            Directory.CreateDirectory(CacheDir);
             await File.WriteAllBytesAsync(cachePath, bytes, ct).ConfigureAwait(false);
             return LoadFromFile(cachePath);
         }
@@ -143,6 +143,11 @@ public sealed class AppIconService
         catch (IOException ex)
         {
             Log.Debug(ex, "Could not write icon cache for {AppId}", appId);
+            return null;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug(ex, "Could not write icon cache (access denied) for {AppId}", appId);
             return null;
         }
     }

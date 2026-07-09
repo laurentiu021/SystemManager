@@ -85,8 +85,6 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         Load(loaded);
     }
 
-    private void Load() => Load(_service.ReadAll());
-
     private void Load(List<EnvVariable> loaded)
     {
         foreach (var v in Variables)
@@ -308,11 +306,22 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ApplyChanges()
+    private async Task ApplyChanges()
     {
         if (PendingChangeCount == 0)
         {
             StatusMessage = "No changes to apply.";
+            return;
+        }
+
+        // Apply and Restore both rewrite the same HKCU/HKLM environment keys. Since 1.52.51 their
+        // slow parts run off the UI thread, so without a shared gate a Restore in progress and an
+        // Apply (or vice-versa) could write at once and leave a nondeterministic mix. Take the
+        // app-wide system-modification lock, exactly like the SFC/DISM operations do.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply environment changes");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot apply now — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
 
@@ -371,7 +380,9 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         }
 
         // Broadcast once so running processes (Explorer, new shells) pick up the changes.
-        if (applied > 0) EnvironmentVariableService.BroadcastSettingChange();
+        // The broadcast waits up to 5 s for windows to respond, so run it OFF the UI thread —
+        // the registry writes above are fast and stay on-thread (they own the change bookkeeping).
+        if (applied > 0) await Task.Run(EnvironmentVariableService.BroadcastSettingChange);
 
         RecomputePending();
 
@@ -401,11 +412,20 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     public bool HasBackup => _service.HasBackup;
 
     [RelayCommand]
-    private void RestoreBackup()
+    private async Task RestoreBackup()
     {
         if (!_service.HasBackup)
         {
             StatusMessage = "There is no backup to restore yet — it is created the first time you apply changes.";
+            return;
+        }
+
+        // Serialize against Apply (and other system-modification operations) so the two can't
+        // rewrite the same environment keys concurrently — see ApplyChanges for the full note.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Restore environment backup");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot restore now — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
 
@@ -434,9 +454,11 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             return;
         }
 
-        var r = _service.RestoreFromBackup();
-        if (r.Restored > 0 || r.Removed > 0) EnvironmentVariableService.BroadcastSettingChange();
-        Load();
+        // Restore rewrites many variables and then broadcasts (up to 5 s) — both run off the
+        // UI thread; the list is re-read off-thread too via LoadAsync so the window stays live.
+        var r = await Task.Run(_service.RestoreFromBackup);
+        if (r.Restored > 0 || r.Removed > 0) await Task.Run(EnvironmentVariableService.BroadcastSettingChange);
+        await LoadAsync();
 
         StatusMessage = r.Failed == 0
             ? $"Restored {r.Restored} variable{(r.Restored == 1 ? "" : "s")}" +
@@ -445,16 +467,16 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void DiscardChanges()
+    private async Task DiscardChanges()
     {
-        Load();
+        await LoadAsync();
         StatusMessage = "Pending changes discarded.";
     }
 
     [RelayCommand]
-    private void Refresh()
+    private async Task Refresh()
     {
-        Load();
+        await LoadAsync();
         StatusMessage = "Variables refreshed.";
         Log.Information("Environment: refreshed variable list");
     }

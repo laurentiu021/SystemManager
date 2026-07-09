@@ -280,14 +280,39 @@ public sealed class TemperatureService : IDisposable
         return names;
     }
 
-    private static void ReadNvidiaGpuTemperatures(List<TemperatureReading> readings)
+    // NvAPI init is one-time. Re-running NVIDIA.Initialize() + GetPhysicalGPUs() on every poll
+    // re-does the setup and, on a non-NVIDIA machine, throws (and swallows) an exception on every
+    // tick — the temperature poll runs about every 2 s. We initialize at most once, remember
+    // whether any NVIDIA GPU is present, and skip the whole read thereafter when none is.
+    private bool _nvApiInitTried;
+    private bool _nvApiAvailable;
+
+    private void ReadNvidiaGpuTemperatures(List<TemperatureReading> readings)
     {
+        if (!_nvApiInitTried)
+        {
+            _nvApiInitTried = true;
+            try
+            {
+                NvAPIWrapper.NVIDIA.Initialize();
+                _nvApiAvailable = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs().Length > 0;
+            }
+            // No NVIDIA GPU / driver present is the normal case on AMD/Intel systems — record it
+            // once so later polls skip silently instead of throwing an exception every tick.
+            catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { _nvApiAvailable = false; }
+            catch (DllNotFoundException) { _nvApiAvailable = false; }
+            catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
+            {
+                _nvApiAvailable = false;
+                Log.Debug("NVIDIA API init failed: {Error}", ex.Message);
+            }
+        }
+
+        if (!_nvApiAvailable) return;
+
         try
         {
-            NvAPIWrapper.NVIDIA.Initialize();
-            var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
-
-            foreach (var gpu in gpus)
+            foreach (var gpu in NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs())
             {
                 var sensor = gpu.ThermalInformation.ThermalSensors
                     .FirstOrDefault(s => s.CurrentTemperature > 0);
@@ -298,13 +323,11 @@ public sealed class TemperatureService : IDisposable
                 }
             }
         }
-        // No NVIDIA GPU / driver present is the normal case on AMD/Intel systems —
-        // skip GPU temperatures silently rather than logging noise on every poll.
-        catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { /* no NVIDIA GPU */ }
-        catch (DllNotFoundException) { /* nvapi.dll not installed */ }
+        // A transient read failure (e.g. a driver reset) must not crash the poll — skip this tick.
+        catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { /* transient GPU read failure */ }
         catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
         {
-            Log.Debug("NVIDIA API init failed: {Error}", ex.Message);
+            Log.Debug("NVIDIA GPU temperature read failed: {Error}", ex.Message);
         }
     }
 

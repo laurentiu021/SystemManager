@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.65] - 2026-07-09
+
+### Fixed
+- **The Cleanup tab no longer lets two repairs use its console at the same time.** Temp Cleanup and the SFC / DISM system repairs all stream their output into the tab's single console, but only SFC and DISM were stopped from running together — Temp Cleanup could still be started while SFC or DISM was running (they use different internal locks), so their output could interleave in the console. Starting any of the three while another is using the console is now declined with a clear message until the first finishes. (Emptying the Recycle Bin is unaffected — it doesn't use the console.)
+- **Dragging the theme shade (background-brightness) slider no longer rewrites the theme file on every tick.** Each tiny movement saved the theme settings to disk; the shade still updates instantly, but the save now happens once you settle on a position instead of many times during a single drag.
+
+### Added
+- **Dashboard buttons now expose their names to screen readers.** The Quick Tune-Up button, the four Quick Actions (Run Quick Cleanup, Update All Apps, Check Windows Updates, Run Speed Test), and the temperature "Run as administrator" button are icon-and-text buttons that didn't carry an accessible name; they now do, so assistive technologies announce what each button does.
+
 ## [1.52.64] - 2026-07-09
 
 ### Fixed

@@ -25,6 +25,15 @@ public sealed partial class CleanupViewModel : ViewModelBase
     private CancellationTokenSource? _sfcCts;
     private CancellationTokenSource? _dismCts;
 
+    // Temp Cleanup, SFC, and DISM all stream through the single shared _runner and its
+    // LineReceived/ProgressChanged events into the one Console, so only one may run at a
+    // time — otherwise their output and progress cross-contaminate. The per-category
+    // OperationLockService locks don't close this gap: Temp Cleanup is a Disk operation
+    // while SFC/DISM are SystemModification, so those locks never exclude Temp from
+    // SFC/DISM. This intra-VM guard does. (Empty-Recycle-Bin doesn't touch _runner, so it
+    // is intentionally not gated.) Set and read only on the UI thread.
+    private bool _runnerBusy;
+
     public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private bool _isElevated;
@@ -65,6 +74,17 @@ public sealed partial class CleanupViewModel : ViewModelBase
 
     private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);
     private void OnRunnerProgressChanged(int p) => Progress = p;
+
+    // Claims the shared _runner for one console/repair op; returns false if another already
+    // holds it. internal for the regression test (mirrors ParseSfcResult's test visibility).
+    internal bool TryBeginConsoleOp()
+    {
+        if (_runnerBusy) return false;
+        _runnerBusy = true;
+        return true;
+    }
+
+    internal void EndConsoleOp() => _runnerBusy = false;
 
     private async Task InitAsync()
     {
@@ -188,6 +208,11 @@ public sealed partial class CleanupViewModel : ViewModelBase
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
         }
+        if (!TryBeginConsoleOp())
+        {
+            StatusMessage = "Cannot start — a repair is already using the console. Wait for it to finish.";
+            return;
+        }
         IsTempRunning = true;
         StatusMessage = "Cleaning temp folders...";
         _tempCts?.Dispose();
@@ -237,7 +262,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         }
         catch (OperationCanceledException) { StatusMessage = "Temp cleanup cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
-        finally { IsTempRunning = false; }
+        finally { EndConsoleOp(); IsTempRunning = false; }
     }
 
     [RelayCommand]
@@ -288,14 +313,21 @@ public sealed partial class CleanupViewModel : ViewModelBase
             return;
         }
 
-        // SFC and DISM share the single _runner (and its LineReceived event), so they
-        // must be mutually exclusive — running both at once cross-contaminates their
-        // captured output and progress. The SystemModification lock enforces that and
-        // also blocks against the other system-repair operations.
+        // SFC and DISM share the single _runner (and its LineReceived event) with each other
+        // AND with Temp Cleanup, so running two at once cross-contaminates their captured
+        // output and progress. The SystemModification lock makes SFC and DISM mutually
+        // exclusive (and blocks the other system-repair operations); the _runnerBusy guard
+        // below additionally excludes Temp Cleanup, which holds a different (Disk) lock and
+        // so is not covered by this one.
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan");
         if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+        if (!TryBeginConsoleOp())
+        {
+            StatusMessage = "Cannot start — a repair is already using the console. Wait for it to finish.";
             return;
         }
 
@@ -337,7 +369,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (OperationCanceledException) { SfcStatus = "Cancelled."; SfcVerdict = "Scan was cancelled."; SfcVerdictColorHex = StatusColors.Neutral; StatusMessage = SfcStatus; }
         catch (InvalidOperationException ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = StatusColors.Bad; StatusMessage = SfcStatus; }
         catch (System.ComponentModel.Win32Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = StatusColors.Bad; StatusMessage = SfcStatus; }
-        finally { _runner.LineReceived -= Collect; IsSfcRunning = false; IsProgressIndeterminate = false; SfcEtaText = string.Empty; }
+        finally { _runner.LineReceived -= Collect; EndConsoleOp(); IsSfcRunning = false; IsProgressIndeterminate = false; SfcEtaText = string.Empty; }
     }
 
     /// <summary>
@@ -388,13 +420,20 @@ public sealed partial class CleanupViewModel : ViewModelBase
             return;
         }
 
-        // Mutually exclusive with SFC (and the other system-repair ops): both share the
+        // Mutually exclusive with SFC and the other system-repair ops (SystemModification
+        // lock) AND with Temp Cleanup (the _runnerBusy guard below): all three share the
         // single _runner and its LineReceived event, so concurrent runs would cross-
-        // contaminate captured output and progress.
+        // contaminate captured output and progress. Temp holds a different (Disk) lock, so
+        // only the guard — not this lock — excludes it.
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
         if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+        if (!TryBeginConsoleOp())
+        {
+            StatusMessage = "Cannot start — a repair is already using the console. Wait for it to finish.";
             return;
         }
 
@@ -436,7 +475,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (OperationCanceledException) { DismStatus = "Cancelled."; DismVerdict = "Repair was cancelled."; DismVerdictColorHex = StatusColors.Neutral; StatusMessage = DismStatus; }
         catch (InvalidOperationException ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = StatusColors.Bad; StatusMessage = DismStatus; }
         catch (System.ComponentModel.Win32Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = StatusColors.Bad; StatusMessage = DismStatus; }
-        finally { _runner.LineReceived -= Collect; IsDismRunning = false; IsProgressIndeterminate = false; DismEtaText = string.Empty; }
+        finally { _runner.LineReceived -= Collect; EndConsoleOp(); IsDismRunning = false; IsProgressIndeterminate = false; DismEtaText = string.Empty; }
     }
 
     /// <summary>

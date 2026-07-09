@@ -6,6 +6,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Serilog;
 
 namespace SysManager.Services;
@@ -27,6 +28,13 @@ public sealed class ThemeService
     public double ShadePosition { get; private set; } = 0.5;
 
     private ThemePreset _baseTheme = ThemePreset.Defaults["midnight-indigo"];
+
+    // The shade slider raises SetShade on every tick of a drag; persisting on each one would
+    // hammer the disk. Coalesce writes: SetShade applies the shade live but (re)starts this
+    // short timer, so the JSON is written once the drag settles. Created lazily on the first
+    // shade change (always on the UI thread). Discrete theme changes (SetPreset/SetAccent/
+    // SetCustom) still save immediately.
+    private DispatcherTimer? _shadeSaveTimer;
 
     private static readonly Dictionary<string, string> DarkToLight = new()
     {
@@ -79,7 +87,22 @@ public sealed class ThemeService
     {
         ShadePosition = Math.Clamp(position, 0, 1);
         ApplyShade();
-        Save();
+        DebouncedSave();
+    }
+
+    // Coalesces rapid shade-slider writes into a single disk save once the drag settles.
+    private void DebouncedSave()
+    {
+        _shadeSaveTimer ??= CreateShadeSaveTimer();
+        _shadeSaveTimer.Stop();
+        _shadeSaveTimer.Start();
+    }
+
+    private DispatcherTimer CreateShadeSaveTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        timer.Tick += (_, _) => { timer.Stop(); Save(); };
+        return timer;
     }
 
     public void SetCustom(Color accent, Color background, Color surface, Color text)

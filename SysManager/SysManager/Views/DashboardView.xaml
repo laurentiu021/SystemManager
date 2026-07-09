@@ -29,6 +29,7 @@
                     <Button Content="Scan system" Command="{Binding RefreshCommand}"
                             Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                     <Button Command="{Binding RunTuneUpCommand}"
+                            AutomationProperties.Name="Quick Tune-Up"
                             Style="{StaticResource PrimaryButton}" Padding="16,8">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons" FontSize="14"
@@ -197,6 +198,7 @@
                             <TextBlock Text="TEMPERATURES" FontSize="11" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <Button Command="{Binding RelaunchAsAdminCommand}" Margin="10,0,0,0"
+                                    AutomationProperties.Name="Run as administrator for all temperature sensors"
                                     Padding="6,3" FontSize="10" VerticalAlignment="Center"
                                     Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
                                 <Button.Template>
@@ -300,6 +302,7 @@
                         <TextBlock Text="QUICK ACTIONS" FontSize="11" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
                         <Button Command="{Binding QuickCleanupCommand}"
+                                AutomationProperties.Name="Run Quick Cleanup"
                                 Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
@@ -308,6 +311,7 @@
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding QuickUpdateAppsCommand}"
+                                AutomationProperties.Name="Update All Apps"
                                 Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
@@ -316,6 +320,7 @@
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding QuickWindowsUpdateCommand}"
+                                AutomationProperties.Name="Check Windows Updates"
                                 Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
@@ -324,6 +329,7 @@
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding QuickSpeedTestCommand}"
+                                AutomationProperties.Name="Run Speed Test"
                                 Style="{StaticResource SecondaryButton}" Padding="10,8"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">

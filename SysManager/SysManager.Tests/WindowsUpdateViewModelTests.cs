@@ -317,6 +317,25 @@ public class WindowsUpdateViewModelTests
         Assert.True(vm.ListUpdatesCommand.CanExecute(null));
     }
 
+    // Check/Install Module stream through the same shared runner and console, so they are
+    // gated on NotBusy too — otherwise starting one while another update operation runs
+    // would interleave output on the shared console (and race on the shared CTS).
+    [Fact]
+    public void ModuleCommands_DisabledWhileBusy()
+    {
+        var vm = NewVm();
+        Assert.True(vm.CheckModuleCommand.CanExecute(null));
+        Assert.True(vm.InstallModuleCommand.CanExecute(null));
+
+        vm.IsBusy = true;
+        Assert.False(vm.CheckModuleCommand.CanExecute(null));
+        Assert.False(vm.InstallModuleCommand.CanExecute(null));
+
+        vm.IsBusy = false;
+        Assert.True(vm.CheckModuleCommand.CanExecute(null));
+        Assert.True(vm.InstallModuleCommand.CanExecute(null));
+    }
+
     // ── Confirmation-gate test (installing updates must route through Confirm) ──
 
     [Fact]

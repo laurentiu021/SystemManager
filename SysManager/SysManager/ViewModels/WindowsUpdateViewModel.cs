@@ -135,6 +135,8 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         ShowHistoryCommand.NotifyCanExecuteChanged();
         CheckPendingRebootCommand.NotifyCanExecuteChanged();
         InstallUpdatesCommand.NotifyCanExecuteChanged();
+        CheckModuleCommand.NotifyCanExecuteChanged();
+        InstallModuleCommand.NotifyCanExecuteChanged();
     }
 
     protected override void Dispose(bool disposing)
@@ -157,7 +159,12 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             System.Windows.Application.Current?.Shutdown();
     }
 
-    [RelayCommand]
+    // Gated on NotBusy like the other runner-driven commands: CheckModule and
+    // InstallModule stream through the shared _runner into the same console, so letting
+    // them start while another update operation is running would cross-contaminate output
+    // (and race on the shared CTS). The internal call from InstallModuleAsync uses the
+    // method directly, so it is unaffected by this command-level gate.
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task CheckModuleAsync()
     {
         IsBusy = true;
@@ -185,7 +192,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         finally { IsBusy = false; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task InstallModuleAsync()
     {
         if (!AdminHelper.IsElevated())

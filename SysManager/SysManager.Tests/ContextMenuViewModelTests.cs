@@ -9,12 +9,19 @@ using SysManager.ViewModels;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="ContextMenuViewModel"/>. Verifies initial state,
-/// filter defaults, and counter logic without scanning the registry.
+/// Tests for <see cref="ContextMenuViewModel"/>. Verifies constructor defaults,
+/// filter state, counter consistency, and command wiring. The VM auto-scans the
+/// registry on construction; <see cref="NewVm"/> awaits <see cref="ViewModelBase.InitializationComplete"/>
+/// so assertions observe a settled state deterministically (no race with the scan).
 /// </summary>
 public class ContextMenuViewModelTests
 {
-    private static ContextMenuViewModel NewVm() => new(new ContextMenuService());
+    private static ContextMenuViewModel NewVm()
+    {
+        var vm = new ContextMenuViewModel(new ContextMenuService());
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
 
     [Fact]
     public void Constructor_LocationFilters_ContainsAllPlusSpecific()
@@ -43,32 +50,31 @@ public class ContextMenuViewModelTests
     }
 
     [Fact]
-    public void Constructor_Entries_StartsEmpty()
+    public void AfterInit_Entries_NotNull()
     {
         var vm = NewVm();
-        // Before scan, entries should be empty
-        Assert.Empty(vm.Entries);
+        Assert.NotNull(vm.Entries);
     }
 
     [Fact]
-    public void Constructor_TotalCount_DefaultsToZero()
+    public void AfterInit_TotalCount_MatchesEntries()
     {
         var vm = NewVm();
-        Assert.Equal(0, vm.TotalCount);
+        Assert.Equal(vm.Entries.Count, vm.TotalCount);
     }
 
     [Fact]
-    public void Constructor_EnabledCount_DefaultsToZero()
+    public void AfterInit_EnabledPlusDisabled_EqualsTotalCount()
     {
         var vm = NewVm();
-        Assert.Equal(0, vm.EnabledCount);
+        Assert.Equal(vm.TotalCount, vm.EnabledCount + vm.DisabledCount);
     }
 
     [Fact]
-    public void Constructor_DisabledCount_DefaultsToZero()
+    public void AfterInit_IsBusy_IsFalse()
     {
         var vm = NewVm();
-        Assert.Equal(0, vm.DisabledCount);
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]

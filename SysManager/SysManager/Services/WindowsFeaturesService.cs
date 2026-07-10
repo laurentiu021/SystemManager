@@ -33,7 +33,7 @@ public sealed partial class WindowsFeaturesService
         _runner.LineReceived += Collect;
         try
         {
-            await _runner.RunProcessAsync("powershell",
+            await _runner.RunProcessAsync("powershell.exe",
                 "-NoProfile -Command \"Get-WindowsOptionalFeature -Online | " +
                 "Select-Object FeatureName, State | " +
                 "ForEach-Object { $_.FeatureName + '|' + $_.State }\"", ct).ConfigureAwait(false);
@@ -67,7 +67,7 @@ public sealed partial class WindowsFeaturesService
             // Wrap in try/catch + `exit 1` so a DISM cmdlet failure propagates to the
             // process exit code. Without this the cmdlet's non-terminating error is
             // ignored and powershell.exe still exits 0, reporting a false success.
-            var code = await _runner.RunProcessAsync("powershell",
+            var code = await _runner.RunProcessAsync("powershell.exe",
                 $"-NoProfile -Command \"try {{ Enable-WindowsOptionalFeature -Online " +
                 $"-FeatureName '{featureName}' -NoRestart -All -ErrorAction Stop | " +
                 $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }} }} catch {{ exit 1 }}\"", ct).ConfigureAwait(false);
@@ -104,7 +104,7 @@ public sealed partial class WindowsFeaturesService
             // Wrap in try/catch + `exit 1` so a DISM cmdlet failure propagates to the
             // process exit code. Without this the cmdlet's non-terminating error is
             // ignored and powershell.exe still exits 0, reporting a false success.
-            var code = await _runner.RunProcessAsync("powershell",
+            var code = await _runner.RunProcessAsync("powershell.exe",
                 $"-NoProfile -Command \"try {{ Disable-WindowsOptionalFeature -Online " +
                 $"-FeatureName '{featureName}' -NoRestart -ErrorAction Stop | " +
                 $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }} }} catch {{ exit 1 }}\"", ct).ConfigureAwait(false);

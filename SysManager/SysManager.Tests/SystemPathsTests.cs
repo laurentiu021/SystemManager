@@ -35,6 +35,30 @@ public class SystemPathsTests
     }
 
     [Fact]
+    public void ResolveSystemTool_BareNameWithoutExeSuffix_ResolvesToRootedExistingPath()
+    {
+        // Regression: a caller passing the extension-less name "powershell" (as
+        // WindowsFeaturesService did) must still be pinned to the trusted System32 path.
+        // Before the ".exe"-fallback fix, File.Exists("...\\powershell") was false so the
+        // method fell through and returned the UNROOTED bare name — re-opening the exact
+        // binary-planting/LPE vector the helper exists to close.
+        var resolved = SystemPaths.ResolveSystemTool("powershell");
+        Assert.True(Path.IsPathRooted(resolved), "bare 'powershell' must resolve to a rooted path");
+        Assert.True(File.Exists(resolved), "resolved path must exist on disk");
+        Assert.EndsWith("powershell.exe", resolved, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ResolveSystemTool_BareSystem32NameWithoutExe_ResolvesToRootedExistingPath()
+    {
+        // Same fallback for a plain System32 tool: "cmd" -> full path to cmd.exe.
+        var resolved = SystemPaths.ResolveSystemTool("cmd");
+        Assert.True(Path.IsPathRooted(resolved));
+        Assert.True(File.Exists(resolved));
+        Assert.Equal(Path.Combine(Environment.SystemDirectory, "cmd.exe"), resolved, ignoreCase: true);
+    }
+
+    [Fact]
     public void ResolveSystemTool_AlreadyRootedPath_ReturnedUnchanged()
     {
         const string p = @"C:\Windows\System32\netsh.exe";

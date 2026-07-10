@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.91] - 2026-07-11
+
+### Fixed
+- **`WindowsFeaturesService` launched PowerShell by the extension-less name `"powershell"`, defeating the System32 path-pinning that blocks binary-planting privilege escalation on an elevated code path.** All three call sites (`ListFeaturesAsync`, `EnableFeatureAsync`, `DisableFeatureAsync` — the enable/disable paths run elevated) called `RunProcessAsync("powershell", …)`. `PowerShellRunner` hardens the target via `SystemPaths.ResolveSystemTool`, but that helper resolved by `File.Exists` and only ever probed the bare name — `File.Exists(@"…\System32\WindowsPowerShell\v1.0\powershell")` is `false` (the file is `powershell.exe`), so both probes missed and it returned the **unrooted** `"powershell"`. With `UseShellExecute=false`, Win32 `CreateProcess` then searches the calling process's own directory first — so an attacker-planted `powershell.exe` next to SysManager's portable .exe (often run from a user-writable folder, sometimes elevated) would execute with the app's privileges. Changed all three sites to `"powershell.exe"` (matching `PowerShellRunner.RunScriptViaPwshAsync` and every other system-tool caller, which all use the `.exe` suffix). **Fix-the-class:** `SystemPaths.ResolveSystemTool` now also probes `"<name>.exe"` when given an extension-less bare name, so a future caller that forgets the suffix can't silently reopen the same hole.
+
 ## [1.52.90] - 2026-07-10
 
 ### Fixed

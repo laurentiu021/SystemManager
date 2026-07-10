@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.87] - 2026-07-10
+
+### Fixed
+- **Removing preinstalled apps in the Debloater could abort the whole batch and pop a raw error dialog if one app's uninstall faulted at the PowerShell-runspace level.** `RemoveSelectedAsync` awaited `DebloaterService.RemoveAsync` per app inside a loop guarded by a single `catch (OperationCanceledException)`. `RemoveAsync` catches only `System.Management.Automation.RuntimeException`, so a runspace-level fault (a failed runspace open → `PSInvalidOperationException`, which derives from `InvalidOperationException`, or a `Win32Exception` launching the host) escaped the loop, hit the global dispatcher `MessageBox` with a technical message, and left the remaining rows frozen at "Removing…" (the grid never refreshed). Each app's removal is now wrapped in its own `try/catch` for `InvalidOperationException`/`Win32Exception` — that one row is marked "Failed" and the batch continues — mirroring the guard `DefenderViewModel` already uses.
+- **The Dark Mode scheduler could flip the real Windows system theme on startup against a saved "app-only" preference.** `LoadFromSchedule` applies the saved settings through the `[ObservableProperty]` setters one at a time under the `_suppressSave` flag, but that flag only gated `SaveSchedule` — not `EvaluateSchedule`, which the `ScheduleEnabled`/`DarkStart`/`LightStart` change handlers also call. So during load the `ScheduleEnabled` setter ran `EvaluateSchedule` while `DarkStart`/`LightStart`/`ApplyToSystem` still held their defaults (`19:00`/`07:00`/`ApplyToSystem = true`), and `SetTheme` could write the wrong theme system-wide even for a user who chose app-only with a different schedule. `EvaluateSchedule` now returns early while `_suppressSave` is set; the constructor still runs one authoritative evaluation after load completes, so nothing is lost.
+
 ## [1.52.86] - 2026-07-10
 
 ### Fixed

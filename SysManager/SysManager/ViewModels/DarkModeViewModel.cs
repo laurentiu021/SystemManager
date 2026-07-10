@@ -72,6 +72,13 @@ public sealed partial class DarkModeViewModel : ViewModelBase
     /// <summary>Apply the scheduled theme if the schedule is on and the current theme differs.</summary>
     private void EvaluateSchedule()
     {
+        // Suppress the theme side effect during LoadFromSchedule: the [ObservableProperty]
+        // setters fire one at a time, so the ScheduleEnabled setter would run this while
+        // DarkStart/LightStart/ApplyToSystem still hold their defaults — writing the WRONG
+        // (and possibly system-wide) theme against the user's saved preference. The ctor
+        // runs one authoritative EvaluateSchedule() after load completes and IsDarkNow is
+        // set, so nothing is lost. _suppressSave already gates SaveSchedule for the same reason.
+        if (_suppressSave) return;
         if (!ScheduleEnabled) return;
         var now = TimeOnly.FromDateTime(DateTime.Now);
         bool wantDark = WindowsThemeService.ShouldBeDark(now, ParseTime(DarkStart, 19, 0), ParseTime(LightStart, 7, 0));

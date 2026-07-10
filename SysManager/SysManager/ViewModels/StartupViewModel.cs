@@ -132,7 +132,11 @@ public sealed partial class StartupViewModel : ViewModelBase
         // this command runs. We use the current (already-flipped) value as
         // the desired new state.
         var desiredState = entry.IsEnabled;
-        var success = await StartupService.SetEnabledAsync(entry, desiredState).ConfigureAwait(false);
+        // Resume on the UI thread (no ConfigureAwait(false)): the continuation reads/writes
+        // bound state (UpdateCounts enumerates the DataGrid-bound Entries, entry.IsEnabled,
+        // StatusMessage). SetEnabledAsync keeps its own internal ConfigureAwait(false).
+        // Matches the documented rule in ServicesViewModel.StartServiceAsync.
+        var success = await StartupService.SetEnabledAsync(entry, desiredState);
         if (success)
         {
             UpdateCounts();
@@ -177,7 +181,12 @@ public sealed partial class StartupViewModel : ViewModelBase
             var failed = 0;
             foreach (var entry in toEnable)
             {
-                if (await StartupService.SetEnabledAsync(entry, true).ConfigureAwait(false))
+                // Resume on the UI thread (no ConfigureAwait(false)): the loop body and the
+                // trailing UpdateCounts() enumerate the DataGrid-bound Entries and touch bound
+                // state. Off-thread (as before) a concurrent ApplyFilter — e.g. the user flipping
+                // "Hide Windows entries" — mutates Entries mid-enumeration and throws
+                // "Collection was modified". SetEnabledAsync keeps its own ConfigureAwait(false).
+                if (await StartupService.SetEnabledAsync(entry, true))
                     enabled++;
                 else
                     failed++;

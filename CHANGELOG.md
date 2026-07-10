@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.73] - 2026-07-10
+
+### Fixed
+- **The Process Manager can no longer force-kill kernel-critical processes (csrss, lsass, smss, services, wininit, etc.) that would cause an immediate BSOD.** The Kill command was the only destructive surface in the app that did not guard against acting on a known-critical target — unlike the Services tab (which refuses to stop/disable critical services) and the File Lock tab (which refuses to end critical lockers). It now refuses outright when the process is classified as "System" in the process database, and as defense-in-depth also checks against a hardcoded boot-critical denylist so protection holds even for processes not yet in the database.
+
 ## [1.52.72] - 2026-07-10
 
 ### Fixed

@@ -121,26 +121,27 @@ public sealed class MemoryTestService
                 {
                     using (mo)
                     {
-                        double cap = Convert.ToDouble(mo["Capacity"] ?? 0) / 1024d / 1024d / 1024d;
-                        list.Add(new MemoryModuleHealth
+                        try
                         {
-                            Slot = mo["DeviceLocator"]?.ToString() ?? mo["BankLabel"]?.ToString() ?? "",
-                            Manufacturer = (mo["Manufacturer"]?.ToString() ?? "").Trim(),
-                            CapacityGB = Math.Round(cap, 0),
-                            SpeedMHz = Convert.ToUInt32(mo["Speed"] ?? 0u),
-                            ConfiguredSpeedMHz = Convert.ToUInt32(mo["ConfiguredClockSpeed"] ?? 0u),
-                            PartNumber = (mo["PartNumber"]?.ToString() ?? "").Trim()
-                        });
+                            double cap = FixedDriveService.ToDoubleSafe(mo["Capacity"]) / 1024d / 1024d / 1024d;
+                            list.Add(new MemoryModuleHealth
+                            {
+                                Slot = mo["DeviceLocator"]?.ToString() ?? mo["BankLabel"]?.ToString() ?? "",
+                                Manufacturer = (mo["Manufacturer"]?.ToString() ?? "").Trim(),
+                                CapacityGB = Math.Round(cap, 0),
+                                SpeedMHz = FixedDriveService.ToUInt32Safe(mo["Speed"]),
+                                ConfiguredSpeedMHz = FixedDriveService.ToUInt32Safe(mo["ConfiguredClockSpeed"]),
+                                PartNumber = (mo["PartNumber"]?.ToString() ?? "").Trim()
+                            });
+                        }
+                        catch (InvalidCastException) { /* malformed WMI value — skip this module, continue scanning */ }
+                        catch (FormatException) { /* malformed WMI value — skip this module */ }
+                        catch (OverflowException) { /* WMI value out of range — skip this module */ }
                     }
                 }
             }
             catch (ManagementException) { /* WMI class not available */ }
             catch (UnauthorizedAccessException) { /* WMI access denied */ }
-            // Convert.To* on an unexpected WMI value can throw these; a malformed module
-            // entry shouldn't abort the whole memory scan.
-            catch (InvalidCastException) { /* malformed WMI value */ }
-            catch (FormatException) { /* malformed WMI value */ }
-            catch (OverflowException) { /* WMI value out of range */ }
             return list;
         }).ConfigureAwait(false);
     }

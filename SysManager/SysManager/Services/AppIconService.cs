@@ -173,9 +173,11 @@ public sealed class AppIconService
             bitmap.Freeze();
             return bitmap;
         }
-        catch (Exception ex) when (ex is NotSupportedException or IOException or UriFormatException)
+        catch (Exception ex) when (ex is NotSupportedException or IOException or UriFormatException
+                                      or System.IO.FileFormatException
+                                      or System.Runtime.InteropServices.ExternalException)
         {
-            // Corrupt/unreadable cache file or an unsupported image format — skip gracefully.
+            // Corrupt/unreadable cache file, unsupported image format, or WIC codec failure — skip gracefully.
             Log.Debug(ex, "Could not load cached icon from {Path}", path);
             return null;
         }

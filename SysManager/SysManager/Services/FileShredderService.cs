@@ -57,6 +57,10 @@ public sealed partial class FileShredderService
         if (!File.Exists(filePath))
             throw new FileNotFoundException("File not found.", filePath);
 
+        var attrs = File.GetAttributes(filePath);
+        if (attrs.HasFlag(FileAttributes.ReadOnly))
+            File.SetAttributes(filePath, attrs & ~FileAttributes.ReadOnly);
+
         var totalPasses = (int)method;
         var patterns = GetPatterns(method);
 

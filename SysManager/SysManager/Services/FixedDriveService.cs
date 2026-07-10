@@ -151,6 +151,15 @@ public sealed class FixedDriveService
         catch (OverflowException) { return 0u; }
     }
 
+    internal static double ToDoubleSafe(object? value)
+    {
+        if (value is null || value is DBNull) return 0d;
+        try { return Convert.ToDouble(value); }
+        catch (InvalidCastException) { return 0d; }
+        catch (FormatException) { return 0d; }
+        catch (OverflowException) { return 0d; }
+    }
+
     private static string MapMedia(uint v) => v switch
     {
         3 => "HDD",

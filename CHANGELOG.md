@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.76] - 2026-07-10
+
+### Fixed
+- **App icon cache loading crashed on corrupt PNG/JPEG files that trigger WIC codec errors.** `AppIconService.LoadFromFile` caught `NotSupportedException`, `IOException`, and `UriFormatException`, but `BitmapImage.EndInit()` throws `FileFormatException` (derives from `FormatException`, not `IOException`) for malformed image headers and `ExternalException` for native WIC decoder failures. Both are now caught, matching the established pattern in `IconExtractorService` (lines 203/234). Without this fix, a single corrupt cached icon file caused the entire app-icon load path to throw unhandled to the caller.
+- **File Shredder failed on read-only files when invoked for a single file (not via folder shred).** `ShredFileAsync` opened a write stream (`FileAccess.Write`) without first clearing the `ReadOnly` attribute, throwing `UnauthorizedAccessException`. `ShredFolderAsync` already stripped ReadOnly (lines 213-215) before calling `ShredFileAsync`, but the ViewModel's single-file path (`FileShredderViewModel:170`) called `ShredFileAsync` directly — the file survived with its data intact while the UI reported "Failed". The ReadOnly strip now lives inside `ShredFileAsync` itself so both entry points are covered.
+- **Memory health scan returned partial or empty results when any single RAM module reported a `DBNull` property.** `MemoryTestService` used `Convert.ToDouble(mo["Capacity"] ?? 0)` and `Convert.ToUInt32(mo["Speed"] ?? 0u)` — the `??` operator does not catch `DBNull.Value` (which is non-null), so `Convert.ToUInt32(DBNull.Value)` throws `InvalidCastException`. The catch block for that exception sat OUTSIDE the `foreach` loop, so one problematic module aborted the entire scan. Now uses `FixedDriveService.ToDoubleSafe`/`ToUInt32Safe` (DBNull-aware, already tested) and the defensive catch wraps each individual module so remaining modules are still reported.
+
 ## [1.52.75] - 2026-07-10
 
 ### Fixed

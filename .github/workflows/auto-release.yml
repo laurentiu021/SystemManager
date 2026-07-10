@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - "SysManager/SysManager/**"
+      - "SysManager/Directory.Packages.props"
+      - "SysManager/Directory.Build.props"
+      - "global.json"
 
 permissions:
   contents: write

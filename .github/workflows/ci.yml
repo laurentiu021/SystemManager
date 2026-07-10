@@ -141,12 +141,13 @@ jobs:
           --results-directory TestResults
         continue-on-error: true
 
-      # Surface UI test failures as a visible warning annotation. Use `conclusion`,
-      # NOT `outcome`: with continue-on-error the step's `outcome` is forced to
-      # 'success', so an `outcome == 'failure'` check never fires and the failure is
-      # masked entirely. `conclusion` reflects the real step result.
+      # Surface UI test failures as a visible warning annotation. Use `outcome`,
+      # NOT `conclusion`: with continue-on-error the step's `conclusion` is forced to
+      # 'success', so a `conclusion == 'failure'` check never fires and the failure is
+      # masked entirely. `outcome` reflects the real step result before continue-on-error
+      # is applied.
       - name: Annotate UI test failures
-        if: steps.ui-tests.conclusion == 'failure'
+        if: steps.ui-tests.outcome == 'failure'
         run: echo "::warning::UI automation tests failed — review the ui-test-results artifact for details."
 
       - name: Upload UI test results

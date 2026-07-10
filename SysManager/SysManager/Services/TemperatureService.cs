@@ -32,6 +32,15 @@ public sealed class TemperatureService : IDisposable
     private Computer? _computer;
     private bool _disposed;
 
+    // Disk friendly-names are static hardware identity — they never change during a session,
+    // yet the Dashboard's 2s temperature poll (includeStorage=true) re-resolved them every tick
+    // via a Win32_DiskDrive WMI query AND a DiskHealthService SMART-association walk (by far the
+    // heaviest part of a read). Memoize both once — mirroring the _nvApiInitTried "resolve static
+    // hardware once" pattern — so the hot poll only calls LHM Update() for live temps.
+    private List<string>? _cachedWmiDiskNames;      // GetDiskNamesFromWmi(), guarded by _sensorLock
+    private List<string>? _cachedStorageFriendlyNames; // DiskHealthService friendly names, guarded by _enrichGate
+    private readonly SemaphoreSlim _enrichGate = new(1, 1);
+
     public TemperatureService(DiskHealthService diskHealth, bool skipHardwareInit = false)
     {
         _diskHealth = diskHealth;
@@ -84,8 +93,10 @@ public sealed class TemperatureService : IDisposable
                 _computer ??= OpenComputer();
 
                 // Pre-fetch disk names from WMI for cross-reference (skipped on the fast path —
-                // this WMI query runs every poll otherwise and the sampler doesn't need names).
-                var diskNames = includeStorage ? GetDiskNamesFromWmi() : [];
+                // the sampler doesn't need names). Memoized: disk models are static hardware, so
+                // resolve the Win32_DiskDrive query once and reuse it — the 2s poll no longer
+                // re-queries WMI every tick. Guarded by _sensorLock (already held here).
+                var diskNames = includeStorage ? (_cachedWmiDiskNames ??= GetDiskNamesFromWmi()) : [];
 
                 foreach (var hardware in _computer.Hardware)
                 {
@@ -229,14 +240,33 @@ public sealed class TemperatureService : IDisposable
             catch (Exception ex) { Log.Debug(ex, "LibreHardwareMonitor close failed"); }
             _computer = null;
         }
+        _enrichGate.Dispose();
     }
 
     private async Task EnrichStorageNamesAsync(List<TemperatureReading> readings)
     {
         try
         {
-            var disks = await _diskHealth.CollectAsync();
-            var diskNames = disks.Select(d => d.FriendlyName).ToList();
+            // The friendly names come from DiskHealthService.CollectAsync()'s MSFT_PhysicalDisk +
+            // per-disk MSFT_StorageReliabilityCounter (SMART) walk — the heaviest part of a read.
+            // They are static hardware identity, so resolve once and cache; the 2s Dashboard poll
+            // then skips the SMART walk entirely on every tick after the first. The gate makes the
+            // first-resolution race-safe when the poll, the user Refresh, and the sampler overlap.
+            var diskNames = _cachedStorageFriendlyNames;
+            if (diskNames is null)
+            {
+                await _enrichGate.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    if (_cachedStorageFriendlyNames is null)
+                    {
+                        var disks = await _diskHealth.CollectAsync().ConfigureAwait(false);
+                        _cachedStorageFriendlyNames = disks.Select(d => d.FriendlyName).ToList();
+                    }
+                    diskNames = _cachedStorageFriendlyNames;
+                }
+                finally { _enrichGate.Release(); }
+            }
 
             var storageReadings = readings
                 .Select((r, i) => (Reading: r, Index: i))

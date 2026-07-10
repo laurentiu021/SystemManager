@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.94] - 2026-07-11
+
+### Fixed
+- **The Dashboard's 2-second temperature poll re-ran a Win32_DiskDrive WMI query and a per-disk SMART association walk on every tick, purely to relabel storage sensors with (unchanging) disk names.** `RefreshTemperaturesAsync` calls `TemperatureService.ReadAllAsync()` with `includeStorage` defaulting to `true`; on an elevated session that ran `GetDiskNamesFromWmi()` (a `Win32_DiskDrive` query) **and** `EnrichStorageNamesAsync` → `DiskHealthService.CollectAsync()` (an `MSFT_PhysicalDisk` enumeration plus a per-disk `MSFT_StorageReliabilityCounter` walk — by the code's own comments "by far the heaviest part of a read") every 2 seconds while the Dashboard (the app's default tab) was open. Disk friendly-names are static hardware identity, so both resolutions are now memoized once (mirroring the existing `_nvApiInitTried` "resolve static hardware once" pattern), with a `SemaphoreSlim` gate making the first resolution race-safe across the 2s poll, the user's Refresh, and the 10s resource sampler. After the first read the hot poll only calls LibreHardwareMonitor's `Update()` for live temperatures.
+
 ## [1.52.93] - 2026-07-11
 
 ### Fixed

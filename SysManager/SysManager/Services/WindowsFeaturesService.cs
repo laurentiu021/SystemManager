@@ -14,9 +14,9 @@ namespace SysManager.Services;
 /// </summary>
 public sealed partial class WindowsFeaturesService
 {
-    private readonly PowerShellRunner _runner;
+    private readonly IPowerShellRunner _runner;
 
-    public WindowsFeaturesService(PowerShellRunner runner) => _runner = runner;
+    public WindowsFeaturesService(IPowerShellRunner runner) => _runner = runner;
 
     /// <summary>
     /// Lists all Windows optional features with their current state.

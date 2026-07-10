@@ -27,7 +27,7 @@ namespace SysManager.Services;
 /// </summary>
 public sealed partial class PerformanceService : IDisposable
 {
-    private readonly PowerShellRunner _ps;
+    private readonly IPowerShellRunner _ps;
     private readonly RestorePointService _restorePoints;
     private readonly SemaphoreSlim _psGate = new(1, 1);
     private bool _disposed;
@@ -58,7 +58,7 @@ public sealed partial class PerformanceService : IDisposable
     private static partial bool SystemParametersInfoSet(
         uint uiAction, uint uiParam, int pvParam, uint fWinIni);
 
-    public PerformanceService(PowerShellRunner ps, RestorePointService restorePoints)
+    public PerformanceService(IPowerShellRunner ps, RestorePointService restorePoints)
     {
         _ps = ps;
         _restorePoints = restorePoints;

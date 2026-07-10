@@ -142,7 +142,7 @@ public sealed partial class ServiceManagerService
     }
 
     /// <summary>Change the startup type of a service via sc.exe. Requires admin.</summary>
-    public static async Task SetStartupTypeAsync(string serviceName, string startType, PowerShellRunner ps, CancellationToken ct = default)
+    public static async Task SetStartupTypeAsync(string serviceName, string startType, IPowerShellRunner ps, CancellationToken ct = default)
     {
         // SEC-006: Strict allowlist for service names — alphanumeric, spaces,
         // hyphens, underscores, dots, and dollar signs only (covers all valid

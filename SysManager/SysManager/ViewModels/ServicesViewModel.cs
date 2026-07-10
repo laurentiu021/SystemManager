@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ServicesViewModel : ViewModelBase
 {
-    private readonly PowerShellRunner _ps;
+    private readonly IPowerShellRunner _ps;
     private List<ServiceEntry> _allServices = [];
 
     public BulkObservableCollection<ServiceEntry> Services { get; } = new();
@@ -37,7 +37,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     public string[] FilterOptions { get; } =
         { "All", "Running", "Stopped", "Safe", "Caution", "Critical" };
 
-    public ServicesViewModel(PowerShellRunner ps)
+    public ServicesViewModel(IPowerShellRunner ps)
     {
         _ps = ps;
         IsElevated = AdminHelper.IsElevated();

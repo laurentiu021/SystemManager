@@ -18,10 +18,8 @@ public static class ServiceRegistration
     {
         // ── Core services ──────────────────────────────────────────────
         // PowerShellRunner is Transient — each consumer gets its own instance
-        // to avoid LineReceived event cross-talk between tabs. Registered under
-        // both the concrete type (legacy consumers) and the IPowerShellRunner
-        // seam (DNS / network repair / winget install — substitutable in tests).
-        services.AddTransient<PowerShellRunner>();
+        // to avoid LineReceived event cross-talk between tabs. All consumers
+        // depend on IPowerShellRunner (substitutable in tests via NSubstitute).
         services.AddTransient<IPowerShellRunner, PowerShellRunner>();
         services.AddSingleton<SystemInfoService>();
         // WingetService is Transient so each consuming ViewModel gets its own

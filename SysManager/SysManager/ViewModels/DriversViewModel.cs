@@ -15,7 +15,7 @@ namespace SysManager.ViewModels;
 
 public sealed partial class DriversViewModel : ViewModelBase
 {
-    private readonly PowerShellRunner _runner;
+    private readonly IPowerShellRunner _runner;
     private CancellationTokenSource? _cts;
     private readonly List<DriverEntry> _allDrivers = new();
 
@@ -25,7 +25,7 @@ public sealed partial class DriversViewModel : ViewModelBase
     [ObservableProperty] private string _summary = "Click List drivers to scan installed drivers.";
     [ObservableProperty] private bool _hideSystemDrivers;
 
-    public DriversViewModel(PowerShellRunner runner)
+    public DriversViewModel(IPowerShellRunner runner)
     {
         _runner = runner;
         // Re-evaluate ListDrivers' CanExecute when IsBusy flips. Without this gate a second

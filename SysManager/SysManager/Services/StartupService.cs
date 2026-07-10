@@ -417,7 +417,7 @@ public sealed class StartupService
 
             var psi = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "schtasks.exe",
+                FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool("schtasks.exe"),
                 Arguments = args,
                 UseShellExecute = false,
                 CreateNoWindow = true,

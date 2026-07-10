@@ -261,7 +261,7 @@ public sealed partial class ContextMenuService
 
             var psi = new ProcessStartInfo
             {
-                FileName = "reg.exe",
+                FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool("reg.exe"),
                 Arguments = $"export \"{fullPath}\" \"{backupFile}\" /y",
                 UseShellExecute = false,
                 CreateNoWindow = true,

@@ -113,7 +113,7 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         // credential securely (LSA secret) — SysManager never writes a plaintext password.
         try
         {
-            Process.Start(new ProcessStartInfo("netplwiz.exe") { UseShellExecute = true })?.Dispose();
+            Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("netplwiz.exe")) { UseShellExecute = true })?.Dispose();
             StatusMessage = "Opened User Accounts (netplwiz). Untick \"Users must enter a user name and password\" to enable auto sign-in.";
         }
         catch (System.ComponentModel.Win32Exception ex)

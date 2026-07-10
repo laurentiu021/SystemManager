@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.68] - 2026-07-10
+
+### Security
+- **Built-in Windows repair tools are now launched by their full trusted system path instead of by name.** Several maintenance actions started Windows' own tools by name only (the SFC / DISM / CHKDSK / network helpers behind the repair tabs, the scheduled-task and registry edits behind the Context Menu and Startup tabs, the memory-diagnostic scheduler, and the auto-logon dialog on the System Fixes tab). When a program is started by name with a direct (non-shell) launch, Windows searches the application's own folder before the system folder — so if SysManager were run as a portable copy from a folder other programs can write to (for example, a Downloads folder) with administrator rights, a look-alike file planted there under the same name could have run in place of the real Windows tool, inheriting those rights. SysManager now resolves these tools to their protected `System32` location before launching them, so a planted look-alike can no longer take their place.
+
 ## [1.52.67] - 2026-07-09
 
 ### Changed

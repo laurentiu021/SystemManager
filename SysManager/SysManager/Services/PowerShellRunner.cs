@@ -187,7 +187,9 @@ public sealed class PowerShellRunner : IPowerShellRunner
 
         var psi = new System.Diagnostics.ProcessStartInfo
         {
-            FileName = fileName,
+            // Pin bare Windows tool names to their full System32 path so an attacker-planted
+            // executable in the (possibly user-writable) app directory can't be run elevated.
+            FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool(fileName),
             Arguments = arguments,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

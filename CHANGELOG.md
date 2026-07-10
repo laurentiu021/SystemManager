@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.84] - 2026-07-10
+
+### Fixed
+- **Traceroute re-resolved the destination hostname on every probe, so a round-robin / CDN host could produce a garbled route toward different servers.** `TracerouteService.RunAsync` passed the raw hostname string into `Ping.SendPingAsync` inside the per-hop/per-probe loop, re-running DNS for each of up to `MaxHops * ProbesPerHop` (30×2 = 60) probes. For a load-balanced hostname (e.g. `google.com`), consecutive TTLs could resolve to *different* destination IPs, interleaving hops toward different servers into one nonsensical route — plus ~60× redundant DNS lookups. The destination is now resolved exactly once, up front, via a new `ResolveDestinationAsync` helper (IP literals are used verbatim with no DNS; hostnames pin the first `Dns.GetHostAddressesAsync` result), and every probe targets that fixed `IPAddress`. A resolution failure now surfaces as `InvalidOperationException` (the type the ViewModel already handles) instead of silently looping `MaxHops` times with per-probe DNS failures. Single-IP hosts and IP literals were never affected; the reverse-DNS lookup of each *responding* hop is unchanged.
+
 ## [1.52.82] - 2026-07-10
 
 ### Fixed

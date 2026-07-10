@@ -27,22 +27,18 @@ public class TracerouteServiceTests
     }
 
     [Fact]
-    public async Task InvalidHost_ThrowsOrReturnsEmpty()
+    public async Task InvalidHost_ThrowsInvalidOperation()
     {
         var svc = new TracerouteService { MaxHops = 2, TimeoutMs = 500, ProbesPerHop = 1 };
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-        // Either an exception is raised (DNS fail) or we hit MaxHops with timeouts.
-        // Both outcomes are acceptable; we just require the method to terminate.
-        try
-        {
-            var result = await svc.RunAsync("this-host-does-not-exist.invalid", cts.Token);
-            Assert.NotNull(result);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // acceptable — invalid DNS
-        }
+        // P2 #39: the destination is now resolved ONCE up front. An unresolvable host
+        // fails at that single resolution and surfaces as InvalidOperationException —
+        // the type the ViewModel's catch already handles — rather than silently looping
+        // MaxHops times with per-probe DNS failures. (Before: the raw hostname went into
+        // every SendPingAsync probe, so a bad host produced MaxHops timeout rows.)
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            svc.RunAsync("this-host-does-not-exist.invalid", cts.Token));
     }
 
     [Fact]

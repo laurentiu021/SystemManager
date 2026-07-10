@@ -27,6 +27,13 @@ public sealed class TracerouteService
         List<TracerouteHop> results = [];
         var payload = new byte[32];
 
+        // Resolve the destination ONCE, up front, and probe that fixed IP for every TTL.
+        // Passing the raw hostname into SendPingAsync inside the loop re-resolves DNS on
+        // every probe (up to MaxHops*ProbesPerHop lookups) and — for a round-robin / CDN
+        // hostname — lets consecutive TTLs target DIFFERENT IPs, producing a garbled route
+        // that interleaves hops toward different servers.
+        var destination = await ResolveDestinationAsync(host, ct).ConfigureAwait(false);
+
         for (int ttl = 1; ttl <= MaxHops; ttl++)
         {
             ct.ThrowIfCancellationRequested();
@@ -48,7 +55,7 @@ public sealed class TracerouteService
                     using var ping = new Ping();
                     var sw = Stopwatch.StartNew();
                     var effectiveTimeout = TimeoutMs > 0 ? TimeoutMs : 3000;
-                    var reply = await ping.SendPingAsync(host, effectiveTimeout, payload, options).WaitAsync(ct).ConfigureAwait(false);
+                    var reply = await ping.SendPingAsync(destination, effectiveTimeout, payload, options).WaitAsync(ct).ConfigureAwait(false);
                     sw.Stop();
 
                     if (reply.Status is IPStatus.Success or IPStatus.TtlExpired)
@@ -102,6 +109,32 @@ public sealed class TracerouteService
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="host"/> to a single fixed <see cref="IPAddress"/> to probe
+    /// for the whole trace. An IP literal is used as-is (no DNS); otherwise the first
+    /// address returned by DNS is pinned. A resolution failure is surfaced as
+    /// <see cref="InvalidOperationException"/> — the type the ViewModel already handles —
+    /// so an unresolvable host shows a friendly "Error" message instead of crashing the
+    /// command with a raw <see cref="System.Net.Sockets.SocketException"/>.
+    /// </summary>
+    internal static async Task<IPAddress> ResolveDestinationAsync(string host, CancellationToken ct)
+    {
+        if (IPAddress.TryParse(host, out var literal))
+            return literal;
+
+        try
+        {
+            var addresses = await Dns.GetHostAddressesAsync(host, ct).ConfigureAwait(false);
+            if (addresses.Length == 0)
+                throw new InvalidOperationException($"Could not resolve host '{host}'.");
+            return addresses[0];
+        }
+        catch (System.Net.Sockets.SocketException ex)
+        {
+            throw new InvalidOperationException($"Could not resolve host '{host}': {ex.Message}", ex);
+        }
     }
 
     /// <summary>

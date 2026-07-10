@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.74] - 2026-07-10
+
+### Fixed
+- **RestartExplorer could leave the user without a taskbar/desktop if any explorer.exe process was unkillable (e.g. elevated or another user's session).** The kill loop and the shell relaunch lived in a single try block, so one `Win32Exception` from `Kill()` on a higher-integrity explorer aborted the entire method — explorer was dead but never relaunched. Each process is now killed in its own guarded block (matching `FileLockService.KillProcess`'s per-process pattern), and the `Process.Start("explorer.exe")` relaunch runs unconditionally after the loop so the shell is always restored.
+- **The Context Menu tab's "Enable" action on HKLM-disabled entries reported success but actually did nothing.** The HKCU fallback path used `CreateSubKey` even when enabling (removing `LegacyDisable`), which created an empty orphan key and deleted a value that never existed there, then returned `true`. The HKLM `LegacyDisable` was never touched, so Explorer still hid the entry and the next scan snapped the toggle back. The enable path now uses `OpenSubKey` and returns `false` if no user-authored override exists to clear — surfacing the "needs admin" message instead of silently lying.
+- **Every Context Menu toggle froze the UI thread for up to 5 seconds.** `ToggleEntry` was synchronous and called `BackupRegistry` which spawns `reg.exe` with a 5-second `WaitForExit` — all on the dispatcher thread. Converted to an async command with `Task.Run`, matching the existing `ApplyPresetAsync` pattern that already offloads the same service calls for exactly this reason.
+
 ## [1.52.73] - 2026-07-10
 
 ### Fixed

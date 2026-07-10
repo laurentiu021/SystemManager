@@ -19,6 +19,14 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     private CancellationTokenSource? _cts;
     private readonly Action<PowerShellLine> _lineHandler;
 
+    /// <summary>
+    /// Shown when winget.exe cannot be launched — App Installer isn't present or its
+    /// execution alias is off (common on older/LTSC/Server machines). Plain-language so
+    /// the non-technical persona knows the tab needs App Installer, not that something broke.
+    /// </summary>
+    internal const string WingetUnavailableMessage =
+        "winget (App Installer) isn't available on this PC — install \"App Installer\" from the Microsoft Store to use this tab.";
+
     public BulkObservableCollection<AppPackage> Packages { get; } = new();
     public ConsoleViewModel Console { get; } = new();
 
@@ -97,6 +105,11 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         }
         catch (OperationCanceledException) { StatusMessage = "Scan cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        // winget.exe missing (App Installer not present / execution alias off) throws
+        // Win32Exception "cannot find the file specified" from Process.Start. Without this
+        // it escapes the AsyncRelayCommand to the global dispatcher handler and pops a raw
+        // OS-error dialog on the tab's first action. Mirror UninstallerViewModel's handling.
+        catch (System.ComponentModel.Win32Exception) { StatusMessage = WingetUnavailableMessage; }
         finally { _winget.LineReceived -= _lineHandler; IsBusy = false; IsProgressIndeterminate = false; }
     }
 
@@ -110,6 +123,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         int attempted = 0, succeeded = 0, failed = 0;
+        var wingetUnavailable = false;
         UpgradeEtaText = string.Empty;
         _upgradeEta.Reset();
         _winget.LineReceived += _lineHandler; // op-scoped subscription (see constructor note)
@@ -136,15 +150,26 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
                 // BEFORE any process runs; record it on the row and keep upgrading the rest
                 // rather than aborting the whole batch.
                 catch (ArgumentException ex) { pkg.Status = $"Error: {ex.Message}"; failed++; }
+                // winget.exe missing throws Win32Exception. It won't reappear mid-batch, so
+                // report it once and stop rather than failing every remaining row identically.
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    pkg.Status = "winget unavailable";
+                    wingetUnavailable = true;
+                    break;
+                }
                 attempted++;
             }
             Progress = 100;
             UpgradeEtaText = string.Empty;
             // Honest summary: separate succeeded from failed, and only mention failures
-            // when there are any.
-            StatusMessage = failed == 0
-                ? $"Updated {succeeded} of {toUpgrade.Count}."
-                : $"Updated {succeeded} of {toUpgrade.Count} · {failed} failed.";
+            // when there are any. If winget itself is missing, keep the friendly
+            // "install App Installer" message instead of a misleading "Updated 0 of N".
+            StatusMessage = wingetUnavailable
+                ? WingetUnavailableMessage
+                : failed == 0
+                    ? $"Updated {succeeded} of {toUpgrade.Count}."
+                    : $"Updated {succeeded} of {toUpgrade.Count} · {failed} failed.";
             Log.Information("App upgrade batch: {Succeeded} ok, {Failed} failed of {Total}",
                 succeeded, failed, toUpgrade.Count);
         }

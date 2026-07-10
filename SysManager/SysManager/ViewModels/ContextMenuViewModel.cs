@@ -132,17 +132,15 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ToggleEntry(object? parameter)
+    private async Task ToggleEntryAsync(object? parameter)
     {
         if (parameter is not ContextMenuEntry entry) return;
 
         var desiredState = entry.IsEnabled;
-        bool success;
 
-        if (desiredState)
-            success = _service.EnableEntry(entry);
-        else
-            success = _service.DisableEntry(entry);
+        var success = await Task.Run(() => desiredState
+            ? _service.EnableEntry(entry)
+            : _service.DisableEntry(entry));
 
         if (success)
         {

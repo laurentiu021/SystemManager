@@ -227,13 +227,19 @@ public sealed partial class ContextMenuService
 
         // Attempt 2: HKCU override (for system-owned entries in HKLM)
         var hkcuPath = @"Software\Classes\" + relativePath;
-        using var hkcuKey = Registry.CurrentUser.CreateSubKey(hkcuPath);
-        if (hkcuKey is null) return false;
 
         if (set)
+        {
+            using var hkcuKey = Registry.CurrentUser.CreateSubKey(hkcuPath);
+            if (hkcuKey is null) return false;
             hkcuKey.SetValue("LegacyDisable", "", RegistryValueKind.String);
+        }
         else
+        {
+            using var hkcuKey = Registry.CurrentUser.OpenSubKey(hkcuPath, writable: true);
+            if (hkcuKey is null) return false;
             hkcuKey.DeleteValue("LegacyDisable", throwOnMissingValue: false);
+        }
 
         Log.Debug("Used HKCU override for {Path}", relativePath);
         return true;
@@ -347,24 +353,38 @@ public sealed partial class ContextMenuService
 
     /// <summary>
     /// Restarts Windows Explorer to apply context menu style changes.
+    /// Each process is killed individually so one unkillable instance (e.g. a
+    /// higher-integrity or other-session explorer) cannot abort the loop and
+    /// leave the user without a shell.
     /// </summary>
     public static void RestartExplorer()
     {
-        try
+        foreach (var proc in Process.GetProcessesByName("explorer"))
         {
-            foreach (var proc in Process.GetProcessesByName("explorer"))
+            try
             {
                 proc.Kill();
                 proc.WaitForExit(3000);
+            }
+            catch (InvalidOperationException) { }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                Log.Debug("Could not kill explorer PID {Pid}: {Error}", proc.Id, ex.Message);
+            }
+            finally
+            {
                 proc.Dispose();
             }
+        }
 
+        try
+        {
             Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true })?.Dispose();
             Log.Information("Explorer restarted to apply context menu changes");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (System.ComponentModel.Win32Exception ex)
         {
-            Log.Warning("Failed to restart Explorer: {Error}", ex.Message);
+            Log.Warning("Failed to relaunch Explorer: {Error}", ex.Message);
         }
     }
 

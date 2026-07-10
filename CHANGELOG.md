@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.70] - 2026-07-10
+
+### Fixed
+- **The Startup tab could throw an error when toggling items while the "Hide Windows entries" filter was changed at the same time.** After enabling or disabling a startup item (or using "Enable all"), the tab finished its work on a background thread and then recounted the list from there. If the list was being re-filtered on the screen at that exact moment (for example, by ticking "Hide Windows entries"), the background recount could read the list while it was changing and fail. The work now finishes back on the screen's own thread — matching how the Services tab already does it — so the two can no longer collide.
+
 ## [1.52.69] - 2026-07-10
 
 ### Fixed

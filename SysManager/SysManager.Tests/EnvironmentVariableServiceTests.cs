@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Text.Json;
 using Microsoft.Win32;
 using SysManager.Models;
 using SysManager.Services;
@@ -234,5 +235,135 @@ public class EnvironmentVariableServiceTests
             Assert.Equal(names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(), names);
         }
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+    }
+
+    // ── P2 #17 regression: TryValidateName, non-throwing restore, kind fidelity ──
+
+    [Theory]
+    [InlineData("PATH", true)]
+    [InlineData("JAVA_HOME", true)]
+    [InlineData("_underscore", true)]
+    [InlineData("My.Var", true)]
+    [InlineData("Var-1", true)]
+    [InlineData("foo(1)", true)]
+    public void TryValidateName_AcceptsConformingNames(string name, bool expected)
+    {
+        var result = EnvironmentVariableService.TryValidateName(name, out var validated);
+        Assert.Equal(expected, result);
+        if (expected) Assert.Equal(name.Trim(), validated);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("=C:")]
+    [InlineData("1startsWithDigit")]
+    [InlineData("has space")]
+    [InlineData("special#char")]
+    [InlineData("has@at")]
+    [InlineData("plus+sign")]
+    [InlineData("with!bang")]
+    public void TryValidateName_RejectsNonConforming_ReturnsFalse(string name)
+    {
+        var result = EnvironmentVariableService.TryValidateName(name, out var validated);
+        Assert.False(result);
+        Assert.Equal("", validated);
+    }
+
+    [Fact]
+    public void TryValidateName_RejectsOverlongName()
+    {
+        var longName = new string('A', 256);
+        Assert.False(EnvironmentVariableService.TryValidateName(longName, out _));
+    }
+
+    [Fact]
+    public void SetVariable_ReturnsFalse_ForInvalidName_DoesNotThrow()
+    {
+        var svc = new EnvironmentVariableService();
+
+        var result = svc.SetVariable("HAS SPACE", "somevalue", EnvVarScope.User);
+        Assert.False(result);
+
+        result = svc.SetVariable("=C:", "somepath", EnvVarScope.User);
+        Assert.False(result);
+
+        result = svc.SetVariable("1DIGIT_START", "x", EnvVarScope.User);
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void EnvBackup_WithKinds_RoundTrips()
+    {
+        var backup = new EnvironmentVariableService.EnvBackup(
+            User: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PATH"] = "%SystemRoot%\\system32",
+                ["TEMP"] = "C:\\Temp"
+            },
+            Machine: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ComSpec"] = "cmd.exe"
+            },
+            UserKinds: new Dictionary<string, RegistryValueKind>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PATH"] = RegistryValueKind.ExpandString,
+                ["TEMP"] = RegistryValueKind.String
+            },
+            MachineKinds: new Dictionary<string, RegistryValueKind>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ComSpec"] = RegistryValueKind.String
+            });
+
+        var json = JsonSerializer.Serialize(backup);
+        var restored = JsonSerializer.Deserialize<EnvironmentVariableService.EnvBackup>(json);
+
+        Assert.NotNull(restored);
+        Assert.Equal(2, restored!.User.Count);
+        Assert.Equal("%SystemRoot%\\system32", restored.User["PATH"]);
+        Assert.NotNull(restored.UserKinds);
+        Assert.Equal(RegistryValueKind.ExpandString, restored.UserKinds!["PATH"]);
+        Assert.Equal(RegistryValueKind.String, restored.UserKinds["TEMP"]);
+        Assert.NotNull(restored.MachineKinds);
+        Assert.Equal(RegistryValueKind.String, restored.MachineKinds!["ComSpec"]);
+    }
+
+    [Fact]
+    public void EnvBackup_OldFormat_DeserializesWithNullKinds()
+    {
+        var oldJson = """
+        {
+            "User": { "PATH": "C:\\Windows" },
+            "Machine": { "TEMP": "C:\\Temp" }
+        }
+        """;
+
+        var restored = JsonSerializer.Deserialize<EnvironmentVariableService.EnvBackup>(oldJson);
+
+        Assert.NotNull(restored);
+        Assert.Single(restored!.User);
+        Assert.Single(restored.Machine);
+        Assert.Null(restored.UserKinds);
+        Assert.Null(restored.MachineKinds);
+    }
+
+    [Fact]
+    public void SetVariable_WithExplicitKind_WritesCorrectKind()
+    {
+        var svc = new EnvironmentVariableService();
+        var name = "SM_TEST_KIND_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            Assert.True(svc.SetVariable(name, "plain_no_percent", EnvVarScope.User, RegistryValueKind.ExpandString));
+
+            using var key = Registry.CurrentUser.OpenSubKey("Environment");
+            Assert.NotNull(key);
+            Assert.Equal(RegistryValueKind.ExpandString, key!.GetValueKind(name));
+        }
+        finally
+        {
+            using var key = Registry.CurrentUser.OpenSubKey("Environment", writable: true);
+            key?.DeleteValue(name, throwOnMissingValue: false);
+        }
     }
 }

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.80] - 2026-07-10
+
+### Fixed
+- **Environment Variables restore/apply aborted partway through when encountering a variable name that passes the registry but fails the application's user-input validation regex.** Windows registries can legally contain environment variable names with spaces, `#`, `@`, `+`, `!`, leading digits, or the `=C:` pseudo-variable prefix — all of which fail `ValidateName`'s strict regex (`\A[A-Za-z_][A-Za-z0-9_.()\-]*\z`). `SetVariable` called the throwing `ValidateName` outside any try/catch, so `RestoreFromBackup` (which iterates all backed-up names) and the ViewModel's `ApplyChanges` loop both threw `ArgumentException` on the first non-conforming name — aborting mid-iteration and leaving the environment HALF-RESTORED (some variables written, others not, no rollback). Added a non-throwing `TryValidateName` that returns `false` for non-conforming names, and `SetVariable` now uses it to skip/count failures instead of throwing — the restore loop processes every valid variable and reports a failure count rather than aborting. Additionally, `EnvBackup` now records each variable's `RegistryValueKind` so that restores round-trip REG_EXPAND_SZ fidelity exactly instead of re-deriving it from a `%`-contains heuristic (which misclassifies expandable variables whose current value happens not to contain a percent sign).
+
 ## [1.52.79] - 2026-07-10
 
 ### Fixed

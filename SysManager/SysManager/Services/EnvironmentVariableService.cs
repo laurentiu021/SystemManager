@@ -79,6 +79,25 @@ public sealed partial class EnvironmentVariableService
         return name.Trim();
     }
 
+    /// <summary>
+    /// Non-throwing validation for pre-existing (registry-originated) names that may not
+    /// conform to the strict user-input rules. Returns <c>false</c> for names that fail
+    /// validation, allowing the caller to skip/count them rather than aborting.
+    /// </summary>
+    public static bool TryValidateName(string name, out string validatedName)
+    {
+        validatedName = "";
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        if (name.Length > 255) return false;
+        if (!VariableNameRegex().IsMatch(name))
+        {
+            Log.Debug("Environment: skipping variable with non-conforming name: '{Name}'", name);
+            return false;
+        }
+        validatedName = name.Trim();
+        return true;
+    }
+
     // ── Reading ──────────────────────────────────────────────────────────────
 
     private static (RegistryKey hive, string path) Location(EnvVarScope scope) =>
@@ -139,16 +158,30 @@ public sealed partial class EnvironmentVariableService
     /// Sets (or, when <paramref name="value"/> is null, deletes) a variable, writing
     /// directly to the registry so the value KIND is preserved. An existing variable
     /// keeps its kind (REG_EXPAND_SZ stays expandable); a new variable is written as
-    /// REG_EXPAND_SZ when its value contains a %VAR% token, else REG_SZ. Validates the
-    /// name at the trust boundary. Returns <c>false</c> if the write is denied (typically
-    /// a Machine-scope write without elevation) instead of throwing.
+    /// REG_EXPAND_SZ when its value contains a %VAR% token, else REG_SZ. Returns
+    /// <c>false</c> if the name fails validation or the write is denied — never throws
+    /// for these cases, so callers (RestoreFromBackup, ApplyChanges) can count failures
+    /// and continue instead of aborting.
     ///
     /// Does NOT broadcast WM_SETTINGCHANGE — the caller broadcasts once after a batch via
     /// <see cref="BroadcastSettingChange"/>.
     /// </summary>
     public bool SetVariable(string name, string? value, EnvVarScope scope)
+        => SetVariable(name, value, scope, explicitKind: null);
+
+    /// <summary>
+    /// Sets (or deletes) a variable with an explicit <see cref="RegistryValueKind"/> override.
+    /// When <paramref name="explicitKind"/> is non-null the variable is written as that kind,
+    /// bypassing the <see cref="ChooseKind"/> heuristic — used by <see cref="RestoreFromBackup"/>
+    /// to restore REG_EXPAND_SZ fidelity from the backup's recorded kind.
+    /// </summary>
+    public bool SetVariable(string name, string? value, EnvVarScope scope, RegistryValueKind? explicitKind)
     {
-        var validName = ValidateName(name);
+        if (!TryValidateName(name, out var validName))
+        {
+            Log.Warning("Environment: cannot set variable with invalid name '{Name}' in {Scope} — skipped", name, scope);
+            return false;
+        }
         var (hive, path) = Location(scope);
         try
         {
@@ -166,10 +199,7 @@ public sealed partial class EnvironmentVariableService
                 return true;
             }
 
-            // Preserve the existing kind; for a new value, choose ExpandString when it
-            // references a %VAR% token so expansion keeps working (matches how Windows
-            // itself stores PATH and similar variables).
-            var kind = ChooseKind(ExistingKind(key, validName), value);
+            var kind = explicitKind ?? ChooseKind(ExistingKind(key, validName), value);
             key.SetValue(validName, value, kind);
             Log.Information("Environment: set {Scope} variable {Name} ({Kind})", scope, validName, kind);
             return true;
@@ -280,9 +310,13 @@ public sealed partial class EnvironmentVariableService
     {
         if (HasBackup) return;
         Directory.CreateDirectory(_backupDir);
+        var userVars = Read(EnvVarScope.User);
+        var machineVars = Read(EnvVarScope.Machine);
         var snapshot = new EnvBackup(
-            User: ToDict(Read(EnvVarScope.User)),
-            Machine: ToDict(Read(EnvVarScope.Machine)));
+            User: ToDict(userVars),
+            Machine: ToDict(machineVars),
+            UserKinds: ToKindDict(userVars),
+            MachineKinds: ToKindDict(machineVars));
         File.WriteAllText(BackupPath, JsonSerializer.Serialize(snapshot, JsonOptions),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         Log.Information("Environment: pristine backup written to {Path}", BackupPath);
@@ -295,10 +329,25 @@ public sealed partial class EnvironmentVariableService
         return dict;
     }
 
-    /// <summary>A point-in-time snapshot of both environment scopes.</summary>
+    private static Dictionary<string, RegistryValueKind> ToKindDict(IEnumerable<EnvVariable> vars)
+    {
+        Dictionary<string, RegistryValueKind> dict = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var v in vars)
+            dict[v.Name] = v.IsExpandable ? RegistryValueKind.ExpandString : RegistryValueKind.String;
+        return dict;
+    }
+
+    /// <summary>
+    /// A point-in-time snapshot of both environment scopes. The Kind dictionaries record
+    /// each variable's <see cref="RegistryValueKind"/> so a restore round-trips
+    /// REG_EXPAND_SZ faithfully instead of relying on the '%' heuristic. Nullable for
+    /// backward compatibility with backups written before this field was added.
+    /// </summary>
     public sealed record EnvBackup(
         Dictionary<string, string> User,
-        Dictionary<string, string> Machine);
+        Dictionary<string, string> Machine,
+        Dictionary<string, RegistryValueKind>? UserKinds = null,
+        Dictionary<string, RegistryValueKind>? MachineKinds = null);
 
     /// <summary>Reads the backup snapshot, or null if there is none / it cannot be parsed.</summary>
     public EnvBackup? ReadBackup()
@@ -339,15 +388,17 @@ public sealed partial class EnvironmentVariableService
         foreach (var scope in new[] { EnvVarScope.User, EnvVarScope.Machine })
         {
             var saved = scope == EnvVarScope.Machine ? backup.Machine : backup.User;
+            var kinds = scope == EnvVarScope.Machine ? backup.MachineKinds : backup.UserKinds;
 
-            // Re-write every backed-up variable to its original value.
             foreach (var (name, value) in saved)
             {
-                if (SetVariable(name, value, scope)) restored++;
+                RegistryValueKind? explicitKind = kinds is not null && kinds.TryGetValue(name, out var savedKind)
+                    ? savedKind
+                    : null;
+                if (SetVariable(name, value, scope, explicitKind)) restored++;
                 else failed++;
             }
 
-            // Remove anything present now but absent from the backup (added since).
             foreach (var current in Read(scope))
             {
                 if (saved.ContainsKey(current.Name)) continue;

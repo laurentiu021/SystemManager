@@ -1733,7 +1733,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - **InitNavigation refactored to data-driven** — sidebar tree construction replaced with
   `BuildNavGroups()` returning a `NavGroup[]` via `Group()` and `Item()` helper methods.
-  Subtitle and Tooltip are auto-generated from child labels.
+  Subtitle and Tooltip are derived from child labels.
 - **Version** aligned to 1.7.17.
 
 ## [1.7.16] - 2026-05-22
@@ -2091,7 +2091,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Removed redundant `(SolidColorBrush)` cast in
     `OutputKindToBrushConverter`.
 - **CodeQL workflow** — added `codeql-config.yml` to exclude `obj/` and
-  `bin/` directories from analysis (36 alerts in auto-generated code).
+  `bin/` directories from analysis (36 alerts in compiler-generated code).
 
 ## [0.48.27] - 2026-05-15
 

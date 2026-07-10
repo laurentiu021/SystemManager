@@ -37,12 +37,24 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void StartMonitoring()
+    private async Task StartMonitoringAsync()
     {
         if (IsMonitoring) return;
 
-        _service.TakeBaseline();
-        _service.Start();
+        // TakeBaseline() walks Program Files / LocalAppData\Programs AND enumerates both
+        // HKLM Uninstall trees (hundreds of subkeys) — the same heavy scan
+        // RefreshInstalledAppsAsync deliberately offloads. Running it synchronously in the
+        // command froze the UI for the whole scan. Offload it (and Start(), whose
+        // FileSystemWatcher creation is thread-agnostic and whose NewAppDetected event is
+        // marshaled via the SynchronizationContext captured at service construction), then
+        // resume on the UI thread to set the bound state.
+        MonitorStatus = "Starting monitoring…";
+        await Task.Run(() =>
+        {
+            _service.TakeBaseline();
+            _service.Start();
+        }).ConfigureAwait(true);
+
         IsMonitoring = true;
         IsBusy = true;
         MonitorStatus = "Monitoring active — watching for new installations...";

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.93] - 2026-07-11
+
+### Fixed
+- **The App Alerts tab froze the window while "Start Monitoring" took its baseline snapshot.** `StartMonitoring` was a synchronous command that called `AppAlertService.TakeBaseline()` directly on the UI thread — a walk of Program Files / Program Files (x86) / LocalAppData\Programs plus a full enumeration of both HKLM `Uninstall` registry trees (hundreds of subkeys), the same heavy scan the tab's own `RefreshInstalledAppsAsync` already offloads with `Task.Run`. On a machine with many installed apps or a slow disk the window hung for the whole scan. `StartMonitoring` is now an async command that runs `TakeBaseline()` + `Start()` on a background thread and resumes on the UI thread to set the monitoring state. This is safe: `FileSystemWatcher` creation is thread-agnostic and the service's `NewAppDetected` event is already marshaled via the `SynchronizationContext` captured at construction.
+
 ## [1.52.92] - 2026-07-11
 
 ### Fixed

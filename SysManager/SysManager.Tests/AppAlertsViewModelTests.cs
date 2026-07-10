@@ -63,7 +63,9 @@ public class AppAlertsViewModelTests
         // Regression (idx 235): a manual refresh must not switch off the busy/monitoring
         // affordance while monitoring is active — IsBusy has to track IsMonitoring.
         using var vm = new AppAlertsViewModel(new Services.AppAlertService());
-        vm.StartMonitoringCommand.Execute(null);
+        // StartMonitoring is now async (the baseline scan is offloaded off the UI thread);
+        // await it so IsMonitoring/IsBusy are set before asserting.
+        await vm.StartMonitoringCommand.ExecuteAsync(null);
         Assert.True(vm.IsMonitoring);
         Assert.True(vm.IsBusy);
 
@@ -71,6 +73,25 @@ public class AppAlertsViewModelTests
 
         Assert.True(vm.IsMonitoring);
         Assert.True(vm.IsBusy); // was incorrectly forced to false before the fix
+    }
+
+    [Fact]
+    public async Task StartMonitoring_IsAsync_AndSetsMonitoringState()
+    {
+        // Regression (P2 #42): StartMonitoring was a synchronous [RelayCommand] that ran the
+        // full baseline scan (Program Files walk + double HKLM Uninstall enumeration) on the
+        // UI thread, freezing the window. It is now an async command that offloads the scan.
+        // The generated command must expose IAsyncRelayCommand and, once awaited, leave the
+        // VM monitoring.
+        using var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        Assert.IsAssignableFrom<CommunityToolkit.Mvvm.Input.IAsyncRelayCommand>(vm.StartMonitoringCommand);
+
+        await vm.StartMonitoringCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsMonitoring);
+        Assert.True(vm.IsBusy);
+
+        vm.StopMonitoringCommand.Execute(null); // clean up watchers/timer
     }
 
     [Fact]

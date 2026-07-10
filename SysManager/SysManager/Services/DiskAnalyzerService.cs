@@ -166,6 +166,8 @@ public sealed class DiskAnalyzerService
 
             foreach (var d in dirs)
             {
+                if (ShouldSkip(d)) continue;
+
                 // Skip junctions, symbolic links, and mount points to avoid
                 // double-counting the same files through multiple paths.
                 try

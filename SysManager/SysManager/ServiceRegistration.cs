@@ -24,7 +24,10 @@ public static class ServiceRegistration
         services.AddTransient<PowerShellRunner>();
         services.AddTransient<IPowerShellRunner, PowerShellRunner>();
         services.AddSingleton<SystemInfoService>();
-        services.AddSingleton<IWingetService, WingetService>();
+        // WingetService is Transient so each consuming ViewModel gets its own
+        // IPowerShellRunner instance — avoids LineReceived cross-talk when
+        // Dashboard and AppUpdates both run winget concurrently.
+        services.AddTransient<IWingetService, WingetService>();
         services.AddSingleton<TrayIconService>();
         services.AddSingleton<UpdateService>();
         services.AddSingleton<ShortcutCleanerService>();

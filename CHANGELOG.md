@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.71] - 2026-07-10
+
+### Fixed
+- **The Dashboard and App Updates tabs could cross-talk when both ran winget at the same time.** Both tabs shared a single winget service instance (and therefore a single underlying process runner). If the Dashboard's "Update All Apps" action ran while the App Updates tab was scanning, the output lines from one operation could bleed into the other tab's console, and the interleaved event subscriptions could produce garbled results or swallowed lines. Each tab now receives its own independent winget service with its own process runner, so concurrent winget operations are fully isolated.
+
 ## [1.52.70] - 2026-07-10
 
 ### Fixed

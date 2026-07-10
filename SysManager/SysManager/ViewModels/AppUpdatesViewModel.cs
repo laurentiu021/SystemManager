@@ -43,10 +43,6 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     {
         _winget = winget;
         _lineHandler = line => Console.Append(line);
-        // NOTE: the WingetService is a singleton shared with other tabs (e.g. the Dashboard's
-        // "Update All Apps"). LineReceived is subscribed only for the duration of THIS tab's own
-        // Scan/UpgradeSelected operations (see below), not for the VM's lifetime, so another tab's
-        // winget output never bleeds into this console.
         // Re-evaluate the long-running commands' CanExecute when IsBusy flips. Scan and
         // UpgradeSelected both recreate the shared _cts; without this gate a second
         // command could dispose the CTS the first is still awaiting (ObjectDisposedException).

@@ -13,9 +13,9 @@ namespace SysManager.Services;
 /// </summary>
 public sealed partial class WingetService : IWingetService
 {
-    private readonly PowerShellRunner _runner;
+    private readonly IPowerShellRunner _runner;
 
-    public WingetService(PowerShellRunner runner) => _runner = runner;
+    public WingetService(IPowerShellRunner runner) => _runner = runner;
 
     public event Action<PowerShellLine>? LineReceived
     {

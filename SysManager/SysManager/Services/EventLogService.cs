@@ -151,7 +151,7 @@ public sealed partial class EventLogService
 
         if (opt.Severities is { Count: > 0 })
         {
-            var levels = opt.Severities.Select(s => (int)SeverityToLevel(s)).Distinct().ToList();
+            var levels = opt.Severities.SelectMany(SeverityToLevels).Distinct().ToList();
             clauses.Add("(" + string.Join(" or ", levels.Select(l => $"Level={l}")) + ")");
         }
 
@@ -193,5 +193,21 @@ public sealed partial class EventLogService
         EventSeverity.Info => 4,
         EventSeverity.Verbose => 5,
         _ => 4
+    };
+
+    /// <summary>
+    /// Maps a severity back to ALL event levels that <see cref="MapLevel"/> folds into it.
+    /// Used by <see cref="BuildXPath"/> so the XPath Level clause is the exact inverse of
+    /// the read-side classification. In particular, Level 0 (LogAlways) is classified as
+    /// Info by MapLevel, so Info must query BOTH Level=0 and Level=4.
+    /// </summary>
+    private static IEnumerable<int> SeverityToLevels(EventSeverity s) => s switch
+    {
+        EventSeverity.Critical => [1],
+        EventSeverity.Error => [2],
+        EventSeverity.Warning => [3],
+        EventSeverity.Info => [0, 4],
+        EventSeverity.Verbose => [5],
+        _ => [0, 4]
     };
 }

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.81] - 2026-07-10
+
+### Fixed
+- **Event Logs tab's "Info" severity filter missed Level 0 (LogAlways) events.** Windows Event Log providers can emit events at Level 0 ("LogAlways" — informational events from legacy/classic providers). `MapLevel` correctly classifies Level 0 as `EventSeverity.Info` when reading records, but the XPath filter in `BuildXPath` used `SeverityToLevel(Info)` which returned only `Level=4`. This asymmetry meant the OS-side query for "Info" events excluded all Level-0 records from the result set — the user saw fewer informational entries than the system actually logged (commonly from providers like `Microsoft-Windows-Kernel-General`, `Service Control Manager`, and other classic providers in the System log). Added `SeverityToLevels` — the exact inverse of `MapLevel` — which maps Info to `{0, 4}`, and switched `BuildXPath` from `Select(SeverityToLevel)` to `SelectMany(SeverityToLevels)` so the generated XPath clause reads `(Level=0 or Level=4)` when the user selects Info.
+
 ## [1.52.80] - 2026-07-10
 
 ### Fixed

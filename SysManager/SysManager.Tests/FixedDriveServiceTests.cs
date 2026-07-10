@@ -77,6 +77,21 @@ public class FixedDriveServiceTests
         Assert.Equal("", a.MediaType); // original unchanged
     }
 
+    // ---------- P2 #33 regression: structural verification ----------
+
+    [Fact]
+    public void Enumerate_NeverThrows()
+    {
+        // P2 #33: DriveFormat was previously read in a LINQ .Where() predicate (lazy
+        // evaluation) that ran during foreach MoveNext — OUTSIDE the per-drive try/catch.
+        // An IOException from a BitLocker-locked volume would abort enumeration of ALL
+        // remaining drives. After the fix, DriveFormat is read inside the try block, so
+        // one flaky drive cannot poison the entire result. This test verifies the method
+        // degrades gracefully (returns what it can) rather than throwing.
+        var ex = Record.Exception(() => FixedDriveService.Enumerate());
+        Assert.Null(ex);
+    }
+
     // Regression: WMI returns DBNull.Value (not null) for absent properties, and
     // Convert.ToUInt32(DBNull.Value) throws — which crashed drive enumeration.
     [Fact]

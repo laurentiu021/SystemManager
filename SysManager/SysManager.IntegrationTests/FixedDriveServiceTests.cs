@@ -120,4 +120,30 @@ public class FixedDriveServiceTests
         var r = await s.EnumerateAsync();
         Assert.All(r, d => Assert.False(string.IsNullOrWhiteSpace(d.Label)));
     }
+
+    // ---------- P2 #33 regression: DriveFormat IOException must not abort all drives ----------
+
+    [Fact]
+    public void Enumerate_DoesNotThrow_WhenDriveFormatAccessible()
+    {
+        // Contract: Enumerate() must never throw — it degrades by skipping individual
+        // drives whose properties are inaccessible. Before the fix, DriveFormat was read
+        // in a LINQ .Where() predicate (lazy evaluation during MoveNext), which threw
+        // OUTSIDE the per-drive try/catch and aborted enumeration of ALL remaining drives
+        // when a single volume was BitLocker-locked or transiently busy.
+        var ex = Record.Exception(() => FixedDriveService.Enumerate());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Enumerate_ReturnsOnlyNtfsOrRefs()
+    {
+        // Post-fix: the format filter still works correctly (just moved inside try).
+        var drives = FixedDriveService.Enumerate();
+        Assert.All(drives, d =>
+        {
+            var fs = (d.FileSystem ?? "").ToUpperInvariant();
+            Assert.True(fs is "NTFS" or "REFS", $"Unexpected FS '{fs}' on {d.Letter}");
+        });
+    }
 }

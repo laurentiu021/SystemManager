@@ -117,9 +117,10 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         try
         {
             // Route through the service (IPowerShellRunner seam) rather than a hand-built
-            // ProcessStartInfo: the runner launches winget with WorkingDirectory pinned to
-            // System32, so the CreateProcess search order can't be hijacked by an
-            // attacker-planted winget.exe in the app's own (user-writable) directory.
+            // ProcessStartInfo: the runner resolves winget to its trusted, admin-only-writable
+            // WindowsApps install path (SystemPaths.ResolveWinget), so the CreateProcess search
+            // order can't be hijacked by an attacker-planted winget.exe in the app's own
+            // (user-writable) directory.
             var lines = await _service.ListInstalledAsync().ConfigureAwait(false);
             if (lines.Count == 0) return;
 

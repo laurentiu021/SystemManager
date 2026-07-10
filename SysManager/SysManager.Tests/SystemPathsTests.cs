@@ -87,4 +87,79 @@ public class SystemPathsTests
         Assert.Equal("", SystemPaths.ResolveSystemTool(""));
         Assert.Null(SystemPaths.ResolveSystemTool(null!));
     }
+
+    // ── winget resolution (ultra-audit P1: bare-name binary-planting LPE) ──
+    //
+    // winget is an MSIX execution alias, not a System32 tool, so the System32 probes never match.
+    // Before ResolveWinget, ResolveSystemTool("winget") fell through and returned the UNROOTED bare
+    // name "winget" — and launched with UseShellExecute=false, an unrooted name lets CreateProcess
+    // search the app's OWN directory first, so an attacker-planted winget.exe beside the portable
+    // .exe would run with the app's (possibly elevated) privileges. The resolver must ALWAYS return
+    // a rooted path and NEVER the bare name / the user-writable %LOCALAPPDATA% alias.
+
+    [Theory]
+    [InlineData("winget")]
+    [InlineData("winget.exe")]
+    [InlineData("WinGet")]      // case-insensitive
+    [InlineData("WINGET.EXE")]
+    public void ResolveSystemTool_Winget_NeverReturnsBareName_AlwaysRooted(string name)
+    {
+        var resolved = SystemPaths.ResolveSystemTool(name);
+        Assert.NotEqual(name, resolved);
+        Assert.True(Path.IsPathRooted(resolved),
+            $"winget must resolve to a rooted path (got '{resolved}') so CreateProcess can't search the app directory");
+        Assert.EndsWith("winget.exe", resolved, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ResolveWinget_NeverPointsAtUserWritableLocalAppData()
+    {
+        // The per-user execution alias lives in the user-WRITABLE %LOCALAPPDATA%\Microsoft\WindowsApps
+        // — trusting it for an elevated launch would defeat the whole hardening. The resolver must
+        // point at the admin-only WindowsApps install (or the rooted System32 fail-closed path),
+        // never at LocalAppData.
+        var resolved = SystemPaths.ResolveWinget();
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        Assert.True(Path.IsPathRooted(resolved));
+        Assert.False(
+            resolved.StartsWith(localAppData, StringComparison.OrdinalIgnoreCase),
+            $"resolved winget path must not be under user-writable LocalAppData (got '{resolved}')");
+    }
+
+    [Fact]
+    public void ResolveWinget_WhenInstalled_ResolvesUnderWindowsAppsAndExists()
+    {
+        // CI (windows-latest) ships App Installer, so winget should resolve to a real, existing
+        // binary under %ProgramFiles%\WindowsApps. If a future runner image lacks it, the resolver
+        // fails closed to a rooted System32 path (asserted by the theory above), so gate this
+        // stronger assertion on the file actually existing.
+        var resolved = SystemPaths.ResolveWinget();
+        if (File.Exists(resolved))
+        {
+            var windowsApps = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WindowsApps");
+            Assert.StartsWith(windowsApps, resolved, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Microsoft.DesktopAppInstaller_", resolved, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void ParsePackageVersion_ParsesVersionSegment_NumericallyOrdered()
+    {
+        // 1.29 must sort ABOVE 1.9 — an ordinal string compare would get this wrong, which is why
+        // the resolver parses System.Version rather than comparing folder-name strings.
+        var v129 = SystemPaths.ParsePackageVersion(
+            @"C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_1.29.279.0_x64__8wekyb3d8bbwe");
+        var v9 = SystemPaths.ParsePackageVersion(
+            @"C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_1.9.25200.0_x64__8wekyb3d8bbwe");
+        Assert.True(v129 > v9, $"1.29.x ({v129}) must sort above 1.9.x ({v9})");
+    }
+
+    [Fact]
+    public void ParsePackageVersion_UnexpectedShape_ReturnsZeroSortsLast()
+    {
+        // A folder that doesn't match the expected shape must sort last, never throw.
+        var bad = SystemPaths.ParsePackageVersion(@"C:\Program Files\WindowsApps\SomethingElse");
+        Assert.Equal(new Version(0, 0), bad);
+    }
 }

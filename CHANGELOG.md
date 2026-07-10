@@ -68,12 +68,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **The Performance tab no longer briefly freezes when you apply Visual Effects, Game Mode, Xbox Game Bar, or GPU settings.** These four toggles wrote to the registry (and, for visual effects, broadcast a system-wide settings change) directly on the UI thread, so the window could hang for a moment while the change was applied. They now run that work off the UI thread and show the progress/busy indicator while they do — matching how the Power Plan and Processor State toggles on the same tab already behave. What each toggle does is unchanged.
 
+## [1.52.61] - 2026-07-08
+
 ### Fixed
 - **The Process Manager can no longer show — or end — the wrong process when Windows reuses a process ID.** The list refreshes every second and matched rows by process ID (PID) alone, but Windows recycles PIDs, so between two refreshes the same PID can belong to a different program. When that happened, the row kept the old program's name and icon while showing the new program's activity — and because Kill targets the PID, confirming "End task" on that row would have ended the new program instead. Rows are now matched by PID together with the process start time, so a recycled PID is treated as a new process (old row removed, new one shown) and End task always acts on the process you see.
+
+## [1.52.60] - 2026-07-08
 
 ### Fixed
 - **The live resource-history charts no longer leak a small amount of memory each time they're rebuilt.** Each chart axis uses a "Segoe UI" font handle; when the chart was torn down and re-created (for example on a theme change), those font handles weren't released — only the paint objects were. They're now freed alongside the paints, the same way the chart legend's font already was.
 - **Selecting a task in Task Scheduler no longer runs its "last run / next run" lookup twice.** Picking a task looked up its run details, and updating the row with those details re-triggered the selection handler, firing the same lookup a second time. The selection update is now guarded so the lookup runs once per selection.
+
+## [1.52.59] - 2026-07-08
 
 ### Fixed
 - **Cancelling a PowerShell-backed operation now ends cleanly instead of risking a stray error.** Two cases: cancelling an in-process PowerShell run reported the stop as a low-level pipeline error rather than a normal "cancelled", so callers watching for cancellation could treat it as a failure; and when cancelling an external PowerShell process, the attempt to stop its process tree only handled one of the errors it can raise, so an access-denied or partially-failed stop could surface as an unhandled error. Both now resolve to the standard "operation cancelled" outcome and swallow the expected stop-time errors.

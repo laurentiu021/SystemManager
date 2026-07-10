@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.97] - 2026-07-11
+
+### Fixed
+- **The Performance tab's system-mutating actions weren't serialized against each other, so "Restore All" could run while an "Apply" was still in flight and corrupt the reversible snapshot.** Every Apply command (power plan, visual effects, Game Mode, Xbox Game Bar, GPU, processor state) plus Restore All, Trim RAM, Create Restore Point and Toggle Hibernation is `async` and awaits real system work (registry writes, `powercfg`, `EmptyWorkingSet` across all processes). Nothing prevented a second command from starting mid-flight: the snapshot's own `SemaphoreSlim` only guards the load-modify of the `_snapshot` field, not the full apply→revert sequence. In the worst case, pressing **Restore All** while an Apply's registry write was still running let Restore All null `_snapshot` and delete the persisted baseline, leaving a tweak applied with nothing left to revert it (and other tabs that mutate the same system state — Tweaks, Cleanup's SFC/DISM — could interleave too). Every one of these ten commands now acquires the app-wide `OperationLockService` `SystemModification` lock (the same lock SFC/DISM and the Environment Variables editor already use) right after its confirmation dialog; if another system-modification operation is running, the command reports "Cannot start — <op> is already running." and bails before touching the system. Toggle-based commands re-sync their toggle from the live profile on that early return so the UI doesn't show a change that wasn't applied.
+
 ## [1.52.96] - 2026-07-11
 
 ### Fixed

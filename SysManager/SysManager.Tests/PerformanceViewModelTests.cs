@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Reflection;
+using NSubstitute;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -11,6 +13,12 @@ namespace SysManager.Tests;
 /// Tests for <see cref="PerformanceViewModel"/>. Verifies initial state,
 /// per-section commands, and property defaults.
 /// </summary>
+/// <remarks>
+/// In the DialogService collection (serialized): the operation-lock regression
+/// tests below swap the global <see cref="DialogService.Instance"/> and take the
+/// shared <see cref="OperationLockService"/>, both process-wide singletons.
+/// </remarks>
+[Collection("DialogService")]
 public class PerformanceViewModelTests
 {
     private static PerformanceViewModel NewVm()
@@ -202,5 +210,115 @@ public class PerformanceViewModelTests
         // (offloaded), not executed synchronously on the dispatcher.
         var vm = NewVm();
         Assert.IsAssignableFrom<CommunityToolkit.Mvvm.Input.IAsyncRelayCommand>(vm.TrimRamCommand);
+    }
+
+    // ── System-modification lock (ultra-audit #46) ──
+    //
+    // Every mutating command (Apply* / Restore All / Trim RAM / Create restore point /
+    // Toggle hibernation) must serialize through OperationLockService before touching the
+    // system. Without it, Restore All can null the snapshot mid-Apply and leave a tweak
+    // applied with nothing to revert it. These pin the guard the way ShortcutCleaner's
+    // DeleteSelected_WhenDiskLocked_DoesNotDelete pins its Disk-lock guard: stub the dialog
+    // to "Yes", hold the SystemModification lock, and prove the command bails at the guard.
+
+    private static void SeedSnapshot(PerformanceViewModel vm)
+    {
+        // Restore All early-returns when _snapshot is null (before the lock guard). Seed a
+        // snapshot via the private field so the command reaches the guard we're testing.
+        var snapshot = new PerformanceService.OriginalSnapshot(
+            PowerPlanGuid: "guid", PowerPlanName: "Balanced", UiEffectsEnabled: true,
+            GameModeEnabled: true, XboxGameBarEnabled: true, XboxGameDvrEnabled: true,
+            GpuDynamicPstate: true, ProcessorMinPercentAc: 5, NvidiaSubKey: null);
+        typeof(PerformanceViewModel)
+            .GetField("_snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(vm, snapshot);
+    }
+
+    [Fact]
+    public async Task RestoreAll_WhenSystemModificationLocked_BailsAtGuard()
+    {
+        var vm = NewVm();
+        SeedSnapshot(vm);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user clicks "Yes"
+        DialogService.Instance = dialog;
+
+        // Hold the SystemModification lock so Restore All must bail rather than race an Apply.
+        using var held = OperationLockService.Instance.TryAcquire(
+            OperationCategory.SystemModification, "Test Holder");
+        Assert.NotNull(held);
+        try
+        {
+            await vm.RestoreAllCommand.ExecuteAsync(null);
+
+            // Confirm was shown, but the lock was unavailable → the command reported the
+            // contention and did NOT run the restore body (which nulls _snapshot). The seeded
+            // snapshot survives, proving the guard short-circuited before the mutation.
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.Contains("already running", vm.StatusMessage);
+            var snapshotAfter = typeof(PerformanceViewModel)
+                .GetField("_snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(vm);
+            Assert.NotNull(snapshotAfter);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public async Task TrimRam_WhenSystemModificationLocked_BailsAtGuard()
+    {
+        var vm = NewVm();
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+
+        using var held = OperationLockService.Instance.TryAcquire(
+            OperationCategory.SystemModification, "Test Holder");
+        Assert.NotNull(held);
+        try
+        {
+            await vm.TrimRamCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.Contains("already running", vm.StatusMessage);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public async Task ApplyPowerPlan_WhenSystemModificationLocked_BailsAtGuard()
+    {
+        var vm = NewVm();
+        // Force SelectedPlan away from the current plan so the "already set" early-return
+        // (before the lock guard) doesn't short-circuit the command first.
+        vm.SelectedPlan = "ultimate";
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+
+        using var held = OperationLockService.Instance.TryAcquire(
+            OperationCategory.SystemModification, "Test Holder");
+        Assert.NotNull(held);
+        try
+        {
+            await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+            Assert.Contains("already running", vm.StatusMessage);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
     }
 }

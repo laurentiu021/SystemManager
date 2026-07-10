@@ -159,6 +159,17 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             $"Switch power plan to {planName}?",
             "Power Plan — Confirm")) return;
 
+        // Serialize every system-mutating command through the app-wide lock (like the SFC/DISM
+        // and Environment-variable operations). Without it, Apply* and Restore All can race:
+        // e.g. Restore All can delete the snapshot + null _snapshot while an Apply's registry
+        // write is still in flight, leaving a tweak applied with no snapshot to revert it.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply power plan");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         try
@@ -209,6 +220,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             $"{action} visual effects (animations, fades, shadows)?",
             "Visual Effects — Confirm")) { SyncTogglesFromProfile(); return; }
 
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply visual effects");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         try
@@ -246,6 +266,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             $"{action} Game Mode?",
             "Game Mode — Confirm")) { SyncTogglesFromProfile(); return; }
 
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply Game Mode");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         try
@@ -280,6 +309,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         if (!DialogService.Instance.Confirm(
             $"{action} Xbox Game Bar and Game DVR overlay?",
             "Xbox Game Bar — Confirm")) { SyncTogglesFromProfile(); return; }
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply Xbox Game Bar");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -321,6 +359,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             $"{action} NVIDIA GPU max performance (DisableDynamicPstate)?\n\n"
             + "⚠ This change requires a REBOOT to take effect.",
             "GPU Performance — Confirm")) { SyncTogglesFromProfile(); return; }
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply GPU performance");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -379,6 +426,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             $"{action} processor minimum state?",
             "Processor State — Confirm")) { SyncTogglesFromProfile(); return; }
 
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply processor state");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         try
@@ -413,6 +469,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
         if (!DialogService.Instance.Confirm("Create a System Restore point?\n\nThis saves the current system state so you can roll back later if something goes wrong.", "Restore Point — Confirm")) return;
 
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Create restore point");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Creating restore point…";
@@ -446,6 +510,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             + "Apps may feel briefly slower on next access.\n\n"
             + "This is the same as \"Empty Working Set\" in RAMMap.",
             "RAM Trim — Confirm")) return;
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Trim RAM");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
 
         try
         {
@@ -484,6 +556,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         if (!DialogService.Instance.Confirm(
             $"{action} hibernation?\n\n{detail}",
             "Hibernation — Confirm")) return;
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Toggle hibernation");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -527,6 +607,16 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             + (gpuWasChanged ? "• GPU → Dynamic P-state (reboot needed)\n" : "")
             + "\nContinue?",
             "Restore Original Settings — Confirm")) return;
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync). This is
+        // the finding's core: without it, Restore All can run concurrently with an Apply command
+        // and revert to / persist a half-mutated snapshot.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Restore all performance settings");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
 
         IsBusy = true;
         IsProgressIndeterminate = true;

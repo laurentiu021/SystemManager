@@ -116,30 +116,14 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     {
         try
         {
-            var output = await Task.Run(() =>
-            {
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "winget",
-                    Arguments = "list --disable-interactivity",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    StandardOutputEncoding = System.Text.Encoding.UTF8,
-                };
+            // Route through the service (IPowerShellRunner seam) rather than a hand-built
+            // ProcessStartInfo: the runner launches winget with WorkingDirectory pinned to
+            // System32, so the CreateProcess search order can't be hijacked by an
+            // attacker-planted winget.exe in the app's own (user-writable) directory.
+            var lines = await _service.ListInstalledAsync().ConfigureAwait(false);
+            if (lines.Count == 0) return;
 
-                using var proc = System.Diagnostics.Process.Start(psi);
-                if (proc == null) return string.Empty;
-
-                var result = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(30_000);
-                return result;
-            }).ConfigureAwait(false);
-
-            if (string.IsNullOrWhiteSpace(output)) return;
-
-            var installedIds = ParseInstalledIds(output);
+            var installedIds = ParseInstalledIds(string.Join("\n", lines));
 
             App.Current?.Dispatcher.Invoke(() =>
             {
@@ -316,8 +300,11 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         SearchResults.Clear();
         try
         {
-            var results = await Task.Run(() => SearchWingetPackages(SearchQuery));
-            SearchResults.ReplaceWith(results);
+            // Route through the service (IPowerShellRunner seam): winget launches with a pinned
+            // System32 WorkingDirectory (closing the binary-planting LPE vector), and the query
+            // is sanitized against argument injection before it reaches the command line.
+            var lines = await _service.SearchAsync(SearchQuery).ConfigureAwait(true);
+            SearchResults.ReplaceWith(ParseSearchResults(string.Join("\n", lines)));
         }
         catch (Exception ex)
         {
@@ -333,30 +320,6 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         if (app == null || Apps.Any(a => a.WingetId == app.WingetId)) return;
         Apps.Add(app);
         ApplyFilter();
-    }
-
-    private List<InstallableApp> SearchWingetPackages(string query)
-    {
-        List<InstallableApp> results = [];
-
-        var psi = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "winget",
-            Arguments = $"search \"{query}\" --accept-source-agreements",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = System.Text.Encoding.UTF8,
-        };
-
-        using var proc = System.Diagnostics.Process.Start(psi);
-        if (proc == null) return results;
-
-        var output = proc.StandardOutput.ReadToEnd();
-        proc.WaitForExit(30_000);
-
-        return ParseSearchResults(output);
     }
 
     /// <summary>

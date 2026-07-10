@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Linq;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -33,5 +34,70 @@ public sealed class BulkInstallerService
 
         var args = $"install --id \"{wingetId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity";
         return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs <c>winget list</c> and returns its raw stdout lines. Routed through the
+    /// <see cref="IPowerShellRunner"/> seam (not a hand-built ProcessStartInfo) so the launch
+    /// inherits the runner's System32 <c>WorkingDirectory</c> pin — closing the binary-planting
+    /// LPE vector a bare <c>FileName="winget"</c> with an unpinned CWD would open. Mirrors
+    /// <see cref="UninstallerService.ListInstalledAsync"/>'s thread-safe capture pattern.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> ListInstalledAsync(CancellationToken ct = default)
+    {
+        var captured = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        void Collect(PowerShellLine l)
+        {
+            if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
+        }
+
+        _runner.LineReceived += Collect;
+        try
+        {
+            await _runner.RunProcessAsync("winget", "list --disable-interactivity", ct).ConfigureAwait(false);
+        }
+        finally { _runner.LineReceived -= Collect; }
+
+        return captured.ToList();
+    }
+
+    /// <summary>
+    /// Runs <c>winget search &lt;query&gt;</c> and returns its raw stdout lines. The query is
+    /// validated (rejecting quotes and control characters) before interpolation to prevent
+    /// argument injection, and the launch is routed through the runner seam for the same
+    /// WorkingDirectory pinning as <see cref="ListInstalledAsync"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> SearchAsync(string query, CancellationToken ct = default)
+    {
+        var safe = SanitizeQuery(query);
+        if (string.IsNullOrEmpty(safe)) return [];
+
+        var captured = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        void Collect(PowerShellLine l)
+        {
+            if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
+        }
+
+        _runner.LineReceived += Collect;
+        try
+        {
+            await _runner.RunProcessAsync("winget",
+                $"search \"{safe}\" --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
+        }
+        finally { _runner.LineReceived -= Collect; }
+
+        return captured.ToList();
+    }
+
+    /// <summary>
+    /// Strips characters that could break out of the quoted winget argument (double quotes,
+    /// control chars) so a search box entry like <c>foo" &amp; calc "</c> cannot inject extra
+    /// arguments. Returns the trimmed, sanitized query (may be empty if nothing usable remains).
+    /// </summary>
+    internal static string SanitizeQuery(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return string.Empty;
+        var cleaned = new string(query.Where(c => c != '"' && !char.IsControl(c)).ToArray());
+        return cleaned.Trim();
     }
 }

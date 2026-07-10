@@ -328,6 +328,55 @@ public sealed class UpdateService
     }
 
     /// <summary>
+    /// Verifies a release's SHA-256 hash against an already-opened stream. The caller
+    /// holds the file handle and keeps it open across <c>Process.Start</c> — closing
+    /// the TOCTOU window between verify and execute that the path-based overload has.
+    /// The stream is rewound to position 0 before hashing.
+    /// </summary>
+    public async Task<(bool Verified, string? ExpectedHash, string? ActualHash)> VerifyHashAsync(
+        ReleaseInfo rel, Stream fileStream, CancellationToken ct = default)
+    {
+        try
+        {
+            var sha256Url = $"https://github.com/{Owner}/{Repo}/releases/download/{rel.Tag}/SysManager-{rel.Tag}.exe.sha256";
+            var hashText = await Http.GetStringAsync(sha256Url, ct).ConfigureAwait(false);
+
+            var expectedHash = ParseExpectedHash(hashText);
+            if (expectedHash is null)
+                return (false, null, null);
+
+            fileStream.Position = 0;
+            var actualHash = await Task.Run(() =>
+            {
+                var hash = SHA256.HashData(fileStream);
+                return Convert.ToHexString(hash);
+            }, ct).ConfigureAwait(false);
+
+            var match = string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase);
+            if (!match)
+                Serilog.Log.Warning("SHA256 mismatch (stream): expected {Expected}, got {Actual}", expectedHash, actualHash);
+            else
+                Serilog.Log.Information("SHA256 verified (stream): {Hash}", actualHash);
+
+            return (match, expectedHash, actualHash);
+        }
+        catch (HttpRequestException ex)
+        {
+            Serilog.Log.Warning(ex, "Could not download .sha256 file for verification");
+            return (false, null, null);
+        }
+        catch (OperationCanceledException)
+        {
+            return (false, null, null);
+        }
+        catch (IOException ex)
+        {
+            Serilog.Log.Warning(ex, "Could not read stream for hash verification");
+            return (false, null, null);
+        }
+    }
+
+    /// <summary>
     /// The version compiled into this running assembly. Falls back to 0.0.0.
     /// </summary>
     public static Version CurrentVersion

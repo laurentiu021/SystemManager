@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.75] - 2026-07-10
+
+### Fixed
+- **Disk Analyzer over-counted drive usage by descending into WinSxS and other heavyweight system directories during recursion.** The `SkipSegments` filter (`\windows\winsxs`, `\windows\csc`, `\$recycle.bin`, `\system volume information`) was only applied to the top-level children of the analyzed root (line 71). The recursive `MeasureFolder` walk pushed every non-reparse subdirectory onto the stack without re-checking against `SkipSegments`, so scanning a drive root like `C:\` would enter `C:\Windows` (not skipped — it's not in the list) and then descend into `C:\Windows\WinSxS` (a hardlink farm, not a reparse point) and `C:\Windows\CSC` (offline files cache), double-counting hundreds of thousands of hardlinked files at full `FileInfo.Length`. The recursive loop now guards each subdirectory with `ShouldSkip(d)` before pushing it, matching the top-level behavior.
+
 ## [1.52.74] - 2026-07-10
 
 ### Fixed

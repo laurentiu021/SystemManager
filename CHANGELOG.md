@@ -9,6 +9,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **Drive enumeration aborted entirely when a single volume's `DriveFormat` property threw (e.g. BitLocker-locked or transiently busy).** `FixedDriveService.Enumerate()` used a LINQ `.Where(di => ... di.DriveFormat ...)` predicate to filter drives to NTFS/ReFS. Because LINQ predicates evaluate lazily during `MoveNext()`, the `DriveFormat` property access ran OUTSIDE the per-drive try/catch block (which only covered the loop body). An `IOException` from one BitLocker-locked or transiently-busy volume caused the `IEnumerator.MoveNext()` call to throw, aborting enumeration of ALL remaining drives — even healthy ones. Callers (Deep Cleanup, System Health) saw zero drives instead of all-minus-one. Moved the `DriveFormat` filter inside the per-drive try block so one flaky volume is skipped (logged at Debug) while all remaining drives enumerate normally. The `DriveType` and `IsReady` checks remain in the predicate — those are backed by cached kernel data and do not hit the volume handle.
 
+## [1.52.81] - 2026-07-10
+
+### Fixed
+- **Event Logs tab's "Info" severity filter missed Level 0 (LogAlways) events.** Windows Event Log providers can emit events at Level 0 ("LogAlways" — informational events from legacy/classic providers). `MapLevel` correctly classifies Level 0 as `EventSeverity.Info` when reading records, but the XPath filter in `BuildXPath` used `SeverityToLevel(Info)` which returned only `Level=4`. This asymmetry meant the OS-side query for "Info" events excluded all Level-0 records from the result set — the user saw fewer informational entries than the system actually logged (commonly from providers like `Microsoft-Windows-Kernel-General`, `Service Control Manager`, and other classic providers in the System log). Added `SeverityToLevels` — the exact inverse of `MapLevel` — which maps Info to `{0, 4}`, and switched `BuildXPath` from `Select(SeverityToLevel)` to `SelectMany(SeverityToLevels)` so the generated XPath clause reads `(Level=0 or Level=4)` when the user selects Info.
+
 ## [1.52.80] - 2026-07-10
 
 ### Fixed

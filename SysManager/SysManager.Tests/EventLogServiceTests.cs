@@ -192,6 +192,46 @@ public class EventLogServiceTests
     public void SeverityToLevel_RoundTrips(EventSeverity severity, byte expected)
         => Assert.Equal(expected, InvokeSeverityToLevel(severity));
 
+    // ---------- P2 #32 regression: Info filter must include Level 0 (LogAlways) ----------
+
+    [Fact]
+    public void BuildXPath_InfoSeverity_IncludesLevel0AndLevel4()
+    {
+        var opt = new EventLogQueryOptions
+        {
+            Severities = [EventSeverity.Info]
+        };
+        var result = InvokeBuildXPath(opt);
+        Assert.Contains("Level=0", result);
+        Assert.Contains("Level=4", result);
+        Assert.Contains(" or ", result);
+    }
+
+    [Fact]
+    public void BuildXPath_InfoAndError_IncludesLevel0_Level4_Level2()
+    {
+        var opt = new EventLogQueryOptions
+        {
+            Severities = [EventSeverity.Info, EventSeverity.Error]
+        };
+        var result = InvokeBuildXPath(opt);
+        Assert.Contains("Level=0", result);
+        Assert.Contains("Level=4", result);
+        Assert.Contains("Level=2", result);
+    }
+
+    [Fact]
+    public void BuildXPath_CriticalOnly_DoesNotIncludeLevel0()
+    {
+        var opt = new EventLogQueryOptions
+        {
+            Severities = [EventSeverity.Critical]
+        };
+        var result = InvokeBuildXPath(opt);
+        Assert.Contains("Level=1", result);
+        Assert.DoesNotContain("Level=0", result);
+    }
+
     // ---------- EventLogQueryOptions defaults ----------
 
     [Fact]

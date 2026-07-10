@@ -34,12 +34,25 @@ internal static class SystemPaths
         if (Path.IsPathRooted(fileName) || fileName.Contains('\\') || fileName.Contains('/'))
             return fileName;
 
-        var direct = Path.Combine(System32, fileName);
-        if (File.Exists(direct)) return direct;
+        // Try the name as given, then with a ".exe" suffix. Callers that pass a bare name
+        // WITHOUT the extension (e.g. "powershell") would otherwise never match on disk —
+        // File.Exists("...\\powershell") is false, only "...\\powershell.exe" exists — so the
+        // method would fall through and return the unrooted bare name, re-opening the exact
+        // binary-planting/LPE vector this helper exists to close. Probing "<name>.exe" as a
+        // fallback makes the guard robust to that mistake (defense-in-depth).
+        var candidates = fileName.Contains('.')
+            ? new[] { fileName }
+            : new[] { fileName, fileName + ".exe" };
 
-        // Windows PowerShell 5.1 lives in a System32 subfolder, not System32 itself.
-        var powerShell = Path.Combine(System32, "WindowsPowerShell", "v1.0", fileName);
-        if (File.Exists(powerShell)) return powerShell;
+        foreach (var name in candidates)
+        {
+            var direct = Path.Combine(System32, name);
+            if (File.Exists(direct)) return direct;
+
+            // Windows PowerShell 5.1 lives in a System32 subfolder, not System32 itself.
+            var powerShell = Path.Combine(System32, "WindowsPowerShell", "v1.0", name);
+            if (File.Exists(powerShell)) return powerShell;
+        }
 
         return fileName;
     }

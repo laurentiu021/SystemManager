@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.92] - 2026-07-11
+
+### Fixed
+- **The Bulk Installer launched `winget` by bare name from a hand-built process with no pinned working directory, enabling binary-planting privilege escalation, and interpolated the raw search box text into the winget arguments (argument injection).** `MarkInstalledAppsAsync` (runs automatically on tab open) and the package search both built their own `ProcessStartInfo { FileName = "winget", UseShellExecute = false }` with **no `WorkingDirectory`**. With `UseShellExecute=false`, Win32 `CreateProcess` searches the calling process's own directory before resolving the real winget App Execution Alias — so an attacker-planted `winget.exe` beside SysManager's portable .exe (often run from a user-writable folder, sometimes elevated) would run with the app's privileges. Separately, the search argument was built as `$"search \"{query}\" …"` from the unvalidated search box — the one process-launch trust boundary in the app without input validation — so a query containing a double-quote could break out and inject extra winget arguments. Both winget calls now route through `BulkInstallerService` (the `IPowerShellRunner` seam), which launches winget with `WorkingDirectory` pinned to System32 (removing the CWD from the search order, matching every other winget call in the app), and the search query is sanitized (double-quotes and control characters stripped) before interpolation. This also brings the two calls into Gate-ARCH conformance — external process launches route through the single runner seam instead of a bespoke `ProcessStartInfo`.
+
 ## [1.52.90] - 2026-07-10
 
 ### Fixed

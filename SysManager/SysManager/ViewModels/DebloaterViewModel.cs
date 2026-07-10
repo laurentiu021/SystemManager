@@ -170,17 +170,38 @@ public sealed partial class DebloaterViewModel : ViewModelBase
                 var app = targets[i];
                 app.Status = "Removing…";
                 StatusMessage = $"Removing {app.DisplayName} ({i + 1} of {targets.Count})…";
-                var ok = await _service.RemoveAsync(app, _cts.Token).ConfigureAwait(true);
-                if (ok)
+                try
                 {
-                    removed++;
-                    app.Status = "Removed";
-                    Apps.Remove(app);
+                    var ok = await _service.RemoveAsync(app, _cts.Token).ConfigureAwait(true);
+                    if (ok)
+                    {
+                        removed++;
+                        app.Status = "Removed";
+                        Apps.Remove(app);
+                    }
+                    else
+                    {
+                        failed++;
+                        app.Status = "Failed";
+                    }
                 }
-                else
+                // RemoveAsync runs PowerShell; a runspace-level fault (runspace-open failure,
+                // PSInvalidOperationException → InvalidOperationException, or a Win32Exception
+                // launching the host) is NOT the RuntimeException the service catches, so it
+                // would otherwise escape this loop, abort the whole batch mid-way, and hit the
+                // global dispatcher MessageBox — leaving remaining rows frozen at "Removing…".
+                // Fail just this row and continue, mirroring DefenderViewModel's guard.
+                catch (InvalidOperationException ex)
                 {
                     failed++;
                     app.Status = "Failed";
+                    Log.Warning(ex, "Debloater: removal of {App} faulted", app.DisplayName);
+                }
+                catch (System.ComponentModel.Win32Exception ex)
+                {
+                    failed++;
+                    app.Status = "Failed";
+                    Log.Warning(ex, "Debloater: removal of {App} faulted", app.DisplayName);
                 }
                 Progress = (int)((i + 1) * 100.0 / targets.Count);
             }

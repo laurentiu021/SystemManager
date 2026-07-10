@@ -144,4 +144,38 @@ public class DarkModeViewModelTests
         // OnScheduleEnabledChanged persists the new schedule with Enabled == true.
         service.Received().SaveSchedule(Arg.Is<DarkModeSchedule>(s => s.Enabled));
     }
+
+    [Fact]
+    public void EvaluateSchedule_WhileSuppressed_DoesNotWriteTheme()
+    {
+        // Regression (P2 #45): during LoadFromSchedule the [ObservableProperty] setters fire
+        // one at a time under _suppressSave. Before the fix, _suppressSave gated only
+        // SaveSchedule — NOT EvaluateSchedule — so the ScheduleEnabled setter fired
+        // OnScheduleEnabledChanged -> EvaluateSchedule -> SetTheme while the other fields
+        // still held their defaults, writing the wrong (possibly system-wide) theme against
+        // the user's saved preference. The fix makes EvaluateSchedule return early when
+        // _suppressSave is set. This drives the exact condition FULLY deterministically (no
+        // wall-clock dependency): DarkStart == LightStart makes ShouldBeDark return false
+        // unconditionally, and IsDarkNow is forced to true, so an UNGUARDED EvaluateSchedule
+        // would see wantDark(false) != IsDarkNow(true) and call SetTheme. With the guard, the
+        // suppressed evaluation must return before touching SetTheme.
+        var service = FakeThemeService(new DarkModeSchedule { Enabled = false });
+        var vm = NewVm(service);
+
+        SetSuppressSave(vm, true);
+        vm.DarkStart = "09:00";
+        vm.LightStart = "09:00";   // equal → ShouldBeDark() is false regardless of the time
+        vm.IsDarkNow = true;        // guaranteed mismatch vs wantDark=false
+        service.ClearReceivedCalls();
+
+        // A setter that calls EvaluateSchedule while suppressed.
+        vm.ScheduleEnabled = true;
+
+        service.DidNotReceive().SetTheme(Arg.Any<bool>(), Arg.Any<bool>());
+    }
+
+    private static void SetSuppressSave(DarkModeViewModel vm, bool value) =>
+        typeof(DarkModeViewModel)
+            .GetField("_suppressSave", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .SetValue(vm, value);
 }

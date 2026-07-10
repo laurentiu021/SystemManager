@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.90] - 2026-07-10
+
+### Fixed
+- **A single transient WMI hiccup on startup could permanently show "Unknown CPU" / "Windows" / no disks / no RAM modules for the whole session.** `SystemInfoService` caches static hardware info with `??=`, but every `Query*` helper returned a **non-null** fallback on a WMI fault (`CpuInfo("Unknown", …)`, `OsInfo("Windows", …)`, an empty disk/module list). Because the fallback was non-null, `??=` stored it and never re-queried — so if the first `CaptureAsync` raced a transient WMI fault (plausible under the ~36-service startup load → `RPC server too busy`), the fallback defaults were cached process-wide (the service is a singleton) even after WMI recovered milliseconds later. The Dashboard, System Info tab, System Report and tray tooltip stayed stuck on the fallbacks until restart. Each `Query*` now returns `null` on a WMI **fault** (distinguished from a genuinely empty-but-successful result, which is still cached), so `??=` caches only a successful query and retries on the next poll; `Capture` uses a transient, non-cached default for the current snapshot only.
+
 ## [1.52.88] - 2026-07-10
 
 ### Fixed

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.89] - 2026-07-10
+
+### Fixed
+- **An environment variable added and applied, then deleted in the same session, could not actually be removed — it stayed orphaned in the registry while the pending-change counter got stuck.** `ApplyChanges` maintains two parallel maps: `_baseline` (drives the pending-change count) and `_originals` (the sole source for the deletion list). The delete loop removed the variable from both maps, but the add/edit loop updated only `_baseline` — so a freshly-added variable was never recorded in `_originals`. If the user then deleted that variable and pressed Apply again, `RecomputePending` (reads `_baseline`) counted it as a pending deletion and the UI showed "1 pending change", but `DeletedEntries` (reads `_originals`) didn't include it, so it was never deleted from the registry — leaving `PendingChangeCount` stuck at 1 and the variable orphaned. (A manual Refresh silently self-healed it by reloading `_originals`.) The apply loop now writes `_originals[Key(v)]` alongside `_baseline[Key(v)]` on a successful `SetVariable`, keeping the two maps in lock-step.
+
 ## [1.52.88] - 2026-07-10
 
 ### Fixed

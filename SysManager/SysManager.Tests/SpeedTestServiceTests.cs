@@ -48,4 +48,22 @@ public class SpeedTestServiceTests
         var dest = Path.GetFullPath(Path.Combine(Root + "-evil", "payload.exe"));
         Assert.False(SpeedTestService.IsInsideDirectory(Root, dest));
     }
+
+    [Fact]
+    public async Task RunOoklaAsync_UserCancelDuringPrepare_SurfacesAsCancellation()
+    {
+        // Regression: the prepare phase (EnsureOoklaAsync) was wrapped in a blanket
+        // catch (Exception) that re-threw OperationCanceledException as
+        // InvalidOperationException("Could not prepare Ookla CLI: A task was canceled."),
+        // bypassing the ViewModel's dedicated "Cancelled" handler and misreporting a
+        // clean user cancel as an error. A pre-cancelled token makes the first
+        // Task.Run(..., ct) inside EnsureOoklaAsync throw before any network or
+        // filesystem work, so this test is deterministic and offline.
+        var svc = new SpeedTestService();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => svc.RunOoklaAsync(progress: null, cts.Token));
+    }
 }

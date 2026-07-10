@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.83] - 2026-07-10
+
+### Fixed
+- **Cancelling an Ookla speed test during the first-run CLI download was misreported as an error instead of "Cancelled".** `RunOoklaAsync` wrapped the prepare phase (`EnsureOoklaAsync` — download, extract, signature-verify) in a blanket `catch (Exception)` that re-threw everything as `InvalidOperationException("Could not prepare Ookla CLI: …")`. Because `OperationCanceledException` derives from `Exception`, a user cancel during the download/extract was converted into that error type, bypassing the ViewModel's dedicated `catch (OperationCanceledException) { OoklaStatus = "Cancelled"; }` handler — the user saw `Error: Could not prepare Ookla CLI: A task was canceled.` for a clean cancel. Cancellation now propagates untouched when the caller's token is signalled (an `OperationCanceledException` *without* the token signalled — HttpClient's internal 2-minute timeout — is reported as a truthful "download timed out" error), and the wrapping catch carries a `when (ex is not OperationCanceledException)` filter so cancellation can never be swallowed again.
+- **A failed cancel-kill of `speedtest.exe` could mask the cancellation and escape as an unhandled error.** The cancel path killed the child with `proc.Kill(entireProcessTree: true)` but only caught `InvalidOperationException`. `Kill(entireProcessTree: true)` also throws `Win32Exception` (process access-denied/terminating) and `AggregateException` (a descendant couldn't be terminated) — either one propagated *instead of* the intended `throw;`, so the original `OperationCanceledException` was lost and an exception type the caller doesn't handle escaped `RunOoklaAsync` entirely. Now uses the same three-exception filter as `PowerShellRunner`'s cancel-kill (`InvalidOperationException or Win32Exception or AggregateException`). The analogous `schtasks` timeout-kill in `StartupService.SetTaskSchedulerEnabledAsync` had the same gap — a `Win32Exception` from `Kill()` escaped to the outer catch, which mislabeled the timeout as "schtasks not available"; it now uses the same filter and reports the truthful "timed out" status.
+
 ## [1.52.82] - 2026-07-10
 
 ### Fixed

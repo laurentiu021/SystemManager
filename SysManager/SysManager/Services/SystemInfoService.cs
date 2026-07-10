@@ -33,23 +33,29 @@ public sealed class SystemInfoService
 
         lock (_cacheLock)
         {
-            // Static OS info (caption, version, build, arch) — cache it; uptime refreshes below.
+            // Each Query* returns null on a WMI FAULT (not on a genuine empty result), so the
+            // ??= caches ONLY a successful query and RE-QUERIES on the next poll after a
+            // transient hiccup. Without this, a WMI fault on the very first CaptureAsync (likely
+            // under the startup thundering-herd → RPC-server-too-busy) would cache the fallback
+            // defaults for the whole process lifetime — permanently showing "Unknown CPU" /
+            // "Windows" / no disks / no RAM even after WMI recovered milliseconds later.
+            // A transient default is used for the CURRENT snapshot only and is never cached.
             _cachedOs ??= QueryOsStatic();
-            osStatic = _cachedOs;
+            osStatic = _cachedOs ?? new OsInfo("Windows", "", "", TimeSpan.Zero, "");
 
             // CPU name/cores/threads/clock are static; only LoadPercentage is dynamic.
             _cachedCpuStatic ??= QueryCpuStatic();
-            cpu = _cachedCpuStatic with { LoadPercent = QueryCpuLoad() };
+            cpu = (_cachedCpuStatic ?? new CpuInfo("Unknown", 0, 0, 0, 0)) with { LoadPercent = QueryCpuLoad() };
 
             // Disk info is static (models don't change at runtime).
             _cachedDisks ??= QueryDisks();
-            disks = _cachedDisks;
+            disks = _cachedDisks ?? [];
 
             // Physical memory modules (bank/manufacturer/capacity/speed/part) are static
             // hardware — enumerate the DIMMs once. Only the dynamic totals refresh below,
             // so the Dashboard's 300 ms vitals poll no longer re-queries Win32_PhysicalMemory.
             _cachedModules ??= QueryMemoryModules();
-            modules = _cachedModules;
+            modules = _cachedModules ?? [];
         }
 
         // One Win32_OperatingSystem query for BOTH the dynamic uptime and memory totals —
@@ -59,10 +65,13 @@ public sealed class SystemInfoService
         return new SystemSnapshot(os, cpu, mem, disks, DateTime.Now);
     }
 
-    private static OsInfo QueryOsStatic()
+    // Returns null on a WMI fault so the caller's ??= cache retries next poll (see Capture).
+    // A successful query always returns a non-null OsInfo (falling through to the loop-less
+    // case only when the class returned no rows, which is itself a valid "OS unknown" answer).
+    private static OsInfo? QueryOsStatic()
     {
-        // A WMI fault (service down, corrupt repository) must degrade to a safe default, not
-        // propagate out of Capture() and surface as an error dialog — mirrors QueryDisks.
+        // A WMI fault (service down, corrupt repository) returns null so it is NOT cached and
+        // is retried on the next poll — Capture() supplies a transient default for this snapshot.
         try
         {
             using var searcher = new ManagementObjectSearcher("SELECT Caption,Version,BuildNumber,OSArchitecture,LastBootUpTime FROM Win32_OperatingSystem");
@@ -89,8 +98,10 @@ public sealed class SystemInfoService
         }
         catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
-            /* WMI unavailable — degrade to defaults (mirrors QueryDisks) */
+            /* WMI unavailable — return null so the cache retries (Capture supplies a transient default) */
+            return null;
         }
+        // Query succeeded but returned no rows — a valid (if unusual) answer; cache it.
         return new OsInfo("Windows", "", "", TimeSpan.Zero, "");
     }
 
@@ -134,7 +145,8 @@ public sealed class SystemInfoService
         return (uptime, new MemoryInfo(totalGB, freeGB, usedGB, pct, modules));
     }
 
-    private static CpuInfo QueryCpuStatic()
+    // Returns null on a WMI fault so the caller's ??= cache retries next poll (see Capture).
+    private static CpuInfo? QueryCpuStatic()
     {
         try
         {
@@ -155,8 +167,10 @@ public sealed class SystemInfoService
         }
         catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
-            /* WMI unavailable — degrade to defaults */
+            /* WMI unavailable — return null so the cache retries (Capture supplies a transient default) */
+            return null;
         }
+        // Query succeeded but returned no rows — cache the "unknown" answer.
         return new CpuInfo("Unknown", 0, 0, 0, 0);
     }
 
@@ -183,7 +197,9 @@ public sealed class SystemInfoService
 
     // Physical DIMM inventory — static hardware, enumerated once and cached. Kept separate
     // from the dynamic OS query so the per-poll path never re-scans Win32_PhysicalMemory.
-    private static List<MemoryModule> QueryMemoryModules()
+    // Returns null on a WMI fault so the caller's ??= cache retries next poll; a successful
+    // (even if empty) enumeration returns the list so it is cached.
+    private static List<MemoryModule>? QueryMemoryModules()
     {
         List<MemoryModule> modules = [];
         try
@@ -206,14 +222,20 @@ public sealed class SystemInfoService
         }
         catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
-            /* WMI unavailable — return whatever modules enumerated before the fault */
+            // WMI unavailable. If NOTHING enumerated, return null so the cache retries next poll
+            // (a first-call fault must not permanently cache an empty DIMM list). If SOME modules
+            // enumerated before the fault, that partial list is a usable answer — cache it.
+            return modules.Count > 0 ? modules : null;
         }
         return modules;
     }
 
-    private static List<DiskInfo> QueryDisks()
+    // Returns null on a WMI fault that yields NO disks so the caller's ??= cache retries next
+    // poll; a successful (even if empty) enumeration returns the list so it is cached.
+    private static List<DiskInfo>? QueryDisks()
     {
         List<DiskInfo> list = [];
+        var faulted = false;
         // Use Storage namespace for MSFT_PhysicalDisk (gives HealthStatus / MediaType)
         try
         {
@@ -301,10 +323,14 @@ public sealed class SystemInfoService
             }
             catch (Exception exFallback) when (exFallback is ManagementException or System.Runtime.InteropServices.COMException)
             {
-                /* Win32_DiskDrive also unavailable — return whatever enumerated (mirrors the other WMI methods) */
+                /* Win32_DiskDrive also unavailable — both WMI sources faulted */
+                faulted = true;
             }
         }
-        return list;
+        // If WMI faulted AND nothing enumerated from either source, return null so the cache
+        // retries next poll (a first-call fault must not permanently cache an empty disk list).
+        // A partial list (some disks enumerated before the fault) is a usable answer — cache it.
+        return faulted && list.Count == 0 ? null : list;
     }
 
     private static string OpStatusName(ushort v) => v switch

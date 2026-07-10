@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Reflection;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.IntegrationTests;
@@ -102,5 +104,37 @@ public class SystemInfoServiceTests
         var ex = await Record.ExceptionAsync(async () => await svc.CaptureAsync(cts.Token));
         // Either TaskCanceledException or completes fine — both acceptable.
         _ = ex;
+    }
+
+    [Fact]
+    public async Task CaptureAsync_ReQueriesStaticInfo_AfterCacheCleared()
+    {
+        // Regression (P2 #40): the static-hardware cache used ??= with a NON-NULL fallback
+        // returned on a WMI fault, so a transient first-call fault poisoned the cache for the
+        // whole process — permanently showing "Unknown CPU" / "Windows" / no disks / no RAM.
+        // The fix makes each Query* return null on a fault so ??= caches ONLY a successful
+        // query and re-queries otherwise. This verifies the retry path: after a successful
+        // capture populates the cache, clearing the cache field forces the NEXT capture to
+        // re-query (rather than being stuck on a stale/absent value).
+        var svc = new SystemInfoService();
+        var first = await svc.CaptureAsync();
+        Assert.False(string.IsNullOrWhiteSpace(first.Cpu.Name));
+
+        // Simulate the post-fault state: cache empty (as if the first query had faulted and
+        // returned null instead of caching a fallback).
+        typeof(SystemInfoService)
+            .GetField("_cachedCpuStatic", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(svc, null);
+
+        var second = await svc.CaptureAsync();
+        // On this (WMI-healthy) host the re-query must succeed and repopulate the real CPU —
+        // proving a cleared/null cache is retried, not left permanently degraded.
+        Assert.False(string.IsNullOrWhiteSpace(second.Cpu.Name));
+        Assert.True(second.Cpu.Cores > 0);
+
+        var cached = (CpuInfo?)typeof(SystemInfoService)
+            .GetField("_cachedCpuStatic", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(svc);
+        Assert.NotNull(cached); // re-query cached a fresh successful result
     }
 }

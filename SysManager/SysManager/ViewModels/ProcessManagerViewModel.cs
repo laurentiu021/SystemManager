@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -192,10 +193,25 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         }
     }
 
+    private static readonly HashSet<string> BootCriticalProcesses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "winlogon", "wininit", "csrss", "smss", "services",
+        "lsass", "lsaiso", "fontdrvhost", "dwm", "logonui",
+        "svchost", "ctfmon", "userinit"
+    };
+
     [RelayCommand]
     private void KillProcess(ProcessEntry? entry)
     {
         if (entry is null) return;
+
+        if (IsKernelCritical(entry))
+        {
+            StatusMessage = $"⛔ \"{entry.Name}\" is a critical system process and cannot be ended — " +
+                            "killing it would cause a system crash (BSOD).";
+            Log.Warning("Refused to kill critical process: {Name} (PID {Pid})", entry.Name, entry.Pid);
+            return;
+        }
 
         if (!DialogService.Instance.Confirm(
             $"Are you sure you want to kill \"{entry.Name}\" (PID {entry.Pid})?\n\nThis may cause unsaved data loss.",
@@ -215,6 +231,15 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             StatusMessage = $"Could not kill {entry.Name} — may need admin rights.";
             Log.Warning("Failed to kill process PID {Pid}", entry.Pid);
         }
+    }
+
+    private static bool IsKernelCritical(ProcessEntry entry)
+    {
+        if (string.Equals(entry.SafetyLevel, "System", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var name = Path.GetFileNameWithoutExtension(entry.Name);
+        return BootCriticalProcesses.Contains(name);
     }
 
     [RelayCommand]

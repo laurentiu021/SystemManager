@@ -332,6 +332,17 @@ public sealed class StartupService
                 return await SetTaskSchedulerEnabledAsync(entry, enabled).ConfigureAwait(false);
             }
 
+            // RunOnce entries cannot be toggled via StartupApproved: Windows has no
+            // StartupApproved\RunOnce subkey and never consults StartupApproved for RunOnce
+            // keys, so writing the disable blob to StartupApproved\Run (the fallback below)
+            // does nothing while returning success — the item still runs at next boot and the
+            // UI falsely shows "Disabled". Report the truth instead of pretending it worked.
+            if (entry.RegistryKey.EndsWith("RunOnce", StringComparison.OrdinalIgnoreCase))
+            {
+                entry.StatusText = "Run-once item — runs next boot, then removes itself; cannot be disabled here.";
+                return false;
+            }
+
             var (root, approvedPath) = entry.Source switch
             {
                 StartupSource.RegistryCurrentUser => (Registry.CurrentUser, ApprovedRunHKCU),

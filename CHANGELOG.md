@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.95] - 2026-07-11
+
+### Fixed
+- **Disabling a "run once" startup item in the Startup Manager reported success but did nothing — the item still ran at the next boot.** The scan lists both the `Run` and `RunOnce` registry keys, and `SetEnabledAsync` keyed purely off the entry's scope, so disabling a `RunOnce` entry wrote the "disabled" blob to `…\Explorer\StartupApproved\Run\{name}` and returned success. But Windows has no `StartupApproved\RunOnce` subkey and never consults `StartupApproved` for `RunOnce` keys, so the command still executed on the next boot while the UI showed "Disabled" — a system-mutation toggle that silently lied to the (non-technical) user. `SetEnabledAsync` now detects a `RunOnce` entry and returns a truthful non-success with a plain-language message ("Run-once item — runs next boot, then removes itself; cannot be disabled here.") instead of writing an ineffective blob. The item stays visible so the user still knows it's scheduled to run once.
+
 ## [1.52.94] - 2026-07-11
 
 ### Fixed

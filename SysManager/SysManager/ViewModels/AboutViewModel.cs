@@ -504,47 +504,74 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        // Step 1: Verify SHA256 hash before installing.
-        DownloadStatus = "Verifying file integrity...";
-        var (verified, expected, actual) = await _updates.VerifyHashAsync(_latest, DownloadedPath);
-        if (!verified)
-        {
-            DownloadStatus = expected is not null && actual is not null
-                ? $"SHA256 mismatch — file may be corrupted. Expected: {expected[..12]}… Got: {actual[..12]}…"
-                : "Hash verification failed — file may be corrupted. Try downloading again.";
-            return;
-        }
-
-        // Step 1b: Authenticode check. Integrity is already guaranteed by the SHA256
-        // step above; this only rejects a file whose signature data is present but
-        // unreadable. Unsigned builds (SysManager ships unsigned) are allowed.
-        if (!UpdateService.VerifyAuthenticode(DownloadedPath))
-        {
-            DownloadStatus = "Update binary's signature could not be read. Download aborted.";
-            return;
-        }
-
-        // Step 2: Determine current executable path.
-        var currentExe = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(currentExe) || !File.Exists(currentExe))
-        {
-            DownloadStatus = "Cannot determine current executable path.";
-            return;
-        }
-
-        // Step 3: Hand off to the in-process applier. Instead of writing a batch
-        // script to disk and running it via cmd.exe — which left a writable file a
-        // same-user process could tamper with between write and execution (updater
-        // TOCTOU → local elevation-of-privilege) — we launch the freshly-downloaded,
-        // already-verified executable itself with an "apply-update" argument. That
-        // new process waits for this one to exit, swaps itself over the old exe with
-        // an atomic move, and relaunches. There is no script for anything to tamper
-        // with, and the new process inherits this one's elevation, so a run-as-admin
-        // session stays elevated across the update.
+        // SEC: Open the downloaded binary with deny-write sharing BEFORE verification
+        // and hold the handle across Process.Start. This eliminates the TOCTOU window
+        // (verify-by-path then execute-by-path on a user-writable %LOCALAPPDATA% file)
+        // that previously allowed a same-user attacker to swap the verified binary for a
+        // malicious one between VerifyHashAsync and Process.Start — inheriting the
+        // caller's (possibly elevated) integrity level on UseShellExecute=true.
+        FileStream? lockedStream = null;
         try
         {
+            lockedStream = new FileStream(
+                DownloadedPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
+        }
+        catch (IOException ex)
+        {
+            DownloadStatus = $"Cannot lock update file: {ex.Message}";
+            return;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            DownloadStatus = $"Cannot access update file: {ex.Message}";
+            return;
+        }
+
+        try
+        {
+            // Step 1: Verify SHA256 hash before installing — hashes from the held stream
+            // so no other process can modify the bytes between verify and launch.
+            DownloadStatus = "Verifying file integrity...";
+            var (verified, expected, actual) = await _updates.VerifyHashAsync(_latest, lockedStream);
+            if (!verified)
+            {
+                DownloadStatus = expected is not null && actual is not null
+                    ? $"SHA256 mismatch — file may be corrupted. Expected: {expected[..12]}… Got: {actual[..12]}…"
+                    : "Hash verification failed — file may be corrupted. Try downloading again.";
+                return;
+            }
+
+            // Step 1b: Authenticode check. Integrity is already guaranteed by the SHA256
+            // step above; this only rejects a file whose signature data is present but
+            // unreadable. Unsigned builds (SysManager ships unsigned) are allowed.
+            // VerifyAuthenticode takes a path — it opens its own handle (read-shared), which
+            // is fine: our deny-write handle prevents modification. The file cannot change
+            // between SHA256 verification and this call because we still hold the lock.
+            if (!UpdateService.VerifyAuthenticode(DownloadedPath))
+            {
+                DownloadStatus = "Update binary's signature could not be read. Download aborted.";
+                return;
+            }
+
+            // Step 2: Determine current executable path.
+            var currentExe = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(currentExe) || !File.Exists(currentExe))
+            {
+                DownloadStatus = "Cannot determine current executable path.";
+                return;
+            }
+
+            // Step 3: Launch the verified binary. The deny-write handle remains open,
+            // guaranteeing the file on disk is byte-for-byte what we hashed. Process.Start
+            // opens its own read handle (compatible with FileShare.Read), so the launch
+            // succeeds without releasing our lock. The OS loads the executable image from
+            // this same file — and Windows itself holds the image section object open for
+            // the lifetime of the new process, so even after we close our handle on
+            // shutdown the binary remains immutable until the applier has fully loaded.
             var pid = Environment.ProcessId;
-            // DownloadedPath is non-null here: validated by File.Exists above.
             var args = UpdateApplier.BuildArguments(currentExe, pid);
 
             DownloadStatus = "Installing update — SysManager will restart...";
@@ -567,6 +594,10 @@ public sealed partial class AboutViewModel : ViewModelBase
         catch (System.ComponentModel.Win32Exception ex)
         {
             DownloadStatus = $"Update failed: {ex.Message}";
+        }
+        finally
+        {
+            lockedStream.Dispose();
         }
     }
 

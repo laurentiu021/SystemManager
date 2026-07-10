@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.79] - 2026-07-10
+
+### Fixed
+- **Self-update installer had a TOCTOU (time-of-check/time-of-use) local privilege escalation window.** `InstallUpdateAsync` verified the downloaded binary's SHA-256 hash via `VerifyHashAsync` (which opened and closed its own file handle) and `VerifyAuthenticode` (likewise), then launched the same path with `Process.Start(UseShellExecute=true)` — reopening the file a third time with no handle held across the verify-to-execute gap. Because the download directory is user-writable (`%LOCALAPPDATA%\SysManager\updates\`), a same-user process could swap the verified binary for a malicious payload in the microseconds between the final verification close and the `CreateProcess` open. When SysManager ran elevated (Run as Administrator), `UseShellExecute=true` inherited the caller's high-integrity token, giving the swapped binary admin privileges — a local elevation-of-privilege. The fix opens the downloaded file once with `FileShare.Read` (deny-write) before any verification begins, hashes directly from that held stream via a new `VerifyHashAsync(ReleaseInfo, Stream)` overload, and keeps the handle open through `Process.Start`. The OS allows `CreateProcess` to read-open the image (compatible with `FileShare.Read`) but blocks any write attempt while the lock is held, closing the TOCTOU window completely.
+
 ## [1.52.78] - 2026-07-10
 
 ### Fixed

@@ -110,8 +110,12 @@ public sealed class DnsService : IDisposable
     /// A point-in-time snapshot of an adapter's DNS configuration for BOTH families, so a
     /// change can be reverted exactly. An empty list for a family means that family was on
     /// automatic (DHCP) at capture time and is restored by clearing it back to DHCP.
+    /// <paramref name="IfIndex"/> pins the adapter that was active at capture time; restore
+    /// targets this adapter directly instead of re-querying (which could pick a different NIC
+    /// if network topology changed between apply and undo). Zero means "not captured" and
+    /// falls back to dynamic lookup (backward-compat with pre-existing snapshots).
     /// </summary>
-    public sealed record DnsSnapshot(IReadOnlyList<string> V4, IReadOnlyList<string> V6)
+    public sealed record DnsSnapshot(IReadOnlyList<string> V4, IReadOnlyList<string> V6, int IfIndex = 0)
     {
         public static readonly DnsSnapshot Empty = new([], []);
     }
@@ -136,9 +140,11 @@ public sealed class DnsService : IDisposable
         try
         {
             // Tag each address with its family so one query returns both, in order.
+            // Also emit "IFINDEX=<n>" so the snapshot pins the adapter identity.
             const string script = ActiveAdapterSelector + """
 
                 if ($adapter) {
+                    "IFINDEX=$($adapter.ifIndex)"
                     foreach ($fam in @('IPv4','IPv6')) {
                         $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily $fam
                         foreach ($a in $dns.ServerAddresses) { "$fam=$a" }
@@ -150,19 +156,25 @@ public sealed class DnsService : IDisposable
                 .ConfigureAwait(false);
 
             List<string> v4 = [], v6 = [];
+            int capturedIfIndex = 0;
             foreach (var r in results)
             {
                 var line = r?.ToString();
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var eq = line.IndexOf('=');
                 if (eq <= 0) continue;
-                var fam = line[..eq];
-                var addr = line[(eq + 1)..];
-                if (!IPAddress.TryParse(addr, out _)) continue;
-                if (fam == "IPv4") v4.Add(addr);
-                else if (fam == "IPv6") v6.Add(addr);
+                var tag = line[..eq];
+                var value = line[(eq + 1)..];
+                if (tag == "IFINDEX")
+                {
+                    int.TryParse(value, out capturedIfIndex);
+                    continue;
+                }
+                if (!IPAddress.TryParse(value, out _)) continue;
+                if (tag == "IPv4") v4.Add(value);
+                else if (tag == "IPv6") v6.Add(value);
             }
-            return new DnsSnapshot(v4, v6);
+            return new DnsSnapshot(v4, v6, capturedIfIndex);
         }
         finally { _gate.Release(); }
     }
@@ -198,7 +210,28 @@ public sealed class DnsService : IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            int ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
+            // Use the adapter pinned at capture time when available; fall back to dynamic
+            // lookup only for legacy snapshots that don't carry an index (IfIndex == 0).
+            // This prevents topology changes (VPN connect/disconnect, USB NIC plug, etc.)
+            // from retargeting the restore to the wrong adapter.
+            int ifIndex;
+            if (snapshot.IfIndex > 0)
+            {
+                // Verify the pinned adapter still exists — if it was removed, fail clearly
+                // rather than silently applying to whatever interface now owns that index.
+                string verifyScript = $"Get-NetAdapter -InterfaceIndex {snapshot.IfIndex} -ErrorAction Stop | Select-Object -ExpandProperty ifIndex";
+                Collection<PSObject> verifyResult = await _ps.RunAsync(verifyScript, cancellationToken: ct)
+                    .ConfigureAwait(false);
+                if (verifyResult.Count == 0 || !int.TryParse(verifyResult[0]?.ToString(), out ifIndex))
+                    throw new InvalidOperationException(
+                        $"The network adapter captured at apply time (interface index {snapshot.IfIndex}) is no longer present. " +
+                        "Reconnect it or reset DNS manually via Settings → Network.");
+            }
+            else
+            {
+                ifIndex = await GetActiveInterfaceIndexAsync(ct).ConfigureAwait(false);
+            }
+
             var script = new System.Text.StringBuilder();
             script.AppendLine("$ErrorActionPreference = 'Stop'");
             // Clear BOTH families first so any servers applied since (incl. IPv6) are removed.

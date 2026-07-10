@@ -461,4 +461,113 @@ public class DnsServiceTests
         // Validation happens before any interface lookup or Set script runs.
         await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
     }
+
+    // ---------- adapter-pinned snapshot (#23 reversibility) ----------
+
+    [Fact]
+    public async Task CaptureSnapshotAsync_PopulatesIfIndexFromAdapterOutput()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>
+              {
+                  PSObject.AsPSObject("IFINDEX=12"),
+                  PSObject.AsPSObject("IPv4=1.1.1.1"),
+                  PSObject.AsPSObject("IPv6=2606:4700:4700::1111"),
+              });
+        using var svc = new DnsService(runner);
+
+        var snap = await svc.CaptureSnapshotAsync();
+
+        Assert.Equal(12, snap.IfIndex);
+        Assert.Equal(["1.1.1.1"], snap.V4);
+        Assert.Equal(["2606:4700:4700::1111"], snap.V6);
+    }
+
+    [Fact]
+    public async Task CaptureSnapshotAsync_NoAdapter_ReturnsZeroIfIndex()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+        using var svc = new DnsService(runner);
+
+        var snap = await svc.CaptureSnapshotAsync();
+
+        Assert.Equal(0, snap.IfIndex);
+        Assert.Empty(snap.V4);
+        Assert.Empty(snap.V6);
+    }
+
+    [Fact]
+    public async Task RestoreSnapshotAsync_PinnedIfIndex_VerifiesAdapterAndTargetsIt()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        // Both the verify call and the restore call return "12" — the verify script
+        // emits the ifIndex, confirming the adapter exists.
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("12"));
+        using var svc = new DnsService(runner);
+
+        await svc.RestoreSnapshotAsync(new DnsService.DnsSnapshot(["9.9.9.9"], ["2620:fe::fe"], 12));
+
+        // First call: verify the adapter is still present.
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s => s.Contains("Get-NetAdapter -InterfaceIndex 12")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+
+        // Second call: restore targets the pinned adapter, not a re-queried one.
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s =>
+                s.Contains("-InterfaceIndex 12") &&
+                s.Contains("-ResetServerAddresses") &&
+                s.Contains("9.9.9.9") &&
+                s.Contains("2620:fe::fe")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RestoreSnapshotAsync_PinnedIfIndex_AdapterGone_ThrowsClearMessage()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        // Verify script returns empty (adapter no longer exists).
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+        using var svc = new DnsService(runner);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => svc.RestoreSnapshotAsync(new DnsService.DnsSnapshot(["1.1.1.1"], [], 99)));
+
+        Assert.Contains("interface index 99", ex.Message);
+        Assert.Contains("no longer present", ex.Message);
+    }
+
+    [Fact]
+    public async Task RestoreSnapshotAsync_ZeroIfIndex_FallsBackToDynamicLookup()
+    {
+        // IfIndex=0 means legacy snapshot — should use GetActiveInterfaceIndexAsync
+        // (the ActiveAdapterSelector script), not the Get-NetAdapter verify path.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("5"));
+        using var svc = new DnsService(runner);
+
+        await svc.RestoreSnapshotAsync(new DnsService.DnsSnapshot(["8.8.8.8"], [], 0));
+
+        // Should NOT issue Get-NetAdapter -InterfaceIndex 0 verify.
+        await runner.DidNotReceive().RunAsync(
+            Arg.Is<string>(s => s.Contains("Get-NetAdapter -InterfaceIndex 0")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+
+        // Should use the dynamic selector and then target the resolved index.
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(s =>
+                s.Contains("-InterfaceIndex 5") &&
+                s.Contains("-ResetServerAddresses")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
 }

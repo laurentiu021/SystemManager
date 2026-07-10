@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.85] - 2026-07-10
+
+### Fixed
+- **Importing a config profile that omitted its `Sections` list crashed with an unhandled `NullReferenceException`.** `ConfigProfile.Sections` was a non-nullable positional record parameter, but System.Text.Json does not enforce non-null on positional params — so any syntactically-valid profile JSON lacking a `"Sections"` property (an empty `{}`, a truncated export, or foreign/hand-edited JSON chosen in the Import dialog) deserialized `Sections` to null. `ProfileViewModel.Import` then called `profile.Sections.Count`, throwing an NRE that escaped the surrounding try/catch (which only caught `IOException`/`UnauthorizedAccessException`/`NotSupportedException`) unhandled on the UI thread. `Sections` is now a defaulted `init` property (`= []`, matching the `CleanupResult.Errors` / `HealthScoreResult.Recommendations` idiom), and `ProfileService.Deserialize` also normalizes a null list to empty (mirroring `SettingsWatchdogService.LoadBaseline`) so the import path can always enumerate it safely.
+- **The PATH editor flagged every `PATHEXT` entry as a "missing directory", rendering the whole list in red.** `PATHEXT` is a `;`-separated list of file *extensions* (`.COM;.EXE;.BAT;…`), not directories, but `EnvVariable.IsPathLike` returned true for it and that single flag gated the editor's `Directory.Exists()` annotation — so each extension row was checked as a path (`Directory.Exists(".COM")` is false) and marked missing. Added a distinct `IsDirectoryList` (every path-like variable *except* `PATHEXT`) and gated the missing-directory annotation on it. `PATHEXT` still opens the reorderable list editor (`IsPathLike` is unchanged); its entries are simply no longer checked for directory existence.
+
 ## [1.52.84] - 2026-07-10
 
 ### Fixed

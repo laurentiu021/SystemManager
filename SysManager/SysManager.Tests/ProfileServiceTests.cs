@@ -74,6 +74,33 @@ public class ProfileServiceTests : IDisposable
         Assert.Throws<NotSupportedException>(() => ProfileService.Deserialize(future));
     }
 
+    [Fact]
+    public void Deserialize_MissingSectionsProperty_YieldsEmptyList_NotNull()
+    {
+        // Regression (P2 #11): a syntactically-valid profile JSON that OMITS "Sections"
+        // (a truncated export, an empty-ish object, or foreign JSON picked in Import)
+        // used to deserialize Sections to null — System.Text.Json does not enforce
+        // non-null on positional record params — and ProfileViewModel.Import then threw
+        // an unhandled NullReferenceException on profile.Sections.Count. Now the model
+        // defaults it to [] and Deserialize normalizes it, so callers can always
+        // enumerate .Sections safely.
+        var json = $"{{\"SchemaVersion\":{ProfileService.CurrentSchemaVersion},\"AppVersion\":\"1.0.0\",\"ExportedAt\":\"2026-01-01T00:00:00\"}}";
+        var profile = ProfileService.Deserialize(json);
+        Assert.NotNull(profile);
+        Assert.NotNull(profile!.Sections);
+        Assert.Empty(profile.Sections);
+    }
+
+    [Fact]
+    public void Deserialize_EmptyObject_YieldsEmptySections()
+    {
+        // The most degenerate valid JSON object — every property absent — must still
+        // produce a usable profile with an empty (non-null) Sections list.
+        var profile = ProfileService.Deserialize("{}");
+        Assert.NotNull(profile);
+        Assert.Empty(profile!.Sections);
+    }
+
     // ---------- ApplySections ----------
 
     [Fact]

@@ -107,4 +107,34 @@ public class StartupToggleTests
 
         Assert.True(entry.IsEnabled);
     }
+
+    // ---------- RunOnce entries can't be toggled via StartupApproved (P2 #35) ----------
+
+    [Theory]
+    [InlineData(StartupSource.RegistryCurrentUser)]
+    [InlineData(StartupSource.RegistryLocalMachine)]
+    public async Task SetEnabledAsync_RunOnce_ReturnsFalseWithHonestMessage_AndDoesNotDisable(StartupSource source)
+    {
+        // Regression (P2 #35): Windows has no StartupApproved\RunOnce and never consults
+        // StartupApproved for RunOnce keys, so the old code wrote the disable blob to
+        // StartupApproved\Run and returned true — the item still ran at next boot while the
+        // UI showed "Disabled". The toggle must now report a truthful non-success and leave
+        // IsEnabled untouched (the RunOnce guard short-circuits before any registry write).
+        var entry = new StartupEntry
+        {
+            Name = "OneShotSetup",
+            Command = "setup.exe /oncemore",
+            Source = source,
+            RegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce",
+            ValueName = "OneShotSetup",
+            IsEnabled = true,
+            StatusText = "Enabled"
+        };
+
+        var result = await StartupService.SetEnabledAsync(entry, false);
+
+        Assert.False(result);
+        Assert.Contains("run-once", entry.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.True(entry.IsEnabled); // never flipped to disabled
+    }
 }

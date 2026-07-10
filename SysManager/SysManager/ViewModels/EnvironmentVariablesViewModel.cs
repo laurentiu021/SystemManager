@@ -380,7 +380,18 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         // Adds + edits.
         foreach (var v in ChangedVariables().ToList())
         {
-            if (_service.SetVariable(v.Name, v.Value, v.Scope)) { applied++; _baseline[Key(v)] = v.Value; }
+            if (_service.SetVariable(v.Name, v.Value, v.Scope))
+            {
+                applied++;
+                _baseline[Key(v)] = v.Value;
+                // Keep _originals in lock-step with _baseline. _originals is the SOLE source
+                // for DeletedEntries()/registry deletion; if an applied ADD only updated
+                // _baseline, a later delete of that same variable (same session, before any
+                // Refresh) would be counted as pending by RecomputePending (reads _baseline)
+                // yet skipped by DeletedEntries (reads _originals) — leaving it orphaned in the
+                // registry with PendingChangeCount stuck at 1.
+                _originals[Key(v)] = (v.Scope, v.Name);
+            }
             else failures++;
         }
 

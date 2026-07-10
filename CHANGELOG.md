@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.77] - 2026-07-10
+
+### Fixed
+- **DNS "Undo" could silently apply the previous configuration to the wrong network adapter if network topology changed between Apply and Undo (e.g. VPN connected, USB NIC plugged in, Wi-Fi toggled).** The `DnsSnapshot` record captured the DNS addresses but not the identity of the adapter they belonged to. At restore time, `RestoreSnapshotAsync` re-queried for the "currently active" adapter using the same lowest-ifIndex heuristic — which could resolve to a completely different NIC than the one originally configured. The snapshot now pins the adapter's interface index at capture time (`IfIndex` field); restore targets that specific adapter directly and verifies it still exists before applying, throwing a clear user-facing message if it was removed rather than silently reconfiguring the wrong interface. Legacy snapshots (pre-existing code paths that don't carry an index) fall back to the dynamic lookup so backward compatibility is preserved.
+
 ## [1.52.76] - 2026-07-10
 
 ### Fixed

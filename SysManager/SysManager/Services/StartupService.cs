@@ -444,8 +444,14 @@ public sealed class StartupService
             }
             catch (OperationCanceledException)
             {
+                // Kill() can also throw Win32Exception (access denied / terminating) —
+                // previously that escaped to the outer Win32Exception catch, which
+                // mislabeled the timeout as "schtasks not available". Swallow the same
+                // kill-failure set PowerShellRunner's cancel-kill uses so the truthful
+                // "timed out" status is always reported.
                 try { proc.Kill(); }
-                catch (InvalidOperationException ex) { Log.Debug(ex, "Process already exited before Kill"); }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException)
+                { Log.Debug(ex, "Could not kill schtasks after timeout"); }
                 entry.StatusText = "Error — schtasks timed out";
                 return false;
             }

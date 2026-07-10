@@ -194,8 +194,25 @@ public sealed class SpeedTestService
         {
             exe = await EnsureOoklaAsync(progress, ct).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // User cancel during the first-run download/extract — let it propagate so
+            // the ViewModel's dedicated "Cancelled" handler runs instead of misreporting
+            // a clean cancel as "Error: Could not prepare Ookla CLI: A task was canceled."
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            // Cancelled without our token being signalled = HttpClient's own 2-minute
+            // timeout fired during the download — a network failure, not a user cancel.
+            throw new InvalidOperationException("Could not prepare Ookla CLI: download timed out.", ex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Wrap real prepare failures (HttpRequestException, IOException, InvalidDataException,
+            // FileNotFoundException, …) in a friendly message the ViewModel displays. The filter
+            // mechanically guarantees cancellation can never be swallowed here even if the
+            // OCE branches above are ever restructured.
             throw new InvalidOperationException($"Could not prepare Ookla CLI: {ex.Message}", ex);
         }
 
@@ -248,8 +265,13 @@ public sealed class SpeedTestService
             // kill the child either way so speedtest.exe is never orphaned. (Previously
             // the kill only covered WaitForExitAsync, so a cancel during the reads
             // leaked the process.)
+            // Kill(entireProcessTree: true) can throw Win32Exception (access denied) or
+            // AggregateException (a descendant couldn't be terminated) as well as
+            // InvalidOperationException — swallow all three so a failed cancel-kill never
+            // masks the OperationCanceledException re-thrown below (same filter as
+            // PowerShellRunner's cancel-kill).
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
-            catch (InvalidOperationException) { /* already exited */ }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException) { }
             throw;
         }
 

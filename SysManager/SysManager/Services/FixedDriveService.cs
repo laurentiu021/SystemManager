@@ -32,19 +32,28 @@ public sealed class FixedDriveService
     {
         // Primary source: DriveInfo (fast, always works, no admin).
         List<FixedDrive> drives = [];
+
+        // Filter only on DriveType/IsReady here — these are backed by cached kernel
+        // data and do not hit the volume. The DriveFormat check (which opens the
+        // volume handle and CAN throw IOException on BitLocker-locked/transiently-busy
+        // drives) is deferred to inside the per-drive try/catch below, so one flaky
+        // volume cannot abort enumeration of all remaining drives.
         var fixedReady = DriveInfo.GetDrives()
-            .Where(di => di.DriveType == DriveType.Fixed && di.IsReady)
-            .Where(di => (di.DriveFormat ?? string.Empty).ToUpperInvariant() is "NTFS" or "REFS");
+            .Where(di => di.DriveType == DriveType.Fixed && di.IsReady);
 
         foreach (var di in fixedReady)
         {
-            // DriveInfo getters (VolumeLabel/TotalSize/AvailableFreeSpace) hit the
-            // volume and can throw IOException/UnauthorizedAccessException if it goes
-            // away or is denied between the IsReady check and the read (e.g. a
+            // DriveInfo getters (DriveFormat/VolumeLabel/TotalSize/AvailableFreeSpace)
+            // hit the volume and can throw IOException/UnauthorizedAccessException if
+            // it goes away or is denied between the IsReady check and the read (e.g. a
             // BitLocker-locked or transiently-busy volume). Skip that one drive
             // instead of aborting enumeration of the rest.
             try
             {
+                var format = (di.DriveFormat ?? string.Empty).ToUpperInvariant();
+                if (format is not ("NTFS" or "REFS"))
+                    continue;
+
                 var letter = di.Name.TrimEnd('\\', '/');
                 drives.Add(new FixedDrive(
                     Letter: letter,

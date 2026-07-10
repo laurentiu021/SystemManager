@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.82] - 2026-07-10
+
+### Fixed
+- **Drive enumeration aborted entirely when a single volume's `DriveFormat` property threw (e.g. BitLocker-locked or transiently busy).** `FixedDriveService.Enumerate()` used a LINQ `.Where(di => ... di.DriveFormat ...)` predicate to filter drives to NTFS/ReFS. Because LINQ predicates evaluate lazily during `MoveNext()`, the `DriveFormat` property access ran OUTSIDE the per-drive try/catch block (which only covered the loop body). An `IOException` from one BitLocker-locked or transiently-busy volume caused the `IEnumerator.MoveNext()` call to throw, aborting enumeration of ALL remaining drives — even healthy ones. Callers (Deep Cleanup, System Health) saw zero drives instead of all-minus-one. Moved the `DriveFormat` filter inside the per-drive try block so one flaky volume is skipped (logged at Debug) while all remaining drives enumerate normally. The `DriveType` and `IsReady` checks remain in the predicate — those are backed by cached kernel data and do not hit the volume handle.
+
 ## [1.52.81] - 2026-07-10
 
 ### Fixed

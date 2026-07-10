@@ -97,7 +97,7 @@ public sealed class MemoryTestService
             // behind the scenes, but safest portable option is to launch mdsched.
             using var proc = Process.Start(new ProcessStartInfo
             {
-                FileName = "mdsched.exe",
+                FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool("mdsched.exe"),
                 UseShellExecute = true
             });
             return true;

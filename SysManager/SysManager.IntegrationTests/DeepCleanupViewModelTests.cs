@@ -128,6 +128,30 @@ public class DeepCleanupViewModelTests
     }
 
     [Fact]
+    public async Task ScanCommand_EnablesCleanButton_WhenPreSelectedCategoriesArrive()
+    {
+        // Regression (P2 #43): scanned categories arrive PRE-SELECTED (size>0 &&
+        // !IsDestructiveHint), but ScanCoreAsync repopulates via Categories.ReplaceWith —
+        // a collection Reset that raises no per-item PropertyChanged. CommunityToolkit's
+        // RelayCommand only re-raises CanExecuteChanged via NotifyCanExecuteChanged(), so
+        // before the fix the "Clean selected" button kept its initial DISABLED state after
+        // the first scan and the user had to untick/retick a category to enable it. The fix
+        // calls CleanCommand.NotifyCanExecuteChanged() right after ReplaceWith.
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
+        Assert.False(vm.CleanCommand.CanExecute(null)); // disabled on the empty pre-scan list
+
+        var task = vm.ScanCommand.ExecuteAsync(null);
+        if (task is Task t) await t;
+
+        // A real scan always finds at least one non-destructive, non-empty category
+        // (e.g. temp files), which arrives pre-selected — so Clean must now be enabled
+        // without any manual toggle.
+        if (vm.Categories.Any(c => c.IsSelected))
+            Assert.True(vm.CleanCommand.CanExecute(null),
+                "Clean button must be enabled after a scan yields pre-selected categories");
+    }
+
+    [Fact]
     public async Task ScanCommand_UpdatesScanSummary()
     {
         var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());

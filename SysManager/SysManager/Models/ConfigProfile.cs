@@ -13,8 +13,19 @@ namespace SysManager.Models;
 public sealed record ConfigProfile(
     int SchemaVersion,
     string AppVersion,
-    DateTime ExportedAt,
-    IReadOnlyList<ConfigSection> Sections);
+    DateTime ExportedAt)
+{
+    /// <summary>
+    /// The exported config files. A defaulted init property (not a positional param)
+    /// because System.Text.Json does NOT enforce non-null on positional record params:
+    /// a syntactically-valid JSON object lacking a "Sections" property (an empty <c>{}</c>,
+    /// a truncated export, or foreign JSON picked in the Import dialog) would otherwise
+    /// deserialize <c>Sections</c> to null and crash Import with an NRE. Defaulting to
+    /// <c>[]</c> mirrors the codebase idiom already used by CleanupResult.Errors,
+    /// HealthScoreResult.Recommendations and TuneUpResult.DiskResults.
+    /// </summary>
+    public IReadOnlyList<ConfigSection> Sections { get; init; } = [];
+}
 
 /// <summary>One exported config file: its logical key, file name, and raw JSON content.</summary>
 public sealed record ConfigSection(

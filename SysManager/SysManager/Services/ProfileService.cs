@@ -91,8 +91,8 @@ public sealed class ProfileService
 
     /// <summary>Builds a profile from the given sections (defaults to all available).</summary>
     public ConfigProfile BuildProfile(DateTime exportedAt, IReadOnlyList<ConfigSection>? sections = null)
-        => new(CurrentSchemaVersion, UpdateService.CurrentVersion.ToString(3), exportedAt,
-               sections ?? AvailableSections());
+        => new(CurrentSchemaVersion, UpdateService.CurrentVersion.ToString(3), exportedAt)
+           { Sections = sections ?? AvailableSections() };
 
     /// <summary>Serializes a profile to indented JSON.</summary>
     public static string Serialize(ConfigProfile profile) => JsonSerializer.Serialize(profile, JsonOptions);
@@ -112,7 +112,12 @@ public sealed class ProfileService
         if (profile.SchemaVersion > CurrentSchemaVersion)
             throw new NotSupportedException(
                 $"This profile was made by a newer version of SysManager (format v{profile.SchemaVersion}). Update SysManager to import it.");
-        return profile;
+        // Normalize a missing "Sections" property to an empty list, mirroring
+        // SettingsWatchdogService.LoadBaseline's handling of BaselineSnapshot.Values.
+        // The model default already covers this, but keep the guard so any future
+        // construction path (or a change to the record shape) can't reintroduce the
+        // NRE that ProfileViewModel.Import hit on profile.Sections.Count.
+        return profile is { Sections: null } ? profile with { Sections = [] } : profile;
     }
 
     /// <summary>Writes a profile to a file the user chose.</summary>

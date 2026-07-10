@@ -205,6 +205,12 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
                 FormatHelper.FormatSize(total), cats.Count);
             OnPropertyChanged(nameof(TotalSelectedBytes));
             OnPropertyChanged(nameof(TotalSelectedDisplay));
+            // Categories arrive pre-selected, but ReplaceWith is a collection Reset that
+            // raises no per-item PropertyChanged — so CanClean (Categories.Any(IsSelected))
+            // is never re-evaluated and the "Clean selected" button stays in its prior
+            // (disabled) state after the first scan. Re-notify explicitly, mirroring how
+            // OnCategoryPropertyChanged re-notifies when an individual tick changes.
+            CleanCommand.NotifyCanExecuteChanged();
         }
         catch (OperationCanceledException) { ScanSummary = "Scan cancelled."; ScanStatusLine = "Cancelled."; }
         catch (IOException ex) { ScanSummary = $"Scan failed: {ex.Message}"; }

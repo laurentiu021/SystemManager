@@ -145,4 +145,35 @@ public class StartupServiceTests
         Assert.Equal("OneDrive", entry.Name);
         Assert.Equal("OneDrive.lnk", entry.ValueName);
     }
+
+    // ── Common (all-users) vs per-user startup folder source (P2 #38) ──
+
+    [Fact]
+    public void BuildStartupFolderEntry_Common_TaggedCommonStartupFolder()
+    {
+        // Regression (P2 #38): all-users folder items store their enabled/disabled state under
+        // HKLM, not HKCU. They must carry a distinct source so ApplyApprovedState/SetEnabledAsync
+        // target the right hive — otherwise a disable is written to HKCU (where Windows never
+        // looks) and silently does nothing while the UI claims "Disabled".
+        var entry = StartupService.BuildStartupFolderEntry(
+            @"C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\Backup Tool.exe",
+            command: @"C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\Backup Tool.exe",
+            locationLabel: "Common Startup Folder",
+            isCommon: true);
+
+        Assert.Equal(StartupSource.CommonStartupFolder, entry.Source);
+        Assert.Equal("Backup Tool.exe", entry.ValueName);
+    }
+
+    [Fact]
+    public void BuildStartupFolderEntry_PerUser_TaggedStartupFolder()
+    {
+        var entry = StartupService.BuildStartupFolderEntry(
+            @"C:\Users\aunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\Spotify.lnk",
+            command: @"C:\Users\aunt\AppData\Roaming\Spotify\Spotify.exe",
+            locationLabel: "User Startup Folder",
+            isCommon: false);
+
+        Assert.Equal(StartupSource.StartupFolder, entry.Source);
+    }
 }

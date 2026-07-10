@@ -59,13 +59,15 @@ public sealed class StartupService
         foreach (var (keyPath, source) in MachineRunKeys)
             ReadRunKey(Registry.LocalMachine, keyPath, source, results);
 
-        // Shell startup folders (user + common)
+        // Shell startup folders (user + common). The common (all-users) folder's enabled/disabled
+        // state lives under HKLM, not HKCU — flag it so ApplyApprovedState/SetEnabledAsync target
+        // the right hive (see #38).
         ReadStartupFolder(
             Environment.GetFolderPath(Environment.SpecialFolder.Startup),
-            "User Startup Folder", results);
+            "User Startup Folder", isCommon: false, results);
         ReadStartupFolder(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup),
-            "Common Startup Folder", results);
+            "Common Startup Folder", isCommon: true, results);
 
         // Task Scheduler logon tasks
         ReadScheduledTasks(results);
@@ -76,7 +78,7 @@ public sealed class StartupService
         return results;
     }
 
-    private static void ReadStartupFolder(string folderPath, string locationLabel, List<StartupEntry> results)
+    private static void ReadStartupFolder(string folderPath, string locationLabel, bool isCommon, List<StartupEntry> results)
     {
         try
         {
@@ -122,7 +124,7 @@ public sealed class StartupService
                     }
                 }
 
-                results.Add(BuildStartupFolderEntry(file, command, locationLabel));
+                results.Add(BuildStartupFolderEntry(file, command, locationLabel, isCommon));
             }
         }
         catch (UnauthorizedAccessException ex)
@@ -145,13 +147,15 @@ public sealed class StartupService
     /// silently did nothing. Registry Run entries and scheduled tasks are unaffected (they key by
     /// their own value/task name).
     /// </summary>
-    internal static StartupEntry BuildStartupFolderEntry(string file, string command, string locationLabel) =>
+    internal static StartupEntry BuildStartupFolderEntry(string file, string command, string locationLabel, bool isCommon = false) =>
         new()
         {
             Name = System.IO.Path.GetFileNameWithoutExtension(file),
             Command = command,
             Location = locationLabel,
-            Source = StartupSource.StartupFolder,
+            // Common (all-users) folder items store their approved-state under HKLM, per-user
+            // items under HKCU — carry the distinction so the toggle targets the right hive.
+            Source = isCommon ? StartupSource.CommonStartupFolder : StartupSource.StartupFolder,
             RegistryKey = "",
             ValueName = System.IO.Path.GetFileName(file),
             IsEnabled = true,
@@ -279,6 +283,8 @@ public sealed class StartupService
         var hklmApproved = ReadApprovedKey(Registry.LocalMachine, ApprovedRunHKLM);
         var hklm32Approved = ReadApprovedKey(Registry.LocalMachine, ApprovedRun32HKLM);
         var folderApproved = ReadApprovedKey(Registry.CurrentUser, ApprovedStartupFolder);
+        // Common (all-users) startup-folder items store their disabled-state under HKLM, not HKCU.
+        var commonFolderApproved = ReadApprovedKey(Registry.LocalMachine, ApprovedStartupFolder);
 
         foreach (var entry in entries)
         {
@@ -287,6 +293,7 @@ public sealed class StartupService
                 StartupSource.RegistryCurrentUser => hkcuApproved,
                 StartupSource.RegistryLocalMachine => hklmApproved ?? hklm32Approved,
                 StartupSource.StartupFolder => folderApproved,
+                StartupSource.CommonStartupFolder => commonFolderApproved,
                 _ => null
             };
 
@@ -348,6 +355,11 @@ public sealed class StartupService
                 StartupSource.RegistryCurrentUser => (Registry.CurrentUser, ApprovedRunHKCU),
                 StartupSource.RegistryLocalMachine => (Registry.LocalMachine, ApprovedRunHKLM),
                 StartupSource.StartupFolder => (Registry.CurrentUser, ApprovedStartupFolder),
+                // Common (all-users) folder items live under HKLM — writing to HKCU (as before)
+                // put the disable blob where Windows never looks, so the item still ran while the
+                // UI claimed "Disabled". HKLM needs elevation; a non-elevated open below returns
+                // null and surfaces the same access-denied status as the HKLM Run path.
+                StartupSource.CommonStartupFolder => (Registry.LocalMachine, ApprovedStartupFolder),
                 _ => (Registry.CurrentUser, ApprovedRunHKCU)
             };
 

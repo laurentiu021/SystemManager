@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.96] - 2026-07-11
+
+### Fixed
+- **Disabling an all-users (Common) startup-folder item did nothing, and such items could show the wrong enabled/disabled state.** Both the per-user Startup folder and the all-users Common Startup folder were scanned and tagged with the same `StartupSource.StartupFolder`, so `ApplyApprovedState` read the enabled/disabled state for *all* folder items only from HKCU, and `SetEnabledAsync` wrote the toggle blob for *all* folder items only to HKCU. But Windows stores the `StartupApproved\StartupFolder` state for all-users shortcuts under **HKLM**, not HKCU. Consequences for a shortcut in `%ProgramData%\...\Startup`: an item disabled via Task Manager (HKLM blob) was shown as "Enabled", and disabling it in SysManager wrote the blob to HKCU where Windows never looks — so it returned success yet the program still launched at logon. Added a distinct `StartupSource.CommonStartupFolder` (set in `ReadStartupFolder` based on which special folder produced the entry); `ApplyApprovedState` now reads HKLM for common-folder entries, and `SetEnabledAsync` routes them to HKLM (which needs administrator — a non-elevated attempt surfaces the same "requires elevation" message the HKLM Run path already produces). Per-user folder items are unchanged.
+
 ## [1.52.95] - 2026-07-11
 
 ### Fixed

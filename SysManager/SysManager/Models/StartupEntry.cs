@@ -37,6 +37,9 @@ public enum StartupSource
 {
     RegistryCurrentUser,
     RegistryLocalMachine,
+    /// <summary>Per-user shell Startup folder (%AppData%\...\Startup) — approved-state in HKCU.</summary>
     StartupFolder,
+    /// <summary>All-users (Common) shell Startup folder (%ProgramData%\...\Startup) — approved-state in HKLM.</summary>
+    CommonStartupFolder,
     TaskScheduler
 }

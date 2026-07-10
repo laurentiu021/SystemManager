@@ -67,8 +67,8 @@ public sealed partial class HostsFileService
             if (line.StartsWith('#'))
             {
                 workLine = line[1..].TrimStart();
-                // If the remainder doesn't start with something that looks like an IP, skip it
-                if (!LooksLikeIpStart(workLine)) continue;
+                // If the remainder isn't a valid disabled entry (IP + hostname), skip it
+                if (!IsDisabledEntryLine(workLine)) continue;
                 isDisabled = true;
             }
 
@@ -138,9 +138,9 @@ public sealed partial class HostsFileService
             if (!line.StartsWith('#')) continue;                       // an IP entry — carried by `entries`
             if (line == ManagedHeaderLine1 || line == ManagedHeaderLine2) continue; // our own header
 
-            // A '#' followed by something IP-shaped is a disabled entry, already represented as a
+            // A '#' followed by a valid disabled entry (IP + hostname) is already represented as a
             // HostsEntry with IsEnabled=false — skip it here so it isn't duplicated.
-            if (LooksLikeIpStart(line[1..].TrimStart())) continue;
+            if (IsDisabledEntryLine(line[1..].TrimStart())) continue;
 
             preserved.Add(line);
         }
@@ -291,8 +291,23 @@ public sealed partial class HostsFileService
     }
 
     /// <summary>
-    /// Quick check: does the string start with a digit or colon (IPv6)?
+    /// Determines whether a '#'-stripped remainder represents a disabled hosts entry
+    /// (IP + hostname), using the SAME acceptance test as <see cref="ReadHostsAsync"/>:
+    /// strip an optional inline comment, split on whitespace, require at least two
+    /// tokens, and validate the first as an IP address. This replaces the old
+    /// <c>LooksLikeIpStart</c> heuristic that only checked the leading character — which
+    /// missed IPv6 addresses starting with hex letters (e.g. <c>fe80::</c>) and
+    /// falsely matched digit-leading comments (e.g. <c># 5G adapter notes</c>).
     /// </summary>
-    private static bool LooksLikeIpStart(string s) =>
-        s.Length > 0 && (char.IsDigit(s[0]) || s[0] == ':');
+    private static bool IsDisabledEntryLine(string afterHash)
+    {
+        if (afterHash.Length == 0) return false;
+
+        // Mirror ReadHostsAsync: strip inline comment, then tokenize.
+        string[] parts = afterHash.Split(['#'], 2);
+        string entryPart = parts[0].Trim();
+        string[] tokens = entryPart.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+
+        return tokens.Length >= 2 && IPAddress.TryParse(tokens[0], out _);
+    }
 }

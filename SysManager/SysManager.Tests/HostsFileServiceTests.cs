@@ -357,4 +357,110 @@ public class HostsFileServiceTests
             try { Directory.Delete(dir, recursive: true); } catch { }
         }
     }
+
+    // ---------- P2 #29/#30/#31: LooksLikeIpStart heuristic fix (IsDisabledEntryLine) ----------
+
+    [Fact]
+    public async Task ReadHostsAsync_DisabledIPv6HexStart_ParsedAsDisabledEntry()
+    {
+        // Regression (P2 #29): IPv6 addresses starting with a hex letter (a-f, e.g. "fe80::")
+        // were invisible because the old LooksLikeIpStart only checked for a digit or ':'.
+        // After the fix, "# fe80::1 myserver" must be parsed as a disabled HostsEntry.
+        const string content = "# fe80::1 myserver\n127.0.0.1 localhost\n";
+        var (svc, _, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            var disabled = entries.FirstOrDefault(e => e.Hostname == "myserver");
+            Assert.NotNull(disabled);
+            Assert.Equal("fe80::1", disabled.IpAddress);
+            Assert.False(disabled.IsEnabled);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public async Task ReadHostsAsync_DisabledIPv6HexStart_RoundTrips()
+    {
+        // End-to-end: "# fe80::1 myserver" survives a read→save→re-read cycle as
+        // a disabled entry, not silently dropped or corrupted.
+        const string content = "# fe80::1 myserver\n127.0.0.1 localhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            svc.SaveHosts(entries);
+            var reloaded = await svc.ReadHostsAsync();
+            var disabled = reloaded.FirstOrDefault(e => e.Hostname == "myserver");
+            Assert.NotNull(disabled);
+            Assert.Equal("fe80::1", disabled.IpAddress);
+            Assert.False(disabled.IsEnabled);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Theory]
+    [InlineData("# 5G adapter notes")]
+    [InlineData("# 1. Block ads")]
+    [InlineData("# :) just a smiley comment")]
+    public async Task SaveHosts_DigitOrColonLeadingComments_PreservedNotDeleted(string commentLine)
+    {
+        // Regression (P2 #30/#31): standalone comments starting with a digit or colon
+        // (e.g. "# 5G adapter notes", "# 1. Block ads") passed the old LooksLikeIpStart
+        // heuristic but failed IPAddress.TryParse — causing them to be skipped from both
+        // the entry list AND the preserved comments, silently deleting them on save.
+        var content = $"{commentLine}\n127.0.0.1 localhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            svc.SaveHosts(entries);
+            var saved = File.ReadAllText(hosts);
+            Assert.Contains(commentLine, saved);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public async Task SaveHosts_DisabledIPv4StillWorks_AfterHeuristicFix()
+    {
+        // Sanity: the classic disabled IPv4 case ("# 0.0.0.0 blocked") must still
+        // round-trip as a disabled entry — ensure the fix didn't break existing behavior.
+        const string content = "# 0.0.0.0\tblocked.example.com\n127.0.0.1 localhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            var disabled = entries.FirstOrDefault(e => e.Hostname == "blocked.example.com");
+            Assert.NotNull(disabled);
+            Assert.False(disabled.IsEnabled);
+
+            svc.SaveHosts(entries);
+            var reloaded = await svc.ReadHostsAsync();
+            var reloadedDisabled = reloaded.FirstOrDefault(e => e.Hostname == "blocked.example.com");
+            Assert.NotNull(reloadedDisabled);
+            Assert.False(reloadedDisabled.IsEnabled);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public async Task SaveHosts_CommentWithOnlyIpNoHostname_PreservedAsComment()
+    {
+        // Edge case: "# 192.168.1.1" (one token only — an IP but no hostname) is NOT a
+        // valid disabled entry (needs at least two tokens: IP + hostname). It must be
+        // preserved as a standalone comment, not silently deleted.
+        const string content = "# 192.168.1.1\n127.0.0.1 localhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            Assert.DoesNotContain(entries, e => e.IpAddress == "192.168.1.1");
+
+            svc.SaveHosts(entries);
+            var saved = File.ReadAllText(hosts);
+            Assert.Contains("# 192.168.1.1", saved);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
 }

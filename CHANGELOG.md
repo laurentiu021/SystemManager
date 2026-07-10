@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.78] - 2026-07-10
+
+### Fixed
+- **Hosts file manager silently deleted standalone comments starting with a digit or colon (e.g. "# 5G adapter notes", "# 1. Block ads") and failed to recognize disabled IPv6 entries whose address starts with a hex letter (e.g. "# fe80::1 myserver").** The internal `LooksLikeIpStart` heuristic only checked whether the first character after `#` was a digit or colon — a crude approximation that disagreed with the real acceptance test (`IPAddress.TryParse` + two-token minimum) in both directions. (1) False negatives: IPv6 addresses starting with `a`–`f` (like `fe80::`, `fd00::`) failed the heuristic, so those disabled entries were invisible in the grid (no data loss — they survived as comments — but could not be re-enabled through the UI). (2) False positives: digit-or-colon-leading comments passed the heuristic (line 71) and were treated as candidate entries, but then failed `IPAddress.TryParse` (line 86) and fell through both code paths — they were neither parsed as entries nor preserved as standalone comments, causing silent data loss on the next save. Replaced with `IsDisabledEntryLine` that mirrors the parser's own logic: strip inline comment, split on whitespace, require `tokens.Length >= 2 && IPAddress.TryParse(tokens[0], out _)`.
+
 ## [1.52.77] - 2026-07-10
 
 ### Fixed

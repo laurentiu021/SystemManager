@@ -125,7 +125,7 @@ public class BulkInstallerServiceTests
     [Theory]
     [InlineData("firefox", "firefox")]
     [InlineData("  vlc  ", "vlc")]                                   // trimmed
-    [InlineData("foo\" & calc \"", "foo  calc")]                    // embedded quotes stripped (injection attempt)
+    [InlineData("foo\" & calc \"", "foo & calc")]                   // embedded quotes stripped (the & is harmless inside a quoted, non-shell arg)
     [InlineData("bar\"--source\"evil", "bar--sourceevil")]          // quote break-out stripped
     [InlineData("baz\r\ninject", "bazinject")]                       // control chars (CR/LF) stripped
     public void SanitizeQuery_StripsQuotesAndControlChars(string input, string expected)
@@ -153,10 +153,13 @@ public class BulkInstallerServiceTests
 
         await svc.SearchAsync("foo\" & calc \"");
 
-        // The dangerous quotes must be gone from the argument string that reaches winget.
+        // The embedded double-quotes must be gone from the argument that reaches winget, so the
+        // query stays inside its own quoted token and can't inject extra winget arguments. The
+        // '&' is retained but harmless — it's inside a quoted arg and there is no shell
+        // (UseShellExecute=false). So exactly ONE opening + ONE closing quote wrap the query.
         await runner.Received(1).RunProcessAsync(
             "winget",
-            Arg.Is<string>(a => a.Contains("search \"foo  calc\"") && !a.Contains("& calc \"")),
+            Arg.Is<string>(a => a.Contains("search \"foo & calc\"") && a.Split('"').Length == 3),
             Arg.Any<CancellationToken>(),
             Arg.Any<System.Text.Encoding?>());
     }

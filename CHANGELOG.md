@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.72] - 2026-07-10
+
+### Fixed
+- **Several services and ViewModels depended on the concrete PowerShellRunner class instead of the IPowerShellRunner interface, making them impossible to unit-test in isolation.** UninstallerService, WindowsFeaturesService, PerformanceService, ServiceManagerService, CleanupViewModel, DriversViewModel, SystemHealthViewModel, WindowsUpdateViewModel, and ServicesViewModel all accepted a concrete PowerShellRunner in their constructors. This prevented substituting a mock in tests (NSubstitute cannot proxy sealed concrete classes) and violated the dependency-inversion principle the rest of the codebase already follows. All ten consumers now depend on IPowerShellRunner, and the redundant concrete-only DI registration was removed — every resolution goes through the interface mapping.
+
 ## [1.52.71] - 2026-07-10
 
 ### Fixed

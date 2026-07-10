@@ -14,9 +14,9 @@ namespace SysManager.Services;
 /// </summary>
 public sealed partial class UninstallerService
 {
-    private readonly PowerShellRunner _runner;
+    private readonly IPowerShellRunner _runner;
 
-    public UninstallerService(PowerShellRunner runner) => _runner = runner;
+    public UninstallerService(IPowerShellRunner runner) => _runner = runner;
 
     public event Action<PowerShellLine>? LineReceived
     {

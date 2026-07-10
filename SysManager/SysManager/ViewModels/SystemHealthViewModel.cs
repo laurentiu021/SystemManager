@@ -21,7 +21,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     private readonly DiskHealthService _diskHealth;
     private readonly MemoryTestService _memTest;
     private readonly FixedDriveService _drives;
-    private readonly PowerShellRunner _runner;
+    private readonly IPowerShellRunner _runner;
     private readonly BiosService _biosService;
     private CancellationTokenSource? _cts;
 
@@ -49,7 +49,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     // BIOS / firmware (read-only); populated on Scan.
     [ObservableProperty] private BiosInfo? _bios;
 
-    public SystemHealthViewModel(SystemInfoService sys, DiskHealthService diskHealth, MemoryTestService memTest, FixedDriveService drives, PowerShellRunner runner, BiosService biosService)
+    public SystemHealthViewModel(SystemInfoService sys, DiskHealthService diskHealth, MemoryTestService memTest, FixedDriveService drives, IPowerShellRunner runner, BiosService biosService)
     {
         _sys = sys;
         _diskHealth = diskHealth;

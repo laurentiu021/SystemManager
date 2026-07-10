@@ -15,7 +15,7 @@ namespace SysManager.ViewModels;
 
 public sealed partial class WindowsUpdateViewModel : ViewModelBase
 {
-    private readonly PowerShellRunner _runner;
+    private readonly IPowerShellRunner _runner;
     private readonly WindowsUpdateService _wu;
     private readonly WindowsUpdatePolicyService _policy;
     private CancellationTokenSource? _cts;
@@ -43,7 +43,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [ObservableProperty] private int _deferDays = 30;
     [ObservableProperty] private int _pauseDays = 7;
 
-    public WindowsUpdateViewModel(PowerShellRunner runner, WindowsUpdateService wu, WindowsUpdatePolicyService policy)
+    public WindowsUpdateViewModel(IPowerShellRunner runner, WindowsUpdateService wu, WindowsUpdatePolicyService policy)
     {
         _runner = runner;
         _wu = wu;

@@ -15,7 +15,7 @@ namespace SysManager.ViewModels;
 
 public sealed partial class CleanupViewModel : ViewModelBase
 {
-    private readonly PowerShellRunner _runner;
+    private readonly IPowerShellRunner _runner;
 
     private readonly EtaCalculator _sfcEta = new();
     private readonly EtaCalculator _dismEta = new();
@@ -62,7 +62,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// <summary>True whenever any background task is running — for a small badge.</summary>
     public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsSfcRunning || IsDismRunning;
 
-    public CleanupViewModel(PowerShellRunner runner)
+    public CleanupViewModel(IPowerShellRunner runner)
     {
         _runner = runner;
         _runner.LineReceived += OnRunnerLineReceived;

@@ -182,11 +182,16 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
 
     private void AnnotatePathEntries()
     {
+        // PATHEXT entries are file extensions (.COM;.EXE;…), not directories, so a
+        // directory-existence check is meaningless and would flag every entry as
+        // "missing". Only annotate IsMissing for genuine directory lists (PATH/*PATH).
+        var checkMissing = SelectedVariable?.IsDirectoryList == true;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in PathEntries)
         {
             var key = entry.Directory.TrimEnd('\\', '/');
             entry.IsDuplicate = !seen.Add(key);
+            if (!checkMissing) { entry.IsMissing = false; continue; }
             try { entry.IsMissing = !string.IsNullOrWhiteSpace(entry.Directory) && !Directory.Exists(entry.Directory); }
             catch (ArgumentException) { entry.IsMissing = true; } // malformed path characters
         }

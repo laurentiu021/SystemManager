@@ -202,4 +202,41 @@ public class AppUpdatesViewModelTests
 
         Assert.Empty(vm.Console.Lines);
     }
+
+    // ---------- winget-unavailable friendly message (regression P2 #41) ----------
+
+    [Fact]
+    public async Task Scan_WhenWingetMissing_ShowsFriendlyMessage_NotRawError()
+    {
+        // Regression (P2 #41): winget.exe missing (App Installer absent / execution alias
+        // off) makes Process.Start throw Win32Exception. Scan is the tab's first action;
+        // before the fix that exception escaped the AsyncRelayCommand to the global
+        // dispatcher handler and popped a raw OS-error dialog. Now it must be caught and
+        // shown as the plain-language "install App Installer" status.
+        var winget = Substitute.For<IWingetService>();
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<List<AppPackage>>>(_ => throw new System.ComponentModel.Win32Exception(2)); // ERROR_FILE_NOT_FOUND
+        var vm = new AppUpdatesViewModel(winget);
+
+        var ex = await Record.ExceptionAsync(() => vm.ScanCommand.ExecuteAsync(null));
+
+        Assert.Null(ex); // the command must not fault
+        Assert.Equal(AppUpdatesViewModel.WingetUnavailableMessage, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Upgrade_WhenWingetMissing_ShowsFriendlyMessage_AndStops()
+    {
+        // The batch summary must NOT overwrite the friendly message with "Updated 0 of N".
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<Task<WingetResult>>(_ => throw new System.ComponentModel.Win32Exception(2));
+        var vm = new AppUpdatesViewModel(winget);
+        vm.Packages.Add(new AppPackage { Name = "A", Id = "a", CurrentVersion = "1", AvailableVersion = "2", IsSelected = true });
+
+        var ex = await Record.ExceptionAsync(() => vm.UpgradeSelectedCommand.ExecuteAsync(null));
+
+        Assert.Null(ex);
+        Assert.Equal(AppUpdatesViewModel.WingetUnavailableMessage, vm.StatusMessage);
+    }
 }

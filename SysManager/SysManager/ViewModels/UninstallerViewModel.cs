@@ -115,6 +115,14 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         {
             StatusMessage = $"Error: {ex.Message}";
         }
+        // winget.exe missing (App Installer absent / execution alias off) throws
+        // Win32Exception from Process.Start. Scan is the tab's first action, so without
+        // this the raw OS-error dialog pops immediately. Reuse the AppUpdates message so
+        // both winget tabs speak with one voice.
+        catch (System.ComponentModel.Win32Exception)
+        {
+            StatusMessage = AppUpdatesViewModel.WingetUnavailableMessage;
+        }
         finally
         {
             IsBusy = false;

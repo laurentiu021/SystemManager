@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.86] - 2026-07-10
+
+### Fixed
+- **On a PC without winget (App Installer), the App Updates and Uninstaller tabs popped a raw OS-error dialog on their first action instead of a friendly message.** All winget calls launch `winget.exe` via `Process.Start`; when App Installer isn't present or its execution alias is off (common on older/LTSC/Server machines), that throws `Win32Exception` ("The system cannot find the file specified"). `AppUpdatesViewModel.ScanAsync`, `AppUpdatesViewModel.UpgradeSelectedAsync`, and `UninstallerViewModel.ScanAsync` caught only `OperationCanceledException`/`InvalidOperationException`, so the `Win32Exception` escaped the generated `AsyncRelayCommand` to the global dispatcher handler and surfaced as a bare OS-error dialog on the tab's very first action. (The sibling `UninstallerViewModel.UninstallSelectedAsync` already handled this — a missed migration of that fix.) All three now catch `Win32Exception` and show a shared plain-language message ("winget (App Installer) isn't available on this PC — install \"App Installer\" from the Microsoft Store to use this tab."). The upgrade batch stops on the first `Win32Exception` (winget won't reappear mid-run) and keeps the friendly message instead of a misleading "Updated 0 of N" summary.
+
 ## [1.52.84] - 2026-07-10
 
 ### Fixed

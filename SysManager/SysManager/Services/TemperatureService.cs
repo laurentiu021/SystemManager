@@ -24,8 +24,11 @@ public sealed class TemperatureService : IDisposable
     // enumerates all hardware — far too heavy to do on every 2s poll. Open it once
     // (lazily, on the first elevated read) and keep it alive for the service
     // lifetime; each poll then only calls Update(). The lock serialises the
-    // not-thread-safe LHM access in case more than one caller polls at once.
-    private readonly Lock _lhmLock = new();
+    // not-thread-safe native sensor access — both the LibreHardwareMonitor path
+    // (admin) and the NvAPI path (non-admin, incl. its init-once fields) — in case
+    // more than one caller polls at once (the 2s temperature poll, the user's
+    // Refresh command, and the always-on 10s resource sampler all share this service).
+    private readonly Lock _sensorLock = new();
     private Computer? _computer;
     private bool _disposed;
 
@@ -71,7 +74,7 @@ public sealed class TemperatureService : IDisposable
 
     private void ReadViaLibreHardwareMonitor(List<TemperatureReading> readings, bool includeStorage = true)
     {
-        lock (_lhmLock)
+        lock (_sensorLock)
         {
             if (_disposed) return;
             try
@@ -218,7 +221,7 @@ public sealed class TemperatureService : IDisposable
 
     public void Dispose()
     {
-        lock (_lhmLock)
+        lock (_sensorLock)
         {
             if (_disposed) return;
             _disposed = true;
@@ -289,45 +292,55 @@ public sealed class TemperatureService : IDisposable
 
     private void ReadNvidiaGpuTemperatures(List<TemperatureReading> readings)
     {
-        if (!_nvApiInitTried)
+        // Serialise under the same lock as the LHM path: NVIDIA.Initialize()/GetPhysicalGPUs()
+        // is a global native call that isn't documented thread-safe, and the init-once fields
+        // below are shared, non-volatile state. Concurrent non-admin callers (2s poll + user
+        // Refresh + 10s sampler) could otherwise both init at once and a losing thread could
+        // latch _nvApiAvailable=false permanently, silently dropping GPU temps for the session.
+        lock (_sensorLock)
         {
-            _nvApiInitTried = true;
-            try
-            {
-                NvAPIWrapper.NVIDIA.Initialize();
-                _nvApiAvailable = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs().Length > 0;
-            }
-            // No NVIDIA GPU / driver present is the normal case on AMD/Intel systems — record it
-            // once so later polls skip silently instead of throwing an exception every tick.
-            catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { _nvApiAvailable = false; }
-            catch (DllNotFoundException) { _nvApiAvailable = false; }
-            catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
-            {
-                _nvApiAvailable = false;
-                Log.Debug("NVIDIA API init failed: {Error}", ex.Message);
-            }
-        }
+            if (_disposed) return;
 
-        if (!_nvApiAvailable) return;
-
-        try
-        {
-            foreach (var gpu in NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs())
+            if (!_nvApiInitTried)
             {
-                var sensor = gpu.ThermalInformation.ThermalSensors
-                    .FirstOrDefault(s => s.CurrentTemperature > 0);
-                if (sensor is not null)
+                _nvApiInitTried = true;
+                try
                 {
-                    readings.Add(new TemperatureReading("GPU", gpu.FullName,
-                        sensor.CurrentTemperature));
+                    NvAPIWrapper.NVIDIA.Initialize();
+                    _nvApiAvailable = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs().Length > 0;
+                }
+                // No NVIDIA GPU / driver present is the normal case on AMD/Intel systems — record it
+                // once so later polls skip silently instead of throwing an exception every tick.
+                catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { _nvApiAvailable = false; }
+                catch (DllNotFoundException) { _nvApiAvailable = false; }
+                catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
+                {
+                    _nvApiAvailable = false;
+                    Log.Debug("NVIDIA API init failed: {Error}", ex.Message);
                 }
             }
-        }
-        // A transient read failure (e.g. a driver reset) must not crash the poll — skip this tick.
-        catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { /* transient GPU read failure */ }
-        catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
-        {
-            Log.Debug("NVIDIA GPU temperature read failed: {Error}", ex.Message);
+
+            if (!_nvApiAvailable) return;
+
+            try
+            {
+                foreach (var gpu in NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs())
+                {
+                    var sensor = gpu.ThermalInformation.ThermalSensors
+                        .FirstOrDefault(s => s.CurrentTemperature > 0);
+                    if (sensor is not null)
+                    {
+                        readings.Add(new TemperatureReading("GPU", gpu.FullName,
+                            sensor.CurrentTemperature));
+                    }
+                }
+            }
+            // A transient read failure (e.g. a driver reset) must not crash the poll — skip this tick.
+            catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { /* transient GPU read failure */ }
+            catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
+            {
+                Log.Debug("NVIDIA GPU temperature read failed: {Error}", ex.Message);
+            }
         }
     }
 

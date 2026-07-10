@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.69] - 2026-07-10
+
+### Fixed
+- **GPU temperature could stop being reported for the rest of a session on some NVIDIA machines.** The Dashboard reads temperatures from several places at once (the 2-second temperature tile, the manual Refresh button, and the always-on resource-history sampler). On a non-administrator session the NVIDIA read path set up its GPU connection without the guard the other sensor path already used, so two of those reads starting at the same moment could collide during that one-time setup — and if the colliding attempt failed, the app remembered "no NVIDIA GPU" permanently and quietly dropped GPU temperature until the app was restarted. That setup is now serialized behind the same lock the rest of the temperature reading already uses, so simultaneous reads no longer collide and a transient collision can't disable GPU temperature for the session.
+
 ## [1.52.68] - 2026-07-10
 
 ### Security

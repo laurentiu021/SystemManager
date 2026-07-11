@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.99] - 2026-07-11
+
+### Fixed
+- **The Gaming Profile crash-recovery sweep reverted the leftover session and rewrote its store without holding the service lock, so a quick Start click could race it.** On launch, if a previous run closed with game-mode tweaks still applied, the tab offers to revert them via `RecoverPendingAsync`. Unlike `ApplyAsync` and `RevertAsync` — which both serialize on the service's `SemaphoreSlim` (`_gate`) — `RecoverPendingAsync` ran its `RunRevertAsync` **and** its `LoadStore`→`SaveStore` completely ungated. After the user answered the "restore?" dialog the UI was live again, so clicking **Start** launched `ApplyAsync` concurrently with the still-running recovery revert: two paths reverting/applying the same machine-wide tweaks (power plan, visual effects, search indexing, notifications) and doing an unsynchronized read-modify-write of the on-disk store — which could lose the `ActiveSession = null` clear (resurrecting the leftover marker so it re-prompts forever) or interleave conflicting tweak steps. `RecoverPendingAsync` now acquires `_gate` for its whole body (mirroring `RevertAsync`, including the `ConfigureAwait(false)` that keeps the gate-release continuation off the UI thread so `Dispose`'s shutdown `_gate.Wait()` can't deadlock) and re-reads the store **inside** the gate so the read-modify-write is atomic against a concurrent `SaveStore`.
+
 ## [1.52.98] - 2026-07-11
 
 ### Fixed

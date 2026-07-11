@@ -473,4 +473,63 @@ public class GamingProfileServiceTests
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }
+
+    // ── Ultra-audit fix: RecoverPendingAsync must serialize on _gate ───────────
+    //
+    // The startup crash-recovery sweep used to revert the leftover session and rewrite the store
+    // WITHOUT holding _gate. After the user answers the "restore?" dialog the UI is live again, so a
+    // Start click could run ApplyAsync concurrently with the still-running recovery revert — two
+    // paths mutating the same machine-wide tweaks and doing an unsynchronized LoadStore→SaveStore,
+    // which can lose the ActiveSession=null clear (resurrecting the leftover marker) or interleave
+    // conflicting steps. The fix wraps RecoverPendingAsync in _gate like RevertAsync. This pins that
+    // contract deterministically: while a revert is suspended HOLDING the gate, RecoverPendingAsync
+    // must not proceed (it is parked on _gate.WaitAsync) — and it completes once the gate frees.
+
+    private static string SerializePendingStore(GamingProfileStore store)
+        => JsonSerializer.Serialize(store with { SchemaVersion = GamingProfileService.CurrentSchemaVersion },
+            new JsonSerializerOptions { WriteIndented = true });
+
+    [Fact]
+    public async Task RecoverPendingAsync_WaitsForGate_WhenARevertHoldsIt()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-rec-{Guid.NewGuid():N}.json");
+        try
+        {
+            // A pending session with an ALL-FALSE profile: BuildMachineWideSteps returns an empty
+            // list, so recovery's own revert is an inert no-op (no power/registry/service call) —
+            // the test stays deterministic and touches nothing on the machine.
+            File.WriteAllText(path, SerializePendingStore(new GamingProfileStore
+            {
+                ActiveSession = new GamingSessionRecord(new GamingProfile(), new GamingSnapshot()),
+            }));
+
+            var svc = StoreOnlyService(path);
+            Assert.True(svc.HasPendingRecovery, "precondition: a leftover session is present on disk");
+
+            // Start a revert that suspends INSIDE the gated step — RevertAsync is now holding _gate.
+            var tweak = new GatedRevertTweak();
+            svc.SeedAppliedStepForTest(tweak);        // IsActive → true
+            var revert = svc.RevertAsync();           // acquires _gate, then parks on the step
+            Assert.True(await CompletesWithinAsync(tweak.Entered),
+                "RevertAsync never reached the suspending step (so it isn't holding the gate yet)");
+
+            // With the fix, RecoverPendingAsync must block on _gate.WaitAsync while the revert holds
+            // it. Deterministic assertion (no timing window): the returned Task is NOT yet completed.
+            var recover = svc.RecoverPendingAsync();
+            Assert.False(recover.IsCompleted,
+                "RecoverPendingAsync completed while a revert held _gate — it is not serializing on the gate (the race).");
+
+            // Release the revert; its gate-release lets the parked recovery acquire, run its (empty)
+            // revert, clear the marker, and complete.
+            tweak.Resume();
+            Assert.True(await CompletesWithinAsync(revert), "the suspended revert did not complete after Resume");
+            Assert.True(await CompletesWithinAsync(recover),
+                "RecoverPendingAsync never completed after the gate was released");
+
+            // The leftover marker is cleared exactly once, under the gate.
+            Assert.False(StoreOnlyService(path).HasPendingRecovery,
+                "the recovered session's ActiveSession marker should be cleared after recovery");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
 }

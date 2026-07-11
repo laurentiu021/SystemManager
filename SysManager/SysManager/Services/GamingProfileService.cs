@@ -238,16 +238,30 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public async Task RecoverPendingAsync(CancellationToken ct = default)
     {
-        var store = LoadStore();
-        if (store.ActiveSession is not { } session) return;
+        // Serialize with ApplyAsync / RevertAsync on _gate. Without this the startup recovery
+        // sweep runs unguarded: after the user answers the "restore?" dialog, the UI is live
+        // again and a Start click can launch ApplyAsync while this revert + store rewrite is
+        // still in flight — two paths reverting/applying the same machine-wide tweaks and doing
+        // an unsynchronized LoadStore→SaveStore, which can lose the ActiveSession=null clear (so
+        // the leftover marker resurrects) or interleave conflicting tweak steps. Reload the store
+        // INSIDE the gate so the read-modify-write is atomic against a concurrent SaveStore.
+        // ConfigureAwait(false) under the gate for the same anti-deadlock reason as RevertAsync
+        // (Dispose's blocking _gate.Wait() at shutdown must never wait on a UI-thread continuation).
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var store = LoadStore();
+            if (store.ActiveSession is not { } session) return;
 
-        // Rebuild ONLY the machine-wide tweaks from the persisted snapshot (per-game
-        // affinity/priority are not persisted — a since-recycled PID must never be touched)
-        // and revert them through the SAME engine path as an in-session revert.
-        var steps = BuildMachineWideSteps(session.Profile, session.Snapshot);
-        await RunRevertAsync(steps, ct).ConfigureAwait(true);
-        SaveStore(store with { ActiveSession = null });
-        Log.Information("Gaming Profile recovered a leftover session from a previous run");
+            // Rebuild ONLY the machine-wide tweaks from the persisted snapshot (per-game
+            // affinity/priority are not persisted — a since-recycled PID must never be touched)
+            // and revert them through the SAME engine path as an in-session revert.
+            var steps = BuildMachineWideSteps(session.Profile, session.Snapshot);
+            await RunRevertAsync(steps, ct).ConfigureAwait(false);
+            SaveStore(store with { ActiveSession = null });
+            Log.Information("Gaming Profile recovered a leftover session from a previous run");
+        }
+        finally { _gate.Release(); }
     }
 
     // ── Snapshot + step construction ───────────────────────────────────────────

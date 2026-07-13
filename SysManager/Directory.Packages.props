@@ -21,7 +21,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
     <PackageVersion Include="NvAPIWrapper.Net" Version="0.8.1.101" />
     <PackageVersion Include="WPF-UI" Version="4.3.0" />
-    <PackageVersion Include="Serilog" Version="4.3.1" />
+    <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageVersion Include="System.Management" Version="10.0.9" />
     <PackageVersion Include="System.Management.Automation" Version="7.6.3" />

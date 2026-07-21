@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.100] - 2026-07-11
+
+### Fixed
+- **App Blocker could block SysManager's own executable, making the app impossible to relaunch and impossible to unblock from within the app.** `BlockApp` writes an IFEO `Debugger` redirection for any executable name that passes validation, and it already refuses a fixed set of boot-critical processes (`winlogon.exe`, `lsass.exe`, …) precisely because an IFEO block on those is unrecoverable — but SysManager's own executable was not protected. A user could block it trivially (the Browse button fills in the real file name of any picked `.exe`, or they could just type it), after which the next launch is redirected to the non-existent `System32\SysManager_Blocked.exe` and fails; because `UnblockApp` requires the app to be running, recovery then needs `regedit` — beyond the non-technical target user. `BlockApp` now refuses to block SysManager's own executable (resolved once from `Environment.ProcessPath`, matching both the dev name `SysManager.exe` and the released `SysManager-vX.Y.Z.exe`), enforced at the service trust boundary alongside the existing boot-critical guard.
+
 ## [1.52.99] - 2026-07-11
 
 ### Fixed

@@ -171,6 +171,18 @@
                                       ToolTip="Select all updates"
                                       HorizontalAlignment="Center"/>
                         </DataGridCheckBoxColumn.Header>
+                        <!-- Per-row name so a screen reader announces which update each checkbox selects
+                             (the header checkbox is named, the rows were not) — matches AppUpdatesView. -->
+                        <DataGridCheckBoxColumn.ElementStyle>
+                            <Style TargetType="CheckBox">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Title, StringFormat='Select {0}'}"/>
+                            </Style>
+                        </DataGridCheckBoxColumn.ElementStyle>
+                        <DataGridCheckBoxColumn.EditingElementStyle>
+                            <Style TargetType="CheckBox">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Title, StringFormat='Select {0}'}"/>
+                            </Style>
+                        </DataGridCheckBoxColumn.EditingElementStyle>
                     </DataGridCheckBoxColumn>
 
                     <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" MinWidth="150" IsReadOnly="True"
@@ -284,29 +296,34 @@
                                     </Border.Style>
                                     <TextBlock Text="{Binding Category}" FontSize="11" FontWeight="SemiBold">
                                         <TextBlock.Style>
+                                            <!-- Category badge text uses the per-preset status/badge brushes
+                                                 (recomputed by ThemeService.ApplyStatusBrushes for light-theme
+                                                 legibility) rather than hardcoded pale dark-theme tints, which
+                                                 fell to ~1.8:1 on the light presets. Matches the Cumulative
+                                                 trigger that was already migrated. -->
                                             <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="#94A3B8"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Category}" Value="Security">
-                                                        <Setter Property="Foreground" Value="#FCA5A5"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource DangerText}"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Category}" Value="Cumulative">
                                                         <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Category}" Value="Defender">
-                                                        <Setter Property="Foreground" Value="#86EFAC"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource SuccessText}"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Category}" Value="Driver">
-                                                        <Setter Property="Foreground" Value="#A5B4FC"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource BadgeIndigoText}"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Category}" Value="Servicing">
-                                                        <Setter Property="Foreground" Value="#7DD3FC"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource InfoText}"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Category}" Value=".NET">
-                                                        <Setter Property="Foreground" Value="#D8B4FE"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource BadgePurpleText}"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Category}" Value="Feature upgrade">
-                                                        <Setter Property="Foreground" Value="#F9A8D4"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource BadgePinkText}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>

@@ -125,6 +125,47 @@ public class ThemeStatusBrushTests
                             Lookup(ThemeService.StatusPalette(false), key));
     }
 
+    // Critical (LogsView) + category-badge text brushes added when those views were migrated off
+    // hardcoded pale dark-theme tints. Same regression class as the semantic brushes above: pin AA
+    // on the tinted light surface and mode-divergence so the light-theme washout can't return.
+    [Theory]
+    [InlineData("CriticalText")]
+    [InlineData("BadgeIndigoText")]
+    [InlineData("BadgePurpleText")]
+    [InlineData("BadgePinkText")]
+    public void LightPalette_CriticalAndBadgeText_MeetsWcagAaOnTintedSurface(string key)
+    {
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), LightTintedSurface);
+        Assert.True(ratio >= 4.5,
+            $"Light-theme '{key}' must meet WCAG AA (4.5:1) as small badge text on the most-tinted light surface; got {ratio:F2}:1.");
+    }
+
+    [Theory]
+    [InlineData("CriticalText")]
+    [InlineData("BadgeIndigoText")]
+    [InlineData("BadgePurpleText")]
+    [InlineData("BadgePinkText")]
+    public void DarkPalette_CriticalAndBadgeText_StaysLegibleOnDark(string key)
+    {
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(true), key), DarkSurface);
+        Assert.True(ratio >= 4.5,
+            $"Dark-theme '{key}' must stay legible (4.5:1) on the dark surface; got {ratio:F2}:1.");
+    }
+
+    [Fact]
+    public void CriticalAndBadge_PresentInBothModes_AndDiverge()
+    {
+        foreach (var key in new[] { "CriticalText", "CriticalBgSubtle", "BadgeIndigoText", "BadgePurpleText", "BadgePinkText" })
+        {
+            Assert.Contains(key, ThemeService.StatusPalette(true).Select(p => p.Key));
+            Assert.Contains(key, ThemeService.StatusPalette(false).Select(p => p.Key));
+        }
+        // The text tones must differ per mode (the whole point of migrating off the fixed literal).
+        foreach (var key in new[] { "CriticalText", "BadgeIndigoText", "BadgePurpleText", "BadgePinkText" })
+            Assert.NotEqual(Lookup(ThemeService.StatusPalette(true), key),
+                            Lookup(ThemeService.StatusPalette(false), key));
+    }
+
     private static Color Lookup(IReadOnlyList<(string Key, Color Color)> palette, string key)
         => palette.First(p => p.Key == key).Color;
 

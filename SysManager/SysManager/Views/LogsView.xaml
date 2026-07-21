@@ -43,14 +43,16 @@
 
         <!-- Severity count glass cards -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="28,16,28,0">
-            <!-- Critical -->
-            <Border Style="{StaticResource GlassCard}" Background="#14FF3B30" Margin="0,0,12,0"
+            <!-- Critical — uses the per-preset Critical brushes (ThemeService.ApplyStatusBrushes)
+                 like its sibling cards, so it stays legible on the light presets instead of keeping a
+                 dark-calibrated 8%-alpha red that washed out to near-invisible on near-white. -->
+            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource CriticalBgSubtle}" Margin="0,0,12,0"
                     AutomationProperties.Name="{Binding CriticalCount, StringFormat='Critical events: {0}'}">
                 <Grid>
-                    <Border Background="#FF3B30" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                    <Border Background="{DynamicResource CriticalText}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
                     <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#FF3B30">
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource CriticalText}">
                             <Ellipse.Effect>
                                 <DropShadowEffect Color="#FF3B30" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
@@ -176,12 +178,12 @@
                     <!-- Each toggle has its own colored dot next to the label -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Critical events" IsChecked="{Binding ShowCritical}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#FF3B30" Margin="8,0,6,0"/>
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource CriticalText}" Margin="8,0,6,0"/>
                         <TextBlock Text="Critical" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Error events" IsChecked="{Binding ShowError}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#F87171" Margin="8,0,6,0"/>
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Danger}" Margin="8,0,6,0"/>
                         <TextBlock Text="Error" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
@@ -196,7 +198,7 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,22,0">
                         <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Verbose events" IsChecked="{Binding ShowVerbose}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="#9AA0A6" Margin="8,0,6,0"/>
+                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource TextMuted}" Margin="8,0,6,0"/>
                         <TextBlock Text="Verbose" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 

@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.102] - 2026-07-11
+
+### Fixed
+- **Keyboard focus was invisible on every toggle switch.** The shared `ToggleSwitch` style set `FocusVisualStyle` to null but — unlike every other interactive style (buttons, TextBox) — had no `IsKeyboardFocused` trigger, so a keyboard user tabbing onto a switch (severity filters, performance tweaks, startup entries, Windows features, …) got no focus cue while Space still flipped it (WCAG 2.4.7). The switch's Track now shows an accent focus ring when focused, matching the button styles; a reserved transparent 1.5px border keeps the layout from shifting when it lights up.
+- **Windows Update category badges were unreadable on the light themes.** Seven of the eight category badge colors (Security, Defender, Driver, Servicing, .NET, Feature upgrade, default) were hardcoded pale dark-theme tints (~1.8:1 on the near-white light presets), while only "Cumulative" had been migrated to a theme brush. All eight now use per-preset status/badge brushes that `ThemeService` recomputes for light-theme legibility.
+- **The Logs tab's Critical severity card and two filter dots bypassed the per-preset color palette.** The Critical card's background/stripe/dot and the Error/Verbose filter dots were hardcoded (the Critical card's 8%-alpha red was near-invisible on light themes — the most severe category was the least visible), while the sibling Error/Warning/Info cards re-themed. Critical now uses new per-preset `CriticalText`/`CriticalBgSubtle` brushes, and the Error/Verbose dots use `Danger`/`TextMuted` — so all severity colors flow through one palette. The colorblind-safe ▲ glyph is unchanged.
+
+### Accessibility
+- **The DNS/Hosts "On" checkboxes and the Windows Update per-row select checkboxes had no accessible name**, so a screen reader announced an unnamed checkbox with no way to tell which host entry or update it toggled. Each now names its row (e.g. "Enable hosts entry example.com", "Select <update title>"), matching the App Updates / Shortcut Cleaner / Uninstaller grids.
+
+### Changed
+- **App Blocker tab's bottom gutter now matches every other tab** (root margin `28,24,28,16` instead of `28,24,28,0`), so its footer no longer sits flush against the window edge when switching tabs.
+
 ## [1.52.101] - 2026-07-11
 
 ### Fixed

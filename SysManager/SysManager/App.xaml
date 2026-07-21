@@ -422,7 +422,10 @@
                                      presets TextMuted is an accent-family tint (tuned for AA body text),
                                      so it collided with the ON Accent and the on/off states looked alike.
                                      Surface4 stays a neutral grey in both modes, keeping OFF clearly distinct. -->
-                                <Border x:Name="Track" CornerRadius="11" Background="{DynamicResource Surface4}"/>
+                                <!-- BorderThickness reserved at 1.5 (transparent) so the IsKeyboardFocused
+                                     trigger can light the Accent ring without shifting the thumb/track layout. -->
+                                <Border x:Name="Track" CornerRadius="11" Background="{DynamicResource Surface4}"
+                                        BorderThickness="1.5" BorderBrush="Transparent"/>
                                 <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9"
                                         Background="White" HorizontalAlignment="Left" Margin="2,2,0,2"
                                         VerticalAlignment="Center">
@@ -439,6 +442,15 @@
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Track" Property="Opacity" Value="0.88"/>
+                                </Trigger>
+                                <!-- Keyboard focus ring (a11y, WCAG 2.4.7): the other interactive styles
+                                     (ButtonBase, Ghost/Admin/Danger buttons, TextBox) all carry this trigger;
+                                     ToggleSwitch was missed, so a keyboard user tabbing onto a switch saw no
+                                     focus cue while Space still toggled it. Track is a Border, so it takes an
+                                     Accent border like the button styles do. -->
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                    <Setter TargetName="Track" Property="BorderThickness" Value="1.5"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.4"/>

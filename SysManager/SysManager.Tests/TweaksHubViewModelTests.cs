@@ -84,7 +84,7 @@ public class TweaksHubViewModelTests
             vm.ApplySelectedCommand.Execute(null);
             // Only the selected, not-yet-applied item is sent to enable=true.
             svc.Received(1).ApplyAsync(
-                Arg.Is<IReadOnlyList<TweakItem>>(l => l.Count == 1 && l[0] == sel),
+                Arg.Is<IReadOnlyList<TweakItem>>(l => l != null && l.Count == 1 && l[0] == sel),
                 true, Arg.Any<CancellationToken>());
         }
         finally { DialogService.Instance = prev; }

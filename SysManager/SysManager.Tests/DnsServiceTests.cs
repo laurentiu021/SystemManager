@@ -75,7 +75,7 @@ public class DnsServiceTests
         await svc.SetDnsAsync("1.1.1.1", "1.0.0.1");
 
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("Set-DnsClientServerAddress") &&
                 s.Contains("-InterfaceIndex 5") &&
                 s.Contains("1.1.1.1") &&
@@ -95,7 +95,7 @@ public class DnsServiceTests
         await svc.ResetToDhcpAsync();
 
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("Set-DnsClientServerAddress") &&
                 s.Contains("-InterfaceIndex 3") &&
                 s.Contains("-ResetServerAddresses")),
@@ -118,7 +118,7 @@ public class DnsServiceTests
         // The Set call must request terminating errors so a non-terminating cmdlet
         // failure surfaces instead of being reported as a false success.
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("Set-DnsClientServerAddress") &&
                 s.Contains("-ErrorAction Stop") &&
                 s.Contains("$ErrorActionPreference = 'Stop'")),
@@ -137,7 +137,7 @@ public class DnsServiceTests
         await svc.ResetToDhcpAsync();
 
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("-ResetServerAddresses") && s.Contains("-ErrorAction Stop")),
             Arg.Any<IDictionary<string, object?>?>(),
             Arg.Any<CancellationToken>());
@@ -158,7 +158,7 @@ public class DnsServiceTests
         await svc.SetDnsAsync("9.9.9.9", "149.112.112.112");
 
         await runner.Received().RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("Virtual -eq $false") &&
                 s.Contains("Sort-Object -Property ifIndex")),
             Arg.Any<IDictionary<string, object?>?>(),
@@ -299,7 +299,7 @@ public class DnsServiceTests
         await svc.RestoreServersAsync(["9.9.9.9", "149.112.112.112"]);
 
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("Set-DnsClientServerAddress") &&
                 s.Contains("-InterfaceIndex 7") &&
                 s.Contains("9.9.9.9") &&
@@ -319,7 +319,7 @@ public class DnsServiceTests
         await svc.RestoreServersAsync([]);
 
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s => s.Contains("-ResetServerAddresses")),
+            Arg.Is<string>(s => s != null && s.Contains("-ResetServerAddresses")),
             Arg.Any<IDictionary<string, object?>?>(),
             Arg.Any<CancellationToken>());
     }
@@ -338,7 +338,7 @@ public class DnsServiceTests
         await svc.RestoreSnapshotAsync(new DnsService.DnsSnapshot(["9.9.9.9"], ["2620:fe::fe"]));
 
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("-ResetServerAddresses") &&        // clears whatever was applied since
                 s.Contains("9.9.9.9") &&                      // re-applies captured IPv4
                 s.Contains("2620:fe::fe")),                   // re-applies captured IPv6
@@ -357,7 +357,7 @@ public class DnsServiceTests
         await svc.RestoreSnapshotAsync(DnsService.DnsSnapshot.Empty);
 
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s => s.Contains("-ResetServerAddresses") && !s.Contains("@(\"")),
+            Arg.Is<string>(s => s != null && s.Contains("-ResetServerAddresses") && !s.Contains("@(\"")),
             Arg.Any<IDictionary<string, object?>?>(),
             Arg.Any<CancellationToken>());
     }
@@ -414,7 +414,7 @@ public class DnsServiceTests
 
         // One script issues two Set-DnsClientServerAddress calls: one IPv4, one IPv6.
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("-InterfaceIndex 7") &&
                 s.Contains("1.1.1.2") && s.Contains("1.0.0.2") &&
                 s.Contains("2606:4700:4700::1112") && s.Contains("2606:4700:4700::1002")),
@@ -433,7 +433,7 @@ public class DnsServiceTests
         await svc.SetDnsAsync("8.8.8.8", "8.8.4.4", "", "");
 
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s => s.Contains("8.8.8.8") && !s.Contains("::")),
+            Arg.Is<string>(s => s != null && s.Contains("8.8.8.8") && !s.Contains("::")),
             Arg.Any<IDictionary<string, object?>?>(),
             Arg.Any<CancellationToken>());
     }
@@ -513,13 +513,13 @@ public class DnsServiceTests
 
         // First call: verify the adapter is still present.
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s => s.Contains("Get-NetAdapter -InterfaceIndex 12")),
+            Arg.Is<string>(s => s != null && s.Contains("Get-NetAdapter -InterfaceIndex 12")),
             Arg.Any<IDictionary<string, object?>?>(),
             Arg.Any<CancellationToken>());
 
         // Second call: restore targets the pinned adapter, not a re-queried one.
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("-InterfaceIndex 12") &&
                 s.Contains("-ResetServerAddresses") &&
                 s.Contains("9.9.9.9") &&
@@ -558,13 +558,13 @@ public class DnsServiceTests
 
         // Should NOT issue Get-NetAdapter -InterfaceIndex 0 verify.
         await runner.DidNotReceive().RunAsync(
-            Arg.Is<string>(s => s.Contains("Get-NetAdapter -InterfaceIndex 0")),
+            Arg.Is<string>(s => s != null && s.Contains("Get-NetAdapter -InterfaceIndex 0")),
             Arg.Any<IDictionary<string, object?>?>(),
             Arg.Any<CancellationToken>());
 
         // Should use the dynamic selector and then target the resolved index.
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s =>
+            Arg.Is<string>(s => s != null &&
                 s.Contains("-InterfaceIndex 5") &&
                 s.Contains("-ResetServerAddresses")),
             Arg.Any<IDictionary<string, object?>?>(),

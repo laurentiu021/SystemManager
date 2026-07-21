@@ -142,7 +142,7 @@ public class DarkModeViewModelTests
         vm.ScheduleEnabled = true;
 
         // OnScheduleEnabledChanged persists the new schedule with Enabled == true.
-        service.Received().SaveSchedule(Arg.Is<DarkModeSchedule>(s => s.Enabled));
+        service.Received().SaveSchedule(Arg.Is<DarkModeSchedule>(s => s != null && s.Enabled));
     }
 
     [Fact]

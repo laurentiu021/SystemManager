@@ -75,7 +75,7 @@ public class BulkInstallerServiceTests
         Assert.Equal(0, exit);
         await runner.Received(1).RunProcessAsync(
             "winget",
-            Arg.Is<string>(a =>
+            Arg.Is<string>(a => a != null &&
                 a.Contains("install") &&
                 a.Contains("--id \"Git.Git\"") &&
                 a.Contains("-e") &&
@@ -102,7 +102,7 @@ public class BulkInstallerServiceTests
         Assert.Equal(0, exit);
         await runner.Received(1).RunProcessAsync(
             "winget",
-            Arg.Is<string>(a => a.Contains($"--id \"{id}\"")),
+            Arg.Is<string>(a => a != null && a.Contains($"--id \"{id}\"")),
             Arg.Any<CancellationToken>(),
             Arg.Any<System.Text.Encoding?>());
     }
@@ -159,7 +159,7 @@ public class BulkInstallerServiceTests
         // (UseShellExecute=false). So exactly ONE opening + ONE closing quote wrap the query.
         await runner.Received(1).RunProcessAsync(
             "winget",
-            Arg.Is<string>(a => a.Contains("search \"foo & calc\"") && a.Split('"').Length == 3),
+            Arg.Is<string>(a => a != null && a.Contains("search \"foo & calc\"") && a.Split('"').Length == 3),
             Arg.Any<CancellationToken>(),
             Arg.Any<System.Text.Encoding?>());
     }
@@ -188,7 +188,7 @@ public class BulkInstallerServiceTests
 
         await runner.Received(1).RunProcessAsync(
             "winget",
-            Arg.Is<string>(a => a.Contains("list")),
+            Arg.Is<string>(a => a != null && a.Contains("list")),
             Arg.Any<CancellationToken>(),
             Arg.Any<System.Text.Encoding?>());
     }

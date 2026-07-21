@@ -43,6 +43,21 @@
             </DockPanel>
         </Border>
 
+        <!-- Elevation banner: elevated (golden admin contract, matches AppBlockerView) -->
+        <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
+                CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — the Windows boot-performance history can be read."
+                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Summary -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16"
                 Visibility="{Binding HasData, Converter={StaticResource FlexVis}}">

@@ -62,6 +62,21 @@
             </DockPanel>
         </Border>
 
+        <!-- Elevation banner: elevated (golden admin contract, matches AppBlockerView) -->
+        <Border Grid.Row="2" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
+                CornerRadius="12" Padding="12,8" Margin="28,12,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — machine-wide watched settings can be restored, not just per-user ones."
+                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Baseline status banner -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"
                 Visibility="{Binding HasBaseline, Converter={StaticResource FlexVis}}">

@@ -132,9 +132,10 @@ dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.c
 dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
-The integration and UI tests touch the live system / require an interactive
-desktop session, so they run locally only (not in CI) — run them locally,
-not over SSH/Remote PowerShell. CI runs the unit tests.
+The integration tests touch the live system, so CI only compile-checks them —
+run them locally, not over SSH/Remote PowerShell. CI runs the unit tests as the
+merge gate and the UI-automation tests as a separate, non-blocking job (they need
+the interactive desktop a `windows-latest` runner provides).
 
 Filter to one class while iterating (pass the project the class lives in —
 `PingMonitorServiceTests` is an integration test):

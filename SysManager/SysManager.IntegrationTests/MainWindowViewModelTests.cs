@@ -9,24 +9,47 @@ namespace SysManager.IntegrationTests;
 [Collection("Network")]
 public class MainWindowViewModelTests
 {
+    // Tabs are addressed through the real navigation surface (NavItems → Content), not
+    // through per-tab accessor properties: those were test-only sugar removed when tab
+    // view-models became lazily built (the "eager-VM startup herd" fix). In the test path
+    // (no DI container) every NavItem's Content is still eager, so touching it proves the VM
+    // constructs exactly as before — while pinning the surface the app actually navigates.
+    private static object TabContent(MainWindowViewModel vm, string navId)
+        => vm.NavItems.First(n => n.Id == navId).Content;
+
     [Fact]
     public void AllTabsAreInstantiated()
     {
         var vm = new MainWindowViewModel();
-        Assert.NotNull(vm.Dashboard);
-        Assert.NotNull(vm.AppUpdates);
-        Assert.NotNull(vm.WindowsUpdate);
-        Assert.NotNull(vm.SystemHealth);
-        Assert.NotNull(vm.Cleanup);
-        Assert.NotNull(vm.DeepCleanup);
-        Assert.NotNull(vm.NetworkShared);
-        Assert.NotNull(vm.Ping);
-        Assert.NotNull(vm.Traceroute);
-        Assert.NotNull(vm.SpeedTest);
-        Assert.NotNull(vm.NetworkRepair);
-        Assert.NotNull(vm.Drivers);
-        Assert.NotNull(vm.Logs);
+        Assert.NotNull(TabContent(vm, "nav-dashboard"));
+        Assert.NotNull(TabContent(vm, "nav-app-updates"));
+        Assert.NotNull(TabContent(vm, "nav-windows-update"));
+        Assert.NotNull(TabContent(vm, "nav-system-health"));
+        Assert.NotNull(TabContent(vm, "nav-cleanup"));
+        Assert.NotNull(TabContent(vm, "nav-deep-cleanup"));
+        Assert.NotNull(TabContent(vm, "nav-ping"));
+        Assert.NotNull(TabContent(vm, "nav-traceroute"));
+        Assert.NotNull(TabContent(vm, "nav-speed-test"));
+        Assert.NotNull(TabContent(vm, "nav-network-repair"));
+        Assert.NotNull(TabContent(vm, "nav-drivers"));
+        Assert.NotNull(TabContent(vm, "nav-logs"));
+        Assert.NotNull(TabContent(vm, "nav-about"));
+        // NetworkSharedState is not a tab of its own — it is shared by the four network tabs.
+        // Assert it exists AND that the tabs genuinely share it (the whole point of the type).
+        Assert.NotNull(((PingViewModel)TabContent(vm, "nav-ping")).Shared);
+    }
+
+    // Regression (lazy-VM startup fix): the app shell (MainWindow.xaml) binds its version label
+    // and update banner to About.*, and About's constructor runs the startup update-check that
+    // fills those bindings. So About MUST stay eager and be exposed as a property — making it a
+    // lazy tab would leave the shell banner/version blank until the About tab was first opened.
+    // The About tab and the shell must also share ONE instance (one update-check, one state).
+    [Fact]
+    public void About_IsEagerlyExposed_AndSharedWithItsTab()
+    {
+        var vm = new MainWindowViewModel();
         Assert.NotNull(vm.About);
+        Assert.Same(vm.About, TabContent(vm, "nav-about"));
     }
 
     [Fact]
@@ -58,20 +81,27 @@ public class MainWindowViewModelTests
     public void EachTabViewModel_HasCorrectType()
     {
         var vm = new MainWindowViewModel();
-        Assert.IsType<DashboardViewModel>(vm.Dashboard);
-        Assert.IsType<AppUpdatesViewModel>(vm.AppUpdates);
-        Assert.IsType<WindowsUpdateViewModel>(vm.WindowsUpdate);
-        Assert.IsType<SystemHealthViewModel>(vm.SystemHealth);
-        Assert.IsType<CleanupViewModel>(vm.Cleanup);
-        Assert.IsType<DeepCleanupViewModel>(vm.DeepCleanup);
-        Assert.IsType<NetworkSharedState>(vm.NetworkShared);
-        Assert.IsType<PingViewModel>(vm.Ping);
-        Assert.IsType<TracerouteViewModel>(vm.Traceroute);
-        Assert.IsType<SpeedTestViewModel>(vm.SpeedTest);
-        Assert.IsType<NetworkRepairViewModel>(vm.NetworkRepair);
-        Assert.IsType<DriversViewModel>(vm.Drivers);
-        Assert.IsType<LogsViewModel>(vm.Logs);
-        Assert.IsType<AboutViewModel>(vm.About);
+        Assert.IsType<DashboardViewModel>(TabContent(vm, "nav-dashboard"));
+        Assert.IsType<AppUpdatesViewModel>(TabContent(vm, "nav-app-updates"));
+        Assert.IsType<WindowsUpdateViewModel>(TabContent(vm, "nav-windows-update"));
+        Assert.IsType<SystemHealthViewModel>(TabContent(vm, "nav-system-health"));
+        Assert.IsType<CleanupViewModel>(TabContent(vm, "nav-cleanup"));
+        Assert.IsType<DeepCleanupViewModel>(TabContent(vm, "nav-deep-cleanup"));
+        Assert.IsType<PingViewModel>(TabContent(vm, "nav-ping"));
+        Assert.IsType<TracerouteViewModel>(TabContent(vm, "nav-traceroute"));
+        Assert.IsType<SpeedTestViewModel>(TabContent(vm, "nav-speed-test"));
+        Assert.IsType<NetworkRepairViewModel>(TabContent(vm, "nav-network-repair"));
+        Assert.IsType<DriversViewModel>(TabContent(vm, "nav-drivers"));
+        Assert.IsType<LogsViewModel>(TabContent(vm, "nav-logs"));
+        Assert.IsType<AboutViewModel>(TabContent(vm, "nav-about"));
+
+        // The four network tabs share ONE NetworkSharedState instance (created once in the
+        // MainWindowViewModel, injected into each). Pin both its type and the sharing.
+        var ping = (PingViewModel)TabContent(vm, "nav-ping");
+        Assert.IsType<NetworkSharedState>(ping.Shared);
+        Assert.Same(ping.Shared, ((TracerouteViewModel)TabContent(vm, "nav-traceroute")).Shared);
+        Assert.Same(ping.Shared, ((SpeedTestViewModel)TabContent(vm, "nav-speed-test")).Shared);
+        Assert.Same(ping.Shared, ((NetworkRepairViewModel)TabContent(vm, "nav-network-repair")).Shared);
     }
 
     [Fact]

@@ -389,9 +389,19 @@ instance per app lifetime. The exceptions are `IPowerShellRunner` / `PowerShellR
 and `IWingetService` / `WingetService`, both registered **transient** so each
 consumer gets its own runner instance, avoiding `LineReceived` event cross-talk
 between tabs (e.g. Dashboard and App Updates running winget concurrently — see the
-transient registrations at the top of `ServiceRegistration.cs`). `MainWindowViewModel` resolves child VMs from
-the container at runtime; falls back to manual creation in tests (no DI
-dependency in the test project).
+transient registrations at the top of `ServiceRegistration.cs`).
+
+`MainWindowViewModel` resolves child VMs from the container **lazily**: each tab's
+`NavItem` holds a `ContentFactory` and builds its view-model from DI only when the tab
+is first opened (`NavItem.Content`). This avoids constructing all ~50 tab VMs at startup
+— most kick off a background scan/timer in their constructor, so eager construction ran
+that work up front for tabs the user might never open. A small set stays eager because
+its constructor drives always-on, app-wide behavior independent of its tab: `Dashboard`
+(the initially-selected tab), `DarkModeViewModel` (owns the theme-schedule poll), and
+`AboutViewModel` (its startup update-check feeds the app-shell version label and update
+banner). The four Network tabs also stay eager because they share one
+`NetworkSharedState` and their constructors do no work. In tests/designer (no DI
+container) every VM is built eagerly via a manual dependency graph, exactly as before.
 
 ## Admin elevation
 

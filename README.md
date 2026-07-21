@@ -102,7 +102,7 @@ work-in-progress placeholders marked with ⚙️:
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks · Notification Blocker ⚙️ |
-| 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control 🔬 |
+| 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface 🔬 · Environment Variables |
 
@@ -157,7 +157,7 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Honest about its limits** — the schedule runs while SysManager (or its tray)
   is open; it's not a background Windows service
 
-### Volume Control 🔬
+### Volume Control
 - **Per-app volume mixer** — lists every app currently playing on your default
   playback device, each with its own volume slider, mute toggle, and a live peak meter
 - **Live and lightweight** — the app list reconciles on a ~1-second loop and the meters
@@ -165,8 +165,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   the background
 - **Real names and icons** — resolved from each audio session's process (with a safe
   fallback for protected processes), including the Windows "system sounds" session
-- 🔬 Preview — per-app output-device routing and saved volume presets are intentionally
-  out of scope for now, planned for a later update
+- **Planned** — per-app output-device routing and saved volume presets are planned for
+  a later update
 
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart
@@ -435,8 +435,10 @@ a confirmation before it runs:
 - Operations grouped by category (Disk, Network, SystemModification)
 - If a conflicting operation is already running, the UI shows which operation
   is blocking and refuses to start the new one
-- Integrated into: Dashboard, Deep Cleanup, Disk Analyzer, Duplicate Finder,
-  Quick Cleanup, Speed Test, Traceroute, Network Repair, Shortcut Cleaner
+- Integrated into every tab that mutates disk, network, or system state
+  (Cleanup, Deep Cleanup, Disk Analyzer, Duplicate Finder, Speed Test, Traceroute,
+  Network Repair, Shortcut Cleaner, Performance Mode, Environment Variables, and the
+  Dashboard's quick actions)
 
 ### Shortcut Cleaner
 - Scans Desktop, Start Menu, Quick Launch, and Recent Items for broken .lnk

@@ -109,4 +109,35 @@ public sealed class AppBlockerServiceRegistryTests : IDisposable
         Assert.True(_svc.UnblockApp("external.exe"));
         Assert.Equal(@"C:\Tools\dbg.exe", ReadDebugger("external.exe"));
     }
+
+    // ── Ultra-audit fix: never let App Blocker block SysManager itself ─────────
+    //
+    // An IFEO block on our own exe is unrecoverable in-app (UnblockApp needs the app running,
+    // but the next launch is redirected to the non-existent blocker path and fails) — the same
+    // hazard the BootCriticalExecutables list guards. The own-exe name is injectable so this
+    // test can drive the guard (the xUnit host's process name is testhost/dotnet, not SysManager).
+
+    [Theory]
+    [InlineData("SysManager.exe", "SysManager.exe")]           // dev/assembly name
+    [InlineData("SysManager-v1.52.99.exe", "SysManager-v1.52.99.exe")] // released name
+    [InlineData("sysmanager.exe", "SysManager.exe")]           // case-insensitive
+    [InlineData("SysManager", "SysManager.exe")]               // bare name (.exe appended before the check)
+    public void BlockApp_OwnExecutable_IsRefused_AndNotWritten(string typedName, string ownExeName)
+    {
+        var svc = new AppBlockerService(_root, ownExecutableName: ownExeName);
+
+        Assert.False(svc.BlockApp(typedName));
+        // Prove nothing was written to the (redirected) IFEO hive — the guard bailed before the write.
+        Assert.Null(ReadDebugger(ownExeName));
+        Assert.False(svc.IsBlocked(ownExeName));
+    }
+
+    [Fact]
+    public void BlockApp_OwnExeGuard_DoesNotBlockOtherApps()
+    {
+        // The self-guard must not over-reach: a different app is still blockable as normal.
+        var svc = new AppBlockerService(_root, ownExecutableName: "SysManager.exe");
+        Assert.True(svc.BlockApp("notepad.exe"));
+        Assert.Equal(BlockerDebugger, ReadDebugger("notepad.exe"));
+    }
 }

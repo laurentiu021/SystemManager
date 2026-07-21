@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.104] - 2026-07-21
+
+### Fixed
+- **The app built every one of its ~55 tab view-models at startup, even the tabs you never open.** `MainWindowViewModel` eagerly constructed all tab VMs up front, and most of them kick off real work in their constructor — a background scan, a poll timer, a WMI/registry query — so launching the app fired ~40 of those at once regardless of which tab you actually used (e.g. opening the app to the Dashboard still spun up Services, Drivers, Debloater, Bulk Installer and dozens more). Each tab's view-model is now built lazily, the first time its tab is opened (`NavItem` carries a `ContentFactory` that resolves the VM from DI on first access), so a fresh launch constructs only what the initial view needs. Startup tab-VM construction drops from ~55 to a handful. A deliberately small set stays eager because its constructor drives always-on, app-wide behavior that must run whether or not you open its tab: the Dashboard (the tab shown at launch), the Dark Mode scheduler (owns the theme-schedule poll), and About (its startup update-check feeds the title-bar version label and the "update available" banner). The four Network tabs also stay eager — they share a single network-state object and their constructors do no work. Behavior is otherwise identical; nothing is disabled, only deferred.
+
 ## [1.52.103] - 2026-07-11
 
 ### Accessibility

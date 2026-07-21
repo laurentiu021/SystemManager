@@ -42,8 +42,12 @@ public class AboutViewUiTests
         {
             EnsureAppResources();
             var mainVm = new MainWindowViewModel();
-            var view = new AboutView { DataContext = mainVm.About };
+            // Reach the About VM through the real nav graph — the per-tab accessor was removed
+            // when tab VMs became lazily built (the "eager-VM startup herd" fix).
+            var aboutVm = mainVm.NavItems.First(n => n.Id == "nav-about").Content;
+            var view = new AboutView { DataContext = aboutVm };
             Assert.NotNull(view.DataContext);
+            Assert.IsType<AboutViewModel>(view.DataContext);
         });
     }
 

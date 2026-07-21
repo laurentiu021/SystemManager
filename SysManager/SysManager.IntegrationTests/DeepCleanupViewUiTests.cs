@@ -38,7 +38,10 @@ public class DeepCleanupViewUiTests
     public void MainVm_DeepCleanup_Instantiates()
     {
         var vm = new MainWindowViewModel();
-        Assert.NotNull(vm.DeepCleanup);
+        // The per-tab accessor was removed when tab VMs became lazily built (the "eager-VM
+        // startup herd" fix); reach the VM through the real nav graph instead.
+        var deepCleanup = vm.NavItems.First(n => n.Id == "nav-deep-cleanup").Content;
+        Assert.IsType<DeepCleanupViewModel>(deepCleanup);
     }
 
     [Fact]

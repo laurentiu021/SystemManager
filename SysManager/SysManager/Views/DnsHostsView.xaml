@@ -139,7 +139,20 @@
                           VirtualizingPanel.IsVirtualizing="True"
                           VirtualizingPanel.VirtualizationMode="Recycling">
                     <DataGrid.Columns>
-                        <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False"/>
+                        <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False">
+                            <!-- Per-row name so a screen reader announces which hosts entry each checkbox
+                                 enables, matching the AppUpdates/ShortcutCleaner/Uninstaller checkbox columns. -->
+                            <DataGridCheckBoxColumn.ElementStyle>
+                                <Style TargetType="CheckBox">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Hostname, StringFormat='Enable hosts entry {0}'}"/>
+                                </Style>
+                            </DataGridCheckBoxColumn.ElementStyle>
+                            <DataGridCheckBoxColumn.EditingElementStyle>
+                                <Style TargetType="CheckBox">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Hostname, StringFormat='Enable hosts entry {0}'}"/>
+                                </Style>
+                            </DataGridCheckBoxColumn.EditingElementStyle>
+                        </DataGridCheckBoxColumn>
                         <DataGridTextColumn Header="IP Address" Binding="{Binding IpAddress}" Width="150" MinWidth="80" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Hostname" Binding="{Binding Hostname}" Width="*" MinWidth="120" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Comment" Binding="{Binding Comment}" Width="150" MinWidth="80" IsReadOnly="True"/>

@@ -140,6 +140,42 @@ public partial class ThemePopup : UserControl
             case "custom": CustomMode.IsChecked = true; break;
             default: DarkMode.IsChecked = true; break;
         }
+
+        // The Mode_Changed handler (which flips panel visibility) is only wired up AFTER this
+        // runs, and clicking an already-checked radio doesn't re-raise Checked — so for a
+        // persisted CUSTOM theme we must set the panel visibility and seed the hex fields here,
+        // or the popup opens on the Presets list with the XAML-default hex literals. Without the
+        // seed, editing one hex box would call SetCustom() with the defaults for the other three,
+        // silently destroying the saved custom colours on the next save.
+        UpdatePanels();
+        if (svc.CurrentMode == "custom")
+            PopulateCustomFields(svc.CurrentTheme);
+    }
+
+    /// <summary>Shows the Custom editors or the Presets list to match the checked mode radio.</summary>
+    private void UpdatePanels()
+    {
+        bool custom = CustomMode.IsChecked == true;
+        PresetsPanel.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
+        CustomPanel.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Seeds the four custom hex boxes + preview swatches from a persisted theme so a reopen shows
+    /// the real saved colours (not the XAML defaults) and a single-field edit doesn't reset the rest.
+    /// </summary>
+    private void PopulateCustomFields(ThemePreset theme)
+    {
+        SetHexField(CustomAccentHex, CustomAccentPreview, theme.Accent);
+        SetHexField(CustomBgHex, CustomBgPreview, theme.Background);
+        SetHexField(CustomSurfaceHex, CustomSurfacePreview, theme.Surface);
+        SetHexField(CustomTextHex, CustomTextPreview, theme.TextPrimary);
+    }
+
+    private static void SetHexField(TextBox box, Border swatch, Color color)
+    {
+        box.Text = color.ToString();
+        swatch.Background = new SolidColorBrush(color);
     }
 
 
@@ -185,16 +221,9 @@ public partial class ThemePopup : UserControl
 
     private void Mode_Changed(object sender, RoutedEventArgs e)
     {
-        if (CustomMode.IsChecked == true)
+        UpdatePanels();
+        if (CustomMode.IsChecked != true)
         {
-            PresetsPanel.Visibility = Visibility.Collapsed;
-            CustomPanel.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            PresetsPanel.Visibility = Visibility.Visible;
-            CustomPanel.Visibility = Visibility.Collapsed;
-
             var targetMode = LightMode.IsChecked == true ? "light" : "dark";
             var companion = ThemeService.Instance.GetCompanionPreset(targetMode);
             ThemeService.Instance.SetPreset(companion);

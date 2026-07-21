@@ -17,6 +17,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - **App Blocker tab's bottom gutter now matches every other tab** (root margin `28,24,28,16` instead of `28,24,28,0`), so its footer no longer sits flush against the window edge when switching tabs.
 
+## [1.52.101] - 2026-07-11
+
+### Fixed
+- **Reopening the theme popup on a saved custom theme showed the preset list instead of the color editors, and editing any one color silently reset the other three.** `SyncUiToService` checked the "Custom" mode radio for a persisted custom theme but never made the custom panel visible (the `Mode_Changed` handler that toggles panel visibility is wired up only afterward, and re-checking an already-checked radio raises no event), so the popup opened on the Presets list; the only way to reach the editors was to click Dark/Light — which immediately applied a preset over the custom theme — then Custom again. Worse, the four hex fields kept their XAML-default literals (`#6366F1`/`#070A0F`/`#0E1218`/`#F1F3F7`) and were never seeded from the saved theme, and `ApplyCustomFromInputs` reads all four on any field's `LostFocus` — so editing just the accent wrote the defaults for background/surface/text, destroying the user's saved custom colors on the next save. `SyncUiToService` now sets panel visibility (via a shared `UpdatePanels` helper `Mode_Changed` also uses) and, for a custom theme, seeds the four hex boxes and preview swatches from `ThemeService.CurrentTheme` so a single-field edit preserves the rest.
+
 ## [1.52.100] - 2026-07-11
 
 ### Fixed

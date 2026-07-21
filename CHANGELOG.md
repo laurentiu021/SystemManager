@@ -95,6 +95,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 - **Traceroute re-resolved the destination hostname on every probe, so a round-robin / CDN host could produce a garbled route toward different servers.** `TracerouteService.RunAsync` passed the raw hostname string into `Ping.SendPingAsync` inside the per-hop/per-probe loop, re-running DNS for each of up to `MaxHops * ProbesPerHop` (30×2 = 60) probes. For a load-balanced hostname (e.g. `google.com`), consecutive TTLs could resolve to *different* destination IPs, interleaving hops toward different servers into one nonsensical route — plus ~60× redundant DNS lookups. The destination is now resolved exactly once, up front, via a new `ResolveDestinationAsync` helper (IP literals are used verbatim with no DNS; hostnames pin the first `Dns.GetHostAddressesAsync` result), and every probe targets that fixed `IPAddress`. A resolution failure now surfaces as `InvalidOperationException` (the type the ViewModel already handles) instead of silently looping `MaxHops` times with per-probe DNS failures. Single-IP hosts and IP literals were never affected; the reverse-DNS lookup of each *responding* hop is unchanged.
+
 ## [1.52.83] - 2026-07-10
 
 ### Fixed
@@ -134,11 +135,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.52.76] - 2026-07-10
 
 ### Fixed
-- **Disk Analyzer over-counted drive usage by descending into WinSxS and other heavyweight system directories during recursion.** The `SkipSegments` filter (`\windows\winsxs`, `\windows\csc`, `\$recycle.bin`, `\system volume information`) was only applied to the top-level children of the analyzed root (line 71). The recursive `MeasureFolder` walk pushed every non-reparse subdirectory onto the stack without re-checking against `SkipSegments`, so scanning a drive root like `C:\` would enter `C:\Windows` (not skipped — it's not in the list) and then descend into `C:\Windows\WinSxS` (a hardlink farm, not a reparse point) and `C:\Windows\CSC` (offline files cache), double-counting hundreds of thousands of hardlinked files at full `FileInfo.Length`. The recursive loop now guards each subdirectory with `ShouldSkip(d)` before pushing it, matching the top-level behavior.
 - **App icon cache loading crashed on corrupt PNG/JPEG files that trigger WIC codec errors.** `AppIconService.LoadFromFile` caught `NotSupportedException`, `IOException`, and `UriFormatException`, but `BitmapImage.EndInit()` throws `FileFormatException` (derives from `FormatException`, not `IOException`) for malformed image headers and `ExternalException` for native WIC decoder failures. Both are now caught, matching the established pattern in `IconExtractorService` (lines 203/234). Without this fix, a single corrupt cached icon file caused the entire app-icon load path to throw unhandled to the caller.
 - **File Shredder failed on read-only files when invoked for a single file (not via folder shred).** `ShredFileAsync` opened a write stream (`FileAccess.Write`) without first clearing the `ReadOnly` attribute, throwing `UnauthorizedAccessException`. `ShredFolderAsync` already stripped ReadOnly (lines 213-215) before calling `ShredFileAsync`, but the ViewModel's single-file path (`FileShredderViewModel:170`) called `ShredFileAsync` directly — the file survived with its data intact while the UI reported "Failed". The ReadOnly strip now lives inside `ShredFileAsync` itself so both entry points are covered.
 - **Memory health scan returned partial or empty results when any single RAM module reported a `DBNull` property.** `MemoryTestService` used `Convert.ToDouble(mo["Capacity"] ?? 0)` and `Convert.ToUInt32(mo["Speed"] ?? 0u)` — the `??` operator does not catch `DBNull.Value` (which is non-null), so `Convert.ToUInt32(DBNull.Value)` throws `InvalidCastException`. The catch block for that exception sat OUTSIDE the `foreach` loop, so one problematic module aborted the entire scan. Now uses `FixedDriveService.ToDoubleSafe`/`ToUInt32Safe` (DBNull-aware, already tested) and the defensive catch wraps each individual module so remaining modules are still reported.
 - **Flaky test (`ContextMenuViewModelTests.Constructor_TotalCount_DefaultsToZero`) that raced the ViewModel's constructor-initiated async registry scan.** On CI, the scan could complete before the assertion checked, producing `Expected: 0, Actual: 6`. Replaced all four timing-dependent baseline tests with post-scan invariant assertions that await `InitializationComplete` — the same deterministic pattern used by 16 other VM test classes.
+
+## [1.52.75] - 2026-07-10
+
+### Fixed
+- **Disk Analyzer over-counted drive usage by descending into WinSxS and other heavyweight system directories during recursion.** The `SkipSegments` filter (`\windows\winsxs`, `\windows\csc`, `\$recycle.bin`, `\system volume information`) was only applied to the top-level children of the analyzed root (line 71). The recursive `MeasureFolder` walk pushed every non-reparse subdirectory onto the stack without re-checking against `SkipSegments`, so scanning a drive root like `C:\` would enter `C:\Windows` (not skipped — it's not in the list) and then descend into `C:\Windows\WinSxS` (a hardlink farm, not a reparse point) and `C:\Windows\CSC` (offline files cache), double-counting hundreds of thousands of hardlinked files at full `FileInfo.Length`. The recursive loop now guards each subdirectory with `ShouldSkip(d)` before pushing it, matching the top-level behavior.
 
 ## [1.52.74] - 2026-07-10
 
@@ -424,6 +429,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **Outline buttons are now visible on the light themes.** "Ghost" buttons (e.g. Export text / Copy on the System Report tab, and similar secondary actions elsewhere) drew their border in a translucent white that was invisible against the light presets' pale backgrounds — the buttons looked borderless. They now use the theme's own border color, so they're clearly outlined on every theme.
 - **Startup Manager asks before re-enabling everything.** The "Enable All" button immediately re-enabled every disabled startup item — a bulk system change that adds boot time — with no confirmation. It now asks first (showing how many items will be affected), matching the confirm-before-bulk-change behavior used elsewhere in the app.
+
+## [1.52.21] - 2026-07-03
+
+### Fixed
 - **Editing the hosts file no longer erases your own comments.** When you added, removed, or toggled an entry on the DNS & Hosts tab, SysManager rewrote the file from just the address mappings — silently dropping any standalone comment lines or blank spacing you'd written (section notes, documentation). Those comment and blank lines are now preserved through an edit, kept above the entries. Repeated saves stay stable (no duplicated headers), and a file with no comments is written exactly as before.
 
 ## [1.52.20] - 2026-07-03
@@ -431,6 +440,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **The theme picker now opens on your saved theme's presets.** If you'd set a Light or Custom theme, the theme popup initially built its preset list from the default Dark mode and only corrected itself once you clicked something — so it briefly showed the wrong set of presets. It now reads your saved mode first, so the correct presets appear immediately.
 - **Ping and System Logs numbers are now readable on the Light themes.** The average-ping / jitter / latency figures on the Network Ping tab and the severity counts (Critical, Errors, Warnings, Info) on the System Logs tab used fixed pale colors that nearly disappeared against the light preset backgrounds. They now use the app's semantic status colors, so they stay legible on every theme.
+
+## [1.52.19] - 2026-07-03
+
+### Fixed
 - **Recycle Bin size estimates now match what emptying actually frees.** Both Quick Cleanup and Deep Cleanup summed the whole hidden `$Recycle.Bin` folder on every drive — which, on a shared PC (especially when running as administrator), also counts *other users'* deleted files. But emptying the bin only ever clears the current user's items, so the "X MB in Recycle Bin" figure could be far larger than what actually gets freed. The estimate now measures only the current user's Recycle Bin, so the number is honest.
 - **Installed-app detection no longer mislabels similarly-named apps.** In the Bulk Installer, an app was marked "Installed" if its winget Id appeared anywhere in a `winget list` row — so an app whose Id is a prefix of another (e.g. `Microsoft.Teams` vs. an installed `Microsoft.Teams.Classic`) was wrongly shown as already installed. Detection now compares exact winget Ids.
 - **System Report and About page now show the correct VRAM for GPUs over 4 GB.** Video memory was read from a 32-bit WMI field that caps at ~4 GiB, so an 8 GB or 12 GB card was reported as ~4 GB. The true size is now read from the graphics driver's 64-bit registry value, falling back to the old field only when that isn't available.

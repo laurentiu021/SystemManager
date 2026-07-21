@@ -255,6 +255,15 @@ public sealed class ThemeService
             ("InfoText", C("#7DD3FC")), ("InfoBgSubtle", C("#1A38BDF8")), ("InfoBorder", C("#3338BDF8")),
             ("DangerText", C("#F87171")), ("DangerBgSubtle", C("#1AEF4444")), ("DangerBorder", C("#33EF4444")),
 
+            // Critical severity (LogsView): a distinct, hotter red than Danger. Dark values mirror the
+            // previous hardcoded #FF3B30 literals so dark themes are unchanged; the light array darkens
+            // them for AA legibility on near-white surfaces (the Critical card used to stay invisible).
+            ("CriticalText", C("#FF3B30")), ("CriticalBgSubtle", C("#14FF3B30")),
+            // WindowsUpdate category badges: Driver/.NET/Feature-upgrade have no semantic equivalent,
+            // so they get their own per-preset brushes (Security/Defender/Servicing reuse Danger/Success/
+            // Info text). Dark = the previous hardcoded Tailwind-300 tints; light darkened for AA.
+            ("BadgeIndigoText", C("#A5B4FC")), ("BadgePurpleText", C("#D8B4FE")), ("BadgePinkText", C("#F9A8D4")),
+
             // Base semantic brushes (used directly as small-text Foreground / dot Fill across the app,
             // e.g. Cleanup's TEMP-folders stat). These were static App.xaml resources that never
             // recomputed per mode, so their light-cyan/green/amber/red washed out on near-white light
@@ -275,6 +284,13 @@ public sealed class ThemeService
             ("SuccessText", C("#15803D")), ("SuccessBgSubtle", C("#2622C55E")), ("SuccessBorder", C("#5522C55E")),
             ("InfoText", C("#0369A1")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
             ("DangerText", C("#B91C1C")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
+
+            // Critical severity (LogsView) — darker red than dark-mode so the Critical card/dot stay AA
+            // on the tinted light surfaces (was a fixed #FF3B30 that washed out); BgSubtle bumped alpha.
+            ("CriticalText", C("#B01508")), ("CriticalBgSubtle", C("#20FF3B30")),
+            // Category badges darkened for AA on light presets (indigo-700 / purple-700 / pink-800).
+            // pink-800 #9D174D (not pink-700) clears 4.5:1 on the most-tinted light surface #FBCFE8.
+            ("BadgeIndigoText", C("#4338CA")), ("BadgePurpleText", C("#7E22CE")), ("BadgePinkText", C("#9D174D")),
 
             // Light: darker, saturated tones that meet WCAG AA as SMALL text — not just on pure white,
             // but on the most-tinted light preset card surface (soft-blossom Surface2 #FBCFE8 is the

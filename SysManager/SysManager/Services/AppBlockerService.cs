@@ -51,12 +51,44 @@ public sealed partial class AppBlockerService : IAppBlockerService
     private readonly RegistryKey _baseKey;
 
     /// <summary>
+    /// The file name of SysManager's own running executable (e.g. <c>SysManager.exe</c> in dev,
+    /// <c>SysManager-vX.Y.Z.exe</c> when released), used by <see cref="BlockApp"/> to refuse a
+    /// self-block. Resolved once from <see cref="Environment.ProcessPath"/> (falling back to the
+    /// main-module name). Injectable so the self-block guard is unit-testable — the xUnit host's
+    /// own process name is testhost/dotnet, not SysManager, so a test passes the app's real name.
+    /// </summary>
+    private readonly string? _ownExecutableName;
+
+    private string? OwnExecutableName => _ownExecutableName;
+
+    /// <summary>
     /// Creates the service over a registry root. Defaults to
     /// <see cref="Registry.LocalMachine"/> (the real IFEO hive); tests pass a
     /// redirected root (e.g. an HKCU subkey) to avoid admin and machine writes.
     /// </summary>
-    public AppBlockerService(RegistryKey? baseKey = null)
-        => _baseKey = baseKey ?? Registry.LocalMachine;
+    /// <param name="baseKey">IFEO registry root (defaults to HKLM).</param>
+    /// <param name="ownExecutableName">Override for the app's own exe file name (defaults to the
+    /// real running process's file name). Tests pass this to exercise the self-block guard.</param>
+    public AppBlockerService(RegistryKey? baseKey = null, string? ownExecutableName = null)
+    {
+        _baseKey = baseKey ?? Registry.LocalMachine;
+        _ownExecutableName = ownExecutableName ?? ResolveOwnExecutableName();
+    }
+
+    private static string? ResolveOwnExecutableName()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(path)) return Path.GetFileName(path);
+            using var proc = System.Diagnostics.Process.GetCurrentProcess();
+            return proc.MainModule?.ModuleName;
+        }
+        // MainModule can throw for a protected/cross-bitness process; a null own-name simply
+        // disables the self-guard (fail-open) rather than crashing block operations.
+        catch (System.ComponentModel.Win32Exception) { return null; }
+        catch (InvalidOperationException) { return null; }
+    }
 
     /// <summary>
     /// Blocks an executable from running.
@@ -81,6 +113,18 @@ public sealed partial class AppBlockerService : IAppBlockerService
         if (BootCriticalExecutables.Contains(exeName))
         {
             Log.Warning("Refusing to block boot-critical executable: {ExeName}", exeName);
+            return false;
+        }
+
+        // Never block SysManager's own executable. UnblockApp requires the app to be
+        // running, so an IFEO block on our own exe is unrecoverable in-app (the next
+        // launch is redirected to the non-existent blocker path and fails) — the same
+        // "unrecoverable IFEO block" hazard the boot-critical list guards. Reachable via
+        // Browse (fills in the picked exe's real name) or by typing it; matches both the
+        // dev name (SysManager.exe) and the released name (SysManager-vX.Y.Z.exe).
+        if (OwnExecutableName is { } self && exeName.Equals(self, StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warning("Refusing to block SysManager's own executable: {ExeName}", exeName);
             return false;
         }
 

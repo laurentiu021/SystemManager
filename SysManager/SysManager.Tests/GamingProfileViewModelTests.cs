@@ -125,9 +125,9 @@ public class GamingProfileViewModelTests
 
         await WithConfirm(true, () => vm.StartCommand.ExecuteAsync(null));
 
-        service.SaveLastConfig(Arg.Is<GamingProfile>(p => p.FinestTimerResolution && p.HighGameCpuPriority));
+        service.SaveLastConfig(Arg.Is<GamingProfile>(p => p != null && p.FinestTimerResolution && p.HighGameCpuPriority));
         await service.Received(1).ApplyAsync(
-            Arg.Is<GamingProfile>(p => p.FinestTimerResolution && p.HighGameCpuPriority),
+            Arg.Is<GamingProfile>(p => p != null && p.FinestTimerResolution && p.HighGameCpuPriority),
             Arg.Is<GameTarget?>(g => g != null && g.ProcessId == 4242 && g.Name == "doom.exe"));
     }
 

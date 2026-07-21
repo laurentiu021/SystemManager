@@ -210,7 +210,7 @@ public class DebloaterServiceTests
 
         Assert.True(result);
         await runner.Received(1).RunAsync(
-            Arg.Is<string>(s => s.Contains("Remove-AppxPackage") && s.Contains("Contoso.RandomApp_1.0.0.0_x64__abc")),
+            Arg.Is<string>(s => s != null && s.Contains("Remove-AppxPackage") && s.Contains("Contoso.RandomApp_1.0.0.0_x64__abc")),
             Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
     }
 }

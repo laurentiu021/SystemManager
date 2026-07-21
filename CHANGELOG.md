@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.103] - 2026-07-11
+
+### Accessibility
+- **Six admin-capable tabs showed no "Running as administrator" confirmation when the app was elevated.** Boot Analyzer, Gaming Profile, Settings Watchdog, Standby List Cleaner, Tweaks Hub and the Dashboard each had only the *not-elevated* banner (a grey "Run as administrator" prompt); when the app actually ran elevated the banner row simply collapsed, unlike the other 23 admin views which show a golden "Running as administrator — <what's unlocked>" confirmation. This broke the app's golden admin-control contract (grey when elevation is unavailable, golden when active) and the cross-tab uniformity the other views establish — most visibly on the hard-admin tabs (Boot Analyzer, Standby List Cleaner) where the core action requires elevation. Each of the six now shows the same golden elevated banner (matching `AppBlockerView`), with view-specific text describing what elevation unlocks, bound to `IsElevated` in the same grid row as the existing not-elevated banner.
+
 ## [1.52.102] - 2026-07-11
 
 ### Fixed

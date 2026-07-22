@@ -92,13 +92,16 @@ public sealed class BulkInstallerService
 
     /// <summary>
     /// Strips characters that could break out of the quoted winget argument (double quotes,
-    /// control chars) so a search box entry like <c>foo" &amp; calc "</c> cannot inject extra
-    /// arguments. Returns the trimmed, sanitized query (may be empty if nothing usable remains).
+    /// backslashes, control chars) so a search box entry like <c>foo" &amp; calc "</c> cannot
+    /// inject extra arguments. The backslash is stripped because a trailing one turns the closing
+    /// quote into an escaped quote (<c>"foo\"</c>), collapsing the argument boundary — and a winget
+    /// search term has no legitimate use for it. Returns the trimmed, sanitized query (may be empty
+    /// if nothing usable remains).
     /// </summary>
     internal static string SanitizeQuery(string? query)
     {
         if (string.IsNullOrWhiteSpace(query)) return string.Empty;
-        var cleaned = new string(query.Where(c => c != '"' && !char.IsControl(c)).ToArray());
+        var cleaned = new string(query.Where(c => c != '"' && c != '\\' && !char.IsControl(c)).ToArray());
         return cleaned.Trim();
     }
 }

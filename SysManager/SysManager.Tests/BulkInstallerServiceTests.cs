@@ -128,8 +128,24 @@ public class BulkInstallerServiceTests
     [InlineData("foo\" & calc \"", "foo & calc")]                   // embedded quotes stripped (the & is harmless inside a quoted, non-shell arg)
     [InlineData("bar\"--source\"evil", "bar--sourceevil")]          // quote break-out stripped
     [InlineData("baz\r\ninject", "bazinject")]                       // control chars (CR/LF) stripped
+    [InlineData("notepad\\", "notepad")]                             // trailing backslash stripped (would escape the closing quote)
+    [InlineData("a\\b\\c", "abc")]                                    // embedded backslashes stripped
     public void SanitizeQuery_StripsQuotesAndControlChars(string input, string expected)
         => Assert.Equal(expected, BulkInstallerService.SanitizeQuery(input));
+
+    // Regression: a query ending in a backslash previously survived sanitization and, once
+    // interpolated as search "{safe}", turned the closing quote into an escaped quote
+    // ("notepad\"), collapsing the argument boundary and corrupting the winget invocation.
+    // The sanitized output must never end in a backslash.
+    [Theory]
+    [InlineData("notepad\\")]
+    [InlineData("path\\to\\thing\\")]
+    [InlineData("\\\\")]
+    public void SanitizeQuery_NeverEndsInBackslash(string input)
+    {
+        var safe = BulkInstallerService.SanitizeQuery(input);
+        Assert.DoesNotContain('\\', safe);
+    }
 
     [Theory]
     [InlineData(null)]

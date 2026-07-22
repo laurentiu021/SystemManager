@@ -130,6 +130,17 @@ public sealed class TrayIconService : IDisposable
         showItem.Click += (_, _) => ShowWindow(mainWindow);
         menu.Items.Add(showItem);
 
+        // Quick access to the per-app Volume Control tab (issue #337… #332 tray-integration ask):
+        // show the window and jump straight to the mixer.
+        var volumeItem = new System.Windows.Controls.MenuItem { Header = "Volume mixer" };
+        volumeItem.Click += (_, _) =>
+        {
+            ShowWindow(mainWindow);
+            if (mainWindow.DataContext is ViewModels.MainWindowViewModel vm)
+                vm.NavigateTo("nav-volume-control");
+        };
+        menu.Items.Add(volumeItem);
+
         menu.Items.Add(new System.Windows.Controls.Separator());
 
         var exitItem = new System.Windows.Controls.MenuItem { Header = "Exit" };

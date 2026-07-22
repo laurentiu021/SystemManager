@@ -20,10 +20,12 @@ namespace SysManager.Services;
 /// <c>ISimpleAudioVolume</c> / <c>IAudioMeterInformation</c>) so nothing but the .NET
 /// runtime is added to the single portable .exe.
 ///
-/// <para>Scope: default render endpoint only (Windows' own mixer is per-device too);
-/// sessions on other output devices are not shown. Per-app <em>output-device routing</em>
-/// and volume <em>presets</em> are intentionally out of scope for this preview — the only
-/// public path to routing is an undocumented, version-fragile internal WinRT class.</para>
+/// <para>Scope: enumerates sessions on the default render endpoint. Output devices are listed via
+/// the documented device API (<see cref="GetRenderDevices"/>). Per-app output-device routing uses
+/// the UNDOCUMENTED <c>IAudioPolicyConfig</c> interface (the same one EarTrumpet reverse-engineers)
+/// and is feature-detected at runtime: if it can't bind on this Windows build,
+/// <see cref="IsRoutingSupported"/> is false and the UI falls back to guiding the user to Windows'
+/// per-app sound settings. Volume presets live in a separate pure service.</para>
 ///
 /// <para>Thread-safety: every COM access is guarded by <see cref="_gate"/>. The manager /
 /// device / enumerator handle is held open across polls; the per-app session interfaces
@@ -48,6 +50,10 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     // all of their control RCWs so a single slider/mute drives every stream of the app.
     private readonly Dictionary<string, List<object>> _groups = new(StringComparer.Ordinal);
 
+    // Per-group (session id → owning PID + exe name), captured during enumeration so routing can
+    // build the app's audio-session identifier for IAudioPolicyConfig without re-walking COM.
+    private readonly Dictionary<string, (uint Pid, string ExeName)> _routingKeys = new(StringComparer.Ordinal);
+
     /// <inheritdoc/>
     public IReadOnlyList<AudioSessionInfo> GetSessions()
     {
@@ -67,12 +73,21 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         // safe (and correct) to run it outside _gate. GetSessions is only ever called from the
         // single serialized reconcile loop, so _identityCache needs no extra synchronization.
         var results = new List<AudioSessionInfo>(groups.Count);
+        var routing = new Dictionary<string, (uint, string)>(groups.Count, StringComparer.Ordinal);
         foreach (var g in groups)
         {
             var (name, path) = g.IsSystemSounds
                 ? ("System Sounds", string.Empty)
                 : ResolveIdentityCached(g.GroupKey, g.ProcessId, g.PidKnown);
             results.Add(g.ToInfo(name, path));
+            if (!g.IsSystemSounds)
+                routing[g.GroupKey] = (g.ProcessId, System.IO.Path.GetFileName(path) ?? string.Empty);
+        }
+        // Publish the routing keys atomically under the gate (SetSessionOutputDevice reads them).
+        lock (_gate)
+        {
+            _routingKeys.Clear();
+            foreach (var kv in routing) _routingKeys[kv.Key] = kv.Value;
         }
 
         // Stable order so the reconcile diff is deterministic: system sounds last,
@@ -278,6 +293,156 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         }
     }
 
+    // ── Output-device enumeration (documented API) ─────────────────────────
+
+    /// <inheritdoc/>
+    public IReadOnlyList<Models.AudioDevice> GetRenderDevices()
+    {
+        lock (_gate)
+        {
+            if (_disposed) return [];
+            try
+            {
+                if (!EnsureManager()) return [];
+                var devEnum = (IMMDeviceEnumerator)_enumerator!;
+
+                // Default endpoint id (to flag IsDefault) — best-effort.
+                string defaultId = "";
+                if (devEnum.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Multimedia, out var def) == 0 && def is not null)
+                {
+                    if (def.GetId(out var dp) == 0 && dp != IntPtr.Zero)
+                    {
+                        defaultId = Marshal.PtrToStringUni(dp) ?? "";
+                        Marshal.FreeCoTaskMem(dp);
+                    }
+                    Release(def);
+                }
+
+                // DEVICE_STATE_ACTIVE (0x1) render endpoints.
+                if (devEnum.EnumAudioEndpoints(EDataFlow.Render, 0x1, out var collPtr) != 0 || collPtr == IntPtr.Zero)
+                    return [];
+                var collection = (IMMDeviceCollection)Marshal.GetObjectForIUnknown(collPtr);
+                try
+                {
+                    if (collection.GetCount(out int count) != 0) return [];
+                    var devices = new List<Models.AudioDevice>(count);
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (collection.Item(i, out var dev) != 0 || dev is null) continue;
+                        try
+                        {
+                            string id = "";
+                            if (dev.GetId(out var idPtr) == 0 && idPtr != IntPtr.Zero)
+                            {
+                                id = Marshal.PtrToStringUni(idPtr) ?? "";
+                                Marshal.FreeCoTaskMem(idPtr);
+                            }
+                            if (id.Length == 0) continue;
+                            var name = ReadFriendlyName(dev) ?? id;
+                            devices.Add(new Models.AudioDevice(id, name, string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase)));
+                        }
+                        finally { Release(dev); }
+                    }
+                    // Default first, then alphabetical.
+                    devices.Sort(static (a, b) =>
+                    {
+                        if (a.IsDefault != b.IsDefault) return a.IsDefault ? -1 : 1;
+                        return string.Compare(a.FriendlyName, b.FriendlyName, StringComparison.OrdinalIgnoreCase);
+                    });
+                    return devices;
+                }
+                finally { Release(collection); Marshal.Release(collPtr); }
+            }
+            catch (COMException ex)
+            {
+                Log.Debug("Audio device enumeration failed: {Error}", ex.Message);
+                ResetManager();
+                return [];
+            }
+        }
+    }
+
+    /// <summary>Reads a device's friendly name from its property store (PKEY_Device_FriendlyName).</summary>
+    private static string? ReadFriendlyName(IMMDevice device)
+    {
+        // STGM_READ = 0.
+        if (device.OpenPropertyStore(0, out var store) != 0 || store is null) return null;
+        try
+        {
+            var key = PKEY_Device_FriendlyName;
+            if (store.GetValue(ref key, out var pv) != 0) return null;
+            try { return pv.GetString(); }
+            finally { PropVariantClear(ref pv); }
+        }
+        catch (COMException) { return null; }
+        finally { Release(store); }
+    }
+
+    // ── Per-app output routing (UNDOCUMENTED IAudioPolicyConfig — guarded) ──
+
+    private bool _routingProbed;
+    private bool _routingSupported;
+
+    /// <inheritdoc/>
+    public bool IsRoutingSupported
+    {
+        get { lock (_gate) { return ProbeRoutingLocked(); } }
+    }
+
+    /// <summary>
+    /// Lazily binds <c>IAudioPolicyConfig</c> once and caches whether it's available. The interface
+    /// is undocumented and its CLSID/IID/vtable are the community-reverse-engineered values; any
+    /// failure to activate leaves routing unsupported (the UI then uses the guided fallback).
+    /// </summary>
+    private bool ProbeRoutingLocked()
+    {
+        if (_routingProbed) return _routingSupported;
+        _routingProbed = true;
+        _routingSupported = false;
+        try
+        {
+            _policyConfig = AudioPolicyConfigFactory.TryCreate();
+            _routingSupported = _policyConfig is not null;
+        }
+        catch (COMException ex) { Log.Debug("Audio routing probe failed: {Error}", ex.Message); }
+        catch (InvalidCastException ex) { Log.Debug("Audio routing probe cast failed: {Error}", ex.Message); }
+        if (!_routingSupported)
+            Log.Information("Audio routing: IAudioPolicyConfig unavailable on this build — using guided fallback");
+        return _routingSupported;
+    }
+
+    private object? _policyConfig; // IAudioPolicyConfig (undocumented)
+
+    /// <inheritdoc/>
+    public string GetSessionOutputDevice(string sessionId)
+    {
+        lock (_gate)
+        {
+            if (_disposed || !ProbeRoutingLocked() || _policyConfig is null) return string.Empty;
+            if (!_routingKeys.TryGetValue(sessionId, out var key)) return string.Empty;
+            try
+            {
+                return AudioPolicyConfigFactory.GetPersistedDefaultEndpoint(_policyConfig, key.Pid) ?? string.Empty;
+            }
+            catch (COMException ex) { Log.Debug("GetSessionOutputDevice failed: {Error}", ex.Message); return string.Empty; }
+        }
+    }
+
+    /// <inheritdoc/>
+    public bool SetSessionOutputDevice(string sessionId, string deviceId)
+    {
+        lock (_gate)
+        {
+            if (_disposed || !ProbeRoutingLocked() || _policyConfig is null) return false;
+            if (!_routingKeys.TryGetValue(sessionId, out var key)) return false;
+            try
+            {
+                return AudioPolicyConfigFactory.SetPersistedDefaultEndpoint(_policyConfig, key.Pid, deviceId);
+            }
+            catch (COMException ex) { Log.Debug("SetSessionOutputDevice failed: {Error}", ex.Message); return false; }
+        }
+    }
+
     // ── COM lifetime ──────────────────────────────────────────────────────
 
     private bool EnsureManager()
@@ -316,6 +481,9 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         Release(_manager); _manager = null;
         Release(_device); _device = null;
         Release(_enumerator); _enumerator = null;
+        // Routing keys reference the (now-stale) enumeration; drop them. The policy-config RCW is
+        // independent of the endpoint handle, so it survives a manager reset (re-probed lazily).
+        _routingKeys.Clear();
     }
 
     private void ReleaseGroups()
@@ -340,6 +508,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             if (_disposed) return;
             _disposed = true;
             ResetManager();
+            Release(_policyConfig); _policyConfig = null;
         }
     }
 
@@ -443,8 +612,58 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     {
         [PreserveSig] int Activate(ref Guid iid, uint dwClsCtx, IntPtr pActivationParams,
             [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
-        // OpenPropertyStore / GetId / GetState are unused — not declared.
+        // Slots 2-4, declared to preserve vtable order (device enumeration reads name + id).
+        [PreserveSig] int OpenPropertyStore(uint stgmAccess, out IPropertyStore ppProperties);
+        [PreserveSig] int GetId(out IntPtr ppstrId);
+        [PreserveSig] int GetState(out uint pdwState);
     }
+
+    [ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IMMDeviceCollection
+    {
+        [PreserveSig] int GetCount(out int pcDevices);
+        [PreserveSig] int Item(int nDevice, out IMMDevice ppDevice);
+    }
+
+    [ComImport, Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        [PreserveSig] int GetCount(out uint cProps);
+        [PreserveSig] int GetAt(uint iProp, out PropertyKey pkey);
+        [PreserveSig] int GetValue(ref PropertyKey key, out PropVariant pv);
+        [PreserveSig] int SetValue(ref PropertyKey key, ref PropVariant propvar);
+        [PreserveSig] int Commit();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PropertyKey
+    {
+        public Guid FmtId;
+        public uint Pid;
+    }
+
+    // PKEY_Device_FriendlyName = {a45c254e-df1c-4efd-8020-67d146a850e0}, 14.
+    private static PropertyKey PKEY_Device_FriendlyName => new()
+    {
+        FmtId = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"),
+        Pid = 14
+    };
+
+    // Minimal PROPVARIANT: we only ever read a VT_LPWSTR (string) friendly name. The union is
+    // represented by the pointer-sized field at offset 8 (x64); we read it as a wide string.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PropVariant
+    {
+        public ushort vt;
+        public ushort r1, r2, r3;
+        public IntPtr p; // union: for VT_LPWSTR this is the wide-string pointer
+        public IntPtr p2;
+
+        public readonly string? GetString() => vt == 31 /* VT_LPWSTR */ ? Marshal.PtrToStringUni(p) : null;
+    }
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(ref PropVariant pvar);
 
     [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IAudioSessionManager2

@@ -53,7 +53,11 @@ public class AudioMixerViewModelTests
     // Sessions is populated before asserting (mirrors CpuAffinityViewModelTests.NewVm).
     private static AudioMixerViewModel NewVm(IAudioMixerService service)
     {
-        var vm = new AudioMixerViewModel(service);
+        // A preset service pointed at a throwaway temp dir so tests never read/write the real
+        // %LocalAppData%\SysManager\volume-presets.json.
+        var presets = new VolumePresetService(System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "SysManagerTests", System.Guid.NewGuid().ToString("N")));
+        var vm = new AudioMixerViewModel(service, presets);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -308,7 +312,9 @@ public class AudioMixerViewModelTests
         // the first await, Dispose cancels+disposes+nulls it, and InitAsync's post-await guard
         // sees the null/cancelled token and starts NO reconcile loop.
         var service = ServiceWith(Session("s1"));
-        var vm = new AudioMixerViewModel(service);
+        var presets = new VolumePresetService(System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "SysManagerTests", System.Guid.NewGuid().ToString("N")));
+        var vm = new AudioMixerViewModel(service, presets);
 
         vm.Dispose();                    // races the fire-and-forget InitAsync
         await vm.InitializationComplete; // must complete, not fault

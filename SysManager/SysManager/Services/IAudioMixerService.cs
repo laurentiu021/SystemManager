@@ -41,4 +41,33 @@ public interface IAudioMixerService
     /// if the session is gone or the value can't be read. Cheap enough to poll.
     /// </summary>
     float GetPeak(string sessionId);
+
+    /// <summary>
+    /// Enumerate the active render (output) devices via the documented Core Audio device API.
+    /// Never throws — returns an empty list on a transient device fault. The one flagged
+    /// <see cref="Models.AudioDevice.IsDefault"/> is the current system default.
+    /// </summary>
+    IReadOnlyList<Models.AudioDevice> GetRenderDevices();
+
+    /// <summary>
+    /// True when true in-app per-app output-device routing is available on this Windows build —
+    /// i.e. the (undocumented) <c>IAudioPolicyConfig</c> interface bound successfully. When false,
+    /// the UI must fall back to guiding the user to Windows' per-app sound settings, and
+    /// <see cref="SetSessionOutputDevice"/> will no-op.
+    /// </summary>
+    bool IsRoutingSupported { get; }
+
+    /// <summary>
+    /// Reads the endpoint id this session is currently routed to, or an empty string for
+    /// "follow the system default" (or when routing can't be read). Best-effort.
+    /// </summary>
+    string GetSessionOutputDevice(string sessionId);
+
+    /// <summary>
+    /// Routes a session's app to a specific output device (empty <paramref name="deviceId"/> =
+    /// follow the system default). Returns true only when the change was applied via
+    /// <c>IAudioPolicyConfig</c>; returns false (a no-op) when routing isn't supported, so the
+    /// caller can fall back to the guided path. Never throws.
+    /// </summary>
+    bool SetSessionOutputDevice(string sessionId, string deviceId);
 }

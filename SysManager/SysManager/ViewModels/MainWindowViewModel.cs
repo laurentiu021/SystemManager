@@ -287,6 +287,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (item is not null) SelectedNav = item;
     }
 
+    /// <summary>
+    /// Public navigation seam for out-of-tree callers (e.g. the system-tray "Volume mixer"
+    /// shortcut). Selects the tab by its nav id; unknown ids are ignored.
+    /// </summary>
+    public void NavigateTo(string navId) => SelectNavById(navId);
+
     [RelayCommand]
     private void OpenAboutTab() => SelectNavById("nav-about");
 
@@ -404,7 +410,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),
             [typeof(ScheduledMaintenanceViewModel)] = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner())),
             [typeof(TweaksHubViewModel)] = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), restorePoints)),
-            [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService()),
+            [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService()),
             [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(
                 new GamingProfileService(
                     new PerformanceService(runner, restorePoints),

@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.55.0] - 2026-07-22
+
+### Added
+- **Volume Control gained per-app output-device routing, saved presets, and a tray shortcut** — completing the per-app mixer (these were previously noted as planned).
+  - **Per-app output routing** — route one app to your headset and another to your speakers. Each app row shows an output-device picker where Windows exposes the routing interface; on builds where it doesn't, the row shows a "Choose output device…" button that opens Windows' per-app sound settings, so there's always a path. Routing is applied for the Multimedia and Console roles (Communications is left to the system so a device switch doesn't hijack call audio).
+  - **Volume presets** — save the current per-app volumes and mutes as a named preset (e.g. "Gaming", "Focus") and re-apply it in one click. Presets are keyed by executable name so they re-apply to whatever instance of an app is running across restarts, and are stored locally in `%LocalAppData%\SysManager\volume-presets.json`.
+  - **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens SysManager straight to the Volume Control tab.
+  - Output-device enumeration uses the documented Core Audio device API. Per-app routing uses the undocumented `IAudioPolicyConfig` interface (the mechanism EarTrumpet uses); it is feature-detected and fully guarded — if it can't bind on this Windows build, the tab silently falls back to the guided path rather than failing. Preset logic and the device/endpoint string handling are unit-tested. Closes #332.
+
 ## [1.54.0] - 2026-07-22
 
 ### Added

@@ -88,6 +88,7 @@ public static class ServiceRegistration
         services.AddSingleton<MaintenanceSchedulerService>();
         services.AddSingleton<ITweaksHubService, TweaksHubService>();
         services.AddSingleton<IAudioMixerService, AudioMixerService>();
+        services.AddSingleton<VolumePresetService>();
         // Gaming Profile orchestrates the audited services above; it needs the process's
         // elevation state at construction (a value DI can't resolve), hence the factory.
         services.AddSingleton<IGamingProfileService>(sp => new GamingProfileService(

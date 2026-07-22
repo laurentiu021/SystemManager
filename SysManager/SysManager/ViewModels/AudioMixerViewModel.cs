@@ -29,17 +29,34 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     private const double PeakIntervalMs = 50;
 
     private readonly IAudioMixerService _service;
+    private readonly VolumePresetService _presets;
     private readonly DispatcherTimer _peakTimer;
     private CancellationTokenSource? _reconcileCts;
 
     public BulkObservableCollection<AudioSessionRowViewModel> Sessions { get; } = new();
 
+    /// <summary>Output devices offered in each row's routing picker (refreshed with the session list).</summary>
+    public BulkObservableCollection<AudioDevice> OutputDevices { get; } = new();
+
+    /// <summary>Saved volume presets the user can apply or delete.</summary>
+    public BulkObservableCollection<VolumePreset> Presets { get; } = new();
+
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private bool _hasSessions;
 
-    public AudioMixerViewModel(IAudioMixerService service)
+    /// <summary>True when true in-app per-app routing is available; false shows the guided fallback.</summary>
+    [ObservableProperty] private bool _routingSupported;
+
+    /// <summary>The preset the user has selected to apply/delete.</summary>
+    [ObservableProperty] private VolumePreset? _selectedPreset;
+
+    /// <summary>Name typed in the "save preset" box.</summary>
+    [ObservableProperty] private string _newPresetName = "";
+
+    public AudioMixerViewModel(IAudioMixerService service, VolumePresetService presets)
     {
         _service = service;
+        _presets = presets;
         _peakTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(PeakIntervalMs) };
         _peakTimer.Tick += (_, _) => UpdatePeaks();
         StatusMessage = "Reading audio sessions…";
@@ -55,6 +72,9 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         _reconcileCts = new CancellationTokenSource();
         var ct = _reconcileCts.Token;
 
+        RoutingSupported = _service.IsRoutingSupported;
+        Presets.ReplaceWith(_presets.Load());
+        await RefreshDevicesAsync();
         await ReconcileAsync();
 
         if (_reconcileCts is null || ct.IsCancellationRequested) return; // disposed during init
@@ -112,7 +132,12 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
             if (existing.TryGetValue(info.SessionId, out var row))
                 row.ApplyUpdate(info);
             else
-                Sessions.Add(new AudioSessionRowViewModel(_service, info));
+            {
+                var newRow = new AudioSessionRowViewModel(_service, info, OutputDevices.ToList(), RoutingSupported);
+                if (RoutingSupported && !info.IsSystemSounds)
+                    newRow.SetOutputDeviceFromService(_service.GetSessionOutputDevice(info.SessionId));
+                Sessions.Add(newRow);
+            }
         }
 
         for (int i = Sessions.Count - 1; i >= 0; i--)
@@ -146,6 +171,80 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         foreach (var row in Sessions)
             row.PeakLevel = _service.GetPeak(row.SessionId);
     }
+
+    /// <summary>Re-enumerate output devices (off the UI thread) into the shared picker list.</summary>
+    private async Task RefreshDevicesAsync()
+    {
+        // Defensive: a substituted/edge-case service could return null; treat it as "no devices"
+        // rather than letting ReplaceWith's null-guard throw into the fire-and-forget init.
+        var devices = await Task.Run(_service.GetRenderDevices).ConfigureAwait(true);
+        OutputDevices.ReplaceWith(devices ?? []);
+    }
+
+    /// <summary>
+    /// Save the current per-app volume/mute as a named preset (keyed by exe name so it re-applies
+    /// across restarts). Overwrites a same-named preset. No-ops on a blank name.
+    /// </summary>
+    [RelayCommand]
+    private void SavePreset()
+    {
+        var name = NewPresetName.Trim();
+        if (name.Length == 0) { StatusMessage = "Enter a name for the preset first."; return; }
+
+        var entries = Sessions
+            .Where(s => !s.IsSystemSounds)
+            .Select(s => new VolumePresetEntry(
+                ExeNameOf(s), s.DisplayName, s.Volume, s.IsMuted))
+            .Where(e => e.ExecutableName.Length > 0)
+            .ToList();
+
+        if (entries.Count == 0) { StatusMessage = "No apps to save into a preset right now."; return; }
+
+        Presets.ReplaceWith(_presets.Save(new VolumePreset(name, entries)));
+        NewPresetName = "";
+        StatusMessage = $"Saved preset \"{name}\" with {entries.Count} app{(entries.Count == 1 ? "" : "s")}.";
+        ActivityLogService.Instance.Log("Volume", $"Saved preset '{name}'");
+    }
+
+    /// <summary>Apply the selected preset's volumes/mutes to the matching live sessions.</summary>
+    [RelayCommand]
+    private void ApplyPreset()
+    {
+        if (SelectedPreset is null) { StatusMessage = "Pick a preset to apply."; return; }
+
+        var live = Sessions.Select(s => new AudioSessionInfo(
+            s.SessionId, s.ProcessId, s.DisplayName, ExePathOf(s), s.Volume, s.IsMuted,
+            s.IsActive ? AudioSessionState.Active : AudioSessionState.Inactive, s.IsSystemSounds, 0f)).ToList();
+
+        var plan = VolumePresetService.BuildApplyPlan(SelectedPreset, live);
+        int applied = 0;
+        foreach (var (sessionId, volume, muted) in plan)
+        {
+            var row = Sessions.FirstOrDefault(s => s.SessionId == sessionId);
+            if (row is null) continue;
+            row.Volume = volume;   // propagates to the service via the row's changed-handler
+            row.IsMuted = muted;
+            applied++;
+        }
+        StatusMessage = applied > 0
+            ? $"Applied \"{SelectedPreset.Name}\" to {applied} app{(applied == 1 ? "" : "s")}."
+            : $"No running apps matched \"{SelectedPreset.Name}\".";
+    }
+
+    /// <summary>Delete the selected preset.</summary>
+    [RelayCommand]
+    private void DeletePreset()
+    {
+        if (SelectedPreset is null) return;
+        var name = SelectedPreset.Name;
+        Presets.ReplaceWith(_presets.Delete(name));
+        SelectedPreset = null;
+        StatusMessage = $"Deleted preset \"{name}\".";
+    }
+
+    // The row doesn't expose the exe path directly; derive both from its icon-source path proxy.
+    private static string ExeNameOf(AudioSessionRowViewModel row) => VolumePresetService.ExeName(ExePathOf(row));
+    private static string ExePathOf(AudioSessionRowViewModel row) => row.ExePath;
 
     partial void OnIsActiveChanged(bool value)
     {

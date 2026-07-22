@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.53.0] - 2026-07-22
+
+### Added
+- **Edge/OneDrive Remover — a new Privacy & Security tab that takes Microsoft Edge and OneDrive out of your way, reversibly** (replaces the previous work-in-progress placeholder). Both of these are frequently-unwanted but awkward to deal with by hand, so the tab does it safely and offers a matching restore for every action:
+  - **OneDrive: full removal for your account, no admin needed.** Stops the running client, runs the official `OneDriveSetup.exe /uninstall`, and clears its File Explorer navigation-pane entry. Files already synced to the PC stay on disk; cloud-only files simply aren't downloaded. **Restore OneDrive** reinstalls it and re-pins the sidebar entry.
+  - **Edge: disable & de-integrate, never uninstall.** Windows relies on Edge (WebView2) and reinstalls it if forced out — and forcing it breaks other apps irreversibly — so the tab never uninstalls it. Instead it turns off Edge's background mode and startup boost (the documented `BackgroundModeEnabled` / `StartupBoostEnabled` Group-Policy values) and disables its two machine auto-update scheduled tasks, so Edge stops launching and running on its own; you can still open it normally. **Restore Edge** clears those policies and re-enables the update tasks. These changes are machine-scope and need administrator (the tab shows the standard golden admin banner explaining why); removing OneDrive does not.
+  - **Honest about the default browser.** Windows hash-protects the default-browser association, so no app can switch it programmatically; the tab opens Windows' default-apps settings and guides the user rather than pretending to change it.
+  - Every action confirms first with a plain-language impact summary and reports its honest outcome (done / needs administrator / not installed). The service routes all PowerShell and process launches through the shared runner seam with hard-coded scripts (no user input is ever interpolated — the Edge update-task names are a fixed, injection-safe allowlist), and its registry logic is unit-tested against a redirected hive. Closes #339.
+
 ## [1.52.105] - 2026-07-22
 
 ### Fixed

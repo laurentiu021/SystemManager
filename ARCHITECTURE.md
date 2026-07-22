@@ -48,7 +48,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
-| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `DefenderViewModel` · `PlaceholderViewModel` (Edge/OneDrive Remover · Notification Blocker) |
+| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `EdgeOneDriveViewModel` · `DefenderViewModel` · `PlaceholderViewModel` (Notification Blocker) |
 | Customization | `ContextMenuViewModel` · `DarkModeViewModel` · `AudioMixerViewModel` |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
 | Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `CliInterfaceViewModel` |
@@ -109,6 +109,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
+- `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
 - `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
@@ -240,6 +241,13 @@ Key services:
   Firefox) under injectable LOCALAPPDATA/APPDATA roots. Scan is read-only (sizes);
   Clean deletes only discovered files, skips locked files, and never follows
   reparse points. Cookies/sessions are flagged sensitive.
+- `EdgeOneDriveService` — reversibly de-integrates Edge and OneDrive through the
+  `IPowerShellRunner` seam plus injectable HKCU/HKLM roots. OneDrive is fully removed
+  per-user (`OneDriveSetup.exe /uninstall` + nav-pane unpin, no elevation); Edge is
+  never uninstalled — only its background/startup-boost Group-Policy keys and its two
+  auto-update scheduled tasks (a fixed, injection-safe allowlist) are toggled, which
+  needs admin. Each action has a matching restore. All scripts are hard-coded constants
+  (no user input); the pin/policy logic is unit-tested against a redirected registry.
 - `PrivacyMonitorService` — read-only reader of the CapabilityAccessManager consent
   store (camera/microphone/location access history). Injectable registry root;
   friendly-name decoding and FILETIME conversion are pure, unit-tested static methods.

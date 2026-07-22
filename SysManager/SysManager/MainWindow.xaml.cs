@@ -69,9 +69,14 @@ public partial class MainWindow : Window
             ApplyDarkTitleBar(source.Handle);
         }
 
-        // Initialize tray icon after window handle is available
+        // Initialize tray icon after window handle is available. Pass a navigation callback so the
+        // tray's "Volume mixer" shortcut can jump to that tab — the View layer legitimately knows
+        // the shell view-model, keeping the tray service itself free of a ViewModels dependency.
         if (Application.Current is App app && app.TrayService != null)
-            app.TrayService.Initialize(this);
+            app.TrayService.Initialize(this, navId =>
+            {
+                if (DataContext is ViewModels.MainWindowViewModel vm) vm.NavigateTo(navId);
+            });
     }
 
     private static void ApplyDarkTitleBar(IntPtr hwnd)

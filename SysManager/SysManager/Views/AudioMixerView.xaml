@@ -12,6 +12,7 @@
     <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -19,13 +20,37 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Volume Control" Style="{StaticResource Display}"/>
-            <TextBlock Text="Set the volume and mute for each app playing sound, with a live level meter. Shows apps on your default playback device — per-app output routing and saved presets are coming in a later update."
+            <TextBlock Text="Set the volume and mute for each app playing sound, with a live level meter. Route an app to a specific output device (headset, speakers), and save volume presets you can re-apply in one click."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"
                        MaxWidth="820" HorizontalAlignment="Left"/>
         </StackPanel>
 
+        <!-- Presets toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
+            <WrapPanel>
+                <TextBlock Text="Presets" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
+                          DisplayMemberPath="Name" Width="180" Margin="0,0,8,0" VerticalContentAlignment="Center"
+                          AutomationProperties.Name="Saved volume presets"/>
+                <Button Content="Apply" Command="{Binding ApplyPresetCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                        AutomationProperties.Name="Apply selected preset"/>
+                <Button Content="Delete" Command="{Binding DeletePresetCommand}"
+                        Style="{StaticResource GhostButton}" Margin="0,0,16,0"
+                        AutomationProperties.Name="Delete selected preset"/>
+
+                <TextBox Text="{Binding NewPresetName, UpdateSourceTrigger=PropertyChanged}"
+                         Width="160" Margin="0,0,8,0" VerticalContentAlignment="Center"
+                         AutomationProperties.Name="New preset name"
+                         ToolTip="Name the current per-app volumes as a preset."/>
+                <Button Content="Save current as preset" Command="{Binding SavePresetCommand}"
+                        Style="{StaticResource PrimaryButton}" Padding="12,6"
+                        AutomationProperties.Name="Save current volumes as a preset"/>
+            </WrapPanel>
+        </Border>
+
         <!-- App mixer list -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
             <Grid>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8"
                               Visibility="{Binding HasSessions, Converter={StaticResource FlexVis}}">
@@ -80,6 +105,34 @@
                                                          Foreground="{DynamicResource Accent}"
                                                          Background="Transparent" BorderThickness="0"
                                                          IsHitTestVisible="False"/>
+
+                                            <!-- Output routing: real per-app device picker when supported, else a
+                                                 guided "open Windows sound settings" link. Hidden entirely for the
+                                                 System Sounds pseudo-session (RoutingSupported is false for it). -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                                        Visibility="{Binding RoutingSupported, Converter={StaticResource FlexVis}}">
+                                                <TextBlock Text="&#xE7F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                           FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                           Foreground="{DynamicResource TextMuted}"/>
+                                                <TextBlock Text="Output:" Style="{StaticResource Caption}"
+                                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <ComboBox ItemsSource="{Binding OutputDevices}"
+                                                          SelectedItem="{Binding SelectedOutputDevice, Mode=TwoWay}"
+                                                          DisplayMemberPath="FriendlyName" MinWidth="160" FontSize="12"
+                                                          VerticalContentAlignment="Center"
+                                                          AutomationProperties.Name="{Binding DisplayName, StringFormat='Output device for {0}'}"/>
+                                            </StackPanel>
+                                            <Button Margin="0,8,0,0" HorizontalAlignment="Left"
+                                                    Style="{StaticResource GhostButton}" Padding="8,4"
+                                                    Command="{Binding OpenSoundSettingsCommand}"
+                                                    Visibility="{Binding ShowGuidedRouting, Converter={StaticResource FlexVis}}"
+                                                    AutomationProperties.Name="{Binding DisplayName, StringFormat='Choose output device for {0} in Windows settings'}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE7F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                               FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="Choose output device…" FontSize="12" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
                                         </StackPanel>
 
                                         <!-- Mute button. A plain Button (not a ToggleButton): the two-state
@@ -123,7 +176,7 @@
         </Border>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="2" Margin="28,12,28,24">
+        <DockPanel Grid.Row="3" Margin="28,12,28,24">
             <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>

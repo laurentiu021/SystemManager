@@ -165,8 +165,15 @@ Edit Windows environment variables without the cramped built-in dialog:
   the background
 - **Real names and icons** — resolved from each audio session's process (with a safe
   fallback for protected processes), including the Windows "system sounds" session
-- **Planned** — per-app output-device routing and saved volume presets are planned for
-  a later update
+- **Per-app output routing** — send one app to your headset and another to your speakers.
+  Where Windows exposes the routing interface, each app gets an output-device picker in the
+  row; on builds where it doesn't, the row shows a "Choose output device…" button that opens
+  Windows' per-app sound settings so you're never left without a path
+- **Volume presets** — save the current per-app volumes and mutes as a named preset (e.g.
+  "Gaming", "Focus") and re-apply it in one click; presets are keyed by app so they work
+  across restarts, and are stored locally in `%LocalAppData%\SysManager`
+- **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens the app straight
+  to this tab
 
 ### Network monitor
 - Live ping across multiple targets overlaid on a single latency chart

@@ -52,8 +52,12 @@ public sealed class TrayIconService : IDisposable
 
     /// <summary>
     /// Initializes the tray icon. Must be called from the UI thread.
+    /// <para><paramref name="navigateToTab"/> is an optional callback the caller (the View layer,
+    /// which legitimately knows the shell view-model) supplies to jump to a tab by nav id — used by
+    /// the "Volume mixer" menu shortcut. Keeping it a callback rather than referencing the shell VM
+    /// here preserves the Services→(not ViewModels) layering the architecture tests enforce.</para>
     /// </summary>
-    public void Initialize(Window mainWindow)
+    public void Initialize(Window mainWindow, Action<string>? navigateToTab = null)
     {
         // Track only an icon we own so Dispose can free its GDI handle. The shared
         // SystemIcons.Application fallback is process-wide and must not be disposed.
@@ -63,7 +67,7 @@ public sealed class TrayIconService : IDisposable
         {
             ToolTipText = "SysManager",
             Icon = icon,
-            ContextMenu = BuildContextMenu(mainWindow),
+            ContextMenu = BuildContextMenu(mainWindow, navigateToTab),
             Visibility = System.Windows.Visibility.Visible
         };
         _trayIcon.ForceCreate();
@@ -122,13 +126,27 @@ public sealed class TrayIconService : IDisposable
         }
     }
 
-    private static System.Windows.Controls.ContextMenu BuildContextMenu(Window mainWindow)
+    private static System.Windows.Controls.ContextMenu BuildContextMenu(Window mainWindow, Action<string>? navigateToTab)
     {
         var menu = new System.Windows.Controls.ContextMenu();
 
         var showItem = new System.Windows.Controls.MenuItem { Header = "Show SysManager" };
         showItem.Click += (_, _) => ShowWindow(mainWindow);
         menu.Items.Add(showItem);
+
+        // Quick access to the per-app Volume Control tab (#332 tray-integration ask): show the
+        // window and, via the caller-supplied navigation callback, jump straight to the mixer.
+        // Only added when a navigation callback was provided (keeps this VM-agnostic).
+        if (navigateToTab is not null)
+        {
+            var volumeItem = new System.Windows.Controls.MenuItem { Header = "Volume mixer" };
+            volumeItem.Click += (_, _) =>
+            {
+                ShowWindow(mainWindow);
+                navigateToTab("nav-volume-control");
+            };
+            menu.Items.Add(volumeItem);
+        }
 
         menu.Items.Add(new System.Windows.Controls.Separator());
 

@@ -103,7 +103,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject).
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back.
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
-- `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Membership reconciles on a ~1&#160;s loop and a shared DispatcherTimer drives the meters, both paused while the tab is hidden (`IsActive`). Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Per-app output-device routing and volume presets are planned for a later update. Row VMs (`AudioSessionRowViewModel`) propagate volume/mute to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back.
+- `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Membership reconciles on a ~1&#160;s loop and a shared DispatcherTimer drives the meters, both paused while the tab is hidden (`IsActive`). Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Adds per-app output-device routing (via the guarded `AudioPolicyConfigFactory`; falls back to guiding the user to Windows sound settings when the OS lacks the interface) and named volume presets (persisted by `VolumePresetService`, keyed by exe name so they re-apply across restarts). Row VMs (`AudioSessionRowViewModel`) propagate volume/mute/route to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back.
 - `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin.
 - `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
@@ -282,7 +282,21 @@ Key services:
   system-sounds pseudo-session. Holds the manager/enumerator handle open across polls and
   releases every COM RCW deterministically in `Dispose` (never finalizer-only, since the
   tab is created/destroyed on navigation). All COM types stay inside the concrete class;
-  the interface exposes only plain models so the VM unit-tests with no audio hardware.
+  the interface exposes only plain models so the VM unit-tests with no audio hardware. Also
+  enumerates render devices (documented device API) and performs per-app output routing via
+  the UNDOCUMENTED `IAudioPolicyConfig` (see `AudioPolicyConfigFactory`), feature-detected so
+  a build without it degrades to the guided fallback rather than failing.
+- `AudioPolicyConfigFactory` — a defensive, isolated wrapper over the undocumented
+  `IAudioPolicyConfig` interface (the mechanism EarTrumpet uses to route one app to a specific
+  output device). Feature-detected (`TryCreate` returns null when it can't bind), guarded (the
+  SET call is invoked only after a successful `QueryInterface` for the exact IID and any failure
+  returns false), and its endpoint-id/process-token string helpers are pure + unit-tested. The
+  routing SET path can only be runtime-verified on a real desktop (laptop workstation), not the
+  build box.
+- `VolumePresetService` — persists named per-app volume/mute presets as JSON under
+  `%LocalAppData%\SysManager\volume-presets.json`, keyed by exe name so a preset re-applies to
+  whatever instance of an app is running. Save/parse/upsert and the "apply preset → live
+  sessions" plan are pure, unit-tested static helpers; the file IO never throws to the caller.
 - `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
   Profile tab: it composes the already-audited services (`PerformanceService`,
   `ITimerResolutionService`, `ICpuAffinityService`, `StandbyMemoryService`,

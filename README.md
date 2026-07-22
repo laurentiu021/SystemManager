@@ -88,15 +88,15 @@ fully open source.
 ### Sidebar navigation
 The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
-scrolling through a flat list. 56 tabs are fully implemented; 2 are
-work-in-progress placeholders marked with ⚙️:
+scrolling through a flat list. 57 tabs are fully implemented; 1 is a
+work-in-progress placeholder marked with ⚙️:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes · Tweaks Hub 🔬 |
 | 🎮 Gaming & Profiles | Gaming Profile 🔬 · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
-| 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog 🔬 · Bandwidth Monitor ⚙️ |
+| 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog 🔬 · Bandwidth Monitor |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance 🔬 |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
@@ -397,6 +397,25 @@ a confirmation before it runs:
 - **Export to CSV** — save the visible range for analysis in Excel or elsewhere
 - Strictly local: history is stored in your `%LocalAppData%\SysManager` folder
   and nothing ever leaves the machine
+
+### Bandwidth Monitor
+- **See your network usage at a glance** — live total download and upload speed
+  with a rolling throughput chart (the last ~2 minutes), so you can spot a sudden
+  upload (a background sync, an update, something unexpected) the moment it starts
+- **Who's using the network** — a per-app list showing which programs are talking,
+  how many connections each holds, and the remote ports involved. This works with
+  **no administrator rights and no setup** — it reads the same connection tables
+  Windows exposes to any user
+- **Precise per-app speeds (optional)** — for exact upload/download rates and
+  session data totals per app (like Task Manager's Network column), enable precise
+  mode; it uses a Windows kernel trace and so **needs administrator**. The tab
+  offers it only when you're already running as administrator and falls back to the
+  no-admin view automatically if the trace can't start — it never breaks the tab
+- **Threshold alert** — set a Mbps limit and the tab warns you when total download
+  or upload goes over it (handy for catching a runaway background upload); set it to
+  0 to turn the alert off
+- Strictly local and read-only: SysManager only observes, never throttles or blocks,
+  and nothing about your traffic leaves the machine
 
 ### File Lock Detector
 - **Find what's holding a file** — when you get a "file in use" error, enter or

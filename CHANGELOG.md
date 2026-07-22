@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.54.0] - 2026-07-22
+
+### Added
+- **Bandwidth Monitor — a new Monitor tab that shows how much data is moving through your network and which apps are using it** (replaces the previous work-in-progress placeholder). It has two measurement modes so it's useful to everyone without forcing elevation:
+  - **Default (no administrator):** accurate machine-wide download/upload speed with a live rolling throughput chart (the last ~2 minutes), plus a per-app list attributed by active TCP/UDP connections — which programs are talking, how many connections each holds, and the remote ports involved. This reads the same connection tables Windows exposes to any user (`GetExtendedTcpTable`/`GetExtendedUdpTable`), so it needs no elevation and no setup.
+  - **Precise per-app rates (optional, administrator):** exact per-process upload/download speeds and per-session data totals (like Task Manager's Network column), captured from a Windows kernel ETW session. It's offered only when the app is already running as administrator, and if the kernel session can't start (privilege, a locked-down host, a blocked native helper) the tab logs it and falls back to the no-admin view — it never crashes because precise mode was unavailable.
+  - **Threshold alert:** set a Mbps limit and the tab warns when total download or upload exceeds it (useful for catching a runaway background upload); 0 turns the alert off.
+  - Strictly local and read-only — SysManager only observes network activity, never throttles or blocks it, and nothing about your traffic leaves the machine. Total-throughput history is stored as NDJSON under `%LocalAppData%\SysManager`. Closes #337.
+
+### Changed
+- Added the `Microsoft.Diagnostics.Tracing.TraceEvent` dependency (used only by the Bandwidth Monitor's optional precise mode). Its native helpers embed into the single-file build, so the shipped `SysManager-vX.Y.Z.exe` remains one self-contained file.
+
 ## [1.53.0] - 2026-07-22
 
 ### Added

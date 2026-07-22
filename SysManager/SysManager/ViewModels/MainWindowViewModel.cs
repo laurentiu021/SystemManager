@@ -51,8 +51,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _elevationBadge = "";
 
     // Placeholder VMs for planned features (cheap; built once, referenced by their NavItems).
-    private readonly PlaceholderViewModel _wipBandwidthMonitor =
-        new("Bandwidth Monitor", "Real-time per-app network usage with history graphs and alerts.", "#337");
     private readonly PlaceholderViewModel _wipNotificationBlocker =
         new("Notification Blocker", "Suppress annoying app pop-ups (update nags, trial reminders) with allowlist.", "#340");
 
@@ -181,7 +179,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<AppAlertsViewModel>("nav-app-alerts",           "App Alerts",         typeof(Views.AppAlertsView)),
             Tab<FileLockViewModel>("nav-file-lock",             "File Lock Detector", typeof(Views.FileLockView)),
             Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true),
-            EagerItem("nav-bandwidth-monitor", "Bandwidth Monitor", typeof(Views.PlaceholderView), _wipBandwidthMonitor, inDevelopment: true)),
+            Tab<BandwidthMonitorViewModel>("nav-bandwidth-monitor", "Bandwidth Monitor", typeof(Views.BandwidthMonitorView))),
 
         Group("grp-cleanup", "Cleanup",
             Tab<CleanupViewModel>("nav-cleanup",                     "Quick Cleanup",         typeof(Views.CleanupView)),
@@ -278,6 +276,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case ProcessManagerViewModel pm: pm.IsActive = active; break;
             case DashboardViewModel db: db.IsActive = active; break;
             case AudioMixerViewModel am: am.IsActive = active; break;
+            case BandwidthMonitorViewModel bw: bw.IsActive = active; break;
         }
     }
 
@@ -400,6 +399,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(DarkModeViewModel)] = new DarkModeViewModel(new WindowsThemeService()),
             [typeof(StandbyMemoryViewModel)] = new StandbyMemoryViewModel(new StandbyMemoryService()),
             [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth))),
+            [typeof(BandwidthMonitorViewModel)] = new BandwidthMonitorViewModel(new BandwidthHistoryService()),
             [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(new SettingsWatchdogService()),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),
             [typeof(ScheduledMaintenanceViewModel)] = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner())),

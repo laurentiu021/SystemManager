@@ -63,7 +63,14 @@ jobs:
         id: latest
         shell: bash
         run: |
-          TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          # NOTE: do NOT pipe `git tag | grep | head`. With `set -o pipefail` (GitHub's
+          # default bash flags), `head -n1` closes the pipe after the first line and grep
+          # gets SIGPIPE while still writing the remaining matches — "grep: write error:
+          # Broken pipe", exit 2, failing the whole release. This surfaced once the tag
+          # list grew past ~100 entries. Read grep's full (newest-first) output into a
+          # var and take the first line with parameter expansion — no pipe to close early.
+          MATCHES=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          TAG=${MATCHES%%$'\n'*}
           if [ -z "$TAG" ]; then TAG="v0.0.0"; fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Latest tag: $TAG"

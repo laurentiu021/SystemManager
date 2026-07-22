@@ -64,6 +64,7 @@ public static class ServiceRegistration
         services.AddSingleton<EnvironmentVariableService>();
         services.AddSingleton<RestorePointService>();
         services.AddSingleton<DebloaterService>();
+        services.AddSingleton<EdgeOneDriveService>();
         services.AddSingleton<LegacyPanelService>();
         services.AddSingleton<SystemFixService>();
         services.AddSingleton<ProfileService>();
@@ -133,6 +134,7 @@ public static class ServiceRegistration
         services.AddSingleton<EnvironmentVariablesViewModel>();
         services.AddSingleton<RestorePointsViewModel>();
         services.AddSingleton<DebloaterViewModel>();
+        services.AddSingleton<EdgeOneDriveViewModel>();
         services.AddSingleton<LegacyPanelsViewModel>();
         services.AddSingleton<SystemFixesViewModel>();
         services.AddSingleton<ProfileViewModel>();

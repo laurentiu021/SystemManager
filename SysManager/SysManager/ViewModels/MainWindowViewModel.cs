@@ -53,8 +53,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     // Placeholder VMs for planned features (cheap; built once, referenced by their NavItems).
     private readonly PlaceholderViewModel _wipBandwidthMonitor =
         new("Bandwidth Monitor", "Real-time per-app network usage with history graphs and alerts.", "#337");
-    private readonly PlaceholderViewModel _wipEdgeOneDriveRemover =
-        new("Edge/OneDrive Remover", "Safely remove or disable Edge and OneDrive with full restore capability.", "#339");
     private readonly PlaceholderViewModel _wipNotificationBlocker =
         new("Notification Blocker", "Suppress annoying app pop-ups (update nags, trial reminders) with allowlist.", "#340");
 
@@ -213,7 +211,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<AppBlockerViewModel>("nav-app-blocker",     "App Blocker",           typeof(Views.AppBlockerView)),
             Tab<DebloaterViewModel>("nav-debloater",        "Debloater & Ads",       typeof(Views.DebloaterView)),
             Tab<BrowserCleanerViewModel>("nav-browser-cleaner", "Browser Cleaner",   typeof(Views.BrowserCleanerView)),
-            EagerItem("nav-edge-onedrive",   "Edge/OneDrive Remover", typeof(Views.PlaceholderView), _wipEdgeOneDriveRemover, inDevelopment: true),
+            Tab<EdgeOneDriveViewModel>("nav-edge-onedrive", "Edge/OneDrive Remover", typeof(Views.EdgeOneDriveView)),
             Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView)),
             EagerItem("nav-notification-blocker", "Notification Blocker", typeof(Views.PlaceholderView), _wipNotificationBlocker, inDevelopment: true)),
 
@@ -386,6 +384,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(EnvironmentVariablesViewModel)] = new EnvironmentVariablesViewModel(new EnvironmentVariableService()),
             [typeof(RestorePointsViewModel)] = new RestorePointsViewModel(restorePoints),
             [typeof(DebloaterViewModel)] = new DebloaterViewModel(new DebloaterService(new PowerShellRunner())),
+            [typeof(EdgeOneDriveViewModel)] = new EdgeOneDriveViewModel(new EdgeOneDriveService(new PowerShellRunner())),
             [typeof(LegacyPanelsViewModel)] = new LegacyPanelsViewModel(new LegacyPanelService()),
             [typeof(SystemFixesViewModel)] = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner())),
             [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService()),

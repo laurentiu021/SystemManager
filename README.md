@@ -88,7 +88,7 @@ fully open source.
 ### Sidebar navigation
 The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
-scrolling through a flat list. 55 tabs are fully implemented; 3 are
+scrolling through a flat list. 56 tabs are fully implemented; 2 are
 work-in-progress placeholders marked with ⚙️:
 
 | Group | Tabs |
@@ -101,7 +101,7 @@ work-in-progress placeholders marked with ⚙️:
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
-| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover ⚙️ · Defender Tweaks · Notification Blocker ⚙️ |
+| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker ⚙️ |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface 🔬 · Environment Variables |
@@ -543,6 +543,23 @@ Reclaim space and clear browsing traces, per browser:
 - **Confirmation with an impact summary** before anything is deleted
 - Per-user (no admin); locked files (browser open) are skipped, not forced, and
   symlinks/junctions are never followed
+
+### Edge/OneDrive Remover
+Get Microsoft Edge and OneDrive out of your way — reversibly:
+- **OneDrive: full removal for your account** — stops the client, runs the official
+  uninstaller, and clears its File Explorer sidebar entry. No admin needed. Files
+  already synced to this PC stay on disk; cloud-only files simply aren't downloaded
+- **Edge: disable & de-integrate, never uninstall** — Windows relies on Edge (WebView2)
+  and reinstalls it if forced out, so instead this turns off its background mode and
+  startup boost (via the documented Group-Policy keys) and disables its automatic-update
+  scheduled tasks, so Edge stops running on its own. You can still open it normally
+- **A Restore button for each** — reinstall OneDrive and re-pin its sidebar entry, or
+  clear the Edge policies and re-enable its update tasks — so nothing here is one-way
+- **Honest about the default browser** — Windows hash-protects the default-browser
+  choice, so no app can switch it for you; the tab opens Windows' default-apps settings
+  and guides you instead of pretending to change it
+- Every action confirms first with a plain-language impact summary; disabling Edge needs
+  administrator (the tab explains why and what it unlocks), removing OneDrive does not
 
 ### Defender Tweaks
 Manage Microsoft Defender without digging through Windows Security:

@@ -1,0 +1,130 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.EdgeOneDriveView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:EdgeOneDriveViewModel}"
+             Background="{DynamicResource Surface0}">
+
+    <Grid Margin="28,24,28,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Edge/OneDrive Remover" Style="{StaticResource Display}"/>
+            <TextBlock Text="Safely take Microsoft Edge and OneDrive out of your way — and put them back whenever you like. OneDrive can be fully removed for your account. Edge is never uninstalled (Windows needs it and would reinstall it); instead it's disabled and de-integrated so it stops running on its own. Everything here is reversible."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Elevation banner: not elevated. OneDrive removal works without admin; the Edge
+             portion writes machine policy + scheduled tasks, so it needs elevation. -->
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                    <TextBlock Text="Disabling Edge needs administrator privileges. Removing OneDrive works without it."
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
+                CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — you can disable Edge and remove OneDrive."
+                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Content cards -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+            <StackPanel>
+
+                <!-- OneDrive -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="OneDrive" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="{Binding OneDriveStateText}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" Margin="0,8,0,0"/>
+                        <TextBlock Text="Removing OneDrive stops it, uninstalls it for your account, and clears its File Explorer sidebar entry. Files already downloaded to this PC stay put; cloud-only files won't be downloaded. Reinstall it any time with Restore."
+                                   Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <WrapPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="Remove OneDrive…" Command="{Binding RemoveOneDriveCommand}"
+                                    Style="{StaticResource DangerButton}" Margin="0,0,8,0"
+                                    AutomationProperties.Name="Remove OneDrive for the current user"
+                                    ToolTip="Uninstall OneDrive for your account (reversible via Restore)."/>
+                            <Button Content="Restore OneDrive" Command="{Binding RestoreOneDriveCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    AutomationProperties.Name="Reinstall OneDrive"
+                                    ToolTip="Reinstall OneDrive and re-add its File Explorer sidebar entry."/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Microsoft Edge -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Microsoft Edge" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="{Binding EdgeStateText}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" Margin="0,8,0,0"/>
+                        <TextBlock Text="Edge is never uninstalled — Windows relies on it (WebView2) and would reinstall it, and forcing it out breaks other apps. Instead, disabling turns off Edge's background mode and startup boost and disables its automatic-update tasks, so it stops launching and running on its own. You can still open Edge normally, and Restore undoes all of it. These changes need administrator rights."
+                                   Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <WrapPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="Disable &amp; de-integrate Edge…" Command="{Binding DisableEdgeCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                                    AutomationProperties.Name="Disable and de-integrate Microsoft Edge"
+                                    ToolTip="Turn off Edge background mode, startup boost, and auto-update tasks (reversible)."/>
+                            <Button Content="Restore Edge" Command="{Binding RestoreEdgeCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    AutomationProperties.Name="Restore Microsoft Edge to defaults"
+                                    ToolTip="Clear the policies and re-enable Edge's automatic-update tasks."/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Default browser guidance -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Default browser" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="Windows protects the default-browser choice, so no app (including this one) can switch it for you. Open Windows' default-apps settings and pick your preferred browser there — do this before disabling Edge if Edge is currently your default."
+                                   Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                        <Button Content="Choose default browser…" Command="{Binding OpenDefaultAppsSettingsCommand}"
+                                Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,14,0,0"
+                                AutomationProperties.Name="Open Windows default-apps settings"/>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

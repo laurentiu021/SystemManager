@@ -200,10 +200,10 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         TotalDownBytesPerSec = snap.TotalDownBytesPerSec;
         TotalUpBytesPerSec = snap.TotalUpBytesPerSec;
 
+        // Setting the totals above already re-evaluates the alert via their changed-handlers.
         AppendToLiveChart(DateTime.Now, snap.TotalDownBytesPerSec, snap.TotalUpBytesPerSec);
         MergeInto(snap.Processes);
         HasProcesses = Processes.Count > 0;
-        EvaluateAlert();
 
         // Feed the history graph at most once per ~5s so the file grows at a bounded rate even
         // though we poll every second (matches ResourceHistory's 10s-ish cadence intent).
@@ -296,6 +296,12 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     }
 
     partial void OnAlertThresholdMbpsChanged(double value) => EvaluateAlert();
+
+    // Re-evaluate the alert whenever the totals change too, not only on a threshold edit — so the
+    // banner always reflects the current rate (the poll loop also calls EvaluateAlert directly, but
+    // this keeps the alert correct for any path that updates the totals).
+    partial void OnTotalDownBytesPerSecChanged(double value) => EvaluateAlert();
+    partial void OnTotalUpBytesPerSecChanged(double value) => EvaluateAlert();
 
     [RelayCommand]
     private void RelaunchAsAdmin()

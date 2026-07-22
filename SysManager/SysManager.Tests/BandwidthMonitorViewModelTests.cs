@@ -92,12 +92,18 @@ public class BandwidthMonitorViewModelTests
         var vm = NewVm();
         vm.AlertThresholdMbps = 10;
 
+        // A rate over the threshold raises the alert (the totals-changed handler re-evaluates).
         vm.TotalDownBytesPerSec = 2_000_000; // 16 Mbps > 10
-        // Setting the threshold re-evaluates; force a re-evaluate by nudging the threshold setter.
-        vm.AlertThresholdMbps = 10;
         Assert.True(vm.HasAlert);
         Assert.Contains("exceeded", vm.AlertMessage, StringComparison.OrdinalIgnoreCase);
 
+        // Dropping back under the threshold clears it.
+        vm.TotalDownBytesPerSec = 500_000; // 4 Mbps < 10
+        Assert.False(vm.HasAlert);
+
+        // Raise it again, then disabling the threshold (0) also clears the alert.
+        vm.TotalDownBytesPerSec = 2_000_000;
+        Assert.True(vm.HasAlert);
         vm.AlertThresholdMbps = 0; // disable
         Assert.False(vm.HasAlert);
     }

@@ -43,7 +43,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` · `TweaksHubViewModel` |
 | Gaming & Profiles | `GamingProfileViewModel` · `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` |
-| Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `SettingsWatchdogViewModel` · `PlaceholderViewModel` (Bandwidth Monitor) |
+| Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `FileLockViewModel` · `SettingsWatchdogViewModel` · `BandwidthMonitorViewModel` |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `ScheduledMaintenanceViewModel` |
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
@@ -111,6 +111,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
 - `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
 - `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions.
+- `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`), reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. Read-only.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
@@ -338,6 +339,15 @@ Key services:
   with 7/14/30-day retention (periodic prune). Reuses `SystemInfoService` + NvAPIWrapper +
   `TemperatureService`; serialize/parse/prune/downsample/CSV are pure, unit-tested static
   helpers. Strictly local — no system writes, nothing leaves the machine.
+- Bandwidth Monitor sources — `IBandwidthMonitorService` is the seam with two implementations:
+  `ConnectionBandwidthSource` (default, no admin) sums `NetworkInterface` byte counters for total
+  throughput and reads the extended TCP/UDP tables via iphlpapi P/Invoke (`GetExtendedTcpTable`/
+  `GetExtendedUdpTable`) to attribute active connections to PIDs; `EtwBandwidthSource` (admin) opens
+  a kernel ETW session (TraceEvent) for true per-process byte rates and falls back cleanly if the
+  session can't start. `BandwidthHistoryService` persists total-throughput samples as NDJSON in
+  `%LocalAppData%\SysManager\bandwidth-history.ndjson` (serialize/parse/prune/downsample are pure,
+  unit-tested); `BandwidthFormat` holds the pure rate-delta/port-summary/threshold math (formatting
+  delegates to `FormatHelper`). Strictly local and read-only.
 - `SettingsWatchdogService` — snapshots a curated catalog of settings Windows Update
   tends to reset (telemetry, web search, widgets, lock-screen ads, Start suggestions, …)
   as a JSON baseline in `%LocalAppData%\SysManager\settings-baseline.json`, then diffs the

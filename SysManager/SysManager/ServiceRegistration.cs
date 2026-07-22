@@ -83,6 +83,7 @@ public static class ServiceRegistration
         services.AddSingleton<IWindowsThemeService, WindowsThemeService>();
         services.AddSingleton<StandbyMemoryService>();
         services.AddSingleton<ResourceHistoryService>();
+        services.AddSingleton<BandwidthHistoryService>();
         services.AddSingleton<ISettingsWatchdogService, SettingsWatchdogService>();
         services.AddSingleton<MaintenanceSchedulerService>();
         services.AddSingleton<ITweaksHubService, TweaksHubService>();
@@ -150,6 +151,7 @@ public static class ServiceRegistration
         services.AddSingleton<DarkModeViewModel>();
         services.AddSingleton<StandbyMemoryViewModel>();
         services.AddSingleton<ResourceHistoryViewModel>();
+        services.AddSingleton<BandwidthMonitorViewModel>();
         services.AddSingleton<SettingsWatchdogViewModel>();
         services.AddSingleton<CliInterfaceViewModel>();
         services.AddSingleton<ScheduledMaintenanceViewModel>();

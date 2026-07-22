@@ -1,0 +1,205 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.BandwidthMonitorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+             xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:BandwidthMonitorViewModel}"
+             Background="{DynamicResource Surface0}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="28,24,28,0">
+            <TextBlock Text="Bandwidth Monitor" Style="{StaticResource Display}"/>
+            <TextBlock Text="See how much data is moving through your network and which apps are using it. Total speed and per-app activity work with no setup. For exact per-app speeds, enable precise mode (needs administrator). Everything stays on this PC — nothing is uploaded."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="900" HorizontalAlignment="Left"/>
+        </StackPanel>
+
+        <!-- Elevation banner: not elevated (precise mode needs admin; safe mode already works) -->
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="28,12,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                    <TextBlock Text="Total speed and per-app activity are shown below. Run as administrator to unlock exact per-app upload/download speeds."
+                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevation banner: elevated -->
+        <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
+                CornerRadius="12" Padding="12,8" Margin="28,12,28,0"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                        Margin="-12,-8,0,-8"/>
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Running as administrator — you can enable precise per-app upload/download speeds below."
+                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Live totals + controls -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Download tile -->
+                <StackPanel Grid.Column="0" Margin="0,0,32,0">
+                    <TextBlock Text="DOWNLOAD" Style="{StaticResource SectionLabel}"/>
+                    <TextBlock Text="{Binding DownDisplay}" FontSize="26" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
+                </StackPanel>
+                <!-- Upload tile -->
+                <StackPanel Grid.Column="1" Margin="0,0,32,0">
+                    <TextBlock Text="UPLOAD" Style="{StaticResource SectionLabel}"/>
+                    <TextBlock Text="{Binding UpDisplay}" FontSize="26" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
+                </StackPanel>
+
+                <!-- Mode + threshold controls -->
+                <StackPanel Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <CheckBox Content="Precise per-app rates (admin)"
+                              IsChecked="{Binding PreciseRequested, Mode=TwoWay}"
+                              IsEnabled="{Binding IsElevated}"
+                              AutomationProperties.Name="Enable precise per-app rates (requires administrator)"
+                              ToolTip="Use a kernel trace for exact per-app upload/download speeds. Requires administrator."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
+                        <TextBlock Text="Alert over" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                        <TextBox Text="{Binding AlertThresholdMbps, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="64" Margin="8,0,6,0" VerticalContentAlignment="Center"
+                                 AutomationProperties.Name="Alert threshold in megabits per second"
+                                 ToolTip="Warn when total download or upload exceeds this many Mbps. 0 turns the alert off."/>
+                        <TextBlock Text="Mbps" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Alert strip -->
+        <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+                BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="28,12,28,0"
+                Visibility="{Binding HasAlert, Converter={StaticResource FlexVis}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="{Binding AlertMessage}" Foreground="{DynamicResource WarningText}"
+                           FontSize="12.5" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Chart + top consumers -->
+        <Grid Grid.Row="4" Margin="28,16,28,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="5*"/>
+                <RowDefinition Height="4*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Live throughput chart -->
+            <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Throughput (last ~2 minutes)" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
+                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="160"
+                                        Series="{Binding ThroughputSeries}"
+                                        XAxes="{Binding ThroughputXAxes}" YAxes="{Binding ThroughputYAxes}"
+                                        LegendPosition="Bottom"
+                                        LegendTextPaint="{Binding LegendTextPaint}"
+                                        LegendBackgroundPaint="{Binding LegendBackgroundPaint}"
+                                        TooltipTextPaint="{Binding TooltipTextPaint}"
+                                        TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"/>
+                </Grid>
+            </Border>
+
+            <!-- Top consumers -->
+            <Border Grid.Row="1" Style="{StaticResource Card}" Padding="0">
+                <Grid>
+                    <DataGrid ItemsSource="{Binding Processes}"
+                              AutomationProperties.Name="Network usage by app"
+                              AutoGenerateColumns="False" HeadersVisibility="Column"
+                              CanUserAddRows="False" SelectionMode="Single" IsReadOnly="True"
+                              Background="Transparent" BorderThickness="0"
+                              GridLinesVisibility="None"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
+                        <DataGrid.Columns>
+                            <!-- Icon + app name -->
+                            <DataGridTemplateColumn Header="App" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="8,4">
+                                            <Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,0,10,0"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                                   VerticalAlignment="Center"/>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}"/>
+                                                <TextBlock Text="{Binding RemoteSummary, StringFormat='ports: {0}'}"
+                                                           FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                           Visibility="{Binding RemoteSummary, Converter={StaticResource FlexVis}}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <!-- Connections (both modes) -->
+                            <DataGridTextColumn Header="Connections" Binding="{Binding ConnectionCount}" Width="110"/>
+                            <!-- Precise-mode columns: shown only when ETW mode is active -->
+                            <DataGridTextColumn Header="Download" Binding="{Binding DownDisplay}" Width="110"
+                                                Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
+                            <DataGridTextColumn Header="Upload" Binding="{Binding UpDisplay}" Width="110"
+                                                Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
+                            <DataGridTextColumn Header="Session total" Binding="{Binding TotalDisplay}" Width="120"
+                                                Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Empty state -->
+                    <v:EmptyState Glyph="&#xE968;"
+                                  Title="No network activity"
+                                  Message="No user apps are using the network right now. Activity appears here as soon as an app sends or receives data."
+                                  Visibility="{Binding HasProcesses, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="5" Margin="28,12,28,24">
+            <ProgressBar AutomationProperties.Name="Monitoring" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                         IsIndeterminate="True"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{Binding ModeDescription}" Style="{StaticResource Caption}" DockPanel.Dock="Right"
+                       HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.105] - 2026-07-22
+
+### Fixed
+- **A backslash in the Bulk Installer search box corrupted the winget search command.** `SanitizeQuery` stripped double quotes and control characters (so a search term couldn't inject extra arguments) but left backslashes untouched. Because the query is passed as `search "{term}"`, a term ending in a backslash turned the closing quote into an escaped quote (`search "foo\"`), collapsing the quoted-argument boundary and producing a malformed winget invocation (a broken or empty search). The sanitizer now also strips backslashes — a winget search term has no legitimate use for one — so the quoted argument can no longer be broken. Hardening at the input trust boundary; not remotely exploitable (winget arguments are passed as data, not through a shell), but the search now behaves correctly for any input.
+
 ## [1.52.104] - 2026-07-21
 
 ### Fixed

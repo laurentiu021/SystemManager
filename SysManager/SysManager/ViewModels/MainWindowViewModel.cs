@@ -50,10 +50,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _elevationBadge = "";
 
-    // Placeholder VMs for planned features (cheap; built once, referenced by their NavItems).
-    private readonly PlaceholderViewModel _wipNotificationBlocker =
-        new("Notification Blocker", "Suppress annoying app pop-ups (update nags, trial reminders) with allowlist.", "#340");
-
     private bool _disposed;
 
     /// <summary>
@@ -211,7 +207,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<BrowserCleanerViewModel>("nav-browser-cleaner", "Browser Cleaner",   typeof(Views.BrowserCleanerView)),
             Tab<EdgeOneDriveViewModel>("nav-edge-onedrive", "Edge/OneDrive Remover", typeof(Views.EdgeOneDriveView)),
             Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView)),
-            EagerItem("nav-notification-blocker", "Notification Blocker", typeof(Views.PlaceholderView), _wipNotificationBlocker, inDevelopment: true)),
+            Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(Views.NotificationBlockerView), inDevelopment: true)),
 
         Group("grp-customization", "Customization",
             Tab<ContextMenuViewModel>("nav-context-menu",   "Context Menu",          typeof(Views.ContextMenuView)),
@@ -411,6 +407,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(ScheduledMaintenanceViewModel)] = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner())),
             [typeof(TweaksHubViewModel)] = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), restorePoints)),
             [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService()),
+            [typeof(NotificationBlockerViewModel)] = new NotificationBlockerViewModel(new NotificationBlockerService()),
             [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(
                 new GamingProfileService(
                     new PerformanceService(runner, restorePoints),

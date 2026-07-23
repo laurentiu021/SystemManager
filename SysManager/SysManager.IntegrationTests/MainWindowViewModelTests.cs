@@ -521,4 +521,16 @@ public class MainWindowViewModelTests
         Assert.IsType<TweaksHubViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
+
+    // Notification Blocker (#340) — graduated from the last WIP placeholder to a real
+    // view/VM, flagged PREVIEW. With this, no PlaceholderView tabs remain in the sidebar.
+    [Fact]
+    public void NavLeaf_NotificationBlocker_IsImplementedAndInPreview()
+    {
+        var vm = new MainWindowViewModel();
+        var item = vm.NavItems.First(n => n.Id == "nav-notification-blocker");
+        Assert.Equal(typeof(SysManager.Views.NotificationBlockerView), item.ViewType);
+        Assert.IsType<NotificationBlockerViewModel>(item.Content);
+        Assert.True(item.IsInDevelopment);
+    }
 }

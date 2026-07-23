@@ -88,8 +88,7 @@ fully open source.
 ### Sidebar navigation
 The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
-scrolling through a flat list. 57 tabs are fully implemented; 1 is a
-work-in-progress placeholder marked with ⚙️:
+scrolling through a flat list. All 58 tabs are fully implemented:
 
 | Group | Tabs |
 |-------|------|
@@ -101,13 +100,12 @@ work-in-progress placeholder marked with ⚙️:
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · Uninstaller |
-| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker ⚙️ |
+| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker 🔬 |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export/Import · CLI Interface 🔬 · Environment Variables |
 
 > 🔬 = Preview — fully implemented and usable, marked in-app while it settles in.
-> ⚙️ = Work in Progress — placeholder tab visible in the sidebar, implementation coming in future updates.
 
 Groups expand and collapse with a click. Collapsed groups show a child count
 badge, a subtitle with abbreviated child labels, and a tooltip with the full
@@ -600,6 +598,20 @@ Manage Microsoft Defender without digging through Windows Security:
   after reading it back and confirming Windows actually applied it
 - Changes need administrator and are confirmed first; lowering a protection is
   always an explicit, reversible choice
+
+### Notification Blocker
+Mute the apps that nag you with pop-up notifications — update reminders, trial
+offers, "rate us" prompts:
+- **Lists every app that has shown a notification**, most recently active first,
+  with how many notifications it sent recently so the noisy ones stand out
+- **Mute per app** with a switch — it flips the same per-app setting as Windows
+  Settings > Notifications, so nothing is hooked or hacked, and Windows itself
+  honors it
+- **Master switch** to silence everything at once (with a clear warning that it
+  also mutes calendar and reminder alerts)
+- **Pending-changes flow** — flips stay local until you press Apply, with a
+  confirmation and a Discard to back out
+- Fully reversible (flip the switch back), per-user, no administrator needed
 
 ### Battery Health
 - Charge %, health %, wear level, cycle count, chemistry

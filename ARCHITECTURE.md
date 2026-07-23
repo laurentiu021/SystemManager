@@ -36,7 +36,8 @@ The sidebar organises tabs into 12 groups (11 collapsible + a flat top-level Das
 `Item()` helper methods. Dashboard renders as a flat top-level entry.
 Collapsed groups show a child count badge, subtitle (derived
 from child labels joined with " · "), and tooltip.
-Planned features use `PlaceholderViewModel` with a WIP view.
+A planned-but-unbuilt feature would use `PlaceholderViewModel` with a WIP view
+(none currently — every tab is implemented).
 
 | Group | View Models |
 |-------|-------------|
@@ -48,7 +49,7 @@ Planned features use `PlaceholderViewModel` with a WIP view.
 | Storage | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
-| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `EdgeOneDriveViewModel` · `DefenderViewModel` · `PlaceholderViewModel` (Notification Blocker) |
+| Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `EdgeOneDriveViewModel` · `DefenderViewModel` · `NotificationBlockerViewModel` |
 | Customization | `ContextMenuViewModel` · `DarkModeViewModel` · `AudioMixerViewModel` |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
 | Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `CliInterfaceViewModel` |
@@ -122,7 +123,7 @@ Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
 an interface seam — currently `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `IAppBlockerService` (AppBlockerService), `IDialogService` (DialogService),
-`ICpuAffinityService`, `IFileLockService`, `ISettingsWatchdogService`,
+`ICpuAffinityService`, `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`,
 `ITimerResolutionService`, `ITweaksHubService`, `IWindowsThemeService`,
 `IAudioMixerService`, and `IGamingProfileService` — each registered against its
 implementation and mock-substitutable (see `ServiceRegistration.cs`).
@@ -192,6 +193,10 @@ Key services:
   FileSystemWatcher and registry polling.
 - `AppBlockerService` — blocks/unblocks app execution via Image File
   Execution Options (IFEO) debugger redirect.
+- `NotificationBlockerService` — mutes app notification nags via the documented
+  per-user registry switches Windows Settings writes (per-app `Enabled` under
+  `Notifications\Settings`, plus the `ToastEnabled` master toggle). Injectable
+  registry root for tests; per-user, reversible, no window hooking.
 - `BatteryService` — battery health, charge cycles, wear level, and
   power report generation via WMI and `powercfg /batteryreport`.
 - `DialogService` — centralized confirmation/message dialogs (replaces

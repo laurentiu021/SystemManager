@@ -89,6 +89,7 @@ public static class ServiceRegistration
         services.AddSingleton<ITweaksHubService, TweaksHubService>();
         services.AddSingleton<IAudioMixerService, AudioMixerService>();
         services.AddSingleton<VolumePresetService>();
+        services.AddSingleton<INotificationBlockerService, NotificationBlockerService>();
         // Gaming Profile orchestrates the audited services above; it needs the process's
         // elevation state at construction (a value DI can't resolve), hence the factory.
         services.AddSingleton<IGamingProfileService>(sp => new GamingProfileService(
@@ -159,6 +160,7 @@ public static class ServiceRegistration
         services.AddSingleton<TweaksHubViewModel>();
         services.AddSingleton<AudioMixerViewModel>();
         services.AddSingleton<GamingProfileViewModel>();
+        services.AddSingleton<NotificationBlockerViewModel>();
 
         return services;
     }

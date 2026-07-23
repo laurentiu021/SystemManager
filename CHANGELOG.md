@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.0] - 2026-07-23
+
+### Added
+- **Notification Blocker — the last work-in-progress tab is now implemented** (Privacy & Security). Mute the apps that nag you with pop-up notifications — update reminders, trial offers, "rate us" prompts — without digging through Windows Settings:
+  - **Per-app mute switches** for every app Windows has recorded as a notification sender, sorted most-recently-active first and showing each app's recent notification count so the noisy ones stand out. Flipping a switch writes the same documented per-user setting as Windows Settings > System > Notifications — nothing is hooked, injected, or hacked, and Windows itself enforces the mute.
+  - **Master switch** to silence all notifications at once, with an explicit warning that it also mutes calendar and reminder alerts until turned back on.
+  - **Pending-changes flow** (like the Privacy & Telemetry tab): switch flips stay local until you press Apply, a confirmation summarises what changes, Discard backs out, and a failed write stays visibly pending instead of silently vanishing.
+  - Everything is per-user (no administrator), fully reversible by flipping the switch back, and searchable. App names resolve from Windows' own AppUserModelId registrations, falling back to a readable form of the sender ID.
+  - Scope note: the original idea (#340) included intercepting arbitrary pop-up windows; that requires manipulating other processes' windows — invasive, fragile, and malware-adjacent — so this tab deliberately sticks to the supported notification channel. Closes #340.
+
 ## [1.55.1] - 2026-07-23
 
 ### Fixed

@@ -72,16 +72,17 @@ public sealed partial class FileShredderService
         // before writing a byte, a reparse point swapped in after ValidatePath can no longer
         // redirect the overwrite — the handle is already bound to the resolved object, and
         // FileShare.None blocks anyone from moving/replacing it mid-shred.
-        var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Write,
-            FileShare.None,
-            BufferSize,
-            FileOptions.WriteThrough | FileOptions.SequentialScan);
-
-        try
+        // The explicit block scopes the `await using` so the exclusive handle is disposed
+        // BEFORE the File.Delete below — deleting while we still hold FileShare.None would fail.
         {
+            await using var stream = new FileStream(
+                filePath,
+                FileMode.Open,
+                FileAccess.Write,
+                FileShare.None,
+                BufferSize,
+                FileOptions.WriteThrough | FileOptions.SequentialScan);
+
             // Re-validate the identity of the object we actually hold. If the resolved path
             // sits under a protected root (a reparse point swapped in between ValidatePath and
             // this open pointed us there), refuse — the exclusive handle guarantees this is the
@@ -148,11 +149,7 @@ public sealed partial class FileShredderService
             // Final truncate on the SAME held handle — no by-path reopen.
             stream.SetLength(0);
             await stream.FlushAsync(ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            await stream.DisposeAsync().ConfigureAwait(false);
-        }
+        } // `await using` disposes the exclusive handle here, releasing FileShare.None for Delete.
 
         // The file contents are already securely overwritten and truncated to zero at
         // this point, so the shred guarantee holds even if the directory-entry removal

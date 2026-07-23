@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.55.1] - 2026-07-23
+
+### Fixed
+- **Cleared the last two CodeQL code-quality warnings, bringing the scanner to zero open findings.** Neither was a field-visible bug — both paths behaved correctly — but each code shape earned its warning and reads better fixed:
+  - *Temperature service (`cs/constant-condition`):* the one-time disk-name resolution used a double-checked lock (re-testing the cached field inside the semaphore), whose inner re-test CodeQL flags as a constant condition because it doesn't model the cross-thread race the re-test guards. Replaced with a plain "always take the gate, `??=` the cache" shape — an uncontended `SemaphoreSlim` acquire is trivial next to the SMART walk it guards, the race-safety is identical, and the flagged pattern is gone.
+  - *File shredder (`cs/local-not-disposed`):* the exclusive shred stream WAS disposed (via `DisposeAsync` in a `finally`), but the manual form isn't recognized by the analyzer. Converted to a scoped `await using` block — same semantics, including disposing the exclusive `FileShare.None` handle *before* the final `File.Delete` (which would otherwise fail while the handle is held) — a shape both humans and the analyzer read as safe.
+
 ## [1.55.0] - 2026-07-22
 
 ### Added

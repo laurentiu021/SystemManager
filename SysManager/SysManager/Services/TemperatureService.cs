@@ -249,24 +249,20 @@ public sealed class TemperatureService : IDisposable
         {
             // The friendly names come from DiskHealthService.CollectAsync()'s MSFT_PhysicalDisk +
             // per-disk MSFT_StorageReliabilityCounter (SMART) walk — the heaviest part of a read.
-            // They are static hardware identity, so resolve once and cache; the 2s Dashboard poll
-            // then skips the SMART walk entirely on every tick after the first. The gate makes the
-            // first-resolution race-safe when the poll, the user Refresh, and the sampler overlap.
-            var diskNames = _cachedStorageFriendlyNames;
-            if (diskNames is null)
+            // They are static hardware identity, so resolve once under the gate and cache; every
+            // later call (the 2s Dashboard poll, the sampler, a user Refresh) returns the cached
+            // list. The gate is taken unconditionally — an uncontended SemaphoreSlim acquire is
+            // trivial next to the SMART walk it guards — which keeps the first resolution
+            // race-safe without the double-checked re-test the previous shape needed.
+            await _enrichGate.WaitAsync().ConfigureAwait(false);
+            List<string> diskNames;
+            try
             {
-                await _enrichGate.WaitAsync().ConfigureAwait(false);
-                try
-                {
-                    if (_cachedStorageFriendlyNames is null)
-                    {
-                        var disks = await _diskHealth.CollectAsync().ConfigureAwait(false);
-                        _cachedStorageFriendlyNames = disks.Select(d => d.FriendlyName).ToList();
-                    }
-                    diskNames = _cachedStorageFriendlyNames;
-                }
-                finally { _enrichGate.Release(); }
+                diskNames = _cachedStorageFriendlyNames ??=
+                    (await _diskHealth.CollectAsync().ConfigureAwait(false))
+                    .Select(d => d.FriendlyName).ToList();
             }
+            finally { _enrichGate.Release(); }
 
             var storageReadings = readings
                 .Select((r, i) => (Reading: r, Index: i))

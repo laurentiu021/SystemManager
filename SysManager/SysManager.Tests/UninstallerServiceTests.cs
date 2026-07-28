@@ -11,6 +11,7 @@ namespace SysManager.Tests;
 /// Tests for <see cref="UninstallerService"/>. Focuses on the table parser
 /// since winget calls are integration-level.
 /// </summary>
+[Collection("ProcessEnvironment")]
 public class UninstallerServiceTests
 {
     // ── IsUnderTrustedDirectory (regression: prefix-boundary bypass) ──
@@ -36,6 +37,24 @@ public class UninstallerServiceTests
     [Fact]
     public void IsUnderTrustedDirectory_UntrustedLocation_IsNotTrusted()
         => Assert.False(UninstallerService.IsUnderTrustedDirectory(@"C:\Temp\random\app.exe", isElevated: false));
+
+    [Fact]
+    public void IsUnderTrustedDirectory_ForgedProgramDataVariable_IsNotTrustedWhenElevated()
+    {
+        var original = Environment.GetEnvironmentVariable("ProgramData");
+        var forgedRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SysManagerProgramDataTest_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Environment.SetEnvironmentVariable("ProgramData", forgedRoot);
+            var plantedBinary = System.IO.Path.Combine(forgedRoot, "Vendor", "uninstall.exe");
+
+            Assert.False(UninstallerService.IsUnderTrustedDirectory(plantedBinary, isElevated: true));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ProgramData", original);
+        }
+    }
 
     // ── SEC-LPE: user-writable per-user location is trusted only when NOT elevated ──
 
@@ -119,6 +138,17 @@ public class UninstallerServiceTests
     {
         var ex = Record.Exception(() =>
             UninstallerService.ValidateTrustedBinaryArgs("MsiExec.exe", args, isElevated: false));
+        Assert.IsType<InvalidOperationException>(ex);
+    }
+
+    [Theory]
+    [InlineData(@"/X{0F2C3A4B-1234-5678-9ABC-DEF012345678} C:\Temp\evil.msi")]
+    [InlineData(@"/X{0F2C3A4B-1234-5678-9ABC-DEF012345678} /quiet TRANSFORMS=C:\Temp\evil.mst")]
+    public void ValidateTrustedBinaryArgs_MsiExec_TrailingPayload_Throws(string args)
+    {
+        var ex = Record.Exception(() =>
+            UninstallerService.ValidateTrustedBinaryArgs("MsiExec.exe", args, isElevated: false));
+
         Assert.IsType<InvalidOperationException>(ex);
     }
 

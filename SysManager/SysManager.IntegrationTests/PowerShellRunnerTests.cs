@@ -10,6 +10,8 @@ namespace SysManager.IntegrationTests;
 [Collection("Network")]
 public class PowerShellRunnerTests
 {
+    private const string UntrustedModulePath = @"C:\Users\Public\SysManager-UntrustedModules";
+
     [Fact]
     public async Task RunAsync_SimpleExpression_ReturnsResult()
     {
@@ -118,6 +120,33 @@ public class PowerShellRunnerTests
         var exit = await runner.RunScriptViaPwshAsync("exit 42", cts.Token);
         Assert.Equal(42, exit);
     }
+
+    [Fact]
+    public async Task RunAsync_DoesNotInheritUserControlledModulePath()
+    {
+        var original = Environment.GetEnvironmentVariable("PSModulePath");
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                "PSModulePath",
+                string.IsNullOrEmpty(original)
+                    ? UntrustedModulePath
+                    : UntrustedModulePath + System.IO.Path.PathSeparator + original);
+
+            var output = await new PowerShellRunner().RunAsync("$env:PSModulePath");
+
+            var modulePath = Assert.Single(output).BaseObject?.ToString() ?? string.Empty;
+            Assert.DoesNotContain(
+                UntrustedModulePath,
+                modulePath,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PSModulePath", original);
+        }
+    }
+
 
     [Fact]
     public void IsClixmlNoise_Detects_AllKnownPatterns()

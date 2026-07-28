@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.1] - 2026-07-28
+
+### Security
+- **Hardened elevated command execution at every affected trust boundary.** The Uninstaller now preserves each registry command's hive and view, gives machine-wide entries precedence, and refuses per-user or unknown commands while elevated. Executable and DLL validation uses canonical Windows locations, rejects reparse-point traversal, and verifies that unprivileged users cannot replace protected payloads or their parent directories. MSI and rundll32 commands are accepted only when their complete argument list matches the supported uninstall grammar.
+- **Isolated PowerShell module discovery from user-controlled process state.** Every in-process and external PowerShell invocation receives a canonical module path: elevated runs use machine module roots only, while non-elevated runs retain the standard per-user roots. PSWindowsUpdate is installed for all users when administrator rights are required.
+- **Made cancellation effective before process or runspace startup.** Already-cancelled operations now return without starting privileged work.
+
+### Fixed
+- **Kept existing uninstall compatibility without inheriting unsafe registry data.** Non-elevated per-user uninstallers remain available, protected machine uninstallers keep working, and conflicting per-user metadata can no longer replace a machine command.
+
 ## [1.56.0] - 2026-07-23
 
 ### Added

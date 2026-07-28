@@ -162,7 +162,8 @@ internal static class AudioPolicyConfigFactory
 
         // Slot 19: the one we call. deviceId is a plain LPWStr (the EarTrumpet-observed marshaling on
         // Win10 1803+ and Win11); an empty string clears the per-app override.
-        [PreserveSig] int SetPersistedDefaultAudioEndpoint(
+        [PreserveSig]
+        int SetPersistedDefaultAudioEndpoint(
             uint processId, EDataFlow flow, ERole role,
             [MarshalAs(UnmanagedType.LPWStr)] string deviceId);
     }

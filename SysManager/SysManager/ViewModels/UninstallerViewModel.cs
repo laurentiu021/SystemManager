@@ -60,8 +60,11 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     /// </summary>
     private bool HasApps => AppCount > 0;
 
-    /// <summary>Uninstall needs both a populated list and no long-running command in flight.</summary>
-    private bool CanUninstall => NotBusy && HasApps;
+    /// <summary>
+    /// Uninstall needs a populated list, no active command, and an unelevated
+    /// SysManager process. The selected package owns any UAC request it needs.
+    /// </summary>
+    private bool CanUninstall => NotBusy && HasApps && !IsElevated;
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -79,12 +82,8 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         DeselectAllCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
-    }
+    partial void OnIsElevatedChanged(bool value) =>
+        UninstallSelectedCommand.NotifyCanExecuteChanged();
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()
@@ -151,7 +150,11 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         IsBusy = true;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
-        int done = 0;
+        int completed = 0;
+        int removed = 0;
+        int failed = 0;
+        int restartRequired = 0;
+        bool cancellationRequested = false;
         UninstallEtaText = string.Empty;
         _uninstallEta.Reset();
 
@@ -159,11 +162,17 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         {
             foreach (var app in toRemove)
             {
-                if (_cts.IsCancellationRequested) break;
-                app.Status = "Uninstalling…";
-                StatusMessage = $"Uninstalling {app.Name} ({done + 1}/{toRemove.Count})…";
-                Progress = (int)(done * 100.0 / toRemove.Count);
+                if (_cts.IsCancellationRequested)
+                {
+                    cancellationRequested = true;
+                    break;
+                }
+
+                app.Status = "Uninstalling...";
+                StatusMessage = $"Uninstalling {app.Name} ({completed + 1}/{toRemove.Count})...";
+                Progress = (int)(completed * 100.0 / toRemove.Count);
                 UninstallEtaText = _uninstallEta.Update(Progress);
+                var currentCompleted = false;
 
                 try
                 {
@@ -172,34 +181,115 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                         ? await _service.UninstallLocalAsync(app, _cts.Token)
                         : await _service.UninstallAsync(app.Id, _cts.Token);
 
-                    if (code == 0)
+                    currentCompleted = true;
+                    if (IsSuccessfulUninstallExitCode(code))
                     {
-                        app.Status = "Removed";
+                        var needsRestart = RequiresRestartAfterUninstall(code);
+                        app.Status = needsRestart ? "Removed - restart required" : "Removed";
+                        removed++;
+                        if (needsRestart)
+                            restartRequired++;
                         AllApps.Remove(app);
                         FilteredApps.Remove(app);
                     }
                     else
                     {
                         app.Status = DescribeUninstallFailure(code, app.Name);
+                        failed++;
                     }
                 }
-                catch (OperationCanceledException) { app.Status = "Cancelled"; break; }
-                catch (InvalidOperationException ex) { app.Status = $"Error: {ex.Message}"; }
+                catch (OperationCanceledException)
+                {
+                    app.Status = "Cancelled";
+                    cancellationRequested = true;
+                    break;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    app.Status = $"Error: {ex.Message}";
+                    failed++;
+                    currentCompleted = !_cts.IsCancellationRequested;
+                }
                 // A failed uninstaller launch (missing/blocked exe) must not abort the
-                // whole batch — record it on the row and continue with the next app.
-                catch (System.ComponentModel.Win32Exception ex) { app.Status = $"Error: {ex.Message}"; }
-                catch (System.IO.IOException ex) { app.Status = $"Error: {ex.Message}"; }
+                // whole batch - record it on the row and continue with the next app.
+                catch (System.ComponentModel.Win32Exception ex)
+                {
+                    app.Status = $"Error: {ex.Message}";
+                    failed++;
+                    currentCompleted = true;
+                }
+                catch (System.IO.IOException ex)
+                {
+                    app.Status = $"Error: {ex.Message}";
+                    failed++;
+                    currentCompleted = true;
+                }
                 // An unparseable package Id (e.g. an ARP GUID) throws ArgumentException from
                 // UninstallAsync before any process runs; record it and continue the batch.
-                catch (ArgumentException ex) { app.Status = $"Error: {ex.Message}"; }
-                done++;
+                catch (ArgumentException ex)
+                {
+                    app.Status = $"Error: {ex.Message}";
+                    failed++;
+                    currentCompleted = true;
+                }
+
+                if (currentCompleted)
+                    completed++;
+
+                Progress = (int)(completed * 100.0 / toRemove.Count);
+                UninstallEtaText = _uninstallEta.Update(Progress);
+
+                if (_cts.IsCancellationRequested && completed < toRemove.Count)
+                {
+                    cancellationRequested = true;
+                    break;
+                }
             }
 
-            Progress = 100;
             UninstallEtaText = string.Empty;
-            StatusMessage = $"Completed {done}/{toRemove.Count} uninstalls.";
-            ToastService.Instance.Show("Uninstall complete", $"Completed {done}/{toRemove.Count} uninstalls");
-            Log.Information("Uninstall batch completed: {Done}/{Total}", done, toRemove.Count);
+            var restartMessage = restartRequired switch
+            {
+                0 => string.Empty,
+                1 => " Restart required for 1 app.",
+                _ => $" Restart required for {restartRequired} apps."
+            };
+            if (cancellationRequested)
+            {
+                StatusMessage = $"Uninstall cancelled after {completed}/{toRemove.Count} completed. Removed {removed}; failed {failed}.{restartMessage}";
+
+                Log.Information(
+                    "Uninstall batch cancelled: {Completed}/{Total} completed, {Removed} removed, {Failed} failed, {RestartRequired} need restart",
+                    completed,
+                    toRemove.Count,
+                    removed,
+                    failed,
+                    restartRequired);
+            }
+            else if (failed > 0)
+            {
+                Progress = 100;
+                StatusMessage = $"Uninstall finished with errors. Removed {removed}; failed {failed}.{restartMessage}";
+
+                Log.Warning(
+                    "Uninstall batch finished with errors: {Removed} removed, {Failed} failed, {RestartRequired} need restart, {Total} total",
+                    removed,
+                    failed,
+                    restartRequired,
+                    toRemove.Count);
+            }
+            else
+            {
+                Progress = 100;
+                StatusMessage = $"Completed {removed}/{toRemove.Count} uninstalls.{restartMessage}";
+                ToastService.Instance.Show(
+                    "Uninstall complete",
+                    $"Completed {removed}/{toRemove.Count} uninstalls.{restartMessage}");
+                Log.Information(
+                    "Uninstall batch completed: {Removed}/{Total}, {RestartRequired} need restart",
+                    removed,
+                    toRemove.Count,
+                    restartRequired);
+            }
         }
         finally
         {
@@ -263,6 +353,13 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         Summary = $"{AppCount} apps{(AllApps.Count != AppCount ? $" (of {AllApps.Count} total)" : "")}";
     }
 
+    // Windows Installer uses 1641 and 3010 for successful removal that requires a restart.
+    private static bool IsSuccessfulUninstallExitCode(int exitCode) =>
+        exitCode is 0 or 1641 or 3010;
+
+    private static bool RequiresRestartAfterUninstall(int exitCode) =>
+        exitCode is 1641 or 3010;
+
     /// <summary>
     /// Translates a winget uninstall exit code into a human-readable message
     /// so the user knows why the uninstall failed and what to try next.
@@ -273,13 +370,12 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         {
             1 => "The app's uninstaller reported a generic error.",
             2 => "The uninstall was cancelled by the user or a UAC prompt was declined.",
-            5 => "Access denied — try running SysManager as Administrator.",
+            5 => "Access denied - retry and accept the uninstaller's Windows UAC prompt, or remove the app from Windows Settings.",
             87 => "Invalid parameter — the app may require a manual uninstall.",
             1602 => "The uninstall was cancelled by the user.",
             1603 => "The app's installer encountered a fatal error during removal.",
             1605 => "The app is not currently installed (already removed?).",
             1618 => "Another installation is in progress — wait and try again.",
-            3010 => "Uninstall succeeded but a reboot is required to complete removal.",
             _ => $"The app's uninstaller returned exit code {exitCode}."
         };
 

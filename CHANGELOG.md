@@ -7,12 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.56.1] - 2026-07-28
 
 ### Security
-- **Hardened elevated command execution at every affected trust boundary.** The Uninstaller now preserves each registry command's hive and view, gives machine-wide entries precedence, and refuses per-user or unknown commands while elevated. Executable and DLL validation uses canonical Windows locations, rejects reparse-point traversal, and verifies that unprivileged users cannot replace protected payloads or their parent directories. MSI and rundll32 commands are accepted only when their complete argument list matches the supported uninstall grammar.
-- **Isolated PowerShell module discovery from user-controlled process state.** Every in-process and external PowerShell invocation receives a canonical module path: elevated runs use machine module roots only, while non-elevated runs retain the standard per-user roots. PSWindowsUpdate is installed for all users when administrator rights are required.
-- **Made cancellation effective before process or runspace startup.** Already-cancelled operations now return without starting privileged work.
+- **Prevented the Uninstaller from acting as a privileged execution broker.** Scan remains available in an administrator session, but uninstall actions are disabled until SysManager is reopened normally. This applies to both direct registry commands and the WinGet route, so user-controlled package metadata can no longer inherit SysManager's elevated token.
+- **Hardened registry-command validation.** Trusted shared-data paths now come from the canonical Windows known folder instead of the mutable `ProgramData` environment variable. Local commands must identify the canonical absolute executable that is actually launched, bare `rundll32` payloads resolve only from System32, and Windows Installer product-code commands must match the complete supported argument grammar; appended packages, transforms, and other payloads are rejected.
 
 ### Fixed
-- **Kept existing uninstall compatibility without inheriting unsafe registry data.** Non-elevated per-user uninstallers remain available, protected machine uninstallers keep working, and conflicting per-user metadata can no longer replace a machine command.
+- **Let each local uninstaller own its UAC request.** In an unelevated SysManager session, validated registry uninstallers now launch through the Windows shell. An uninstaller whose manifest requires administrator rights can therefore show its own Windows UAC prompt without requiring SysManager itself to remain elevated.
+- **Made cancellation and batch outcomes truthful.** Cancelling while WinGet or a local uninstaller is queued now prevents an unobserved process start, completed processes win a late cancellation race, cancelled or failed batches retain partial progress, and successful removals that require a restart are reported as success with restart guidance.
 
 ## [1.56.0] - 2026-07-23
 

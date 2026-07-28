@@ -11,8 +11,14 @@ public class TweaksHubServiceTests
 {
     private static PrivacyToggle Toggle(string name, string path, bool enabled) => new()
     {
-        Name = name, Description = "d", Category = "c",
-        RegistryPath = path, ValueName = "v", EnabledValue = 1, DisabledValue = 0, IsEnabled = enabled,
+        Name = name,
+        Description = "d",
+        Category = "c",
+        RegistryPath = path,
+        ValueName = "v",
+        EnabledValue = 1,
+        DisabledValue = 0,
+        IsEnabled = enabled,
     };
 
     private static TweakItem Item(string path, bool selected, bool applied)

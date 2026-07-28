@@ -25,6 +25,28 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class PowerShellRunner : IPowerShellRunner
 {
+    private readonly Func<Action, Task> _scheduleProcessStart;
+    private readonly Func<System.Diagnostics.Process, CancellationToken, Task> _waitForProcessExit;
+    private readonly Action<System.Diagnostics.Process> _terminateProcessTree;
+
+    public PowerShellRunner()
+        : this(action => Task.Run(action))
+    {
+    }
+
+    internal PowerShellRunner(
+        Func<Action, Task> scheduleProcessStart,
+        Func<System.Diagnostics.Process, CancellationToken, Task>? waitForProcessExit = null,
+        Action<System.Diagnostics.Process>? terminateProcessTree = null)
+    {
+        _scheduleProcessStart = scheduleProcessStart
+            ?? throw new ArgumentNullException(nameof(scheduleProcessStart));
+        _waitForProcessExit = waitForProcessExit
+            ?? (static (process, cancellationToken) => process.WaitForExitAsync(cancellationToken));
+        _terminateProcessTree = terminateProcessTree
+            ?? (static process => process.Kill(entireProcessTree: true));
+    }
+
     /// <summary>
     /// Raised for each line of output from any stream (stdout, stderr, information,
     /// warning, error, verbose, debug, progress). Fires on a thread-pool thread —
@@ -172,6 +194,8 @@ public sealed class PowerShellRunner : IPowerShellRunner
         CancellationToken cancellationToken = default,
         System.Text.Encoding? outputEncoding = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // Always launch from a neutral system directory so the spawned
         // process never inherits a "locked" CWD (e.g. a user's Downloads
         // folder on another drive, which causes "Access is denied" when
@@ -212,26 +236,33 @@ public sealed class PowerShellRunner : IPowerShellRunner
                 LineReceived?.Invoke(PowerShellLine.Err(e.Data));
         };
 
-        // Start the process on a thread-pool thread so the potentially slow
-        // Process.Start() (especially powershell.exe) never blocks the UI.
-        await Task.Run(() =>
+        // Start on a worker thread. The second token check closes the queueing race:
+        // cancellation before this delegate runs cannot start the executable.
+        await _scheduleProcessStart(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             proc.Start();
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
         }).ConfigureAwait(false);
 
-        using var reg = cancellationToken.Register(() =>
+        try
         {
-            // Kill(entireProcessTree: true) can throw Win32Exception (access denied) or
-            // AggregateException (a descendant couldn't be terminated) as well as
-            // InvalidOperationException — swallow all three so a failed cancel-kill never
-            // escapes out of cts.Cancel() to whoever requested cancellation.
-            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
-            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException) { }
-        });
-        await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            await _waitForProcessExit(proc, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            if (await TryTerminateForCancellationAsync(
+                    proc,
+                    "Cancellation was requested, but the process may still be running.")
+                .ConfigureAwait(false))
+            {
+                throw;
+            }
 
+            // The process completed before cancellation could terminate it. Completion
+            // wins so callers receive the real exit code instead of a false cancellation.
+        }
         // WaitForExitAsync returns when the process exits, but the asynchronous
         // BeginOutputReadLine/BeginErrorReadLine pumps may not have raised their final
         // lines yet — callers that snapshot captured output immediately can lose the
@@ -241,6 +272,90 @@ public sealed class PowerShellRunner : IPowerShellRunner
         await Task.Run(proc.WaitForExit, CancellationToken.None).ConfigureAwait(false);
 
         return proc.ExitCode;
+    }
+
+    /// <summary>
+    /// Runs a validated executable through ShellExecute. Unlike
+    /// <see cref="RunProcessAsync"/>, this lets an executable whose manifest requires
+    /// administrator rights display its own UAC prompt instead of inheriting
+    /// SysManager's token.
+    /// </summary>
+    public async Task<int> RunProcessWithShellAsync(
+        string fileName,
+        string arguments,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var workingDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        if (string.IsNullOrWhiteSpace(workingDir) || !System.IO.Directory.Exists(workingDir))
+            workingDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool(fileName),
+            Arguments = arguments,
+            UseShellExecute = true,
+            WorkingDirectory = workingDir
+        };
+
+        using var process = new System.Diagnostics.Process { StartInfo = psi };
+        await _scheduleProcessStart(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!process.Start())
+                throw new InvalidOperationException($"Failed to start '{fileName}'.");
+        }).ConfigureAwait(false);
+
+        try
+        {
+            await _waitForProcessExit(process, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            if (await TryTerminateForCancellationAsync(
+                    process,
+                    "Cancellation was requested, but the uninstaller may still be running.")
+                .ConfigureAwait(false))
+            {
+                throw;
+            }
+
+            // Shell execution finished before cancellation could take effect. Preserve
+            // the completed uninstaller's exit code and terminal state.
+        }
+
+        return process.ExitCode;
+    }
+
+    private async Task<bool> TryTerminateForCancellationAsync(
+        System.Diagnostics.Process process,
+        string failureMessage)
+    {
+        if (process.HasExited)
+            return false;
+
+        try
+        {
+            _terminateProcessTree(process);
+        }
+        catch (InvalidOperationException) when (process.HasExited)
+        {
+            // The process completed between the state check and the termination call.
+            return false;
+        }
+        catch (Exception ex) when (
+            ex is InvalidOperationException or
+            System.ComponentModel.Win32Exception or
+            AggregateException)
+        {
+            // A tree-termination failure can leave descendants running even when the
+            // parent has exited. Never downgrade that partial failure to completion.
+            throw new InvalidOperationException(failureMessage, ex);
+        }
+
+        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        return true;
     }
 
     private static bool IsClixmlNoise(string line)

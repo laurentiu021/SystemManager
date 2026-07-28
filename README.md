@@ -625,6 +625,7 @@ offers, "rate us" prompts:
 - Sort by name, size, or publisher via clickable column headers
 - Select/deselect all, batch uninstall with confirmation dialog
 - Local app support — uninstalls apps not in winget via registry UninstallString
+- Runs uninstall actions only from an unelevated SysManager session; each package requests its own UAC elevation when required
 - Live console output from winget
 
 ### Gaming Profile 🔬

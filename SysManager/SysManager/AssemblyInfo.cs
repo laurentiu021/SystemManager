@@ -10,6 +10,7 @@ using System.Windows;
 // Title / Description / Product / Company / Copyright come from csproj.
 [assembly: AssemblyTrademark("SysManager by laurentiu021")]
 [assembly: InternalsVisibleTo("SysManager.Tests")]
+[assembly: InternalsVisibleTo("SysManager.IntegrationTests")]
 
 [assembly: ThemeInfo(
     ResourceDictionaryLocation.None,            //where theme specific resource dictionaries are located

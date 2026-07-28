@@ -15,7 +15,12 @@ namespace SysManager.Tests;
 /// </summary>
 public class UninstallerViewModelTests
 {
-    private static UninstallerViewModel NewVm() => new(new UninstallerService(new PowerShellRunner()));
+    private static UninstallerViewModel NewVm()
+    {
+        var viewModel = new UninstallerViewModel(new UninstallerService(new PowerShellRunner()));
+        viewModel.IsElevated = false;
+        return viewModel;
+    }
 
     [Fact]
     public void Constructor_Commands_Exist()
@@ -67,11 +72,24 @@ public class UninstallerViewModelTests
     }
 
     [Fact]
+    public void UninstallCommand_DisabledWhenSysManagerIsElevated()
+    {
+        var viewModel = NewVm();
+        viewModel.AllApps.Add(new InstalledApp { Name = "App", Id = "Vendor.App" });
+        viewModel.FilterText = "App";
+
+        Assert.True(viewModel.UninstallSelectedCommand.CanExecute(null));
+
+        viewModel.IsElevated = true;
+
+        Assert.False(viewModel.UninstallSelectedCommand.CanExecute(null));
+    }
+
+    [Fact]
     public void DescribeUninstallFailure_KnownCodes()
     {
         Assert.Contains("Access denied", UninstallerViewModel.DescribeUninstallFailure(5, "Test"));
         Assert.Contains("cancelled", UninstallerViewModel.DescribeUninstallFailure(1602, "Test"));
-        Assert.Contains("reboot", UninstallerViewModel.DescribeUninstallFailure(3010, "Test"));
     }
 
     [Fact]
@@ -83,17 +101,21 @@ public class UninstallerViewModelTests
 }
 
 /// <summary>
-/// Confirmation-gate coverage for the Uninstaller. These swap the process-wide
-/// <see cref="DialogService.Instance"/>, so they run in the serialized
-/// "DialogService" collection. <see cref="UninstallerService"/> takes a concrete
-/// <see cref="PowerShellRunner"/> (not mockable), so the "confirm DOES uninstall"
-/// direction belongs in integration tests; here we cover the decline path and the
-/// pure-VM select-all guard, which are fully deterministic.
+/// Confirmation-gate and terminal-status coverage for the Uninstaller. These tests
+/// swap the process-wide <see cref="DialogService.Instance"/>, so they run in the
+/// serialized "DialogService" collection. Process execution is substituted through
+/// <see cref="IPowerShellRunner"/> so success, failure, and cancellation stay deterministic.
 /// </summary>
 [Collection("DialogService")]
 public class UninstallerViewModelGateTests
 {
-    private static UninstallerViewModel NewVm() => new(new UninstallerService(new PowerShellRunner()));
+    private static UninstallerViewModel NewVm(IPowerShellRunner? runner = null)
+    {
+        var viewModel = new UninstallerViewModel(
+            new UninstallerService(runner ?? new PowerShellRunner(), () => false));
+        viewModel.IsElevated = false;
+        return viewModel;
+    }
 
     // Populate FilteredApps deterministically through the public filter path:
     // add to AllApps, then toggle FilterText so ApplyFilter() repopulates.
@@ -156,6 +178,170 @@ public class UninstallerViewModelGateTests
         finally
         {
             DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public async Task UninstallSelected_AllSucceed_ReportsCompletion()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(
+                "winget",
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(0);
+        var vm = NewVm(runner);
+        Seed(vm, 1);
+        vm.FilteredApps[0].Source = "winget";
+        vm.FilteredApps[0].IsSelected = true;
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.UninstallSelectedCommand.ExecuteAsync(null);
+
+            Assert.Equal(100, vm.Progress);
+            Assert.Equal("Completed 1/1 uninstalls.", vm.StatusMessage);
+            Assert.Empty(vm.AllApps);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+        }
+    }
+
+    [Fact]
+    public async Task UninstallSelected_WhenRunnerFails_ReportsErrorsNotCompletion()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(
+                "winget",
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(5);
+        var vm = NewVm(runner);
+        Seed(vm, 1);
+        vm.FilteredApps[0].Source = "winget";
+        vm.FilteredApps[0].IsSelected = true;
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.UninstallSelectedCommand.ExecuteAsync(null);
+
+            Assert.Equal(100, vm.Progress);
+            Assert.Contains("finished with errors", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("failed 1", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Uninstall complete", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Windows UAC prompt", vm.FilteredApps[0].Status, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+        }
+    }
+
+    [Theory]
+    [InlineData(1641)]
+    [InlineData(3010)]
+    public async Task UninstallSelected_WhenRestartIsRequired_ReportsSuccessfulRemoval(int exitCode)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(
+                "winget",
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(exitCode);
+        var vm = NewVm(runner);
+        Seed(vm, 1);
+        vm.FilteredApps[0].Source = "winget";
+        vm.FilteredApps[0].IsSelected = true;
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.UninstallSelectedCommand.ExecuteAsync(null);
+
+            Assert.Equal(100, vm.Progress);
+            Assert.Contains("Completed 1/1", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("restart required", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("failed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(vm.AllApps);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+        }
+    }
+
+    [Fact]
+    public async Task UninstallSelected_WhenCancelled_StopsBatchAndReportsPartialProgress()
+    {
+        var started = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<int>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var callCount = 0;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(
+                "winget",
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(callInfo =>
+            {
+                if (Interlocked.Increment(ref callCount) == 1)
+                    return Task.FromResult(0);
+
+                var token = callInfo.ArgAt<CancellationToken>(2);
+                token.Register(() => pending.TrySetCanceled(token));
+                started.TrySetResult(true);
+                return pending.Task;
+            });
+        var vm = NewVm(runner);
+        Seed(vm, 2);
+        foreach (var app in vm.FilteredApps)
+        {
+            app.Source = "winget";
+            app.IsSelected = true;
+        }
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            var execution = vm.UninstallSelectedCommand.ExecuteAsync(null);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            vm.CancelCommand.Execute(null);
+            await execution;
+
+            Assert.Equal(50, vm.Progress);
+            Assert.Contains("cancelled after 1/2 completed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Single(vm.FilteredApps);
+            Assert.Equal("Cancelled", vm.FilteredApps[0].Status);
+            await runner.Received(2).RunProcessAsync(
+                "winget",
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>());
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
         }
     }
 

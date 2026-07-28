@@ -17,9 +17,14 @@ public class TweaksHubViewModelTests
     {
         var toggle = new PrivacyToggle
         {
-            Name = name, Description = "d", Category = "c",
-            RegistryPath = $@"{hive}\Software\Test\{name}", ValueName = "v",
-            EnabledValue = 1, DisabledValue = 0, IsEnabled = applied,
+            Name = name,
+            Description = "d",
+            Category = "c",
+            RegistryPath = $@"{hive}\Software\Test\{name}",
+            ValueName = "v",
+            EnabledValue = 1,
+            DisabledValue = 0,
+            IsEnabled = applied,
         };
         return TweakItem.From(toggle);
     }

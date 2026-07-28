@@ -23,7 +23,6 @@ public class AdminBannerUiTests
         // Originally had the banner (reference implementations)
         new object[] { "nav-services" },
         new object[] { "nav-dns-hosts" },
-        new object[] { "nav-uninstaller" },
         // Added by the uniformity fix (v1.43.0) — these regressed silently before
         new object[] { "nav-processes" },
         new object[] { "nav-startup" },

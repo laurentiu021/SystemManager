@@ -22,7 +22,6 @@ public class UninstallerDescribeFailureTests
     [InlineData(1603, "fatal error")]
     [InlineData(1605, "not currently installed")]
     [InlineData(1618, "another installation")]
-    [InlineData(3010, "reboot is required")]
     public void KnownExitCode_ContainsExpectedPhrase(int exitCode, string expectedPhrase)
     {
         var result = UninstallerViewModel.DescribeUninstallFailure(exitCode, "TestApp");
@@ -48,16 +47,11 @@ public class UninstallerDescribeFailureTests
     }
 
     [Fact]
-    public void ExitCode3010_MentionsReboot()
-    {
-        var result = UninstallerViewModel.DescribeUninstallFailure(3010, "TestApp");
-        Assert.Contains("reboot", result, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void ExitCode5_MentionsAdministrator()
+    public void ExitCode5_DoesNotRecommendRunningSysManagerAsAdministrator()
     {
         var result = UninstallerViewModel.DescribeUninstallFailure(5, "TestApp");
-        Assert.Contains("Administrator", result);
+
+        Assert.Contains("Windows UAC prompt", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SysManager as Administrator", result, StringComparison.OrdinalIgnoreCase);
     }
 }

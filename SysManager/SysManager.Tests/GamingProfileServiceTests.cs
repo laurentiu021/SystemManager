@@ -323,8 +323,12 @@ public class GamingProfileServiceTests
         // restarts a WSearch this run never stopped (the Audit-1 over-revert defect).
         var requested = new GamingProfile
         {
-            UltimatePerformancePlan = true, DisableVisualEffects = true, FinestTimerResolution = true,
-            PurgeStandbyMemory = true, PauseSearchIndexing = true, SilenceNotifications = true,
+            UltimatePerformancePlan = true,
+            DisableVisualEffects = true,
+            FinestTimerResolution = true,
+            PurgeStandbyMemory = true,
+            PauseSearchIndexing = true,
+            SilenceNotifications = true,
         };
         var applied = new IGamingTweak[]
         {

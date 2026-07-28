@@ -181,7 +181,9 @@ Key services:
 - `WindowsFeaturesService` — list, enable, disable Windows optional features
   via `Get-WindowsOptionalFeature` / `Enable-WindowsOptionalFeature` PowerShell.
 - `UninstallerService` — winget-based uninstall + registry UninstallString
-  fallback for local apps not in winget.
+  fallback for local apps not in winget. Uninstall execution is standard-session
+  only; validated local commands use the shell runner so their own manifests own
+  any UAC request instead of inheriting SysManager elevation.
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
   Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
   working set trim, hibernation toggle. Snapshot-based restore.

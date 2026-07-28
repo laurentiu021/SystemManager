@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -14,6 +15,113 @@ namespace SysManager.Tests;
 [Collection("ProcessEnvironment")]
 public class UninstallerServiceTests
 {
+    [Fact]
+    public async Task UninstallAsync_WhenElevated_RejectsBeforeWingetLaunch()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new UninstallerService(runner, () => true);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.UninstallAsync("Vendor.Package"));
+
+        Assert.Contains("running as administrator", exception.Message, StringComparison.OrdinalIgnoreCase);
+        await runner.DidNotReceiveWithAnyArgs()
+            .RunProcessAsync(default!, default!, default, default);
+        await runner.DidNotReceiveWithAnyArgs()
+            .RunProcessWithShellAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task UninstallLocalAsync_WhenElevated_RejectsWindowsCommandBeforeLaunch()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new UninstallerService(runner, () => true);
+        var app = new InstalledApp
+        {
+            Name = "Forged registration",
+            UninstallString =
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile"
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.UninstallLocalAsync(app));
+
+        Assert.Contains("running as administrator", exception.Message, StringComparison.OrdinalIgnoreCase);
+        await runner.DidNotReceiveWithAnyArgs()
+            .RunProcessAsync(default!, default!, default, default);
+        await runner.DidNotReceiveWithAnyArgs()
+            .RunProcessWithShellAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task UninstallAsync_WhenNotElevated_UsesWingetRunner()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(
+                "winget",
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(0);
+        var service = new UninstallerService(runner, () => false);
+
+        var exitCode = await service.UninstallAsync("Vendor.Package");
+
+        Assert.Equal(0, exitCode);
+        await runner.Received(1).RunProcessAsync(
+            "winget",
+            Arg.Is<string>(args => args != null && args.Contains("Vendor.Package", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task UninstallLocalAsync_WhenNotElevated_UsesShellRunnerForOwnedUac()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessWithShellAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(0);
+        var service = new UninstallerService(runner, () => false);
+        var executable = System.IO.Path.Combine(Environment.SystemDirectory, "where.exe");
+        var app = new InstalledApp
+        {
+            Name = "Local app",
+            UninstallString = $"\"{executable}\" cmd.exe"
+        };
+
+        var exitCode = await service.UninstallLocalAsync(app);
+
+        Assert.Equal(0, exitCode);
+        await runner.Received(1).RunProcessWithShellAsync(
+            executable,
+            "cmd.exe",
+            Arg.Any<CancellationToken>());
+        await runner.DidNotReceiveWithAnyArgs()
+            .RunProcessAsync(default!, default!, default, default);
+    }
+
+    [Fact]
+    public async Task UninstallLocalAsync_RelativeExecutable_RejectsBeforeShellLaunch()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new UninstallerService(runner, () => false);
+        var app = new InstalledApp
+        {
+            Name = "Relative registration",
+            UninstallString = @".\where.exe cmd.exe"
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.UninstallLocalAsync(app));
+
+        Assert.Contains("not absolute", exception.Message, StringComparison.OrdinalIgnoreCase);
+        await runner.DidNotReceiveWithAnyArgs()
+            .RunProcessWithShellAsync(default!, default!, default);
+    }
+
     // ── IsUnderTrustedDirectory (regression: prefix-boundary bypass) ──
 
     [Fact]
@@ -39,10 +147,20 @@ public class UninstallerServiceTests
         => Assert.False(UninstallerService.IsUnderTrustedDirectory(@"C:\Temp\random\app.exe", isElevated: false));
 
     [Fact]
+    public void IsUnderTrustedDirectory_ProgramData_IsTrustedOnlyAtStandardIntegrity()
+    {
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var executable = System.IO.Path.Combine(programData, "Vendor", "uninstall.exe");
+
+        Assert.True(UninstallerService.IsUnderTrustedDirectory(executable, isElevated: false));
+        Assert.False(UninstallerService.IsUnderTrustedDirectory(executable, isElevated: true));
+    }
+
+    [Fact]
     public void IsUnderTrustedDirectory_ForgedProgramDataVariable_IsNotTrustedWhenElevated()
     {
         var original = Environment.GetEnvironmentVariable("ProgramData");
-        var forgedRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SysManagerProgramDataTest_" + Guid.NewGuid().ToString("N"));
+        var forgedRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SysManagerProgramDataTest_Forged");
         try
         {
             Environment.SetEnvironmentVariable("ProgramData", forgedRoot);
@@ -92,13 +210,26 @@ public class UninstallerServiceTests
     }
 
     [Fact]
-    public void ValidateTrustedBinaryArgs_Rundll32_DllUnderWindows_IsAllowed()
+    public void ValidateTrustedBinaryArgs_Rundll32_DllUnderWindows_IsCanonicalized()
     {
         var sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
         var dll = System.IO.Path.Combine(sys, "shell32.dll");
-        var ex = Record.Exception(() =>
-            UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", $"\"{dll}\",Control_RunDLL", isElevated: false));
-        Assert.Null(ex);
+
+        var args = UninstallerService.ValidateTrustedBinaryArgs(
+            "rundll32.exe", $"\"{dll}\",Control_RunDLL", isElevated: false);
+
+        Assert.Equal($"\"{dll}\",Control_RunDLL", args);
+    }
+
+    [Fact]
+    public void ValidateTrustedBinaryArgs_Rundll32_BareSystemDll_ResolvesToSystem32()
+    {
+        var dll = System.IO.Path.Combine(Environment.SystemDirectory, "shell32.dll");
+
+        var args = UninstallerService.ValidateTrustedBinaryArgs(
+            "rundll32.exe", "shell32.dll,Control_RunDLL", isElevated: false);
+
+        Assert.Equal($"\"{dll}\",Control_RunDLL", args);
     }
 
     [Fact]
@@ -111,6 +242,26 @@ public class UninstallerServiceTests
         var ex = Record.Exception(() =>
             UninstallerService.ValidateTrustedBinaryArgs("rundll32.exe", $"\"{dll}\",EntryPoint", isElevated: true));
         Assert.IsType<InvalidOperationException>(ex);
+    }
+
+    [Fact]
+    public void ValidateTrustedBinaryArgs_Rundll32_RelativeDll_Throws()
+    {
+        var ex = Record.Exception(() =>
+            UninstallerService.ValidateTrustedBinaryArgs(
+                "rundll32.exe", @"subdir\shell32.dll,Control_RunDLL", isElevated: false));
+
+        Assert.IsType<InvalidOperationException>(ex);
+    }
+
+    [Fact]
+    public void ValidateTrustedBinaryArgs_Rundll32_DriveRelativeDll_ThrowsAsNonAbsolute()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            UninstallerService.ValidateTrustedBinaryArgs(
+                "rundll32.exe", @"C:shell32.dll,Control_RunDLL", isElevated: false));
+
+        Assert.Contains("not absolute", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -147,7 +298,7 @@ public class UninstallerServiceTests
     public void ValidateTrustedBinaryArgs_MsiExec_TrailingPayload_Throws(string args)
     {
         var ex = Record.Exception(() =>
-            UninstallerService.ValidateTrustedBinaryArgs("MsiExec.exe", args, isElevated: false));
+            UninstallerService.ValidateTrustedBinaryArgs("MsiExec.exe", args, isElevated: true));
 
         Assert.IsType<InvalidOperationException>(ex);
     }

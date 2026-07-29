@@ -32,3 +32,9 @@ public class IconCacheCollection { }
 /// </summary>
 [CollectionDefinition("DialogService", DisableParallelization = true)]
 public class DialogServiceCollection { }
+
+/// <summary>
+/// Groups tests that temporarily replace process environment variables.
+/// </summary>
+[CollectionDefinition("ProcessEnvironment", DisableParallelization = true)]
+public class ProcessEnvironmentCollection { }

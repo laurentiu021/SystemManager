@@ -58,4 +58,14 @@ public interface IPowerShellRunner
         string arguments,
         CancellationToken cancellationToken = default,
         Encoding? outputEncoding = null);
+
+    /// <summary>
+    /// Run a validated executable through the Windows shell so its own manifest can
+    /// request elevation. Use only after the caller has validated both the executable
+    /// and arguments at its trust boundary.
+    /// </summary>
+    Task<int> RunProcessWithShellAsync(
+        string fileName,
+        string arguments,
+        CancellationToken cancellationToken = default);
 }

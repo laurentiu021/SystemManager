@@ -46,6 +46,88 @@ public class PowerShellRunnerTests
     }
 
     [Fact]
+    public async Task RunProcessAsync_PreCancelled_DoesNotStartProcess()
+    {
+        var runner = new PowerShellRunner();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            runner.RunProcessAsync(
+                "must-not-start.exe",
+                string.Empty,
+                cancellation.Token));
+    }
+
+    [Fact]
+    public async Task RunProcessAsync_CancelledWhileStartQueued_DoesNotStartProcess()
+    {
+        var startQueued = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStart = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new PowerShellRunner(async startProcess =>
+        {
+            startQueued.TrySetResult(true);
+            await releaseStart.Task;
+            startProcess();
+        });
+        using var cancellation = new CancellationTokenSource();
+
+        var runTask = runner.RunProcessAsync(
+            "must-not-start.exe",
+            string.Empty,
+            cancellation.Token);
+
+        await startQueued.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        releaseStart.TrySetResult(true);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
+    }
+
+    [Fact]
+    public async Task RunProcessWithShellAsync_PreCancelled_DoesNotStartProcess()
+    {
+        var runner = new PowerShellRunner();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            runner.RunProcessWithShellAsync(
+                "must-not-start.exe",
+                string.Empty,
+                cancellation.Token));
+    }
+
+    [Fact]
+    public async Task RunProcessWithShellAsync_CancelledWhileStartQueued_DoesNotStartProcess()
+    {
+        var startQueued = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStart = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new PowerShellRunner(async startProcess =>
+        {
+            startQueued.TrySetResult(true);
+            await releaseStart.Task;
+            startProcess();
+        });
+        using var cancellation = new CancellationTokenSource();
+
+        var runTask = runner.RunProcessWithShellAsync(
+            "must-not-start.exe",
+            string.Empty,
+            cancellation.Token);
+
+        await startQueued.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        releaseStart.TrySetResult(true);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
+    }
+
+    [Fact]
     public void LineReceived_CanSubscribeAndUnsubscribe()
     {
         var runner = new PowerShellRunner();

@@ -610,7 +610,8 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IMMDevice
     {
-        [PreserveSig] int Activate(ref Guid iid, uint dwClsCtx, IntPtr pActivationParams,
+        [PreserveSig]
+        int Activate(ref Guid iid, uint dwClsCtx, IntPtr pActivationParams,
             [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
         // Slots 2-4, declared to preserve vtable order (device enumeration reads name + id).
         [PreserveSig] int OpenPropertyStore(uint stgmAccess, out IPropertyStore ppProperties);

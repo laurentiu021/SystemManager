@@ -81,6 +81,75 @@ public class PowerShellRunnerTests
     }
 
     [Fact]
+    public async Task RunProcessWithShellAsync_CmdExitZero_ReturnsZero()
+    {
+        var runner = new PowerShellRunner();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var code = await runner.RunProcessWithShellAsync("cmd.exe", "/c exit 0", cts.Token);
+
+        Assert.Equal(0, code);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProcessCancellationObservedAfterExit_ReturnsExitCode(bool useShell)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            async (process, token) =>
+            {
+                await process.WaitForExitAsync(CancellationToken.None);
+                cancellation.Cancel();
+                throw new OperationCanceledException(token);
+            });
+
+        var exitCode = useShell
+            ? await runner.RunProcessWithShellAsync("cmd.exe", "/c exit 42", cancellation.Token)
+            : await runner.RunProcessAsync("cmd.exe", "/c exit 42", cancellation.Token);
+
+        Assert.Equal(42, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProcessCancellation_WhenTreeTerminationPartiallyFails_ReportsProcessMayRemain(
+        bool useShell)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            (_, token) =>
+            {
+                cancellation.Cancel();
+                return Task.FromException(new OperationCanceledException(token));
+            },
+            process =>
+            {
+                process.Kill(entireProcessTree: false);
+                process.WaitForExit();
+                throw new AggregateException("A descendant could not be terminated.");
+            });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            useShell
+                ? runner.RunProcessWithShellAsync(
+                    "powershell.exe",
+                    "-NoProfile -NonInteractive -Command Start-Sleep -Seconds 60",
+                    cancellation.Token)
+                : runner.RunProcessAsync(
+                    "powershell.exe",
+                    "-NoProfile -NonInteractive -Command Start-Sleep -Seconds 60",
+                    cancellation.Token));
+
+        Assert.Contains("may still be running", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<AggregateException>(exception.InnerException);
+    }
+
+    [Fact]
     public async Task RunProcessAsync_MissingExe_Throws()
     {
         var runner = new PowerShellRunner();

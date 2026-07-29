@@ -87,8 +87,11 @@ public class NavGroupTests
     {
         var item = new NavItem
         {
-            Id = "a", Label = "A", Glyph = "A",
-            Content = new object(), ViewType = typeof(object),
+            Id = "a",
+            Label = "A",
+            Glyph = "A",
+            Content = new object(),
+            ViewType = typeof(object),
         };
         Assert.False(item.IsInDevelopment);
     }
@@ -98,8 +101,11 @@ public class NavGroupTests
     {
         var item = new NavItem
         {
-            Id = "a", Label = "A", Glyph = "A",
-            Content = new object(), ViewType = typeof(object),
+            Id = "a",
+            Label = "A",
+            Glyph = "A",
+            Content = new object(),
+            ViewType = typeof(object),
             IsInDevelopment = true,
         };
         Assert.True(item.IsInDevelopment);

@@ -4,9 +4,8 @@
 
 using System.Management;
 using Serilog;
-using SysManager.Models;
-
 using SysManager.Helpers;
+using SysManager.Models;
 
 namespace SysManager.Services;
 

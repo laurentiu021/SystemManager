@@ -92,7 +92,7 @@ public sealed class ProfileService
     /// <summary>Builds a profile from the given sections (defaults to all available).</summary>
     public ConfigProfile BuildProfile(DateTime exportedAt, IReadOnlyList<ConfigSection>? sections = null)
         => new(CurrentSchemaVersion, UpdateService.CurrentVersion.ToString(3), exportedAt)
-           { Sections = sections ?? AvailableSections() };
+        { Sections = sections ?? AvailableSections() };
 
     /// <summary>Serializes a profile to indented JSON.</summary>
     public static string Serialize(ConfigProfile profile) => JsonSerializer.Serialize(profile, JsonOptions);

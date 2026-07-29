@@ -15,8 +15,18 @@ namespace SysManager.Services;
 public sealed partial class UninstallerService
 {
     private readonly IPowerShellRunner _runner;
+    private readonly Func<bool> _isElevated;
 
-    public UninstallerService(IPowerShellRunner runner) => _runner = runner;
+    public UninstallerService(IPowerShellRunner runner)
+        : this(runner, Helpers.AdminHelper.IsElevated)
+    {
+    }
+
+    internal UninstallerService(IPowerShellRunner runner, Func<bool> isElevated)
+    {
+        _runner = runner;
+        _isElevated = isElevated;
+    }
 
     public event Action<PowerShellLine>? LineReceived
     {
@@ -57,6 +67,8 @@ public sealed partial class UninstallerService
         // Validate packageId before interpolating it into the winget command line.
         if (!WingetId.IsValid(packageId))
             throw new ArgumentException("Invalid package ID.", nameof(packageId));
+
+        EnsureStandardIntegrity();
 
         var args = $"uninstall --id \"{packageId}\" -e --silent --accept-source-agreements --disable-interactivity";
         return await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
@@ -207,6 +219,8 @@ public sealed partial class UninstallerService
     /// </summary>
     public async Task<int> UninstallLocalAsync(InstalledApp app, CancellationToken ct = default)
     {
+        EnsureStandardIntegrity();
+
         var command = !string.IsNullOrWhiteSpace(app.QuietUninstallString)
             ? app.QuietUninstallString
             : app.UninstallString;
@@ -219,13 +233,11 @@ public sealed partial class UninstallerService
         // Handles both quoted paths ("C:\path\uninstall.exe" /S) and unquoted.
         var (exe, args) = ParseUninstallCommand(command);
 
-        // SEC-LPE: capture our own elevation up front. The UninstallString (and any
-        // rundll32 DLL path it carries) comes from a registry key that a standard user
-        // can write — HKCU especially. When SysManager itself runs elevated, executing
-        // a binary from a user-writable location would let an unprivileged attacker who
-        // planted it gain our elevation (local privilege escalation). The trusted-path
-        // checks below therefore tighten when elevated.
-        var isElevated = Helpers.AdminHelper.IsElevated();
+        // Uninstall execution is restricted to a standard-integrity SysManager process
+        // before registry data is parsed. Keep that state explicit for the shared path and
+        // payload validators; the selected uninstaller may request its own elevation later
+        // through the Windows shell.
+        const bool runningElevated = false;
 
         // SEC-002: Validate the executable exists and is a real file (not a
         // script or arbitrary command). HKCU uninstall keys can be modified
@@ -251,34 +263,54 @@ public sealed partial class UninstallerService
             // SEC-LPE: resolving the binary to System32 is NOT enough — rundll32 and
             // MsiExec take their payload from the (HKCU-writable) arguments. rundll32
             // will load ANY DLL at ANY entry point, and MsiExec will run an arbitrary
-            // package; both inherit our elevation. Validate the payload before launch.
-            ValidateTrustedBinaryArgs(resolvedName, args, isElevated);
+            // package. Validate the payload before handing the command to the shell.
+            args = ValidateTrustedBinaryArgs(resolvedName, args, runningElevated);
         }
         else
         {
-            if (!System.IO.File.Exists(exe))
+            // Registry uninstall commands must identify the exact executable. A relative
+            // path would be checked against SysManager's current directory but resolved by
+            // ShellExecute against its working directory, so reject it before any file check.
+            if (!System.IO.Path.IsPathFullyQualified(exe))
+                throw new InvalidOperationException(
+                    $"Uninstall executable path is not absolute: '{exe}'. Refusing to run for security.");
+
+            var fullPath = System.IO.Path.GetFullPath(exe);
+            if (!System.IO.File.Exists(fullPath))
                 throw new InvalidOperationException(
                     $"Uninstall executable not found: '{exe}'. The app may have been removed already.");
 
-            var ext = System.IO.Path.GetExtension(exe);
+            var ext = System.IO.Path.GetExtension(fullPath);
             if (!ext.Equals(".exe", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
                     $"Uninstall target is not an executable (.exe): '{exe}'. Refusing to run for security.");
 
             // SEC-H2 / SEC-LPE: Validate the executable resides under a trusted directory.
             // Registry uninstall keys (especially HKCU) can be modified without admin,
-            // so we must not execute arbitrary paths. Admin-protected dirs (Program Files,
-            // Windows, ProgramData) are always trusted; the user-writable per-user location
-            // (LocalApplicationData) is trusted ONLY when we are not elevated — otherwise an
-            // unprivileged attacker who dropped a binary there would gain our elevation.
-            var fullPath = System.IO.Path.GetFullPath(exe);
-            if (!IsUnderTrustedDirectory(fullPath, isElevated))
+            // so we must not execute arbitrary paths. Windows installation roots are always
+            // trusted; shared and per-user application-data roots are accepted only while
+            // SysManager is at standard integrity.
+            if (!IsUnderTrustedDirectory(fullPath, runningElevated))
                 throw new InvalidOperationException(
                     $"Uninstall executable is outside trusted directories: '{exe}'. Refusing to run for security.");
+
+            // Launch the same canonical path that passed every check above. This binds
+            // validation to execution and avoids current-directory or dot-segment drift.
+            exe = fullPath;
         }
 
         Log.Information("Uninstalling local app '{Name}' via: {Exe} {Args}", app.Name, exe, args);
-        return await _runner.RunProcessAsync(exe, args, ct).ConfigureAwait(false);
+        return await _runner.RunProcessWithShellAsync(exe, args, ct).ConfigureAwait(false);
+    }
+
+    private void EnsureStandardIntegrity()
+    {
+        if (_isElevated())
+        {
+            throw new InvalidOperationException(
+                "Uninstall actions are disabled while SysManager is running as administrator. " +
+                "Reopen SysManager normally so each uninstaller can request only the privileges it needs.");
+        }
     }
 
     /// <summary>
@@ -371,12 +403,10 @@ public sealed partial class UninstallerService
     }
 
     /// <summary>
-    /// Checks whether the given absolute path resides under a trusted directory.
-    /// Admin-protected directories (Program Files, Windows, ProgramData) are always
-    /// trusted. The user-writable per-user location (LocalApplicationData) is trusted
-    /// ONLY when <paramref name="isElevated"/> is false — when we run elevated, a binary
-    /// there could have been planted by an unprivileged attacker, so trusting it would
-    /// be a local privilege-escalation vector (SEC-LPE).
+    /// Checks whether the given absolute path resides under an approved directory.
+    /// Windows installation roots are accepted in either integrity mode. Shared and
+    /// per-user application-data roots are accepted only when <paramref name="isElevated"/>
+    /// is false because their contents can be created by an unprivileged user.
     /// </summary>
     internal static bool IsUnderTrustedDirectory(string fullPath, bool isElevated)
     {
@@ -384,15 +414,17 @@ public sealed partial class UninstallerService
         {
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-            Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData"
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows)
         };
 
-        // Per-user install locations (e.g. VS Code, Discord) are writable without admin.
-        // Trust them only when we are NOT elevated, so an elevated uninstall can never
-        // execute an attacker-planted binary from a user-writable directory.
+        // Shared and per-user app-data locations can contain user-created payloads.
+        // Accept them only at standard integrity, where executing such a payload cannot
+        // inherit an administrator token from SysManager.
         if (!isElevated)
+        {
+            trustedDirs.Add(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData));
             trustedDirs.Add(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        }
 
         // Compare on a directory boundary, not a raw prefix. A bare StartsWith lets
         // "C:\Program Files Evil\x.exe" pass the "C:\Program Files" check — so append
@@ -409,7 +441,7 @@ public sealed partial class UninstallerService
     /// <summary>
     /// SEC-LPE: validates the arguments passed to a trusted system binary (rundll32 /
     /// MsiExec) before launch, because those arguments come from the HKCU-writable
-    /// registry UninstallString and the binary executes them with our elevation.
+    /// registry UninstallString and can select an arbitrary executable payload.
     /// </summary>
     /// <remarks>
     /// rundll32: the leading token (before the first comma) is the DLL path; it must
@@ -417,25 +449,57 @@ public sealed partial class UninstallerService
     /// must be a product-code uninstall (/X{GUID}); anything else (e.g. an arbitrary
     /// package path or /I install) is rejected.
     /// </remarks>
-    internal static void ValidateTrustedBinaryArgs(string resolvedExeName, string args, bool isElevated)
+    internal static string ValidateTrustedBinaryArgs(
+        string resolvedExeName,
+        string args,
+        bool isElevated)
     {
         if (resolvedExeName.Equals("rundll32.exe", StringComparison.OrdinalIgnoreCase))
         {
-            // rundll32 syntax: <dll>[,<entrypoint> [<args>]]. Extract the DLL path.
-            var dll = args.Split(',', 2)[0].Trim().Trim('"');
+            // rundll32 syntax: <dll>[,<entrypoint> [<args>]]. Bind validation and
+            // execution to one canonical DLL path before passing it to the system binary.
+            var commaIndex = args.IndexOf(',');
+            var dllToken = commaIndex >= 0 ? args[..commaIndex] : args;
+            var dll = dllToken.Trim().Trim('"');
             if (string.IsNullOrWhiteSpace(dll))
                 throw new InvalidOperationException(
-                    "rundll32 uninstall command has no DLL path — refusing to run for security.");
+                    "rundll32 uninstall command has no DLL path - refusing to run for security.");
+
+            string dllFullPath;
+            if (System.IO.Path.IsPathFullyQualified(dll))
+            {
+                dllFullPath = System.IO.Path.GetFullPath(dll);
+            }
+            else if (!System.IO.Path.IsPathRooted(dll) &&
+                     !dll.Contains('\\') &&
+                     !dll.Contains('/'))
+            {
+                // Bare DLL names are a common Windows uninstall form. Resolve them only
+                // against System32, never PATH or SysManager's current directory.
+                dllFullPath = System.IO.Path.Combine(Environment.SystemDirectory, dll);
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"rundll32 DLL path is not absolute: '{dll}'. Refusing to run for security.");
+            }
+
+            if (!System.IO.File.Exists(dllFullPath))
+                throw new InvalidOperationException(
+                    $"rundll32 DLL was not found: '{dllFullPath}'. Refusing to run for security.");
 
             // Same SEC-LPE rule as the executable check: a user-writable DLL path is only
             // trusted when not elevated, so rundll32 can't load attacker-planted DLLs with
             // our elevation.
-            var dllFullPath = System.IO.Path.GetFullPath(dll);
             if (!IsUnderTrustedDirectory(dllFullPath, isElevated))
                 throw new InvalidOperationException(
                     $"rundll32 would load a DLL outside trusted directories: '{dll}'. Refusing to run for security.");
+
+            var suffix = commaIndex >= 0 ? args[commaIndex..] : string.Empty;
+            return $"\"{dllFullPath}\"{suffix}";
         }
-        else if (resolvedExeName.Equals("MsiExec.exe", StringComparison.OrdinalIgnoreCase))
+
+        if (resolvedExeName.Equals("MsiExec.exe", StringComparison.OrdinalIgnoreCase))
         {
             // Only allow a product-code uninstall (/X{GUID}); reject arbitrary packages.
             if (!MsiUninstallArgsPattern().IsMatch(args))
@@ -443,12 +507,15 @@ public sealed partial class UninstallerService
                     $"MsiExec uninstall arguments are not a recognized product-code uninstall: '{args}'. " +
                     "Refusing to run for security.");
         }
+
+        return args;
     }
 
     // Matches a product-code uninstall such as "/X{0F2C3A4B-...}" optionally followed
     // by /quiet, /qn, /norestart and similar switches. Requires the /X{GUID} form so a
     // crafted UninstallString cannot make MsiExec run an arbitrary package path.
-    [GeneratedRegex(@"^\s*/x\s*\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}",
-        RegexOptions.IgnoreCase)]
+    [GeneratedRegex(
+        @"^\s*/x\s*\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}(?:\s+/(?:quiet|passive|norestart|promptrestart|forcerestart|q(?:n|b[+!]?|r|f)))*\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex MsiUninstallArgsPattern();
 }

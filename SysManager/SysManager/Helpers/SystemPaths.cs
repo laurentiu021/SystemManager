@@ -27,9 +27,17 @@ internal static class SystemPaths
     /// Returns the full trusted path for a bare Windows tool name that exists under System32
     /// (or the boxed Windows PowerShell 5.1 folder). Names that are already rooted / contain a
     /// path separator, or that are not found in a trusted location, are returned unchanged so
-    /// callers of non-system executables and explicit paths are never altered.
+    /// callers of non-system executables and explicit paths are never altered. Windows PowerShell
+    /// is always mapped to its rooted canonical path, even when missing, so execution fails closed
+    /// instead of falling back to the Win32 executable search order.
     /// </summary>
     public static string ResolveSystemTool(string fileName)
+        => ResolveSystemTool(fileName, System32, File.Exists);
+
+    internal static string ResolveSystemTool(
+        string fileName,
+        string systemDirectory,
+        Func<string, bool> fileExists)
     {
         if (string.IsNullOrEmpty(fileName)) return fileName;
         if (Path.IsPathRooted(fileName) || fileName.Contains('\\') || fileName.Contains('/'))
@@ -43,24 +51,26 @@ internal static class SystemPaths
             fileName.Equals("winget.exe", StringComparison.OrdinalIgnoreCase))
             return ResolveWinget();
 
-        // Try the name as given, then with a ".exe" suffix. Callers that pass a bare name
-        // WITHOUT the extension (e.g. "powershell") would otherwise never match on disk —
-        // File.Exists("...\\powershell") is false, only "...\\powershell.exe" exists — so the
-        // method would fall through and return the unrooted bare name, re-opening the exact
-        // binary-planting/LPE vector this helper exists to close. Probing "<name>.exe" as a
-        // fallback makes the guard robust to that mistake (defense-in-depth).
+        if (fileName.Equals("powershell", StringComparison.OrdinalIgnoreCase) ||
+            fileName.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.Combine(
+                systemDirectory,
+                "WindowsPowerShell",
+                "v1.0",
+                "powershell.exe");
+        }
+
+        // Try the name as given, then with a ".exe" suffix so extensionless built-in names
+        // such as "cmd" still resolve to their machine-owned executable.
         var candidates = fileName.Contains('.')
             ? new[] { fileName }
             : new[] { fileName, fileName + ".exe" };
 
         foreach (var name in candidates)
         {
-            var direct = Path.Combine(System32, name);
-            if (File.Exists(direct)) return direct;
-
-            // Windows PowerShell 5.1 lives in a System32 subfolder, not System32 itself.
-            var powerShell = Path.Combine(System32, "WindowsPowerShell", "v1.0", name);
-            if (File.Exists(powerShell)) return powerShell;
+            var direct = Path.Combine(systemDirectory, name);
+            if (fileExists(direct)) return direct;
         }
 
         return fileName;

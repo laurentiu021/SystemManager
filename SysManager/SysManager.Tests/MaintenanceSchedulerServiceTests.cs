@@ -126,6 +126,17 @@ public class MaintenanceSchedulerServiceTests
     }
 
     [Fact]
+    public async Task GetStatusAsync_MapsUnsignedFailureResultFromRemoting()
+    {
+        var (svc, _) = NewService(
+            StatusRow("Ready", unchecked((uint)0x80070002)));
+
+        var status = await svc.GetStatusAsync();
+
+        Assert.Equal("Last run failed (file not found)", status.LastResultDescription);
+    }
+
+    [Fact]
     public async Task GetStatusAsync_PowerShellThrows_ReturnsExistsFalse()
     {
         var ps = Substitute.For<IPowerShellRunner>();

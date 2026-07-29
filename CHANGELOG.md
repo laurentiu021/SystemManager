@@ -11,6 +11,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 - **Kept optional Windows Update history installation on the correct privilege boundary.** SysManager now installs PSWindowsUpdate only from a normal, non-administrator session into the current user's module directory. The installer verifies the canonical PowerShell Gallery endpoint and explicitly selects `PSGallery`; an elevated session refuses the install instead of consuming user-writable PowerShellGet repository state with an administrator token. Failed module imports now expose installation guidance instead of reporting a successful empty history.
+- **Handled locked-down systems without a working Windows PowerShell 5.1 host.** If policy, installation damage, or a disabled executable prevents the isolated administrator runspace from starting, the runner now maps that failure to the existing unavailable/failed service states. External PowerShell launches remain pinned to the canonical system path even when the host is missing, preventing executable search-order fallback. The runner deliberately does not fall back to an elevated in-process runspace, which would weaken the module-discovery boundary.
+- **Preserved PowerShell parameter and task-result semantics.** Defender mutation scripts now declare every bound parameter instead of silently receiving null variables, and Scheduled Maintenance correctly decodes unsigned high-bit Task Scheduler result codes after out-of-process serialization.
+- **Reported partial elevated operations honestly.** Edge disable/restore now reports failure when its registry policy changes but scheduled-task updates cannot run, and restore-point creation returns a clean failure state when the isolated PowerShell host is unavailable.
 
 ## [1.56.1] - 2026-07-28
 

@@ -4,6 +4,8 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using System.Reflection;
 using SysManager.Services;
 
@@ -115,6 +117,200 @@ public class PowerShellRunnerTests
         Assert.Equal(
             "$env:PSModulePath='C:\\Program Files\\Owner''s Modules';",
             assignment);
+    }
+
+    [Fact]
+    public async Task RunAsync_ElevatedHostOpenFailure_IsNormalizedToRuntimeException()
+    {
+        var runner = CreateRunnerWithOpenFailure(
+            new PSInvalidOperationException("Windows PowerShell was blocked."));
+
+        var exception = await Assert.ThrowsAsync<RuntimeException>(
+            () => runner.RunAsync("'never-runs'"));
+
+        Assert.Contains(
+            "Windows PowerShell 5.1 is unavailable",
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.IsType<PSInvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task RunAsync_ElevatedTransportFailure_IsNormalizedToRuntimeException()
+    {
+        var runner = CreateRunnerWithOpenFailure(
+            new System.Management.Automation.Remoting.PSRemotingTransportException(
+                "The child-process transport failed."));
+
+        var exception = await Assert.ThrowsAsync<RuntimeException>(
+            () => runner.RunAsync("'never-runs'"));
+
+        Assert.Contains(
+            "Windows PowerShell 5.1 is unavailable",
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.IsType<System.Management.Automation.Remoting.PSRemotingTransportException>(
+            exception.InnerException);
+    }
+
+    [Fact]
+    public async Task RunAsync_ElevatedHostCreationFailure_IsNormalizedToRuntimeException()
+    {
+        var failure = new PSInvalidOperationException(
+            "Windows PowerShell is unavailable.");
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => true,
+            trustedPowerShellModulePath:
+                @"C:\Program Files\WindowsPowerShell\Modules;" +
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+            createRunspace: () => throw failure);
+
+        var exception = await Assert.ThrowsAsync<RuntimeException>(
+            () => runner.RunAsync("'never-runs'"));
+
+        Assert.Contains(
+            "Windows PowerShell 5.1 is unavailable",
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.Same(failure, exception.InnerException);
+    }
+
+    [Fact]
+    public async Task RunAsync_ElevatedHostRegistrationFailure_IsNormalizedToRuntimeException()
+    {
+        var registrationFailure = new System.Security.SecurityException(
+            "Windows PowerShell registration is inaccessible.");
+        var failure = new TypeInitializationException(
+            typeof(PowerShellProcessInstance).FullName,
+            registrationFailure);
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => true,
+            trustedPowerShellModulePath:
+                @"C:\Program Files\WindowsPowerShell\Modules;" +
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+            createRunspace: () => throw failure);
+
+        var exception = await Assert.ThrowsAsync<RuntimeException>(
+            () => runner.RunAsync("'never-runs'"));
+
+        var wrappedFailure = Assert.IsType<TypeInitializationException>(
+            exception.InnerException);
+        Assert.Same(failure, wrappedFailure);
+        Assert.Same(registrationFailure, wrappedFailure.InnerException);
+    }
+
+    [Fact]
+    public async Task RunAsync_ElevatedHostOpenFailure_DisposesInjectedProcessResources()
+    {
+        var order = new List<string>();
+        var processInstance = new RecordingDisposable("process instance", order);
+        var process = new RecordingDisposable("process", order);
+        var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => true,
+            trustedPowerShellModulePath:
+                @"C:\Program Files\WindowsPowerShell\Modules;" +
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+            openRunspace: _ => Task.FromException(
+                new PSInvalidOperationException("Windows PowerShell was blocked.")),
+            createRunspace: () => (runspace, processInstance, process));
+
+        await Assert.ThrowsAsync<RuntimeException>(
+            () => runner.RunAsync("'never-runs'"));
+
+        Assert.Equal(["process instance", "process"], order);
+    }
+
+    [Fact]
+    public void DisposeRunspaceResources_DisposesInDependencyOrder()
+    {
+        var order = new List<string>();
+        var runspace = new RecordingDisposable("runspace", order);
+        var processInstance = new RecordingDisposable("process instance", order);
+        var process = new RecordingDisposable("process", order);
+
+        PowerShellRunner.DisposeRunspaceResources(
+            runspace,
+            processInstance,
+            process);
+
+        Assert.Equal(
+            ["runspace", "process instance", "process"],
+            order);
+    }
+
+    [Fact]
+    public void DisposeRunspaceResources_RunspaceDisposeFails_StillDisposesProcessResources()
+    {
+        var order = new List<string>();
+        var failure = new InvalidOperationException("Runspace disposal failed.");
+        var runspace = new RecordingDisposable("runspace", order, failure);
+        var processInstance = new RecordingDisposable("process instance", order);
+        var process = new RecordingDisposable("process", order);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            PowerShellRunner.DisposeRunspaceResources(
+                runspace,
+                processInstance,
+                process));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(
+            ["runspace", "process instance", "process"],
+            order);
+    }
+
+    [Fact]
+    public async Task DefenderStatus_ElevatedHostOpenFailure_ReturnsUnavailable()
+    {
+        var runner = CreateRunnerWithOpenFailure(
+            new PSInvalidOperationException("Windows PowerShell was blocked."));
+        var service = new DefenderService(runner);
+
+        var status = await service.GetStatusAsync();
+
+        Assert.False(status.Available);
+    }
+
+    [Fact]
+    public async Task DnsStatus_ElevatedHostOpenFailure_ReturnsUnavailable()
+    {
+        var runner = CreateRunnerWithOpenFailure(
+            new PSInvalidOperationException("Windows PowerShell was blocked."));
+        using var service = new DnsService(runner);
+
+        var status = await service.GetCurrentDnsAsync();
+
+        Assert.Equal("Unavailable", status);
+    }
+
+    private static PowerShellRunner CreateRunnerWithOpenFailure(Exception exception)
+    {
+        var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());
+        return new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => true,
+            trustedPowerShellModulePath:
+                @"C:\Program Files\WindowsPowerShell\Modules;" +
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+            openRunspace: _ => Task.FromException(exception),
+            createRunspace: () => (runspace, null, null));
+    }
+
+    private sealed class RecordingDisposable(
+        string name,
+        ICollection<string> order,
+        Exception? exception = null) : IDisposable
+    {
+        public void Dispose()
+        {
+            order.Add(name);
+            if (exception is not null)
+                throw exception;
+        }
     }
 
     [Theory]

@@ -191,6 +191,24 @@ public class DnsServiceTests
         Assert.Equal("Unknown", current);
     }
 
+    [Fact]
+    public async Task GetCurrentDnsAsync_PowerShellHostUnavailable_ReturnsUnavailable()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Collection<PSObject>>>(
+                _ => throw new RuntimeException(
+                    "Windows PowerShell 5.1 is unavailable."));
+        using var svc = new DnsService(runner);
+
+        var current = await svc.GetCurrentDnsAsync();
+
+        Assert.Equal("Unavailable", current);
+    }
+
     // ---------- presets (pure) ----------
 
     [Fact]

@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using System.Net;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -72,6 +73,11 @@ public sealed class DnsService : IDisposable
                 .ConfigureAwait(false);
 
             return results.Count > 0 ? results[0]?.ToString() ?? "Unknown" : "Unknown";
+        }
+        catch (RuntimeException ex)
+        {
+            Log.Debug("DNS status read failed: {Error}", ex.Message);
+            return "Unavailable";
         }
         finally { _gate.Release(); }
     }

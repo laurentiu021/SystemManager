@@ -28,6 +28,8 @@ public sealed class PowerShellRunner : IPowerShellRunner
     private readonly Func<Action, Task> _scheduleProcessStart;
     private readonly Func<System.Diagnostics.Process, CancellationToken, Task> _waitForProcessExit;
     private readonly Action<System.Diagnostics.Process> _terminateProcessTree;
+    private readonly Func<Runspace, Task> _openRunspace;
+    private readonly Func<(Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process)> _createRunspace;
     private readonly bool _isElevated;
     private readonly string _trustedPowerShellModulePath;
 
@@ -41,7 +43,9 @@ public sealed class PowerShellRunner : IPowerShellRunner
         Func<System.Diagnostics.Process, CancellationToken, Task>? waitForProcessExit = null,
         Action<System.Diagnostics.Process>? terminateProcessTree = null,
         Func<bool>? isElevated = null,
-        string? trustedPowerShellModulePath = null)
+        string? trustedPowerShellModulePath = null,
+        Func<Runspace, Task>? openRunspace = null,
+        Func<(Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process)>? createRunspace = null)
     {
         _scheduleProcessStart = scheduleProcessStart
             ?? throw new ArgumentNullException(nameof(scheduleProcessStart));
@@ -49,6 +53,8 @@ public sealed class PowerShellRunner : IPowerShellRunner
             ?? (static (process, cancellationToken) => process.WaitForExitAsync(cancellationToken));
         _terminateProcessTree = terminateProcessTree
             ?? (static process => process.Kill(entireProcessTree: true));
+        _openRunspace = openRunspace
+            ?? (static runspace => Task.Run(() => runspace.Open()));
 
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         _isElevated = (isElevated ?? Helpers.AdminHelper.IsElevated)();
@@ -62,6 +68,7 @@ public sealed class PowerShellRunner : IPowerShellRunner
                 "PSModulePath",
                 EnvironmentVariableTarget.Machine),
             programFiles);
+        _createRunspace = createRunspace ?? CreateRunspace;
     }
 
     /// <summary>
@@ -102,12 +109,11 @@ public sealed class PowerShellRunner : IPowerShellRunner
         IDictionary<string, object?>? parameters = null,
         CancellationToken cancellationToken = default)
     {
-        var (runspace, processInstance) = CreateRunspace();
-        using var processLifetime = processInstance;
-        using var runspaceLifetime = runspace;
+        using var resources = CreateRunspaceResources();
+        var runspace = resources.Runspace;
         // Open the runspace on a thread-pool thread — this can take
         // several hundred milliseconds and must not block the UI.
-        await Task.Run(() => runspace.Open()).ConfigureAwait(false);
+        await OpenRunspaceAsync(runspace).ConfigureAwait(false);
 
         using var ps = PowerShell.Create();
         ps.Runspace = runspace;
@@ -472,13 +478,13 @@ public sealed class PowerShellRunner : IPowerShellRunner
         return $"$env:PSModulePath='{escapedPath}';";
     }
 
-    private (Runspace Runspace, PowerShellProcessInstance? ProcessInstance) CreateRunspace()
+    private (Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process) CreateRunspace()
     {
         if (!_isElevated)
         {
             var initialSessionState = InitialSessionState.CreateDefault2();
             initialSessionState.ExecutionPolicy = Microsoft.PowerShell.ExecutionPolicy.Bypass;
-            return (RunspaceFactory.CreateRunspace(initialSessionState), null);
+            return (RunspaceFactory.CreateRunspace(initialSessionState), null, null);
         }
 
         var processInstance = new PowerShellProcessInstance(
@@ -487,6 +493,7 @@ public sealed class PowerShellRunner : IPowerShellRunner
             initializationScript: ScriptBlock.Create(
                 BuildPowerShellModulePathAssignment(_trustedPowerShellModulePath)),
             useWow64: false);
+        var process = processInstance.Process;
         Runspace? runspace = null;
         try
         {
@@ -498,13 +505,101 @@ public sealed class PowerShellRunner : IPowerShellRunner
             runspace = RunspaceFactory.CreateOutOfProcessRunspace(
                 TypeTable.LoadDefaultTypeFiles(),
                 processInstance);
-            return (runspace, processInstance);
+            return (runspace, processInstance, process);
         }
         finally
         {
             if (runspace is null)
-                processInstance.Dispose();
+                DisposeRunspaceResources(null, processInstance, process);
         }
+    }
+
+    private RunspaceResources CreateRunspaceResources()
+    {
+        try
+        {
+            var (runspace, processInstance, process) = _createRunspace();
+            return new RunspaceResources(runspace, processInstance, process);
+        }
+        catch (Exception ex) when (_isElevated && IsPowerShellHostUnavailable(ex))
+        {
+            throw CreatePowerShellHostUnavailableException(ex);
+        }
+    }
+
+    private async Task OpenRunspaceAsync(Runspace runspace)
+    {
+        try
+        {
+            await _openRunspace(runspace).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (_isElevated && IsPowerShellHostUnavailable(ex))
+        {
+            // Keep the isolation boundary fail-closed. Callers already map RuntimeException
+            // to their established unavailable/failed states; an in-process fallback here
+            // would reintroduce per-user module discovery under the administrator token.
+            throw CreatePowerShellHostUnavailableException(ex);
+        }
+    }
+
+    private static bool IsPowerShellHostUnavailable(Exception exception)
+        => exception is System.Management.Automation.Remoting.PSRemotingTransportException or
+            PSInvalidOperationException or
+            System.ComponentModel.Win32Exception or
+            System.IO.FileNotFoundException or
+            UnauthorizedAccessException ||
+            exception is TypeInitializationException { InnerException: { } innerException } &&
+            (IsPowerShellHostUnavailable(innerException) ||
+             innerException is ArgumentException or
+                 System.Security.SecurityException or
+                 System.IO.IOException);
+
+    private static RuntimeException CreatePowerShellHostUnavailableException(Exception innerException)
+        => new(
+            "Windows PowerShell 5.1 is unavailable or blocked by system policy.",
+            innerException);
+
+    internal static void DisposeRunspaceResources(
+        IDisposable? runspace,
+        IDisposable? processInstance,
+        IDisposable? process)
+    {
+        try
+        {
+            runspace?.Dispose();
+        }
+        finally
+        {
+            try
+            {
+                processInstance?.Dispose();
+            }
+            finally
+            {
+                process?.Dispose();
+            }
+        }
+    }
+
+    private sealed class RunspaceResources : IDisposable
+    {
+        private readonly IDisposable? _processInstance;
+        private readonly IDisposable? _process;
+
+        public RunspaceResources(
+            Runspace runspace,
+            IDisposable? processInstance,
+            IDisposable? process)
+        {
+            Runspace = runspace ?? throw new ArgumentNullException(nameof(runspace));
+            _processInstance = processInstance;
+            _process = process;
+        }
+
+        public Runspace Runspace { get; }
+
+        public void Dispose()
+            => DisposeRunspaceResources(Runspace, _processInstance, _process);
     }
 
     internal static void ApplyTrustedPowerShellModulePath(

@@ -164,10 +164,17 @@ public sealed class MaintenanceSchedulerService
 
     private static string DescribeResult(PSObject row)
     {
-        var v = row.Properties["LastTaskResult"]?.Value;
-        if (v is null) return DescribeResultCode(null);
-        if (v is int i) return DescribeResultCode(i);
-        return int.TryParse(v.ToString(), out var parsed) ? DescribeResultCode(parsed) : DescribeResultCode(null);
+        var value = row.Properties["LastTaskResult"]?.Value;
+        if (value is null) return DescribeResultCode(null);
+        if (value is int signed) return DescribeResultCode(signed);
+        if (value is uint unsigned) return DescribeResultCode(unchecked((int)unsigned));
+
+        var text = value.ToString();
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out signed))
+            return DescribeResultCode(signed);
+        return uint.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out unsigned)
+            ? DescribeResultCode(unchecked((int)unsigned))
+            : DescribeResultCode(null);
     }
 
     private static string? Str(PSObject? obj, string property) => obj?.Properties[property]?.Value?.ToString();

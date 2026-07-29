@@ -83,11 +83,11 @@ public sealed class DefenderService
     /// re-read status; compare its PuaProtection to confirm success.
     /// </summary>
     public Task<DefenderStatus> SetPuaProtectionAsync(int value, CancellationToken ct = default)
-        => ApplyAndVerifyAsync("Set-MpPreference -PUAProtection $Value", new() { ["Value"] = ClampTri(value) }, ct);
+        => ApplyAndVerifyAsync("param([int]$Value) Set-MpPreference -PUAProtection $Value", new() { ["Value"] = ClampTri(value) }, ct);
 
     /// <summary>Set Controlled Folder Access (0/1/2) and verify.</summary>
     public Task<DefenderStatus> SetControlledFolderAccessAsync(int value, CancellationToken ct = default)
-        => ApplyAndVerifyAsync("Set-MpPreference -EnableControlledFolderAccess $Value", new() { ["Value"] = ClampTri(value) }, ct);
+        => ApplyAndVerifyAsync("param([int]$Value) Set-MpPreference -EnableControlledFolderAccess $Value", new() { ["Value"] = ClampTri(value) }, ct);
 
     /// <summary>Add a folder exclusion (additive — never replaces the array). Verifies.</summary>
     public Task<DefenderStatus> AddExclusionPathAsync(string path, CancellationToken ct = default)
@@ -97,7 +97,7 @@ public sealed class DefenderService
         // exclusion ("*", "C:\?") can never weaken Defender, even via a non-UI caller.
         if (!IsValidExclusionPath(path))
             throw new ArgumentException("Exclusion path must be a rooted path without wildcards.", nameof(path));
-        return ApplyAndVerifyAsync("Add-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
+        return ApplyAndVerifyAsync("param([string]$Path) Add-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
     }
 
     /// <summary>
@@ -113,7 +113,7 @@ public sealed class DefenderService
 
     /// <summary>Remove a folder exclusion. Verifies.</summary>
     public Task<DefenderStatus> RemoveExclusionPathAsync(string path, CancellationToken ct = default)
-        => ApplyAndVerifyAsync("Remove-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
+        => ApplyAndVerifyAsync("param([string]$Path) Remove-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
 
     /// <summary>
     /// Run a hard-coded Set/Add/Remove script with bound parameters (never interpolated),

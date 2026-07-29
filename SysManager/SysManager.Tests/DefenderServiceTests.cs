@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections;
 using System.Management.Automation;
 using SysManager.Services;
 
@@ -40,6 +41,21 @@ public class DefenderServiceTests
     {
         Assert.Single(DefenderService.ToStringList(@"C:\One"));
         Assert.Empty(DefenderService.ToStringList(null));
+    }
+
+    [Fact]
+    public void ToStringList_FromRemotingCollectionShape()
+    {
+        var deserialized = new PSObject(new ArrayList
+        {
+            new PSObject(@"C:\Games"),
+            new PSObject(@"D:\Steam"),
+            new PSObject("")
+        });
+
+        var list = DefenderService.ToStringList(deserialized);
+
+        Assert.Equal(new[] { @"C:\Games", @"D:\Steam" }, list);
     }
 
     [Theory]

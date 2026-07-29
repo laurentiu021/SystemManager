@@ -33,7 +33,7 @@ public interface IPowerShellRunner
     event Action<int>? ProgressChanged;
 
     /// <summary>
-    /// Execute a script in-process and return the collected PSObject results.
+    /// Execute a script and return the collected PSObject results.
     /// All streams are forwarded via <see cref="LineReceived"/> for live UI display.
     /// </summary>
     Task<Collection<PSObject>> RunAsync(

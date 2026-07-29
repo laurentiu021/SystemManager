@@ -97,6 +97,12 @@ What the app can and cannot do by design:
 
 - **PowerShell execution**: Windows Update and SMART features invoke
   PowerShell. Scripts are bundled with the app, not downloaded at runtime.
+  Administrator sessions isolate PowerShell runspaces in Windows PowerShell 5.1
+  child processes whose
+  module discovery is restricted to canonical machine-owned locations under
+  Program Files and System32, without changing the parent process environment.
+  Per-user modules and optional module installation remain available only when
+  the app runs without elevation.
 - **External CLI downloads**: the Ookla speed-test CLI is downloaded from
   `install.speedtest.net` the first time it's used. If that URL changes,
   the feature fails safely rather than substituting an alternative.

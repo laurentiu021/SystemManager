@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using SysManager.Services;
 
@@ -43,6 +45,125 @@ public class PowerShellRunnerTests
     {
         var runner = new PowerShellRunner();
         Assert.NotNull(runner);
+    }
+
+    [Fact]
+    public void BuildTrustedPowerShellModulePath_UsesOnlyMachineOwnedRoots()
+    {
+        var path = PowerShellRunner.BuildTrustedPowerShellModulePath(
+            @"C:\Program Files",
+            @"C:\Windows\System32");
+
+        var roots = path.Split(Path.PathSeparator);
+        Assert.Equal(
+            new[]
+            {
+                @"C:\Program Files\WindowsPowerShell\Modules",
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+                @"C:\Program Files\PowerShell\Modules"
+            },
+            roots);
+        Assert.DoesNotContain(roots, root =>
+            root.Contains(@"C:\Users", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void EnsureDistinctFromMachinePowerShellModulePath_WhenEqual_AppendsMachineOwnedGuard()
+    {
+        const string machinePath =
+            @"C:\Program Files\WindowsPowerShell\Modules;" +
+            @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules";
+
+        var path = PowerShellRunner.EnsureDistinctFromMachinePowerShellModulePath(
+            machinePath,
+            machinePath,
+            @"C:\Program Files");
+
+        Assert.NotEqual(machinePath, path);
+        Assert.Equal(
+            new[]
+            {
+                @"C:\Program Files\WindowsPowerShell\Modules",
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+                @"C:\Program Files\SysManager\PowerShellModules"
+            },
+            path.Split(Path.PathSeparator));
+        Assert.DoesNotContain(
+            path.Split(Path.PathSeparator),
+            root => root.Contains(@"\Users\", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void EnsureDistinctFromMachinePowerShellModulePath_WhenAlreadyDistinct_PreservesPath()
+    {
+        const string trustedPath = @"C:\Program Files\WindowsPowerShell\Modules";
+
+        var path = PowerShellRunner.EnsureDistinctFromMachinePowerShellModulePath(
+            trustedPath,
+            @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+            @"C:\Program Files");
+
+        Assert.Equal(trustedPath, path);
+    }
+
+    [Fact]
+    public void BuildPowerShellModulePathAssignment_EscapesSingleQuotes()
+    {
+        var assignment = PowerShellRunner.BuildPowerShellModulePathAssignment(
+            @"C:\Program Files\Owner's Modules");
+
+        Assert.Equal(
+            "$env:PSModulePath='C:\\Program Files\\Owner''s Modules';",
+            assignment);
+    }
+
+    [Theory]
+    [InlineData("powershell")]
+    [InlineData("powershell.exe")]
+    [InlineData(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")]
+    [InlineData("pwsh")]
+    [InlineData("pwsh.exe")]
+    public void ApplyTrustedPowerShellModulePath_ElevatedPowerShellChild_ReplacesInheritedValue(
+        string executable)
+    {
+        const string inheritedPath = @"C:\Users\Example\Documents\WindowsPowerShell\Modules";
+        const string trustedPath = @"C:\Program Files\WindowsPowerShell\Modules";
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            UseShellExecute = false
+        };
+        startInfo.Environment["PSModulePath"] = inheritedPath;
+
+        PowerShellRunner.ApplyTrustedPowerShellModulePath(
+            startInfo,
+            isElevated: true,
+            trustedPath);
+
+        Assert.Equal(trustedPath, startInfo.Environment["PSModulePath"]);
+    }
+
+    [Theory]
+    [InlineData(false, "powershell.exe")]
+    [InlineData(true, "cmd.exe")]
+    public void ApplyTrustedPowerShellModulePath_NonPrivilegedBoundary_PreservesInheritedValue(
+        bool isElevated,
+        string executable)
+    {
+        const string inheritedPath = @"C:\Users\Example\Documents\WindowsPowerShell\Modules";
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            UseShellExecute = false
+        };
+        startInfo.Environment["PSModulePath"] = inheritedPath;
+
+        PowerShellRunner.ApplyTrustedPowerShellModulePath(
+            startInfo,
+            isElevated,
+            @"C:\Program Files\WindowsPowerShell\Modules");
+
+        Assert.Equal(inheritedPath, startInfo.Environment["PSModulePath"]);
     }
 
     [Fact]

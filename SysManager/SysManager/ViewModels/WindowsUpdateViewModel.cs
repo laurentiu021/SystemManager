@@ -15,6 +15,56 @@ namespace SysManager.ViewModels;
 
 public sealed partial class WindowsUpdateViewModel : ViewModelBase
 {
+    internal const string PsWindowsUpdateInstallScript = """
+        $ErrorActionPreference = 'Stop'
+        Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+        $gallery = Get-PSRepository -Name PSGallery -ErrorAction Stop
+        $gallerySource = ([string]$gallery.SourceLocation).TrimEnd('/')
+        if ($gallerySource -ne 'https://www.powershellgallery.com/api/v2') {
+            throw "PSGallery points to an unexpected source: $gallerySource"
+        }
+        if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+            Install-PackageProvider -Name NuGet -Force -Scope CurrentUser | Out-Null
+        }
+        Install-Module -Name PSWindowsUpdate -Force -Scope CurrentUser -Repository PSGallery -AllowClobber
+        Import-Module PSWindowsUpdate
+        'INSTALLED'
+        """;
+
+    internal const int HistoryModuleImportFailedExitCode = 41;
+    internal const int HistoryQueryFailedExitCode = 42;
+
+    internal const string PsWindowsUpdateHistoryScript = """
+        $ErrorActionPreference = 'Stop'
+        try {
+            Import-Module PSWindowsUpdate -ErrorAction Stop
+        }
+        catch {
+            [Console]::Error.WriteLine("PSWindowsUpdate import failed: $($_.Exception.Message)")
+            exit 41
+        }
+
+        try {
+            $hist = Get-WUHistory -Last 30 -ErrorAction Stop
+        }
+        catch {
+            [Console]::Error.WriteLine("PSWindowsUpdate history query failed: $($_.Exception.Message)")
+            exit 42
+        }
+
+        if (-not $hist -or $hist.Count -eq 0) { '[]' }
+        else {
+            $hist | Select-Object @{N='Title';E={$_.Title}},
+                @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
+                @{N='Size';E={''}},
+                @{N='Status';E={$_.Result}},
+                @{N='Date';E={if($_.Date){$_.Date.ToString('yyyy-MM-dd')}else{''}}},
+                @{N='IsHidden';E={$false}},
+                @{N='Category';E={'History'}} |
+            ConvertTo-Json -Compress
+        }
+        """;
+
     private readonly IPowerShellRunner _runner;
     private readonly WindowsUpdateService _wu;
     private readonly WindowsUpdatePolicyService _policy;
@@ -43,7 +93,19 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [ObservableProperty] private int _deferDays = 30;
     [ObservableProperty] private int _pauseDays = 7;
 
-    public WindowsUpdateViewModel(IPowerShellRunner runner, WindowsUpdateService wu, WindowsUpdatePolicyService policy)
+    public WindowsUpdateViewModel(
+        IPowerShellRunner runner,
+        WindowsUpdateService wu,
+        WindowsUpdatePolicyService policy)
+        : this(runner, wu, policy, AdminHelper.IsElevated)
+    {
+    }
+
+    internal WindowsUpdateViewModel(
+        IPowerShellRunner runner,
+        WindowsUpdateService wu,
+        WindowsUpdatePolicyService policy,
+        Func<bool> isElevated)
     {
         _runner = runner;
         _wu = wu;
@@ -55,7 +117,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         // long-running commands' CanExecute (disabling them while one runs prevents
         // a second command disposing the shared CTS the first is still awaiting).
         PropertyChanged += OnVmPropertyChanged;
-        IsElevated = AdminHelper.IsElevated();
+        IsElevated = (isElevated ?? throw new ArgumentNullException(nameof(isElevated)))();
         // PSWindowsUpdate is only needed for the History view, so we don't
         // probe for it at startup — the History command checks itself if
         // the module is missing. This keeps the constructor side-effect-free
@@ -162,43 +224,58 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     // Gated on NotBusy like the other runner-driven commands: CheckModule and
     // InstallModule stream through the shared _runner into the same console, so letting
     // them start while another update operation is running would cross-contaminate output
-    // (and race on the shared CTS). The internal call from InstallModuleAsync uses the
-    // method directly, so it is unaffected by this command-level gate.
+    // and race on the shared cancellation state.
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task CheckModuleAsync()
     {
         IsBusy = true;
         try
         {
-            var found = false;
-            void Listen(PowerShellLine l)
-            {
-                if (l.Kind == OutputKind.Output && l.Text.Contains("AVAILABLE")) found = true;
-            }
-            _runner.LineReceived += Listen;
-            try
-            {
-                await _runner.RunScriptViaPwshAsync(
-                    "if (Get-Module -ListAvailable -Name PSWindowsUpdate) { 'AVAILABLE' } else { 'MISSING' }");
-            }
-            finally { _runner.LineReceived -= Listen; }
-            ModuleAvailable = found;
+            ModuleAvailable = await ProbeModuleAvailabilityAsync();
             ModuleStatus = ModuleAvailable
                 ? "PSWindowsUpdate is available (used for update history)."
-                : "PSWindowsUpdate not installed — history view will be unavailable. Click Install Module if needed.";
+                : MissingModuleStatus();
         }
         catch (InvalidOperationException ex) { ModuleStatus = $"Check failed: {ex.Message}"; }
         catch (OperationCanceledException) { ModuleStatus = "Module check cancelled."; }
         finally { IsBusy = false; }
     }
 
+    private async Task<bool> ProbeModuleAvailabilityAsync()
+    {
+        var found = false;
+        void Listen(PowerShellLine line)
+        {
+            if (line.Kind == OutputKind.Output &&
+                line.Text.Contains("AVAILABLE", StringComparison.Ordinal))
+            {
+                found = true;
+            }
+        }
+
+        _runner.LineReceived += Listen;
+        try
+        {
+            var exitCode = await _runner.RunScriptViaPwshAsync(
+                "if (Get-Module -ListAvailable -Name PSWindowsUpdate) { 'AVAILABLE' } else { 'MISSING' }");
+            return exitCode == 0 && found;
+        }
+        finally
+        {
+            _runner.LineReceived -= Listen;
+        }
+    }
+
+    private string MissingModuleStatus() => IsElevated
+        ? "Update history is unavailable in administrator mode. Reopen SysManager normally to install or use the current-user module."
+        : "PSWindowsUpdate is not installed. Install it to enable update history.";
+
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task InstallModuleAsync()
     {
-        if (!AdminHelper.IsElevated())
+        if (IsElevated)
         {
-            StatusMessage = "Requesting admin rights...";
-            if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current?.Shutdown();
+            StatusMessage = "Install PSWindowsUpdate from a normal, non-administrator SysManager session.";
             return;
         }
         IsBusy = true;
@@ -207,16 +284,20 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         ShowConsole = true;
         try
         {
-            await _runner.RunScriptViaPwshAsync(@"
-                Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-                if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-                    Install-PackageProvider -Name NuGet -Force -Scope CurrentUser | Out-Null
-                }
-                Install-Module -Name PSWindowsUpdate -Force -Scope CurrentUser -AllowClobber
-                Import-Module PSWindowsUpdate
-                'INSTALLED'
-            ");
-            await CheckModuleAsync();
+            var exitCode = await _runner.RunScriptViaPwshAsync(PsWindowsUpdateInstallScript);
+            if (exitCode != 0)
+            {
+                ModuleAvailable = false;
+                ModuleStatus = "PSWindowsUpdate installation failed. Review the console output.";
+                StatusMessage = ModuleStatus;
+                return;
+            }
+
+            ModuleAvailable = await ProbeModuleAvailabilityAsync();
+            ModuleStatus = ModuleAvailable
+                ? "PSWindowsUpdate is available (used for update history)."
+                : "Installation completed, but PSWindowsUpdate could not be loaded.";
+            StatusMessage = ModuleStatus;
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         catch (OperationCanceledException) { StatusMessage = "Module install cancelled."; }
@@ -274,6 +355,9 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         IsShowingHistory = true;
         StatusMessage = "Loading update history…";
         Updates.Clear();
+        UpdateCount = 0;
+        TableSummary = "";
+        AllSelected = false;
         ShowConsole = false;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -290,33 +374,65 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             _runner.LineReceived += Capture;
             try
             {
-                await _runner.RunScriptViaPwshAsync(@"
-                    Import-Module PSWindowsUpdate -ErrorAction Stop
-                    $hist = Get-WUHistory -Last 30 -ErrorAction SilentlyContinue
-                    if (-not $hist -or $hist.Count -eq 0) { '[]' }
-                    else {
-                        $hist | Select-Object @{N='Title';E={$_.Title}},
-                            @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
-                            @{N='Size';E={''}},
-                            @{N='Status';E={$_.Result}},
-                            @{N='Date';E={if($_.Date){$_.Date.ToString('yyyy-MM-dd')}else{''}}},
-                            @{N='IsHidden';E={$false}},
-                            @{N='Category';E={'History'}} |
-                        ConvertTo-Json -Compress
-                    }
-                ", cancellationToken: _cts.Token);
+                var exitCode = await _runner.RunScriptViaPwshAsync(
+                    PsWindowsUpdateHistoryScript,
+                    cancellationToken: _cts.Token);
+                if (exitCode != 0)
+                {
+                    SetHistoryFailureState(exitCode);
+                    return;
+                }
             }
             finally { _runner.LineReceived -= Capture; }
 
-            ParseUpdateJson(json.ToString());
+            ModuleAvailable = true;
+            ModuleStatus = "PSWindowsUpdate is available (used for update history).";
+            if (!ParseUpdateJson(json.ToString()))
+            {
+                TableSummary = "Update history unavailable.";
+                ShowConsole = true;
+                StatusMessage = "Update history returned invalid data.";
+                return;
+            }
             UpdateCount = Updates.Count;
             TableSummary = $"{UpdateCount} history entries.";
             StatusMessage = "Done";
             ToastService.Instance.Show("Update History complete", $"{UpdateCount} history entries");
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        catch (InvalidOperationException ex)
+        {
+            TableSummary = "Update history unavailable.";
+            ModuleAvailable = false;
+            ModuleStatus = "PSWindowsUpdate availability could not be confirmed.";
+            ShowConsole = true;
+            StatusMessage = $"Error: {ex.Message}";
+        }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    private void SetHistoryFailureState(int exitCode)
+    {
+        TableSummary = "Update history unavailable.";
+        ShowConsole = true;
+        switch (exitCode)
+        {
+            case HistoryModuleImportFailedExitCode:
+                ModuleAvailable = false;
+                ModuleStatus = MissingModuleStatus();
+                StatusMessage = ModuleStatus;
+                break;
+            case HistoryQueryFailedExitCode:
+                ModuleAvailable = true;
+                ModuleStatus = "PSWindowsUpdate is available (used for update history).";
+                StatusMessage = "Update history query failed. Review the console output.";
+                break;
+            default:
+                ModuleAvailable = false;
+                ModuleStatus = "PSWindowsUpdate availability could not be confirmed.";
+                StatusMessage = "Update history could not be loaded. Review the console output.";
+                break;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
@@ -451,9 +567,9 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
 
-    private void ParseUpdateJson(string raw)
+    private bool ParseUpdateJson(string raw)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return;
+        if (string.IsNullOrWhiteSpace(raw)) return false;
 
         try
         {
@@ -477,11 +593,12 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             {
                 Updates.Add(entry);
             }
+            return true;
         }
         catch (JsonException ex)
         {
             Log.Warning("Failed to parse update JSON: {Error}", ex.Message);
-            StatusMessage = "Parse error — some updates may not be shown.";
+            return false;
         }
     }
 

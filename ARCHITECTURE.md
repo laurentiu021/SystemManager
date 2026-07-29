@@ -135,7 +135,10 @@ Key services:
   auto-downloaded on first use.
 - `PowerShellRunner` — wraps `System.Management.Automation` to run scripts
   and stream output line-by-line. Always launches spawned processes from
-  `System32` so `Access is denied` never bites on `chkdsk` etc.
+  `System32` so `Access is denied` never bites on `chkdsk` etc. Normal sessions
+  use an in-process runspace and retain per-user modules. Elevated sessions use
+  an isolated Windows PowerShell 5.1 child with module discovery limited to canonical
+  machine-owned roots, avoiding process-global environment mutation.
 - `WingetService` — shells out to `winget` and parses its table output.
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting; backs `WindowsUpdateViewModel`.

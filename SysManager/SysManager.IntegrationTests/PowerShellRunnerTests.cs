@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Reflection;
 using SysManager.Services;
 
@@ -17,6 +18,146 @@ public class PowerShellRunnerTests
         var result = await runner.RunAsync("2 + 2");
         Assert.NotEmpty(result);
         Assert.Equal(4, (int)result[0].BaseObject);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenElevated_IsolatesModuleDiscoveryInChildProcess()
+    {
+        const string marker = "UNTRUSTED_MODULE_EXECUTED";
+        var tempRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"sysmanager-psmodule-test-{Guid.NewGuid():N}");
+        var moduleRoot = Path.Combine(tempRoot, "SysManagerProbe");
+        var parentModulePath = Environment.GetEnvironmentVariable("PSModulePath");
+
+        try
+        {
+            Directory.CreateDirectory(moduleRoot);
+            await File.WriteAllTextAsync(
+                Path.Combine(moduleRoot, "SysManagerProbe.psd1"),
+                "@{ RootModule='SysManagerProbe.psm1'; ModuleVersion='1.0.0'; " +
+                "FunctionsToExport=@('Invoke-SysManagerProbe') }");
+            await File.WriteAllTextAsync(
+                Path.Combine(moduleRoot, "SysManagerProbe.psm1"),
+                $"function Invoke-SysManagerProbe {{ '{marker}' }}; " +
+                "Export-ModuleMember -Function Invoke-SysManagerProbe");
+
+            var inheritedModulePath = string.Join(
+                Path.PathSeparator,
+                new[] { tempRoot, parentModulePath }
+                    .Where(static path => !string.IsNullOrWhiteSpace(path)));
+            Environment.SetEnvironmentVariable("PSModulePath", inheritedModulePath);
+
+            var runner = new PowerShellRunner(
+                action => Task.Run(action),
+                isElevated: static () => true);
+            var sawCommandNotFound = false;
+            runner.LineReceived += line =>
+                sawCommandNotFound |= line.Kind == Models.OutputKind.Error;
+
+            var injectedResult = await runner.RunAsync("Invoke-SysManagerProbe");
+            var trustedResult = await runner.RunAsync(
+                "(Get-Command Get-NetAdapter -ErrorAction Stop).Source");
+
+            Assert.DoesNotContain(injectedResult, item =>
+                string.Equals(item.BaseObject?.ToString(), marker, StringComparison.Ordinal));
+            Assert.True(sawCommandNotFound);
+            Assert.Contains(trustedResult, item =>
+                string.Equals(
+                    item.BaseObject?.ToString(),
+                    "NetAdapter",
+                    StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(
+                inheritedModulePath,
+                Environment.GetEnvironmentVariable("PSModulePath"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PSModulePath", parentModulePath);
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ElevatedPowerShell_WhenStartupWouldRestorePersonalModules_ReassertsTrustedPath()
+    {
+        var machineModulePath = Environment.GetEnvironmentVariable(
+            "PSModulePath",
+            EnvironmentVariableTarget.Machine);
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        Assert.False(string.IsNullOrWhiteSpace(machineModulePath));
+        Assert.False(string.IsNullOrWhiteSpace(documents));
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var moduleName = $"SysManagerPersonalProbe_{suffix}";
+        var commandName = $"Invoke-SysManagerPersonalProbe{suffix}";
+        var marker = $"UNTRUSTED_PERSONAL_MODULE_{suffix}";
+        var windowsPowerShellRoot = Path.Combine(documents, "WindowsPowerShell");
+        var personalModulesRoot = Path.Combine(windowsPowerShellRoot, "Modules");
+        var moduleRoot = Path.Combine(personalModulesRoot, moduleName);
+        var windowsPowerShellRootExisted = Directory.Exists(windowsPowerShellRoot);
+        var personalModulesRootExisted = Directory.Exists(personalModulesRoot);
+        var parentModulePath = Environment.GetEnvironmentVariable("PSModulePath");
+
+        try
+        {
+            Directory.CreateDirectory(moduleRoot);
+            await File.WriteAllTextAsync(
+                Path.Combine(moduleRoot, $"{moduleName}.psd1"),
+                $"@{{ RootModule='{moduleName}.psm1'; ModuleVersion='1.0.0'; " +
+                $"FunctionsToExport=@('{commandName}') }}");
+            await File.WriteAllTextAsync(
+                Path.Combine(moduleRoot, $"{moduleName}.psm1"),
+                $"function {commandName} {{ '{marker}' }}; " +
+                $"Export-ModuleMember -Function {commandName}");
+
+            var runner = new PowerShellRunner(
+                action => Task.Run(action),
+                isElevated: static () => true,
+                trustedPowerShellModulePath: machineModulePath);
+            var lines = new List<Models.PowerShellLine>();
+            runner.LineReceived += lines.Add;
+
+            var runspaceResults = await runner.RunAsync(commandName);
+            Assert.DoesNotContain(
+                runspaceResults,
+                item => string.Equals(
+                    item.BaseObject?.ToString(),
+                    marker,
+                    StringComparison.Ordinal));
+            Assert.Contains(lines, line => line.Kind == Models.OutputKind.Error);
+
+            lines.Clear();
+            var childExitCode = await runner.RunScriptViaPwshAsync(
+                $"$ErrorActionPreference='Stop'; {commandName}");
+            Assert.NotEqual(0, childExitCode);
+            Assert.DoesNotContain(
+                lines,
+                line => line.Text.Contains(marker, StringComparison.Ordinal));
+            Assert.Equal(
+                parentModulePath,
+                Environment.GetEnvironmentVariable("PSModulePath"));
+        }
+        finally
+        {
+            if (Directory.Exists(moduleRoot))
+                Directory.Delete(moduleRoot, recursive: true);
+
+            if (!personalModulesRootExisted &&
+                Directory.Exists(personalModulesRoot) &&
+                !Directory.EnumerateFileSystemEntries(personalModulesRoot).Any())
+            {
+                Directory.Delete(personalModulesRoot);
+            }
+
+            if (!windowsPowerShellRootExisted &&
+                Directory.Exists(windowsPowerShellRoot) &&
+                !Directory.EnumerateFileSystemEntries(windowsPowerShellRoot).Any())
+            {
+                Directory.Delete(windowsPowerShellRoot);
+            }
+        }
     }
 
     [Fact]

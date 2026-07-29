@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.2] - 2026-07-29
+
+### Security
+- **Blocked per-user PowerShell module hijacking in administrator sessions.** Since the initial v0.3.0 runner, both in-process runspaces and child `powershell.exe` processes inherited the caller's `PSModulePath`, whose first entry normally points to the current user's writable Documents folder. A planted module could therefore be auto-loaded with SysManager's administrator token when a built-in command such as `Get-NetAdapter` was resolved. Elevated in-process work now moves into an isolated Windows PowerShell 5.1 child whose environment contains only canonical machine-owned module roots under Program Files and System32; existing child-process execution receives the same restriction. Normal unelevated sessions retain per-user module support, and the parent process environment is never rewritten.
+
+### Fixed
+- **Kept optional Windows Update history installation on the correct privilege boundary.** SysManager now installs PSWindowsUpdate only from a normal, non-administrator session into the current user's module directory. The installer verifies the canonical PowerShell Gallery endpoint and explicitly selects `PSGallery`; an elevated session refuses the install instead of consuming user-writable PowerShellGet repository state with an administrator token. Failed module imports now expose installation guidance instead of reporting a successful empty history.
+
 ## [1.56.1] - 2026-07-28
 
 ### Security

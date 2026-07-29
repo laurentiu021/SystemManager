@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections;
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using Serilog;
@@ -151,14 +152,28 @@ public sealed class DefenderService
         catch (OverflowException) { return 0; }
     }
 
-    internal static IReadOnlyList<string> ToStringList(object? v)
+    internal static IReadOnlyList<string> ToStringList(object? value)
     {
-        if (v is null) return [];
-        if (v is object[] arr)
-            return arr.Where(x => x is not null).Select(x => x.ToString() ?? "").Where(s => s.Length > 0).ToList();
-        string single = v.ToString() ?? "";
+        value = UnwrapPsObject(value);
+        if (value is null) return [];
+        if (value is string text)
+            return text.Length > 0 ? [text] : [];
+        if (value is IEnumerable values)
+        {
+            return values.Cast<object?>()
+                .Select(UnwrapPsObject)
+                .Where(item => item is not null)
+                .Select(item => item!.ToString() ?? "")
+                .Where(item => item.Length > 0)
+                .ToList();
+        }
+
+        string single = value.ToString() ?? "";
         return single.Length > 0 ? [single] : [];
     }
+
+    private static object? UnwrapPsObject(object? value)
+        => value is PSObject psObject ? psObject.BaseObject : value;
 
     internal static int ClampTri(int value) => value is >= 0 and <= 2 ? value : 0;
 }

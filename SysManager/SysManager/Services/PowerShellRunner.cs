@@ -10,13 +10,13 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// Runs PowerShell scripts in-process with live streaming of all output streams.
-/// Uses System.Management.Automation so we don't spawn external pwsh.exe processes.
+/// Runs PowerShell scripts with live streaming of all output streams. Normal sessions
+/// use an in-process runspace; elevated sessions use an isolated Windows PowerShell 5.1
+/// child so per-user module paths never enter an administrator runspace.
 ///
-/// <para><b>Security note (SEC-005 / SEC-M8):</b> ExecutionPolicy is set to Bypass for
-/// in-process runspaces because SysManager only executes its own static scripts — never
-/// user-supplied or downloaded scripts. RunScriptViaPwshAsync also uses -ExecutionPolicy
-/// Bypass for the same reason.</para>
+/// <para><b>Security note (SEC-005 / SEC-M8):</b> ExecutionPolicy is set to Bypass because
+/// SysManager only executes its own static scripts — never user-supplied or downloaded
+/// scripts. Elevated child processes also receive a machine-owned-only module path.</para>
 ///
 /// <para><b>SECURITY CONTRACT:</b> Callers MUST only pass hard-coded script strings to
 /// RunAsync and RunScriptViaPwshAsync. User input MUST NEVER be interpolated into scripts.
@@ -28,6 +28,8 @@ public sealed class PowerShellRunner : IPowerShellRunner
     private readonly Func<Action, Task> _scheduleProcessStart;
     private readonly Func<System.Diagnostics.Process, CancellationToken, Task> _waitForProcessExit;
     private readonly Action<System.Diagnostics.Process> _terminateProcessTree;
+    private readonly bool _isElevated;
+    private readonly string _trustedPowerShellModulePath;
 
     public PowerShellRunner()
         : this(action => Task.Run(action))
@@ -37,7 +39,9 @@ public sealed class PowerShellRunner : IPowerShellRunner
     internal PowerShellRunner(
         Func<Action, Task> scheduleProcessStart,
         Func<System.Diagnostics.Process, CancellationToken, Task>? waitForProcessExit = null,
-        Action<System.Diagnostics.Process>? terminateProcessTree = null)
+        Action<System.Diagnostics.Process>? terminateProcessTree = null,
+        Func<bool>? isElevated = null,
+        string? trustedPowerShellModulePath = null)
     {
         _scheduleProcessStart = scheduleProcessStart
             ?? throw new ArgumentNullException(nameof(scheduleProcessStart));
@@ -45,6 +49,19 @@ public sealed class PowerShellRunner : IPowerShellRunner
             ?? (static (process, cancellationToken) => process.WaitForExitAsync(cancellationToken));
         _terminateProcessTree = terminateProcessTree
             ?? (static process => process.Kill(entireProcessTree: true));
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        _isElevated = (isElevated ?? Helpers.AdminHelper.IsElevated)();
+        var configuredModulePath = trustedPowerShellModulePath
+            ?? BuildTrustedPowerShellModulePath(
+                programFiles,
+                Environment.SystemDirectory);
+        _trustedPowerShellModulePath = EnsureDistinctFromMachinePowerShellModulePath(
+            configuredModulePath,
+            Environment.GetEnvironmentVariable(
+                "PSModulePath",
+                EnvironmentVariableTarget.Machine),
+            programFiles);
     }
 
     /// <summary>
@@ -76,7 +93,8 @@ public sealed class PowerShellRunner : IPowerShellRunner
     }
 
     /// <summary>
-    /// Execute a script and return the collected PSObject results.
+    /// Execute a script and return the collected PSObject results. Elevated execution
+    /// is isolated in a child process with a sanitized module path.
     /// All streams are forwarded via <see cref="LineReceived"/> for live UI display.
     /// </summary>
     public async Task<Collection<PSObject>> RunAsync(
@@ -84,10 +102,9 @@ public sealed class PowerShellRunner : IPowerShellRunner
         IDictionary<string, object?>? parameters = null,
         CancellationToken cancellationToken = default)
     {
-        var iss = InitialSessionState.CreateDefault2();
-        iss.ExecutionPolicy = Microsoft.PowerShell.ExecutionPolicy.Bypass;
-
-        using var runspace = RunspaceFactory.CreateRunspace(iss);
+        var (runspace, processInstance) = CreateRunspace();
+        using var processLifetime = processInstance;
+        using var runspaceLifetime = runspace;
         // Open the runspace on a thread-pool thread — this can take
         // several hundred milliseconds and must not block the UI.
         await Task.Run(() => runspace.Open()).ConfigureAwait(false);
@@ -156,7 +173,7 @@ public sealed class PowerShellRunner : IPowerShellRunner
         {
             // Cancellation calls ps.Stop(), which makes EndInvoke throw PipelineStoppedException.
             // Surface the standard cancellation signal so callers that catch OperationCanceledException
-            // treat a cancelled in-process run as cancelled rather than as an error.
+            // treat a cancelled PowerShell run as cancelled rather than as an error.
             throw new OperationCanceledException(cancellationToken);
         }
 
@@ -175,8 +192,11 @@ public sealed class PowerShellRunner : IPowerShellRunner
     {
         // Prefix to silence progress (which gets serialized as CLIXML in stderr
         // when pwsh runs under a non-PS host) and set UTF-8 for clean text.
+        var modulePathInitialization = _isElevated
+            ? BuildPowerShellModulePathAssignment(_trustedPowerShellModulePath)
+            : string.Empty;
         var wrapped =
-            "$ProgressPreference='SilentlyContinue';" +
+            modulePathInitialization + "$ProgressPreference='SilentlyContinue';" +
             "$WarningPreference='Continue';" +
             "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;" +
             script;
@@ -223,6 +243,10 @@ public sealed class PowerShellRunner : IPowerShellRunner
             StandardOutputEncoding = enc,
             StandardErrorEncoding = enc,
         };
+        ApplyTrustedPowerShellModulePath(
+            psi,
+            _isElevated,
+            _trustedPowerShellModulePath);
 
         using var proc = new System.Diagnostics.Process { StartInfo = psi, EnableRaisingEvents = true };
         proc.OutputDataReceived += (_, e) =>
@@ -356,6 +380,152 @@ public sealed class PowerShellRunner : IPowerShellRunner
 
         await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
         return true;
+    }
+
+    internal static string BuildTrustedPowerShellModulePath(
+        string programFiles,
+        string systemDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(programFiles) ||
+            !System.IO.Path.IsPathFullyQualified(programFiles))
+        {
+            throw new ArgumentException(
+                "Program Files must be a fully qualified path.",
+                nameof(programFiles));
+        }
+
+        if (string.IsNullOrWhiteSpace(systemDirectory) ||
+            !System.IO.Path.IsPathFullyQualified(systemDirectory))
+        {
+            throw new ArgumentException(
+                "The system directory must be a fully qualified path.",
+                nameof(systemDirectory));
+        }
+
+        var trustedRoots = new[]
+        {
+            System.IO.Path.Combine(programFiles, "WindowsPowerShell", "Modules"),
+            System.IO.Path.Combine(
+                systemDirectory,
+                "WindowsPowerShell",
+                "v1.0",
+                "Modules"),
+            System.IO.Path.Combine(programFiles, "PowerShell", "Modules")
+        };
+
+        return string.Join(
+            System.IO.Path.PathSeparator,
+            trustedRoots
+                .Select(System.IO.Path.GetFullPath)
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    internal static string EnsureDistinctFromMachinePowerShellModulePath(
+        string trustedModulePath,
+        string? machineModulePath,
+        string programFiles)
+    {
+        if (string.IsNullOrWhiteSpace(trustedModulePath))
+        {
+            throw new ArgumentException(
+                "The trusted PowerShell module path cannot be empty.",
+                nameof(trustedModulePath));
+        }
+
+        if (!string.Equals(
+                trustedModulePath,
+                machineModulePath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return trustedModulePath;
+        }
+
+        if (string.IsNullOrWhiteSpace(programFiles) ||
+            !System.IO.Path.IsPathFullyQualified(programFiles))
+        {
+            throw new ArgumentException(
+                "Program Files must be a fully qualified path.",
+                nameof(programFiles));
+        }
+
+        var guardRoot = System.IO.Path.GetFullPath(
+            System.IO.Path.Combine(
+                programFiles,
+                "SysManager",
+                "PowerShellModules"));
+        return string.Join(
+            System.IO.Path.PathSeparator,
+            trustedModulePath,
+            guardRoot);
+    }
+
+    internal static string BuildPowerShellModulePathAssignment(string trustedModulePath)
+    {
+        if (string.IsNullOrWhiteSpace(trustedModulePath))
+        {
+            throw new ArgumentException(
+                "The trusted PowerShell module path cannot be empty.",
+                nameof(trustedModulePath));
+        }
+
+        var escapedPath = trustedModulePath.Replace("'", "''", StringComparison.Ordinal);
+        return $"$env:PSModulePath='{escapedPath}';";
+    }
+
+    private (Runspace Runspace, PowerShellProcessInstance? ProcessInstance) CreateRunspace()
+    {
+        if (!_isElevated)
+        {
+            var initialSessionState = InitialSessionState.CreateDefault2();
+            initialSessionState.ExecutionPolicy = Microsoft.PowerShell.ExecutionPolicy.Bypass;
+            return (RunspaceFactory.CreateRunspace(initialSessionState), null);
+        }
+
+        var processInstance = new PowerShellProcessInstance(
+            new Version(5, 1),
+            credential: null,
+            initializationScript: ScriptBlock.Create(
+                BuildPowerShellModulePathAssignment(_trustedPowerShellModulePath)),
+            useWow64: false);
+        Runspace? runspace = null;
+        try
+        {
+            ApplyTrustedPowerShellModulePath(
+                processInstance.Process.StartInfo,
+                isElevated: true,
+                _trustedPowerShellModulePath);
+
+            runspace = RunspaceFactory.CreateOutOfProcessRunspace(
+                TypeTable.LoadDefaultTypeFiles(),
+                processInstance);
+            return (runspace, processInstance);
+        }
+        finally
+        {
+            if (runspace is null)
+                processInstance.Dispose();
+        }
+    }
+
+    internal static void ApplyTrustedPowerShellModulePath(
+        System.Diagnostics.ProcessStartInfo startInfo,
+        bool isElevated,
+        string trustedModulePath)
+    {
+        ArgumentNullException.ThrowIfNull(startInfo);
+        if (!isElevated || !IsPowerShellExecutable(startInfo.FileName))
+            return;
+
+        startInfo.Environment["PSModulePath"] = trustedModulePath;
+    }
+
+    private static bool IsPowerShellExecutable(string fileName)
+    {
+        var leafName = System.IO.Path.GetFileName(fileName);
+        return leafName.Equals("powershell", StringComparison.OrdinalIgnoreCase)
+            || leafName.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase)
+            || leafName.Equals("pwsh", StringComparison.OrdinalIgnoreCase)
+            || leafName.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsClixmlNoise(string line)

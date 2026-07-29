@@ -57,6 +57,255 @@ public class WindowsUpdateViewModelTests
         Assert.Equal(0, vm.UpdateCount);
     }
 
+    [Fact]
+    public void PsWindowsUpdateInstallScript_PinsGalleryAndUsesCurrentUserScope()
+    {
+        Assert.Contains(
+            "https://www.powershellgallery.com/api/v2",
+            WindowsUpdateViewModel.PsWindowsUpdateInstallScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$ErrorActionPreference = 'Stop'",
+            WindowsUpdateViewModel.PsWindowsUpdateInstallScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Install-PackageProvider -Name NuGet -Force -Scope CurrentUser",
+            WindowsUpdateViewModel.PsWindowsUpdateInstallScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Install-Module -Name PSWindowsUpdate -Force -Scope CurrentUser -Repository PSGallery",
+            WindowsUpdateViewModel.PsWindowsUpdateInstallScript,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "AllUsers",
+            WindowsUpdateViewModel.PsWindowsUpdateInstallScript,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InstallModule_WhenElevated_RefusesWithoutRunningPowerShell()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = new WindowsUpdateViewModel(
+            runner,
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => true);
+
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        await runner.DidNotReceiveWithAnyArgs()
+            .RunScriptViaPwshAsync(default!, default);
+        Assert.Contains("non-administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task InstallModule_WhenNotElevated_RunsPinnedCurrentUserInstall()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(0);
+        var vm = new WindowsUpdateViewModel(
+            runner,
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => false);
+
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        await runner.Received(1).RunScriptViaPwshAsync(
+            Arg.Is<string>(script =>
+                script != null &&
+                script.Contains("-Scope CurrentUser", StringComparison.Ordinal) &&
+                script.Contains("-Repository PSGallery", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task InstallModule_WhenPowerShellFails_ExposesFailureAndModuleRemediation()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(1);
+        var vm = new WindowsUpdateViewModel(
+            runner,
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => false);
+
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        Assert.False(vm.ModuleAvailable);
+        Assert.Contains("failed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        await runner.Received(1).RunScriptViaPwshAsync(
+            WindowsUpdateViewModel.PsWindowsUpdateInstallScript,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShowHistory_WhenModuleImportFails_DoesNotReportEmptySuccess()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(WindowsUpdateViewModel.HistoryModuleImportFailedExitCode);
+        var vm = new WindowsUpdateViewModel(
+            runner,
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => false);
+        vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
+        vm.UpdateCount = 1;
+        vm.TableSummary = "1 history entries.";
+
+        await vm.ShowHistoryCommand.ExecuteAsync(null);
+
+        Assert.False(vm.ModuleAvailable);
+        Assert.Empty(vm.Updates);
+        Assert.Equal(0, vm.UpdateCount);
+        Assert.Equal("Update history unavailable.", vm.TableSummary);
+        Assert.Contains("not installed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.True(vm.ShowConsole);
+        Assert.NotEqual("Done", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ShowHistory_WhenQueryFails_PreservesModuleAvailabilityAndClearsPriorState()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(WindowsUpdateViewModel.HistoryQueryFailedExitCode);
+        var vm = new WindowsUpdateViewModel(
+            runner,
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => false);
+        vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
+        vm.UpdateCount = 1;
+        vm.TableSummary = "1 history entries.";
+
+        await vm.ShowHistoryCommand.ExecuteAsync(null);
+
+        Assert.True(vm.ModuleAvailable);
+        Assert.Empty(vm.Updates);
+        Assert.Equal(0, vm.UpdateCount);
+        Assert.Equal("Update history unavailable.", vm.TableSummary);
+        Assert.Contains("query failed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not installed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.True(vm.ShowConsole);
+        Assert.NotEqual("Done", vm.StatusMessage);
+    }
+
+    [Fact]
+    public void PsWindowsUpdateHistoryScript_UsesDistinctImportAndQueryExitCodes()
+    {
+        Assert.Contains(
+            $"exit {WindowsUpdateViewModel.HistoryModuleImportFailedExitCode}",
+            WindowsUpdateViewModel.PsWindowsUpdateHistoryScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"exit {WindowsUpdateViewModel.HistoryQueryFailedExitCode}",
+            WindowsUpdateViewModel.PsWindowsUpdateHistoryScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Get-WUHistory -Last 30 -ErrorAction Stop",
+            WindowsUpdateViewModel.PsWindowsUpdateHistoryScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "[Console]::Error.WriteLine",
+            WindowsUpdateViewModel.PsWindowsUpdateHistoryScript,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Write-Error",
+            WindowsUpdateViewModel.PsWindowsUpdateHistoryScript,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShowHistory_WhenOutputIsInvalid_DoesNotReportSuccess()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                runner.LineReceived += Raise.Event<Action<PowerShellLine>>(
+                    PowerShellLine.Output("not json"));
+                return 0;
+            });
+        var vm = new WindowsUpdateViewModel(
+            runner,
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => false);
+        vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
+        vm.UpdateCount = 1;
+        vm.TableSummary = "1 history entries.";
+
+        await vm.ShowHistoryCommand.ExecuteAsync(null);
+
+        Assert.True(vm.ModuleAvailable);
+        Assert.Empty(vm.Updates);
+        Assert.Equal(0, vm.UpdateCount);
+        Assert.Equal("Update history unavailable.", vm.TableSummary);
+        Assert.Contains("invalid data", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.True(vm.ShowConsole);
+        Assert.NotEqual("Done", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ShowHistory_WhenProcessFails_ReportsUnknownAvailabilityAndClearsPriorState()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(1);
+        var vm = new WindowsUpdateViewModel(
+            runner,
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => false);
+        vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
+        vm.UpdateCount = 1;
+
+        await vm.ShowHistoryCommand.ExecuteAsync(null);
+
+        Assert.False(vm.ModuleAvailable);
+        Assert.Empty(vm.Updates);
+        Assert.Equal(0, vm.UpdateCount);
+        Assert.Equal("Update history unavailable.", vm.TableSummary);
+        Assert.Contains("could not be confirmed", vm.ModuleStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("could not be loaded", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.True(vm.ShowConsole);
+        Assert.NotEqual("Done", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ShowHistory_WhenRunnerThrows_ClearsAvailabilityAndPriorState()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<Task<int>>(_ => throw new InvalidOperationException("process failed"));
+        var vm = new WindowsUpdateViewModel(
+            runner,
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => false);
+        vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
+        vm.UpdateCount = 1;
+
+        await vm.ShowHistoryCommand.ExecuteAsync(null);
+
+        Assert.False(vm.ModuleAvailable);
+        Assert.Empty(vm.Updates);
+        Assert.Equal(0, vm.UpdateCount);
+        Assert.Equal("Update history unavailable.", vm.TableSummary);
+        Assert.Contains(
+            "could not be confirmed",
+            vm.ModuleStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("process failed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.True(vm.ShowConsole);
+        Assert.NotEqual("Done", vm.StatusMessage);
+    }
+
     // ---------- commands exist ----------
 
     [Theory]

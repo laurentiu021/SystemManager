@@ -2,7 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections;
+using System.Collections.ObjectModel;
 using System.Management.Automation;
+using NSubstitute;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -40,6 +43,60 @@ public class DefenderServiceTests
     {
         Assert.Single(DefenderService.ToStringList(@"C:\One"));
         Assert.Empty(DefenderService.ToStringList(null));
+    }
+
+    [Fact]
+    public void ToStringList_FromRemotingCollectionShape()
+    {
+        var deserialized = new PSObject(new ArrayList
+        {
+            new PSObject(@"C:\Games"),
+            new PSObject(@"D:\Steam"),
+            new PSObject("")
+        });
+
+        var list = DefenderService.ToStringList(deserialized);
+
+        Assert.Equal(new[] { @"C:\Games", @"D:\Steam" }, list);
+    }
+
+    [Fact]
+    public async Task MutationScripts_DeclareAndBindTheirParameters()
+    {
+        const string path = @"C:\Games";
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new Collection<PSObject>());
+        var service = new DefenderService(runner);
+
+        await service.SetPuaProtectionAsync(1);
+        await service.SetControlledFolderAccessAsync(2);
+        await service.AddExclusionPathAsync(path);
+        await service.RemoveExclusionPathAsync(path);
+
+        await runner.Received(1).RunAsync(
+            "param([int]$Value) Set-MpPreference -PUAProtection $Value",
+            Arg.Is<IDictionary<string, object?>?>(values =>
+                values != null && Equals(values["Value"], 1)),
+            Arg.Any<CancellationToken>());
+        await runner.Received(1).RunAsync(
+            "param([int]$Value) Set-MpPreference -EnableControlledFolderAccess $Value",
+            Arg.Is<IDictionary<string, object?>?>(values =>
+                values != null && Equals(values["Value"], 2)),
+            Arg.Any<CancellationToken>());
+        await runner.Received(1).RunAsync(
+            "param([string]$Path) Add-MpPreference -ExclusionPath $Path",
+            Arg.Is<IDictionary<string, object?>?>(values =>
+                values != null && Equals(values["Path"], path)),
+            Arg.Any<CancellationToken>());
+        await runner.Received(1).RunAsync(
+            "param([string]$Path) Remove-MpPreference -ExclusionPath $Path",
+            Arg.Is<IDictionary<string, object?>?>(values =>
+                values != null && Equals(values["Path"], path)),
+            Arg.Any<CancellationToken>());
     }
 
     [Theory]

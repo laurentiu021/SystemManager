@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Management.Automation;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -92,6 +93,24 @@ public class RestorePointServiceTests
     [Fact]
     public void Parse_EmptyInput_ReturnsEmpty()
         => Assert.Empty(RestorePointService.ParseRestorePoints([]));
+
+    [Fact]
+    public async Task CreateAsync_PowerShellHostUnavailable_ReturnsFalse()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<System.Collections.ObjectModel.Collection<PSObject>>>(
+                _ => throw new RuntimeException(
+                    "Windows PowerShell 5.1 is unavailable."));
+        var service = new RestorePointService(runner);
+
+        var created = await service.CreateAsync("Before changes");
+
+        Assert.False(created);
+    }
 
     // ---------- TypeDisplay mapping ----------
 

@@ -191,7 +191,11 @@ public sealed partial class EdgeOneDriveService
     {
         if (!TrySetEdgeBackgroundDisabled(true)) return EdgeOneDriveOutcome.NeedsAdmin;
         try { await _ps.RunAsync(BuildSetEdgeTasksScript(enabled: false), cancellationToken: ct).ConfigureAwait(false); }
-        catch (System.Management.Automation.RuntimeException ex) { Log.Debug("Edge: disable update tasks failed: {Error}", ex.Message); }
+        catch (System.Management.Automation.RuntimeException ex)
+        {
+            Log.Warning("Edge: policy was disabled, but update tasks could not be disabled: {Error}", ex.Message);
+            return EdgeOneDriveOutcome.Failed;
+        }
         Log.Information("Edge: disabled background/startup-boost and update tasks");
         return EdgeOneDriveOutcome.Success;
     }
@@ -205,7 +209,11 @@ public sealed partial class EdgeOneDriveService
     {
         if (!TrySetEdgeBackgroundDisabled(false)) return EdgeOneDriveOutcome.NeedsAdmin;
         try { await _ps.RunAsync(BuildSetEdgeTasksScript(enabled: true), cancellationToken: ct).ConfigureAwait(false); }
-        catch (System.Management.Automation.RuntimeException ex) { Log.Debug("Edge: enable update tasks failed: {Error}", ex.Message); }
+        catch (System.Management.Automation.RuntimeException ex)
+        {
+            Log.Warning("Edge: policy was restored, but update tasks could not be enabled: {Error}", ex.Message);
+            return EdgeOneDriveOutcome.Failed;
+        }
         Log.Information("Edge: restored background/startup-boost and update tasks");
         return EdgeOneDriveOutcome.Success;
     }

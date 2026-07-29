@@ -48,6 +48,27 @@ public class SystemPathsTests
         Assert.EndsWith("powershell.exe", resolved, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("powershell")]
+    [InlineData("powershell.exe")]
+    [InlineData("POWERSHELL.EXE")]
+    public void ResolveSystemTool_PowerShellMissing_ReturnsRootedFailClosedPath(string name)
+    {
+        const string trustedSystemDirectory = @"C:\TrustedWindows\System32";
+
+        var resolved = SystemPaths.ResolveSystemTool(
+            name,
+            trustedSystemDirectory,
+            static _ => false);
+
+        Assert.Equal(
+            @"C:\TrustedWindows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            resolved,
+            ignoreCase: true);
+        Assert.True(Path.IsPathRooted(resolved));
+        Assert.NotEqual(name, resolved);
+    }
+
     [Fact]
     public void ResolveSystemTool_BareSystem32NameWithoutExe_ResolvesToRootedExistingPath()
     {

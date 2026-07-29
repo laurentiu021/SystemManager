@@ -105,11 +105,19 @@ public sealed class RestorePointService
             $"Checkpoint-Computer -Description '{safeDesc}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop; " +
             $"'{CreateOkSentinel}' " +
             "} catch { Write-Error $_; exit 1 }";
-        var results = await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
-        var ok = results.Any(o => string.Equals(o?.BaseObject?.ToString(), CreateOkSentinel, StringComparison.Ordinal));
-        if (!ok)
-            Log.Warning("RestorePoint: Checkpoint-Computer did not confirm success (it may be rate-limited to one per 24h).");
-        return ok;
+        try
+        {
+            var results = await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
+            var ok = results.Any(o => string.Equals(o?.BaseObject?.ToString(), CreateOkSentinel, StringComparison.Ordinal));
+            if (!ok)
+                Log.Warning("RestorePoint: Checkpoint-Computer did not confirm success (it may be rate-limited to one per 24h).");
+            return ok;
+        }
+        catch (RuntimeException ex)
+        {
+            Log.Warning("RestorePoint: creation failed: {Error}", ex.Message);
+            return false;
+        }
     }
 
     /// <summary>

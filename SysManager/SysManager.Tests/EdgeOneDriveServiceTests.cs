@@ -131,6 +131,45 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
             Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task DisableEdgeAsync_TaskMutationFails_ReturnsFailedInsteadOfPartialSuccess()
+    {
+        _runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Collection<PSObject>>>(
+                _ => throw new RuntimeException("Windows PowerShell is unavailable."));
+
+        var outcome = await _svc.DisableEdgeAsync();
+
+        Assert.Equal(EdgeOneDriveOutcome.Failed, outcome);
+        Assert.Equal(0, ReadEdgePolicy("BackgroundModeEnabled"));
+        Assert.Equal(0, ReadEdgePolicy("StartupBoostEnabled"));
+    }
+
+    [Fact]
+    public async Task RestoreEdgeAsync_TaskMutationFails_ReturnsFailedInsteadOfPartialSuccess()
+    {
+        using (var key = _root.CreateSubKey(EdgePolicyPath, writable: true)!)
+        {
+            key.SetValue("BackgroundModeEnabled", 0, RegistryValueKind.DWord);
+            key.SetValue("StartupBoostEnabled", 0, RegistryValueKind.DWord);
+        }
+        _runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Collection<PSObject>>>(
+                _ => throw new RuntimeException("Windows PowerShell is unavailable."));
+
+        var outcome = await _svc.RestoreEdgeAsync();
+
+        Assert.Equal(EdgeOneDriveOutcome.Failed, outcome);
+        Assert.Null(ReadEdgePolicy("BackgroundModeEnabled"));
+        Assert.Null(ReadEdgePolicy("StartupBoostEnabled"));
+    }
+
     // ── GetStatusAsync reads the redirected registry back ───────────────────
 
     [Fact]

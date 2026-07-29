@@ -308,7 +308,9 @@ a confirmation before it runs:
 - Reboot detection — toast notification if any update requires reboot
 - Pending-reboot check, update history (last 30 — via PSWindowsUpdate)
 - Admin banner with a one-click "Run as Administrator" relaunch
-- PSWindowsUpdate is optional now (used only for the History view)
+- PSWindowsUpdate is optional now (used only for the History view); install it
+  from a normal, non-administrator SysManager session. The installer validates
+  the official PowerShell Gallery endpoint and uses the current-user module directory
 - **Update timing & deferral** — defer feature updates by N days while security
   patches keep flowing, pause all updates for a bounded window (max 35 days, then
   Windows auto-resumes), or restore defaults. Uses the documented Windows Update

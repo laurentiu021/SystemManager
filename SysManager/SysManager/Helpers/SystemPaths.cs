@@ -67,9 +67,8 @@ internal static class SystemPaths
             ? new[] { fileName }
             : new[] { fileName, fileName + ".exe" };
 
-        foreach (var name in candidates)
+        foreach (var direct in candidates.Select(name => Path.Combine(systemDirectory, name)))
         {
-            var direct = Path.Combine(systemDirectory, name);
             if (fileExists(direct)) return direct;
         }
 

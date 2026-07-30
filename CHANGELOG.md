@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.3] - 2026-07-30
+
+### Security
+- **Prevented per-user backup data from authorizing elevated machine-wide registry changes.** Environment restore, introduced in v1.33.3, kept both User and Machine snapshots in a LocalAppData JSON file. An unprivileged process could edit that file and, when SysManager was later restored as administrator, choose valid Machine variable values and which Machine variables were deleted. New User snapshots now live under HKCU, while System snapshots are stored under an owner- and ACL-validated `HKLM\SOFTWARE\SysManagerEnvironmentBackup` key. Only that protected snapshot can drive HKLM restore; legacy LocalAppData data remains read-only compatibility input for User restore, and its `Machine` section is never migrated or trusted.
+
+### Fixed
+- **Rejected malformed environment backups before any restore write.** User and protected Machine snapshots are now parsed with bounded file, entry-count, name, value-length, and registry-kind validation. Null or missing sections, wrong JSON types, null values, duplicate names, unsupported registry kinds, and oversized content produce a safe invalid-backup result instead of a `NullReferenceException` or a partial restore.
+- **Preserved pristine backups across partial and scope-specific operations.** Present-but-invalid snapshots are never mistaken for missing data or overwritten, restore validates every present scope before its first write, and a System-only change no longer creates a User snapshot. Existing valid User files remain compatible, while new registry values publish atomically without an elevated write into a user-controlled filesystem path.
+
 ## [1.56.2] - 2026-07-29
 
 ### Security

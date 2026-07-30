@@ -140,8 +140,10 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Dedicated PATH editor** for PATH-like variables — reorder directories, remove
   entries, and strip duplicates in one click
 - **Missing folders highlighted** so you can spot dead PATH entries at a glance
-- **Local until Apply** — changes are staged; a one-time JSON backup of every
-  variable is written before the first write so the original environment is recoverable
+- **Local until Apply:** changes are staged and each scope gets a one-time safety
+  snapshot before its first write. New User snapshots stay under HKCU; System
+  snapshots use access-controlled HKLM storage, and only that protected source can
+  restore machine-wide variables
 - Changes broadcast to Windows, so new terminals pick them up without a reboot
 - System-scope edits need administrator rights (standard elevation banner); user
   variables can be edited without it

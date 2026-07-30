@@ -454,23 +454,25 @@ public sealed partial class EnvironmentVariableService
         }
 
         EnsureMachineBackupParentIsProtected();
-        var key = _machineRoot.CreateSubKey(
-            MachineBackupPath,
-            RegistryKeyPermissionCheck.ReadWriteSubTree,
-            RegistryOptions.None,
-            CreateProtectedMachineBackupSecurity())
-            ?? throw new UnauthorizedAccessException(
-                "The protected Machine backup key could not be created.");
-
-        if (!IsProtectedMachineBackupSecurity(key.GetAccessControl(
-                AccessControlSections.Owner | AccessControlSections.Access)))
+        using (var key = _machineRoot.CreateSubKey(
+                   MachineBackupPath,
+                   RegistryKeyPermissionCheck.ReadWriteSubTree,
+                   RegistryOptions.None,
+                   CreateProtectedMachineBackupSecurity())
+               ?? throw new UnauthorizedAccessException(
+                   "The protected Machine backup key could not be created."))
         {
-            key.Dispose();
-            throw new InvalidDataException(
-                "The Machine backup key is not protected from standard-user writes.");
+            if (!IsProtectedMachineBackupSecurity(key.GetAccessControl(
+                    AccessControlSections.Owner | AccessControlSections.Access)))
+            {
+                throw new InvalidDataException(
+                    "The Machine backup key is not protected from standard-user writes.");
+            }
         }
 
-        return key;
+        return _machineRoot.OpenSubKey(MachineBackupPath, writable: true)
+            ?? throw new UnauthorizedAccessException(
+                "The protected Machine backup key could not be reopened.");
     }
 
     private void EnsureMachineBackupParentIsProtected()
@@ -624,6 +626,14 @@ public sealed partial class EnvironmentVariableService
     private sealed record ScopeBackup(
         Dictionary<string, string> Values,
         Dictionary<string, RegistryValueKind>? Kinds);
+
+    private readonly record struct ScopeRestoreCounts(int Restored, int Removed, int Failed)
+    {
+        public ScopeRestoreCounts Add(ScopeRestoreCounts other) => new(
+            Restored + other.Restored,
+            Removed + other.Removed,
+            Failed + other.Failed);
+    }
 
     private readonly record struct BackupRead<T>(bool Exists, T? Snapshot)
         where T : class
@@ -968,36 +978,32 @@ public sealed partial class EnvironmentVariableService
         if (!hasValidBackup)
             return new RestoreResult(false, 0, 0, 0);
 
-        int restored = 0, removed = 0, failed = 0;
+        var counts = default(ScopeRestoreCounts);
         if (userBackup.Snapshot is { } userSnapshot)
-            RestoreScope(
+            counts = counts.Add(RestoreScope(
                 EnvVarScope.User,
                 userSnapshot.User,
-                userSnapshot.UserKinds,
-                ref restored,
-                ref removed,
-                ref failed);
+                userSnapshot.UserKinds));
         if (machineBackup.Snapshot is { } machineSnapshot)
-            RestoreScope(
+            counts = counts.Add(RestoreScope(
                 EnvVarScope.Machine,
                 machineSnapshot.Machine,
-                machineSnapshot.MachineKinds,
-                ref restored,
-                ref removed,
-                ref failed);
+                machineSnapshot.MachineKinds));
 
-        Log.Information("Environment: restored {Restored}, removed {Removed}, failed {Failed} from backup", restored, removed, failed);
-        return new RestoreResult(true, restored, removed, failed);
+        Log.Information(
+            "Environment: restored {Restored}, removed {Removed}, failed {Failed} from backup",
+            counts.Restored,
+            counts.Removed,
+            counts.Failed);
+        return new RestoreResult(true, counts.Restored, counts.Removed, counts.Failed);
     }
 
-    private void RestoreScope(
+    private ScopeRestoreCounts RestoreScope(
         EnvVarScope scope,
         Dictionary<string, string> saved,
-        Dictionary<string, RegistryValueKind>? kinds,
-        ref int restored,
-        ref int removed,
-        ref int failed)
+        Dictionary<string, RegistryValueKind>? kinds)
     {
+        int restored = 0, removed = 0, failed = 0;
         foreach (var (name, value) in saved)
         {
             RegistryValueKind? explicitKind = kinds is not null && kinds.TryGetValue(name, out var savedKind)
@@ -1013,5 +1019,7 @@ public sealed partial class EnvironmentVariableService
             if (DeleteVariable(current.Name, scope)) removed++;
             else failed++;
         }
+
+        return new ScopeRestoreCounts(restored, removed, failed);
     }
 }

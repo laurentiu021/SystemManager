@@ -635,6 +635,32 @@ public class EnvironmentVariableServiceTests
     }
 
     [Fact]
+    public void RestoreFromBackup_AggregatesCountsAcrossUserAndMachineScopes()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "original-user");
+        env.SetMachine("SAFE_MACHINE", "original-machine");
+        env.Service.EnsureBackup(includeUser: true, includeMachine: true);
+
+        env.SetUser("SAFE_USER", "changed-user");
+        env.SetUser("ADDED_USER", "added-user");
+        env.SetMachine("SAFE_MACHINE", "changed-machine");
+        env.SetMachine("ADDED_MACHINE", "added-machine");
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.True(result.HadBackup);
+        Assert.False(result.InvalidBackup);
+        Assert.Equal(2, result.Restored);
+        Assert.Equal(2, result.Removed);
+        Assert.Equal(0, result.Failed);
+        Assert.Equal("original-user", env.GetUser("SAFE_USER"));
+        Assert.Null(env.GetUser("ADDED_USER"));
+        Assert.Equal("original-machine", env.GetMachine("SAFE_MACHINE"));
+        Assert.Null(env.GetMachine("ADDED_MACHINE"));
+    }
+
+    [Fact]
     public void ReadBackup_ExactDuplicateNames_ReturnsNull()
     {
         using var env = new RedirectedEnvironment();

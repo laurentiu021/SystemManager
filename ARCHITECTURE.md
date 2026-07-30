@@ -236,10 +236,14 @@ Key services:
   (OS, CPU, memory, GPU, motherboard, storage health, network) into a
   `SystemReportData` payload, then renders it to plain text, self-contained
   HTML, or JSON so all three exports share a single source of truth.
-- `EnvironmentVariableService` — reads/writes User and Machine environment
-  variables via `Environment.SetEnvironmentVariable` (which broadcasts
-  WM_SETTINGCHANGE), with name validation, pure PATH split/join/dedupe helpers,
-  and a one-time JSON backup of the original environment before the first write.
+- `EnvironmentVariableService`: reads/writes User and Machine environment
+  variables directly through HKCU/HKLM so `REG_EXPAND_SZ` values round-trip
+  without flattening, then broadcasts `WM_SETTINGCHANGE`. It provides name
+  validation and pure PATH split/join/dedupe helpers. Reversibility uses
+  independent one-time snapshots in matching registry hives: User state under
+  HKCU and Machine state in access-controlled HKLM storage. Legacy LocalAppData
+  data remains read-only compatibility input for User restore and is never
+  authoritative for an elevated Machine restore.
 - `RestorePointService` — lists (`Get-ComputerRestorePoint`), creates
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested

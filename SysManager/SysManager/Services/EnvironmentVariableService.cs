@@ -4,6 +4,8 @@
 
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -29,21 +31,35 @@ namespace SysManager.Services;
 ///
 /// Machine-scope writes require administrator rights; <see cref="SetVariable"/> returns
 /// <c>false</c> (rather than throwing) when the write is denied, mirroring
-/// <see cref="PrivacyService"/>. A timestamped JSON backup of every variable is written
-/// before the first mutation so the user can fully restore the original environment.
+/// <see cref="PrivacyService"/>. New backups are stored in their matching registry hive:
+/// User state under HKCU and Machine state under access-controlled HKLM. Legacy
+/// LocalAppData backups remain read-only compatibility input for User restore only.
 /// </summary>
 public sealed partial class EnvironmentVariableService
 {
     // Registry locations of the two environment scopes.
-    private const string UserEnvPath = @"Environment";
-    private const string MachineEnvPath = @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+    internal const string UserEnvPath = @"Environment";
+    internal const string MachineEnvPath = @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+    internal const string UserBackupPath = @"SOFTWARE\SysManager\Backups\Environment";
+    internal const string UserBackupValueName = "Snapshot";
+    internal const string MachineBackupPath = @"SOFTWARE\SysManagerEnvironmentBackup";
+    internal const string MachineBackupValueName = "Snapshot";
+    internal const int MaxBackupFileBytes = 1024 * 1024;
+    internal const int MaxVariableCount = 4096;
+    internal const int MaxVariableNameLength = 16383;
+    internal const int MaxVariableValueLength = 32767;
 
     private readonly string _backupDir;
+    private readonly RegistryKey _userRoot;
+    private readonly RegistryKey _machineRoot;
+    private readonly bool _enforceMachineBackupProtection;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        MaxDepth = 8,
+        AllowDuplicateProperties = false
     };
 
     /// <summary>
@@ -52,10 +68,26 @@ public sealed partial class EnvironmentVariableService
     /// %LOCALAPPDATA% backup location.
     /// </summary>
     public EnvironmentVariableService(string? backupDir = null)
+        : this(
+            backupDir,
+            Registry.CurrentUser,
+            Registry.LocalMachine,
+            enforceMachineBackupProtection: true)
+    {
+    }
+
+    internal EnvironmentVariableService(
+        string? backupDir,
+        RegistryKey userRoot,
+        RegistryKey machineRoot,
+        bool enforceMachineBackupProtection = false)
     {
         _backupDir = backupDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysManager", "Backups", "Environment");
+        _userRoot = userRoot;
+        _machineRoot = machineRoot;
+        _enforceMachineBackupProtection = enforceMachineBackupProtection;
     }
 
     // Variable names: letters, digits, underscore and a few shell-safe punctuation
@@ -98,12 +130,26 @@ public sealed partial class EnvironmentVariableService
         return true;
     }
 
+    private static bool TryValidateBackupName(string? name, out string validatedName)
+    {
+        validatedName = "";
+        if (string.IsNullOrEmpty(name) ||
+            name.Length > MaxVariableNameLength ||
+            name.Contains('\0'))
+        {
+            return false;
+        }
+
+        validatedName = name;
+        return true;
+    }
+
     // ── Reading ──────────────────────────────────────────────────────────────
 
-    private static (RegistryKey hive, string path) Location(EnvVarScope scope) =>
+    private (RegistryKey hive, string path) Location(EnvVarScope scope) =>
         scope == EnvVarScope.Machine
-            ? (Registry.LocalMachine, MachineEnvPath)
-            : (Registry.CurrentUser, UserEnvPath);
+            ? (_machineRoot, MachineEnvPath)
+            : (_userRoot, UserEnvPath);
 
     /// <summary>
     /// Reads all variables for the given scope, sorted by name. Reads the RAW value
@@ -111,33 +157,55 @@ public sealed partial class EnvironmentVariableService
     /// are preserved for round-tripping, and records the value KIND so a write can keep
     /// REG_EXPAND_SZ intact.
     /// </summary>
-    public List<EnvVariable> Read(EnvVarScope scope)
+    public List<EnvVariable> Read(EnvVarScope scope) =>
+        ReadCore(scope, requireKey: false, requireSupportedKinds: false);
+
+    private List<EnvVariable> ReadCore(
+        EnvVarScope scope,
+        bool requireKey,
+        bool requireSupportedKinds)
     {
         List<EnvVariable> result = [];
         var (hive, path) = Location(scope);
         try
         {
             using var key = hive.OpenSubKey(path);
-            if (key is null) return result;
+            if (key is null)
+            {
+                if (requireKey)
+                    throw new IOException($"The {scope} environment registry key is unavailable.");
+                return result;
+            }
             foreach (var name in key.GetValueNames())
             {
                 if (string.IsNullOrEmpty(name)) continue;
                 var raw = key.GetValue(name, "", RegistryValueOptions.DoNotExpandEnvironmentNames);
-                var expandable = key.GetValueKind(name) == RegistryValueKind.ExpandString;
+                var kind = key.GetValueKind(name);
+                if (requireSupportedKinds &&
+                    kind is not RegistryValueKind.String and not RegistryValueKind.ExpandString)
+                {
+                    throw new InvalidDataException(
+                        $"The {scope} environment contains an unsupported registry value kind.");
+                }
+                if (requireSupportedKinds && raw is not string)
+                {
+                    throw new InvalidDataException(
+                        $"The {scope} environment contains a non-string registry value.");
+                }
                 result.Add(new EnvVariable
                 {
                     Name = name,
                     Scope = scope,
                     Value = raw?.ToString() ?? "",
-                    IsExpandable = expandable
+                    IsExpandable = kind == RegistryValueKind.ExpandString
                 });
             }
         }
-        catch (System.Security.SecurityException ex)
+        catch (System.Security.SecurityException ex) when (!requireKey)
         {
             Log.Warning(ex, "Environment: reading {Scope} scope denied", scope);
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException ex) when (!requireKey)
         {
             Log.Warning(ex, "Environment: reading {Scope} scope denied", scope);
         }
@@ -199,7 +267,19 @@ public sealed partial class EnvironmentVariableService
                 return true;
             }
 
-            var kind = explicitKind ?? ChooseKind(ExistingKind(key, validName), value);
+            var existingKind = ExistingKind(key, validName);
+            if (explicitKind is null &&
+                existingKind is not null and not RegistryValueKind.String and not RegistryValueKind.ExpandString)
+            {
+                Log.Warning(
+                    "Environment: cannot safely overwrite {Scope} variable {Name} with unsupported kind {Kind}",
+                    scope,
+                    validName,
+                    existingKind);
+                return false;
+            }
+
+            var kind = explicitKind ?? ChooseKind(existingKind, value);
             key.SetValue(validName, value, kind);
             Log.Information("Environment: set {Scope} variable {Name} ({Kind})", scope, validName, kind);
             return true;
@@ -228,7 +308,9 @@ public sealed partial class EnvironmentVariableService
     /// REG_EXPAND_SZ when the value contains a %VAR% token, else REG_SZ. Pure for testing.
     /// </summary>
     public static RegistryValueKind ChooseKind(RegistryValueKind? existingKind, string value)
-        => existingKind ?? (value.Contains('%') ? RegistryValueKind.ExpandString : RegistryValueKind.String);
+        => existingKind is RegistryValueKind.String or RegistryValueKind.ExpandString
+            ? existingKind.Value
+            : value.Contains('%') ? RegistryValueKind.ExpandString : RegistryValueKind.String;
 
     /// <summary>Deletes a variable. Returns false if the write is denied.</summary>
     public bool DeleteVariable(string name, EnvVarScope scope) => SetVariable(name, null, scope);
@@ -295,53 +377,237 @@ public sealed partial class EnvironmentVariableService
 
     // ── Backup / restore ───────────────────────────────────────────────────────
 
-    /// <summary>Path of the pristine pre-SysManager backup (created before the first write).</summary>
+    /// <summary>Path of the legacy read-only User backup used by earlier releases.</summary>
     public string BackupPath => Path.Combine(_backupDir, "environment-backup.json");
 
-    /// <summary>True if a pristine backup already exists.</summary>
-    public bool HasBackup => File.Exists(BackupPath);
+    /// <summary>True when any backup artifact exists, including one that needs repair.</summary>
+    public bool HasBackup => ReadUserBackup().Exists || ReadMachineBackup().Exists;
+
+    /// <summary>True when a validated User snapshot exists.</summary>
+    public bool HasUserBackup => ReadUserBackup().Snapshot is not null;
+
+    /// <summary>True when a validated machine-protected snapshot exists.</summary>
+    public bool HasMachineBackup => ReadMachineBackup().Snapshot is not null;
 
     /// <summary>
-    /// Writes a one-time pristine backup of every User and Machine variable, so the
-    /// original environment can be restored later. No-op if a backup already exists
-    /// (preserving the truly-original snapshot, like <see cref="HostsFileService"/>).
+    /// Writes independent one-time snapshots before a scope's first mutation. New User
+    /// snapshots are stored under HKCU and Machine snapshots under access-controlled HKLM.
+    /// A legacy LocalAppData Machine section is never promoted across that boundary.
     /// </summary>
-    public void EnsureBackup()
+    public void EnsureBackup() => EnsureBackup(includeUser: true, includeMachine: true);
+
+    /// <summary>Ensures pristine snapshots only for the scopes about to be changed.</summary>
+    public void EnsureBackup(bool includeUser, bool includeMachine)
     {
-        if (HasBackup) return;
-        Directory.CreateDirectory(_backupDir);
-        var userVars = Read(EnvVarScope.User);
-        var machineVars = Read(EnvVarScope.Machine);
-        var snapshot = new EnvBackup(
-            User: ToDict(userVars),
-            Machine: ToDict(machineVars),
-            UserKinds: ToKindDict(userVars),
-            MachineKinds: ToKindDict(machineVars));
-        File.WriteAllText(BackupPath, JsonSerializer.Serialize(snapshot, JsonOptions),
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        Log.Information("Environment: pristine backup written to {Path}", BackupPath);
+        // Validate every present artifact even when this operation will not mutate that
+        // scope. Otherwise Apply could create a snapshot that the all-or-nothing restore
+        // contract can never consume.
+        var userBackup = ReadUserBackup();
+        var machineBackup = ReadMachineBackup();
+
+        if (userBackup.IsInvalid || machineBackup.IsInvalid)
+            throw new InvalidDataException(
+                "An existing environment backup is invalid and will not be replaced.");
+
+        string? userJson = null;
+        string? machineJson = null;
+        if (includeUser && !userBackup.Exists)
+        {
+            var snapshot = CaptureScope(EnvVarScope.User);
+            userJson = SerializeBounded(new UserEnvBackup(snapshot.Values, snapshot.Kinds));
+        }
+        if (includeMachine && !machineBackup.Exists)
+        {
+            var snapshot = CaptureScope(EnvVarScope.Machine);
+            machineJson = SerializeBounded(new MachineEnvBackup(snapshot.Values, snapshot.Kinds));
+        }
+
+        // Publish only after every requested missing scope has been captured and validated.
+        if (machineJson is not null)
+            WriteMachineBackup(machineJson);
+        if (userJson is not null)
+            WriteUserBackup(userJson);
     }
 
-    private static Dictionary<string, string> ToDict(IEnumerable<EnvVariable> vars)
+    private void WriteUserBackup(string json)
     {
-        Dictionary<string, string> dict = new(StringComparer.OrdinalIgnoreCase);
-        foreach (var v in vars) dict[v.Name] = v.Value;
-        return dict;
+        using var key = _userRoot.CreateSubKey(UserBackupPath, writable: true)
+            ?? throw new UnauthorizedAccessException("The User backup key could not be created.");
+        key.SetValue(UserBackupValueName, json, RegistryValueKind.String);
+        Log.Information("Environment: pristine User backup written to HKCU storage");
     }
 
-    private static Dictionary<string, RegistryValueKind> ToKindDict(IEnumerable<EnvVariable> vars)
+    private void WriteMachineBackup(string json)
     {
-        Dictionary<string, RegistryValueKind> dict = new(StringComparer.OrdinalIgnoreCase);
-        foreach (var v in vars)
-            dict[v.Name] = v.IsExpandable ? RegistryValueKind.ExpandString : RegistryValueKind.String;
-        return dict;
+        using var key = OpenOrCreateMachineBackupKey();
+        key.SetValue(MachineBackupValueName, json, RegistryValueKind.String);
+        Log.Information("Environment: pristine Machine backup written to protected registry storage");
+    }
+
+    private RegistryKey OpenOrCreateMachineBackupKey()
+    {
+        if (!_enforceMachineBackupProtection)
+        {
+            return _machineRoot.CreateSubKey(MachineBackupPath, writable: true)
+                ?? throw new UnauthorizedAccessException(
+                    "The protected Machine backup key could not be created.");
+        }
+
+        EnsureMachineBackupParentIsProtected();
+        using (var key = _machineRoot.CreateSubKey(
+                   MachineBackupPath,
+                   RegistryKeyPermissionCheck.ReadWriteSubTree,
+                   RegistryOptions.None,
+                   CreateProtectedMachineBackupSecurity())
+               ?? throw new UnauthorizedAccessException(
+                   "The protected Machine backup key could not be created."))
+        {
+            if (!IsProtectedMachineBackupSecurity(key.GetAccessControl(
+                    AccessControlSections.Owner | AccessControlSections.Access)))
+            {
+                throw new InvalidDataException(
+                    "The Machine backup key is not protected from standard-user writes.");
+            }
+        }
+
+        return _machineRoot.OpenSubKey(MachineBackupPath, writable: true)
+            ?? throw new UnauthorizedAccessException(
+                "The protected Machine backup key could not be reopened.");
+    }
+
+    private void EnsureMachineBackupParentIsProtected()
+    {
+        if (!IsMachineBackupParentProtected())
+        {
+            throw new InvalidDataException(
+                "The Machine backup parent key is not protected from standard-user writes.");
+        }
+    }
+
+    private bool IsMachineBackupParentProtected()
+    {
+        using var parent = _machineRoot.OpenSubKey(
+            "SOFTWARE",
+            RegistryRights.ReadKey | RegistryRights.ReadPermissions);
+        return parent is not null && IsProtectedMachineBackupSecurity(parent.GetAccessControl(
+            AccessControlSections.Owner | AccessControlSections.Access));
+    }
+
+    internal static RegistrySecurity CreateProtectedMachineBackupSecurity()
+    {
+        var administrators = new SecurityIdentifier(
+            WellKnownSidType.BuiltinAdministratorsSid,
+            domainSid: null);
+        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, domainSid: null);
+        var users = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, domainSid: null);
+
+        RegistrySecurity security = new();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.SetOwner(administrators);
+        security.AddAccessRule(new RegistryAccessRule(
+            administrators,
+            RegistryRights.FullControl,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Allow));
+        security.AddAccessRule(new RegistryAccessRule(
+            system,
+            RegistryRights.FullControl,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Allow));
+        security.AddAccessRule(new RegistryAccessRule(
+            users,
+            RegistryRights.ReadKey,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Allow));
+        return security;
+    }
+
+    internal static bool IsProtectedMachineBackupSecurity(RegistrySecurity security)
+    {
+        if (security.GetOwner(typeof(SecurityIdentifier)) is not SecurityIdentifier owner ||
+            !IsTrustedMachinePrincipal(owner) ||
+            !security.AreAccessRulesCanonical)
+            return false;
+
+        const RegistryRights mutatingRights =
+            RegistryRights.SetValue |
+            RegistryRights.CreateSubKey |
+            RegistryRights.CreateLink |
+            RegistryRights.Delete |
+            RegistryRights.ChangePermissions |
+            RegistryRights.TakeOwnership;
+
+        foreach (RegistryAccessRule rule in security.GetAccessRules(
+                     includeExplicit: true,
+                     includeInherited: true,
+                     typeof(SecurityIdentifier)))
+        {
+            if (rule.AccessControlType != AccessControlType.Allow ||
+                (rule.RegistryRights & mutatingRights) == 0 ||
+                (rule.PropagationFlags & PropagationFlags.InheritOnly) != 0)
+            {
+                continue;
+            }
+
+            var principal = (SecurityIdentifier)rule.IdentityReference;
+            if (!IsTrustedMachinePrincipal(principal) &&
+                !principal.IsWellKnown(WellKnownSidType.CreatorOwnerSid))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsTrustedMachinePrincipal(SecurityIdentifier principal) =>
+        principal.IsWellKnown(WellKnownSidType.LocalSystemSid) ||
+        principal.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid);
+
+    private ScopeBackup CaptureScope(EnvVarScope scope)
+    {
+        var variables = ReadCore(
+            scope,
+            requireKey: true,
+            requireSupportedKinds: true);
+        if (scope == EnvVarScope.Machine && variables.Count == 0)
+            throw new InvalidDataException("The Machine environment is empty and cannot be backed up safely.");
+        if (variables.Count > MaxVariableCount)
+            throw new InvalidDataException($"The {scope} environment contains too many variables to back up safely.");
+
+        Dictionary<string, string> values = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, RegistryValueKind> kinds = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var variable in variables)
+        {
+            if (!TryValidateBackupName(variable.Name, out var name))
+                throw new InvalidDataException($"The {scope} environment contains an unsupported variable name.");
+            if (variable.Value.Length > MaxVariableValueLength)
+                throw new InvalidDataException($"The {scope} environment contains an oversized variable value.");
+            if (!values.TryAdd(name, variable.Value))
+                throw new InvalidDataException($"The {scope} environment contains duplicate variable names.");
+
+            kinds.Add(
+                name,
+                variable.IsExpandable ? RegistryValueKind.ExpandString : RegistryValueKind.String);
+        }
+
+        return new ScopeBackup(values, kinds);
+    }
+
+    private static string SerializeBounded<T>(T snapshot)
+    {
+        var json = JsonSerializer.Serialize(snapshot, JsonOptions);
+        if (Encoding.UTF8.GetByteCount(json) > MaxBackupFileBytes)
+            throw new InvalidDataException("The environment backup exceeds the supported size.");
+        return json;
     }
 
     /// <summary>
-    /// A point-in-time snapshot of both environment scopes. The Kind dictionaries record
-    /// each variable's <see cref="RegistryValueKind"/> so a restore round-trips
-    /// REG_EXPAND_SZ faithfully instead of relying on the '%' heuristic. Nullable for
-    /// backward compatibility with backups written before this field was added.
+    /// A User-scope snapshot. New snapshots live under HKCU; old LocalAppData files may
+    /// contain Machine fields, but deserialization deliberately ignores those fields.
     /// </summary>
     public sealed record EnvBackup(
         Dictionary<string, string> User,
@@ -349,64 +615,411 @@ public sealed partial class EnvironmentVariableService
         Dictionary<string, RegistryValueKind>? UserKinds = null,
         Dictionary<string, RegistryValueKind>? MachineKinds = null);
 
-    /// <summary>Reads the backup snapshot, or null if there is none / it cannot be parsed.</summary>
+    private sealed record UserEnvBackup(
+        Dictionary<string, string> User,
+        Dictionary<string, RegistryValueKind>? UserKinds = null);
+
+    private sealed record MachineEnvBackup(
+        Dictionary<string, string> Machine,
+        Dictionary<string, RegistryValueKind>? MachineKinds = null);
+
+    private sealed record ScopeBackup(
+        Dictionary<string, string> Values,
+        Dictionary<string, RegistryValueKind>? Kinds);
+
+    private readonly record struct ScopeRestoreCounts(int Restored, int Removed, int Failed)
+    {
+        public ScopeRestoreCounts Add(ScopeRestoreCounts other) => new(
+            Restored + other.Restored,
+            Removed + other.Removed,
+            Failed + other.Failed);
+    }
+
+    private readonly record struct BackupRead<T>(bool Exists, T? Snapshot)
+        where T : class
+    {
+        public bool IsInvalid => Exists && Snapshot is null;
+        public static BackupRead<T> Missing => new(false, null);
+        public static BackupRead<T> Invalid => new(true, null);
+        public static BackupRead<T> Valid(T snapshot) => new(true, snapshot);
+    }
+
+    /// <summary>
+    /// Reads validated authoritative snapshots in the legacy aggregate shape. Legacy
+    /// LocalAppData Machine fields are never included; Machine data comes only from HKLM.
+    /// Returns null if a present artifact is invalid or no snapshot exists.
+    /// </summary>
     public EnvBackup? ReadBackup()
     {
-        if (!HasBackup) return null;
+        var userBackup = ReadUserBackup();
+        var machineBackup = ReadMachineBackup();
+        if (userBackup.IsInvalid || machineBackup.IsInvalid)
+            return null;
+        if (userBackup.Snapshot is null && machineBackup.Snapshot is null)
+            return null;
+
+        return new EnvBackup(
+            userBackup.Snapshot?.User ??
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            machineBackup.Snapshot?.Machine ??
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            userBackup.Snapshot?.UserKinds,
+            machineBackup.Snapshot?.MachineKinds);
+    }
+
+    private BackupRead<UserEnvBackup> ReadUserBackup()
+    {
+        var registryBackup = ReadUserRegistryBackup();
+        return registryBackup.Exists
+            ? registryBackup
+            : ReadLegacyUserBackup();
+    }
+
+    private BackupRead<UserEnvBackup> ReadUserRegistryBackup()
+    {
         try
         {
-            return JsonSerializer.Deserialize<EnvBackup>(File.ReadAllText(BackupPath), JsonOptions);
+            using var key = _userRoot.OpenSubKey(UserBackupPath);
+            if (key is null || !key.GetValueNames().Contains(
+                    UserBackupValueName,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                return BackupRead<UserEnvBackup>.Missing;
+            }
+
+            var rawValue = key.GetValue(
+                UserBackupValueName,
+                defaultValue: null,
+                RegistryValueOptions.DoNotExpandEnvironmentNames);
+            if (rawValue is not string json ||
+                key.GetValueKind(UserBackupValueName) != RegistryValueKind.String)
+            {
+                Log.Warning("Environment: User backup has an invalid registry type");
+                return BackupRead<UserEnvBackup>.Invalid;
+            }
+
+            return ParseUserBackup(json, "User registry");
         }
         catch (JsonException ex)
         {
-            Log.Warning(ex, "Environment: backup file is corrupt and will be ignored");
-            return null;
+            Log.Warning(ex, "Environment: User registry backup is corrupt");
+            return BackupRead<UserEnvBackup>.Invalid;
         }
         catch (IOException ex)
         {
-            Log.Warning(ex, "Environment: backup file could not be read");
-            return null;
+            Log.Warning(ex, "Environment: User registry backup could not be read");
+            return BackupRead<UserEnvBackup>.Invalid;
+        }
+        catch (System.Security.SecurityException ex)
+        {
+            Log.Warning(ex, "Environment: User registry backup read was denied");
+            return BackupRead<UserEnvBackup>.Invalid;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Environment: User registry backup read was denied");
+            return BackupRead<UserEnvBackup>.Invalid;
         }
     }
 
+    private BackupRead<UserEnvBackup> ReadLegacyUserBackup()
+    {
+        if (!File.Exists(BackupPath))
+            return BackupRead<UserEnvBackup>.Missing;
+
+        try
+        {
+            var raw = JsonSerializer.Deserialize<UserEnvBackup>(ReadBoundedBackupFile(), JsonOptions);
+            return ValidateUserBackup(raw, "legacy User file");
+        }
+        catch (InvalidDataException ex)
+        {
+            Log.Warning(ex, "Environment: legacy User backup failed validation");
+            return BackupRead<UserEnvBackup>.Invalid;
+        }
+        catch (JsonException ex)
+        {
+            Log.Warning(ex, "Environment: legacy User backup is corrupt");
+            return BackupRead<UserEnvBackup>.Invalid;
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "Environment: legacy User backup could not be read");
+            return BackupRead<UserEnvBackup>.Invalid;
+        }
+        catch (System.Security.SecurityException ex)
+        {
+            Log.Warning(ex, "Environment: legacy User backup read was denied");
+            return BackupRead<UserEnvBackup>.Invalid;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Environment: legacy User backup read was denied");
+            return BackupRead<UserEnvBackup>.Invalid;
+        }
+    }
+
+    private static BackupRead<UserEnvBackup> ParseUserBackup(string json, string source)
+    {
+        if (Encoding.UTF8.GetByteCount(json) is <= 0 or > MaxBackupFileBytes)
+        {
+            Log.Warning("Environment: {Source} backup has an invalid size", source);
+            return BackupRead<UserEnvBackup>.Invalid;
+        }
+
+        var raw = JsonSerializer.Deserialize<UserEnvBackup>(json, JsonOptions);
+        return ValidateUserBackup(raw, source);
+    }
+
+    private static BackupRead<UserEnvBackup> ValidateUserBackup(UserEnvBackup? raw, string source)
+    {
+        if (raw is null)
+            return BackupRead<UserEnvBackup>.Invalid;
+
+        var validated = ValidateScopeBackup(raw.User, raw.UserKinds, source);
+        return validated is null
+            ? BackupRead<UserEnvBackup>.Invalid
+            : BackupRead<UserEnvBackup>.Valid(new UserEnvBackup(validated.Values, validated.Kinds));
+    }
+
+    private byte[] ReadBoundedBackupFile()
+    {
+        using var stream = new FileStream(
+            BackupPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            FileOptions.SequentialScan);
+
+        var length = stream.Length;
+        if (length is <= 0 or > MaxBackupFileBytes)
+            throw new InvalidDataException("The environment backup has an invalid size.");
+
+        var bytes = new byte[(int)length];
+        var read = 0;
+        while (read < bytes.Length)
+        {
+            var count = stream.Read(bytes, read, bytes.Length - read);
+            if (count == 0) break;
+            read += count;
+        }
+
+        if (read != bytes.Length || stream.ReadByte() != -1)
+            throw new InvalidDataException("The environment backup changed while it was being read.");
+
+        return bytes;
+    }
+
+    private BackupRead<MachineEnvBackup> ReadMachineBackup()
+    {
+        try
+        {
+            using var key = _machineRoot.OpenSubKey(MachineBackupPath);
+            if (key is null)
+                return BackupRead<MachineEnvBackup>.Missing;
+
+            if (_enforceMachineBackupProtection && !IsMachineBackupParentProtected())
+            {
+                Log.Warning("Environment: Machine backup parent key is not access-controlled");
+                return BackupRead<MachineEnvBackup>.Invalid;
+            }
+
+            if (_enforceMachineBackupProtection &&
+                !IsProtectedMachineBackupSecurity(key.GetAccessControl(
+                    AccessControlSections.Owner | AccessControlSections.Access)))
+            {
+                Log.Warning("Environment: Machine backup key is writable by an untrusted principal");
+                return BackupRead<MachineEnvBackup>.Invalid;
+            }
+
+            if (!key.GetValueNames().Contains(
+                    MachineBackupValueName,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                return BackupRead<MachineEnvBackup>.Missing;
+            }
+
+            var rawValue = key.GetValue(
+                MachineBackupValueName,
+                defaultValue: null,
+                RegistryValueOptions.DoNotExpandEnvironmentNames);
+            if (rawValue is not string json ||
+                key.GetValueKind(MachineBackupValueName) != RegistryValueKind.String)
+            {
+                Log.Warning("Environment: protected Machine backup has an invalid registry type");
+                return BackupRead<MachineEnvBackup>.Invalid;
+            }
+            if (Encoding.UTF8.GetByteCount(json) is <= 0 or > MaxBackupFileBytes)
+            {
+                Log.Warning("Environment: protected Machine backup has an invalid size");
+                return BackupRead<MachineEnvBackup>.Invalid;
+            }
+
+            var raw = JsonSerializer.Deserialize<MachineEnvBackup>(json, JsonOptions);
+            if (raw is null)
+                return BackupRead<MachineEnvBackup>.Invalid;
+
+            var validated = ValidateScopeBackup(
+                raw.Machine,
+                raw.MachineKinds,
+                "protected Machine",
+                requireNonEmpty: true);
+            return validated is null
+                ? BackupRead<MachineEnvBackup>.Invalid
+                : BackupRead<MachineEnvBackup>.Valid(
+                    new MachineEnvBackup(validated.Values, validated.Kinds));
+        }
+        catch (JsonException ex)
+        {
+            Log.Warning(ex, "Environment: protected Machine backup is corrupt");
+            return BackupRead<MachineEnvBackup>.Invalid;
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "Environment: protected Machine backup could not be read");
+            return BackupRead<MachineEnvBackup>.Invalid;
+        }
+        catch (System.Security.SecurityException ex)
+        {
+            Log.Warning(ex, "Environment: protected Machine backup read was denied");
+            return BackupRead<MachineEnvBackup>.Invalid;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Environment: protected Machine backup read was denied");
+            return BackupRead<MachineEnvBackup>.Invalid;
+        }
+    }
+
+    private static ScopeBackup? ValidateScopeBackup(
+        Dictionary<string, string>? values,
+        Dictionary<string, RegistryValueKind>? kinds,
+        string source,
+        bool requireNonEmpty = false)
+    {
+        if (values is null)
+            return RejectScopeBackup(source, "the variables section is missing or null");
+        if (requireNonEmpty && values.Count == 0)
+            return RejectScopeBackup(source, "the variables section is empty");
+        if (values.Count > MaxVariableCount)
+            return RejectScopeBackup(source, "the variables section has too many entries");
+
+        Dictionary<string, string> normalizedValues = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, value) in values)
+        {
+            if (!TryValidateBackupName(name, out var validatedName))
+                return RejectScopeBackup(source, "a variable name is invalid");
+            if (value is null)
+                return RejectScopeBackup(source, "a variable value is null");
+            if (value.Length > MaxVariableValueLength)
+                return RejectScopeBackup(source, "a variable value is oversized");
+            if (!normalizedValues.TryAdd(validatedName, value))
+                return RejectScopeBackup(source, "variable names are duplicated");
+        }
+
+        Dictionary<string, RegistryValueKind>? normalizedKinds = null;
+        if (kinds is not null)
+        {
+            if (kinds.Count > MaxVariableCount)
+                return RejectScopeBackup(source, "the value-kind section has too many entries");
+
+            normalizedKinds = new Dictionary<string, RegistryValueKind>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (name, kind) in kinds)
+            {
+                if (!TryValidateBackupName(name, out var validatedName))
+                    return RejectScopeBackup(source, "a value-kind name is invalid");
+                if (!normalizedValues.ContainsKey(validatedName))
+                    return RejectScopeBackup(source, "a value kind has no matching variable");
+                if (kind != RegistryValueKind.String && kind != RegistryValueKind.ExpandString)
+                    return RejectScopeBackup(source, "a registry value kind is unsupported");
+                if (!normalizedKinds.TryAdd(validatedName, kind))
+                    return RejectScopeBackup(source, "value-kind names are duplicated");
+            }
+        }
+
+        return new ScopeBackup(normalizedValues, normalizedKinds);
+    }
+
+    private static ScopeBackup? RejectScopeBackup(string source, string reason)
+    {
+        Log.Warning("Environment: {Source} backup rejected because {Reason}", source, reason);
+        return null;
+    }
+
     /// <summary>The outcome of a <see cref="RestoreFromBackup"/> call.</summary>
-    public readonly record struct RestoreResult(bool HadBackup, int Restored, int Removed, int Failed);
+    public readonly record struct RestoreResult(
+        bool HadBackup,
+        int Restored,
+        int Removed,
+        int Failed)
+    {
+        public bool InvalidBackup { get; init; }
+    }
 
     /// <summary>
-    /// Restores the environment to the pristine backup: every backed-up variable is
-    /// written back (kind preserved for existing names), and any variable that did NOT
-    /// exist in the backup is removed. Returns counts. Machine-scope changes need admin —
-    /// those writes count as failures (not exceptions) when not elevated. The caller
-    /// should <see cref="BroadcastSettingChange"/> once afterwards.
+    /// Restores each scope only from its authoritative, fully validated snapshot. The
+    /// HKCU or legacy LocalAppData data can affect only User variables; Machine variables
+    /// are restored only from the access-controlled HKLM snapshot. Every present snapshot
+    /// is validated before the first write. Machine writes count as failures when the
+    /// process is not elevated. The caller should
+    /// <see cref="BroadcastSettingChange"/> once afterwards.
     /// </summary>
     public RestoreResult RestoreFromBackup()
     {
-        var backup = ReadBackup();
-        if (backup is null) return new RestoreResult(false, 0, 0, 0);
-
-        int restored = 0, removed = 0, failed = 0;
-        foreach (var scope in new[] { EnvVarScope.User, EnvVarScope.Machine })
+        var userBackup = ReadUserBackup();
+        var machineBackup = ReadMachineBackup();
+        var hasValidBackup = userBackup.Snapshot is not null || machineBackup.Snapshot is not null;
+        if (userBackup.IsInvalid || machineBackup.IsInvalid)
         {
-            var saved = scope == EnvVarScope.Machine ? backup.Machine : backup.User;
-            var kinds = scope == EnvVarScope.Machine ? backup.MachineKinds : backup.UserKinds;
-
-            foreach (var (name, value) in saved)
-            {
-                RegistryValueKind? explicitKind = kinds is not null && kinds.TryGetValue(name, out var savedKind)
-                    ? savedKind
-                    : null;
-                if (SetVariable(name, value, scope, explicitKind)) restored++;
-                else failed++;
-            }
-
-            foreach (var current in Read(scope))
-            {
-                if (saved.ContainsKey(current.Name)) continue;
-                if (DeleteVariable(current.Name, scope)) removed++;
-                else failed++;
-            }
+            Log.Warning("Environment: restore aborted because a present backup is invalid");
+            return new RestoreResult(hasValidBackup, 0, 0, 0) { InvalidBackup = true };
         }
-        Log.Information("Environment: restored {Restored}, removed {Removed}, failed {Failed} from backup", restored, removed, failed);
-        return new RestoreResult(true, restored, removed, failed);
+        if (!hasValidBackup)
+            return new RestoreResult(false, 0, 0, 0);
+
+        var counts = default(ScopeRestoreCounts);
+        if (userBackup.Snapshot is { } userSnapshot)
+            counts = counts.Add(RestoreScope(
+                EnvVarScope.User,
+                userSnapshot.User,
+                userSnapshot.UserKinds));
+        if (machineBackup.Snapshot is { } machineSnapshot)
+            counts = counts.Add(RestoreScope(
+                EnvVarScope.Machine,
+                machineSnapshot.Machine,
+                machineSnapshot.MachineKinds));
+
+        Log.Information(
+            "Environment: restored {Restored}, removed {Removed}, failed {Failed} from backup",
+            counts.Restored,
+            counts.Removed,
+            counts.Failed);
+        return new RestoreResult(true, counts.Restored, counts.Removed, counts.Failed);
+    }
+
+    private ScopeRestoreCounts RestoreScope(
+        EnvVarScope scope,
+        Dictionary<string, string> saved,
+        Dictionary<string, RegistryValueKind>? kinds)
+    {
+        int restored = 0, removed = 0, failed = 0;
+        foreach (var (name, value) in saved)
+        {
+            RegistryValueKind? explicitKind = kinds is not null && kinds.TryGetValue(name, out var savedKind)
+                ? savedKind
+                : null;
+            if (SetVariable(name, value, scope, explicitKind)) restored++;
+            else failed++;
+        }
+
+        foreach (var current in Read(scope))
+        {
+            if (saved.ContainsKey(current.Name)) continue;
+            if (DeleteVariable(current.Name, scope)) removed++;
+            else failed++;
+        }
+
+        return new ScopeRestoreCounts(restored, removed, failed);
     }
 }

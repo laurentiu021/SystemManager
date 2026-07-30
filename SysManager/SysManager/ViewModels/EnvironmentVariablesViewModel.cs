@@ -330,8 +330,12 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             return;
         }
 
-        var touchesMachine = ChangedVariables().Any(v => v.Scope == EnvVarScope.Machine)
-            || DeletedEntries().Any(e => e.scope == EnvVarScope.Machine);
+        var changedVariables = ChangedVariables().ToList();
+        var deletedEntries = DeletedEntries().ToList();
+        var touchesUser = changedVariables.Any(v => v.Scope == EnvVarScope.User)
+            || deletedEntries.Any(e => e.scope == EnvVarScope.User);
+        var touchesMachine = changedVariables.Any(v => v.Scope == EnvVarScope.Machine)
+            || deletedEntries.Any(e => e.scope == EnvVarScope.Machine);
         if (touchesMachine && !IsElevated)
         {
             StatusMessage = "Some changes affect System variables — relaunch as administrator first.";
@@ -340,14 +344,20 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
 
         if (!DialogService.Instance.Confirm(
                 $"Apply {PendingChangeCount} environment change{(PendingChangeCount == 1 ? "" : "s")}?\n\n" +
-                "A one-time backup of all variables is saved first so you can restore the original environment.",
+                "A scope-specific safety backup is saved first so you can restore the original environment.",
                 "Confirm Environment Changes"))
         {
             StatusMessage = "Apply cancelled.";
             return;
         }
 
-        try { _service.EnsureBackup(); }
+        try { _service.EnsureBackup(touchesUser, touchesMachine); }
+        catch (InvalidDataException ex)
+        {
+            StatusMessage = "The existing safety backup is invalid - no changes were made.";
+            Log.Warning(ex, "Environment: invalid safety backup; aborting apply");
+            return;
+        }
         catch (IOException ex)
         {
             StatusMessage = "Could not write the safety backup — no changes were made.";
@@ -360,13 +370,19 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             Log.Warning(ex, "Environment: backup write denied; aborting apply");
             return;
         }
+        catch (System.Security.SecurityException ex)
+        {
+            StatusMessage = "Could not write the safety backup - no changes were made.";
+            Log.Warning(ex, "Environment: protected backup write denied; aborting apply");
+            return;
+        }
         OnPropertyChanged(nameof(HasBackup));
 
         var failures = 0;
         var applied = 0;
 
         // Deletions: original variables no longer present in the working set.
-        foreach (var (scope, name) in DeletedEntries().ToList())
+        foreach (var (scope, name) in deletedEntries)
         {
             if (_service.DeleteVariable(name, scope))
             {
@@ -378,7 +394,7 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         }
 
         // Adds + edits.
-        foreach (var v in ChangedVariables().ToList())
+        foreach (var v in changedVariables)
         {
             if (_service.SetVariable(v.Name, v.Value, v.Scope))
             {
@@ -446,7 +462,7 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         }
 
         // Restoring Machine-scope variables needs admin; warn early like Apply does.
-        if (!IsElevated && _service.ReadBackup() is { Machine.Count: > 0 })
+        if (!IsElevated && _service.HasMachineBackup)
         {
             // Still allow restoring User-scope vars, but tell the user System ones will be skipped.
             if (!DialogService.Instance.Confirm(
@@ -473,6 +489,17 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         // Restore rewrites many variables and then broadcasts (up to 5 s) — both run off the
         // UI thread; the list is re-read off-thread too via LoadAsync so the window stays live.
         var r = await Task.Run(_service.RestoreFromBackup);
+        if (r.InvalidBackup)
+        {
+            StatusMessage = "The available environment backup is invalid; no changes were made.";
+            return;
+        }
+        if (!r.HadBackup)
+        {
+            StatusMessage = "There is no environment backup to restore.";
+            return;
+        }
+
         if (r.Restored > 0 || r.Removed > 0) await Task.Run(EnvironmentVariableService.BroadcastSettingChange);
         await LoadAsync();
 

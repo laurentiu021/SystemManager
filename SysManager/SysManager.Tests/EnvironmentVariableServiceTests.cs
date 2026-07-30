@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.Win32;
 using SysManager.Models;
@@ -12,9 +14,9 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="EnvironmentVariableService"/>. The pure helpers (name validation,
-/// PATH split/join/dedup) and the file-backed backup/restore are exercised deterministically;
-/// the live registry read/write path is intentionally not unit-tested (it touches the machine
-/// environment and needs admin for the System scope).
+/// PATH split/join/dedup), bounded file parsing, and redirected-registry backup/restore
+/// behavior are exercised deterministically. Tests that need real environment integration
+/// use unique HKCU values and never touch the production Machine hive.
 /// </summary>
 public class EnvironmentVariableServiceTests
 {
@@ -62,6 +64,17 @@ public class EnvironmentVariableServiceTests
     {
         Assert.Equal(RegistryValueKind.String,
             EnvironmentVariableService.ChooseKind(RegistryValueKind.String, @"%SystemRoot%\x"));
+    }
+
+    [Fact]
+    public void ChooseKind_UnsupportedExistingKindFallsBackToStringKind()
+    {
+        Assert.Equal(
+            RegistryValueKind.String,
+            EnvironmentVariableService.ChooseKind(RegistryValueKind.DWord, "plain"));
+        Assert.Equal(
+            RegistryValueKind.ExpandString,
+            EnvironmentVariableService.ChooseKind(RegistryValueKind.MultiString, "%SystemRoot%"));
     }
 
     [Theory]
@@ -129,65 +142,62 @@ public class EnvironmentVariableServiceTests
 
     // ---------- Backup / restore ----------
 
-    private static (EnvironmentVariableService svc, string dir) NewServiceWithTempBackup()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "SysManagerEnvTest_" + Guid.NewGuid().ToString("N"));
-        return (new EnvironmentVariableService(dir), dir);
-    }
-
     [Fact]
     public void HasBackup_FalseBeforeEnsure_TrueAfter()
     {
-        var (svc, dir) = NewServiceWithTempBackup();
-        try
-        {
-            Assert.False(svc.HasBackup);
-            svc.EnsureBackup();
-            Assert.True(svc.HasBackup);
-            Assert.True(File.Exists(svc.BackupPath));
-        }
-        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+        using var env = new RedirectedEnvironment();
+
+        Assert.False(env.Service.HasBackup);
+        env.Service.EnsureBackup(includeUser: true, includeMachine: false);
+
+        Assert.True(env.Service.HasBackup);
+        Assert.True(env.HasUserRegistryBackup());
+        Assert.False(File.Exists(env.Service.BackupPath));
     }
 
     [Fact]
     public void EnsureBackup_DoesNotOverwriteExistingBackup()
     {
-        var (svc, dir) = NewServiceWithTempBackup();
-        try
-        {
-            svc.EnsureBackup();
-            var firstWrite = File.GetLastWriteTimeUtc(svc.BackupPath);
-            File.WriteAllText(svc.BackupPath, "{\"User\":{\"SENTINEL\":\"keep\"},\"Machine\":{}}");
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "original");
+        env.Service.EnsureBackup(includeUser: true, includeMachine: false);
+        var originalSnapshot = env.GetUserBackupRaw();
 
-            svc.EnsureBackup(); // must be a no-op since a backup already exists
+        env.SetUser("SAFE_USER", "changed");
+        env.Service.EnsureBackup(includeUser: true, includeMachine: false);
 
-            var restored = svc.ReadBackup();
-            Assert.NotNull(restored);
-            Assert.True(restored!.User.ContainsKey("SENTINEL"));
-            Assert.Equal("keep", restored.User["SENTINEL"]);
-        }
-        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+        Assert.Equal(originalSnapshot, env.GetUserBackupRaw());
+        Assert.Equal("original", env.Service.ReadBackup()!.User["SAFE_USER"]);
+    }
+
+    [Fact]
+    public void EnsureBackup_ParameterlessPreservesBothScopeContract()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "user");
+        env.SetMachine("SAFE_MACHINE", "machine");
+
+        env.Service.EnsureBackup();
+
+        Assert.True(env.Service.HasUserBackup);
+        Assert.True(env.Service.HasMachineBackup);
     }
 
     [Fact]
     public void ReadBackup_NoBackup_ReturnsNull()
     {
-        var (svc, dir) = NewServiceWithTempBackup();
-        try { Assert.Null(svc.ReadBackup()); }
-        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+        using var env = new RedirectedEnvironment();
+
+        Assert.Null(env.Service.ReadBackup());
     }
 
     [Fact]
     public void ReadBackup_CorruptFile_ReturnsNull()
     {
-        var (svc, dir) = NewServiceWithTempBackup();
-        try
-        {
-            Directory.CreateDirectory(dir);
-            File.WriteAllText(svc.BackupPath, "{ this is not valid json ");
-            Assert.Null(svc.ReadBackup());
-        }
-        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+        using var env = new RedirectedEnvironment();
+        env.WriteLegacyUserBackup("{ this is not valid json ");
+
+        Assert.Null(env.Service.ReadBackup());
     }
 
     [Fact]
@@ -224,17 +234,13 @@ public class EnvironmentVariableServiceTests
     {
         // The User environment always contains at least TEMP/Path on a real Windows box,
         // but we only assert structural invariants so the test is robust on CI runners.
-        var (svc, dir) = NewServiceWithTempBackup();
-        try
-        {
-            var vars = svc.Read(EnvVarScope.User);
-            Assert.All(vars, v => Assert.Equal(EnvVarScope.User, v.Scope));
-            Assert.All(vars, v => Assert.False(string.IsNullOrEmpty(v.Name)));
-            // sorted, case-insensitive
-            var names = vars.Select(v => v.Name).ToList();
-            Assert.Equal(names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(), names);
-        }
-        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+        var svc = new EnvironmentVariableService();
+        var vars = svc.Read(EnvVarScope.User);
+        Assert.All(vars, v => Assert.Equal(EnvVarScope.User, v.Scope));
+        Assert.All(vars, v => Assert.False(string.IsNullOrEmpty(v.Name)));
+        // sorted, case-insensitive
+        var names = vars.Select(v => v.Name).ToList();
+        Assert.Equal(names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(), names);
     }
 
     // ── P2 #17 regression: TryValidateName, non-throwing restore, kind fidelity ──
@@ -342,6 +348,7 @@ public class EnvironmentVariableServiceTests
 
         Assert.NotNull(restored);
         Assert.Single(restored!.User);
+        Assert.Equal("C:\\Windows", restored.User["PATH"]);
         Assert.Single(restored.Machine);
         Assert.Null(restored.UserKinds);
         Assert.Null(restored.MachineKinds);
@@ -364,6 +371,742 @@ public class EnvironmentVariableServiceTests
         {
             using var key = Registry.CurrentUser.OpenSubKey("Environment", writable: true);
             key?.DeleteValue(name, throwOnMissingValue: false);
+        }
+    }
+
+    // ---------- Backup trust boundary ----------
+
+    [Fact]
+    public void ReadBackup_NullUserSection_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup("""{"User":null}""");
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_MissingUserSection_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup("""{"Machine":{}}""");
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_WrongUserType_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup("""{"User":[]}""");
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_WindowsPermittedNonUiName_IsAccepted()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup("""{"User":{"BAD NAME":"value"}}""");
+
+        var backup = env.Service.ReadBackup();
+
+        Assert.NotNull(backup);
+        Assert.Equal("value", backup!.User["BAD NAME"]);
+    }
+
+    [Fact]
+    public void ReadBackup_EmbeddedNullName_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup("""{"User":{"BAD\u0000NAME":"value"}}""");
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_NullValue_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup("""{"User":{"SAFE":null}}""");
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_OversizedValue_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        var json = JsonSerializer.Serialize(new
+        {
+            User = new Dictionary<string, string>
+            {
+                ["SAFE"] = new string('x', EnvironmentVariableService.MaxVariableValueLength + 1)
+            }
+        });
+        env.WriteUserBackup(json);
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_OversizedFile_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup(new string('x', EnvironmentVariableService.MaxBackupFileBytes + 1));
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_TooManyVariables_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        var values = Enumerable.Range(0, EnvironmentVariableService.MaxVariableCount + 1)
+            .ToDictionary(i => $"VAR_{i}", _ => "value");
+        env.WriteUserBackup(JsonSerializer.Serialize(new { User = values }));
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_UnsupportedRegistryKind_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup(
+            """
+            {
+              "User": { "SAFE": "value" },
+              "UserKinds": { "SAFE": 4 }
+            }
+            """);
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_LegacyNullMachineSection_IsIgnored()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup(
+            """
+            {
+              "User": { "SAFE": "value" },
+              "Machine": null
+            }
+            """);
+
+        var backup = env.Service.ReadBackup();
+
+        Assert.NotNull(backup);
+        Assert.Equal("value", backup!.User["SAFE"]);
+    }
+
+    [Fact]
+    public void HasMachineBackup_EmptySection_ReturnsFalse()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteMachineBackup("""{"Machine":{}}""", RegistryValueKind.String);
+
+        Assert.False(env.Service.HasMachineBackup);
+    }
+
+    [Fact]
+    public void HasMachineBackup_NullSection_ReturnsFalse()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteMachineBackup("""{"Machine":null}""", RegistryValueKind.String);
+
+        Assert.False(env.Service.HasMachineBackup);
+    }
+
+    [Fact]
+    public void HasMachineBackup_WrongSectionType_ReturnsFalse()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteMachineBackup("""{"Machine":[]}""", RegistryValueKind.String);
+
+        Assert.False(env.Service.HasMachineBackup);
+    }
+
+    [Fact]
+    public void HasMachineBackup_WrongRegistryType_ReturnsFalse()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteMachineBackup(1, RegistryValueKind.DWord);
+
+        Assert.False(env.Service.HasMachineBackup);
+    }
+
+    [Fact]
+    public void HasMachineBackup_OversizedValue_ReturnsFalse()
+    {
+        using var env = new RedirectedEnvironment();
+        var json = JsonSerializer.Serialize(new
+        {
+            Machine = new Dictionary<string, string>
+            {
+                ["SAFE"] = new string('x', EnvironmentVariableService.MaxVariableValueLength + 1)
+            }
+        });
+        env.WriteMachineBackup(json, RegistryValueKind.String);
+
+        Assert.False(env.Service.HasMachineBackup);
+    }
+
+    [Fact]
+    public void HasMachineBackup_UnsupportedRegistryKind_ReturnsFalse()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteMachineBackup(
+            """
+            {
+              "Machine": { "SAFE": "value" },
+              "MachineKinds": { "SAFE": 4 }
+            }
+            """,
+            RegistryValueKind.String);
+
+        Assert.False(env.Service.HasMachineBackup);
+    }
+
+    [Fact]
+    public void RestoreFromBackup_LegacyMachineSectionCannotChangeMachineScope()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "current");
+        env.SetMachine("SAFE_MACHINE", "current");
+        env.WriteUserBackup(
+            """
+            {
+              "User": { "SAFE_USER": "user-backup" },
+              "Machine": {
+                "SAFE_MACHINE": "attacker-value",
+                "ATTACKER_MACHINE": "owned"
+              }
+            }
+            """);
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.True(result.HadBackup);
+        Assert.Equal("user-backup", env.GetUser("SAFE_USER"));
+        Assert.Equal("current", env.GetMachine("SAFE_MACHINE"));
+        Assert.Null(env.GetMachine("ATTACKER_MACHINE"));
+    }
+
+    [Fact]
+    public void EnsureBackup_UserSnapshotDoesNotPreventLaterMachineSnapshot()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetMachine("SAFE_MACHINE", "original");
+
+        env.Service.EnsureBackup(includeUser: true, includeMachine: false);
+        Assert.False(env.Service.HasMachineBackup);
+
+        env.Service.EnsureBackup(includeUser: true, includeMachine: true);
+        Assert.True(env.Service.HasMachineBackup);
+    }
+
+    [Fact]
+    public void RestoreFromBackup_UsesProtectedMachineSnapshotAndDoesNotOverwriteIt()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetMachine("SAFE_MACHINE", "original");
+        env.Service.EnsureBackup(includeUser: true, includeMachine: true);
+        Assert.True(env.Service.HasMachineBackup);
+        Assert.DoesNotContain("\"Machine\"", Assert.IsType<string>(env.GetUserBackupRaw()));
+        Assert.False(File.Exists(env.Service.BackupPath));
+
+        env.SetMachine("SAFE_MACHINE", "changed");
+        env.Service.EnsureBackup(includeUser: true, includeMachine: true);
+        env.WriteUserBackup(
+            """
+            {
+              "User": {},
+              "Machine": { "SAFE_MACHINE": "attacker-value" }
+            }
+            """);
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.True(result.HadBackup);
+        Assert.Equal("original", env.GetMachine("SAFE_MACHINE"));
+    }
+
+    [Fact]
+    public void RestoreFromBackup_AggregatesCountsAcrossUserAndMachineScopes()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "original-user");
+        env.SetMachine("SAFE_MACHINE", "original-machine");
+        env.Service.EnsureBackup(includeUser: true, includeMachine: true);
+
+        env.SetUser("SAFE_USER", "changed-user");
+        env.SetUser("ADDED_USER", "added-user");
+        env.SetMachine("SAFE_MACHINE", "changed-machine");
+        env.SetMachine("ADDED_MACHINE", "added-machine");
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.True(result.HadBackup);
+        Assert.False(result.InvalidBackup);
+        Assert.Equal(2, result.Restored);
+        Assert.Equal(2, result.Removed);
+        Assert.Equal(0, result.Failed);
+        Assert.Equal("original-user", env.GetUser("SAFE_USER"));
+        Assert.Null(env.GetUser("ADDED_USER"));
+        Assert.Equal("original-machine", env.GetMachine("SAFE_MACHINE"));
+        Assert.Null(env.GetMachine("ADDED_MACHINE"));
+    }
+
+    [Fact]
+    public void ReadBackup_ExactDuplicateNames_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup("""{"User":{"PATH":"first","PATH":"second"}}""");
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void ReadBackup_CaseVariantDuplicateNames_ReturnsNull()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserBackup("""{"User":{"PATH":"first","Path":"second"}}""");
+
+        Assert.Null(env.Service.ReadBackup());
+    }
+
+    [Fact]
+    public void RestoreFromBackup_LegacyNullMachineSection_DoesNotTouchMachineScope()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "current");
+        env.SetMachine("SAFE_MACHINE", "current");
+        env.WriteUserBackup(
+            """
+            {
+              "User": { "SAFE_USER": "backup" },
+              "Machine": null
+            }
+            """);
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.True(result.HadBackup);
+        Assert.Equal("backup", env.GetUser("SAFE_USER"));
+        Assert.Equal("current", env.GetMachine("SAFE_MACHINE"));
+    }
+
+    [Fact]
+    public void RestoreFromBackup_LegacyMissingKindsCountsUnsupportedLiveKindWithoutThrowing()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("UNSUPPORTED", 1, RegistryValueKind.DWord);
+        env.SetUser("SAFE_USER", "current");
+        env.WriteLegacyUserBackup("""
+            {
+              "User": {
+                "UNSUPPORTED": "backup-text",
+                "SAFE_USER": "backup-safe"
+              }
+            }
+            """);
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.False(result.InvalidBackup);
+        Assert.Equal(1, result.Restored);
+        Assert.Equal(1, result.Failed);
+        Assert.Equal(1, env.GetUser("UNSUPPORTED"));
+        Assert.Equal("backup-safe", env.GetUser("SAFE_USER"));
+    }
+
+    [Fact]
+    public void EnsureBackup_InvalidUserSnapshotIsNotReplaced()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "current");
+        env.WriteUserRegistryBackup("{ invalid json");
+        var original = env.GetUserBackupRaw();
+
+        Assert.Throws<InvalidDataException>(() =>
+            env.Service.EnsureBackup(includeUser: true, includeMachine: false));
+
+        Assert.Equal(original, env.GetUserBackupRaw());
+        Assert.Equal("current", env.GetUser("SAFE_USER"));
+    }
+
+    [Fact]
+    public void EnsureBackup_InvalidMachineSnapshotIsNotReplaced()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetMachine("SAFE_MACHINE", "current");
+        env.WriteMachineBackup("{ invalid json", RegistryValueKind.String);
+        var original = env.GetMachineBackupRaw();
+
+        Assert.Throws<InvalidDataException>(() =>
+            env.Service.EnsureBackup(includeUser: false, includeMachine: true));
+
+        Assert.Equal(original, env.GetMachineBackupRaw());
+        Assert.Equal("current", env.GetMachine("SAFE_MACHINE"));
+    }
+
+    [Fact]
+    public void RestoreFromBackup_InvalidMachineSnapshotPreventsUserMutation()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "current-user");
+        env.SetMachine("SAFE_MACHINE", "current-machine");
+        env.WriteUserRegistryBackup("""
+            { "User": { "SAFE_USER": "backup-user" } }
+            """);
+        env.WriteMachineBackup("{ invalid json", RegistryValueKind.String);
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.True(result.InvalidBackup);
+        Assert.Equal(0, result.Restored);
+        Assert.Equal(0, result.Removed);
+        Assert.Equal("current-user", env.GetUser("SAFE_USER"));
+        Assert.Equal("current-machine", env.GetMachine("SAFE_MACHINE"));
+    }
+
+    [Fact]
+    public void RestoreFromBackup_EmptyMachineSnapshotPreventsUserMutation()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "current-user");
+        env.SetMachine("SAFE_MACHINE", "current-machine");
+        env.WriteUserRegistryBackup("""
+            { "User": { "SAFE_USER": "backup-user" } }
+            """);
+        env.WriteMachineBackup("""{ "Machine": {} }""", RegistryValueKind.String);
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.True(result.InvalidBackup);
+        Assert.Equal(0, result.Restored);
+        Assert.Equal(0, result.Removed);
+        Assert.Equal("current-user", env.GetUser("SAFE_USER"));
+        Assert.Equal("current-machine", env.GetMachine("SAFE_MACHINE"));
+    }
+
+    [Fact]
+    public void RestoreFromBackup_InvalidUserSnapshotPreventsMachineMutation()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "current-user");
+        env.SetMachine("SAFE_MACHINE", "current-machine");
+        env.WriteUserRegistryBackup("{ invalid json");
+        env.WriteMachineBackup("""
+            { "Machine": { "SAFE_MACHINE": "backup-machine" } }
+            """, RegistryValueKind.String);
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.True(result.InvalidBackup);
+        Assert.Equal(0, result.Restored);
+        Assert.Equal(0, result.Removed);
+        Assert.Equal("current-user", env.GetUser("SAFE_USER"));
+        Assert.Equal("current-machine", env.GetMachine("SAFE_MACHINE"));
+    }
+
+    [Fact]
+    public void EnsureBackup_MachineOnlyChangeDoesNotCreateUserSnapshot()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetMachine("SAFE_MACHINE", "original");
+
+        env.Service.EnsureBackup(includeUser: false, includeMachine: true);
+
+        Assert.True(env.Service.HasMachineBackup);
+        Assert.False(env.Service.HasUserBackup);
+        Assert.False(env.HasUserRegistryBackup());
+        Assert.False(File.Exists(env.Service.BackupPath));
+    }
+
+    [Fact]
+    public void EnsureBackup_InvalidUnrequestedUserSnapshotBlocksMachineSnapshot()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetMachine("SAFE_MACHINE", "original");
+        env.WriteUserRegistryBackup("{ invalid json");
+
+        Assert.Throws<InvalidDataException>(() =>
+            env.Service.EnsureBackup(includeUser: false, includeMachine: true));
+
+        Assert.Null(env.GetMachineBackupRaw());
+    }
+
+    [Fact]
+    public void EnsureBackup_LiveWindowsPermittedNonUiName_IsCaptured()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("BAD NAME", "value");
+
+        env.Service.EnsureBackup(includeUser: true, includeMachine: false);
+
+        Assert.Equal("value", env.Service.ReadBackup()!.User["BAD NAME"]);
+    }
+
+    [Fact]
+    public void EnsureBackup_UnsupportedLiveRegistryKindPublishesNoSnapshot()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetMachine("UNSUPPORTED", 1, RegistryValueKind.DWord);
+
+        Assert.Throws<InvalidDataException>(() =>
+            env.Service.EnsureBackup(includeUser: false, includeMachine: true));
+
+        Assert.Null(env.GetMachineBackupRaw());
+    }
+
+    [Fact]
+    public void ProtectedMachineBackupAcl_AcceptsOnlyTrustedWriters()
+    {
+        var security = EnvironmentVariableService.CreateProtectedMachineBackupSecurity();
+
+        Assert.True(EnvironmentVariableService.IsProtectedMachineBackupSecurity(security));
+
+        var users = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, domainSid: null);
+        security.AddAccessRule(new RegistryAccessRule(
+            users,
+            RegistryRights.SetValue,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Allow));
+        Assert.False(EnvironmentVariableService.IsProtectedMachineBackupSecurity(security));
+    }
+
+    [Fact]
+    public void ProtectedMachineBackupAcl_RejectsUntrustedOwner()
+    {
+        var security = EnvironmentVariableService.CreateProtectedMachineBackupSecurity();
+        security.SetOwner(new SecurityIdentifier(
+            WellKnownSidType.BuiltinUsersSid,
+            domainSid: null));
+
+        Assert.False(EnvironmentVariableService.IsProtectedMachineBackupSecurity(security));
+    }
+
+    [Fact]
+    public void MachineBackup_UserWritableRegistryPathIsRejected()
+    {
+        using var env = new RedirectedEnvironment(enforceMachineBackupProtection: true);
+        env.SetMachine("SAFE_MACHINE", "current");
+        env.WriteMachineBackup("""
+            { "Machine": { "SAFE_MACHINE": "attacker-value" } }
+            """, RegistryValueKind.String);
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.False(env.Service.HasMachineBackup);
+        Assert.True(result.InvalidBackup);
+        Assert.Equal("current", env.GetMachine("SAFE_MACHINE"));
+    }
+
+    [Fact]
+    public void MissingMachineBackup_DoesNotBlockUserOnlySnapshotOnUntrustedParent()
+    {
+        using var env = new RedirectedEnvironment(enforceMachineBackupProtection: true);
+        env.SetUser("SAFE_USER", "original");
+
+        Assert.False(env.Service.HasBackup);
+
+        env.Service.EnsureBackup(includeUser: true, includeMachine: false);
+
+        Assert.True(env.Service.HasUserBackup);
+        Assert.False(env.Service.HasMachineBackup);
+        Assert.Equal("original", env.Service.ReadBackup()!.User["SAFE_USER"]);
+    }
+
+    [Fact]
+    public void RestoreFromBackup_DeniedMachineWritesLeaveValuesUnchangedAndCountFailures()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetMachine("SAFE_MACHINE", "original");
+        env.Service.EnsureBackup(includeUser: false, includeMachine: true);
+        env.SetMachine("SAFE_MACHINE", "changed");
+        env.SetMachine("ADDED_MACHINE", "added");
+
+        using var key = env.MachineRoot.OpenSubKey(
+            EnvironmentVariableService.MachineEnvPath,
+            writable: true);
+        Assert.NotNull(key);
+        var originalSecurity = key!.GetAccessControl(
+            AccessControlSections.Owner | AccessControlSections.Access);
+        var deniedSecurity = key.GetAccessControl(
+            AccessControlSections.Owner | AccessControlSections.Access);
+        using var identity = WindowsIdentity.GetCurrent();
+        Assert.NotNull(identity.User);
+        deniedSecurity.AddAccessRule(new RegistryAccessRule(
+            identity.User!,
+            RegistryRights.SetValue,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Deny));
+        key.SetAccessControl(deniedSecurity);
+
+        try
+        {
+            var result = env.Service.RestoreFromBackup();
+
+            Assert.False(result.InvalidBackup);
+            Assert.Equal(0, result.Restored);
+            Assert.Equal(0, result.Removed);
+            Assert.Equal(2, result.Failed);
+            Assert.Equal("changed", env.GetMachine("SAFE_MACHINE"));
+            Assert.Equal("added", env.GetMachine("ADDED_MACHINE"));
+        }
+        finally
+        {
+            key.SetAccessControl(originalSecurity);
+        }
+    }
+
+    [Fact]
+    public void ReadBackup_UserRegistryWrongTypeReturnsNullAndIsNotReplaced()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteUserRegistryBackup(1, RegistryValueKind.DWord);
+
+        Assert.Null(env.Service.ReadBackup());
+        Assert.Throws<InvalidDataException>(() =>
+            env.Service.EnsureBackup(includeUser: true, includeMachine: false));
+        Assert.Equal(1, env.GetUserBackupRaw());
+    }
+
+    private sealed class RedirectedEnvironment : IDisposable
+    {
+        private readonly string _userRootName =
+            $@"Software\SysManagerTests\Environment\User_{Guid.NewGuid():N}";
+        private readonly string _machineRootName =
+            $@"Software\SysManagerTests\Environment\Machine_{Guid.NewGuid():N}";
+
+        public RedirectedEnvironment(bool enforceMachineBackupProtection = false)
+        {
+            BackupDirectory = Path.Combine(
+                Path.GetTempPath(),
+                $"SysManagerEnvironmentTests_{Guid.NewGuid():N}");
+            UserRoot = Registry.CurrentUser.CreateSubKey(_userRootName, writable: true)
+                ?? throw new InvalidOperationException("Could not create redirected User root.");
+            MachineRoot = Registry.CurrentUser.CreateSubKey(_machineRootName, writable: true)
+                ?? throw new InvalidOperationException("Could not create redirected Machine root.");
+
+            using var userEnvironment = UserRoot.CreateSubKey(
+                EnvironmentVariableService.UserEnvPath,
+                writable: true);
+            using var machineEnvironment = MachineRoot.CreateSubKey(
+                EnvironmentVariableService.MachineEnvPath,
+                writable: true);
+
+            Service = new EnvironmentVariableService(
+                BackupDirectory,
+                UserRoot,
+                MachineRoot,
+                enforceMachineBackupProtection);
+        }
+
+        public string BackupDirectory { get; }
+        public RegistryKey UserRoot { get; }
+        public RegistryKey MachineRoot { get; }
+        public EnvironmentVariableService Service { get; }
+
+        public void WriteUserBackup(string json)
+            => WriteLegacyUserBackup(json);
+
+        public void WriteLegacyUserBackup(string json)
+        {
+            Directory.CreateDirectory(BackupDirectory);
+            File.WriteAllText(Service.BackupPath, json);
+        }
+
+        public void WriteUserRegistryBackup(object value, RegistryValueKind kind = RegistryValueKind.String)
+        {
+            using var key = UserRoot.CreateSubKey(
+                EnvironmentVariableService.UserBackupPath,
+                writable: true);
+            key!.SetValue(EnvironmentVariableService.UserBackupValueName, value, kind);
+        }
+
+        public bool HasUserRegistryBackup()
+        {
+            using var key = UserRoot.OpenSubKey(EnvironmentVariableService.UserBackupPath);
+            return key?.GetValueNames().Contains(
+                EnvironmentVariableService.UserBackupValueName,
+                StringComparer.OrdinalIgnoreCase) == true;
+        }
+
+        public object? GetUserBackupRaw()
+        {
+            using var key = UserRoot.OpenSubKey(EnvironmentVariableService.UserBackupPath);
+            return key?.GetValue(
+                EnvironmentVariableService.UserBackupValueName,
+                defaultValue: null,
+                RegistryValueOptions.DoNotExpandEnvironmentNames);
+        }
+
+        public void WriteMachineBackup(object value, RegistryValueKind kind)
+        {
+            using var key = MachineRoot.CreateSubKey(
+                EnvironmentVariableService.MachineBackupPath,
+                writable: true);
+            key!.SetValue(EnvironmentVariableService.MachineBackupValueName, value, kind);
+        }
+
+        public object? GetMachineBackupRaw()
+        {
+            using var key = MachineRoot.OpenSubKey(EnvironmentVariableService.MachineBackupPath);
+            return key?.GetValue(
+                EnvironmentVariableService.MachineBackupValueName,
+                defaultValue: null,
+                RegistryValueOptions.DoNotExpandEnvironmentNames);
+        }
+
+        public void SetUser(string name, string value)
+            => SetUser(name, value, RegistryValueKind.String);
+
+        public void SetUser(string name, object value, RegistryValueKind kind)
+        {
+            using var key = UserRoot.OpenSubKey(
+                EnvironmentVariableService.UserEnvPath,
+                writable: true);
+            key!.SetValue(name, value, kind);
+        }
+
+        public void SetMachine(string name, string value)
+            => SetMachine(name, value, RegistryValueKind.String);
+
+        public void SetMachine(string name, object value, RegistryValueKind kind)
+        {
+            using var key = MachineRoot.OpenSubKey(
+                EnvironmentVariableService.MachineEnvPath,
+                writable: true);
+            key!.SetValue(name, value, kind);
+        }
+
+        public object? GetUser(string name)
+        {
+            using var key = UserRoot.OpenSubKey(EnvironmentVariableService.UserEnvPath);
+            return key?.GetValue(name, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+        }
+
+        public object? GetMachine(string name)
+        {
+            using var key = MachineRoot.OpenSubKey(EnvironmentVariableService.MachineEnvPath);
+            return key?.GetValue(name, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+        }
+
+        public void Dispose()
+        {
+            UserRoot.Dispose();
+            MachineRoot.Dispose();
+            Registry.CurrentUser.DeleteSubKeyTree(_userRootName, throwOnMissingSubKey: false);
+            Registry.CurrentUser.DeleteSubKeyTree(_machineRootName, throwOnMissingSubKey: false);
+            if (Directory.Exists(BackupDirectory))
+                Directory.Delete(BackupDirectory, recursive: true);
         }
     }
 }

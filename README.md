@@ -512,9 +512,12 @@ a confirmation before it runs:
   Cloudflare, Quad9, OpenDNS) plus **ad/malware/family-blocking variants**
   (Cloudflare 1.1.1.2 malware / 1.1.1.3 family, AdGuard DNS ad-blocking + family,
   OpenDNS FamilyShield), each with a description of what it blocks. **IPv6
-  resolvers** are configured automatically alongside IPv4. Reset to automatic
-  (DHCP) any time; shows current active DNS. An **Undo** button restores the exact
-  DNS configuration in effect before the last change.
+  resolvers** are configured automatically alongside IPv4. Preset changes and
+  reset to automatic (DHCP) are confirmed, then verify the captured adapter and
+  DNS state again inside the mutation script. An **Undo** button follows that
+  adapter's stable identity and restores its exact prior IPv4 and IPv6
+  automatic/static configuration without persisting DHCP-supplied addresses as
+  static overrides.
 - **Hosts File Editor** — view, add, and remove entries from the Windows
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
   or remove them. Backs up hosts file before modifications.

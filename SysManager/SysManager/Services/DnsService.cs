@@ -583,9 +583,8 @@ public sealed class DnsService : IDisposable
     private static void ThrowIfMutationPreconditionFailed(Collection<PSObject> results)
     {
         var detailPrefix = MutationPreconditionFailureMarker + "|";
-        foreach (var result in results)
+        foreach (var value in results.Select(static result => result?.ToString()))
         {
-            var value = result?.ToString();
             if (string.Equals(value, MutationPreconditionFailureMarker, StringComparison.Ordinal))
                 throw new DnsMutationPreconditionException();
 

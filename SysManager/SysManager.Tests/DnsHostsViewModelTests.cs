@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.ObjectModel;
 using System.IO;
+using System.Management.Automation;
 using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -104,6 +106,38 @@ public class DnsHostsViewModelTests
 [Collection("DialogService")]
 public class DnsHostsViewModelGateTests
 {
+    private const string TestInterfaceGuid = "11111111-2222-3333-4444-555555555555";
+    private const string OtherInterfaceGuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+    private static Collection<PSObject> CaptureResult(
+        string ipv4 = "8.8.8.8",
+        int ifIndex = 12,
+        string interfaceGuid = TestInterfaceGuid) =>
+        new()
+        {
+            PSObject.AsPSObject($"IFINDEX={ifIndex}"),
+            PSObject.AsPSObject($"IFGUID={interfaceGuid}"),
+            PSObject.AsPSObject("SOURCE_IPv4=Static"),
+            PSObject.AsPSObject("SOURCE_IPv6=Automatic"),
+            PSObject.AsPSObject($"IPv4={ipv4}"),
+            PSObject.AsPSObject("COMPLETE=IPv4"),
+            PSObject.AsPSObject("COMPLETE=IPv6"),
+            PSObject.AsPSObject("IDENTITY=Verified"),
+        };
+
+    private static Collection<PSObject> DhcpCaptureResult() =>
+        new()
+        {
+            PSObject.AsPSObject("IFINDEX=12"),
+            PSObject.AsPSObject($"IFGUID={TestInterfaceGuid}"),
+            PSObject.AsPSObject("SOURCE_IPv4=Automatic"),
+            PSObject.AsPSObject("SOURCE_IPv6=Automatic"),
+            PSObject.AsPSObject("IPv4=192.0.2.53"),
+            PSObject.AsPSObject("COMPLETE=IPv4"),
+            PSObject.AsPSObject("COMPLETE=IPv6"),
+            PSObject.AsPSObject("IDENTITY=Verified"),
+        };
+
     private static (DnsHostsViewModel vm, string hostsPath, string dir, IPowerShellRunner runner) NewVm()
     {
         var dir = Path.Combine(Path.GetTempPath(), "smtest_dnsgate_" + Guid.NewGuid().ToString("N"));
@@ -116,6 +150,18 @@ public class DnsHostsViewModelGateTests
         // reading the temp hosts file while the test runs).
         var vm = new DnsHostsViewModel(new DnsService(runner), new HostsFileService(hostsPath), autoInit: false) { IsElevated = true };
         return (vm, hostsPath, dir, runner);
+    }
+
+    private static void DeleteTestDirectory(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Test cleanup failed for '{path}': {ex.Message}");
+        }
     }
 
     // ── SaveHosts (overwrites the system hosts file) ──────────────────────
@@ -143,7 +189,7 @@ public class DnsHostsViewModelGateTests
         finally
         {
             DialogService.Instance = prevDialog;
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            DeleteTestDirectory(dir);
         }
     }
 
@@ -170,7 +216,7 @@ public class DnsHostsViewModelGateTests
         finally
         {
             DialogService.Instance = prevDialog;
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            DeleteTestDirectory(dir);
         }
     }
 
@@ -193,16 +239,20 @@ public class DnsHostsViewModelGateTests
         finally
         {
             DialogService.Instance = prevDialog;
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            DeleteTestDirectory(dir);
         }
     }
 
     // ── ApplyDns (changes the system DNS servers) ─────────────────────────
 
     [StaFact]
-    public async Task ApplyDns_WhenUserDeclinesConfirm_DoesNotInvokeRunner()
+    public async Task ApplyDns_WhenUserDeclinesCapturedTarget_DoesNotMutate()
     {
         var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(CaptureResult()));
+
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // "No"
@@ -214,10 +264,13 @@ public class DnsHostsViewModelGateTests
 
             await vm.ApplyDnsCommand.ExecuteAsync(null);
 
-            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
-            // Declining must short-circuit before any DNS PowerShell runs. With
-            // autoInit off, the runner is only ever touched by ApplyDns itself.
-            await runner.DidNotReceive().RunAsync(Arg.Any<string>(),
+            dialog.Received(1).Confirm(
+                Arg.Is<string>(message => message != null &&
+                    message.Contains("interface 12")),
+                "Confirm DNS Change");
+            await runner.DidNotReceive().RunAsync(
+                Arg.Is<string>(script => script != null &&
+                    script.Contains("Set-DnsClientServerAddress")),
                 Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
             Assert.Equal("DNS change cancelled.", vm.StatusMessage);
             Assert.False(vm.IsDnsApplying);
@@ -225,7 +278,1057 @@ public class DnsHostsViewModelGateTests
         finally
         {
             DialogService.Instance = prevDialog;
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ApplyDns_WhenDnsChangesDuringConfirmation_DoesNotMutateOrArmUndo()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(
+                        Interlocked.Increment(ref captureCount) == 1
+                            ? CaptureResult()
+                            : CaptureResult("9.9.9.9"));
+                }
+                if (script.Contains("Set-DnsClientServerAddress", StringComparison.Ordinal))
+                {
+                    return Task.FromException<Collection<PSObject>>(
+                        new RuntimeException("Mutation must not run after confirmation drift."));
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal(2, captureCount);
+            Assert.False(vm.CanRestorePreviousDns);
+            Assert.Contains("changed while confirmation was open", vm.StatusMessage);
+            Assert.DoesNotContain(runner.ReceivedCalls(), call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true);
+            dialog.Received(1).Confirm(Arg.Any<string>(), "Confirm DNS Change");
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ResetDns_WhenDnsChangesDuringConfirmation_DoesNotMutateOrArmUndo()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(
+                        Interlocked.Increment(ref captureCount) == 1
+                            ? CaptureResult()
+                            : CaptureResult("9.9.9.9"));
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal(2, captureCount);
+            Assert.False(vm.CanRestorePreviousDns);
+            Assert.Contains("changed while confirmation was open", vm.StatusMessage);
+            Assert.DoesNotContain(runner.ReceivedCalls(), call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true);
+            dialog.Received(1).Confirm(Arg.Any<string>(), "Confirm DNS Reset");
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ApplyDns_WhenAdapterIdentityChangesDuringConfirmation_DoesNotMutateOrArmUndo()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(
+                        Interlocked.Increment(ref captureCount) == 1
+                            ? CaptureResult()
+                            : CaptureResult(interfaceGuid: OtherInterfaceGuid));
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal(2, captureCount);
+            Assert.False(vm.CanRestorePreviousDns);
+            Assert.Contains("changed while confirmation was open", vm.StatusMessage);
+            Assert.DoesNotContain(runner.ReceivedCalls(), call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ResetDns_WhenAdapterIndexChangesDuringConfirmation_DoesNotMutateOrArmUndo()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(
+                        Interlocked.Increment(ref captureCount) == 1
+                            ? CaptureResult()
+                            : CaptureResult(ifIndex: 27));
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal(2, captureCount);
+            Assert.False(vm.CanRestorePreviousDns);
+            Assert.Contains("changed while confirmation was open", vm.StatusMessage);
+            Assert.DoesNotContain(runner.ReceivedCalls(), call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task FailedAttempt_PreservesPriorSuccessfulUndoAsFallbackOnSameAdapter()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(
+                        Interlocked.Increment(ref captureCount) <= 2
+                            ? CaptureResult()
+                            : DhcpCaptureResult());
+                }
+                if (script.Contains("if ($adapter) { $adapter.ifIndex }", StringComparison.Ordinal))
+                    return Task.FromResult(new Collection<PSObject> { PSObject.AsPSObject("27") });
+                if (script.Contains("Set-DnsClientServerAddress", StringComparison.Ordinal) &&
+                    !script.Contains("-ResetServerAddresses", StringComparison.Ordinal))
+                {
+                    return Task.FromException<Collection<PSObject>>(
+                        new RuntimeException("Simulated failure after mutation dispatch."));
+                }
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.False(vm.CanRestorePreviousDns);
+
+            var mutations = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Where(script => script?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true)
+                .ToList();
+
+            Assert.Equal(4, mutations.Count);
+            Assert.DoesNotContain("8.8.8.8", mutations[2]);
+            Assert.DoesNotContain("192.0.2.53", mutations[2]);
+            Assert.Contains("8.8.8.8", mutations[3]);
+            Assert.All(mutations, script =>
+            {
+                Assert.Contains(TestInterfaceGuid, script);
+                Assert.DoesNotContain("-InterfaceIndex 27", script);
+            });
+            Assert.All(mutations.Take(2), script =>
+            {
+                Assert.Contains("Get-NetAdapter -InterfaceIndex 12", script);
+                Assert.Contains(
+                    "Set-DnsClientServerAddress -InterfaceIndex $targetIfIndex",
+                    script);
+            });
+            Assert.All(mutations.Skip(2), script =>
+            {
+                Assert.Contains("Get-NetAdapter -IncludeHidden", script);
+                Assert.Contains(
+                    "Set-DnsClientServerAddress -InterfaceIndex $targetIfIndex",
+                    script);
+            });
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task AmbiguousFailureThenSuccessfulRetry_UndoRestoresLastTrustedSnapshot()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        var mutationCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    var capture = Interlocked.Increment(ref captureCount) <= 2
+                        ? CaptureResult("8.8.8.8")
+                        : CaptureResult("203.0.113.53");
+                    return Task.FromResult(capture);
+                }
+                if (script.Contains("$expectedSources", StringComparison.Ordinal))
+                {
+                    return Interlocked.Increment(ref mutationCount) == 1
+                        ? Task.FromException<Collection<PSObject>>(
+                            new RuntimeException("Simulated ambiguous partial failure."))
+                        : Task.FromResult(new Collection<PSObject>());
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+
+            var restoreScript = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Last(script => script?.Contains(
+                    "Get-NetAdapter -IncludeHidden", StringComparison.Ordinal) == true);
+            Assert.Contains("8.8.8.8", restoreScript);
+            Assert.DoesNotContain("203.0.113.53", restoreScript);
+            Assert.False(vm.CanRestorePreviousDns);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+    [StaFact]
+    public async Task AmbiguousFailureThenSuccessfulRetryOnDifferentAdapter_PreservesBothUndoTargets()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        var mutationCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    var capture = Interlocked.Increment(ref captureCount) <= 2
+                        ? CaptureResult("8.8.8.8", 12, TestInterfaceGuid)
+                        : CaptureResult("9.9.9.9", 27, OtherInterfaceGuid);
+                    return Task.FromResult(capture);
+                }
+                if (script.Contains("-AddressFamily IPv4", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new Collection<PSObject>
+                    {
+                        PSObject.AsPSObject("1.1.1.1, 1.0.0.1"),
+                    });
+                }
+                if (script.Contains("$expectedSources", StringComparison.Ordinal))
+                {
+                    return Interlocked.Increment(ref mutationCount) == 1
+                        ? Task.FromException<Collection<PSObject>>(
+                            new RuntimeException("Simulated ambiguous partial failure."))
+                        : Task.FromResult(new Collection<PSObject>());
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+            Assert.Equal("1.1.1.1, 1.0.0.1", vm.CurrentDns);
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.False(vm.CanRestorePreviousDns);
+
+            var restoreScripts = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Where(script => script?.Contains(
+                    "Get-NetAdapter -IncludeHidden", StringComparison.Ordinal) == true)
+                .ToList();
+
+            Assert.Equal(2, restoreScripts.Count);
+            Assert.Contains(OtherInterfaceGuid, restoreScripts[0]);
+            Assert.Contains("9.9.9.9", restoreScripts[0]);
+            Assert.DoesNotContain(TestInterfaceGuid, restoreScripts[0]);
+            Assert.Contains(TestInterfaceGuid, restoreScripts[1]);
+            Assert.Contains("8.8.8.8", restoreScripts[1]);
+            Assert.DoesNotContain(OtherInterfaceGuid, restoreScripts[1]);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+
+    [StaFact]
+    public async Task InterleavedAmbiguousFailuresThenSuccessfulRetry_PreservesEveryAdapterRecovery()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captures = new[]
+        {
+            CaptureResult("8.8.8.8", 12, TestInterfaceGuid),
+            CaptureResult("8.8.8.8", 12, TestInterfaceGuid),
+            CaptureResult("9.9.9.9", 27, OtherInterfaceGuid),
+            CaptureResult("9.9.9.9", 27, OtherInterfaceGuid),
+            CaptureResult("203.0.113.53", 12, TestInterfaceGuid),
+            CaptureResult("203.0.113.53", 12, TestInterfaceGuid),
+        };
+        var captureIndex = 0;
+        var mutationCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                    return Task.FromResult(captures[captureIndex++]);
+
+                if (script.Contains("$expectedSources", StringComparison.Ordinal))
+                {
+                    return Interlocked.Increment(ref mutationCount) <= 2
+                        ? Task.FromException<Collection<PSObject>>(
+                            new RuntimeException("Simulated ambiguous partial failure."))
+                        : Task.FromResult(new Collection<PSObject>());
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.False(vm.CanRestorePreviousDns);
+
+            var restoreScripts = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Where(script => script?.Contains(
+                    "Get-NetAdapter -IncludeHidden", StringComparison.Ordinal) == true)
+                .ToList();
+
+            Assert.Equal(2, restoreScripts.Count);
+            Assert.Contains(TestInterfaceGuid, restoreScripts[0]);
+            Assert.Contains("8.8.8.8", restoreScripts[0]);
+            Assert.DoesNotContain("203.0.113.53", restoreScripts[0]);
+            Assert.Contains(OtherInterfaceGuid, restoreScripts[1]);
+            Assert.Contains("9.9.9.9", restoreScripts[1]);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task SuccessfulChangesAfterCrossAdapterAmbiguity_PreserveUnresolvedRecovery()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captures = new[]
+        {
+            CaptureResult("8.8.8.8", 12, TestInterfaceGuid),
+            CaptureResult("8.8.8.8", 12, TestInterfaceGuid),
+            CaptureResult("9.9.9.9", 27, OtherInterfaceGuid),
+            CaptureResult("9.9.9.9", 27, OtherInterfaceGuid),
+            CaptureResult("1.1.1.1", 27, OtherInterfaceGuid),
+            CaptureResult("1.1.1.1", 27, OtherInterfaceGuid),
+        };
+        var captureIndex = 0;
+        var mutationCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                    return Task.FromResult(captures[captureIndex++]);
+
+                if (script.Contains("$expectedSources", StringComparison.Ordinal))
+                {
+                    return Interlocked.Increment(ref mutationCount) == 1
+                        ? Task.FromException<Collection<PSObject>>(
+                            new RuntimeException("Simulated ambiguous partial failure."))
+                        : Task.FromResult(new Collection<PSObject>());
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Quad9");
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.False(vm.CanRestorePreviousDns);
+
+            var restoreScripts = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Where(script => script?.Contains(
+                    "Get-NetAdapter -IncludeHidden", StringComparison.Ordinal) == true)
+                .ToList();
+
+            Assert.Equal(2, restoreScripts.Count);
+            Assert.Contains(OtherInterfaceGuid, restoreScripts[0]);
+            Assert.Contains("1.1.1.1", restoreScripts[0]);
+            Assert.Contains(TestInterfaceGuid, restoreScripts[1]);
+            Assert.Contains("8.8.8.8", restoreScripts[1]);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task SuccessfulLaterChange_DiscardsOlderUndoHistory()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(
+                        Interlocked.Increment(ref captureCount) <= 2
+                            ? CaptureResult()
+                            : DhcpCaptureResult());
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.False(vm.CanRestorePreviousDns);
+
+            var mutations = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Where(script => script?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true)
+                .ToList();
+
+            Assert.Equal(3, mutations.Count);
+            Assert.DoesNotContain("8.8.8.8", mutations[2]);
+            Assert.DoesNotContain("192.0.2.53", mutations[2]);
+            var mutationCount = mutations.Count;
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal("No previous DNS to restore.", vm.StatusMessage);
+            Assert.Equal(mutationCount, runner.ReceivedCalls().Count(call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true));
+            dialog.Received(3).Confirm(Arg.Any<string>(), Arg.Any<string>());
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task CaptureFailureAndDecline_PreserveExistingUndo()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    return Interlocked.Increment(ref captureCount) switch
+                    {
+                        1 or 2 => Task.FromResult(CaptureResult()),
+                        3 => Task.FromResult(new Collection<PSObject>()),
+                        _ => Task.FromResult(DhcpCaptureResult()),
+                    };
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true, false, true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+            Assert.Equal("DNS change cancelled.", vm.StatusMessage);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+            Assert.False(vm.CanRestorePreviousDns);
+
+            var mutations = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Where(script => script?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true)
+                .ToList();
+
+            Assert.Equal(2, mutations.Count);
+            Assert.Contains("8.8.8.8", mutations[1]);
+            dialog.Received(3).Confirm(Arg.Any<string>(), Arg.Any<string>());
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ApplyDns_WhenStateChangesAfterRevalidation_DiscardsPendingUndo()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref captureCount);
+                    return Task.FromResult(CaptureResult());
+                }
+                if (script.Contains("-AddressFamily IPv4", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new Collection<PSObject>
+                    {
+                        PSObject.AsPSObject("9.9.9.9"),
+                    });
+                }
+                if (script.Contains("Set-DnsClientServerAddress", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new Collection<PSObject>
+                    {
+                        PSObject.AsPSObject("SYSMANAGER_DNS_PRECONDITION_FAILED"),
+                    });
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal(2, captureCount);
+            Assert.False(vm.CanRestorePreviousDns);
+            Assert.Contains("changed, or their current state could not be verified", vm.StatusMessage);
+            Assert.False(vm.IsDnsApplying);
+            Assert.Equal("9.9.9.9", vm.CurrentDns);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ResetDns_WhenStateChangesAfterRevalidation_DiscardsPendingUndo()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref captureCount);
+                    return Task.FromResult(CaptureResult());
+                }
+                if (script.Contains("-AddressFamily IPv4", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new Collection<PSObject>
+                    {
+                        PSObject.AsPSObject("4.4.4.4"),
+                    });
+                }
+                if (script.Contains("-ResetServerAddresses", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new Collection<PSObject>
+                    {
+                        PSObject.AsPSObject("SYSMANAGER_DNS_PRECONDITION_FAILED"),
+                    });
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal(2, captureCount);
+            Assert.False(vm.CanRestorePreviousDns);
+            Assert.Contains("changed, or their current state could not be verified", vm.StatusMessage);
+            Assert.False(vm.IsDnsApplying);
+            Assert.Equal("4.4.4.4", vm.CurrentDns);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task PreMutationRejection_PreservesEarlierUndoInsteadOfHidingIt()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var captureCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                {
+                    var capture = Interlocked.Increment(ref captureCount) <= 2
+                        ? CaptureResult()
+                        : CaptureResult(ifIndex: 27, interfaceGuid: OtherInterfaceGuid);
+                    return Task.FromResult(capture);
+                }
+                if (script.Contains("$expectedSources", StringComparison.Ordinal) &&
+                    script.Contains("Set-DnsClientServerAddress", StringComparison.Ordinal) &&
+                    !script.Contains("-ResetServerAddresses", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new Collection<PSObject>
+                    {
+                        PSObject.AsPSObject("SYSMANAGER_DNS_PRECONDITION_FAILED"),
+                    });
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+            Assert.Contains("changed, or their current state could not be verified", vm.StatusMessage);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+
+            Assert.False(vm.CanRestorePreviousDns);
+            var restoreScript = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Last(script => script?.Contains("Get-NetAdapter -IncludeHidden", StringComparison.Ordinal) == true);
+            Assert.Contains(TestInterfaceGuid, restoreScript);
+            Assert.DoesNotContain(OtherInterfaceGuid, restoreScript);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+    [StaFact]
+    public async Task ApplyDns_WhenNoAdapterCanBeCaptured_OffersNoUndoAndDoesNotMutate()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new Collection<PSObject>()));
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            Assert.False(vm.CanRestorePreviousDns);
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.DoesNotContain(runner.ReceivedCalls(), call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+
+    [StaFact]
+    public async Task RestorePreviousDns_WhenRestorePartiallyFails_RefreshesDisplayedDnsAndKeepsUndo()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        var queryCount = 0;
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var script = callInfo.ArgAt<string>(0);
+                if (script.Contains("IFGUID=", StringComparison.Ordinal))
+                    return Task.FromResult(CaptureResult());
+
+                if (script.Contains("Get-NetAdapter -IncludeHidden", StringComparison.Ordinal))
+                {
+                    return Task.FromException<Collection<PSObject>>(
+                        new RuntimeException("Simulated failure after reset started."));
+                }
+
+                if (script.Contains("-AddressFamily IPv4", StringComparison.Ordinal))
+                {
+                    var current = Interlocked.Increment(ref queryCount) == 1
+                        ? "1.1.1.1"
+                        : "4.4.4.4";
+                    return Task.FromResult(new Collection<PSObject>
+                    {
+                        PSObject.AsPSObject(current),
+                    });
+                }
+
+                return Task.FromResult(new Collection<PSObject>());
+            });
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            Assert.Equal("1.1.1.1", vm.CurrentDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal(2, queryCount);
+            Assert.Equal("4.4.4.4", vm.CurrentDns);
+            Assert.True(vm.CanRestorePreviousDns);
+            Assert.Contains("Failed to restore DNS", vm.StatusMessage);
+            Assert.False(vm.IsDnsApplying);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+    [StaFact]
+    public async Task RestorePreviousDns_WhenUserDeclines_KeepsUndoAndDoesNotMutateAgain()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(CaptureResult()));
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true, false);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+
+            Assert.True(vm.CanRestorePreviousDns);
+            Assert.Equal("DNS restore cancelled.", vm.StatusMessage);
+            Assert.Equal(1, runner.ReceivedCalls().Count(call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true));
+            dialog.Received(2).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            dialog.Received(1).Confirm(
+                Arg.Is<string>(message => message != null &&
+                    message.Contains("previously changed network adapter") &&
+                    !message.Contains("interface 12")),
+                "Confirm DNS Restore");
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ResetDns_WhenUserDeclinesCapturedTarget_DoesNotMutate()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(CaptureResult()));
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(
+                Arg.Is<string>(message => message != null &&
+                    message.Contains("interface 12")),
+                "Confirm DNS Reset");
+            await runner.DidNotReceive().RunAsync(
+                Arg.Is<string>(script => script != null &&
+                    script.Contains("Set-DnsClientServerAddress")),
+                Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+            Assert.Equal("DNS reset cancelled.", vm.StatusMessage);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ResetDns_DhcpWithEffectiveAddress_ConfirmationDescribesAutomaticMode()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(DhcpCaptureResult()));
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(
+                Arg.Is<string>(message => message != null &&
+                    message.Contains("IPv4 automatic (DHCP)") &&
+                    !message.Contains("192.0.2.53")),
+                "Confirm DNS Reset");
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
         }
     }
 
@@ -256,7 +1359,7 @@ public class DnsHostsViewModelGateTests
         finally
         {
             DialogService.Instance = prevDialog;
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            DeleteTestDirectory(dir);
         }
     }
 }

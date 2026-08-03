@@ -34,9 +34,16 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     /// <summary>
     /// The DNS servers in effect immediately before the last SysManager-applied
     /// change, captured so the change can be reverted to the exact previous state.
-    /// Null until a change is applied this session.
+    /// A failed attempt keeps the prior successful rollback point as a fallback:
+    /// the first Undo repairs a possible partial mutation, and a second Undo can
+    /// still revert the last successful change.
     /// </summary>
-    private DnsService.DnsSnapshot? _previousServers;
+    private sealed record DnsUndoState(
+        DnsService.DnsSnapshot Snapshot,
+        DnsUndoState? Fallback,
+        bool IsAmbiguous = false);
+
+    private DnsUndoState? _dnsUndo;
 
     [ObservableProperty] private bool _canRestorePreviousDns;
 
@@ -124,7 +131,8 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     [RelayCommand]
     private async Task ApplyDnsAsync()
     {
-        if (SelectedPreset is null) return;
+        var preset = SelectedPreset;
+        if (preset is null) return;
 
         if (!IsElevated)
         {
@@ -133,59 +141,89 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         }
 
         // DHCP reset path
-        if (string.IsNullOrEmpty(SelectedPreset.Primary))
+        if (string.IsNullOrEmpty(preset.Primary))
         {
             await ResetDnsAsync();
             return;
         }
 
-        var v6Note = SelectedPreset.HasIpv6 ? " + IPv6" : "";
-        if (!DialogService.Instance.Confirm(
-                $"Change this PC's DNS servers to {SelectedPreset.Name} " +
-                $"({SelectedPreset.Primary}, {SelectedPreset.Secondary}{v6Note})?\n\n" +
-                "You can revert any time with \"Reset to automatic (DHCP)\".",
-                "Confirm DNS Change"))
-        {
-            StatusMessage = "DNS change cancelled.";
-            return;
-        }
-
         IsDnsApplying = true;
-        StatusMessage = $"Applying {SelectedPreset.Name} DNS...";
+        StatusMessage = "Reading the active adapter's DNS settings...";
+        DnsUndoState? pendingUndo = null;
         try
         {
             // Snapshot BOTH families in effect now so the change is reversible to the exact
-            // previous configuration, not just a generic DHCP reset. Record it (and enable
-            // Undo) BEFORE the Set: if the Set partially applies (e.g. IPv4 lands, IPv6
-            // fails), the user must still be offered an Undo for what did change.
-            var snapshot = await _dnsService.CaptureSnapshotAsync(_cts.Token).ConfigureAwait(false);
-            _previousServers = snapshot;
-            Application.Current?.Dispatcher?.Invoke(() => CanRestorePreviousDns = true);
+            // previous configuration, not just a generic DHCP reset. Capture before consent
+            // so the confirmation names the same adapter identity that mutation will verify.
+            var snapshot = await _dnsService.CaptureSnapshotAsync(_cts.Token).ConfigureAwait(true);
 
-            await _dnsService.SetDnsAsync(SelectedPreset.Primary, SelectedPreset.Secondary,
-                    SelectedPreset.PrimaryV6, SelectedPreset.SecondaryV6, _cts.Token)
+            var v6Note = preset.HasIpv6 ? " + IPv6" : "";
+            if (!DialogService.Instance.Confirm(
+                    $"Change DNS on active network interface {snapshot.IfIndex} to {preset.Name} " +
+                    $"({preset.Primary}, {preset.Secondary}{v6Note})?\n\n" +
+                    $"Previous setting: {DescribeDnsSnapshot(snapshot)}.\n" +
+                    "You can restore the previous setting with Undo.",
+                    "Confirm DNS Change"))
+            {
+                StatusMessage = "DNS change cancelled.";
+                return;
+            }
+
+            var confirmedSnapshot = await _dnsService.CaptureSnapshotAsync(_cts.Token)
+                .ConfigureAwait(true);
+            if (!DnsSnapshotsMatch(snapshot, confirmedSnapshot))
+            {
+                await RefreshDnsAsync();
+                StatusMessage =
+                    "DNS settings changed while confirmation was open. Review and try again.";
+                return;
+            }
+
+            // Arm Undo before the guarded mutation so an ambiguous partial failure remains
+            // recoverable. A typed precondition rejection proves no mutation began and safely
+            // removes only this pending entry, exposing any older rollback point again.
+            pendingUndo = ArmDnsUndo(confirmedSnapshot);
+            StatusMessage = $"Applying {preset.Name} DNS...";
+
+            await _dnsService.SetDnsAsync(confirmedSnapshot, preset.Primary, preset.Secondary,
+                    preset.PrimaryV6, preset.SecondaryV6, _cts.Token)
                 .ConfigureAwait(false);
+            CommitDnsUndo(pendingUndo);
+            pendingUndo = null;
 
             await RefreshDnsAsync();
-            Application.Current?.Dispatcher?.Invoke(() =>
-                StatusMessage = $"DNS set to {SelectedPreset.Name} ({SelectedPreset.Primary}, {SelectedPreset.Secondary}).");
+            SetStatusMessage($"DNS set to {preset.Name} ({preset.Primary}, {preset.Secondary}).");
+
             Log.Information("DNS changed to {Preset} ({Primary}, {Secondary})",
-                SelectedPreset.Name, SelectedPreset.Primary, SelectedPreset.Secondary);
-            ActivityLogService.Instance.Log("DNS & Hosts", $"Set DNS to {SelectedPreset.Name}");
+                preset.Name, preset.Primary, preset.Secondary);
+            ActivityLogService.Instance.Log("DNS & Hosts", $"Set DNS to {preset.Name}");
         }
-        catch (OperationCanceledException) { }
+        catch (DnsService.DnsMutationPreconditionException ex)
+        {
+            DiscardDnsUndo(pendingUndo);
+            await RefreshDnsAsync();
+            SetStatusMessage("DNS settings or the adapter changed, or their current state could not be verified. Review and try again.");
+
+            Log.Warning(ex, "DNS preset {Preset} was not applied because its captured state could not be verified", preset.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            RetainAmbiguousDnsUndo(pendingUndo);
+        }
         catch (Exception ex)
         {
-            Application.Current?.Dispatcher?.Invoke(() =>
-                StatusMessage = $"Failed to set DNS: {ex.Message}");
-            Log.Error(ex, "Failed to apply DNS preset {Preset}", SelectedPreset.Name);
+            RetainAmbiguousDnsUndo(pendingUndo);
+            if (pendingUndo is not null)
+                await RefreshDnsAsync();
+            SetStatusMessage($"Failed to set DNS: {ex.Message}");
+
+            Log.Error(ex, "Failed to apply DNS preset {Preset}", preset.Name);
         }
         finally
         {
-            Application.Current?.Dispatcher?.Invoke(() => IsDnsApplying = false);
+            SetDnsApplying(false);
         }
     }
-
     [RelayCommand]
     private async Task ResetDnsAsync()
     {
@@ -196,28 +234,69 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         }
 
         IsDnsApplying = true;
-        StatusMessage = "Resetting DNS to DHCP...";
+        StatusMessage = "Reading the active adapter's DNS settings...";
+        DnsUndoState? pendingUndo = null;
         try
         {
-            await _dnsService.ResetToDhcpAsync(_cts.Token).ConfigureAwait(false);
+            var snapshot = await _dnsService.CaptureSnapshotAsync(_cts.Token).ConfigureAwait(true);
+
+            if (!DialogService.Instance.Confirm(
+                    $"Reset DNS on active network interface {snapshot.IfIndex} to automatic (DHCP)?\n\n" +
+                    $"Current setting: {DescribeDnsSnapshot(snapshot)}.\n" +
+                    "The current setting can be restored with Undo.",
+                    "Confirm DNS Reset"))
+            {
+                StatusMessage = "DNS reset cancelled.";
+                return;
+            }
+
+            var confirmedSnapshot = await _dnsService.CaptureSnapshotAsync(_cts.Token)
+                .ConfigureAwait(true);
+            if (!DnsSnapshotsMatch(snapshot, confirmedSnapshot))
+            {
+                await RefreshDnsAsync();
+                StatusMessage =
+                    "DNS settings changed while confirmation was open. Review and try again.";
+                return;
+            }
+
+            pendingUndo = ArmDnsUndo(confirmedSnapshot);
+            StatusMessage = "Resetting DNS to DHCP...";
+
+            await _dnsService.ResetToDhcpAsync(confirmedSnapshot, _cts.Token).ConfigureAwait(false);
+            CommitDnsUndo(pendingUndo);
+            pendingUndo = null;
             await RefreshDnsAsync();
-            Application.Current?.Dispatcher?.Invoke(() =>
-                StatusMessage = "DNS reset to automatic (DHCP).");
+            SetStatusMessage("DNS reset to automatic (DHCP).");
+
             Log.Information("DNS reset to DHCP");
         }
-        catch (OperationCanceledException) { }
+        catch (DnsService.DnsMutationPreconditionException ex)
+        {
+            DiscardDnsUndo(pendingUndo);
+            await RefreshDnsAsync();
+            SetStatusMessage("DNS settings or the adapter changed, or their current state could not be verified. Review and try again.");
+
+            Log.Warning(ex, "DNS reset was not applied because its captured state could not be verified");
+        }
+        catch (OperationCanceledException)
+        {
+            RetainAmbiguousDnsUndo(pendingUndo);
+        }
         catch (Exception ex)
         {
-            Application.Current?.Dispatcher?.Invoke(() =>
-                StatusMessage = $"Failed to reset DNS: {ex.Message}");
+            RetainAmbiguousDnsUndo(pendingUndo);
+            if (pendingUndo is not null)
+                await RefreshDnsAsync();
+            SetStatusMessage($"Failed to reset DNS: {ex.Message}");
+
             Log.Error(ex, "Failed to reset DNS to DHCP");
         }
         finally
         {
-            Application.Current?.Dispatcher?.Invoke(() => IsDnsApplying = false);
+            SetDnsApplying(false);
         }
     }
-
     [RelayCommand]
     private async Task RestorePreviousDnsAsync()
     {
@@ -227,19 +306,19 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
-        if (_previousServers is null)
+        var undo = _dnsUndo;
+        if (undo is null)
         {
             StatusMessage = "No previous DNS to restore.";
             return;
         }
 
-        var allPrev = _previousServers.V4.Concat(_previousServers.V6).ToList();
-        var label = allPrev.Count == 0
-            ? "automatic (DHCP)"
-            : string.Join(", ", allPrev);
+        var previousServers = undo.Snapshot;
+        var label = DescribeDnsSnapshot(previousServers);
 
         if (!DialogService.Instance.Confirm(
-                $"Restore this PC's DNS to its previous setting ({label})?",
+                "Restore DNS on the previously changed network adapter " +
+                $"to its previous setting ({label})?",
                 "Confirm DNS Restore"))
         {
             StatusMessage = "DNS restore cancelled.";
@@ -250,28 +329,150 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         StatusMessage = "Restoring previous DNS...";
         try
         {
-            await _dnsService.RestoreSnapshotAsync(_previousServers, _cts.Token).ConfigureAwait(false);
+            await _dnsService.RestoreSnapshotAsync(previousServers, _cts.Token).ConfigureAwait(false);
 
-            _previousServers = null;
-            Application.Current?.Dispatcher?.Invoke(() =>
-            {
-                CanRestorePreviousDns = false;
-                StatusMessage = $"DNS restored to previous setting ({label}).";
-            });
+            CompleteDnsUndo(undo);
+            SetStatusMessage($"DNS restored to previous setting ({label}).");
+
             await RefreshDnsAsync();
             Log.Information("DNS restored to previous setting ({Label})", label);
         }
         catch (OperationCanceledException) { /* expected when the view is closed mid-operation */ }
         catch (Exception ex)
         {
-            Application.Current?.Dispatcher?.Invoke(() =>
-                StatusMessage = $"Failed to restore DNS: {ex.Message}");
+            await RefreshDnsAsync();
+            SetStatusMessage($"Failed to restore DNS: {ex.Message}");
+
             Log.Error(ex, "Failed to restore previous DNS");
         }
         finally
         {
-            Application.Current?.Dispatcher?.Invoke(() => IsDnsApplying = false);
+            SetDnsApplying(false);
         }
+    }
+
+    private DnsUndoState ArmDnsUndo(DnsService.DnsSnapshot snapshot)
+    {
+        var pending = new DnsUndoState(snapshot, _dnsUndo);
+        _dnsUndo = pending;
+        UpdateCanRestorePreviousDns();
+        return pending;
+    }
+
+    private static string DescribeDnsSnapshot(DnsService.DnsSnapshot snapshot)
+    {
+        static string DescribeFamily(
+            string family,
+            IReadOnlyList<string> addresses,
+            DnsService.DnsConfigurationSource source) =>
+            source switch
+            {
+                DnsService.DnsConfigurationSource.Automatic =>
+                    $"{family} automatic (DHCP)",
+                DnsService.DnsConfigurationSource.Static when addresses.Count > 0 =>
+                    $"{family} static: {string.Join(", ", addresses)}",
+                _ => $"{family} unavailable",
+            };
+
+        return $"{DescribeFamily("IPv4", snapshot.V4, snapshot.V4Source)}; " +
+               DescribeFamily("IPv6", snapshot.V6, snapshot.V6Source);
+    }
+
+    private static bool DnsSnapshotsMatch(
+        DnsService.DnsSnapshot expected,
+        DnsService.DnsSnapshot actual) =>
+        expected.IfIndex == actual.IfIndex &&
+        expected.InterfaceGuid == actual.InterfaceGuid &&
+        expected.V4Source == actual.V4Source &&
+        expected.V6Source == actual.V6Source &&
+        expected.V4.SequenceEqual(actual.V4, StringComparer.OrdinalIgnoreCase) &&
+        expected.V6.SequenceEqual(actual.V6, StringComparer.OrdinalIgnoreCase);
+
+    private static bool DnsSnapshotsReferToSameAdapter(
+        DnsService.DnsSnapshot left,
+        DnsService.DnsSnapshot right) =>
+        left.InterfaceGuid is { } capturedGuid &&
+        capturedGuid != Guid.Empty && right.InterfaceGuid == capturedGuid;
+
+    private void CommitDnsUndo(DnsUndoState pending)
+    {
+        if (!ReferenceEquals(_dnsUndo, pending))
+            return;
+
+        var restoreSnapshot = pending.Snapshot;
+        var unresolved = new List<DnsUndoState>();
+        for (var candidate = pending.Fallback;
+             candidate is not null;
+             candidate = candidate.Fallback)
+        {
+            if (!candidate.IsAmbiguous)
+                continue;
+
+            if (DnsSnapshotsReferToSameAdapter(pending.Snapshot, candidate.Snapshot))
+            {
+                restoreSnapshot = candidate.Snapshot;
+                continue;
+            }
+
+            unresolved.Add(candidate);
+        }
+
+        DnsUndoState? fallback = null;
+        for (var i = unresolved.Count - 1; i >= 0; i--)
+            fallback = unresolved[i] with { Fallback = fallback };
+
+        _dnsUndo = new DnsUndoState(restoreSnapshot, fallback);
+    }
+
+    private void RetainAmbiguousDnsUndo(DnsUndoState? pending)
+    {
+        if (pending is not null && ReferenceEquals(_dnsUndo, pending))
+            _dnsUndo = pending with { IsAmbiguous = true };
+    }
+
+    private void DiscardDnsUndo(DnsUndoState? pending)
+    {
+        if (pending is not null && ReferenceEquals(_dnsUndo, pending))
+            _dnsUndo = pending.Fallback;
+
+        UpdateCanRestorePreviousDns();
+    }
+
+    private void CompleteDnsUndo(DnsUndoState restored)
+    {
+        if (ReferenceEquals(_dnsUndo, restored))
+            _dnsUndo = restored.Fallback;
+
+        UpdateCanRestorePreviousDns();
+    }
+
+    private void UpdateCanRestorePreviousDns()
+    {
+        void Update() => CanRestorePreviousDns = _dnsUndo is not null;
+
+        if (Application.Current?.Dispatcher is { } dispatcher)
+            dispatcher.Invoke(Update);
+        else
+            Update();
+    }
+
+    private void SetStatusMessage(string value)
+    {
+        void Update() => StatusMessage = value;
+
+        if (Application.Current?.Dispatcher is { } dispatcher)
+            dispatcher.Invoke(Update);
+        else
+            Update();
+    }
+    private void SetDnsApplying(bool value)
+    {
+        void Update() => IsDnsApplying = value;
+
+        if (Application.Current?.Dispatcher is { } dispatcher)
+            dispatcher.Invoke(Update);
+        else
+            Update();
     }
 
     // ── Hosts Commands ───────────────────────────────────────────────────

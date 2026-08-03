@@ -242,7 +242,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedNavChanged(NavItem? oldValue, NavItem? newValue)
     {
-        if (newValue is null) return;
+        UpdateSelectionState(oldValue, newValue);
+
+        if (newValue is null)
+        {
+            if (oldValue is { IsContentCreated: true }) SetActive(oldValue.Content, false);
+            return;
+        }
+
         Log.Information("Tab navigated: {TabLabel}", newValue.Label);
 
         // Record the feature the user opened in the Dashboard's "Recent activity"
@@ -261,6 +268,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // built (a never-opened lazy tab has no VM and, by definition, nothing polling).
         if (oldValue is { IsContentCreated: true }) SetActive(oldValue.Content, false);
         SetActive(newValue.Content, true); // accessing Content here materialises the entered tab's VM
+    }
+
+    internal static void UpdateSelectionState(NavItem? oldValue, NavItem? newValue)
+    {
+        if (oldValue is not null) oldValue.IsSelected = false;
+        if (newValue is not null) newValue.IsSelected = true;
     }
 
     // The three tabs with a visibility-gated poll expose an IsActive flag. Toggle it generically

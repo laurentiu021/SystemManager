@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.5] - 2026-08-03
+
+### Fixed
+- **Restored persistent selected-tab feedback throughout the sidebar.** The grouped-sidebar migration in v0.18.0 replaced the selecting `ListBox` with non-selecting `ItemsControl` rows, leaving the live accent mark permanently collapsed and making all 58 tabs look unselected once the pointer moved away. Normal navigation now keeps exactly one `NavItem` selected, and both the flat Dashboard row and every grouped leaf share one selected-state treatment: an accent bar, selected background, stronger label, and primary foreground.
+- **Exposed the active tab to assistive technology.** Sidebar automation peers now report the selected item's status, and regression coverage pins the selection handoff, both live XAML templates, and removal of the obsolete `SideNavTabItem` style that previously held an unused second copy of the intended visuals.
+
 ## [1.56.4] - 2026-08-03
 
 ### Fixed

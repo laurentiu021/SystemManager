@@ -935,57 +935,6 @@
             </Style>
 
             <!-- ============================================================ -->
-            <!-- Side-nav tab style (vertical tabs with icon + label)          -->
-            <!-- ============================================================ -->
-            <Style x:Key="SideNavTabItem" TargetType="TabItem">
-                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-                <Setter Property="FontSize" Value="13"/>
-                <Setter Property="FontWeight" Value="Medium"/>
-                <Setter Property="Cursor" Value="Hand"/>
-                <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                <Setter Property="MinWidth" Value="180"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="TabItem">
-                            <Border x:Name="Bd"
-                                    Background="Transparent"
-                                    CornerRadius="{StaticResource RadiusMd}"
-                                    Margin="10,2"
-                                    Padding="14,10">
-                                <Grid>
-                                    <Rectangle x:Name="ActiveMark"
-                                               HorizontalAlignment="Left"
-                                               Width="3" Height="20"
-                                               Fill="{DynamicResource Accent}"
-                                               RadiusX="2" RadiusY="2"
-                                               Margin="-14,0,0,0"
-                                               Visibility="Collapsed"/>
-                                    <ContentPresenter ContentSource="Header"
-                                                      VerticalAlignment="Center"
-                                                      HorizontalAlignment="Left"
-                                                      TextBlock.Foreground="{TemplateBinding Foreground}"
-                                                      TextBlock.FontWeight="{TemplateBinding FontWeight}"/>
-                                </Grid>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface2}"/>
-                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-                                </Trigger>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
-                                    <Setter TargetName="ActiveMark" Property="Visibility" Value="Visible"/>
-                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <!-- ============================================================ -->
             <!-- Pill / Badge                                                  -->
             <!-- ============================================================ -->
             <Style x:Key="Badge" TargetType="Border">

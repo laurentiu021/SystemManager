@@ -13,6 +13,48 @@
         <vm:MainWindowViewModel/>
     </Window.DataContext>
 
+    <Window.Resources>
+        <!-- One selected-row treatment serves both the flat Dashboard entry and grouped leaves. -->
+        <Style x:Key="SidebarNavRow" TargetType="Border">
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource RowHover}"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SidebarNavText" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SidebarActiveMark" TargetType="Rectangle">
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Width" Value="3"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Fill" Value="{DynamicResource Accent}"/>
+            <Setter Property="RadiusX" Value="2"/>
+            <Setter Property="RadiusY" Value="2"/>
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="220"/>
@@ -54,6 +96,12 @@
                     <ItemsControl.ItemContainerStyle>
                         <Style TargetType="ContentPresenter">
                             <Setter Property="AutomationProperties.AutomationId" Value="{Binding Children[0].Id}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSingleItem}" Value="True">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Children[0].Label}"/>
+                                    <Setter Property="AutomationProperties.ItemStatus" Value="{Binding Children[0].SelectionStatus}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
                         </Style>
                     </ItemsControl.ItemContainerStyle>
                     <ItemsControl.ItemTemplate>
@@ -73,37 +121,35 @@
                                                 MouseLeftButtonUp="SingleGroup_Click"
                                                 Tag="{Binding Children[0]}"
                                                 AutomationProperties.AutomationId="{Binding Children[0].Id}"
-                                                AutomationProperties.Name="{Binding Children[0].Label}">
-                                    <Border CornerRadius="8" Padding="14,10">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="Transparent"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
-                                                    </Trigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding Glyph}"
-                                                       FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                                       FontSize="14" Margin="0,0,12,0"
-                                                       VerticalAlignment="Center"
-                                                       Foreground="{DynamicResource TextSecondary}"/>
-                                            <TextBlock Text="{Binding Label}"
-                                                       VerticalAlignment="Center"
-                                                       FontFamily="{StaticResource UiFont}"
-                                                       FontSize="13" FontWeight="Medium"
-                                                       Foreground="{DynamicResource TextSecondary}"/>
-                                            <!-- PREVIEW pill: implemented but not yet QA-verified -->
-                                            <Border Background="{DynamicResource AccentSoft}" CornerRadius="4"
-                                                    Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
-                                                    Visibility="{Binding Children[0].IsInDevelopment, Converter={StaticResource BoolToVis}}">
-                                                <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
-                                                           Foreground="{DynamicResource Info}"/>
-                                            </Border>
-                                        </StackPanel>
+                                                AutomationProperties.Name="{Binding Children[0].Label}"
+                                                AutomationProperties.ItemStatus="{Binding Children[0].SelectionStatus}">
+                                    <Border CornerRadius="8" Padding="14,10"
+                                            DataContext="{Binding Children[0]}"
+                                            Style="{StaticResource SidebarNavRow}">
+                                        <Grid>
+                                            <Rectangle x:Name="SingleActiveMark"
+                                                       Style="{StaticResource SidebarActiveMark}"
+                                                       Margin="-14,0,0,0"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Glyph}"
+                                                           Style="{StaticResource SidebarNavText}"
+                                                           FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                           FontSize="14" Margin="0,0,12,0"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Label}"
+                                                           Style="{StaticResource SidebarNavText}"
+                                                           VerticalAlignment="Center"
+                                                           FontFamily="{StaticResource UiFont}"
+                                                           FontSize="13"/>
+                                                <!-- PREVIEW pill: implemented but not yet QA-verified -->
+                                                <Border Background="{DynamicResource AccentSoft}" CornerRadius="4"
+                                                        Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
+                                                        Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
+                                                               Foreground="{DynamicResource Info}"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
                                     </Border>
                                 </ContentControl>
 
@@ -214,6 +260,7 @@
                                             <Style TargetType="ContentPresenter">
                                                 <Setter Property="AutomationProperties.AutomationId" Value="{Binding Id}"/>
                                                 <Setter Property="AutomationProperties.Name" Value="{Binding Label}"/>
+                                                <Setter Property="AutomationProperties.ItemStatus" Value="{Binding SelectionStatus}"/>
                                             </Style>
                                         </ItemsControl.ItemContainerStyle>
                                         <ItemsControl.ItemTemplate>
@@ -223,25 +270,12 @@
                                                         Cursor="Hand"
                                                         MouseLeftButtonUp="NavChild_Click"
                                                         Tag="{Binding}"
-                                                        AutomationProperties.AutomationId="{Binding Id}">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="Transparent"/>
-                                                            <Style.Triggers>
-                                                                <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
-                                                                </Trigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
+                                                        AutomationProperties.AutomationId="{Binding Id}"
+                                                        Style="{StaticResource SidebarNavRow}">
                                                     <Grid>
                                                         <Rectangle x:Name="ActiveMark"
-                                                                   HorizontalAlignment="Left"
-                                                                   Width="3" Height="18"
-                                                                   Fill="{DynamicResource Accent}"
-                                                                   RadiusX="2" RadiusY="2"
-                                                                   Margin="-28,0,0,0"
-                                                                   Visibility="Collapsed"/>
+                                                                   Style="{StaticResource SidebarActiveMark}"
+                                                                   Margin="-28,0,0,0"/>
                                                         <!-- DockPanel (not a horizontal StackPanel): a StackPanel gives its
                                                              children infinite width, so the label's grid never constrained and the
                                                              PREVIEW pill overflowed the 220px sidebar. Docking the glyph left lets
@@ -249,10 +283,10 @@
                                                              the pill always shows. -->
                                                         <DockPanel>
                                                             <TextBlock Text="{Binding Glyph}" DockPanel.Dock="Left"
+                                                                       Style="{StaticResource SidebarNavText}"
                                                                        FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                                        FontSize="13" Margin="0,0,10,0"
-                                                                       VerticalAlignment="Center"
-                                                                       Foreground="{DynamicResource TextSecondary}"/>
+                                                                       VerticalAlignment="Center"/>
                                                             <StackPanel VerticalAlignment="Center">
                                                                 <!-- Label + PREVIEW pill in a 2-column grid (label = *, pill = Auto):
                                                                      a horizontal StackPanel measured with infinite width, so on a long
@@ -264,10 +298,10 @@
                                                                         <ColumnDefinition Width="Auto"/>
                                                                     </Grid.ColumnDefinitions>
                                                                     <TextBlock Grid.Column="0" Text="{Binding Label}"
+                                                                               Style="{StaticResource SidebarNavText}"
                                                                                FontFamily="{StaticResource UiFont}"
-                                                                               FontSize="13" FontWeight="Medium"
-                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                                                               Foreground="{DynamicResource TextSecondary}"/>
+                                                                               FontSize="13"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                                     <!-- PREVIEW pill: implemented but not yet QA-verified -->
                                                                     <Border Grid.Column="1" Background="{DynamicResource AccentSoft}" CornerRadius="4"
                                                                             Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"

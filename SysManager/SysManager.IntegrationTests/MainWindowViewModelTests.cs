@@ -198,9 +198,15 @@ public class MainWindowViewModelTests
     public void OpenAboutTabCommand_SwitchesSelection()
     {
         var vm = new MainWindowViewModel();
+        var dashboard = vm.SelectedNav!;
+
         vm.OpenAboutTabCommand.Execute(null);
+
         Assert.NotNull(vm.SelectedNav);
         Assert.Equal("nav-about", vm.SelectedNav!.Id);
+        Assert.False(dashboard.IsSelected);
+        Assert.True(vm.SelectedNav.IsSelected);
+        Assert.Single(vm.NavItems, item => item.IsSelected);
     }
 
     [Fact]
@@ -209,6 +215,23 @@ public class MainWindowViewModelTests
         var vm = new MainWindowViewModel();
         Assert.NotNull(vm.SelectedNav);
         Assert.Equal("nav-dashboard", vm.SelectedNav!.Id);
+        Assert.True(vm.SelectedNav.IsSelected);
+        Assert.Single(vm.NavItems, item => item.IsSelected);
+    }
+
+    [Fact]
+    public void SelectedNav_NullClearsSelectionState()
+    {
+        var vm = new MainWindowViewModel();
+        var dashboard = vm.SelectedNav!;
+        var dashboardViewModel = Assert.IsType<DashboardViewModel>(dashboard.Content);
+        Assert.True(dashboardViewModel.IsActive);
+
+        vm.SelectedNav = null;
+
+        Assert.False(dashboard.IsSelected);
+        Assert.DoesNotContain(vm.NavItems, item => item.IsSelected);
+        Assert.False(dashboardViewModel.IsActive);
     }
 
     [Fact]

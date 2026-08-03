@@ -74,6 +74,26 @@ public class SmokeUiTests
     }
 
     [Fact]
+    public void NavSelection_ExposesCurrentItemStatus()
+    {
+        var dashboard = _fx.FindById("nav-dashboard");
+        Assert.NotNull(dashboard);
+        Assert.Equal("Selected", dashboard.ItemStatus);
+
+        _fx.GoToTab("nav-logs");
+        var logs = _fx.FindById("nav-logs");
+        Assert.NotNull(logs);
+        Assert.Equal("Selected", logs.ItemStatus);
+        Assert.NotEqual("Selected", dashboard.ItemStatus);
+
+        _fx.GoToTab("nav-ping");
+        var ping = _fx.FindById("nav-ping");
+        Assert.NotNull(ping);
+        Assert.Equal("Selected", ping.ItemStatus);
+        Assert.NotEqual("Selected", logs.ItemStatus);
+    }
+
+    [Fact]
     public void Navigate_BackAndForth_NoCrash()
     {
         _fx.GoToTab("nav-logs");

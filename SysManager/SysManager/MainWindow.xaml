@@ -14,6 +14,44 @@
     </Window.DataContext>
 
     <Window.Resources>
+        <!-- The flat Dashboard entry is a real Button so it exposes one invokable UIA peer
+             and remains keyboard-operable without inheriting the app's command-button chrome. -->
+        <Style x:Key="SidebarNavButton" TargetType="Button"
+               BasedOn="{StaticResource ButtonBase}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="FocusBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="FocusBorder" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusBorder" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="FocusBorder" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- One selected-row treatment serves both the flat Dashboard entry and grouped leaves. -->
         <Style x:Key="SidebarNavRow" TargetType="Border">
             <Setter Property="Background" Value="Transparent"/>
@@ -91,22 +129,17 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Grid Margin="0,2">
-                                <!-- Single-item group: render as a flat clickable row.
-                                     Hosted in a ContentControl (a Control, so it produces a
-                                     ControlAutomationPeer) — a bare Border has no peer, so its
-                                     AutomationId never surfaced in the UI Automation tree (and
-                                     screen readers couldn't name it). AutomationId + Name now
-                                     ride on the ContentControl; the inner Border keeps the exact
-                                     visuals + hover. -->
-                                <ContentControl x:Name="SingleBd"
-                                                Visibility="{Binding IsSingleItem, Converter={StaticResource FlexVis}}"
-                                                Cursor="Hand"
-                                                Focusable="False"
-                                                MouseLeftButtonUp="SingleGroup_Click"
-                                                Tag="{Binding Children[0]}"
-                                                AutomationProperties.AutomationId="{Binding Children[0].Id}"
-                                                AutomationProperties.Name="{Binding Children[0].Label}"
-                                                AutomationProperties.ItemStatus="{Binding Children[0].SelectionStatus}">
+                                <!-- Single-item groups render as flat nav buttons. A Button supplies
+                                     the invokable automation peer and keyboard activation that a
+                                     ContentControl or bare Border cannot provide. -->
+                                <Button x:Name="SingleBd"
+                                        Visibility="{Binding IsSingleItem, Converter={StaticResource FlexVis}}"
+                                        Click="SingleGroup_Click"
+                                        Tag="{Binding Children[0]}"
+                                        Style="{StaticResource SidebarNavButton}"
+                                        AutomationProperties.AutomationId="{Binding Children[0].Id}"
+                                        AutomationProperties.Name="{Binding Children[0].Label}"
+                                        AutomationProperties.ItemStatus="{Binding Children[0].SelectionStatus}">
                                     <Border CornerRadius="8" Padding="14,10"
                                             DataContext="{Binding Children[0]}"
                                             Style="{StaticResource SidebarNavRow}">
@@ -135,7 +168,7 @@
                                             </StackPanel>
                                         </Grid>
                                     </Border>
-                                </ContentControl>
+                                </Button>
 
                                 <!-- Multi-item group: expander with children -->
                                 <Expander Visibility="{Binding IsSingleItem, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"

@@ -73,7 +73,7 @@ public class SidebarSelectionContractTests
     {
         var document = LoadProjectXaml("MainWindow.xaml");
         var singleRow = document
-            .Descendants(Presentation + "ContentControl")
+            .Descendants(Presentation + "Button")
             .Single(element => (string?)element.Attribute(Xaml + "Name") == "SingleBd");
 
         Assert.Equal(
@@ -85,6 +85,19 @@ public class SidebarSelectionContractTests
         Assert.Equal(
             "{Binding Children[0].SelectionStatus}",
             (string?)singleRow.Attribute("AutomationProperties.ItemStatus"));
+        Assert.Equal("SingleGroup_Click", (string?)singleRow.Attribute("Click"));
+        Assert.Equal(
+            "{StaticResource SidebarNavButton}",
+            (string?)singleRow.Attribute("Style"));
+        Assert.Null(singleRow.Attribute("Focusable"));
+
+        var buttonStyle = FindStyle(document, "SidebarNavButton");
+        var focusTrigger = buttonStyle
+            .Descendants(Presentation + "Trigger")
+            .Single(trigger =>
+                (string?)trigger.Attribute("Property") == "IsKeyboardFocused"
+                && (string?)trigger.Attribute("Value") == "True");
+        AssertSetter(focusTrigger, "BorderBrush", "{DynamicResource Accent}");
 
         var outerItemsControl = document
             .Descendants(Presentation + "ItemsControl")

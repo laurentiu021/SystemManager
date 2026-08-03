@@ -105,8 +105,8 @@ public partial class MainWindow : Window
     [System.Runtime.InteropServices.LibraryImport("user32.dll", EntryPoint = "DefWindowProcW")]
     private static partial IntPtr DefWindowProc(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
-    /// <summary>Click on a single-item group (Dashboard, Network).</summary>
-    private void SingleGroup_Click(object sender, MouseButtonEventArgs e)
+    /// <summary>Activate the flat Dashboard navigation button.</summary>
+    private void SingleGroup_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement fe && fe.Tag is NavItem item
             && DataContext is MainWindowViewModel vm)

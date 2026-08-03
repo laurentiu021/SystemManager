@@ -71,7 +71,14 @@ public sealed class AppFixture : IDisposable
         if (item is null)
             throw new InvalidOperationException($"Nav item '{navId}' not found.{DescribeNavTree()}");
 
-        item.Click();
+        if (item.ControlType != ControlType.Button)
+            throw new InvalidOperationException(
+                $"Nav item '{navId}' is {item.ControlType}, not an invokable Button.");
+
+        // Exercise the same UI Automation Invoke contract used by keyboard and
+        // assistive-technology clients, without relying on screen coordinates.
+        item.AsButton().Invoke();
+
         Thread.Sleep(250);
     }
 

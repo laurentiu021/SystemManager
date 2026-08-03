@@ -81,6 +81,13 @@ public sealed partial class NavItem : ObservableObject, IDisposable
     /// </summary>
     public bool IsInDevelopment { get; init; }
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectionStatus))]
+    private bool _isSelected;
+
+    /// <summary>Selection state exposed to the sidebar's UI Automation peers.</summary>
+    public string SelectionStatus => IsSelected ? "Selected" : string.Empty;
+
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>

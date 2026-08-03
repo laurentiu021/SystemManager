@@ -71,12 +71,13 @@ public sealed class AppFixture : IDisposable
         if (item is null)
             throw new InvalidOperationException($"Nav item '{navId}' not found.{DescribeNavTree()}");
 
-        // Buttons expose Invoke through UI Automation; use it so keyboard/invoke semantics
-        // are exercised directly. Legacy/DataItem rows still require a coordinate click.
-        if (item.ControlType == ControlType.Button)
-            item.AsButton().Invoke();
-        else
-            item.Click();
+        if (item.ControlType != ControlType.Button)
+            throw new InvalidOperationException(
+                $"Nav item '{navId}' is {item.ControlType}, not an invokable Button.");
+
+        // Exercise the same UI Automation Invoke contract used by keyboard and
+        // assistive-technology clients, without relying on screen coordinates.
+        item.AsButton().Invoke();
 
         Thread.Sleep(250);
     }

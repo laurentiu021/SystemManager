@@ -171,14 +171,31 @@
                                               HorizontalAlignment="Stretch"
                                               HorizontalContentAlignment="Stretch"
                                               Cursor="Hand" Padding="0" Margin="0"
-                                              Focusable="False">
+                                              Focusable="True"
+                                              KeyboardNavigation.IsTabStop="True"
+                                              AutomationProperties.AutomationId="{Binding Id, StringFormat={}{0}-header}"
+                                              AutomationProperties.Name="{Binding Label}">
                                     <ToggleButton.Template>
                                         <ControlTemplate TargetType="ToggleButton">
-                                            <ContentPresenter HorizontalAlignment="Stretch"/>
+                                            <Border x:Name="HeaderFocusBorder"
+                                                    BorderBrush="Transparent"
+                                                    BorderThickness="1"
+                                                    CornerRadius="8">
+                                                <ContentPresenter HorizontalAlignment="Stretch"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                    <Setter TargetName="HeaderFocusBorder"
+                                                            Property="BorderBrush"
+                                                            Value="{DynamicResource Accent}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </ToggleButton.Template>
                                 </ToggleButton>
-                                <Border x:Name="ContentPanel" ClipToBounds="True">
+                                <Border x:Name="ContentPanel"
+                                        ClipToBounds="True"
+                                        IsEnabled="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
                                     <ContentPresenter x:Name="ExpanderContent"
                                                       ContentSource="Content"
                                                       Margin="{TemplateBinding Padding}"/>

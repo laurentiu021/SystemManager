@@ -89,8 +89,9 @@ fully open source.
 The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
 scrolling through a flat list. The active tab stays marked with an accent bar,
-selected background, and stronger label while you move between groups. All 58
-tabs are fully implemented:
+selected background, and stronger label while you move between groups. Every tab
+row and every group header is also keyboard-operable with a visible focus cue. All
+58 tabs are fully implemented:
 
 | Group | Tabs |
 |-------|------|

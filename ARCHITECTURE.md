@@ -37,9 +37,11 @@ The sidebar organises tabs into 12 groups (11 collapsible + a flat top-level Das
 Collapsed groups show a child count badge, subtitle (derived
 from child labels joined with " · "), and tooltip.
 `MainWindowViewModel.SelectedNav` mirrors selection into `NavItem.IsSelected`.
-The flat Dashboard row and grouped leaf rows consume that state through the
-shared `SidebarNavRow`, `SidebarNavText`, and `SidebarActiveMark` styles, while
-`SelectionStatus` exposes the same state to UI Automation.
+The flat Dashboard row and grouped leaf rows are invokable `SidebarNavButton`
+controls. Their inner visuals consume selection through the shared `SidebarNavRow`,
+`SidebarNavText`, and `SidebarActiveMark` styles, while `SelectionStatus` exposes
+the same state to UI Automation. Group headers are keyboard-focusable toggles;
+collapsed content is disabled so visually hidden leaves cannot receive focus.
 A planned-but-unbuilt feature would use `PlaceholderViewModel` with a WIP view
 (none currently — every tab is implemented).
 

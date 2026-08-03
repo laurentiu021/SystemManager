@@ -367,10 +367,12 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void NavGroups_AllExpandedByDefault()
+    public void NavGroups_CollapsibleGroupsStartCollapsed()
     {
         var vm = new MainWindowViewModel();
-        Assert.All(vm.NavGroups, g => Assert.True(g.IsExpanded));
+        Assert.All(
+            vm.NavGroups.Where(group => !group.IsSingleItem),
+            group => Assert.False(group.IsExpanded));
     }
 
     // ── Data-driven contract: every leaf in the live graph is well-formed ──

@@ -14,8 +14,8 @@
     </Window.DataContext>
 
     <Window.Resources>
-        <!-- The flat Dashboard entry is a real Button so it exposes one invokable UIA peer
-             and remains keyboard-operable without inheriting the app's command-button chrome. -->
+        <!-- Each leaf is a real Button so it exposes one invokable UIA peer and remains
+             keyboard-operable without inheriting the app's command-button chrome. -->
         <Style x:Key="SidebarNavButton" TargetType="Button"
                BasedOn="{StaticResource ButtonBase}">
             <Setter Property="Background" Value="Transparent"/>
@@ -173,7 +173,9 @@
                                 <!-- Multi-item group: expander with children -->
                                 <Expander Visibility="{Binding IsSingleItem, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"
                                           IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
-                                          Style="{StaticResource SidebarExpander}">
+                                          Style="{StaticResource SidebarExpander}"
+                                          AutomationProperties.AutomationId="{Binding Id}"
+                                          AutomationProperties.Name="{Binding Label}">
                                     <Expander.Header>
                                         <Border CornerRadius="8" Padding="14,10" Cursor="Hand"
                                                 ToolTip="{Binding Tooltip}">
@@ -267,72 +269,63 @@
                                         </Border>
                                     </Expander.Header>
                                     <ItemsControl ItemsSource="{Binding Children}" Focusable="False">
-                                        <!-- Put the nav-item AutomationId + Name on the generated
-                                             item container (the ContentPresenter, whose peer is the
-                                             DataItem that actually appears in the UI Automation tree).
-                                             The inner Border has no automation peer, so its AutomationId
-                                             never surfaced — this is also what made the items invisible
-                                             to screen readers. -->
-                                        <ItemsControl.ItemContainerStyle>
-                                            <Style TargetType="ContentPresenter">
-                                                <Setter Property="AutomationProperties.AutomationId" Value="{Binding Id}"/>
-                                                <Setter Property="AutomationProperties.Name" Value="{Binding Label}"/>
-                                                <Setter Property="AutomationProperties.ItemStatus" Value="{Binding SelectionStatus}"/>
-                                            </Style>
-                                        </ItemsControl.ItemContainerStyle>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border x:Name="ChildBd"
-                                                        CornerRadius="8" Padding="28,9,14,9"
-                                                        Cursor="Hand"
-                                                        MouseLeftButtonUp="NavChild_Click"
+                                                <Button x:Name="ChildBd"
+                                                        Click="NavChild_Click"
                                                         Tag="{Binding}"
-                                                        Style="{StaticResource SidebarNavRow}">
-                                                    <Grid>
-                                                        <Rectangle x:Name="ActiveMark"
-                                                                   Style="{StaticResource SidebarActiveMark}"
-                                                                   Margin="-28,0,0,0"/>
-                                                        <!-- DockPanel (not a horizontal StackPanel): a StackPanel gives its
-                                                             children infinite width, so the label's grid never constrained and the
-                                                             PREVIEW pill overflowed the 220px sidebar. Docking the glyph left lets
-                                                             the content fill the real remaining width, so the label ellipsizes and
-                                                             the pill always shows. -->
-                                                        <DockPanel>
-                                                            <TextBlock Text="{Binding Glyph}" DockPanel.Dock="Left"
-                                                                       Style="{StaticResource SidebarNavText}"
-                                                                       FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                                                       FontSize="13" Margin="0,0,10,0"
-                                                                       VerticalAlignment="Center"/>
-                                                            <StackPanel VerticalAlignment="Center">
-                                                                <!-- Label + PREVIEW pill in a 2-column grid (label = *, pill = Auto):
-                                                                     a horizontal StackPanel measured with infinite width, so on a long
-                                                                     label the pill was pushed past the 220px sidebar edge and clipped to
-                                                                     "PR". The label now ellipsizes and the pill always renders in full. -->
-                                                                <Grid>
-                                                                    <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="*"/>
-                                                                        <ColumnDefinition Width="Auto"/>
-                                                                    </Grid.ColumnDefinitions>
-                                                                    <TextBlock Grid.Column="0" Text="{Binding Label}"
-                                                                               Style="{StaticResource SidebarNavText}"
-                                                                               FontFamily="{StaticResource UiFont}"
-                                                                               FontSize="13"
-                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                                    <!-- PREVIEW pill: implemented but not yet QA-verified -->
-                                                                    <Border Grid.Column="1" Background="{DynamicResource AccentSoft}" CornerRadius="4"
-                                                                            Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
-                                                                            Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
-                                                                        <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
-                                                                                   Foreground="{DynamicResource Info}"/>
-                                                                    </Border>
-                                                                </Grid>
-                                                                <ProgressBar Height="2" Margin="0,3,0,0"
-                                                                             IsIndeterminate="True"
-                                                                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                                                            </StackPanel>
-                                                        </DockPanel>
-                                                    </Grid>
-                                                </Border>
+                                                        Style="{StaticResource SidebarNavButton}"
+                                                        AutomationProperties.AutomationId="{Binding Id}"
+                                                        AutomationProperties.Name="{Binding Label}"
+                                                        AutomationProperties.ItemStatus="{Binding SelectionStatus}">
+                                                    <Border CornerRadius="8" Padding="28,9,14,9"
+                                                            Style="{StaticResource SidebarNavRow}">
+                                                        <Grid>
+                                                            <Rectangle x:Name="ActiveMark"
+                                                                       Style="{StaticResource SidebarActiveMark}"
+                                                                       Margin="-28,0,0,0"/>
+                                                            <!-- DockPanel (not a horizontal StackPanel): a StackPanel gives its
+                                                                 children infinite width, so the label's grid never constrained and the
+                                                                 PREVIEW pill overflowed the 220px sidebar. Docking the glyph left lets
+                                                                 the content fill the real remaining width, so the label ellipsizes and
+                                                                 the pill always shows. -->
+                                                            <DockPanel>
+                                                                <TextBlock Text="{Binding Glyph}" DockPanel.Dock="Left"
+                                                                           Style="{StaticResource SidebarNavText}"
+                                                                           FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                                           FontSize="13" Margin="0,0,10,0"
+                                                                           VerticalAlignment="Center"/>
+                                                                <StackPanel VerticalAlignment="Center">
+                                                                    <!-- Label + PREVIEW pill in a 2-column grid (label = *, pill = Auto):
+                                                                         a horizontal StackPanel measured with infinite width, so on a long
+                                                                         label the pill was pushed past the 220px sidebar edge and clipped to
+                                                                         "PR". The label now ellipsizes and the pill always renders in full. -->
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="{Binding Label}"
+                                                                                   Style="{StaticResource SidebarNavText}"
+                                                                                   FontFamily="{StaticResource UiFont}"
+                                                                                   FontSize="13"
+                                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                        <!-- PREVIEW pill: implemented but not yet QA-verified -->
+                                                                        <Border Grid.Column="1" Background="{DynamicResource AccentSoft}" CornerRadius="4"
+                                                                                Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
+                                                                                Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
+                                                                            <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
+                                                                                       Foreground="{DynamicResource Info}"/>
+                                                                        </Border>
+                                                                    </Grid>
+                                                                    <ProgressBar Height="2" Margin="0,3,0,0"
+                                                                                 IsIndeterminate="True"
+                                                                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                                                                </StackPanel>
+                                                            </DockPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </Button>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>

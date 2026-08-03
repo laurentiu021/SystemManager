@@ -3,6 +3,7 @@
 // License: MIT
 
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
 
 namespace SysManager.UITests;
 
@@ -91,11 +92,42 @@ public class SmokeUiTests
         Assert.NotEqual("Selected", logs.ItemStatus);
     }
 
+    [Fact]
+    public void CollapsedGroup_DisablesHiddenNavButtons()
+    {
+        var group = _fx.FindById("grp-info");
+        var header = _fx.FindById("grp-info-header");
+        Assert.NotNull(group);
+        Assert.NotNull(header);
+        Assert.True(header!.Properties.IsKeyboardFocusable.ValueOrDefault);
+
+        var pattern = group!.Patterns.ExpandCollapse.PatternOrDefault;
+        Assert.NotNull(pattern);
+        var logs = FindSingleById("nav-logs");
+
+        try
+        {
+            pattern!.Collapse();
+            var disabled = FlaUI.Core.Tools.Retry.WhileFalse(
+                () => !logs.IsEnabled,
+                TimeSpan.FromSeconds(3)).Success;
+            Assert.True(disabled, "A collapsed sidebar group left its hidden nav buttons enabled.");
+        }
+        finally
+        {
+            pattern!.Expand();
+            _ = FlaUI.Core.Tools.Retry.WhileFalse(
+                () => logs.IsEnabled,
+                TimeSpan.FromSeconds(3));
+        }
+    }
+
     private AutomationElement FindSingleById(string automationId)
     {
         var matches = _fx.MainWindow.FindAllDescendants(
             condition => condition.ByAutomationId(automationId));
         Assert.Single(matches);
+        Assert.Equal(ControlType.Button, matches[0].ControlType);
         return matches[0];
     }
 

@@ -113,8 +113,8 @@ public partial class MainWindow : Window
             vm.SelectedNav = item;
     }
 
-    /// <summary>Click on a child item inside an expanded group.</summary>
-    private void NavChild_Click(object sender, MouseButtonEventArgs e)
+    /// <summary>Activate a tab inside an expanded navigation group.</summary>
+    private void NavChild_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement fe && fe.Tag is NavItem item
             && DataContext is MainWindowViewModel vm)

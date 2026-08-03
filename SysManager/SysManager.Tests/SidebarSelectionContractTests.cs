@@ -37,6 +37,7 @@ public class SidebarSelectionContractTests
         AssertSetter(textTrigger, "FontWeight", "SemiBold");
 
         var markStyle = FindStyle(document, "SidebarActiveMark");
+        AssertSetter(markStyle, "Visibility", "Collapsed");
         var markTrigger = FindSelectedTrigger(markStyle);
         AssertSetter(markTrigger, "Visibility", "Visible");
 
@@ -69,27 +70,38 @@ public class SidebarSelectionContractTests
     }
 
     [Fact]
-    public void LiveRows_ExposeSelectionToAutomationPeers()
+    public void LiveRows_ExposeSelectionToInvokableAutomationPeers()
     {
         var document = LoadProjectXaml("MainWindow.xaml");
         var singleRow = document
             .Descendants(Presentation + "Button")
             .Single(element => (string?)element.Attribute(Xaml + "Name") == "SingleBd");
+        var groupedRow = document
+            .Descendants(Presentation + "Button")
+            .Single(element => (string?)element.Attribute(Xaml + "Name") == "ChildBd");
 
+        AssertNavButton(
+            singleRow,
+            idBinding: "{Binding Children[0].Id}",
+            nameBinding: "{Binding Children[0].Label}",
+            statusBinding: "{Binding Children[0].SelectionStatus}",
+            tagBinding: "{Binding Children[0]}",
+            clickHandler: "SingleGroup_Click");
+        AssertNavButton(
+            groupedRow,
+            idBinding: "{Binding Id}",
+            nameBinding: "{Binding Label}",
+            statusBinding: "{Binding SelectionStatus}",
+            tagBinding: "{Binding}",
+            clickHandler: "NavChild_Click");
+
+        var singleVisual = singleRow
+            .Descendants(Presentation + "Border")
+            .Single(element =>
+                (string?)element.Attribute("Style") == "{StaticResource SidebarNavRow}");
         Assert.Equal(
-            "{Binding Children[0].Id}",
-            (string?)singleRow.Attribute("AutomationProperties.AutomationId"));
-        Assert.Equal(
-            "{Binding Children[0].Label}",
-            (string?)singleRow.Attribute("AutomationProperties.Name"));
-        Assert.Equal(
-            "{Binding Children[0].SelectionStatus}",
-            (string?)singleRow.Attribute("AutomationProperties.ItemStatus"));
-        Assert.Equal("SingleGroup_Click", (string?)singleRow.Attribute("Click"));
-        Assert.Equal(
-            "{StaticResource SidebarNavButton}",
-            (string?)singleRow.Attribute("Style"));
-        Assert.Null(singleRow.Attribute("Focusable"));
+            "{Binding Children[0]}",
+            (string?)singleVisual.Attribute("DataContext"));
 
         var buttonStyle = FindStyle(document, "SidebarNavButton");
         var focusTrigger = buttonStyle
@@ -99,35 +111,62 @@ public class SidebarSelectionContractTests
                 && (string?)trigger.Attribute("Value") == "True");
         AssertSetter(focusTrigger, "BorderBrush", "{DynamicResource Accent}");
 
-        var outerItemsControl = document
+        var navItemsControls = document
             .Descendants(Presentation + "ItemsControl")
-            .Single(element => (string?)element.Attribute("ItemsSource") == "{Binding NavGroups}");
-        Assert.Empty(
-            outerItemsControl.Elements(Presentation + "ItemsControl.ItemContainerStyle"));
+            .Where(element =>
+                (string?)element.Attribute("ItemsSource") is "{Binding NavGroups}" or "{Binding Children}")
+            .ToList();
+        Assert.Equal(2, navItemsControls.Count);
+        Assert.All(
+            navItemsControls,
+            itemsControl => Assert.Empty(
+                itemsControl.Elements(Presentation + "ItemsControl.ItemContainerStyle")));
+    }
 
-        var groupedContainerStyle = document
-            .Descendants(Presentation + "ItemsControl")
-            .Single(element => (string?)element.Attribute("ItemsSource") == "{Binding Children}")
-            .Elements(Presentation + "ItemsControl.ItemContainerStyle")
-            .Single()
-            .Element(Presentation + "Style")!;
-        AssertSetter(
-            groupedContainerStyle,
-            "AutomationProperties.AutomationId",
-            "{Binding Id}");
-        AssertSetter(
-            groupedContainerStyle,
-            "AutomationProperties.Name",
-            "{Binding Label}");
-        AssertSetter(
-            groupedContainerStyle,
-            "AutomationProperties.ItemStatus",
-            "{Binding SelectionStatus}");
+    [Fact]
+    public void CollapsedGroups_KeepHiddenLeavesOutOfKeyboardNavigation()
+    {
+        var appDocument = LoadProjectXaml("App.xaml");
+        var expanderStyle = FindStyle(appDocument, "SidebarExpander");
+        var header = expanderStyle
+            .Descendants(Presentation + "ToggleButton")
+            .Single(element => (string?)element.Attribute(Xaml + "Name") == "HeaderSite");
 
-        var groupedRow = document
+        Assert.Equal("True", (string?)header.Attribute("Focusable"));
+        Assert.Equal("True", (string?)header.Attribute("KeyboardNavigation.IsTabStop"));
+        Assert.Equal(
+            "{Binding Id, StringFormat={}{0}-header}",
+            (string?)header.Attribute("AutomationProperties.AutomationId"));
+        Assert.Equal(
+            "{Binding Label}",
+            (string?)header.Attribute("AutomationProperties.Name"));
+
+        var focusTrigger = header
+            .Descendants(Presentation + "Trigger")
+            .Single(trigger =>
+                (string?)trigger.Attribute("Property") == "IsKeyboardFocused"
+                && (string?)trigger.Attribute("Value") == "True");
+        Assert.Contains(
+            focusTrigger.Elements(Presentation + "Setter"),
+            setter =>
+                (string?)setter.Attribute("TargetName") == "HeaderFocusBorder"
+                && (string?)setter.Attribute("Property") == "BorderBrush"
+                && (string?)setter.Attribute("Value") == "{DynamicResource Accent}");
+
+        var contentPanel = expanderStyle
             .Descendants(Presentation + "Border")
-            .Single(element => (string?)element.Attribute(Xaml + "Name") == "ChildBd");
-        Assert.Null(groupedRow.Attribute("AutomationProperties.AutomationId"));
+            .Single(element => (string?)element.Attribute(Xaml + "Name") == "ContentPanel");
+        Assert.Equal(
+            "{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}",
+            (string?)contentPanel.Attribute("IsEnabled"));
+
+        var mainDocument = LoadProjectXaml("MainWindow.xaml");
+        var liveExpander = mainDocument
+            .Descendants(Presentation + "Expander")
+            .Single(element =>
+                (string?)element.Attribute("Style") == "{StaticResource SidebarExpander}");
+        Assert.Equal("{Binding Id}", (string?)liveExpander.Attribute("AutomationProperties.AutomationId"));
+        Assert.Equal("{Binding Label}", (string?)liveExpander.Attribute("AutomationProperties.Name"));
     }
 
     [Fact]
@@ -138,6 +177,23 @@ public class SidebarSelectionContractTests
         Assert.DoesNotContain(
             document.Descendants(Presentation + "Style"),
             style => (string?)style.Attribute(Xaml + "Key") == "SideNavTabItem");
+    }
+
+    private static void AssertNavButton(
+        XElement button,
+        string idBinding,
+        string nameBinding,
+        string statusBinding,
+        string tagBinding,
+        string clickHandler)
+    {
+        Assert.Equal(idBinding, (string?)button.Attribute("AutomationProperties.AutomationId"));
+        Assert.Equal(nameBinding, (string?)button.Attribute("AutomationProperties.Name"));
+        Assert.Equal(statusBinding, (string?)button.Attribute("AutomationProperties.ItemStatus"));
+        Assert.Equal(tagBinding, (string?)button.Attribute("Tag"));
+        Assert.Equal(clickHandler, (string?)button.Attribute("Click"));
+        Assert.Equal("{StaticResource SidebarNavButton}", (string?)button.Attribute("Style"));
+        Assert.Null(button.Attribute("Focusable"));
     }
 
     private static XElement FindStyle(XDocument document, string key) =>
@@ -152,9 +208,9 @@ public class SidebarSelectionContractTests
                 (string?)trigger.Attribute("Binding") == "{Binding IsSelected}"
                 && (string?)trigger.Attribute("Value") == "True");
 
-    private static void AssertSetter(XElement trigger, string property, string value) =>
+    private static void AssertSetter(XElement owner, string property, string value) =>
         Assert.Contains(
-            trigger.Elements(Presentation + "Setter"),
+            owner.Elements(Presentation + "Setter"),
             setter =>
                 (string?)setter.Attribute("Property") == property
                 && (string?)setter.Attribute("Value") == value);

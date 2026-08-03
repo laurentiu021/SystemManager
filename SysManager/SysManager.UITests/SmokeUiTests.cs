@@ -61,7 +61,7 @@ public class SmokeUiTests
             "nav-system-health", "nav-cleanup", "nav-ping",
             "nav-drivers", "nav-logs" })
         {
-            Assert.NotNull(_fx.FindById(id));
+            _ = FindSingleById(id);
         }
     }
 
@@ -76,21 +76,27 @@ public class SmokeUiTests
     [Fact]
     public void NavSelection_ExposesCurrentItemStatus()
     {
-        var dashboard = _fx.FindById("nav-dashboard");
-        Assert.NotNull(dashboard);
+        _fx.GoToTab("nav-dashboard");
+        var dashboard = FindSingleById("nav-dashboard");
         Assert.Equal("Selected", dashboard.ItemStatus);
 
         _fx.GoToTab("nav-logs");
-        var logs = _fx.FindById("nav-logs");
-        Assert.NotNull(logs);
+        var logs = FindSingleById("nav-logs");
         Assert.Equal("Selected", logs.ItemStatus);
         Assert.NotEqual("Selected", dashboard.ItemStatus);
 
         _fx.GoToTab("nav-ping");
-        var ping = _fx.FindById("nav-ping");
-        Assert.NotNull(ping);
+        var ping = FindSingleById("nav-ping");
         Assert.Equal("Selected", ping.ItemStatus);
         Assert.NotEqual("Selected", logs.ItemStatus);
+    }
+
+    private AutomationElement FindSingleById(string automationId)
+    {
+        var matches = _fx.MainWindow.FindAllDescendants(
+            condition => condition.ByAutomationId(automationId));
+        Assert.Single(matches);
+        return matches[0];
     }
 
     [Fact]

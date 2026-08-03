@@ -88,22 +88,6 @@
                 <ItemsControl ItemsSource="{Binding NavGroups}"
                               Padding="10,0"
                               Focusable="False">
-                    <!-- A single-item group renders as a flat row (no expander), so the nav
-                         id has to ride on the group's own container peer — the inner Border
-                         has no automation peer. For multi-item groups Children[0].Id is just
-                         the first child's id and is harmless (those children carry their own
-                         ids via the inner ItemsControl's ItemContainerStyle below). -->
-                    <ItemsControl.ItemContainerStyle>
-                        <Style TargetType="ContentPresenter">
-                            <Setter Property="AutomationProperties.AutomationId" Value="{Binding Children[0].Id}"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsSingleItem}" Value="True">
-                                    <Setter Property="AutomationProperties.Name" Value="{Binding Children[0].Label}"/>
-                                    <Setter Property="AutomationProperties.ItemStatus" Value="{Binding Children[0].SelectionStatus}"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ItemsControl.ItemContainerStyle>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Grid Margin="0,2">
@@ -270,7 +254,6 @@
                                                         Cursor="Hand"
                                                         MouseLeftButtonUp="NavChild_Click"
                                                         Tag="{Binding}"
-                                                        AutomationProperties.AutomationId="{Binding Id}"
                                                         Style="{StaticResource SidebarNavRow}">
                                                     <Grid>
                                                         <Rectangle x:Name="ActiveMark"

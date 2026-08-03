@@ -77,28 +77,20 @@ public class SidebarSelectionContractTests
             .Single(element => (string?)element.Attribute(Xaml + "Name") == "SingleBd");
 
         Assert.Equal(
+            "{Binding Children[0].Id}",
+            (string?)singleRow.Attribute("AutomationProperties.AutomationId"));
+        Assert.Equal(
+            "{Binding Children[0].Label}",
+            (string?)singleRow.Attribute("AutomationProperties.Name"));
+        Assert.Equal(
             "{Binding Children[0].SelectionStatus}",
             (string?)singleRow.Attribute("AutomationProperties.ItemStatus"));
 
-        var outerContainerStyle = document
+        var outerItemsControl = document
             .Descendants(Presentation + "ItemsControl")
-            .Single(element => (string?)element.Attribute("ItemsSource") == "{Binding NavGroups}")
-            .Elements(Presentation + "ItemsControl.ItemContainerStyle")
-            .Single()
-            .Element(Presentation + "Style")!;
-        var outerSingleItemTrigger = outerContainerStyle
-            .Descendants(Presentation + "DataTrigger")
-            .Single(trigger =>
-                (string?)trigger.Attribute("Binding") == "{Binding IsSingleItem}"
-                && (string?)trigger.Attribute("Value") == "True");
-        AssertSetter(
-            outerSingleItemTrigger,
-            "AutomationProperties.Name",
-            "{Binding Children[0].Label}");
-        AssertSetter(
-            outerSingleItemTrigger,
-            "AutomationProperties.ItemStatus",
-            "{Binding Children[0].SelectionStatus}");
+            .Single(element => (string?)element.Attribute("ItemsSource") == "{Binding NavGroups}");
+        Assert.Empty(
+            outerItemsControl.Elements(Presentation + "ItemsControl.ItemContainerStyle"));
 
         var groupedContainerStyle = document
             .Descendants(Presentation + "ItemsControl")
@@ -108,8 +100,21 @@ public class SidebarSelectionContractTests
             .Element(Presentation + "Style")!;
         AssertSetter(
             groupedContainerStyle,
+            "AutomationProperties.AutomationId",
+            "{Binding Id}");
+        AssertSetter(
+            groupedContainerStyle,
+            "AutomationProperties.Name",
+            "{Binding Label}");
+        AssertSetter(
+            groupedContainerStyle,
             "AutomationProperties.ItemStatus",
             "{Binding SelectionStatus}");
+
+        var groupedRow = document
+            .Descendants(Presentation + "Border")
+            .Single(element => (string?)element.Attribute(Xaml + "Name") == "ChildBd");
+        Assert.Null(groupedRow.Attribute("AutomationProperties.AutomationId"));
     }
 
     [Fact]

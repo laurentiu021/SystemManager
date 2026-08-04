@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.7] - 2026-08-04
+
+### Fixed
+- **Restored Performance Mode's persisted `Restore All` after an app restart.** Snapshot persistence added in #431 loaded the saved baseline only when the user applied another change. Reopening SysManager therefore left `Restore All` disabled even though `%LocalAppData%\SysManager\performance-snapshot.json` still held the original settings. Performance Mode now rehydrates that snapshot first during initialization under the existing snapshot gate, so the recovery action becomes available without waiting for live `powercfg` probes and without racing a concurrent Apply.
+- **Made old recovery points clear and testable.** New snapshots record their UTC capture time and show it in local time in the `Restore All` confirmation, while snapshots created by older releases remain loadable with an explicit unknown-time label. Snapshot storage now has an injected test directory, and regression coverage recreates an app restart with a second service instance, verifies the real command reaches confirmation, and keeps legacy JSON compatible without touching the user's profile.
+- **Hardened the persisted recovery boundary and failure semantics.** Snapshot files are size-bounded, require a complete non-duplicated schema, and reject malformed GUIDs, spoofable plan names, out-of-range processor values, and unsafe GPU subkeys before enabling restore. Power-plan, processor, and GPU restore failures now remain failures instead of reporting success and deleting the only recovery point; failed snapshot saves prevent any setting change, and failed cleanup keeps `Restore All` available for a retry.
+
 ## [1.56.6] - 2026-08-04
 
 ### Fixed

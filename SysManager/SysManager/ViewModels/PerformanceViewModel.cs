@@ -65,6 +65,16 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
     private async Task InitAsync()
     {
+        await _snapshotGate.WaitAsync();
+        try
+        {
+            // Recovery must not wait behind live powercfg probes. A blocked or unavailable
+            // system tool must never keep a valid persisted Restore All action disabled.
+            _snapshot ??= await Task.Run(_service.LoadSnapshot);
+            HasSnapshot = _snapshot is not null;
+        }
+        finally { _snapshotGate.Release(); }
+
         try { await RefreshAsync(); }
         catch (InvalidOperationException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
         catch (System.Security.SecurityException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
@@ -74,12 +84,28 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     /// <summary>Ensure snapshot exists before any change.</summary>
     private async Task EnsureSnapshotAsync()
     {
-        await _snapshotGate.WaitAsync().ConfigureAwait(false);
+        await _snapshotGate.WaitAsync();
         try
         {
-            _snapshot ??= PerformanceService.LoadSnapshot()
-                       ?? await _service.TakeSnapshotAsync();
-            PerformanceService.SaveSnapshot(_snapshot);
+            if (_snapshot is null)
+            {
+                var persisted = await Task.Run(_service.LoadSnapshot);
+                if (persisted is not null)
+                {
+                    _snapshot = persisted;
+                }
+                else
+                {
+                    var captured = await _service.TakeSnapshotAsync();
+                    var saved = await Task.Run(() => _service.SaveSnapshot(captured));
+                    if (!saved)
+                    {
+                        throw new InvalidOperationException(
+                            "The recovery snapshot could not be saved, so no setting was changed.");
+                    }
+                    _snapshot = captured;
+                }
+            }
             HasSnapshot = true;
         }
         finally { _snapshotGate.Release(); }
@@ -594,17 +620,27 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             return;
         }
 
-        var gpuWasChanged = _snapshot.NvidiaSubKey is not null
-            && Profile.GpuMaxPerformance != !_snapshot.GpuDynamicPstate;
+        var gpuWillBeRestored = _snapshot.NvidiaSubKey is not null;
+        var capturedAt = _snapshot.CapturedAtUtc is DateTimeOffset timestamp
+            ? timestamp.ToLocalTime().ToString("f")
+            : "Unknown (snapshot created by an earlier SysManager version)";
+        var powerPlan = string.IsNullOrEmpty(_snapshot.PowerPlanGuid)
+            ? _snapshot.PowerPlanName
+            : $"{_snapshot.PowerPlanName} ({_snapshot.PowerPlanGuid})";
+        var gpuRestoreState = _snapshot.GpuDynamicPstate
+            ? "Dynamic P-state"
+            : "Max performance";
 
         if (!DialogService.Instance.Confirm(
             "Restore ALL settings to the state before any changes were made?\n\n"
-            + $"• Power plan → {_snapshot.PowerPlanName}\n"
+            + $"Snapshot captured: {capturedAt}\n\n"
+            + $"• Power plan → {powerPlan}\n"
             + $"• Visual effects → {(_snapshot.UiEffectsEnabled ? "Normal" : "Reduced")}\n"
             + $"• Game Mode → {(_snapshot.GameModeEnabled ? "ON" : "OFF")}\n"
             + $"• Xbox Game Bar → {(_snapshot.XboxGameBarEnabled ? "ON" : "OFF")}\n"
+            + $"• Game DVR → {(_snapshot.XboxGameDvrEnabled ? "ON" : "OFF")}\n"
             + $"• Processor min state → {(_snapshot.ProcessorMinPercentAc is int p ? $"{p}%" : "unchanged")}\n"
-            + (gpuWasChanged ? "• GPU → Dynamic P-state (reboot needed)\n" : "")
+            + (gpuWillBeRestored ? $"• GPU → {gpuRestoreState} (reboot needed)\n" : "")
             + "\nContinue?",
             "Restore Original Settings — Confirm")) return;
 
@@ -625,18 +661,27 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         try
         {
             await _service.RestoreFromSnapshotAsync(_snapshot);
-            NeedsReboot = gpuWasChanged;
-            StatusMessage = NeedsReboot
-                ? "Original settings restored. Reboot required for GPU changes."
-                : "Original settings restored.";
-            Log.Information("Performance settings restored to original snapshot");
-            _snapshot = null;
-            HasSnapshot = false;
             // Delete the persisted snapshot too — otherwise the next Apply reloads the
             // now-reverted pre-restore baseline via LoadSnapshot and a later Restore All
             // would re-apply stale values.
-            PerformanceService.DeleteSnapshot();
+            var snapshotDeleted = await Task.Run(_service.DeleteSnapshot);
+            if (snapshotDeleted)
+            {
+                _snapshot = null;
+                HasSnapshot = false;
+            }
+
             await RefreshAsync();
+            NeedsReboot = gpuWillBeRestored;
+            StatusMessage = snapshotDeleted
+                ? NeedsReboot
+                    ? "Original settings restored. Reboot required for GPU changes."
+                    : "Original settings restored."
+                : "Original settings were restored, but the recovery snapshot could not be cleared. "
+                    + "Restore All remains available so the cleanup can be retried.";
+            Log.Information(
+                "Performance settings restored to original snapshot; snapshot deleted: {Deleted}",
+                snapshotDeleted);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }

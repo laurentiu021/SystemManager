@@ -195,7 +195,9 @@ Key services:
   any UAC request instead of inheriting SysManager elevation.
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
   Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
-  working set trim, hibernation toggle. Snapshot-based restore.
+  working set trim, hibernation toggle. Its timestamped restore snapshot is
+  persisted locally, bounded and validated at load, then rehydrated by
+  `PerformanceViewModel` before live profile probes during initialization.
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming

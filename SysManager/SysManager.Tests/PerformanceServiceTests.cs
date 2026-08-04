@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -12,6 +13,9 @@ namespace SysManager.Tests;
 /// </summary>
 public class PerformanceServiceTests
 {
+    private static PerformanceService NewService(IPowerShellRunner runner) =>
+        new(runner, new RestorePointService(runner));
+
     // ── ParseActivePlan ──
 
     [Fact]
@@ -269,6 +273,93 @@ public class PerformanceServiceTests
     public void UltimatePerfScheme_IsCorrect()
     {
         Assert.Equal("e9a42b02-d5df-448d-aa00-03f14749eb61", PerformanceService.UltimatePerfScheme);
+    }
+
+    // ── Snapshot trust boundary ──
+
+    [Theory]
+    [InlineData("not-a-guid", "Balanced", 5, null)]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "", 5, null)]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced\nSpoofed", 5, null)]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced\u202ESpoofed", 5, null)]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced", -1, null)]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced", 101, null)]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced", 5, @"..\0000")]
+    public void SnapshotValidation_RejectsUnsafeFields(
+        string guid,
+        string name,
+        int processorMinimum,
+        string? nvidiaSubKey)
+    {
+        var snapshot = new PerformanceService.OriginalSnapshot(
+            guid,
+            name,
+            true,
+            true,
+            true,
+            true,
+            true,
+            processorMinimum,
+            nvidiaSubKey);
+
+        Assert.False(PerformanceService.TryValidateSnapshot(snapshot, out _));
+    }
+
+    [Fact]
+    public void SnapshotValidation_AcceptsLegacyUnknownValues()
+    {
+        var snapshot = new PerformanceService.OriginalSnapshot(
+            PowerPlanGuid: "",
+            PowerPlanName: "Unknown",
+            UiEffectsEnabled: true,
+            GameModeEnabled: true,
+            XboxGameBarEnabled: true,
+            XboxGameDvrEnabled: true,
+            GpuDynamicPstate: true,
+            ProcessorMinPercentAc: null,
+            NvidiaSubKey: null);
+
+        Assert.True(PerformanceService.TryValidateSnapshot(snapshot, out _));
+    }
+
+    [Fact]
+    public async Task SetActivePlan_NonzeroExitCode_Throws()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(5);
+        using var service = NewService(runner);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.SetActivePlanAsync(PerformanceService.BalancedGuid));
+    }
+
+    [Fact]
+    public async Task SetProcessorMinimum_NonzeroExitCode_ThrowsBeforeReportingSuccess()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(0);
+        runner.RunProcessAsync(
+                "powercfg.exe",
+                Arg.Is<string>(args =>
+                    args != null
+                    && args.StartsWith("/setdcvalueindex", StringComparison.Ordinal)),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(7);
+        using var service = NewService(runner);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.SetProcessorMinStateAsync(5));
     }
 
     // ── OriginalSnapshot ──

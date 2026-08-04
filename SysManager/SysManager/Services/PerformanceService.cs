@@ -3,10 +3,12 @@
 // License: MIT
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Win32;
 using Serilog;
 using SysManager.Models;
@@ -29,6 +31,7 @@ public sealed partial class PerformanceService : IDisposable
 {
     private readonly IPowerShellRunner _ps;
     private readonly RestorePointService _restorePoints;
+    private readonly string _snapshotPath;
     private readonly SemaphoreSlim _psGate = new(1, 1);
     private bool _disposed;
 
@@ -36,6 +39,14 @@ public sealed partial class PerformanceService : IDisposable
     internal const string BalancedGuid = "381b4222-f694-41f0-9685-ff5bb260df2e";
     internal const string HighPerfGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
     internal const string UltimatePerfScheme = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+
+    internal const int MaxSnapshotBytes = 64 * 1024;
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
+    {
+        WriteIndented = true,
+        MaxDepth = 8,
+        AllowDuplicateProperties = false
+    };
 
     // ── Registry paths ──
     internal const string GameBarKey = @"SOFTWARE\Microsoft\GameBar";
@@ -59,9 +70,24 @@ public sealed partial class PerformanceService : IDisposable
         uint uiAction, uint uiParam, int pvParam, uint fWinIni);
 
     public PerformanceService(IPowerShellRunner ps, RestorePointService restorePoints)
+        : this(
+            ps,
+            restorePoints,
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SysManager"))
+    {
+    }
+
+    /// <summary>Test seam for snapshot persistence without touching the real app profile.</summary>
+    internal PerformanceService(
+        IPowerShellRunner ps,
+        RestorePointService restorePoints,
+        string configDir)
     {
         _ps = ps;
         _restorePoints = restorePoints;
+        _snapshotPath = Path.Combine(configDir, "performance-snapshot.json");
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -73,15 +99,16 @@ public sealed partial class PerformanceService : IDisposable
     /// Used by Restore to revert to the exact original state.
     /// </summary>
     public sealed record OriginalSnapshot(
-        string PowerPlanGuid,
-        string PowerPlanName,
-        bool UiEffectsEnabled,
-        bool GameModeEnabled,
-        bool XboxGameBarEnabled,
-        bool XboxGameDvrEnabled,
-        bool GpuDynamicPstate,       // true = dynamic (default), false = disabled
-        int? ProcessorMinPercentAc,  // null = couldn't read (don't restore rather than guess)
-        string? NvidiaSubKey);       // null = no NVIDIA GPU
+        [property: JsonRequired] string PowerPlanGuid,
+        [property: JsonRequired] string PowerPlanName,
+        [property: JsonRequired] bool UiEffectsEnabled,
+        [property: JsonRequired] bool GameModeEnabled,
+        [property: JsonRequired] bool XboxGameBarEnabled,
+        [property: JsonRequired] bool XboxGameDvrEnabled,
+        [property: JsonRequired] bool GpuDynamicPstate,       // true = dynamic (default), false = disabled
+        [property: JsonRequired] int? ProcessorMinPercentAc,  // null = couldn't read (don't restore rather than guess)
+        [property: JsonRequired] string? NvidiaSubKey,        // null = no NVIDIA GPU
+        DateTimeOffset? CapturedAtUtc = null); // null = legacy snapshot without timestamp
 
     /// <summary>
     /// Take a snapshot of the current system state.
@@ -105,26 +132,34 @@ public sealed partial class PerformanceService : IDisposable
             XboxGameDvrEnabled: ReadXboxGameDvrEnabled(),
             GpuDynamicPstate: nvidiaKey is not null && !ReadGpuMaxPerformance(nvidiaKey),
             ProcessorMinPercentAc: await ReadProcessorMinPercentAsync(ct).ConfigureAwait(false),
-            NvidiaSubKey: nvidiaKey);
+            NvidiaSubKey: nvidiaKey,
+            CapturedAtUtc: DateTimeOffset.UtcNow);
     }
 
-    private static readonly string SnapshotPath = Path.Join(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SysManager", "performance-snapshot.json");
-
     /// <summary>Persist a snapshot to disk so it survives app restarts.</summary>
-    public static void SaveSnapshot(OriginalSnapshot snapshot)
+    public bool SaveSnapshot(OriginalSnapshot snapshot)
     {
+        if (!TryValidateSnapshot(snapshot, out var reason))
+        {
+            Log.Warning("Refused to save invalid performance snapshot: {Reason}", reason);
+            return false;
+        }
+
         try
         {
-            var dir = Path.GetDirectoryName(SnapshotPath)!;
+            var dir = Path.GetDirectoryName(_snapshotPath)!;
             Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(snapshot, JsonDefaults.Indented);
-            File.WriteAllText(SnapshotPath, json);
-            Log.Information("Performance snapshot saved to {Path}", SnapshotPath);
+            var json = JsonSerializer.SerializeToUtf8Bytes(snapshot, SnapshotJsonOptions);
+            if (json.Length > MaxSnapshotBytes)
+                throw new InvalidDataException("The performance snapshot exceeds the supported size.");
+            File.WriteAllBytes(_snapshotPath, json);
+            Log.Information("Performance snapshot saved to {Path}", _snapshotPath);
+            return true;
         }
-        catch (IOException ex) { Log.Warning(ex, "Failed to save performance snapshot"); }
-        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to save performance snapshot"); }
+        catch (InvalidDataException ex) { Log.Warning(ex, "Failed to save performance snapshot"); return false; }
+        catch (IOException ex) { Log.Warning(ex, "Failed to save performance snapshot"); return false; }
+        catch (SecurityException ex) { Log.Warning(ex, "Failed to save performance snapshot"); return false; }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to save performance snapshot"); return false; }
     }
 
     /// <summary>
@@ -132,30 +167,108 @@ public sealed partial class PerformanceService : IDisposable
     /// Apply captures a fresh baseline instead of reloading the now-reverted pre-restore
     /// state via <see cref="LoadSnapshot"/>.
     /// </summary>
-    public static void DeleteSnapshot()
+    public bool DeleteSnapshot()
     {
         try
         {
-            if (File.Exists(SnapshotPath)) File.Delete(SnapshotPath);
-            Log.Information("Performance snapshot deleted from {Path}", SnapshotPath);
+            if (File.Exists(_snapshotPath)) File.Delete(_snapshotPath);
+            Log.Information("Performance snapshot deleted from {Path}", _snapshotPath);
+            return true;
         }
-        catch (IOException ex) { Log.Warning(ex, "Failed to delete performance snapshot"); }
-        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to delete performance snapshot"); }
+        catch (IOException ex) { Log.Warning(ex, "Failed to delete performance snapshot"); return false; }
+        catch (SecurityException ex) { Log.Warning(ex, "Failed to delete performance snapshot"); return false; }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to delete performance snapshot"); return false; }
     }
 
-    /// <summary>Load a previously saved snapshot from disk. Returns null if none exists.</summary>
-    public static OriginalSnapshot? LoadSnapshot()
+    /// <summary>
+    /// Loads and validates a previously saved snapshot. Invalid, incomplete, or oversized
+    /// files are rejected before any value can reach a restore operation.
+    /// </summary>
+    public OriginalSnapshot? LoadSnapshot()
     {
         try
         {
-            if (!File.Exists(SnapshotPath)) return null;
-            var json = File.ReadAllText(SnapshotPath);
-            return JsonSerializer.Deserialize<OriginalSnapshot>(json);
+            if (!File.Exists(_snapshotPath)) return null;
+            var snapshot = JsonSerializer.Deserialize<OriginalSnapshot>(
+                ReadBoundedSnapshot(),
+                SnapshotJsonOptions);
+            if (!TryValidateSnapshot(snapshot, out var reason))
+            {
+                Log.Warning("Rejected invalid performance snapshot: {Reason}", reason);
+                return null;
+            }
+            return snapshot;
         }
+        catch (InvalidDataException ex) { Log.Warning(ex, "Rejected invalid performance snapshot"); return null; }
         catch (IOException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
+        catch (SecurityException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
         catch (JsonException ex) { Log.Warning(ex, "Failed to parse performance snapshot"); return null; }
     }
+
+    private byte[] ReadBoundedSnapshot()
+    {
+        using var stream = new FileStream(
+            _snapshotPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            FileOptions.SequentialScan);
+
+        if (stream.Length is <= 0 or > MaxSnapshotBytes)
+            throw new InvalidDataException("The performance snapshot has an invalid size.");
+
+        var bytes = new byte[(int)stream.Length];
+        stream.ReadExactly(bytes);
+        if (stream.ReadByte() != -1)
+            throw new InvalidDataException("The performance snapshot changed while it was being read.");
+        return bytes;
+    }
+
+    internal static bool TryValidateSnapshot(OriginalSnapshot? snapshot, out string reason)
+    {
+        if (snapshot is null)
+            return RejectSnapshot("the document is empty", out reason);
+
+        if (snapshot.PowerPlanGuid is null)
+            return RejectSnapshot("the power-plan GUID is missing", out reason);
+        if (snapshot.PowerPlanGuid.Length > 0 &&
+            !Guid.TryParseExact(snapshot.PowerPlanGuid, "D", out _))
+        {
+            return RejectSnapshot("the power-plan GUID is not canonical", out reason);
+        }
+
+        if (string.IsNullOrWhiteSpace(snapshot.PowerPlanName) ||
+            snapshot.PowerPlanName.Length > 256 ||
+            snapshot.PowerPlanName.Any(character =>
+                char.IsControl(character) ||
+                char.GetUnicodeCategory(character) == UnicodeCategory.Format))
+        {
+            return RejectSnapshot("the power-plan name is invalid", out reason);
+        }
+
+        if (snapshot.ProcessorMinPercentAc is < 0 or > 100)
+            return RejectSnapshot("the processor minimum is outside 0-100", out reason);
+
+        if (snapshot.NvidiaSubKey is not null &&
+            !NvidiaSubKeyRegex().IsMatch(snapshot.NvidiaSubKey))
+        {
+            return RejectSnapshot("the NVIDIA registry subkey is invalid", out reason);
+        }
+
+        reason = "";
+        return true;
+    }
+
+    private static bool RejectSnapshot(string rejectionReason, out string reason)
+    {
+        reason = rejectionReason;
+        return false;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\A[0-9]{1,8}\z")]
+    private static partial System.Text.RegularExpressions.Regex NvidiaSubKeyRegex();
 
     // ═══════════════════════════════════════════════════════════════
     //  READ — current system state
@@ -244,13 +357,22 @@ public sealed partial class PerformanceService : IDisposable
     /// <summary>Activate a power plan by GUID.</summary>
     public async Task SetActivePlanAsync(string guid, CancellationToken ct = default)
     {
+        if (!Guid.TryParseExact(guid, "D", out _))
+            throw new ArgumentException("Power-plan GUID must use canonical D format.", nameof(guid));
+
         // Serialize on the same gate the readers use: they own the shared
         // _ps.LineReceived while parsing, and a concurrent powercfg call on the
         // same runner would interleave their output stream.
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await _ps.RunProcessAsync("powercfg.exe", $"/setactive {guid}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+            var exitCode = await _ps.RunProcessAsync(
+                "powercfg.exe",
+                $"/setactive {guid}",
+                ct,
+                PowerShellRunner.OemEncoding).ConfigureAwait(false);
+            if (exitCode != 0)
+                throw new InvalidOperationException($"powercfg failed to activate the power plan (exit code {exitCode}).");
         }
         finally { _psGate.Release(); }
     }
@@ -501,6 +623,7 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     public static bool SetGpuMaxPerformance(string subKey, bool maxPerformance)
     {
+        if (!IsNvidiaSubKey(subKey)) return false;
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(
@@ -517,6 +640,22 @@ public sealed partial class PerformanceService : IDisposable
             Log.Information("Registry: GPU DisableDynamicPstate set to {Value} on subkey {SubKey}",
                 maxPerformance ? 1 : 0, subKey);
             return true;
+        }
+        catch (SecurityException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    internal static bool IsNvidiaSubKey(string subKey)
+    {
+        if (!NvidiaSubKeyRegex().IsMatch(subKey)) return false;
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey($@"{GpuClassRoot}\{subKey}");
+            if (key is null) return false;
+            var driverDesc = key.GetValue("DriverDesc")?.ToString() ?? "";
+            var provider = key.GetValue("ProviderName")?.ToString() ?? "";
+            return driverDesc.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
+                || provider.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase);
         }
         catch (SecurityException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
@@ -593,15 +732,27 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     public async Task SetProcessorMinStateAsync(int percent, CancellationToken ct = default)
     {
+        if (percent is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(percent), percent, "Processor minimum must be between 0 and 100.");
+
         // Serialize on the shared gate — see SetActivePlanAsync.
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await _ps.RunProcessAsync("powercfg.exe",
+            var acExitCode = await _ps.RunProcessAsync("powercfg.exe",
                 $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
-            await _ps.RunProcessAsync("powercfg.exe",
+            if (acExitCode != 0)
+                throw new InvalidOperationException($"powercfg failed to set the AC processor minimum (exit code {acExitCode}).");
+
+            var dcExitCode = await _ps.RunProcessAsync("powercfg.exe",
                 $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
-            await _ps.RunProcessAsync("powercfg.exe", "/setactive SCHEME_CURRENT", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+            if (dcExitCode != 0)
+                throw new InvalidOperationException($"powercfg failed to set the DC processor minimum (exit code {dcExitCode}).");
+
+            var applyExitCode = await _ps.RunProcessAsync(
+                "powercfg.exe", "/setactive SCHEME_CURRENT", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+            if (applyExitCode != 0)
+                throw new InvalidOperationException($"powercfg failed to apply the processor minimum (exit code {applyExitCode}).");
         }
         finally { _psGate.Release(); }
     }
@@ -698,6 +849,9 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     public async Task RestoreFromSnapshotAsync(OriginalSnapshot snapshot, CancellationToken ct = default)
     {
+        if (!TryValidateSnapshot(snapshot, out var reason))
+            throw new InvalidOperationException($"The saved performance snapshot is invalid: {reason}.");
+
         // Power plan — restore the exact original plan
         if (!string.IsNullOrEmpty(snapshot.PowerPlanGuid))
             await SetActivePlanAsync(snapshot.PowerPlanGuid, ct).ConfigureAwait(false);
@@ -714,7 +868,10 @@ public sealed partial class PerformanceService : IDisposable
 
         // GPU
         if (snapshot.NvidiaSubKey is not null)
-            SetGpuMaxPerformance(snapshot.NvidiaSubKey, !snapshot.GpuDynamicPstate);
+        {
+            if (!SetGpuMaxPerformance(snapshot.NvidiaSubKey, !snapshot.GpuDynamicPstate))
+                throw new InvalidOperationException("The saved NVIDIA adapter is unavailable or could not be restored.");
+        }
 
         // Processor state — only restore if we captured a real value. A null means the
         // snapshot couldn't read the original minimum (e.g. an unparseable powercfg output),

@@ -710,8 +710,10 @@ offers, "rate us" prompts:
 - **NVIDIA GPU**: force max performance with auto-detected GPU subkey (reboot required)
 - **Processor State**: force CPU min state to 100%
 - **Overlays info**: manual instructions for Discord, Steam, NVIDIA GFE, EA App
-- **OriginalSnapshot**: captures exact system state before first change;
-  Restore All reverts to the snapshot, not hardcoded defaults
+- **OriginalSnapshot**: captures the exact system state before the first change,
+  persists it locally, and reloads it when the tab opens so Restore All remains
+  available after an app restart; persisted fields are validated before use and the
+  confirmation shows when the baseline was captured
 - Confirmation dialog before every change
 - **Restore point creation**: create a Windows System Restore point before
   making changes (requires admin)

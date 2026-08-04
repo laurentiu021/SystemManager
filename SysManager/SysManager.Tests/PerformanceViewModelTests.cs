@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Reflection;
 using NSubstitute;
 using SysManager.Services;
@@ -21,10 +22,31 @@ namespace SysManager.Tests;
 [Collection("DialogService")]
 public class PerformanceViewModelTests
 {
-    private static PerformanceViewModel NewVm()
+    private static PerformanceViewModel NewVm(bool completeInitialization = false)
     {
-        var ps = new PowerShellRunner();
-        return new(new PerformanceService(ps, new RestorePointService(ps)));
+        var ps = Substitute.For<IPowerShellRunner>();
+        var processCall = ps.RunProcessAsync(
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<System.Text.Encoding?>());
+        if (completeInitialization)
+        {
+            processCall.Returns(0);
+        }
+        else
+        {
+            // Keep constructor-state tests independent of the host registry/P/Invoke state.
+            // Tests that need initialized state opt in and await InitializationComplete.
+            var pending = new TaskCompletionSource<int>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            processCall.Returns(pending.Task);
+        }
+        var configDir = Path.Combine(
+            Path.GetTempPath(),
+            "SysManagerPerformanceTests",
+            Guid.NewGuid().ToString("N"));
+        return new(new PerformanceService(ps, new RestorePointService(ps), configDir));
     }
 
     // ── Commands exist ──
@@ -73,9 +95,11 @@ public class PerformanceViewModelTests
     }
 
     [Fact]
-    public void Constructor_HasSnapshot_DefaultFalse()
+    public async Task Initialization_WithoutPersistedSnapshot_HasSnapshotFalse()
     {
-        var vm = NewVm();
+        using var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+
         Assert.False(vm.HasSnapshot);
     }
 

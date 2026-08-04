@@ -142,6 +142,12 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
             AlertCount = Alerts.Count;
             UnacknowledgedCount = Alerts.Count(a => !a.IsAcknowledged);
             MonitorStatus = $"New app detected: {entry.Name}";
+
+            // Surface it outside this tab. The whole point of monitoring is to learn about an
+            // install you did not start, and the user is almost never sitting on this tab when
+            // that happens — the list entry and the status line were only visible to someone
+            // already looking at them, so a detection went unnoticed.
+            ToastService.Instance.Show("New app installed", entry.Name);
         });
     }
 

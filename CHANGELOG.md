@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.12] - 2026-08-04
+
+### Fixed
+- **App Alerts now notifies you when something installs itself.** The tab detected new installations and added them to its list, but nothing surfaced them — so unless you happened to be sitting on that tab at the moment it happened, you never found out. The entire point of the feature is learning about an install you did not start. A notification now appears when one is detected.
+- **The auto-purge setting in Standby List Cleaner is remembered.** The switch and its RAM threshold lived only in memory, so arming auto-purge and closing the app silently reverted it to off at the default threshold — unusable for a set-and-forget feature. Both are now saved as soon as you change them and restored on startup. A damaged settings file falls back to auto-purge off rather than arming an automatic action you did not choose.
+- **App Blocker no longer blames your permissions for its own safety refusals.** Every failed block reported "check admin privileges", including the four cases where SysManager deliberately refused: a Windows boot-critical program, SysManager itself, an invalid name, or an executable another program already has a debugger registered for. Someone trying to block `winlogon.exe` was told to restart as administrator, where the same refusal would happen again for the same unstated reason. Each case now explains what it is and why, and the genuine permissions case says so specifically.
+
 ## [1.56.11] - 2026-08-04
 
 ### Fixed

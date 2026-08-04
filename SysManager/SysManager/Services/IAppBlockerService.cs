@@ -17,6 +17,14 @@ public interface IAppBlockerService
     /// <summary>Blocks an executable from running. Returns true on success.</summary>
     bool BlockApp(string exeName);
 
+    /// <summary>
+    /// Blocks an executable, reporting the specific outcome. Prefer this over
+    /// <see cref="BlockApp"/> anywhere the result is shown to the user: several of the failure
+    /// modes are deliberate safety refusals rather than permissions problems, and a bare bool
+    /// cannot tell them apart.
+    /// </summary>
+    AppBlockerService.BlockResult TryBlockApp(string exeName);
+
     /// <summary>Unblocks an executable, allowing it to run again. Returns true on success.</summary>
     bool UnblockApp(string exeName);
 

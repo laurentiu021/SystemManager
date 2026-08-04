@@ -108,12 +108,17 @@ What the app can and cannot do by design:
   the feature fails safely rather than substituting an alternative.
 - **Auto-update**: new builds are downloaded from the official GitHub
   Releases endpoint. The app does not auto-install without an explicit
-  click. Before applying, the downloaded binary's SHA256 and Authenticode
-  signature are checked; the swap is then performed from within the
-  downloaded executable itself (no intermediate script on disk) using a
-  staged atomic file move, so an interrupted update cannot leave a
-  half-written, unstartable binary. You can also download manually and
-  verify the binary yourself.
+  click. Before applying, the downloaded binary's SHA256 is compared against
+  the `.sha256` published with the release — that comparison is the integrity
+  gate. The binary is also inspected for an Authenticode signature, but since
+  SysManager ships unsigned that check is informational: an unsigned build is
+  accepted, and a signature that cannot be parsed is rejected. It is not a
+  publisher check and does not detect a tampered signed binary; the SHA256
+  comparison is what catches a modified download. The swap is then performed
+  from within the downloaded executable itself (no intermediate script on
+  disk) using a staged atomic file move, so an interrupted update cannot
+  leave a half-written, unstartable binary. You can also download manually
+  and verify the binary yourself.
 - **Portable distribution model**: the standard distribution is a portable,
   self-contained `.exe` (also published to winget as a portable package),
   which lives in a per-user, user-writable location. This means a process

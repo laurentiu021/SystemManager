@@ -861,9 +861,10 @@ offers, "rate us" prompts:
 <a href="docs/screenshots/22-file-lock.png"><img src="docs/screenshots/22-file-lock.png" width="280" alt="File Lock Detector"></a>
 </p>
 <p>
-<a href="docs/screenshots/23-settings-watchdog.png"><img src="docs/screenshots/23-settings-watchdog.png" width="280" alt="Settings Watchdog"></a>&nbsp;
-<a href="docs/screenshots/24-bandwidth-monitor.png"><img src="docs/screenshots/24-bandwidth-monitor.png" width="280" alt="Bandwidth Monitor"></a>
+<a href="docs/screenshots/23-settings-watchdog.png"><img src="docs/screenshots/23-settings-watchdog.png" width="280" alt="Settings Watchdog"></a>
 </p>
+<p><em>Bandwidth Monitor is implemented but its screenshot is still being recaptured — the
+previous one showed the tab while it was a placeholder, which no longer reflects the app.</em></p>
 </details>
 
 <details>
@@ -1136,9 +1137,10 @@ If it saved you a reinstall or a clean-up headache, you can back its development
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-laurentiu021-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/laurentiu021)
 
-Sponsorships go toward a code-signing certificate, so Windows stops warning on
-first launch, plus the build pipeline and time to fix bugs and finish the tools
-that are still half-built. The app stays free either way.
+Sponsorships go toward a code-signing certificate — which makes Windows show the
+publisher's name instead of "unknown publisher", and reduces the SmartScreen warning
+as the signed builds accumulate reputation — plus the build pipeline and time to fix
+bugs and finish the tools that are still half-built. The app stays free either way.
 
 ## License
 

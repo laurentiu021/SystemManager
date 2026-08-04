@@ -35,6 +35,26 @@ The app must not already be running. The test runner launches and closes it auto
 dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
+## Manual smoke test over the published exe
+
+`docs/manual-smoke.ps1` launches the published executable, walks the nav tree with
+Windows UI Automation, and fails loudly if a tab doesn't render. It complements the
+UI test project: it exercises the single-file build a user actually downloads, rather
+than a `bin` output, which is where publish-only problems (missing native assets,
+single-file extraction, trimming) surface.
+
+Needs a published exe and an interactive desktop session — a WPF app cannot render
+over SSH or in a non-interactive scheduled task.
+
+```powershell
+./publish.ps1
+./docs/manual-smoke.ps1
+```
+
+It checks 11 of the 58 tabs (the list is at the top of the script), so treat a pass as
+"the shell starts and those tabs render", not as full coverage. Add a nav id to `$navIds`
+when a new tab is worth including in the quick check.
+
 ## Running everything at once
 
 ```powershell

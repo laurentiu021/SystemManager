@@ -23,8 +23,37 @@ public sealed partial class EventLogService
     private static partial Regex ProviderNameRegex();
 
     /// <summary>
-    /// Queries a single log. Security requires admin; we silently skip on
-    /// UnauthorizedAccessException so the rest of the dashboard still works.
+    /// Why a query produced no entries. An empty result and a refused result look identical
+    /// to the caller otherwise, which made the Security log (readable only when elevated)
+    /// report "No events match your filters" to a standard user.
+    /// </summary>
+    public enum ReadOutcome
+    {
+        /// <summary>The log was read; any emptiness is genuine.</summary>
+        Ok,
+
+        /// <summary>Windows refused access — the Security log needs elevation.</summary>
+        AccessDenied,
+
+        /// <summary>The named log does not exist on this machine.</summary>
+        LogNotFound,
+
+        /// <summary>The log exists but could not be opened for another reason.</summary>
+        Unavailable
+    }
+
+    /// <summary>
+    /// Set by the last <see cref="ReadAsync"/> enumeration that reached the open step, so the
+    /// caller can tell "nothing matched" from "not allowed to look". Written before any entry
+    /// is yielded and readable once enumeration completes.
+    /// </summary>
+    public ReadOutcome LastOutcome { get; private set; } = ReadOutcome.Ok;
+
+    /// <summary>
+    /// Queries a single log. The Security log requires elevation; when access is refused the
+    /// enumeration ends without entries and <see cref="LastOutcome"/> reports why, so the rest
+    /// of the dashboard still works and the UI can explain the gap instead of implying the log
+    /// is empty.
     /// </summary>
     public IAsyncEnumerable<FriendlyEventEntry> ReadAsync(
         EventLogQueryOptions options, CancellationToken ct)
@@ -35,6 +64,7 @@ public sealed partial class EventLogService
     {
         var xpath = BuildXPath(opt);
         EventLogReader? reader = null;
+        LastOutcome = ReadOutcome.Ok;
         try
         {
             var q = new EventLogQuery(opt.LogName, PathType.LogName, xpath)
@@ -43,9 +73,9 @@ public sealed partial class EventLogService
             };
             reader = new EventLogReader(q);
         }
-        catch (UnauthorizedAccessException) { yield break; }
-        catch (EventLogNotFoundException) { yield break; }
-        catch (EventLogException) { yield break; }
+        catch (UnauthorizedAccessException) { LastOutcome = ReadOutcome.AccessDenied; yield break; }
+        catch (EventLogNotFoundException) { LastOutcome = ReadOutcome.LogNotFound; yield break; }
+        catch (EventLogException) { LastOutcome = ReadOutcome.Unavailable; yield break; }
 
         int emitted = 0;
         using (reader)

@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.10] - 2026-08-04
+
+### Fixed
+- **Battery health and wear no longer show "-1%".** When Windows refuses the capacity query — it only reports design and full-charge capacity to an elevated process — the app used an internal `-1` marker meaning "unknown", and the page printed it straight out with a percent sign after it. Both figures now read "Not available", and the page explains that these two values need administrator rights while everything else on it works without.
+- **The Security event log now says it needs administrator rights.** Selecting Security without elevation produced an empty grid and "Loaded 0 events", indistinguishable from a log that genuinely had nothing in it, because the underlying read swallowed Windows' refusal. The reader now reports why a log came back empty — refused, missing, or unavailable — and the page shows that reason instead of a blank list.
+- **Renamed the log-folder button on the System Logs tab.** "Open log folder" sat beside "Open Event Viewer" on a tab named after the Windows Event Log, but opened SysManager's own diagnostic folder. It now reads "SysManager's own logs", and its tooltip shows the exact path before you click.
+- **Report and environment actions no longer overwrite the update message.** Exporting a report or copying environment info wrote its result into the update card's status line, replacing "Update available: vX.Y.Z" with "Report saved" — discarding the more useful message and leaving the update card describing something unrelated to updates. These results now appear next to the buttons that produce them.
+- **Old update downloads are deleted once a newer one arrives.** Each cached build is roughly 85 MB and nothing ever removed the previous ones, so `%LocalAppData%\SysManager\updates` grew by that much with every update — in an app whose Cleanup tab exists to reclaim disk space. The current build and its checksum are kept; superseded binaries, stale checksums, and interrupted partial downloads are removed. A file still in use by a running copy is left alone and cleaned up next time.
+
 ## [1.56.9] - 2026-08-04
 
 ### Fixed

@@ -62,6 +62,10 @@ public sealed partial class LogsViewModel : ViewModelBase
     [ObservableProperty] private string _logFolder = LogService.LogDir;
     [ObservableProperty] private int _visibleCount;
     [ObservableProperty] private bool _hasNoResults;
+    // True when the log itself could not be read (access denied / missing / unavailable), as
+    // opposed to being read and yielding nothing. Drives a separate empty state, because
+    // "no events match your filters" is misleading when the filters never ran.
+    [ObservableProperty] private bool _loadWasRefused;
 
     public LogsViewModel(EventLogService eventLogs)
     {
@@ -137,6 +141,9 @@ public sealed partial class LogsViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Loading events…";
+        // Clear before loading so a previous refusal cannot keep the overlay up over a
+        // successful reload (e.g. after the user elevates and switches back to Security).
+        LoadWasRefused = false;
         Entries.Clear();
         ResetCounts();
 
@@ -185,7 +192,23 @@ public sealed partial class LogsViewModel : ViewModelBase
                 });
             }
 
-            StatusMessage = $"Loaded {Entries.Count} events from {SelectedLog}";
+            // Distinguish "nothing matched" from "not allowed to look". The Security log is
+            // readable only by an elevated process, and the reader used to swallow that refusal
+            // and return an empty sequence — so a standard user selecting Security saw
+            // "Loaded 0 events", then the empty-state's "No events match your filters", and had
+            // no way to know the filters were never applied to anything.
+            StatusMessage = (Entries.Count, _eventLogs.LastOutcome) switch
+            {
+                (0, EventLogService.ReadOutcome.AccessDenied) =>
+                    $"Windows would not let SysManager read the {SelectedLog} log. This log requires "
+                    + "administrator rights — restart SysManager as administrator to view it.",
+                (0, EventLogService.ReadOutcome.LogNotFound) =>
+                    $"The {SelectedLog} log does not exist on this machine.",
+                (0, EventLogService.ReadOutcome.Unavailable) =>
+                    $"The {SelectedLog} log could not be opened. It may be disabled or in use.",
+                _ => $"Loaded {Entries.Count} events from {SelectedLog}"
+            };
+            LoadWasRefused = Entries.Count == 0 && _eventLogs.LastOutcome != EventLogService.ReadOutcome.Ok;
             UpdateVisibleCount();
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled"; }

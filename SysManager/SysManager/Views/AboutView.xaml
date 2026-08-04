@@ -22,6 +22,11 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <!-- Report / environment status line, added below the button row. -->
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <StackPanel Grid.Column="0">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="SysManager" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
@@ -49,7 +54,7 @@
                                     Command="{Binding ExportToFileCommand}"
                                     Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
                                     IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
-                                    ToolTip="Generate a comprehensive system report and save it to the Desktop."/>
+                                    ToolTip="Generate a comprehensive system report and choose where to save it."/>
                             <Button Content="Copy full report"
                                     Command="{Binding CopyReportCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
@@ -62,6 +67,16 @@
                             <Button Content="View license" Command="{Binding OpenLicenseCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
                         </StackPanel>
+
+                        <!-- Report / environment results live here, next to the buttons that produce
+                             them. They previously wrote to UpdateStatus inside the update card below,
+                             so exporting a report replaced "Update available: vX.Y.Z" with
+                             "Report saved" — losing the more important message and making the update
+                             card describe something unrelated. Collapsed until there is something
+                             to say, so the row does not reserve empty space. -->
+                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding ReportStatus}"
+                                   Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
+                                   Visibility="{Binding ReportStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
                     </Grid>
                 </Border>
 

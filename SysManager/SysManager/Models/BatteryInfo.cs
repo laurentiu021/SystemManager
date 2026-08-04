@@ -18,11 +18,17 @@ public sealed partial class BatteryInfo : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HealthPercent))]
     [NotifyPropertyChangedFor(nameof(WearPercent))]
+    [NotifyPropertyChangedFor(nameof(HealthDisplay))]
+    [NotifyPropertyChangedFor(nameof(WearDisplay))]
+    [NotifyPropertyChangedFor(nameof(HasCapacityData))]
     private uint _designCapacityMWh;       // milliwatt-hours
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HealthPercent))]
     [NotifyPropertyChangedFor(nameof(WearPercent))]
+    [NotifyPropertyChangedFor(nameof(HealthDisplay))]
+    [NotifyPropertyChangedFor(nameof(WearDisplay))]
+    [NotifyPropertyChangedFor(nameof(HasCapacityData))]
     private uint _fullChargeCapacityMWh;
     [ObservableProperty] private int _cycleCount;
     [ObservableProperty]
@@ -54,4 +60,18 @@ public sealed partial class BatteryInfo : ObservableObject
         0 => "Calculating…",
         _ => $"{EstimatedRuntimeMinutes / 60}h {EstimatedRuntimeMinutes % 60}m"
     };
+
+    /// <summary>True when capacity data could be read, so health and wear are meaningful.</summary>
+    public bool HasCapacityData => HealthPercent >= 0;
+
+    /// <summary>
+    /// Formatted health. The -1 sentinel means "capacity could not be read", usually because
+    /// the root\WMI query needs elevation — so it must not reach the screen as a number.
+    /// Bound instead of HealthPercent, which rendered literally as "-1%" next to a "%" suffix
+    /// in the view and read as a nonsensical measurement rather than as missing data.
+    /// </summary>
+    public string HealthDisplay => HasCapacityData ? $"{HealthPercent}%" : "Not available";
+
+    /// <summary>Formatted wear level. Same sentinel handling as <see cref="HealthDisplay"/>.</summary>
+    public string WearDisplay => HasCapacityData ? $"{WearPercent}%" : "Not available";
 }

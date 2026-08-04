@@ -40,7 +40,10 @@ public partial class UiAutomationContractTests
             ["btn-app-updates-scan"] = "Scan for updates",
             ["btn-system-health-memory-errors"] = "Check memory errors",
             ["btn-logs-open-event-viewer"] = "Open Event Viewer",
-            ["btn-logs-open-folder"] = "Open log folder",
+            // Renamed for #1647: this button sits beside "Open Event Viewer" on a tab titled
+            // after the Windows Event Log, but opens SysManager's own diagnostic folder. The
+            // accessible name now says whose logs, so a screen-reader user is not misled either.
+            ["btn-logs-open-folder"] = "Open SysManager's own log folder",
             ["btn-ping-add-target"] = "Add target"
         };
 

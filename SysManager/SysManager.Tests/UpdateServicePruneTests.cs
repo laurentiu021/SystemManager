@@ -35,8 +35,12 @@ public class UpdateServicePruneTests : IDisposable
         return path;
     }
 
+    // Ordinal sort: the default OrderBy is culture-sensitive, which on Windows placed
+    // "notes.txt" before the capitalised names and made an assertion on the expected order
+    // fail for a reason unrelated to pruning.
     private string[] Remaining() =>
-        Directory.GetFiles(_dir).Select(Path.GetFileName).OfType<string>().OrderBy(n => n).ToArray();
+        Directory.GetFiles(_dir).Select(Path.GetFileName).OfType<string>()
+            .OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
     [Fact]
     public void Prune_RemovesSupersededBinariesAndKeepsTheCurrentOne()
@@ -91,9 +95,11 @@ public class UpdateServicePruneTests : IDisposable
         var removed = UpdateService.PruneOldDownloads(_dir, keep);
 
         Assert.Equal(0, removed);
+        // Membership, not order: what matters is that nothing was deleted, and directory
+        // enumeration order is not a contract worth asserting.
         Assert.Equal(
-            ["SomeOtherApp-2.0.exe", "SysManager-1.56.8.exe", "notes.txt", "sysmanager-report.txt"],
-            Remaining());
+            new HashSet<string>(["SomeOtherApp-2.0.exe", "SysManager-1.56.8.exe", "notes.txt", "sysmanager-report.txt"]),
+            Remaining().ToHashSet());
     }
 
     [Fact]

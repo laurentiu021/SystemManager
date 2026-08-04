@@ -144,4 +144,41 @@ public partial class UiAutomationContractTests
 
     [GeneratedRegex("FindButtonById\\s*\\(\\s*\"(?<id>btn-[a-z0-9-]+)\"", RegexOptions.CultureInvariant)]
     private static partial Regex FindButtonByIdCall();
+
+    /// <summary>
+    /// The event-log severity column must not convey severity by colour alone. It previously held
+    /// a bare coloured Ellipse under an empty header — no text, no tooltip, no accessible name —
+    /// so severity was unavailable to anyone with a colour-vision deficiency and to a screen
+    /// reader. Asserted against the real XAML because the defect lived entirely in the cell
+    /// template: no view-model or model assertion could have caught it.
+    /// </summary>
+    [Fact]
+    public void LogsSeverityColumn_ConveysSeverityAsTextNotColourAlone()
+    {
+        var logsView = Path.Combine(
+            FindSolutionDirectory().FullName, "SysManager", "Views", "LogsView.xaml");
+        var document = XDocument.Load(logsView);
+
+        var severityColumn = Assert.Single(
+            document.Descendants(Presentation + "DataGridTemplateColumn"),
+            column => (string?)column.Attribute("Header") == "Severity");
+
+        var cellRoot = severityColumn
+            .Descendants(Presentation + "DataTemplate")
+            .Single()
+            .Elements()
+            .Single();
+
+        // A screen reader needs a name on the cell content, and a colour-blind sighted user needs
+        // the word rendered. The coloured dot may accompany them; it must not replace them.
+        Assert.Equal(
+            "{Binding SeverityLabel}",
+            (string?)cellRoot.Attribute("AutomationProperties.Name"));
+        Assert.Contains(
+            cellRoot.Descendants(Presentation + "TextBlock"),
+            text => (string?)text.Attribute("Text") == "{Binding SeverityLabel}");
+
+        // The column must also be identifiable and sortable, which an empty header prevented.
+        Assert.Equal("Severity", (string?)severityColumn.Attribute("SortMemberPath"));
+    }
 }

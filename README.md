@@ -52,6 +52,11 @@ Everything runs on the machine itself. No cloud, no telemetry, no account.
 > winget. App icons in the Bulk Installer are an **opt-in** extra — off by default, and
 > only when you tick "Load app icons from the web" does it fetch them from Google's
 > favicon service. Nothing else leaves your PC.
+>
+> The local diagnostic log keeps 14 days of rolling files in
+> `%LocalAppData%\SysManager\logs`, and your Windows user name is replaced with `[user]`
+> in every line — including inside error messages — so a log you choose to share does
+> not carry your account name with it.
 
 Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and streaming
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and

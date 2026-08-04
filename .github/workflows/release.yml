@@ -10,9 +10,11 @@ on:
         description: "Tag to release (e.g. v0.5.3)"
         required: true
 
+# Default for every job in this workflow: read-only. The guard job below only reads
+# release metadata, so it needs nothing more. build-and-release re-declares the
+# writes it actually needs, keeping the privileged token confined to that one job.
 permissions:
-  contents: write
-  discussions: write
+  contents: read
 
 # Serialize releases per tag so two pushes (or a tag push racing a manual dispatch)
 # can't run two release jobs that race the winget publish and Discussions post.
@@ -58,6 +60,17 @@ jobs:
     if: needs.guard.outputs.should_release == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
+
+    # Scoped to this job rather than the workflow: the guard job only reads release
+    # metadata and must not be able to mint an OIDC token or write attestations.
+    # id-token/attestations exist solely so the build can sign a provenance statement
+    # binding this exe's digest to this repo, workflow and commit. Neither grants
+    # any write access to repository content.
+    permissions:
+      contents: write
+      discussions: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout
@@ -133,6 +146,55 @@ jobs:
           "hash=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "SHA256: $hash"
 
+      # The shipped exe is self-contained and single-file, so its contents are opaque:
+      # neither the binary nor its .sha256 says which dependencies are embedded. The SBOM
+      # is the machine-readable answer. Generated AFTER publish and with the same
+      # framework/runtime, so it reads the graph that was actually published rather than
+      # a RID-agnostic restore.
+      #
+      # Note this is a restore-graph inventory, not a byte-level manifest of the exe:
+      # verified against a real win-x64 publish, 71 components resolve, of which 14 are
+      # RID-specific placeholder packages (Linux/macOS/Android variants of
+      # System.IO.Ports and SkiaSharp/HarfBuzz native assets, all empty '_._' on this
+      # RID) plus System.IO.Hashing, a build-time transitive of SourceLink that never
+      # reaches the output. They are kept rather than filtered because a
+      # vulnerability-feed consumer wants the resolved set, and hand-maintaining an
+      # exclusion list would silently rot as the graph changes.
+      - name: Generate CycloneDX SBOM
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          # Version-pinned like every action in this workflow — an unpinned tool is an
+          # unreviewed dependency in the release path.
+          dotnet tool install --global CycloneDX --version 6.2.0
+          if ($LASTEXITCODE -ne 0) { throw "Failed to install the CycloneDX tool." }
+          dotnet-CycloneDX SysManager/SysManager/SysManager.csproj `
+            --output publish `
+            --filename "SysManager-v${ver}.sbom.json" `
+            --output-format Json `
+            --framework net10.0-windows `
+            --runtime win-x64 `
+            --exclude-dev `
+            --set-name SysManager `
+            --set-version $ver
+          if ($LASTEXITCODE -ne 0) { throw "SBOM generation failed." }
+          $sbom = "publish/SysManager-v${ver}.sbom.json"
+          if (-not (Test-Path $sbom)) { throw "Missing $sbom" }
+          $components = (Get-Content $sbom -Raw | ConvertFrom-Json).components.Count
+          if (-not $components) { throw "SBOM contains no components — refusing to publish an empty inventory." }
+          Write-Host "SBOM written with $components components."
+
+      # Binds this exact binary digest to this repository, workflow and commit in the
+      # public Sigstore transparency log. The .sha256 file cannot do this: it ships from
+      # the same release as the exe, so both share one trust root. Anyone can verify with
+      #   gh attestation verify SysManager-v<version>.exe --repo laurentiu021/SystemManager
+      # Deliberately placed BEFORE the release is created, so a failure here aborts the
+      # run instead of leaving a published release without provenance.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: publish/SysManager-v${{ steps.version.outputs.version }}.exe
+
       - name: Extract release notes from CHANGELOG
         id: notes
         shell: pwsh
@@ -159,10 +221,58 @@ jobs:
 
       - name: Append verification instructions to release notes
         shell: pwsh
+        env:
+          # Passed as data rather than interpolated into the script body, matching the
+          # tag-extraction step above.
+          VERSION: ${{ steps.version.outputs.version }}
+          HASH: ${{ steps.hash.outputs.hash }}
         run: |
-          $ver = "${{ steps.version.outputs.version }}"
-          $hash = "${{ steps.hash.outputs.hash }}"
-          Add-Content release-notes.md "`n`n---`n`n### Verify the download`n`n``````powershell`nGet-FileHash .\SysManager-v${ver}.exe -Algorithm SHA256`n```````n`nExpected SHA256: ``$hash``"
+          # A literal here-string keeps the markdown code fences readable — an expandable
+          # one would need every backtick escaped, which is what made this unreadable
+          # before. The two placeholders are substituted after the fact.
+          $template = @'
+
+          ---
+
+          ### Verify the download
+
+          ```powershell
+          Get-FileHash .\SysManager-__TAG__.exe -Algorithm SHA256
+          ```
+
+          Expected SHA256: `__HASH__`
+
+          This build is not code-signed, so Windows will warn on first launch. That is
+          expected for a small independent app: [see what the warning says and what to
+          click](https://github.com/laurentiu021/SystemManager#first-launch-windows-will-warn-you).
+
+          ### Verify where this binary came from
+
+          This exe was built by GitHub Actions from this public source, and the build is
+          recorded in the Sigstore public transparency log. With the
+          [GitHub CLI](https://cli.github.com/):
+
+          ```powershell
+          gh attestation verify .\SysManager-__TAG__.exe --repo laurentiu021/SystemManager
+          ```
+
+          That proves which commit and workflow produced this exact binary, something the
+          SHA256 file cannot show, since it is published alongside the exe it describes.
+          Each release also ships `SysManager-__TAG__.sbom.json`, a CycloneDX inventory of
+          every dependency resolved for this build.
+          '@
+          $notes = $template.Replace('__TAG__', "v$env:VERSION").Replace('__HASH__', $env:HASH)
+          # This appended block is deliberately ASCII-only. A non-ASCII character here is
+          # decoded according to how the host reads this script file, so the same text can
+          # render as mojibake under a different PowerShell host than the one used in CI.
+          # The CHANGELOG body above is untouched and keeps its punctuation; only this
+          # generated footer is constrained. Fail the release rather than publish garbled
+          # notes to both the release page and the Discussions announcement.
+          $nonAscii = [regex]::Matches($notes, '[^\x00-\x7F]')
+          if ($nonAscii.Count -gt 0) {
+              throw "The appended verification notes must be ASCII-only; found $($nonAscii.Count) non-ASCII character(s): $(($nonAscii | ForEach-Object { $_.Value }) -join ' ')"
+          }
+          Add-Content release-notes.md $notes -Encoding utf8
 
       - name: Create GitHub Release
         id: release
@@ -176,6 +286,7 @@ jobs:
           files: |
             publish/SysManager-v${{ steps.version.outputs.version }}.exe
             publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256
+            publish/SysManager-v${{ steps.version.outputs.version }}.sbom.json
 
       - name: Update winget package
         uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2

@@ -4,12 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.56.7] - 2026-08-04
+## [1.56.8] - 2026-08-04
+
+Version 1.56.7 was tagged but never published: its release run failed at the unit-test
+gate, so no binary, notes, or announcement for it exist. The tag is retained rather than
+moved, and the work below ships here instead.
 
 ### Fixed
 - **Restored Performance Mode's persisted `Restore All` after an app restart.** Snapshot persistence added in #431 loaded the saved baseline only when the user applied another change. Reopening SysManager therefore left `Restore All` disabled even though `%LocalAppData%\SysManager\performance-snapshot.json` still held the original settings. Performance Mode now rehydrates that snapshot first during initialization under the existing snapshot gate, so the recovery action becomes available without waiting for live `powercfg` probes and without racing a concurrent Apply.
 - **Made old recovery points clear and testable.** New snapshots record their UTC capture time and show it in local time in the `Restore All` confirmation, while snapshots created by older releases remain loadable with an explicit unknown-time label. Snapshot storage now has an injected test directory, and regression coverage recreates an app restart with a second service instance, verifies the real command reaches confirmation, and keeps legacy JSON compatible without touching the user's profile.
 - **Hardened the persisted recovery boundary and failure semantics.** Snapshot files are size-bounded, require a complete non-duplicated schema, and reject malformed GUIDs, spoofable plan names, out-of-range processor values, and unsafe GPU subkeys before enabling restore. Power-plan, processor, and GPU restore failures now remain failures instead of reporting success and deleting the only recovery point; failed snapshot saves prevent any setting change, and failed cleanup keeps `Restore All` available for a retry.
+- **Made the Performance Mode lock-guard test deterministic.** The guard test seeded the recovery snapshot while initialization was still loading the persisted one, and that load's deferred assignment overwrote the seeded value. On a fast machine the load finished first and the test passed; on a slower one it did not, so `Restore All` reported "nothing to restore" and never reached the guard under test. The test now waits for initialization before seeding. Test-only change, no effect on shipped behavior.
 
 ## [1.56.6] - 2026-08-04
 

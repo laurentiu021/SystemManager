@@ -16,7 +16,7 @@ public class DashboardTabUiTests
     public void ScanSystemButton_Exists()
     {
         GoTo();
-        Assert.NotNull(_fx.FindButton("Scan system"));
+        Assert.NotNull(_fx.FindButtonById("btn-dashboard-scan-system"));
     }
 
     [Fact]

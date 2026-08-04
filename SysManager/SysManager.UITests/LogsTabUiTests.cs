@@ -51,28 +51,28 @@ public class LogsTabUiTests
     public void RefreshButton_Exists()
     {
         GoTo();
-        Assert.NotNull(_fx.FindButton("Refresh"));
+        Assert.NotNull(_fx.FindButtonById("btn-logs-refresh"));
     }
 
     [Fact]
     public void ExportCsvButton_Exists()
     {
         GoTo();
-        Assert.NotNull(_fx.FindButton("Export CSV"));
+        Assert.NotNull(_fx.FindButtonById("btn-logs-export-csv"));
     }
 
     [Fact]
     public void OpenEventViewerButton_Exists()
     {
         GoTo();
-        Assert.NotNull(_fx.FindButton("Open Event Viewer"));
+        Assert.NotNull(_fx.FindButtonById("btn-logs-open-event-viewer"));
     }
 
     [Fact]
     public void OpenLogFolderButton_Exists()
     {
         GoTo();
-        Assert.NotNull(_fx.FindButton("Open log folder"));
+        Assert.NotNull(_fx.FindButtonById("btn-logs-open-folder"));
     }
 
     [Fact]

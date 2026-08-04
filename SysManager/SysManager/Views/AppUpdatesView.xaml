@@ -54,7 +54,7 @@
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0">
             <StackPanel Orientation="Horizontal">
-                <Button Content="Scan for updates" Command="{Binding ScanCommand}" AutomationProperties.Name="Scan for updates" Style="{StaticResource PrimaryButton}"/>
+                <Button Content="Scan for updates" Command="{Binding ScanCommand}" AutomationProperties.AutomationId="btn-app-updates-scan" AutomationProperties.Name="Scan for updates" Style="{StaticResource PrimaryButton}"/>
                 <Button Content="Upgrade selected" Command="{Binding UpgradeSelectedCommand}" AutomationProperties.Name="Upgrade selected packages" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}" AutomationProperties.Name="Cancel update operation" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                 <CheckBox Content="Select All" IsChecked="{Binding SelectAll}" AutomationProperties.Name="Select all packages" Margin="16,0,0,0" VerticalAlignment="Center"/>

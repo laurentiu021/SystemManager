@@ -53,8 +53,8 @@ public class NetworkTabUiTests
     {
         GoTo();
         // Either Start (not monitoring) or Stop (monitoring) is shown.
-        var start = _fx.FindButton("Start");
-        var stop = _fx.FindButton("Stop");
+        var start = _fx.FindButtonById("btn-ping-start", timeoutSeconds: 1);
+        var stop = _fx.FindButtonById("btn-ping-stop", timeoutSeconds: 1);
         Assert.True(start != null || stop != null);
     }
 
@@ -62,23 +62,49 @@ public class NetworkTabUiTests
     public void ClearButton_Exists()
     {
         GoTo();
-        Assert.NotNull(_fx.FindButton("Clear"));
+        Assert.NotNull(_fx.FindButtonById("btn-ping-clear"));
     }
 
     [Fact]
     public void StartStop_Cycle()
     {
         GoTo();
-        var start = _fx.FindButton("Start");
-        if (start != null)
+        var completed = false;
+        try
         {
-            start.Invoke();
-            Thread.Sleep(400);
+            var monitoringBeforeTest = _fx.FindButtonById("btn-ping-stop", timeoutSeconds: 1);
+            monitoringBeforeTest?.Invoke();
+
+            var start = _fx.FindButtonById("btn-ping-start");
+            Assert.NotNull(start);
+            start!.Invoke();
+
+            var stop = _fx.FindButtonById("btn-ping-stop");
+            Assert.NotNull(stop);
+            stop!.Invoke();
+
+            Assert.NotNull(_fx.FindButtonById("btn-ping-start"));
+            Assert.Null(_fx.FindButtonById("btn-ping-stop", timeoutSeconds: 1));
+            completed = true;
         }
-        var stop = _fx.FindButton("Stop");
-        Assert.NotNull(stop);
-        stop!.Invoke();
-        Thread.Sleep(400);
+        finally
+        {
+            // Keep the shared fixture stopped without replacing the primary test failure.
+            try
+            {
+                if (!completed)
+                {
+                    var cleanupStop = _fx.FindButtonById("btn-ping-stop", timeoutSeconds: 1)
+                        ?? _fx.FindButtonByAccessibleName("Stop ping monitoring");
+                    cleanupStop?.Invoke();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Ping cleanup failed without replacing the test result: {ex.Message}");
+            }
+        }
     }
 
     [Fact]
@@ -116,6 +142,6 @@ public class NetworkTabUiTests
     public void AddTargetButton_Exists()
     {
         GoTo();
-        Assert.NotNull(_fx.FindButton("Add target"));
+        Assert.NotNull(_fx.FindButtonById("btn-ping-add-target"));
     }
 }

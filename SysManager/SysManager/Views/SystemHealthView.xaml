@@ -16,6 +16,7 @@
                                    Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                     </StackPanel>
                     <Button Content="Scan" Command="{Binding ScanCommand}" Style="{StaticResource PrimaryButton}"
+                            AutomationProperties.AutomationId="btn-system-health-scan"
                             AutomationProperties.Name="Scan system health"
                             HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                 </DockPanel>
@@ -106,9 +107,11 @@
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="Check memory errors" Command="{Binding CheckMemoryErrorsCommand}"
+                                    AutomationProperties.AutomationId="btn-system-health-memory-errors"
                                     AutomationProperties.Name="Check memory errors"
                                     Style="{StaticResource PrimaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                             <Button Content="Run MemTest (reboot)" Command="{Binding ScheduleMemoryTestCommand}"
+                                    AutomationProperties.AutomationId="btn-system-health-memtest"
                                     AutomationProperties.Name="Schedule a memory test on next reboot"
                                     Style="{StaticResource SecondaryButton}" Padding="14,8"/>
                         </StackPanel>
@@ -176,6 +179,7 @@
                         <DockPanel>
                             <TextBlock Text="Disk health (SMART)" Style="{StaticResource SectionTitle}"/>
                             <Button Content="Run SMART check" Command="{Binding CheckDiskHealthCommand}"
+                                    AutomationProperties.AutomationId="btn-system-health-smart"
                                     AutomationProperties.Name="Run SMART disk health check"
                                     Style="{StaticResource PrimaryButton}"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right"/>

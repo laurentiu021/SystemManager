@@ -19,10 +19,11 @@ public class WindowsUpdateAutoCheckTests
     }
 
     [Fact]
-    public void ModuleAvailable_DefaultsFalse()
+    public void ModuleStatus_DefersAvailabilityCheckUntilHistory()
     {
         var vm = Build();
-        Assert.False(vm.ModuleAvailable);
+        Assert.Contains("History", vm.ModuleStatus, StringComparison.Ordinal);
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]

@@ -74,7 +74,7 @@ public class AllTabsSmokeUiTests
         // ── Privacy & Security ──
         new object[] { "nav-privacy-settings", "Privacy" },
         new object[] { "nav-file-shredder", "File Shredder" },
-        new object[] { "nav-app-blocker", "Application Blocker" },
+        new object[] { "nav-app-blocker", "App Blocker" },
         new object[] { "nav-debloater", "Debloater" },
         new object[] { "nav-browser-cleaner", "Browser Cleaner" },
         new object[] { "nav-edge-onedrive", "Edge/OneDrive Remover" },
@@ -103,7 +103,7 @@ public class AllTabsSmokeUiTests
     {
         _fx.GoToTab(navId);
         Assert.True(
-            _fx.HasText(expectedHeader),
+            _fx.HasTextInCurrentTab(expectedHeader),
             $"Tab '{navId}' did not render its expected header '{expectedHeader}'.");
     }
 

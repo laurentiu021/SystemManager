@@ -24,17 +24,20 @@
                         DockPanel.Dock="Right" VerticalAlignment="Center">
                 <Button Content="Start" Command="{Binding StartCommand}"
                         Style="{StaticResource PrimaryButton}"
+                        AutomationProperties.AutomationId="btn-ping-start"
                         AutomationProperties.Name="Start ping monitoring"
                         Visibility="{Binding Shared.IsMonitoring,
                             Converter={StaticResource FlexVis},
                             ConverterParameter=Inverse}"/>
                 <Button Content="Stop" Command="{Binding StopCommand}"
                         Style="{StaticResource SecondaryButton}"
+                        AutomationProperties.AutomationId="btn-ping-stop"
                         AutomationProperties.Name="Stop ping monitoring"
                         Visibility="{Binding Shared.IsMonitoring,
                             Converter={StaticResource FlexVis}}"/>
                 <Button Content="Clear" Command="{Binding ClearHistoryCommand}"
                         Style="{StaticResource GhostButton}" Margin="6,0,0,0"
+                        AutomationProperties.AutomationId="btn-ping-clear"
                         AutomationProperties.Name="Clear ping history"/>
             </StackPanel>
         </DockPanel>
@@ -167,6 +170,7 @@
                     <TextBox Text="{Binding Shared.NewTargetHost, UpdateSourceTrigger=PropertyChanged}" Width="240"
                              AutomationProperties.Name="New target host"/>
                     <Button Content="Add target" Command="{Binding AddCustomTargetCommand}" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                            AutomationProperties.AutomationId="btn-ping-add-target"
                             AutomationProperties.Name="Add target"/>
                 </StackPanel>
             </StackPanel>

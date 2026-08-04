@@ -31,6 +31,8 @@
             <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
                 <WrapPanel>
                     <Button Content="List drivers" Command="{Binding ListDriversCommand}"
+                            AutomationProperties.AutomationId="btn-drivers-list"
+                            AutomationProperties.Name="List drivers"
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}"
                             Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>

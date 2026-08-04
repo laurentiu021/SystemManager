@@ -106,6 +106,14 @@ What the app can and cannot do by design:
 - **External CLI downloads**: the Ookla speed-test CLI is downloaded from
   `install.speedtest.net` the first time it's used. If that URL changes,
   the feature fails safely rather than substituting an alternative.
+- **Local diagnostic log**: SysManager keeps 14 days of rolling log files in
+  `%LocalAppData%\SysManager\logs`. They never leave the machine on their own —
+  there is no upload path. Your Windows user name is replaced with `[user]` on
+  every line before it is written, including inside exception messages, so a log
+  you choose to share for a bug report does not carry your account name. The
+  replacement happens in the log sink rather than at each logging call, so a new
+  code path cannot forget it. Paths outside your user profile, such as
+  `C:\Program Files\...`, are recorded as-is.
 - **Auto-update**: new builds are downloaded from the official GitHub
   Releases endpoint. The app does not auto-install without an explicit
   click. Before applying, the downloaded binary's SHA256 is compared against

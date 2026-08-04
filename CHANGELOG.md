@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.13] - 2026-08-04
+
+### Fixed
+- **Your Windows user name is now removed from every line of the diagnostic log.** The app already had a helper for this, but only 15 of the 75 places that log a file path actually called it — so whether your account name ended up in the log depended on which part of the app happened to run into trouble. The removal now happens where the log is written, so it covers every existing message, every future one, and paths that appear inside error text (which no per-message fix could reach). Log files stay local and are never uploaded; this matters for a log you choose to share yourself, for example when reporting a problem.
+
 ## [1.56.12] - 2026-08-04
 
 ### Fixed

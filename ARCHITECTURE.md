@@ -172,7 +172,13 @@ Key services:
   wear into a single 0–100 score with color-coded verdict and recommendations.
 - `TrayIconService` — system tray icon with background monitoring (60s),
   tooltip updates, context menu, and Windows toast notifications.
-- `LogService` — Serilog wrapper with rolling file sink.
+- `LogService` — Serilog wrapper with a rolling file sink, wrapped by
+  `UserPathScrubbingSink`. That wrapper renders each event and runs the finished line through
+  `SanitizePath` before writing, so the Windows user name cannot reach the log regardless of
+  which call site produced it. Sanitizing at the sink rather than per call site is deliberate:
+  `SanitizePath` was called at 15 of 75 path-logging sites, so exposure depended on which
+  service happened to fail, and no call-site fix can reach a path inside exception text —
+  Serilog renders that separately from the message properties.
 - `FixedDriveService` — enumerate fixed NTFS/ReFS volumes.
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming
   launcher caches, Windows caches). Per-file try/catch so locked files

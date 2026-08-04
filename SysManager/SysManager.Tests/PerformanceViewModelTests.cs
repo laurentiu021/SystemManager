@@ -245,8 +245,18 @@ public class PerformanceViewModelTests
     // DeleteSelected_WhenDiskLocked_DoesNotDelete pins its Disk-lock guard: stub the dialog
     // to "Yes", hold the SystemModification lock, and prove the command bails at the guard.
 
-    private static void SeedSnapshot(PerformanceViewModel vm)
+    private static async Task SeedSnapshotAsync(PerformanceViewModel vm)
     {
+        // Await initialization BEFORE seeding. InitAsync hydrates the persisted snapshot with
+        // `_snapshot ??= await Task.Run(_service.LoadSnapshot)`, which reads the field, performs
+        // disk I/O, then assigns — so a value written during that await is overwritten by the
+        // deferred assignment. Seeding first therefore raced the load: on a fast machine the I/O
+        // finished before the seed and the test passed, on a slower runner it did not and
+        // `_snapshot` came back null, making Restore All bail at its "nothing to restore" guard
+        // before ever reaching the lock guard under test. Ordering the wait explicitly keeps
+        // this deterministic without a sleep.
+        await vm.InitializationComplete;
+
         // Restore All early-returns when _snapshot is null (before the lock guard). Seed a
         // snapshot via the private field so the command reaches the guard we're testing.
         var snapshot = new PerformanceService.OriginalSnapshot(
@@ -261,8 +271,10 @@ public class PerformanceViewModelTests
     [Fact]
     public async Task RestoreAll_WhenSystemModificationLocked_BailsAtGuard()
     {
-        var vm = NewVm();
-        SeedSnapshot(vm);
+        // completeInitialization: the seed below must happen after InitAsync has finished, and
+        // InitializationComplete only settles once the stubbed process calls return.
+        var vm = NewVm(completeInitialization: true);
+        await SeedSnapshotAsync(vm);
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();

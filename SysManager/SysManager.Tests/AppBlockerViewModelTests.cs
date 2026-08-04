@@ -107,6 +107,9 @@ public class AppBlockerViewModelTests
             vm.BlockAppCommand.Execute(null);
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            // Assert on both entry points: the view model calls TryBlockApp, and asserting only
+            // the old BlockApp would leave this test passing while checking nothing.
+            blocker.DidNotReceive().TryBlockApp(Arg.Any<string>());
             blocker.DidNotReceive().BlockApp(Arg.Any<string>());
         }
         finally
@@ -119,7 +122,9 @@ public class AppBlockerViewModelTests
     public void BlockApp_WhenUserConfirms_BlocksApp()
     {
         var blocker = Substitute.For<IAppBlockerService>();
-        blocker.BlockApp(Arg.Any<string>()).Returns(true);
+        // The view model calls TryBlockApp now, so it can tell a safety refusal from a
+        // permissions problem instead of reporting every failure as "check admin privileges".
+        blocker.TryBlockApp(Arg.Any<string>()).Returns(AppBlockerService.BlockResult.Success);
         var vm = NewVm(blocker);
         vm.NewExeName = "game.exe";
 
@@ -132,7 +137,64 @@ public class AppBlockerViewModelTests
             vm.BlockAppCommand.Execute(null);
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
-            blocker.Received(1).BlockApp("game.exe");
+            blocker.Received(1).TryBlockApp("game.exe");
+            Assert.Contains("Blocked game.exe", vm.BlockStatus);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Theory]
+    [InlineData(AppBlockerService.BlockResult.BootCritical, "required for Windows to start")]
+    [InlineData(AppBlockerService.BlockResult.OwnExecutable, "SysManager itself")]
+    [InlineData(AppBlockerService.BlockResult.ExternalDebuggerPresent, "already registered a debugger")]
+    [InlineData(AppBlockerService.BlockResult.InvalidName, "not a valid executable name")]
+    public void BlockApp_SafetyRefusal_DoesNotBlameAdminRights(
+        AppBlockerService.BlockResult refusal, string expectedFragment)
+    {
+        // Each of these is SysManager deliberately declining. Reporting them as a permissions
+        // problem sent the user to relaunch elevated, where the same guard refuses again.
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.TryBlockApp(Arg.Any<string>()).Returns(refusal);
+        var vm = NewVm(blocker);
+        vm.NewExeName = "something.exe";
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.BlockAppCommand.Execute(null);
+
+            Assert.Contains(expectedFragment, vm.BlockStatus);
+            Assert.DoesNotContain("administrator", vm.BlockStatus, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void BlockApp_AccessDenied_IsTheOnlyCaseThatMentionsAdminRights()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.TryBlockApp(Arg.Any<string>()).Returns(AppBlockerService.BlockResult.AccessDenied);
+        var vm = NewVm(blocker);
+        vm.NewExeName = "something.exe";
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.BlockAppCommand.Execute(null);
+
+            Assert.Contains("administrator", vm.BlockStatus, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

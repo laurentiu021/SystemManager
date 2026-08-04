@@ -330,6 +330,13 @@ Key services:
   unit-tested `Serialize`/`Parse`, file IO that never throws. Every untrusted or unrecognized
   value degrades to `Ask` rather than to a concrete action, so a damaged file can never exit an
   app the user wanted kept in the tray.
+- `StandbyPreferenceService` — persists the Standby List Cleaner's auto-purge toggle and
+  threshold as JSON under `%LocalAppData%\SysManager\standby-preference.json`. Auto-purge is a
+  set-and-forget setting, so losing it on every restart made it effectively unusable. Same shape
+  as the two above: injectable config directory, pure unit-tested `Serialize`/`Parse`, file IO
+  that never throws. An unreadable file falls back to auto-purge OFF, and an out-of-range
+  threshold resets only that field while keeping the toggle — arming an automatic system action
+  on the strength of a corrupt file would be the wrong way to fail.
 - `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
   Profile tab: it composes the already-audited services (`PerformanceService`,
   `ITimerResolutionService`, `ICpuAffinityService`, `StandbyMemoryService`,

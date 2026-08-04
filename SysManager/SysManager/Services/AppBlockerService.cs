@@ -91,11 +91,52 @@ public sealed partial class AppBlockerService : IAppBlockerService
     }
 
     /// <summary>
-    /// Blocks an executable from running.
+    /// Why a block attempt did not succeed. <see cref="BlockApp"/> returned a bare bool for six
+    /// distinct causes — four of them deliberate safety refusals — and the UI attributed all of
+    /// them to missing administrator rights. That sent a user who tried to block a boot-critical
+    /// executable off to relaunch elevated, where it would be refused again for the same real
+    /// reason, never stated.
     /// </summary>
-    public bool BlockApp(string exeName)
+    public enum BlockResult
     {
-        if (string.IsNullOrWhiteSpace(exeName)) return false;
+        /// <summary>The block was written.</summary>
+        Success,
+
+        /// <summary>No name was supplied.</summary>
+        EmptyName,
+
+        /// <summary>The name contains path separators or characters that are not permitted.</summary>
+        InvalidName,
+
+        /// <summary>Refused: blocking it could leave Windows unbootable.</summary>
+        BootCritical,
+
+        /// <summary>Refused: blocking SysManager itself would be unrecoverable in-app.</summary>
+        OwnExecutable,
+
+        /// <summary>Refused: another program already set a Debugger value we must not clobber.</summary>
+        ExternalDebuggerPresent,
+
+        /// <summary>Windows denied the registry write — this is the one that needs elevation.</summary>
+        AccessDenied,
+
+        /// <summary>The registry write failed for another reason.</summary>
+        RegistryFailure
+    }
+
+    /// <summary>
+    /// Blocks an executable from running. Prefer <see cref="TryBlockApp"/>, which reports why a
+    /// block was refused; this overload is kept for callers that only need success or failure.
+    /// </summary>
+    public bool BlockApp(string exeName) => TryBlockApp(exeName) == BlockResult.Success;
+
+    /// <summary>
+    /// Blocks an executable from running, reporting the specific outcome so the caller can tell a
+    /// safety refusal from a permissions problem.
+    /// </summary>
+    public BlockResult TryBlockApp(string exeName)
+    {
+        if (string.IsNullOrWhiteSpace(exeName)) return BlockResult.EmptyName;
 
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
@@ -104,7 +145,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
         if (!ExeNamePattern().IsMatch(exeName))
         {
             Log.Warning("Rejected invalid exeName: {ExeName}", exeName);
-            return false;
+            return BlockResult.InvalidName;
         }
 
         // Never block a boot/logon-critical process: an IFEO redirection here is
@@ -113,7 +154,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
         if (BootCriticalExecutables.Contains(exeName))
         {
             Log.Warning("Refusing to block boot-critical executable: {ExeName}", exeName);
-            return false;
+            return BlockResult.BootCritical;
         }
 
         // Never block SysManager's own executable. UnblockApp requires the app to be
@@ -125,13 +166,13 @@ public sealed partial class AppBlockerService : IAppBlockerService
         if (OwnExecutableName is { } self && exeName.Equals(self, StringComparison.OrdinalIgnoreCase))
         {
             Log.Warning("Refusing to block SysManager's own executable: {ExeName}", exeName);
-            return false;
+            return BlockResult.OwnExecutable;
         }
 
         try
         {
             using var ifeo = _baseKey.OpenSubKey(IfeoPath, writable: true);
-            if (ifeo is null) return false;
+            if (ifeo is null) return BlockResult.RegistryFailure;
 
             using var appKey = ifeo.CreateSubKey(exeName, writable: true);
 
@@ -144,28 +185,28 @@ public sealed partial class AppBlockerService : IAppBlockerService
             {
                 Log.Warning("Refusing to block {ExeName}: an external Debugger value is already set ({Debugger})",
                     exeName, existingDebugger);
-                return false;
+                return BlockResult.ExternalDebuggerPresent;
             }
 
             appKey.SetValue("Debugger", BlockerDebugger, RegistryValueKind.String);
 
             Log.Information("Blocked application: {ExeName}", exeName);
-            return true;
+            return BlockResult.Success;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Failed to block {ExeName} — admin required", exeName);
-            return false;
+            return BlockResult.AccessDenied;
         }
         catch (SecurityException ex)
         {
             Log.Warning(ex, "Failed to block {ExeName} — security exception", exeName);
-            return false;
+            return BlockResult.AccessDenied;
         }
         catch (IOException ex)
         {
             Log.Warning(ex, "Failed to block {ExeName} — IO error", exeName);
-            return false;
+            return BlockResult.RegistryFailure;
         }
     }
 

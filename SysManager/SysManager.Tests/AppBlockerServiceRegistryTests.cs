@@ -140,4 +140,90 @@ public sealed class AppBlockerServiceRegistryTests : IDisposable
         Assert.True(svc.BlockApp("notepad.exe"));
         Assert.Equal(BlockerDebugger, ReadDebugger("notepad.exe"));
     }
+
+    // ---------- TryBlockApp: telling the refusals apart ----------
+    //
+    // BlockApp returned a bare bool for six different causes, four of them deliberate safety
+    // refusals, and the UI reported every one as "check admin privileges". These pin each cause
+    // to its own result so a refusal can never again be mistaken for a permissions problem.
+
+    [Fact]
+    public void TryBlockApp_Success_ReportsSuccess()
+    {
+        Assert.Equal(AppBlockerService.BlockResult.Success, _svc.TryBlockApp("notepad.exe"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TryBlockApp_EmptyName_ReportsEmptyName(string name)
+    {
+        Assert.Equal(AppBlockerService.BlockResult.EmptyName, _svc.TryBlockApp(name));
+    }
+
+    [Theory]
+    [InlineData(@"C:\Windows\notepad.exe")]      // path separators
+    [InlineData(@"..\..\evil.exe")]              // traversal
+    [InlineData("note*pad.exe")]                 // wildcard
+    public void TryBlockApp_InvalidName_ReportsInvalidName(string name)
+    {
+        Assert.Equal(AppBlockerService.BlockResult.InvalidName, _svc.TryBlockApp(name));
+    }
+
+    [Theory]
+    [InlineData("winlogon.exe")]
+    [InlineData("lsass.exe")]
+    [InlineData("explorer.exe")]
+    [InlineData("csrss")]        // bare name; .exe is appended before the check
+    public void TryBlockApp_BootCritical_ReportsBootCritical(string name)
+    {
+        // The distinction that mattered most: this previously told the user to check their admin
+        // rights, sending them to relaunch elevated where the same guard refuses again.
+        Assert.Equal(AppBlockerService.BlockResult.BootCritical, _svc.TryBlockApp(name));
+    }
+
+    [Fact]
+    public void TryBlockApp_OwnExecutable_ReportsOwnExecutable()
+    {
+        var svc = new AppBlockerService(_root, ownExecutableName: "SysManager.exe");
+
+        Assert.Equal(AppBlockerService.BlockResult.OwnExecutable, svc.TryBlockApp("SysManager.exe"));
+    }
+
+    [Fact]
+    public void TryBlockApp_ExternalDebuggerPresent_ReportsExternalDebuggerPresent()
+    {
+        using (var appKey = _root.CreateSubKey($@"{IfeoPath}\devtool.exe", writable: true)!)
+            appKey.SetValue("Debugger", @"C:\SomeTool\attach.exe", RegistryValueKind.String);
+
+        Assert.Equal(
+            AppBlockerService.BlockResult.ExternalDebuggerPresent,
+            _svc.TryBlockApp("devtool.exe"));
+
+        // And the external value survives untouched.
+        Assert.Equal(@"C:\SomeTool\attach.exe", ReadDebugger("devtool.exe"));
+    }
+
+    [Fact]
+    public void BlockApp_StillAgreesWithTryBlockApp()
+    {
+        // The bool overload is kept for callers that only need success/failure, so the two must
+        // not drift apart.
+        Assert.True(_svc.BlockApp("notepad.exe"));
+        Assert.False(_svc.BlockApp("winlogon.exe"));
+        Assert.Equal(
+            _svc.TryBlockApp("winlogon.exe") == AppBlockerService.BlockResult.Success,
+            _svc.BlockApp("winlogon.exe"));
+    }
+
+    [Fact]
+    public void TryBlockApp_RefusalsWriteNothing()
+    {
+        // Every refusal must bail before the registry write, not write and then report failure.
+        foreach (var name in new[] { "winlogon.exe", @"C:\evil.exe", "" })
+            _svc.TryBlockApp(name);
+
+        Assert.Null(ReadDebugger("winlogon.exe"));
+        Assert.False(_svc.IsBlocked("winlogon.exe"));
+    }
 }

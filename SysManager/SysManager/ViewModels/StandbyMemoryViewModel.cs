@@ -21,19 +21,34 @@ namespace SysManager.ViewModels;
 public sealed partial class StandbyMemoryViewModel : ViewModelBase
 {
     private readonly StandbyMemoryService _service;
+    private readonly StandbyPreferenceService _preferences;
     private readonly DispatcherTimer? _timer;
+    // Suppresses saving while the constructor applies the loaded values, so restoring a
+    // preference does not immediately rewrite the same file.
+    private bool _loadingPreferences;
 
     [ObservableProperty] private string _totalDisplay = "—";
     [ObservableProperty] private string _availableDisplay = "—";
     [ObservableProperty] private string _loadDisplay = "—";
     [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _autoPurgeEnabled;
-    [ObservableProperty] private double _thresholdMb = 1024; // default 1 GB
+    [ObservableProperty] private double _thresholdMb = StandbyPreferenceService.DefaultThresholdMb;
 
-    public StandbyMemoryViewModel(StandbyMemoryService service)
+    public StandbyMemoryViewModel(StandbyMemoryService service, StandbyPreferenceService? preferences = null)
     {
         _service = service;
+        _preferences = preferences ?? new StandbyPreferenceService();
         IsElevated = AdminHelper.IsElevated();
+
+        // Auto-purge is set-and-forget, so losing it on restart made it effectively unusable:
+        // the user armed it, closed the app, and it silently reverted to off at the default
+        // threshold. Restore before the first Refresh so the very first tick already honours it.
+        _loadingPreferences = true;
+        var saved = _preferences.Load();
+        AutoPurgeEnabled = saved.AutoPurgeEnabled;
+        ThresholdMb = saved.ThresholdMb;
+        _loadingPreferences = false;
+
         Refresh();
         StatusMessage = IsElevated
             ? "Purge the standby list to free cached memory, or enable auto-purge."
@@ -53,6 +68,18 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
     /// <summary>Pure: should auto-purge fire? True when available RAM is below the threshold.</summary>
     public static bool ShouldAutoPurge(double availableMb, double thresholdMb)
         => thresholdMb > 0 && availableMb > 0 && availableMb < thresholdMb;
+
+    // Persist on change rather than on close: the app can be closed to the tray or killed, and a
+    // setting the user visibly toggled should survive either.
+    partial void OnAutoPurgeEnabledChanged(bool value) => SavePreferences();
+
+    partial void OnThresholdMbChanged(double value) => SavePreferences();
+
+    private void SavePreferences()
+    {
+        if (_loadingPreferences) return;
+        _preferences.Save(new StandbyPreference(AutoPurgeEnabled, ThresholdMb));
+    }
 
     [RelayCommand]
     private void Refresh()

@@ -90,18 +90,41 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
             $"Block \"{exeName}\" from running?\n\nThis will prevent the application from launching until you unblock it.",
             "Block Application — Confirm")) return;
 
-        var success = _blocker.BlockApp(exeName);
-        if (success)
+        var result = _blocker.TryBlockApp(exeName);
+        if (result == AppBlockerService.BlockResult.Success)
         {
             NewExeName = "";
             RefreshList();
             BlockStatus = $"Blocked {exeName}.";
             Log.Information("User blocked application: {ExeName}", exeName);
+            return;
         }
-        else
+
+        // Say which refusal it was. Every failure used to be reported as "check admin
+        // privileges", so a user blocked by a deliberate safety guard was sent to relaunch
+        // elevated — where the same guard refuses again, still without explaining itself.
+        BlockStatus = result switch
         {
-            BlockStatus = $"Failed to block {exeName} — check admin privileges.";
-        }
+            AppBlockerService.BlockResult.BootCritical =>
+                $"{exeName} is required for Windows to start, so SysManager will not block it. "
+                + "Blocking it could leave the computer unable to boot, with no way to undo it from here.",
+            AppBlockerService.BlockResult.OwnExecutable =>
+                $"{exeName} is SysManager itself. Blocking it would stop SysManager from launching, "
+                + "and unblocking has to be done from inside the app — so this one is refused.",
+            AppBlockerService.BlockResult.ExternalDebuggerPresent =>
+                $"Another program has already registered a debugger for {exeName}. SysManager will not "
+                + "overwrite it, because doing so would break that program's setup and could not be undone here.",
+            AppBlockerService.BlockResult.InvalidName =>
+                $"\"{exeName}\" is not a valid executable name. Enter just the file name, "
+                + "for example notepad.exe, without a folder path.",
+            AppBlockerService.BlockResult.EmptyName =>
+                "Enter an executable name (e.g., notepad.exe).",
+            AppBlockerService.BlockResult.AccessDenied =>
+                $"Windows denied the change needed to block {exeName}. This step needs administrator "
+                + "rights — restart SysManager as administrator and try again.",
+            _ =>
+                $"Could not block {exeName}: the registry change failed. The app log has the details."
+        };
     }
 
     [RelayCommand]

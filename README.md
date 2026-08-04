@@ -549,6 +549,8 @@ a confirmation before it runs:
   detection source
 - Start/stop monitoring, acknowledge alerts, show all currently installed
   apps, clear history
+- Notifies you when a new install is detected, so you find out even when you are
+  on another tab or the window is in the notification area
 
 ### App Blocker
 - Blocks applications from executing using Image File Execution Options (IFEO)
@@ -705,6 +707,8 @@ offers, "rate us" prompts:
   cache, so clearing it loses nothing; Windows reloads from disk on next use
 - Reading stats needs no admin; purging requires administrator (it enables the
   same privilege RAMMap and ISLC use) and reports cleanly if not elevated
+- The auto-purge switch and its threshold are remembered between sessions, so
+  arming it once is enough
 
 ### Performance Mode
 - **Per-tweak Apply buttons** — each setting is independent

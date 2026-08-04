@@ -126,19 +126,44 @@ What the app can and cannot do by design:
 
 ## Verifying a release
 
-Every release on GitHub ships a versioned `SysManager-v<version>.exe` and a
-matching `SysManager-v<version>.exe.sha256` file. You can verify the binary
-before running it (replace `<version>` with the version you downloaded):
+Every release on GitHub ships a versioned `SysManager-v<version>.exe`, a matching
+`SysManager-v<version>.exe.sha256`, and a `SysManager-v<version>.sbom.json`
+dependency inventory. There are two independent checks, and they answer
+different questions.
+
+**Did the file arrive intact?** Compare the hash (replace `<version>` with the
+version you downloaded):
 
 ```powershell
 Get-FileHash .\SysManager-v<version>.exe -Algorithm SHA256
 # Compare the output to the contents of the .sha256 file from the release page.
 ```
 
-The build is **not** currently code-signed. Windows SmartScreen may show a
-warning on first launch; this is expected until a code-signing certificate
-is available. Verifying the SHA256 hash is the recommended mitigation in
-the meantime.
+**Was the file built from this source?** Every release is covered by a GitHub
+build attestation — a SLSA provenance statement signed during the build and
+recorded in the public [Sigstore](https://www.sigstore.dev/) transparency log,
+binding that binary's digest to this repository, the release workflow, and the
+commit that produced it. Verify it with the [GitHub CLI](https://cli.github.com/):
+
+```powershell
+gh attestation verify .\SysManager-v<version>.exe --repo laurentiu021/SystemManager
+```
+
+The attestation is the stronger claim. The `.sha256` file is computed and published
+from the same job and onto the same release as the binary it describes, so the two
+share a single trust root — effective against transport corruption and against
+local tampering with a cached copy, but not against a replaced release asset. The
+attestation is signed by GitHub's infrastructure at build time and its subject
+digest, source repository, workflow, and commit are recorded in an append-only
+public log, so the binding between a binary and its origin cannot be rewritten
+after publication. It does not, by itself, assert that the source was reviewed or
+that the maintainer's account was not compromised — it proves origin, not intent.
+
+The build is **not** currently code-signed, so Windows SmartScreen shows a
+warning on first launch; this is expected until a code-signing certificate is
+available. The README walks through
+[what that dialog says and what to click](README.md#first-launch-windows-will-warn-you),
+with hash verification as the precondition.
 
 ## Dependencies and supply chain
 
@@ -147,7 +172,22 @@ the meantime.
 - CI builds and runs the unit test suite on every pull request.
   Integration tests (which access real OS APIs) run locally only.
 - The release workflow builds the binary from source on a clean GitHub
-  Actions runner and publishes both the `.exe` and its SHA256 sum together.
+  Actions runner and publishes the `.exe`, its SHA256 sum, and a CycloneDX
+  SBOM together.
+- Every release carries a signed build-provenance attestation (see
+  [Verifying a release](#verifying-a-release)). The privileged token that
+  produces it is scoped to the build job alone; the workflow's default
+  permission is read-only.
+- Each release ships a CycloneDX SBOM (`SysManager-v<version>.sbom.json`) listing
+  every NuGet package resolved for the published `win-x64` build, with version,
+  package URL, and hash, so the dependency set can be audited against a
+  vulnerability feed without unpacking the single-file executable. It is a
+  resolved-dependency inventory rather than a byte-level manifest: a handful of
+  entries are RID-specific placeholders for other platforms or build-time-only
+  transitives that carry no payload into the shipped binary.
+- All GitHub Actions used in the release pipeline are pinned to full commit
+  SHAs, and release builds are deterministic
+  (`ContinuousIntegrationBuild` + `Deterministic`).
 
 ## Scope
 

@@ -984,9 +984,56 @@ Get-FileHash .\SysManager-v<version>.exe -Algorithm SHA256
 # Compare the output to the contents of SysManager-v<version>.exe.sha256.
 ```
 
-The build is not currently code-signed, so Windows SmartScreen may warn on
-first launch. Verifying the SHA256 matches the one on the release page is the
-recommended mitigation — see [SECURITY.md](SECURITY.md) for details.
+That check confirms the file downloaded intact. To also confirm **where the file came
+from**, each release carries a GitHub build attestation — a signed record, kept in a
+public transparency log outside this repository, tying that exact binary to the commit
+and workflow that produced it. With the [GitHub CLI](https://cli.github.com/):
+
+```powershell
+gh attestation verify .\SysManager-v<version>.exe --repo laurentiu021/SystemManager
+```
+
+This is the stronger of the two checks. The `.sha256` file is generated in the same job
+and published onto the same release as the binary it describes, so both come from one
+source — enough to catch a corrupted download, but not a substituted release asset. The
+attestation is signed by GitHub's own infrastructure at build time and logged publicly, so
+it also records *which* commit and workflow produced the file, and that record cannot be
+rewritten after the fact. Each release also ships
+`SysManager-v<version>.sbom.json`, a CycloneDX inventory of every NuGet package resolved
+for that build — useful for checking the dependency set against a vulnerability feed.
+
+### First launch: Windows will warn you
+
+The first time you run it, Windows shows a blue box titled **"Windows protected your
+PC"**. This is expected, and it is worth knowing what it does and does not mean.
+
+It means Windows does not recognise the publisher. Code-signing certificates cost money
+and require a registered identity, and SysManager is a free one-person project without
+one yet, so every build is "unknown publisher" to Windows regardless of what it contains.
+It is **not** a virus warning — Windows has not found anything wrong with the file.
+
+The dialog only offers a **Don't run** button. To continue:
+
+1. Verify the SHA256 first, using the command above. Do this before anything else — it is
+   what makes the next step safe rather than blind.
+2. Click **More info** — a small link in the dialog, easy to miss.
+3. The file name and publisher appear, along with a **Run anyway** button. Click it.
+
+Windows remembers the choice, so this only happens once per downloaded version.
+
+If you would rather avoid the warning altogether, install through winget instead:
+
+```powershell
+winget install laurentiu021.SysManager
+```
+
+winget fetches and validates the package outside the browser download path, so the
+first-launch prompt does not appear.
+
+> Only click through this warning for a file you downloaded from
+> [the official releases page](https://github.com/laurentiu021/SystemManager/releases/latest)
+> **and** whose hash you verified. The same dialog protects you from genuinely malicious
+> files, so it is worth reading rather than reflexively dismissing.
 
 ## Build from source
 

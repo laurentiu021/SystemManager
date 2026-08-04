@@ -288,6 +288,38 @@ jobs:
             publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256
             publish/SysManager-v${{ steps.version.outputs.version }}.sbom.json
 
+      # winget-releaser creates its manifest branch on our winget-pkgs fork, and that
+      # branch must descend from current upstream. When the fork drifts, the branch
+      # creation fails — which is what silently broke the 1.56.6 and 1.56.8 publishes
+      # (the fork had fallen 5452 commits behind and komac reported the failure as a
+      # token problem, sending the diagnosis down the wrong path twice). Upstream
+      # recommends an external fork-sync app; syncing here instead means the fork is
+      # current at the exact moment it is used, with no dependency on a third-party
+      # service's schedule.
+      #
+      # Non-fatal by design: a sync failure must not abort a release whose binary is
+      # already published. If the fork is genuinely broken the winget step below fails
+      # and reports it, which is the correct place for that error to surface.
+      - name: Sync the winget-pkgs fork with upstream
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -o pipefail
+          behind=$(gh api "repos/microsoft/winget-pkgs/compare/master...laurentiu021:winget-pkgs:master" \
+            --jq '.behind_by' 2>/dev/null || echo "unknown")
+          echo "Fork is behind upstream by: $behind commit(s)"
+          if [ "$behind" = "0" ]; then
+            echo "Already current — nothing to do."
+            exit 0
+          fi
+          gh api -X POST repos/laurentiu021/winget-pkgs/merge-upstream -f branch=master \
+            --jq '"\(.merge_type): \(.message)"'
+          after=$(gh api "repos/microsoft/winget-pkgs/compare/master...laurentiu021:winget-pkgs:master" \
+            --jq '.behind_by' 2>/dev/null || echo "unknown")
+          echo "Fork is now behind by: $after commit(s)"
+
       - name: Update winget package
         uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         with:
@@ -323,6 +355,32 @@ jobs:
             const cat = categories.find(c => c.name === 'Announcements');
             if (!cat) { console.log('Announcements category not found, skipping.'); return; }
 
+            const title = `SysManager ${version} released`;
+
+            // Skip if this version was already announced. A manual re-dispatch is the
+            // normal recovery when a release fails partway (the guard job deliberately
+            // allows it), and without this check every retry posts another copy of the
+            // same announcement. Checking the category rather than searching keeps this
+            // exact — titles are generated here, so an existing match is definitive.
+            const existingQuery = `
+              query($owner: String!, $repo: String!, $catId: ID!) {
+                repository(owner: $owner, name: $repo) {
+                  discussions(first: 25, categoryId: $catId, orderBy: {field: CREATED_AT, direction: DESC}) {
+                    nodes { title url }
+                  }
+                }
+              }`;
+            const existing = await github.graphql(existingQuery, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              catId: cat.id,
+            });
+            const already = existing.repository.discussions.nodes.find(d => d.title === title);
+            if (already) {
+              console.log(`Already announced: ${already.url} — skipping.`);
+              return;
+            }
+
             const repoQuery = `
               query($owner: String!, $repo: String!) {
                 repository(owner: $owner, name: $repo) { id }
@@ -341,7 +399,6 @@ jobs:
                   body: $body
                 }) { discussion { url } }
               }`;
-            const title = `SysManager ${version} released`;
             const body = `## SysManager ${version} is out!\n\n[Download from GitHub Releases](${releaseUrl})\n\n${notes}`;
             await github.graphql(mutation, {
               repoId: repoResult.repository.id,

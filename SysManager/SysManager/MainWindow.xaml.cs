@@ -15,6 +15,11 @@ public partial class MainWindow : Window
 {
     private const int WM_NCACTIVATE = 0x0086;
 
+    private readonly ClosePreferenceService _closePreference = new();
+    // Per-session: the "it's still running" hint is useful the first time the window
+    // disappears, noise on every subsequent close within the same session.
+    private bool _trayHintShown;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -123,13 +128,64 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        // Minimize to tray instead of closing (if enabled)
-        if (Application.Current is App app && app.TrayService is { MinimizeToTray: true })
+        // Closing used to hide to the tray unconditionally, because MinimizeToTray defaults
+        // to true and was never surfaced anywhere. Pressing X therefore looked like it had
+        // closed the app while it kept running, with no notice and no way to change it —
+        // the worst outcome for a non-technical user, who then wonders why it is still there.
+        //
+        // Ask once, remember the answer, and honour it silently afterwards. The tray icon's
+        // own Exit command still quits directly, since that intent is already unambiguous.
+        if (Application.Current is not App app || app.TrayService is null)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
+        var behavior = _closePreference.Load();
+        if (behavior == CloseBehavior.Ask)
+        {
+            var choice = DialogService.Instance.AskCloseOrMinimize(
+                "SysManager can keep running in the notification area (the icons next to the "
+                + "clock) so it continues watching your system, or it can close completely.\n\n"
+                + "Yes — keep it running in the notification area\n"
+                + "No — close SysManager\n"
+                + "Cancel — go back\n\n"
+                + "This choice is remembered. You can right-click the notification-area icon "
+                + "to reopen the window or exit at any time.",
+                "Close SysManager?");
+
+            switch (choice)
+            {
+                case CloseChoice.Cancel:
+                    e.Cancel = true;
+                    return;
+                case CloseChoice.MinimizeToTray:
+                    behavior = CloseBehavior.MinimizeToTray;
+                    break;
+                default:
+                    behavior = CloseBehavior.Exit;
+                    break;
+            }
+
+            _closePreference.Save(behavior);
+        }
+
+        if (behavior == CloseBehavior.MinimizeToTray)
         {
             e.Cancel = true;
             TrayIconService.HideWindow(this);
+            // Say where the window went the first time it happens. Without this the window
+            // simply vanishes, which reads as a crash rather than as running in the tray.
+            if (!_trayHintShown)
+            {
+                _trayHintShown = true;
+                ToastService.Instance.Show(
+                    "SysManager is still running",
+                    "Find it next to the clock. Right-click the icon to reopen or exit.");
+            }
             return;
         }
+
         base.OnClosing(e);
     }
 

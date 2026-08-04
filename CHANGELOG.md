@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.9] - 2026-08-04
+
+### Fixed
+- **Closing the window no longer hides the app without telling you.** Pressing the window's X minimized SysManager to the notification area unconditionally, because the switch controlling that defaulted to on and was never exposed anywhere in the UI. The app looked closed while it kept running, with no notice and no way to change it. Closing now asks once whether to keep running in the notification area or exit, remembers the answer, and honours it silently afterwards. Choosing the notification area also shows a one-time note saying where the window went, so it no longer reads as a crash. The stored choice lives in `%LocalAppData%\SysManager\close-preference.json`; an unreadable or hand-edited file falls back to asking again rather than to an action the user never picked.
+- **"Export full report" now asks where to save.** The About tab wrote the report straight to the Desktop, unlike every other export in the app (System Report, Logs, Resource History, and Profile all prompt). That silently failed where the Desktop is redirected to OneDrive or restricted by policy, with no way to pick another location. It now uses the same save dialog as its siblings and reports the chosen file name.
+
 ## [1.56.8] - 2026-08-04
 
 Version 1.56.7 was tagged but never published: its release run failed at the unit-test

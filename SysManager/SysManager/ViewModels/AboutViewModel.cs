@@ -10,6 +10,7 @@ using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Services;
@@ -436,16 +437,27 @@ public sealed partial class AboutViewModel : ViewModelBase
     private async Task ExportToFileAsync()
     {
         if (IsGeneratingReport) return;
+
+        // Ask where to save, matching every other export in the app (System Report, Logs,
+        // Resource History, Profile). This previously wrote straight to the Desktop, which
+        // both differed from those tabs and failed outright when the Desktop is redirected
+        // to OneDrive or locked down by policy — with no way for the user to choose another
+        // location. The dialog is shown before any work starts so cancelling costs nothing.
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-Report-{DateTime.Now:yyyy-MM-dd-HHmmss}.txt",
+            Filter = "Text file (*.txt)|*.txt|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
         IsGeneratingReport = true;
         UpdateStatus = "Generating system report...";
         try
         {
             var report = await _reportService.GenerateReportAsync();
-            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            var fileName = $"SysManager-Report-{DateTime.Now:yyyy-MM-dd-HHmmss}.txt";
-            var filePath = Path.Join(desktop, fileName);
-            await File.WriteAllTextAsync(filePath, report, Encoding.UTF8);
-            UpdateStatus = $"Report saved to Desktop: {fileName}";
+            await File.WriteAllTextAsync(dlg.FileName, report, Encoding.UTF8);
+            UpdateStatus = $"Report saved: {Path.GetFileName(dlg.FileName)}";
+            ToastService.Instance.Show("Report exported", Path.GetFileName(dlg.FileName));
         }
         catch (IOException ex)
         {

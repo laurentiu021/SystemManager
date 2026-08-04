@@ -319,6 +319,13 @@ Key services:
   `%LocalAppData%\SysManager\volume-presets.json`, keyed by exe name so a preset re-applies to
   whatever instance of an app is running. Save/parse/upsert and the "apply preset → live
   sessions" plan are pure, unit-tested static helpers; the file IO never throws to the caller.
+- `ClosePreferenceService` — remembers what the window's close button should do, as JSON under
+  `%LocalAppData%\SysManager\close-preference.json`. `MainWindow.OnClosing` asks once
+  (`IDialogService.AskCloseOrMinimize`, a three-way prompt) and honours the stored answer
+  silently afterwards. Same shape as `VolumePresetService`: injectable config directory, pure
+  unit-tested `Serialize`/`Parse`, file IO that never throws. Every untrusted or unrecognized
+  value degrades to `Ask` rather than to a concrete action, so a damaged file can never exit an
+  app the user wanted kept in the tray.
 - `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
   Profile tab: it composes the already-audited services (`PerformanceService`,
   `ITimerResolutionService`, `ICpuAffinityService`, `StandbyMemoryService`,

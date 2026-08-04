@@ -752,9 +752,14 @@ offers, "rate us" prompts:
   SMART, RAM usage, uptime, and battery wear. Color-coded ring (green /
   amber / red) with up to 3 actionable recommendations. Auto-computes on
   load and refreshes with "Scan system".
-- **System Tray** — minimize-to-tray on close, background health monitoring
-  (60s polling), CPU/RAM tooltip, Windows notifications when RAM > 90%,
-  uptime > 14 days, or disk health degrades. Context menu: Show / Exit.
+- **System Tray** — background health monitoring (60s polling), CPU/RAM tooltip,
+  Windows notifications when RAM > 90%, uptime > 14 days, or disk health degrades.
+  Context menu: Show / Exit.
+- **Closing is your choice** — the first time you close the window, SysManager asks
+  whether it should keep running in the notification area or close completely, and
+  remembers the answer. If you pick the notification area, it tells you where the
+  window went so it doesn't look like it vanished. Right-click the tray icon to
+  reopen or exit at any time.
 
 ### Updates (for SysManager itself)
 - Auto-check on startup against the GitHub Releases API, plus a manual

@@ -504,7 +504,14 @@ retained). The in-app Console mirrors the same stream per tab.
 at startup and on demand. Downloads land in
 `%LOCALAPPDATA%\SysManager\updates\SysManager-{version}.exe` with a companion
 `.sha256` so re-opening the app doesn't re-download a good copy. The "Install"
-button verifies the download's SHA256 and Authenticode signature, then hands
+button verifies the download's SHA256 against the published `.sha256` — the actual
+integrity gate — and additionally inspects the file for an Authenticode signature.
+That second check is informational, not a publisher check: `VerifyAuthenticode`
+returns true both for a validly-signed binary and for one with no signature at all
+(SysManager ships unsigned), and rejects only a signature that cannot be parsed.
+`CreateFromSignedFile` reads the signer certificate without validating the file
+against it, so it cannot detect a tampered signed binary; the SHA256 comparison,
+which runs first, is what catches a modified download. It then hands
 off to `UpdateApplier`: the freshly-downloaded exe is relaunched with
 `--apply-update`, which `App.OnStartup` intercepts before any window opens. That
 process waits for the old instance to exit, swaps itself over the old executable

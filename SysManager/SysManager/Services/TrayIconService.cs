@@ -34,7 +34,14 @@ public sealed class TrayIconService : IDisposable
     private DateTime _lastDiskNotification = DateTime.MinValue;
     private static readonly TimeSpan NotificationCooldown = TimeSpan.FromHours(4);
 
-    /// <summary>Whether the app should minimize to tray instead of closing.</summary>
+    /// <summary>
+    /// Whether the app should minimize to tray instead of closing.
+    /// <para>No longer consulted when the window closes: that decision now comes from
+    /// <see cref="ClosePreferenceService"/>, which asks the user once and persists the
+    /// answer. This property never had any UI, so as a close switch it only ever produced
+    /// its hardcoded default. Kept as the in-memory flag a future Settings tab can bind to
+    /// (alongside <see cref="NotificationsEnabled"/>) rather than removed in a bug fix.</para>
+    /// </summary>
     public bool MinimizeToTray { get; set; } = true;
 
     /// <summary>Whether background notifications are enabled.</summary>

@@ -263,4 +263,22 @@ public class AboutViewModelTests
         Assert.Equal("v0.5.0", r.Version);
         Assert.True(r.IsCurrent);
     }
+
+    // ── Report export location ──
+    //
+    // Export used to write straight to the Desktop with no prompt, unlike every other
+    // export in the app (System Report, Logs, Resource History and Profile all use
+    // SaveFileDialog). It now asks first.
+    //
+    // Deliberately NOT unit-tested by invoking the command: SaveFileDialog is constructed
+    // directly, and calling it headlessly opens a real dialog that blocks forever waiting
+    // for input rather than returning false. A test that executed ExportToFileCommand
+    // would hang CI. Verified by running the command in a console harness, which printed
+    // its first line and then stopped at ShowDialog() until the process was killed.
+    //
+    // The same limitation applies to the four sibling exports, none of which are unit
+    // tested either. Covering this properly needs the dialog behind an injectable seam
+    // (an IFileDialogService), which is a broader refactor than a bug fix should carry.
+    // Tracked separately; until then the guarantee is enforced by code review: this method
+    // must not write anywhere the user did not pick.
 }

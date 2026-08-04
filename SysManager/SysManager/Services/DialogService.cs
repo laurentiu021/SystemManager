@@ -27,4 +27,24 @@ public sealed class DialogService : IDialogService
         var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
         return result == MessageBoxResult.Yes;
     }
+
+    /// <inheritdoc/>
+    public CloseChoice AskCloseOrMinimize(string message, string title)
+    {
+        // No UI available (unit tests, shutdown) — report Cancel rather than silently
+        // choosing an action on the user's behalf.
+        if (Application.Current == null) return CloseChoice.Cancel;
+
+        // Yes = keep running in the notification area, No = exit, Cancel = stay open.
+        // The caller's message states which option is which, so the mapping is explicit
+        // on screen. Cancel is also what Esc and the dialog's own close button produce,
+        // which is the right default for an accidental click.
+        var result = MessageBox.Show(message, title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        return result switch
+        {
+            MessageBoxResult.Yes => CloseChoice.MinimizeToTray,
+            MessageBoxResult.No => CloseChoice.Exit,
+            _ => CloseChoice.Cancel
+        };
+    }
 }

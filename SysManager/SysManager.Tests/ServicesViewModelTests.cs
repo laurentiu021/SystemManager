@@ -12,6 +12,10 @@ namespace SysManager.Tests;
 /// Tests for <see cref="ServicesViewModel"/> — filter logic, property defaults,
 /// and command existence. Uses reflection to inject test data into the private
 /// _allServices field to test ApplyFilter without hitting real WMI.
+/// <para>Seeding goes through <c>CreateWithDataAsync</c>, which waits for the view model's
+/// initialization to finish first — see the comment there for why the order matters. The
+/// constructor tests below build the view model directly and assert only on defaults, so
+/// they neither need nor use the helper.</para>
 /// </summary>
 public class ServicesViewModelTests
 {
@@ -24,9 +28,24 @@ public class ServicesViewModelTests
         new() { Name = "BITS", DisplayName = "Background Intelligent Transfer", Description = "Transfers files in background", Status = "Stopped", StartType = "Manual", Recommendation = "keep-enabled", SafetyLevel = Models.SafetyLevel.Critical },
     };
 
-    private static ServicesViewModel CreateWithData(List<ServiceEntry>? services = null)
+    private static async Task<ServicesViewModel> CreateWithDataAsync(List<ServiceEntry>? services = null)
     {
         var vm = new ServicesViewModel(new Services.PowerShellRunner());
+
+        // Wait for initialization BEFORE seeding. The constructor starts InitAsync, whose
+        // RefreshAsync does `_allServices = await Task.Run(ServiceManagerService.GetAllServices)`
+        // — it assigns the same field this helper seeds, after an await, so a value written
+        // during that window is replaced by the real service list. Measured against the live
+        // view model: seeding first, the seed was overwritten 25 out of 25 times, with three
+        // fixtures replaced by the machine's 320 actual services.
+        //
+        // The tests pass today only because they read `Services` synchronously, right after
+        // ApplyFilter and before the load lands. Any test that awaits before asserting would
+        // read the runner's real services instead of the fixtures, and the failure would look
+        // like a filtering bug rather than an ordering one. Awaiting first makes the data the
+        // test controls, deterministically and without a sleep.
+        await vm.InitializationComplete;
+
         var field = typeof(ServicesViewModel).GetField("_allServices", BindingFlags.NonPublic | BindingFlags.Instance)!;
         field.SetValue(vm, services ?? TestServices);
 
@@ -86,44 +105,44 @@ public class ServicesViewModelTests
     // ── ApplyFilter: category filters ──
 
     [Fact]
-    public void ApplyFilter_All_ShowsAllServices()
+    public async Task ApplyFilter_All_ShowsAllServices()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "All";
         Assert.Equal(5, vm.Services.Count);
     }
 
     [Fact]
-    public void ApplyFilter_Running_ShowsOnlyRunning()
+    public async Task ApplyFilter_Running_ShowsOnlyRunning()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "Running";
         Assert.All(vm.Services, s => Assert.Equal("Running", s.Status));
         Assert.Equal(3, vm.Services.Count);
     }
 
     [Fact]
-    public void ApplyFilter_Stopped_ShowsOnlyStopped()
+    public async Task ApplyFilter_Stopped_ShowsOnlyStopped()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "Stopped";
         Assert.All(vm.Services, s => Assert.Equal("Stopped", s.Status));
         Assert.Equal(2, vm.Services.Count);
     }
 
     [Fact]
-    public void ApplyFilter_SafeLevel_ShowsOnlySafe()
+    public async Task ApplyFilter_SafeLevel_ShowsOnlySafe()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "Safe";
         Assert.All(vm.Services, s => Assert.Equal(Models.SafetyLevel.Safe, s.SafetyLevel));
         Assert.Single(vm.Services);
     }
 
     [Fact]
-    public void ApplyFilter_Safe_ShowsOnlySafe()
+    public async Task ApplyFilter_Safe_ShowsOnlySafe()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "Safe";
         Assert.All(vm.Services, s => Assert.Equal(Models.SafetyLevel.Safe, s.SafetyLevel));
     }
@@ -131,45 +150,45 @@ public class ServicesViewModelTests
     // ── ApplyFilter: text filter ──
 
     [Fact]
-    public void ApplyFilter_TextFilter_MatchesDisplayName()
+    public async Task ApplyFilter_TextFilter_MatchesDisplayName()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.FilterText = "Print";
         Assert.Single(vm.Services);
         Assert.Equal("Print Spooler", vm.Services[0].DisplayName);
     }
 
     [Fact]
-    public void ApplyFilter_TextFilter_MatchesServiceName()
+    public async Task ApplyFilter_TextFilter_MatchesServiceName()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.FilterText = "wuauserv";
         Assert.Single(vm.Services);
         Assert.Equal("Windows Update", vm.Services[0].DisplayName);
     }
 
     [Fact]
-    public void ApplyFilter_TextFilter_MatchesDescription()
+    public async Task ApplyFilter_TextFilter_MatchesDescription()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.FilterText = "indexing";
         Assert.Single(vm.Services);
         Assert.Equal("Windows Search", vm.Services[0].DisplayName);
     }
 
     [Fact]
-    public void ApplyFilter_TextFilter_CaseInsensitive()
+    public async Task ApplyFilter_TextFilter_CaseInsensitive()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.FilterText = "XBOX";
         Assert.Single(vm.Services);
         Assert.Equal("Xbox Accessory Management", vm.Services[0].DisplayName);
     }
 
     [Fact]
-    public void ApplyFilter_TextFilter_NoMatch_ReturnsEmpty()
+    public async Task ApplyFilter_TextFilter_NoMatch_ReturnsEmpty()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.FilterText = "zzz_nonexistent_zzz";
         Assert.Empty(vm.Services);
     }
@@ -177,9 +196,9 @@ public class ServicesViewModelTests
     // ── ApplyFilter: combined text + category ──
 
     [Fact]
-    public void ApplyFilter_TextAndCategory_Combined()
+    public async Task ApplyFilter_TextAndCategory_Combined()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "Running";
         vm.FilterText = "Update";
         Assert.Single(vm.Services);
@@ -187,9 +206,9 @@ public class ServicesViewModelTests
     }
 
     [Fact]
-    public void ApplyFilter_TextAndCategory_NoOverlap_Empty()
+    public async Task ApplyFilter_TextAndCategory_NoOverlap_Empty()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "Stopped";
         vm.FilterText = "Windows Update";
         Assert.Empty(vm.Services);
@@ -198,9 +217,9 @@ public class ServicesViewModelTests
     // ── ApplyFilter: sorting ──
 
     [Fact]
-    public void ApplyFilter_SortsByDisplayName()
+    public async Task ApplyFilter_SortsByDisplayName()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "All";
         var names = vm.Services.Select(s => s.DisplayName).ToList();
         var sorted = names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
@@ -210,9 +229,9 @@ public class ServicesViewModelTests
     // ── ApplyFilter: empty data ──
 
     [Fact]
-    public void ApplyFilter_EmptyList_NoException()
+    public async Task ApplyFilter_EmptyList_NoException()
     {
-        var vm = CreateWithData(new List<ServiceEntry>());
+        var vm = await CreateWithDataAsync(new List<ServiceEntry>());
         vm.SelectedFilter = "Running";
         Assert.Empty(vm.Services);
     }
@@ -220,9 +239,9 @@ public class ServicesViewModelTests
     // ── Property change triggers filter ──
 
     [Fact]
-    public void SelectedFilter_Change_TriggersRefilter()
+    public async Task SelectedFilter_Change_TriggersRefilter()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "All";
         Assert.Equal(5, vm.Services.Count);
         vm.SelectedFilter = "Stopped";
@@ -230,9 +249,9 @@ public class ServicesViewModelTests
     }
 
     [Fact]
-    public void Filter_Change_TriggersRefilter()
+    public async Task Filter_Change_TriggersRefilter()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "All";
         Assert.Equal(5, vm.Services.Count);
         vm.FilterText = "Xbox";
@@ -257,7 +276,7 @@ public class ServicesViewModelTests
             SafetyLevel = Models.SafetyLevel.Critical,
             SafetyDescription = "Core Windows IPC. System will not function without it."
         };
-        var vm = CreateWithData(new List<ServiceEntry> { critical });
+        var vm = await CreateWithDataAsync(new List<ServiceEntry> { critical });
 
         await vm.DisableServiceCommand.ExecuteAsync(critical);
 
@@ -269,7 +288,7 @@ public class ServicesViewModelTests
     [Fact]
     public async Task DisableService_NullEntry_DoesNotThrow()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         var ex = await Record.ExceptionAsync(() => vm.DisableServiceCommand.ExecuteAsync(null));
         Assert.Null(ex);
     }
@@ -292,7 +311,7 @@ public class ServicesViewModelTests
             SafetyLevel = Models.SafetyLevel.Critical,
             SafetyDescription = "Core Windows IPC. System will not function without it."
         };
-        var vm = CreateWithData(new List<ServiceEntry> { critical });
+        var vm = await CreateWithDataAsync(new List<ServiceEntry> { critical });
 
         await vm.StopServiceCommand.ExecuteAsync(critical);
 
@@ -304,7 +323,7 @@ public class ServicesViewModelTests
     [Fact]
     public async Task StopService_NullEntry_DoesNotThrow()
     {
-        var vm = CreateWithData();
+        var vm = await CreateWithDataAsync();
         var ex = await Record.ExceptionAsync(() => vm.StopServiceCommand.ExecuteAsync(null));
         Assert.Null(ex);
     }

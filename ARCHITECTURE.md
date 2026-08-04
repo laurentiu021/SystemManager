@@ -155,7 +155,11 @@ Key services:
 - `DiskHealthService` — pulls SMART data through WMI.
 - `MemoryTestService` — scans WHEA / MemoryDiagnostics events.
 - `EventLogService` + `EventExplainer` — read Windows Event Log and attach
-  human-readable explanations.
+  human-readable explanations. Exposes `LastOutcome` (`Ok` / `AccessDenied` /
+  `LogNotFound` / `Unavailable`) alongside the streamed entries, because a refused
+  log and an empty log are otherwise indistinguishable to the caller — the Security
+  log needs elevation, and swallowing that made the UI report "0 events". Reset at
+  the start of every query so a past refusal cannot outlive it.
 - `HealthAnalyzer` — raw SMART / ping data into verdict pills.
 - `SystemInfoService` — OS / CPU / RAM / uptime snapshot.
 - `BiosService` — read-only BIOS/firmware + motherboard info (Win32_BIOS,
@@ -503,7 +507,13 @@ retained). The in-app Console mirrors the same stream per tab.
 `UpdateService` hits `api.github.com/repos/laurentiu021/SystemManager/releases`
 at startup and on demand. Downloads land in
 `%LOCALAPPDATA%\SysManager\updates\SysManager-{version}.exe` with a companion
-`.sha256` so re-opening the app doesn't re-download a good copy. The "Install"
+`.sha256` so re-opening the app doesn't re-download a good copy. After a successful
+download, `PruneOldDownloads` deletes superseded binaries, their stale hashes, and
+orphaned `.tmp` files, keeping only the current pair — each build is ~85 MB and
+nothing removed the old ones, so the cache grew by that much per update. It only
+matches the `SysManager-*.exe` names the service itself writes, never throws, and
+treats a file locked by a running instance as ordinary (it survives to the next
+round). The "Install"
 button verifies the download's SHA256 against the published `.sha256` — the actual
 integrity gate — and additionally inspects the file for an Authenticode signature.
 That second check is informational, not a publisher check: `VerifyAuthenticode`

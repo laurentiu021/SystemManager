@@ -201,6 +201,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Each event gets a plain-English explanation and recommended next steps
 - Filter by severity and time range, plus full-text search
 - Export to CSV, with a "search online" link for unknown events
+- The Security log requires administrator rights. Without them the page says so
+  outright rather than showing an empty list that looks like "no events"
 
 ### System report
 - One-click, read-only snapshot of the whole machine: OS, CPU, memory
@@ -628,6 +630,9 @@ offers, "rate us" prompts:
 - Design vs full-charge capacity via WMI
 - Estimated runtime display
 - Gracefully shows "No battery detected" on desktops
+- Health and wear need administrator rights (Windows only reports capacity to an
+  elevated process). Without it they read "Not available" and the page explains
+  why, instead of showing a number that isn't a measurement.
 
 ### Uninstaller
 - Lists all installed applications via winget with size from registry

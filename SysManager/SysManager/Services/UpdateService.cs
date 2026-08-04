@@ -230,6 +230,12 @@ public sealed class UpdateService
             catch (IOException) { /* non-fatal — next launch will re-download */ }
             catch (UnauthorizedAccessException) { /* non-fatal */ }
 
+            // Drop superseded downloads. Each cached build is ~85 MB and nothing ever removed
+            // the older ones, so the folder grew by that much per update forever — in a tool
+            // whose own Cleanup tab exists to reclaim disk space. Runs after the new binary is
+            // safely in place, so a failure here cannot cost the user the update.
+            PruneOldDownloads(dir, keep: target);
+
             return target;
         }
         catch (OperationCanceledException)
@@ -442,6 +448,57 @@ public sealed class UpdateService
         try { if (File.Exists(path)) File.Delete(path); }
         catch (IOException ex) { Serilog.Log.Debug(ex, "Update cleanup: could not delete {Path}", LogService.SanitizePath(path)); }
         catch (UnauthorizedAccessException ex) { Serilog.Log.Debug(ex, "Update cleanup: access denied deleting {Path}", LogService.SanitizePath(path)); }
+    }
+
+    /// <summary>
+    /// Deletes cached update binaries other than <paramref name="keep"/>, plus their companion
+    /// <c>.sha256</c> and any orphaned <c>.tmp</c> files.
+    /// <para>Only touches names matching the <c>SysManager-*.exe</c> pattern this service itself
+    /// writes, so an unrelated file that happens to sit in the folder is left alone. Never
+    /// throws: pruning is housekeeping, and failing it must not affect an update that already
+    /// succeeded. A file still locked by a running instance simply survives to the next round.</para>
+    /// </summary>
+    internal static int PruneOldDownloads(string dir, string keep)
+    {
+        var removed = 0;
+        try
+        {
+            if (!Directory.Exists(dir)) return 0;
+            var keepName = Path.GetFileName(keep);
+
+            foreach (var path in Directory.EnumerateFiles(dir, "SysManager-*.exe*"))
+            {
+                var name = Path.GetFileName(path);
+
+                // Keep the current binary and its hash; everything else is superseded.
+                if (name.Equals(keepName, StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals(keepName + ".sha256", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(path);
+                    removed++;
+                }
+                catch (IOException ex)
+                {
+                    // Typically the binary of a running instance — expected, not an error.
+                    Serilog.Log.Debug(ex, "Update prune: {Path} is in use", LogService.SanitizePath(path));
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    Serilog.Log.Debug(ex, "Update prune: access denied for {Path}", LogService.SanitizePath(path));
+                }
+            }
+
+            if (removed > 0)
+                Serilog.Log.Information("Pruned {Count} superseded update download(s) from the cache", removed);
+        }
+        catch (IOException ex) { Serilog.Log.Debug(ex, "Update prune: could not enumerate the cache"); }
+        catch (UnauthorizedAccessException ex) { Serilog.Log.Debug(ex, "Update prune: access denied enumerating the cache"); }
+        return removed;
     }
 
     // ---------- internals ----------

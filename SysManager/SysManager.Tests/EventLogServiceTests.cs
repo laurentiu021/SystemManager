@@ -254,4 +254,53 @@ public class EventLogServiceTests
         var opt = new EventLogQueryOptions();
         Assert.Null(opt.Severities);
     }
+
+    // ---------- ReadOutcome ----------
+    //
+    // The reader used to swallow UnauthorizedAccessException with a bare `yield break`, so a
+    // refused log and an empty log were indistinguishable — a standard user selecting Security
+    // saw "Loaded 0 events" over a blank grid. LastOutcome carries the reason so the UI can
+    // say which it was.
+
+    [Fact]
+    public async Task Read_NonexistentLog_ReportsLogNotFound()
+    {
+        var svc = new EventLogService();
+        var opt = new EventLogQueryOptions { LogName = "SysManagerNoSuchLog", MaxResults = 5 };
+
+        var count = 0;
+        await foreach (var _ in svc.ReadAsync(opt, CancellationToken.None)) count++;
+
+        Assert.Equal(0, count);
+        Assert.Equal(EventLogService.ReadOutcome.LogNotFound, svc.LastOutcome);
+    }
+
+    [Fact]
+    public void ReadOutcome_DefaultIsOk()
+    {
+        // Before any query, Ok is the honest state: nothing has been refused. It also means a
+        // caller reading LastOutcome without querying cannot observe a spurious failure.
+        Assert.Equal(EventLogService.ReadOutcome.Ok, new EventLogService().LastOutcome);
+        Assert.Equal(EventLogService.ReadOutcome.Ok, default(EventLogService.ReadOutcome));
+    }
+
+    [Fact]
+    public async Task Read_OutcomeIsResetAtTheStartOfEachQuery()
+    {
+        // A failed query must not leave the flag set for the next one, or the UI would keep the
+        // refusal overlay up over a successful reload. Both queries here name a log that does
+        // not exist, so the assertion is about the reset being unconditional rather than about
+        // any particular machine's event logs — reading a real log would make this depend on
+        // the runner's log contents and permissions.
+        var svc = new EventLogService();
+
+        await foreach (var _ in svc.ReadAsync(
+            new EventLogQueryOptions { LogName = "SysManagerNoSuchLog" }, CancellationToken.None)) { }
+        Assert.Equal(EventLogService.ReadOutcome.LogNotFound, svc.LastOutcome);
+
+        // Reaching the open step again re-evaluates the outcome rather than keeping the old one.
+        await foreach (var _ in svc.ReadAsync(
+            new EventLogQueryOptions { LogName = "SysManagerAlsoMissing" }, CancellationToken.None)) { }
+        Assert.Equal(EventLogService.ReadOutcome.LogNotFound, svc.LastOutcome);
+    }
 }

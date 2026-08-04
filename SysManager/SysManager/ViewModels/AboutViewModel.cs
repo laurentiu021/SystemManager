@@ -39,6 +39,13 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private string _latestPublishedLabel = string.Empty;
     [ObservableProperty] private string _latestNotes = string.Empty;
 
+    // Report / environment action state — deliberately separate from UpdateStatus.
+    // Both used to write to UpdateStatus, which is displayed inside the update card, so
+    // exporting a report or copying environment info replaced "Update available: v1.56.9"
+    // with "Report saved" — discarding the more important message and making the update
+    // card describe something unrelated to updates.
+    [ObservableProperty] private string _reportStatus = string.Empty;
+
     // Download state
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowDownloadButton))]
@@ -259,21 +266,21 @@ public sealed partial class AboutViewModel : ViewModelBase
             try
             {
                 Clipboard.SetText(text);
-                UpdateStatus = "Environment info copied to clipboard.";
+                ReportStatus = "Environment info copied to clipboard.";
             }
             catch (System.Runtime.InteropServices.ExternalException ex)
             {
                 Log.Debug("Clipboard locked: {Error}", ex.Message);
-                UpdateStatus = "Couldn't copy to clipboard: it's currently in use by another application.";
+                ReportStatus = "Couldn't copy to clipboard: it's currently in use by another application.";
             }
         }
         catch (System.Management.ManagementException ex)
         {
-            UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
+            ReportStatus = $"Couldn't collect environment info: {ex.Message}";
         }
         catch (InvalidOperationException ex)
         {
-            UpdateStatus = $"Couldn't collect environment info: {ex.Message}";
+            ReportStatus = $"Couldn't collect environment info: {ex.Message}";
         }
     }
 
@@ -451,25 +458,25 @@ public sealed partial class AboutViewModel : ViewModelBase
         if (dlg.ShowDialog() != true) return;
 
         IsGeneratingReport = true;
-        UpdateStatus = "Generating system report...";
+        ReportStatus = "Generating system report...";
         try
         {
             var report = await _reportService.GenerateReportAsync();
             await File.WriteAllTextAsync(dlg.FileName, report, Encoding.UTF8);
-            UpdateStatus = $"Report saved: {Path.GetFileName(dlg.FileName)}";
+            ReportStatus = $"Report saved: {Path.GetFileName(dlg.FileName)}";
             ToastService.Instance.Show("Report exported", Path.GetFileName(dlg.FileName));
         }
         catch (IOException ex)
         {
-            UpdateStatus = $"Failed to save report: {ex.Message}";
+            ReportStatus = $"Failed to save report: {ex.Message}";
         }
         catch (UnauthorizedAccessException ex)
         {
-            UpdateStatus = $"Failed to save report (access denied): {ex.Message}";
+            ReportStatus = $"Failed to save report (access denied): {ex.Message}";
         }
         catch (InvalidOperationException ex)
         {
-            UpdateStatus = $"Failed to generate report: {ex.Message}";
+            ReportStatus = $"Failed to generate report: {ex.Message}";
         }
         finally { IsGeneratingReport = false; }
     }
@@ -479,24 +486,24 @@ public sealed partial class AboutViewModel : ViewModelBase
     {
         if (IsGeneratingReport) return;
         IsGeneratingReport = true;
-        UpdateStatus = "Generating system report...";
+        ReportStatus = "Generating system report...";
         try
         {
             var report = await _reportService.GenerateReportAsync();
             try
             {
                 Clipboard.SetText(report);
-                UpdateStatus = "Full system report copied to clipboard.";
+                ReportStatus = "Full system report copied to clipboard.";
             }
             catch (System.Runtime.InteropServices.ExternalException ex)
             {
                 Log.Debug("Clipboard locked: {Error}", ex.Message);
-                UpdateStatus = "Couldn't copy to clipboard: it's currently in use by another application.";
+                ReportStatus = "Couldn't copy to clipboard: it's currently in use by another application.";
             }
         }
         catch (InvalidOperationException ex)
         {
-            UpdateStatus = $"Failed to generate report: {ex.Message}";
+            ReportStatus = $"Failed to generate report: {ex.Message}";
         }
         finally { IsGeneratingReport = false; }
     }

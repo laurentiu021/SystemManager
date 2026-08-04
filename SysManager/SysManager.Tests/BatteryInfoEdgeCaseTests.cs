@@ -121,4 +121,77 @@ public class BatteryInfoEdgeCaseTests
         Assert.Equal("", info.Chemistry);
         Assert.Equal("", info.Manufacturer);
     }
+
+    // ── Display formatting ──
+    //
+    // HealthPercent/WearPercent return -1 to mean "capacity could not be read" (the root\WMI
+    // query needs elevation). The view bound those numbers directly and appended "%", so an
+    // unelevated run showed "-1%" as though it were a measurement. These pin the sentinel
+    // never reaching the screen as a number.
+
+    [Theory]
+    [InlineData(0u, 5000u)]      // design capacity unreadable
+    [InlineData(50000u, 0u)]     // full-charge capacity unreadable
+    [InlineData(0u, 0u)]         // neither readable
+    public void Display_WhenCapacityUnavailable_SaysNotAvailable(uint design, uint full)
+    {
+        var info = new BatteryInfo { DesignCapacityMWh = design, FullChargeCapacityMWh = full };
+
+        Assert.False(info.HasCapacityData);
+        Assert.Equal("Not available", info.HealthDisplay);
+        Assert.Equal("Not available", info.WearDisplay);
+        Assert.DoesNotContain("-1", info.HealthDisplay);
+        Assert.DoesNotContain("-1", info.WearDisplay);
+    }
+
+    [Fact]
+    public void Display_WhenCapacityAvailable_ShowsPercentages()
+    {
+        var info = new BatteryInfo { DesignCapacityMWh = 50000, FullChargeCapacityMWh = 40000 };
+
+        Assert.True(info.HasCapacityData);
+        Assert.Equal("80%", info.HealthDisplay);
+        Assert.Equal("20%", info.WearDisplay);
+    }
+
+    [Fact]
+    public void Display_HealthyBattery_ShowsZeroWearNotNotAvailable()
+    {
+        // 100% health means 0% wear — a real figure that must not be confused with missing
+        // data just because the number is zero.
+        var info = new BatteryInfo { DesignCapacityMWh = 50000, FullChargeCapacityMWh = 50000 };
+
+        Assert.True(info.HasCapacityData);
+        Assert.Equal("100%", info.HealthDisplay);
+        Assert.Equal("0%", info.WearDisplay);
+    }
+
+    [Fact]
+    public void Display_TracksCapacityArrivingLater()
+    {
+        // The view binds the Display properties, so they must re-read when capacity arrives
+        // rather than staying stuck at "Not available" after an elevated refresh succeeds.
+        var info = new BatteryInfo();
+        Assert.Equal("Not available", info.HealthDisplay);
+
+        info.DesignCapacityMWh = 50000;
+        info.FullChargeCapacityMWh = 45000;
+
+        Assert.Equal("90%", info.HealthDisplay);
+        Assert.Equal("10%", info.WearDisplay);
+    }
+
+    [Fact]
+    public void Display_RaisesPropertyChanged_WhenCapacityArrives()
+    {
+        var info = new BatteryInfo();
+        var changed = new List<string>();
+        info.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? "");
+
+        info.FullChargeCapacityMWh = 45000;
+
+        Assert.Contains(nameof(BatteryInfo.HealthDisplay), changed);
+        Assert.Contains(nameof(BatteryInfo.WearDisplay), changed);
+        Assert.Contains(nameof(BatteryInfo.HasCapacityData), changed);
+    }
 }

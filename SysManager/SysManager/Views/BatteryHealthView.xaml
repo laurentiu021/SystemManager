@@ -80,19 +80,39 @@
 
                                 <StackPanel Grid.Column="0">
                                     <TextBlock Text="Health" Style="{StaticResource Subtle}" FontSize="12"/>
-                                    <TextBlock FontSize="24" FontWeight="Bold" Margin="0,4,0,0">
-                                        <Run Text="{Binding Battery.HealthPercent, Mode=OneWay}"/><Run Text="%"/>
-                                    </TextBlock>
+                                    <TextBlock Text="{Binding Battery.HealthDisplay, Mode=OneWay}"
+                                               FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Wear" Style="{StaticResource Subtle}" FontSize="12"/>
-                                    <TextBlock FontSize="24" FontWeight="Bold" Margin="0,4,0,0"
-                                               Foreground="{DynamicResource Danger}">
-                                        <Run Text="{Binding Battery.WearPercent, Mode=OneWay}"/><Run Text="%"/>
+                                    <!-- Danger red only when a real wear figure exists; "Not available"
+                                         is missing data, not a warning. -->
+                                    <TextBlock Text="{Binding Battery.WearDisplay, Mode=OneWay}"
+                                               FontSize="24" FontWeight="Bold" Margin="0,4,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Battery.HasCapacityData, Mode=OneWay}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
                                     </TextBlock>
                                 </StackPanel>
                             </Grid>
+                        </Border>
+
+                        <!-- Why the figures are missing. Capacity comes from root\WMI, which needs
+                             elevation; without it the app previously showed "-1%" as if it were a
+                             measurement. Explains the gap and what unlocks it, consistent with how
+                             other tabs describe their admin requirement. -->
+                        <Border Style="{StaticResource Card}" Padding="12" Margin="0,0,0,12"
+                                Visibility="{Binding Battery.HasCapacityData, Converter={StaticResource FlexVis}, ConverterParameter=Inverse, Mode=OneWay}">
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}"
+                                       Text="Battery health and wear could not be read. Windows only reports design and full-charge capacity to an elevated process, so these two figures need SysManager to be running as administrator. Everything else on this page works without it."/>
                         </Border>
 
                         <!-- Details grid -->

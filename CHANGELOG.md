@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.11] - 2026-08-04
+
+### Fixed
+- **The event-log list now names each severity instead of only colouring it.** The severity column was a coloured dot under a blank header, with no text, no tooltip and nothing for a screen reader to read, so the difference between an error and an informational entry was carried by colour alone. The column is now labelled "Severity", shows the word next to the dot, is sortable, and reports the severity to assistive technology.
+
 ## [1.56.10] - 2026-08-04
 
 ### Fixed

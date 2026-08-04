@@ -269,12 +269,22 @@
                         </Style>
                     </DataGrid.RowStyle>
                     <DataGrid.Columns>
-                        <!-- Severity column: colored dot instead of emoji -->
-                        <DataGridTemplateColumn Header="" Width="40" MinWidth="40" CanUserResize="False">
+                        <!-- Severity column: a coloured dot PLUS the word. The dot alone conveyed
+                             severity by colour only — invisible to a colour-blind user and to a
+                             screen reader, since the column had no header, no text and no tooltip.
+                             AutomationProperties.Name gives assistive technology the severity to
+                             read out; the visible label makes it legible to everyone else. -->
+                        <DataGridTemplateColumn Header="Severity" Width="106" MinWidth="90" SortMemberPath="Severity">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" HorizontalAlignment="Center"
-                                             Fill="{Binding SeverityColor, Converter={StaticResource HexBrush}}"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                AutomationProperties.Name="{Binding SeverityLabel}"
+                                                ToolTip="{Binding SeverityLabel}">
+                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                                                 Fill="{Binding SeverityColor, Converter={StaticResource HexBrush}}"/>
+                                        <TextBlock Text="{Binding SeverityLabel}" Margin="8,0,0,0"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

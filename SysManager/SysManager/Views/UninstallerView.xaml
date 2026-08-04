@@ -62,6 +62,8 @@
                 <Button Content="Scan" Command="{Binding ScanCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                 <Button Content="Uninstall selected" Command="{Binding UninstallSelectedCommand}"
+                        AutomationProperties.AutomationId="btn-uninstaller-uninstall-selected"
+                        AutomationProperties.Name="Uninstall selected applications"
                         Style="{StaticResource DangerButton}" Margin="0,0,8,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0"

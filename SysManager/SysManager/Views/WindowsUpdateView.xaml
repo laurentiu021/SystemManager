@@ -79,17 +79,19 @@
                 </StackPanel>
                 <Button Grid.Column="1" Content="Install PSWindowsUpdate"
                         Command="{Binding InstallModuleCommand}"
+                        AutomationProperties.AutomationId="btn-windows-update-install-module"
+                        AutomationProperties.Name="Install PSWindowsUpdate for update history"
                         Style="{StaticResource PrimaryButton}"
                         Padding="18,10" FontSize="14" VerticalAlignment="Center" Margin="16,0,0,0"/>
             </Grid>
         </Border>
 
-        <!-- Module status: available (green pill) -->
+        <!-- Module status: deferred check / confirmed available -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
                 Visibility="{Binding ModuleAvailable, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal">
-                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource Success}"/>
-                <TextBlock Text="PSWindowsUpdate is available" FontWeight="SemiBold" Foreground="{DynamicResource Success}" VerticalAlignment="Center"/>
+                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource Info}"/>
+                <TextBlock Text="{Binding ModuleStatus}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
@@ -98,10 +100,21 @@
             <StackPanel>
                 <TextBlock Text="Actions" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
                 <WrapPanel Orientation="Horizontal">
-                    <Button Content="List updates" Command="{Binding ListUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="History" Command="{Binding ShowHistoryCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
-                    <Button Content="Pending reboot?" Command="{Binding CheckPendingRebootCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                    <Button Content="List updates" Command="{Binding ListUpdatesCommand}"
+                            AutomationProperties.AutomationId="btn-windows-update-list"
+                            AutomationProperties.Name="List available Windows updates"
+                            Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
+                    <Button Content="History" Command="{Binding ShowHistoryCommand}"
+                            AutomationProperties.AutomationId="btn-windows-update-history"
+                            AutomationProperties.Name="Show Windows Update history"
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                    <Button Content="Pending reboot?" Command="{Binding CheckPendingRebootCommand}"
+                            AutomationProperties.AutomationId="btn-windows-update-pending-reboot"
+                            AutomationProperties.Name="Check for a pending reboot"
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Install selected" Command="{Binding InstallUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
+                            AutomationProperties.AutomationId="btn-windows-update-install-selected"
+                            AutomationProperties.Name="Install selected Windows updates"
                             Visibility="{Binding IsShowingHistory, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     <Button Content="Select All" Command="{Binding SelectAllCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"
                             Visibility="{Binding IsShowingHistory, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

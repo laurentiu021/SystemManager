@@ -35,9 +35,9 @@
                            Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
-                <Button Content="Open Event Viewer" AutomationProperties.Name="Open Event Viewer" Command="{Binding OpenEventViewerCommand}" Style="{StaticResource GhostButton}"/>
-                <Button Content="Open log folder" AutomationProperties.Name="Open log folder" Command="{Binding OpenLogFolderCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
-                <Button Content="Export CSV" AutomationProperties.Name="Export logs to CSV" Command="{Binding ExportCsvCommand}" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"/>
+                <Button Content="Open Event Viewer" AutomationProperties.AutomationId="btn-logs-open-event-viewer" AutomationProperties.Name="Open Event Viewer" Command="{Binding OpenEventViewerCommand}" Style="{StaticResource GhostButton}"/>
+                <Button Content="Open log folder" AutomationProperties.AutomationId="btn-logs-open-folder" AutomationProperties.Name="Open log folder" Command="{Binding OpenLogFolderCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                <Button Content="Export CSV" AutomationProperties.AutomationId="btn-logs-export-csv" AutomationProperties.Name="Export logs to CSV" Command="{Binding ExportCsvCommand}" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"/>
             </StackPanel>
         </DockPanel>
 
@@ -168,7 +168,7 @@
                     <TextBlock Text="Max results" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                     <ComboBox ItemsSource="{Binding MaxResultOptions}" SelectedItem="{Binding SelectedMaxResults}" AutomationProperties.Name="Maximum results" Width="88" Margin="8,0,18,0"/>
 
-                    <Button Content="Refresh" AutomationProperties.Name="Refresh logs" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}"/>
+                    <Button Content="Refresh" AutomationProperties.AutomationId="btn-logs-refresh" AutomationProperties.Name="Refresh logs" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}"/>
                     <Button Content="Cancel" AutomationProperties.Name="Cancel log loading" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                 </StackPanel>
 

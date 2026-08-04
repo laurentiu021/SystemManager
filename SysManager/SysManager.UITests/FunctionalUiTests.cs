@@ -23,7 +23,7 @@ public class FunctionalUiTests
     public void Services_Refresh_PopulatesList()
     {
         _fx.GoToTab("nav-services");
-        var refresh = _fx.FindButton("Refresh");
+        var refresh = _fx.FindButtonById("btn-services-refresh");
         Assert.NotNull(refresh);
         refresh!.Invoke();
 
@@ -50,7 +50,7 @@ public class FunctionalUiTests
     public void Logs_Refresh_LoadsEventsOrReportsState()
     {
         _fx.GoToTab("nav-logs");
-        var refresh = _fx.FindButton("Refresh");
+        var refresh = _fx.FindButtonById("btn-logs-refresh");
         Assert.NotNull(refresh);
         refresh!.Invoke();
 
@@ -70,7 +70,7 @@ public class FunctionalUiTests
     public void Drivers_List_ProducesCountOrDone()
     {
         _fx.GoToTab("nav-drivers");
-        var list = _fx.FindButton("List drivers");
+        var list = _fx.FindButtonById("btn-drivers-list");
         Assert.NotNull(list);
         list!.Invoke();
 

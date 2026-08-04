@@ -44,6 +44,16 @@ public class WindowsUpdateViewModelTests
     }
 
     [Fact]
+    public void Constructor_DefersModuleAvailabilityCheckUntilHistory()
+    {
+        var vm = NewVm();
+
+        Assert.True(vm.ModuleAvailable);
+        Assert.Contains("History", vm.ModuleStatus, StringComparison.Ordinal);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
     public void Constructor_ShowConsoleFalse()
     {
         var vm = NewVm();

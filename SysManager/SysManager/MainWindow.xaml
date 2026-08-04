@@ -445,8 +445,10 @@
                     </Grid>
                 </Border>
 
-                <ContentControl Grid.Row="1" x:Name="ContentHost"
-                                Content="{Binding SelectedNav.View}"/>
+                <!-- UserControl supplies the UIA peer used to scope automation to the live tab. -->
+                <UserControl Grid.Row="1" x:Name="ContentHost"
+                             AutomationProperties.AutomationId="CurrentViewHost"
+                             Content="{Binding SelectedNav.View}"/>
 
             </Grid>
         </Border>

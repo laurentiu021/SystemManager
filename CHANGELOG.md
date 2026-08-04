@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.6] - 2026-08-04
+
+### Fixed
+- **Restored the UI automation safety net for action buttons.** Accessible-name improvements had silently orphaned 17 visible-text lookups across Cleanup, System Health, Logs, Services, and Ping, so 15 tests never reached the controls they were meant to verify. All positive button lookups now use unique, current-tab-scoped automation IDs while descriptive screen-reader names remain unchanged. A blocking unit contract rejects missing or duplicate asserted IDs before the warning-only UI job can mask another regression.
+- **Made the Ping interaction test exercise the real Start/Stop cycle.** The previous nullable Start lookup skipped the invocation, then failed while searching for a Stop button that could never appear. The test now normalizes its initial state, proves both UI transitions without fixed delays, invokes both commands, and restores the shared fixture to stopped state even after a failure.
+- **Corrected the two stale assertions outside the selector failures.** Windows Update now describes its deferred History-time module check instead of claiming PSWindowsUpdate is available before any probe, while keeping installation hidden until a missing module is confirmed. The `App Blocker` smoke check now validates the rendered view header inside the current content host, so the matching sidebar label cannot make a blank or wrong page pass.
+
 ## [1.56.5] - 2026-08-03
 
 ### Fixed

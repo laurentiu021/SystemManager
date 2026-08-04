@@ -20,35 +20,35 @@ public class OtherTabsUiTests
     public void Cleanup_CleanTempButton_Exists()
     {
         _fx.GoToTab("nav-cleanup");
-        Assert.NotNull(_fx.FindButton("Clean TEMP"));
+        Assert.NotNull(_fx.FindButtonById("btn-cleanup-clean-temp"));
     }
 
     [Fact]
     public void Cleanup_EmptyRecycleBinButton_Exists()
     {
         _fx.GoToTab("nav-cleanup");
-        Assert.NotNull(_fx.FindButton("Empty Recycle Bin"));
+        Assert.NotNull(_fx.FindButtonById("btn-cleanup-empty-recycle-bin"));
     }
 
     [Fact]
     public void Cleanup_SfcButton_Exists()
     {
         _fx.GoToTab("nav-cleanup");
-        Assert.NotNull(_fx.FindButton("SFC /scannow"));
+        Assert.NotNull(_fx.FindButtonById("btn-cleanup-sfc"));
     }
 
     [Fact]
     public void Cleanup_DismButton_Exists()
     {
         _fx.GoToTab("nav-cleanup");
-        Assert.NotNull(_fx.FindButton("DISM RestoreHealth"));
+        Assert.NotNull(_fx.FindButtonById("btn-cleanup-dism"));
     }
 
     [Fact]
     public void Cleanup_CancelButton_Exists()
     {
         _fx.GoToTab("nav-cleanup");
-        Assert.NotNull(_fx.FindButton("Cancel"));
+        Assert.NotNull(_fx.FindButtonById("btn-cleanup-cancel"));
     }
 
     // ---------------- Drivers ----------------
@@ -57,44 +57,45 @@ public class OtherTabsUiTests
     public void Drivers_ListButton_Exists()
     {
         _fx.GoToTab("nav-drivers");
-        Assert.NotNull(_fx.FindButton("List drivers"));
+        Assert.NotNull(_fx.FindButtonById("btn-drivers-list"));
     }
 
     // ---------------- Windows Update ----------------
 
     [Fact]
-    public void WindowsUpdate_InstallModuleButton_Exists()
+    public void WindowsUpdate_ModuleAvailability_IsDeferredUntilHistory()
     {
         _fx.GoToTab("nav-windows-update");
-        Assert.NotNull(_fx.FindButton("Install PSWindowsUpdate"));
+        Assert.NotNull(_fx.WaitForTextInCurrentTab("used for the History view only"));
+        Assert.Null(_fx.FindButtonById("btn-windows-update-install-module", timeoutSeconds: 1));
     }
 
     [Fact]
     public void WindowsUpdate_ListUpdatesButton_Exists()
     {
         _fx.GoToTab("nav-windows-update");
-        Assert.NotNull(_fx.FindButton("List updates"));
+        Assert.NotNull(_fx.FindButtonById("btn-windows-update-list"));
     }
 
     [Fact]
     public void WindowsUpdate_HistoryButton_Exists()
     {
         _fx.GoToTab("nav-windows-update");
-        Assert.NotNull(_fx.FindButton("History"));
+        Assert.NotNull(_fx.FindButtonById("btn-windows-update-history"));
     }
 
     [Fact]
     public void WindowsUpdate_PendingRebootButton_Exists()
     {
         _fx.GoToTab("nav-windows-update");
-        Assert.NotNull(_fx.FindButton("Pending reboot?"));
+        Assert.NotNull(_fx.FindButtonById("btn-windows-update-pending-reboot"));
     }
 
     [Fact]
     public void WindowsUpdate_InstallUpdatesButton_Exists()
     {
         _fx.GoToTab("nav-windows-update");
-        Assert.NotNull(_fx.FindButton("Install selected"));
+        Assert.NotNull(_fx.FindButtonById("btn-windows-update-install-selected"));
     }
 
     // ---------------- System health ----------------
@@ -103,28 +104,28 @@ public class OtherTabsUiTests
     public void SystemHealth_ScanButton_Exists()
     {
         _fx.GoToTab("nav-system-health");
-        Assert.NotNull(_fx.FindButton("Scan"));
+        Assert.NotNull(_fx.FindButtonById("btn-system-health-scan"));
     }
 
     [Fact]
     public void SystemHealth_DiskHealthButton_Exists()
     {
         _fx.GoToTab("nav-system-health");
-        Assert.NotNull(_fx.FindButton("Run SMART check"));
+        Assert.NotNull(_fx.FindButtonById("btn-system-health-smart"));
     }
 
     [Fact]
     public void SystemHealth_MemoryCheckButton_Exists()
     {
         _fx.GoToTab("nav-system-health");
-        Assert.NotNull(_fx.FindButton("Check memory errors"));
+        Assert.NotNull(_fx.FindButtonById("btn-system-health-memory-errors"));
     }
 
     [Fact]
     public void SystemHealth_RunMemTestButton_Exists()
     {
         _fx.GoToTab("nav-system-health");
-        Assert.NotNull(_fx.FindButton("Run MemTest (reboot)"));
+        Assert.NotNull(_fx.FindButtonById("btn-system-health-memtest"));
     }
 
     // ---------------- App updates ----------------
@@ -133,6 +134,6 @@ public class OtherTabsUiTests
     public void AppUpdates_ScanButton_Exists()
     {
         _fx.GoToTab("nav-app-updates");
-        Assert.NotNull(_fx.FindButton("Scan for updates"));
+        Assert.NotNull(_fx.FindButtonById("btn-app-updates-scan"));
     }
 }

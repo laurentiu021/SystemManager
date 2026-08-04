@@ -27,6 +27,8 @@
             <DockPanel Grid.Row="0" Margin="0,0,0,16">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="Scan system" Command="{Binding RefreshCommand}"
+                            AutomationProperties.AutomationId="btn-dashboard-scan-system"
+                            AutomationProperties.Name="Scan system"
                             Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                     <Button Command="{Binding RunTuneUpCommand}"
                             AutomationProperties.Name="Quick Tune-Up"

@@ -16,9 +16,9 @@ public class UninstallerUiTests
     {
         _fixture.GoToTab("nav-uninstaller");
 
-        Assert.NotNull(_fixture.FindButton("Uninstall selected"));
-        Assert.Null(_fixture.FindButton("Run as administrator", timeoutSeconds: 1));
-        Assert.Null(_fixture.FindButton("Relaunch as administrator", timeoutSeconds: 1));
+        Assert.NotNull(_fixture.FindButtonById("btn-uninstaller-uninstall-selected"));
+        Assert.False(_fixture.HasButtonWithName("Run as administrator"));
+        Assert.False(_fixture.HasButtonWithName("Relaunch as administrator"));
 
         var expectedGuidance = Helpers.AdminHelper.IsElevated()
             ? "Uninstall is disabled in administrator sessions. Reopen SysManager normally to continue."

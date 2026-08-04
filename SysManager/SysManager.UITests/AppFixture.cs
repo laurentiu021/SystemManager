@@ -23,6 +23,7 @@ public sealed class AppFixture : IDisposable
     public Application App { get; }
     public UIA3Automation Automation { get; } = new();
     public Window MainWindow { get; }
+    private AutomationElement CurrentViewHost { get; }
 
     public AppFixture()
     {
@@ -43,6 +44,11 @@ public sealed class AppFixture : IDisposable
                 (App.HasExited
                     ? $"The app process EXITED with code {SafeExitCode()} — it crashed on launch rather than rendering."
                     : "The app process is still running but produced no main window within the timeout."));
+
+        CurrentViewHost = Retry.WhileNull(
+            () => FindUniqueDescendantById(MainWindow, "CurrentViewHost"),
+            TimeSpan.FromSeconds(5)).Result
+            ?? throw new InvalidOperationException("The current-view automation host was not exposed.");
 
         // Sidebar groups render as collapsed Expanders, so their child nav items aren't
         // realized in the UI Automation tree until expanded. Expand everything once up
@@ -139,21 +145,62 @@ public sealed class AppFixture : IDisposable
                     e.Name.Contains(text, StringComparison.OrdinalIgnoreCase)),
             TimeSpan.FromSeconds(timeoutSeconds)).Result;
 
-    /// <summary>
-    /// Find a Button by its exact visible content text, retrying up to
-    /// <paramref name="timeoutSeconds"/>. The retry matters on a slow CI runner: a tab's
-    /// buttons aren't realized in the automation tree the instant navigation happens, so a
-    /// single snapshot (as this used to do) returned null before the content rendered.
-    /// </summary>
-    public Button? FindButton(string text, int timeoutSeconds = 5) =>
-        Retry.WhileNull(() =>
-            MainWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
-                .FirstOrDefault(b => string.Equals(b.Name, text, StringComparison.OrdinalIgnoreCase)),
-            TimeSpan.FromSeconds(timeoutSeconds)).Result?.AsButton();
-
     /// <summary>Find a control by its AutomationId.</summary>
     public AutomationElement? FindById(string automationId) =>
         MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(automationId));
+
+    /// <summary>
+    /// Find a control in the currently rendered tab by its stable AutomationId.
+    /// The retry lets the new view finish rendering after navigation on slow CI runners.
+    /// </summary>
+    public AutomationElement? FindByIdInCurrentTab(string automationId, int timeoutSeconds = 5) =>
+        Retry.WhileNull(() =>
+            FindUniqueDescendantById(CurrentViewHost, automationId),
+            TimeSpan.FromSeconds(timeoutSeconds)).Result;
+
+    /// <summary>Find a Button in the current tab by its stable AutomationId.</summary>
+    public Button? FindButtonById(string automationId, int timeoutSeconds = 5)
+    {
+        var element = FindByIdInCurrentTab(automationId, timeoutSeconds);
+        if (element is null) return null;
+        if (element.ControlType != ControlType.Button)
+        {
+            throw new InvalidOperationException(
+                $"Element '{automationId}' is {element.ControlType}, not a Button.");
+        }
+
+        return element.AsButton();
+    }
+
+    /// <summary>
+    /// Find a Button by its exact accessible name. Reserved for accessible-name assertions
+    /// and best-effort cleanup when the stable-id contract itself is under test.
+    /// </summary>
+    public Button? FindButtonByAccessibleName(string accessibleName, int timeoutSeconds = 1) =>
+        Retry.WhileNull(() =>
+            CurrentViewHost
+                .FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+                .FirstOrDefault(button =>
+                    string.Equals(button.Name, accessibleName, StringComparison.OrdinalIgnoreCase)),
+            TimeSpan.FromSeconds(timeoutSeconds)).Result?.AsButton();
+
+    /// <summary>True when the current tab exposes a Button with the exact accessible name.</summary>
+    public bool HasButtonWithName(string accessibleName, int timeoutSeconds = 1) =>
+        FindButtonByAccessibleName(accessibleName, timeoutSeconds) is not null;
+
+    private static AutomationElement? FindUniqueDescendantById(
+        AutomationElement root,
+        string automationId)
+    {
+        var matches = root.FindAllDescendants(cf => cf.ByAutomationId(automationId));
+        return matches.Length switch
+        {
+            0 => null,
+            1 => matches[0],
+            _ => throw new InvalidOperationException(
+                $"AutomationId '{automationId}' matched {matches.Length} elements; expected at most one.")
+        };
+    }
 
     /// <summary>
     /// True if any descendant's Name contains <paramref name="text"/>
@@ -162,6 +209,18 @@ public sealed class AppFixture : IDisposable
     /// </summary>
     public bool HasText(string text, int timeoutSeconds = 5)
         => WaitForText(text, timeoutSeconds) is not null;
+
+    /// <summary>Wait for named content inside the currently rendered tab only.</summary>
+    public AutomationElement? WaitForTextInCurrentTab(string text, int timeoutSeconds = 5) =>
+        Retry.WhileNull(() =>
+            CurrentViewHost.FindAllDescendants()
+                .FirstOrDefault(element =>
+                    !string.IsNullOrEmpty(element.Name)
+                    && element.Name.Contains(text, StringComparison.OrdinalIgnoreCase)),
+            TimeSpan.FromSeconds(timeoutSeconds)).Result;
+
+    public bool HasTextInCurrentTab(string text, int timeoutSeconds = 5)
+        => WaitForTextInCurrentTab(text, timeoutSeconds) is not null;
 
     /// <summary>
     /// True when the current tab shows the shared "requires administrator"

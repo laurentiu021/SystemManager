@@ -248,4 +248,71 @@ public class NotificationBlockerViewModelTests
         };
         Assert.StartsWith("3 recent · last ", full.ActivitySummary);
     }
+
+    // ---------- progress feedback (regression) ----------
+    // NotificationBlockerView.xaml binds a progress bar to IsBusy and the sidebar spinner reads the
+    // same flag, but this VM never assigned it — so walking the notification-senders registry tree
+    // (which the VM's own comment says must happen off the UI thread) showed nothing at all.
+
+    [Fact]
+    public async Task AfterConstruction_TheBusyFlagIsClear()
+    {
+        var vm = new NotificationBlockerViewModel(NewService(App("a"), App("b")));
+
+        await vm.InitializationComplete;
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public async Task Refresh_RaisesIsBusyThenClearsIt()
+    {
+        var vm = NewVm(NewService(App("a"), App("b")));
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
+        };
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        // Observed through the change notifications: the substituted read finishes too fast to sample
+        // mid-flight, but the flag must still have gone up and then back down.
+        Assert.Equal([true, false], seen);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Refresh_UsesAMarqueeBar()
+    {
+        // Enumerating registry senders reports no meaningful percentage, so a determinate bar stuck
+        // at 0 would read as "stalled".
+        var vm = NewVm(NewService(App("a")));
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.IsProgressIndeterminate)) seen.Add(vm.IsProgressIndeterminate);
+        };
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal([true, false], seen);
+    }
+
+    [Fact]
+    public async Task Refresh_WhenTheServiceThrows_StillClearsTheBusyFlag()
+    {
+        // A failed refresh must not leave the bar spinning forever.
+        var svc = Substitute.For<INotificationBlockerService>();
+        svc.GetApps().Returns(_ => throw new InvalidOperationException("registry unavailable"));
+
+        var vm = new NotificationBlockerViewModel(svc);
+        await vm.InitializationComplete;   // the guarded helper logs the failure
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
 }

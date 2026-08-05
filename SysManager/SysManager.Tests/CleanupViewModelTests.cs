@@ -394,6 +394,95 @@ public class CleanupViewModelTests
         vm.RecycleBinLabel = "Empty";
         Assert.Equal("Empty", vm.RecycleBinLabel);
     }
+
+    // ---------- progress feedback (regression) ----------
+    // CleanupView.xaml binds a progress bar to IsBusy and the sidebar spinner reads the same flag,
+    // but this VM never assigned it — so nothing appeared while SFC or DISM ran, which is minutes of
+    // work. IsBusy is now DERIVED from the four per-operation flags, so overlapping operations cannot
+    // clear the bar out from under one another.
+
+    [Fact]
+    public void IsBusy_TracksAnyRunningOperation()
+    {
+        var vm = NewVm();
+        vm.IsTempRunning = true;
+        Assert.True(vm.IsBusy);
+
+        vm.IsTempRunning = false;
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public void IsBusy_StaysSetWhileASecondOperationIsStillRunning()
+    {
+        // The failure a per-command `finally { IsBusy = false; }` would cause: two operations run,
+        // the first finishes, and the bar disappears while the second is still going.
+        var vm = NewVm();
+        vm.IsTempRunning = true;
+        vm.IsBinRunning = true;
+
+        vm.IsTempRunning = false;
+
+        Assert.True(vm.IsBusy);
+        vm.IsBinRunning = false;
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public void IsBusy_IsIndeterminateForTempButDeterminateForSfcAndDism()
+    {
+        // Temp/Recycle-Bin report no percentage, so the bar must be marquee. SFC and DISM DO report
+        // one (through the runner's ProgressChanged → Progress), and a marquee bar there would throw
+        // that real number away.
+        var vm = NewVm();
+
+        vm.IsTempRunning = true;
+        Assert.True(vm.IsProgressIndeterminate);
+        vm.IsTempRunning = false;
+
+        vm.IsSfcRunning = true;
+        Assert.True(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+        vm.IsSfcRunning = false;
+
+        vm.IsDismRunning = true;
+        Assert.True(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+        vm.IsDismRunning = false;
+    }
+
+    [Fact]
+    public void IsBusy_IsClearOnceEveryOperationHasFinished()
+    {
+        var vm = NewVm();
+        vm.IsTempRunning = true;
+        vm.IsBinRunning = true;
+        vm.IsSfcRunning = true;
+        vm.IsDismRunning = true;
+
+        vm.IsTempRunning = false;
+        vm.IsBinRunning = false;
+        vm.IsSfcRunning = false;
+        vm.IsDismRunning = false;
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public void PreScan_RaisesTheBusyFlagWithoutWaitingForTheDiskWalk()
+    {
+        // Rescan and the constructor's pre-scan both walk every file under both Temp folders and the
+        // Recycle Bin — measured at 20,776 temp files and 163,188 in the bin on a real machine, which
+        // is exactly why the progress bar was worth fixing. Awaiting that walk here would make the
+        // test's DURATION depend on the developer's disk state, so this asserts only the synchronous
+        // half: the flag is raised before the first await, and the pre-scan's own finally releases it
+        // (covered by the derived-flag tests above, which need no IO at all).
+        var vm = NewVm();
+
+        Assert.True(vm.IsBusy);
+        Assert.True(vm.IsProgressIndeterminate);
+    }
 }
 
 // ---------- SFC result parsing ----------

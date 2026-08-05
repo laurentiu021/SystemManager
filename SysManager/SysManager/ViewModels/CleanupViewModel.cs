@@ -113,6 +113,12 @@ public sealed partial class CleanupViewModel : ViewModelBase
 
     private async Task PreScanAsync()
     {
+        // The scan enumerates every file under both Temp folders and the Recycle Bin recursively,
+        // which is seconds of disk work on a neglected machine — and "Rescan" is a button the user
+        // presses, so it needs to visibly do something. Kept separate from OnAnyRunningChanged's
+        // derived flag: a pre-scan is not one of the four cleanup operations.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             var (tempLabel, binLabel) = await Task.Run(() =>
@@ -169,6 +175,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
         }
         catch (IOException ex) { Log.Debug("Pre-scan failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Pre-scan access denied: {Error}", ex.Message); }
+        // Hand the flag back to the derived value rather than blindly clearing it: a cleanup
+        // operation may have been started while the scan ran, and it still needs the bar.
+        finally { OnAnyRunningChanged(); }
     }
 
     // Each running flag feeds IsAnyRunning; re-evaluate Cancel's CanExecute too so the
@@ -182,6 +191,15 @@ public sealed partial class CleanupViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsAnyRunning));
         CancelCommand.NotifyCanExecuteChanged();
+        // The status-bar progress bar and the sidebar spinner are bound to IsBusy, which this VM
+        // never set — so neither could appear while SFC or DISM ran, which is minutes of work.
+        // Derived from the per-operation flags rather than assigned in each command, so the four
+        // operations can overlap without one finishing and clearing the bar for the others.
+        IsBusy = IsAnyRunning;
+        // Temp and Recycle-Bin cleanup report no percentage, but SFC/DISM do (via the runner's
+        // ProgressChanged → Progress). Marquee only when nothing is reporting a real number,
+        // otherwise the determinate value would be ignored.
+        IsProgressIndeterminate = IsAnyRunning && !(IsSfcRunning || IsDismRunning);
     }
 
     [RelayCommand]

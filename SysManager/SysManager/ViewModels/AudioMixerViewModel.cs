@@ -72,10 +72,20 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         _reconcileCts = new CancellationTokenSource();
         var ct = _reconcileCts.Token;
 
-        RoutingSupported = _service.IsRoutingSupported;
-        Presets.ReplaceWith(_presets.Load());
-        await RefreshDevicesAsync();
-        await ReconcileAsync();
+        // Only the FIRST load drives the progress bar. The 1 s reconcile loop below deliberately
+        // does not: it would strobe the bar on and off for as long as the tab stays open. Without
+        // this the bound bar (and the sidebar spinner) could never appear at all, even though
+        // enumerating audio sessions and render devices is COM work run off the UI thread.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            RoutingSupported = _service.IsRoutingSupported;
+            Presets.ReplaceWith(_presets.Load());
+            await RefreshDevicesAsync();
+            await ReconcileAsync();
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
 
         if (_reconcileCts is null || ct.IsCancellationRequested) return; // disposed during init
         _ = ReconcileLoopAsync(ct);

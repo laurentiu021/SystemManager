@@ -171,4 +171,57 @@ public class PrivacyViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ---------- progress feedback (regression) ----------
+    // PrivacyView.xaml binds a progress bar to IsBusy and the sidebar spinner reads the same flag,
+    // but this VM never assigned it — so reading every privacy registry key, which the VM's own
+    // comment says has to happen off the UI thread, produced no feedback at all.
+
+    [Fact]
+    public async Task AfterConstruction_TheBusyFlagIsClear()
+    {
+        var vm = new PrivacyViewModel(new PrivacyService());
+
+        await vm.InitializationComplete;
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public async Task Refresh_RaisesIsBusyThenClearsIt()
+    {
+        var vm = NewVm();
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
+        };
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        // Observed through the change notifications: the registry read finishes too fast to sample
+        // mid-flight, but the flag must still have gone up and then back down.
+        Assert.Equal([true, false], seen);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Refresh_UsesAMarqueeBar()
+    {
+        // Reading N registry keys reports no meaningful percentage, so a determinate bar stuck at 0
+        // would read as "stalled".
+        var vm = NewVm();
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.IsProgressIndeterminate)) seen.Add(vm.IsProgressIndeterminate);
+        };
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal([true, false], seen);
+    }
 }

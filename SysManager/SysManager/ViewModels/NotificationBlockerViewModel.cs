@@ -48,9 +48,18 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
 
     private async Task LoadAppsAsync()
     {
-        var (apps, master) = await Task.Run(() => (_service.GetApps(), _service.IsGlobalToastEnabled()))
-            .ConfigureAwait(true);
-        LoadApps(apps, master);
+        // The view binds a progress bar to IsBusy and the sidebar spinner reads the same flag, but
+        // this VM never set it — so walking the notification-senders registry tree, which is what
+        // the comment above says needs to happen off the UI thread, showed nothing at all.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            var (apps, master) = await Task.Run(() => (_service.GetApps(), _service.IsGlobalToastEnabled()))
+                .ConfigureAwait(true);
+            LoadApps(apps, master);
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     private void LoadApps(IReadOnlyList<NotificationApp> apps, bool masterEnabled)
@@ -178,12 +187,18 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        // Re-read off the UI thread — mirrors the async initial load.
-        var (apps, master) = await Task.Run(() => (_service.GetApps(), _service.IsGlobalToastEnabled()))
-            .ConfigureAwait(true);
-        LoadApps(apps, master);
-        StatusMessage = "Notification senders refreshed.";
-        Log.Information("Notification Blocker: refreshed sender list ({Count} apps)", Apps.Count);
+        // Re-read off the UI thread — mirrors the async initial load, including its feedback.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            var (apps, master) = await Task.Run(() => (_service.GetApps(), _service.IsGlobalToastEnabled()))
+                .ConfigureAwait(true);
+            LoadApps(apps, master);
+            StatusMessage = "Notification senders refreshed.";
+            Log.Information("Notification Blocker: refreshed sender list ({Count} apps)", Apps.Count);
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     private void UpdateStatus()

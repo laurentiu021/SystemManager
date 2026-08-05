@@ -87,4 +87,41 @@ public class BulkObservableCollectionTests
 
         Assert.Empty(collection);
     }
+
+    // ── The source is materialized before the collection is touched (regression) ──
+    // Every caller passes a lazy LINQ query, and ReplaceWith used to enumerate it WHILE rebuilding
+    // Items. The two cases below were silently wrong because of it. (Notification suppression already
+    // meant a Reset subscriber could not observe the rebuild, so that was never the problem — this is
+    // about what the lazy source itself sees.)
+
+    [Fact]
+    public void ReplaceWith_ItsOwnContents_KeepsThemRatherThanClearingItself()
+    {
+        // Items.Clear() runs before anything is added back, so a source that IS this collection would
+        // be emptied first and everything lost. The snapshot is taken up front to prevent that.
+        var collection = new BulkObservableCollection<int>();
+        collection.ReplaceWith(new[] { 1, 2, 3 });
+
+        collection.ReplaceWith(collection);
+
+        Assert.Equal([1, 2, 3], collection);
+    }
+
+    [Fact]
+    public void ReplaceWith_AThrowingSourceLeavesTheCollectionUntouched()
+    {
+        // The snapshot is built before Items.Clear(), so a query that fails part-way cannot leave a
+        // half-rebuilt collection bound to the UI.
+        var collection = new BulkObservableCollection<int>();
+        collection.ReplaceWith(new[] { 1, 2, 3 });
+
+        static IEnumerable<int> Failing()
+        {
+            yield return 9;
+            throw new InvalidOperationException("source failed");
+        }
+
+        Assert.Throws<InvalidOperationException>(() => collection.ReplaceWith(Failing()));
+        Assert.Equal([1, 2, 3], collection);
+    }
 }

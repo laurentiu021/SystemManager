@@ -137,6 +137,16 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     private readonly BulkObservableCollection<DateTimePoint> _downBuffer = new();
     private readonly BulkObservableCollection<DateTimePoint> _upBuffer = new();
 
+    /// <summary>
+    /// True while <see cref="ReloadHistoryAsync"/> owns the two chart buffers, so the poll loop must
+    /// not append to them. Distinct from <see cref="ShowingHistory"/>, which is a UI-facing property
+    /// set only once the load has landed: this is claimed BEFORE the load's first await, covering the
+    /// whole span in which the buffers may be rebuilt. Both the poll loop and the reload run on the UI
+    /// dispatcher in the app, but a test host has no dispatcher, so the two genuinely interleave and
+    /// LiveCharts throws "Collection was modified" on a buffer mutated mid-notification.
+    /// </summary>
+    private bool _historyOwnsChart;
+
     /// <summary>Production constructor — safe source always available; ETW source built on demand when elevated.</summary>
     public BandwidthMonitorViewModel(BandwidthHistoryService history)
         : this(history, () => new ConnectionBandwidthSource(), () => new EtwBandwidthSource())
@@ -244,7 +254,12 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         // Keep filling the live buffers only while the live range is shown; a stored range owns the
         // chart until the user switches back, otherwise each poll would append a "now" point onto a
         // week-long series and squash it.
-        if (!ShowingHistory)
+        //
+        // Gated on _historyOwnsChart rather than ShowingHistory: that property is only set AFTER the
+        // load's await completes, leaving a window in which this poll could Add to a buffer while
+        // ReloadHistoryAsync was rebuilding it — LiveCharts observes those buffers and throws
+        // "Collection was modified" when it sees one mutate mid-notification.
+        if (!_historyOwnsChart)
             AppendToLiveChart(DateTime.Now, snap.TotalDownBytesPerSec, snap.TotalUpBytesPerSec);
         MergeInto(snap.Processes);
         HasProcesses = Processes.Count > 0;
@@ -348,6 +363,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         var range = SelectedRange;
         if (range.IsLive)
         {
+            _historyOwnsChart = false;
             ShowingHistory = false;
             HistoryIsEmpty = false;
             HistorySummary = "";
@@ -358,6 +374,10 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
             return;
         }
 
+        // Claimed BEFORE the await, not after the load lands: the poll loop must stop touching the
+        // buffers for the whole span in which this method may rebuild them, otherwise its Add races
+        // ReplaceWith on a collection LiveCharts is observing.
+        _historyOwnsChart = true;
         IsBusy = true;
         try
         {
@@ -374,7 +394,12 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
                 ? $"Showing {loaded.Count} recorded sample(s) over {range.Label.ToLowerInvariant()}."
                 : "No history recorded for that range yet — samples are saved while this tab is open.";
         }
-        catch (OperationCanceledException) { /* tab closed mid-load */ }
+        catch (OperationCanceledException)
+        {
+            // Tab closed mid-load. Hand the buffers back, or a cancelled load would leave the live
+            // chart permanently frozen the next time the tab is opened.
+            _historyOwnsChart = false;
+        }
         finally { IsBusy = false; }
     }
 

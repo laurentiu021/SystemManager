@@ -53,6 +53,36 @@ jobs:
           dotnet format SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj --verify-no-changes --verbosity diagnostic
           dotnet format SysManager/SysManager.UITests/SysManager.UITests.csproj --verify-no-changes --verbosity diagnostic
 
+      # The release workflow derives its notes from the CHANGELOG section matching the TAG that
+      # auto-release computed from the commit type (feat: -> minor, fix: -> patch). If the csproj
+      # version and the newest CHANGELOG header disagree with that bump, the release fails after the
+      # tag is already pushed — leaving a tag with no release. Catch the mismatch here, on the PR,
+      # where it costs one edit instead of a stuck release.
+      - name: Check version consistency
+        shell: pwsh
+        run: |
+          $csproj = Select-Xml -Path SysManager/SysManager/SysManager.csproj -XPath '//Version' |
+                    Select-Object -First 1 -ExpandProperty Node | Select-Object -ExpandProperty '#text'
+          $file = Select-Xml -Path SysManager/SysManager/SysManager.csproj -XPath '//FileVersion' |
+                  Select-Object -First 1 -ExpandProperty Node | Select-Object -ExpandProperty '#text'
+          $asm = Select-Xml -Path SysManager/SysManager/SysManager.csproj -XPath '//AssemblyVersion' |
+                 Select-Object -First 1 -ExpandProperty Node | Select-Object -ExpandProperty '#text'
+
+          # The three csproj versions must agree (FileVersion/AssemblyVersion carry a 4th component).
+          if ($file -ne "$csproj.0") { throw "FileVersion ($file) does not match Version ($csproj)." }
+          if ($asm -ne "$csproj.0") { throw "AssemblyVersion ($asm) does not match Version ($csproj)." }
+
+          # The newest CHANGELOG entry must be for that same version, or the release step that reads
+          # release notes out of the CHANGELOG finds nothing.
+          $head = (Select-String -Path CHANGELOG.md -Pattern '^## \[([0-9]+\.[0-9]+\.[0-9]+)\]' |
+                   Select-Object -First 1).Matches[0].Groups[1].Value
+          if ($head -ne $csproj) {
+              throw "csproj Version ($csproj) and the newest CHANGELOG entry ($head) disagree. " +
+                    "A feat: PR bumps the MINOR component and a fix: PR the PATCH — set both to the " +
+                    "version the merge will actually tag."
+          }
+          Write-Host "Version $csproj is consistent across csproj and CHANGELOG."
+
       - name: Build (Release)
         run: dotnet build SysManager/SysManager/SysManager.csproj -c Release --no-restore
 

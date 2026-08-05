@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.56.15] - 2026-08-05
+## [1.57.0] - 2026-08-05
 
 ### Added
 - **Bandwidth Monitor can now show you the last hour, day, or week.** The tab had been recording your throughput to disk every few seconds and keeping a week of it — but nothing ever read it back, so the file grew for seven days and you could never see any of it. Pick a range and the chart now draws that period, with how much you actually downloaded and uploaded over it and the fastest speed you reached. That answers "where did my data cap go?" without an account or a cloud service. The live view is still the default and still one click away. Totals are worked out from the time between readings, and stretches where the tab was closed are left out rather than guessed at, so the figure never claims traffic that was not measured.

@@ -78,6 +78,15 @@ public static partial class LogService
         private const string Template =
             "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
 
+        // Both are stateless and thread-safe once constructed, and Emit runs on every log call —
+        // building them per event allocated a formatter and re-parsed a constant template each
+        // time, for no benefit.
+        private static readonly MessageTemplateTextFormatter Formatter =
+            new(Template, CultureInfo.InvariantCulture);
+
+        private static readonly MessageTemplate LineTemplate =
+            new MessageTemplateParser().Parse("{Line}");
+
         private readonly Logger _inner;
 
         public UserPathScrubbingSink(
@@ -99,11 +108,12 @@ public static partial class LogService
             // it as a single pre-formatted message. Rendering first is what makes the exception
             // text reachable; scrubbing the rendered string is also cheaper than walking a
             // structured tree, and cannot miss a nested or destructured value.
-            var writer = new StringWriter();
-            new MessageTemplateTextFormatter(Template, CultureInfo.InvariantCulture)
-                .Format(logEvent, writer);
-
-            var scrubbed = SanitizePath(writer.ToString().TrimEnd('\r', '\n'));
+            string scrubbed;
+            using (var writer = new StringWriter())
+            {
+                Formatter.Format(logEvent, writer);
+                scrubbed = SanitizePath(writer.ToString().TrimEnd('\r', '\n'));
+            }
 
             // Written through Verbose so the inner logger never re-filters an event the outer
             // logger already allowed, and as a literal to keep any braces in the text from being
@@ -112,7 +122,7 @@ public static partial class LogService
                 logEvent.Timestamp,
                 LogEventLevel.Verbose,
                 exception: null,
-                new MessageTemplateParser().Parse("{Line}"),
+                LineTemplate,
                 [new LogEventProperty("Line", new ScalarValue(scrubbed))]));
         }
 

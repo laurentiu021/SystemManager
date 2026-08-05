@@ -176,4 +176,24 @@ public sealed class LogServiceSinkScrubbingTests : IDisposable
         Assert.DoesNotContain("should not appear", text);
         Assert.Contains("should appear", text);
     }
+
+    [Fact]
+    public void Sink_IsSafeUnderConcurrentWrites()
+    {
+        // The formatter and the "{Line}" template are shared statics — they were allocated per
+        // event before, which cost an allocation and a constant-template re-parse on every log
+        // call. Both are stateless, but that has to be proven rather than assumed: logging happens
+        // from background scans, poll timers and the UI thread at once, so a shared mutable buffer
+        // here would interleave or drop lines.
+        const int writes = 400;
+
+        var text = WriteAndRead(log =>
+            Parallel.For(0, writes, i => log.Information("Line {Index} at {Path}", i, UserPath($"f{i}.txt"))));
+
+        var lines = text.Split('\n').Where(l => l.Contains("[INF]")).ToArray();
+        Assert.Equal(writes, lines.Length);
+        Assert.DoesNotContain(CurrentUserName, text, StringComparison.OrdinalIgnoreCase);
+        // Every line is individually intact — no two events rendered into each other.
+        Assert.All(lines, line => Assert.Matches(@"\[INF\] Line \d+ at ", line));
+    }
 }

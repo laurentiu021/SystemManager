@@ -42,8 +42,10 @@ controls. Their inner visuals consume selection through the shared `SidebarNavRo
 `SidebarNavText`, and `SidebarActiveMark` styles, while `SelectionStatus` exposes
 the same state to UI Automation. Group headers are keyboard-focusable toggles;
 collapsed content is disabled so visually hidden leaves cannot receive focus.
-A planned-but-unbuilt feature would use `PlaceholderViewModel` with a WIP view
-(none currently — every tab is implemented).
+Every tab is backed by a real view and view-model. A shared WIP placeholder view
+existed while tabs were still being built; the last tab graduated off it, so it was
+removed rather than left as unreachable code. A tab that is implemented but not yet
+QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) instead.
 
 | Group | View Models |
 |-------|-------------|

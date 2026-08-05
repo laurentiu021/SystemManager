@@ -123,32 +123,25 @@
             <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI, Inter, Arial</FontFamily>
 
             <!-- ============================================================ -->
-            <!-- Design tokens — radius / spacing / motion (single source)     -->
-            <!-- Radius scale 4/8/12/16/999 · spacing 4px grid · motion         -->
-            <!-- 150/200/300ms. These do NOT vary per preset, so StaticResource -->
-            <!-- (cheap, no theme-swap). Colors stay DynamicResource. This kills -->
-            <!-- the per-style radius drift (was 5/6/8/10/999 scattered).        -->
+            <!-- Design tokens — corner radius (single source)                  -->
+            <!-- Radius scale 4/8/12/999. Does NOT vary per preset, so           -->
+            <!-- StaticResource (cheap, no theme-swap). Colors stay              -->
+            <!-- DynamicResource. This kills the per-style radius drift          -->
+            <!-- (was 5/6/8/10/999 scattered).                                   -->
+            <!--                                                                 -->
+            <!-- NOTE: there is deliberately NO spacing or motion token set here. -->
+            <!-- Both existed but were referenced by exactly zero views, while    -->
+            <!-- their comments claimed a live 4px scale and motion vocabulary —  -->
+            <!-- so a contributor writing Margin="{StaticResource Space16}" for   -->
+            <!-- "consistency" produced a view unlike all of its siblings, every  -->
+            <!-- one of which uses raw Thickness literals. Spacing is governed by -->
+            <!-- the two layout strategies in the project docs. If a token scale  -->
+            <!-- is wanted, land it WITH the view migration, not before it.       -->
             <!-- ============================================================ -->
             <CornerRadius x:Key="RadiusSm">4</CornerRadius>
             <CornerRadius x:Key="RadiusMd">8</CornerRadius>
             <CornerRadius x:Key="RadiusLg">12</CornerRadius>
-            <CornerRadius x:Key="RadiusXl">16</CornerRadius>
             <CornerRadius x:Key="RadiusPill">999</CornerRadius>
-
-            <!-- Spacing rhythm on a 4px base. Defined here as the single source;
-                 the per-view rollout migrates raw margins/paddings to these. -->
-            <Thickness x:Key="Space4">4</Thickness>
-            <Thickness x:Key="Space8">8</Thickness>
-            <Thickness x:Key="Space12">12</Thickness>
-            <Thickness x:Key="Space16">16</Thickness>
-            <Thickness x:Key="Space24">24</Thickness>
-            <Thickness x:Key="Space32">32</Thickness>
-
-            <!-- Motion vocabulary: Fast=hover/focus/selection, Mid=view transitions,
-                 Slow=theme-background fade. ease-out, no bounce (see brief §1.5). -->
-            <Duration x:Key="DurFast">0:0:0.15</Duration>
-            <Duration x:Key="DurMid">0:0:0.2</Duration>
-            <Duration x:Key="DurSlow">0:0:0.3</Duration>
 
             <!-- ============================================================ -->
             <!-- Sidebar Expander — smooth slide animation                      -->
@@ -311,12 +304,10 @@
                 <Setter Property="SnapsToDevicePixels" Value="True"/>
             </Style>
 
-            <!-- PERF-008: CardElevated kept without DropShadowEffect to avoid
-                 software-rendered shadows when many cards are visible. -->
-            <Style x:Key="CardElevated" TargetType="Border" BasedOn="{StaticResource Card}">
-                <Setter Property="Background" Value="{DynamicResource Surface2}"/>
-            </Style>
-
+            <!-- NOTE: PERF-008 (no DropShadowEffect on cards — software-rendered shadows are
+                 expensive when many cards are visible) still stands. It used to be documented on a
+                 CardElevated style that no view ever applied; CardInner below is the live variant
+                 and follows the same rule. -->
             <Style x:Key="CardInner" TargetType="Border" BasedOn="{StaticResource Card}">
                 <Setter Property="Background" Value="{DynamicResource Surface2}"/>
                 <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}"/>
@@ -919,13 +910,10 @@
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
             </Style>
 
-            <Style x:Key="Heading" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="20"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-            </Style>
-
+            <!-- The type scale runs Display (28) → SectionTitle (14) → Subtle → Caption. A Heading
+                 (20) rung existed between the first two and no view ever used it, which made it a
+                 trap: a reviewer enforcing "use an existing style" would point at a style that had
+                 never actually rendered. Add it back only alongside a view that needs it. -->
             <Style x:Key="SectionTitle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="14"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
@@ -1005,43 +993,6 @@
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.5"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <!-- ============================================================ -->
-            <!-- Horizontal pill tabs (used inside Network sub-sections)      -->
-            <!-- ============================================================ -->
-            <Style x:Key="PillTabItem" TargetType="TabItem">
-                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-                <Setter Property="FontSize" Value="13"/>
-                <Setter Property="FontWeight" Value="Medium"/>
-                <Setter Property="Cursor" Value="Hand"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="TabItem">
-                            <Border x:Name="Bd"
-                                    Background="Transparent"
-                                    CornerRadius="{StaticResource RadiusPill}"
-                                    Margin="0,0,6,0"
-                                    Padding="16,7">
-                                <ContentPresenter ContentSource="Header" VerticalAlignment="Center" HorizontalAlignment="Center"
-                                                  TextBlock.Foreground="{TemplateBinding Foreground}"
-                                                  TextBlock.FontWeight="{TemplateBinding FontWeight}"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface2}"/>
-                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-                                </Trigger>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Accent}"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                    <Setter Property="FontWeight" Value="SemiBold"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

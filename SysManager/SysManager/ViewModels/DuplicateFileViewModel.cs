@@ -50,9 +50,12 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     public DuplicateFileViewModel(DuplicateFileService service)
     {
         _service = service;
-        // Resolve known-folder paths + probe drives off the UI thread: DriveInfo.IsReady can
-        // stall on a disconnected mapped/removable volume, which would freeze startup since
-        // this VM is built eagerly. The collection update runs back on the UI thread.
+        // Resolve known-folder paths + probe drives off the UI thread: DriveInfo.IsReady can stall on
+        // a disconnected mapped/removable volume. This tab is LAZY — NavItem.ContentFactory builds it
+        // on first open, not at startup (the eager set is Dashboard, DarkMode and About; see the list
+        // above NavItems) — so the stall this avoids is on the first navigation into the tab, not at
+        // app launch. The Task.Run is still required either way; the collection update runs back on
+        // the UI thread.
         InitializeAsync(PopulatePresetsAsync);
     }
 

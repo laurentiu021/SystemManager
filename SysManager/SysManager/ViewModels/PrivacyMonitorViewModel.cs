@@ -32,8 +32,12 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
         _service = service;
         StatusMessage = "Reading access history…";
         PropertyChanged += OnVmPropertyChanged;
-        // Read off the UI thread so a registry walk (or a corrupt-hive failure) can never
-        // block or crash startup — this VM is built eagerly with the main window.
+        // Read off the UI thread so a registry walk (or a corrupt-hive failure) can never block or
+        // crash the UI. This tab is LAZY — NavItem.ContentFactory builds it on first open, not at
+        // startup (the eager set is Dashboard, DarkMode and About; see the list above NavItems) — so
+        // what this protects is the first navigation into the tab, not app launch. The Task.Run is
+        // still required: without it the walk would run on the dispatcher and freeze the window while
+        // the tab opens.
         InitializeAsync(RefreshAsync);
     }
 

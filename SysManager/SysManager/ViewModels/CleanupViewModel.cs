@@ -88,7 +88,11 @@ public sealed partial class CleanupViewModel : ViewModelBase
 
     private async Task InitAsync()
     {
-        try { await PreScanAsync(); }
+        // reportProgress: false — the startup scan already announces itself through the size labels,
+        // which read "Scanning…" until it lands. Driving the progress bar from here would also make
+        // the flag's value depend on when a fire-and-forget task happens to resume relative to the
+        // constructor returning, which is not something callers (or tests) can reason about.
+        try { await PreScanAsync(reportProgress: false); }
         catch (IOException ex) { Log.Warning("Cleanup pre-scan failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Warning("Cleanup pre-scan failed: {Error}", ex.Message); }
         catch (InvalidOperationException ex) { Log.Warning("Cleanup pre-scan failed: {Error}", ex.Message); }
@@ -109,23 +113,28 @@ public sealed partial class CleanupViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task RescanAsync() => await PreScanAsync();
+    private async Task RescanAsync() => await PreScanAsync(reportProgress: true);
 
-    private async Task PreScanAsync()
+    /// <summary>
+    /// Measures what Temp and the Recycle Bin currently hold, off the UI thread.
+    /// </summary>
+    /// <param name="reportProgress">
+    /// Whether to drive the progress bar. True for the user-pressed Rescan — it walks every file
+    /// under both Temp folders and the Recycle Bin (seconds of disk work on a neglected machine) and
+    /// a button press has to visibly do something. False for the startup scan, whose progress is
+    /// already visible in the "Scanning…" size labels, and which runs fire-and-forget from the
+    /// constructor: touching the flag there would make its value depend on when that task resumes
+    /// relative to construction finishing.
+    /// <para>Separate from <c>OnAnyRunningChanged</c>'s derived flag either way — a pre-scan is not
+    /// one of the four cleanup operations.</para>
+    /// </param>
+    private async Task PreScanAsync(bool reportProgress)
     {
-        // The scan enumerates every file under both Temp folders and the Recycle Bin recursively,
-        // which is seconds of disk work on a neglected machine — and "Rescan" is a button the user
-        // presses, so it needs to visibly do something. Kept separate from OnAnyRunningChanged's
-        // derived flag: a pre-scan is not one of the four cleanup operations.
-        //
-        // Raised AFTER the first yield, not before it. Setting it synchronously would mean the
-        // constructor itself returned with the bar already on — which broke the long-standing
-        // "IsProgressIndeterminate starts false" test, and is a real behavioural claim: the tab is
-        // not busy until the scan is actually running. Yielding first also keeps construction free
-        // of visible side effects.
-        await Task.Yield();
-        IsBusy = true;
-        IsProgressIndeterminate = true;
+        if (reportProgress)
+        {
+            IsBusy = true;
+            IsProgressIndeterminate = true;
+        }
         try
         {
             var (tempLabel, binLabel) = await Task.Run(() =>
@@ -182,9 +191,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
         }
         catch (IOException ex) { Log.Debug("Pre-scan failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Pre-scan access denied: {Error}", ex.Message); }
-        // Hand the flag back to the derived value rather than blindly clearing it: a cleanup
-        // operation may have been started while the scan ran, and it still needs the bar.
-        finally { OnAnyRunningChanged(); }
+        // Hand the flag back to the DERIVED value rather than blindly clearing it: a cleanup
+        // operation may have started while the scan ran, and it still needs the bar. Skipped when we
+        // never raised the flag, so the startup scan cannot disturb it either.
+        finally { if (reportProgress) OnAnyRunningChanged(); }
     }
 
     // Each running flag feeds IsAnyRunning; re-evaluate Cancel's CanExecute too so the
@@ -283,7 +293,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
             StatusMessage = "Temp cleanup done";
             Log.Information("Temp cleanup completed");
             ActivityLogService.Instance.Log("Quick Cleanup", "Cleared temporary files");
-            await PreScanAsync();
+            // The operation's own flag still holds the bar (it clears in finally), so this
+            // refresh must not take it over.
+            await PreScanAsync(reportProgress: false);
         }
         catch (OperationCanceledException) { StatusMessage = "Temp cleanup cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
@@ -314,7 +326,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
             await Task.Run(RecycleBinHelper.EmptyAllDrives, ct);
             StatusMessage = "Done";
             ToastService.Instance.Show("Cleanup complete", "Operation finished successfully");
-            await PreScanAsync();
+            // The operation's own flag still holds the bar (it clears in finally), so this
+            // refresh must not take it over.
+            await PreScanAsync(reportProgress: false);
         }
         catch (OperationCanceledException) { StatusMessage = "Recycle Bin cleanup cancelled."; }
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }

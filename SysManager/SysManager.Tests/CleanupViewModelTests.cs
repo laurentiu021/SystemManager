@@ -472,16 +472,16 @@ public class CleanupViewModelTests
     [Fact]
     public void Construction_LeavesTheProgressBarOff()
     {
-        // The pre-scan raises the flag only AFTER its first yield, so constructing the VM has no
-        // visible side effect — the tab is not "busy" until the scan is actually running. This is the
-        // same contract the older IsProgressIndeterminate_TogglesCleanly test depends on; stated
-        // explicitly here so the reason is discoverable from the progress-feedback tests too.
+        // The startup pre-scan runs with reportProgress: false, so it never touches the flag and
+        // construction has no visible side effect. That is the contract the older
+        // IsProgressIndeterminate_TogglesCleanly test depends on, restated here so the reason is
+        // discoverable from the progress-feedback tests too.
         //
-        // The scan itself is deliberately not awaited anywhere in this class: it walks every file
-        // under both Temp folders and the Recycle Bin (measured at 20,776 and 163,188 files on a real
-        // machine — precisely why the bar was worth fixing), so awaiting it would make the test's
-        // duration depend on the developer's disk state. The derived-flag tests above cover the
-        // raise/clear behaviour with no IO at all.
+        // It matters that this holds UNCONDITIONALLY rather than by timing: the scan is
+        // fire-and-forget from the constructor, so an approach that raised the flag "after the first
+        // yield" left the observed value depending on whether that continuation resumed before the
+        // constructor returned — it passed locally and failed on CI. The startup scan's progress is
+        // already visible in the "Scanning…" size labels; only the user-pressed Rescan drives the bar.
         var vm = NewVm();
 
         Assert.False(vm.IsBusy);

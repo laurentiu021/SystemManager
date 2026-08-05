@@ -29,6 +29,9 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     // device — not whatever is selected when the timer fires — or it would apply
     // display A's old mode to display B.
     private DisplayDevice? _previousDevice;
+    // Incremented per mode load so only the newest one clears the busy flag (see LoadModesAsync).
+    // UI-thread only — every mutation happens in a continuation marshalled back with ConfigureAwait(true).
+    private int _modeLoadGeneration;
     private const int RevertSeconds = 15;
 
     public BulkObservableCollection<DisplayDevice> Displays { get; } = new();
@@ -52,14 +55,25 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
     private async Task LoadDisplaysAsync()
     {
-        var displays = await Task.Run(_service.GetDisplays).ConfigureAwait(true);
-        Displays.ReplaceWith(displays);
-        IsSupported = displays.Count > 0;
-        if (!IsSupported)
+        IReadOnlyList<DisplayDevice> displays;
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
         {
-            StatusMessage = "No active displays were found.";
-            return;
+            displays = await Task.Run(_service.GetDisplays).ConfigureAwait(true);
+            Displays.ReplaceWith(displays);
+            IsSupported = displays.Count > 0;
+            if (!IsSupported)
+            {
+                StatusMessage = "No active displays were found.";
+                return;
+            }
         }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+
+        // Assigned after the block above, not inside it: this setter starts the mode load, which
+        // owns IsBusy for its own span. Nested inside, our finally would clear the flag while that
+        // load was still running and the bar would vanish mid-work.
         SelectedDisplay = displays.FirstOrDefault(d => d.IsPrimary) ?? displays[0];
         StatusMessage = "Pick a resolution and refresh rate, then apply.";
     }
@@ -76,18 +90,29 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
     private async Task LoadModesAsync(string deviceName)
     {
-        var modes = await Task.Run(() => _service.GetSupportedModes(deviceName)).ConfigureAwait(true);
-        var current = await Task.Run(() => _service.GetCurrentMode(deviceName)).ConfigureAwait(true);
-        // Rapid display switches launch overlapping loads; if the selection moved on while
-        // this one was running, drop its results so a slow earlier load can't overwrite
-        // the newer display's modes (last-writer-wins).
-        if (SelectedDisplay is null || SelectedDisplay.DeviceName != deviceName) return;
-        Modes.ReplaceWith(modes);
-        CurrentMode = current;
-        SelectedMode = modes.FirstOrDefault(m =>
-            CurrentMode is not null && m.Width == CurrentMode.Width &&
-            m.Height == CurrentMode.Height && m.RefreshHz == CurrentMode.RefreshHz);
-        ApplyCommand.NotifyCanExecuteChanged();
+        // Rapid display switches launch overlapping loads, so the busy flag is owned by the NEWEST
+        // one: an older load finishing must not clear the bar while the newer one is still working.
+        int generation = ++_modeLoadGeneration;
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            var modes = await Task.Run(() => _service.GetSupportedModes(deviceName)).ConfigureAwait(true);
+            var current = await Task.Run(() => _service.GetCurrentMode(deviceName)).ConfigureAwait(true);
+            // If the selection moved on while this one was running, drop its results so a slow
+            // earlier load can't overwrite the newer display's modes (last-writer-wins).
+            if (SelectedDisplay is null || SelectedDisplay.DeviceName != deviceName) return;
+            Modes.ReplaceWith(modes);
+            CurrentMode = current;
+            SelectedMode = modes.FirstOrDefault(m =>
+                CurrentMode is not null && m.Width == CurrentMode.Width &&
+                m.Height == CurrentMode.Height && m.RefreshHz == CurrentMode.RefreshHz);
+            ApplyCommand.NotifyCanExecuteChanged();
+        }
+        finally
+        {
+            if (generation == _modeLoadGeneration) { IsBusy = false; IsProgressIndeterminate = false; }
+        }
     }
 
     partial void OnSelectedModeChanged(DisplayMode? value) => ApplyCommand.NotifyCanExecuteChanged();
@@ -107,22 +132,31 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         // (and the auto-revert DispatcherTimer) stays responsive during the switch.
         // Capture the device alongside its previous mode so a revert targets THIS
         // display even if the user changes the selection during the countdown.
-        _previousDevice = display;
-        _previousMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
+        // This is the slowest thing the tab does — a panel re-train can take seconds — so it is
+        // exactly what the progress bar exists for. The flag is cleared before the countdown starts:
+        // waiting 15 s for the user to confirm is not the app being busy.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            _previousDevice = display;
+            _previousMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
 
-        var (ok, error) = await Task.Run(() =>
-        {
-            bool applied = _service.TryApplyMode(display.DeviceName, mode.Width, mode.Height, mode.RefreshHz, out string err);
-            return (applied, err);
-        }).ConfigureAwait(true);
-        if (!ok)
-        {
-            StatusMessage = error;
-            return;
+            var (ok, error) = await Task.Run(() =>
+            {
+                bool applied = _service.TryApplyMode(display.DeviceName, mode.Width, mode.Height, mode.RefreshHz, out string err);
+                return (applied, err);
+            }).ConfigureAwait(true);
+            if (!ok)
+            {
+                StatusMessage = error;
+                return;
+            }
+
+            Log.Information("Applied display mode {Mode} to {Device}", mode.Display, display.DeviceName);
+            CurrentMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
         }
-
-        Log.Information("Applied display mode {Mode} to {Device}", mode.Display, display.DeviceName);
-        CurrentMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
 
         // Begin the auto-revert window — the user must confirm to keep the change.
         BeginRevertCountdown();
@@ -181,22 +215,30 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         bool revertFailed = false;
         if (device is not null && prev is not null)
         {
-            // Revert is the only in-app safety net for a mode that blanked the panel, so its
-            // success matters — don't discard it. If the driver rejects the previous mode,
-            // tell the user exactly how to recover via Windows rather than claiming success.
-            var (reverted, revertError) = await Task.Run(() =>
+            // Reverting re-trains the panel exactly like applying does, so it gets the same
+            // feedback — and here it matters more: the screen may be blank while this runs.
+            IsBusy = true;
+            IsProgressIndeterminate = true;
+            try
             {
-                var ok = _service.TryApplyMode(device.DeviceName, prev.Width, prev.Height, prev.RefreshHz, out var err);
-                return (ok, err);
-            }).ConfigureAwait(true);
-            revertFailed = !reverted;
-            if (revertFailed)
-                Log.Warning("Display auto-revert failed for {Device}: {Error}", device.DeviceName, revertError);
+                // Revert is the only in-app safety net for a mode that blanked the panel, so its
+                // success matters — don't discard it. If the driver rejects the previous mode,
+                // tell the user exactly how to recover via Windows rather than claiming success.
+                var (reverted, revertError) = await Task.Run(() =>
+                {
+                    var ok = _service.TryApplyMode(device.DeviceName, prev.Width, prev.Height, prev.RefreshHz, out var err);
+                    return (ok, err);
+                }).ConfigureAwait(true);
+                revertFailed = !reverted;
+                if (revertFailed)
+                    Log.Warning("Display auto-revert failed for {Device}: {Error}", device.DeviceName, revertError);
 
-            // Only refresh CurrentMode if the reverted device is still the selected one,
-            // so we don't overwrite the display the user has since switched to.
-            if (ReferenceEquals(device, SelectedDisplay))
-                CurrentMode = await Task.Run(() => _service.GetCurrentMode(device.DeviceName)).ConfigureAwait(true);
+                // Only refresh CurrentMode if the reverted device is still the selected one,
+                // so we don't overwrite the display the user has since switched to.
+                if (ReferenceEquals(device, SelectedDisplay))
+                    CurrentMode = await Task.Run(() => _service.GetCurrentMode(device.DeviceName)).ConfigureAwait(true);
+            }
+            finally { IsBusy = false; IsProgressIndeterminate = false; }
         }
         _previousMode = null;
         _previousDevice = null;

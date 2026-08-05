@@ -83,13 +83,30 @@
                                Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
                 </StackPanel>
 
-                <!-- Mode + threshold controls -->
+                <!-- Mode + range + threshold controls -->
                 <StackPanel Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <CheckBox Content="Precise per-app rates (admin)"
                               IsChecked="{Binding PreciseRequested, Mode=TwoWay}"
                               IsEnabled="{Binding IsElevated}"
                               AutomationProperties.Name="Enable precise per-app rates (requires administrator)"
                               ToolTip="Use a kernel trace for exact per-app upload/download speeds. Requires administrator."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
+                        <TextBlock Text="Show" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                        <ComboBox ItemsSource="{Binding RangeOptions}"
+                                  SelectedItem="{Binding SelectedRange, Mode=TwoWay}" Width="150" Margin="8,0,0,0"
+                                  TextSearch.TextPath="Label"
+                                  AutomationProperties.Name="Throughput chart time range"
+                                  ToolTip="Live shows the last couple of minutes. The other ranges chart the history recorded while this tab was open.">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Content="Refresh" Command="{Binding ReloadHistoryCommand}"
+                                Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                                AutomationProperties.Name="Refresh throughput chart"/>
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
                         <TextBlock Text="Alert over" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         <TextBox Text="{Binding AlertThresholdMbps, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -121,14 +138,20 @@
                 <RowDefinition Height="4*"/>
             </Grid.RowDefinitions>
 
-            <!-- Live throughput chart -->
+            <!-- Throughput chart: live rolling window, or a recorded range -->
             <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="Throughput (last ~2 minutes)" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                        <TextBlock Text="{Binding ChartTitle}" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="{Binding HistorySummary}" Style="{StaticResource Caption}"
+                                   DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="480"
+                                   Visibility="{Binding HistorySummary, Converter={StaticResource FlexVis}}"/>
+                    </DockPanel>
                     <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="160"
                                         Series="{Binding ThroughputSeries}"
                                         XAxes="{Binding ThroughputXAxes}" YAxes="{Binding ThroughputYAxes}"
@@ -137,6 +160,11 @@
                                         LegendBackgroundPaint="{Binding LegendBackgroundPaint}"
                                         TooltipTextPaint="{Binding TooltipTextPaint}"
                                         TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"/>
+                    <!-- A chosen range with nothing recorded in it would otherwise render as a blank chart -->
+                    <v:EmptyState Grid.Row="1" Glyph="&#xE9D9;"
+                                  Title="No history for this range"
+                                  Message="Throughput is recorded while this tab is open, and kept for 7 days. Leave the tab open for a while, then pick a range again."
+                                  Visibility="{Binding HistoryIsEmpty, Converter={StaticResource FlexVis}}"/>
                 </Grid>
             </Border>
 

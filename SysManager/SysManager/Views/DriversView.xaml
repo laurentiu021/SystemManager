@@ -36,6 +36,10 @@
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}"
                             Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
+                    <CheckBox Content="Hide built-in Windows drivers" IsChecked="{Binding HideSystemDrivers}"
+                              VerticalAlignment="Center" Margin="8,0,0,0"
+                              AutomationProperties.Name="Hide built-in Windows drivers"
+                              ToolTip="Hide the drivers that come with Windows, leaving the ones your hardware maker installed (graphics, audio, network, and so on)."/>
                 </WrapPanel>
             </Border>
 
@@ -102,10 +106,16 @@
                         </DataGridTextColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+                <!-- Nothing scanned yet -->
                 <v:EmptyState Glyph="&#xE950;"
                               Title="No drivers listed"
                               Message="Click 'List drivers' to enumerate installed system drivers."
-                              Visibility="{Binding Drivers.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                              Visibility="{Binding HasNotScanned, Converter={StaticResource FlexVis}}"/>
+                <!-- Scanned, but the filter hid every driver: telling the user to scan again would be wrong. -->
+                <v:EmptyState Glyph="&#xE721;"
+                              Title="No drivers match your filter"
+                              Message="Every driver on this PC is supplied by Windows. Untick 'Hide built-in Windows drivers' to see them."
+                              Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>
                 </Grid>
             </Border>
 

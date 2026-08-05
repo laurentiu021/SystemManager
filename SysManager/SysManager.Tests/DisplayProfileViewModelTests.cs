@@ -61,4 +61,73 @@ public class DisplayProfileViewModelTests
         Assert.NotNull(device);
         Assert.Equal("SysManager.Models.DisplayDevice", device!.FieldType.FullName);
     }
+
+    // ── Progress feedback (regression) ──
+    // DisplayProfileView.xaml binds a progress bar to IsBusy, and the sidebar spinner reads the same
+    // flag, but this VM never assigned it — so applying a mode (which can block for seconds while the
+    // driver re-trains the panel) gave no feedback at all. DisplayProfileService is sealed with no
+    // interface, so these assert the observable end state rather than substituting the P/Invoke.
+
+    [Fact]
+    public async Task AfterInitAndItsChainedModeLoad_TheBusyFlagIsClear()
+    {
+        // Covers both branches of LoadDisplaysAsync — displays found and none found — because either
+        // way the finally must release the flag. Left set, the bar would spin forever on tab open.
+        //
+        // Init CHAINS: LoadDisplaysAsync assigns SelectedDisplay, whose handler calls InitializeAsync
+        // again — which REPLACES InitializationComplete with the mode-load task. So awaiting the
+        // handle once returns while the mode load is still running with the flag legitimately raised.
+        // Re-reading the property after the first await yields that second task; awaiting it too is
+        // what makes this deterministic instead of a race. (With no displays, the early return means
+        // no second task was ever created and the handle is simply already complete.)
+        var vm = NewVm();                        // NewVm already awaited the first task
+        await vm.InitializationComplete;         // re-read: the chained mode load, if one started
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public async Task LoadingModesForAnUnknownDevice_ClearsTheBusyFlag()
+    {
+        // A device name no adapter answers to: EnumDisplaySettings returns nothing, the last-writer
+        // guard bails out early via `return` — and the finally still has to run.
+        var vm = NewVm();
+        var load = typeof(DisplayProfileViewModel).GetMethod(
+            "LoadModesAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+        await (Task)load.Invoke(vm, [@"\\.\DISPLAY_DOES_NOT_EXIST"])!;
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public async Task AnOlderModeLoadFinishingDoesNotClearANewerOnesBusyFlag()
+    {
+        // Rapid display switches launch overlapping loads (the VM documents this). If every completion
+        // cleared the flag, the older one finishing would hide the bar while the newer load was still
+        // working — so only the newest generation may release it.
+        var vm = NewVm();
+        var load = typeof(DisplayProfileViewModel).GetMethod(
+            "LoadModesAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var generation = typeof(DisplayProfileViewModel).GetField(
+            "_modeLoadGeneration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+        // Start the older load. Invoking runs synchronously up to its first await, so by now it has
+        // claimed a generation and raised the flag.
+        var older = (Task)load.Invoke(vm, [@"\\.\DISPLAY_A"])!;
+        int olderGeneration = (int)generation.GetValue(vm)!;
+
+        // Model a newer load starting while that one is still in flight.
+        generation.SetValue(vm, olderGeneration + 1);
+        vm.IsBusy = true;
+        vm.IsProgressIndeterminate = true;
+
+        await older;
+
+        // The older completion saw a newer generation and left the flag alone.
+        Assert.True(vm.IsBusy);
+        Assert.True(vm.IsProgressIndeterminate);
+    }
 }

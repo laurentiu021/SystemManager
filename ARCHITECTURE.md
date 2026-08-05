@@ -345,6 +345,15 @@ Key services:
   that never throws. An unreadable file falls back to auto-purge OFF, and an out-of-range
   threshold resets only that field while keeping the toggle — arming an automatic system action
   on the strength of a corrupt file would be the wrong way to fail.
+- `ServiceStartupLedgerService` — records what startup type a service had before SysManager
+  disabled it, as JSON under `%LocalAppData%\SysManager\service-startup-ledger.json`, so Enable
+  restores the original instead of guessing. The value used to live in a plain property on
+  `ServiceEntry`, and every scan rebuilds those objects — so Disable → Refresh → Enable brought an
+  Automatic service back as Manual (`StartTypeToScToken` maps an unknown value to `demand`) while
+  reporting success. Same shape as the three above: injectable config directory, pure unit-tested
+  `Serialize`/`Parse`, file IO that never throws. Only the four types Windows accepts
+  (`Automatic`/`Manual`/`Boot`/`System`) are stored, and rehydration applies only to services
+  Windows currently reports as `Disabled`, so a stale entry can never override the machine.
 - `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
   Profile tab: it composes the already-audited services (`PerformanceService`,
   `ITimerResolutionService`, `ICpuAffinityService`, `StandbyMemoryService`,
@@ -408,8 +417,16 @@ Key services:
   a kernel ETW session (TraceEvent) for true per-process byte rates and falls back cleanly if the
   session can't start. `BandwidthHistoryService` persists total-throughput samples as NDJSON in
   `%LocalAppData%\SysManager\bandwidth-history.ndjson` (serialize/parse/prune/downsample are pure,
-  unit-tested); `BandwidthFormat` holds the pure rate-delta/port-summary/threshold math (formatting
-  delegates to `FormatHelper`). Strictly local and read-only.
+  unit-tested; the directory is injectable so tests never touch the user's own history), and the VM
+  reads it back through a range picker — Live plus last hour/24 hours/7 days, capped at the service's
+  own retention so no range can promise data that was pruned. `LoadAsync` walks the append-ordered
+  file from the end and stops at the first sample outside the window, so a week-long file costs the
+  window, not the whole file; the loaded series is downsampled to 400 points before plotting. The
+  range summary integrates each rate over the gap to the next sample rather than summing rates, and
+  skips gaps longer than 4× the write cadence — samples are only written while the tab is open, so
+  crediting the last known rate across a closed-tab hour would fabricate traffic. `BandwidthFormat`
+  holds the pure rate-delta/port-summary/threshold math (formatting delegates to `FormatHelper`).
+  Strictly local and read-only.
 - `SettingsWatchdogService` — snapshots a curated catalog of settings Windows Update
   tends to reset (telemetry, web search, widgets, lock-screen ads, Start suggestions, …)
   as a JSON baseline in `%LocalAppData%\SysManager\settings-baseline.json`, then diffs the

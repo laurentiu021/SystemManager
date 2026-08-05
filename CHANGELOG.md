@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.15] - 2026-08-05
+
+### Added
+- **Bandwidth Monitor can now show you the last hour, day, or week.** The tab had been recording your throughput to disk every few seconds and keeping a week of it — but nothing ever read it back, so the file grew for seven days and you could never see any of it. Pick a range and the chart now draws that period, with how much you actually downloaded and uploaded over it and the fastest speed you reached. That answers "where did my data cap go?" without an account or a cloud service. The live view is still the default and still one click away. Totals are worked out from the time between readings, and stretches where the tab was closed are left out rather than guessed at, so the figure never claims traffic that was not measured.
+- **Drivers can hide the drivers that came with Windows.** A filter for exactly this had been written into the tab — including the code that adjusts the count — but it had no checkbox, menu item or any other control in the window, so no one could ever switch it on. It is now a checkbox in the toolbar, and the count shows both the total found and the number shown, so nothing looks like it disappeared. If your PC has no third-party drivers at all, the tab now says the filter is what emptied the list, instead of telling you to run a scan you already ran.
+
+### Fixed
+- **Re-enabling a service now restores the startup type it actually had.** Disabling a service recorded its previous setting in memory only, and that memory was discarded the next time the list refreshed — which happens on every scan and on every restart. So disabling an "Automatic" service, then re-enabling it later, quietly set it to "Manual" instead while reporting success: a change to your PC's configuration that nobody asked for and nothing showed. The previous setting is now saved to disk and used on re-enable. If you re-enable a service outside SysManager, what Windows reports wins — a stale record can never override your machine.
+- **Three tabs sat silent while they worked.** CPU Core Affinity, Display Profiles and Standby List Cleaner each drew a progress bar wired to a signal their code never sent, so the bar could not appear under any circumstance, and the sidebar spinner stayed dark too. Meanwhile the work behind them is genuinely slow: listing every running process and reading its core assignment, or switching a display mode, which blocks while the monitor re-trains and can take seconds on a screen that has gone black. Clicking produced no bar, no spinner and no busy cursor — nothing to distinguish "working" from "the click did not register". All three now report progress while they work. Timer Resolution is deliberately left alone: its operations finish in well under a millisecond, so a bar there would only flicker.
+
 ## [1.56.14] - 2026-08-05
 
 ### Fixed

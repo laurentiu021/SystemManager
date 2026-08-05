@@ -45,8 +45,16 @@ public sealed partial class PrivacyViewModel : ViewModelBase
 
     private async Task LoadTogglesAsync()
     {
-        var loaded = await Task.Run(_service.LoadToggles).ConfigureAwait(true);
-        LoadToggles(loaded);
+        // The view binds a progress bar to IsBusy and the sidebar spinner reads the same flag, but
+        // this VM never set it — so reading every privacy registry key produced no feedback at all.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            var loaded = await Task.Run(_service.LoadToggles).ConfigureAwait(true);
+            LoadToggles(loaded);
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     private void LoadToggles(List<PrivacyToggle> loaded)
@@ -173,11 +181,17 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     {
         // Read the registry off the UI thread — the service reads every privacy key
         // synchronously, which froze the UI when Refresh ran directly on the dispatcher.
-        // Mirrors the async initial load (LoadTogglesAsync).
-        var loaded = await Task.Run(_service.LoadToggles).ConfigureAwait(true);
-        LoadToggles(loaded);
-        StatusMessage = "Toggles refreshed from registry.";
-        Log.Information("Privacy: refreshed toggle states from registry");
+        // Mirrors the async initial load (LoadTogglesAsync), including its progress feedback.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            var loaded = await Task.Run(_service.LoadToggles).ConfigureAwait(true);
+            LoadToggles(loaded);
+            StatusMessage = "Toggles refreshed from registry.";
+            Log.Information("Privacy: refreshed toggle states from registry");
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     private void UpdateStatus()

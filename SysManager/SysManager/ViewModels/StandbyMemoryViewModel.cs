@@ -144,24 +144,32 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
         // time on a large cache, so run it off the UI thread to keep the window responsive —
         // mirrors PerformanceViewModel.TrimRamAsync. ConfigureAwait(true) resumes on the UI
         // thread so the status/Refresh updates marshal correctly.
+        // Only the MANUAL purge drives the progress bar. The 2 s auto-purge in Tick deliberately
+        // does not: it would strobe the bar on and off in the background every couple of seconds.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
         StatusMessage = "Purging standby list…";
-        var (ok, error) = await Task.Run(() =>
+        try
         {
-            var success = _service.TryPurgeStandbyList(out var err);
-            return (success, err);
-        }).ConfigureAwait(true);
+            var (ok, error) = await Task.Run(() =>
+            {
+                var success = _service.TryPurgeStandbyList(out var err);
+                return (success, err);
+            }).ConfigureAwait(true);
 
-        if (ok)
-        {
-            Log.Information("User purged standby list");
-            ActivityLogService.Instance.Log("Standby cleaner", "Purged the standby memory list");
-            StatusMessage = "Standby list purged — cached memory released to the free list.";
-            Refresh();
+            if (ok)
+            {
+                Log.Information("User purged standby list");
+                ActivityLogService.Instance.Log("Standby cleaner", "Purged the standby memory list");
+                StatusMessage = "Standby list purged — cached memory released to the free list.";
+                Refresh();
+            }
+            else
+            {
+                StatusMessage = error;
+            }
         }
-        else
-        {
-            StatusMessage = error;
-        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand]

@@ -394,6 +394,99 @@ public class CleanupViewModelTests
         vm.RecycleBinLabel = "Empty";
         Assert.Equal("Empty", vm.RecycleBinLabel);
     }
+
+    // ---------- progress feedback (regression) ----------
+    // CleanupView.xaml binds a progress bar to IsBusy and the sidebar spinner reads the same flag,
+    // but this VM never assigned it — so nothing appeared while SFC or DISM ran, which is minutes of
+    // work. IsBusy is now DERIVED from the four per-operation flags, so overlapping operations cannot
+    // clear the bar out from under one another.
+
+    [Fact]
+    public void IsBusy_TracksAnyRunningOperation()
+    {
+        var vm = NewVm();
+        vm.IsTempRunning = true;
+        Assert.True(vm.IsBusy);
+
+        vm.IsTempRunning = false;
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public void IsBusy_StaysSetWhileASecondOperationIsStillRunning()
+    {
+        // The failure a per-command `finally { IsBusy = false; }` would cause: two operations run,
+        // the first finishes, and the bar disappears while the second is still going.
+        var vm = NewVm();
+        vm.IsTempRunning = true;
+        vm.IsBinRunning = true;
+
+        vm.IsTempRunning = false;
+
+        Assert.True(vm.IsBusy);
+        vm.IsBinRunning = false;
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public void IsBusy_IsIndeterminateForTempButDeterminateForSfcAndDism()
+    {
+        // Temp/Recycle-Bin report no percentage, so the bar must be marquee. SFC and DISM DO report
+        // one (through the runner's ProgressChanged → Progress), and a marquee bar there would throw
+        // that real number away.
+        var vm = NewVm();
+
+        vm.IsTempRunning = true;
+        Assert.True(vm.IsProgressIndeterminate);
+        vm.IsTempRunning = false;
+
+        vm.IsSfcRunning = true;
+        Assert.True(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+        vm.IsSfcRunning = false;
+
+        vm.IsDismRunning = true;
+        Assert.True(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+        vm.IsDismRunning = false;
+    }
+
+    [Fact]
+    public void IsBusy_IsClearOnceEveryOperationHasFinished()
+    {
+        var vm = NewVm();
+        vm.IsTempRunning = true;
+        vm.IsBinRunning = true;
+        vm.IsSfcRunning = true;
+        vm.IsDismRunning = true;
+
+        vm.IsTempRunning = false;
+        vm.IsBinRunning = false;
+        vm.IsSfcRunning = false;
+        vm.IsDismRunning = false;
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public void Construction_LeavesTheProgressBarOff()
+    {
+        // The startup pre-scan runs with reportProgress: false, so it never touches the flag and
+        // construction has no visible side effect. That is the contract the older
+        // IsProgressIndeterminate_TogglesCleanly test depends on, restated here so the reason is
+        // discoverable from the progress-feedback tests too.
+        //
+        // It matters that this holds UNCONDITIONALLY rather than by timing: the scan is
+        // fire-and-forget from the constructor, so an approach that raised the flag "after the first
+        // yield" left the observed value depending on whether that continuation resumed before the
+        // constructor returned — it passed locally and failed on CI. The startup scan's progress is
+        // already visible in the "Scanning…" size labels; only the user-pressed Rescan drives the bar.
+        var vm = NewVm();
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
 }
 
 // ---------- SFC result parsing ----------

@@ -35,9 +35,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     private readonly ResourceHistoryService _service;
     private IReadOnlyList<ResourceSample> _loaded = [];
 
-    public sealed record RangeOption(string Label, TimeSpan Range);
-
-    public IReadOnlyList<RangeOption> RangeOptions { get; } =
+    public IReadOnlyList<HistoryRange> RangeOptions { get; } =
     [
         new("Last hour", TimeSpan.FromHours(1)),
         new("Last 6 hours", TimeSpan.FromHours(6)),
@@ -48,7 +46,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
 
     public int[] RetentionOptions => ResourceHistoryService.RetentionOptions;
 
-    [ObservableProperty] private RangeOption _selectedRange;
+    [ObservableProperty] private HistoryRange _selectedRange;
     [ObservableProperty] private int _retentionDays;
     [ObservableProperty] private int _sampleCount;
     [ObservableProperty] private bool _hasData;
@@ -101,7 +99,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         InitializeAsync(() => ReloadAsync());
     }
 
-    partial void OnSelectedRangeChanged(RangeOption value) => _ = ReloadAsync();
+    partial void OnSelectedRangeChanged(HistoryRange value) => _ = ReloadAsync();
 
     partial void OnRetentionDaysChanged(int value)
     {

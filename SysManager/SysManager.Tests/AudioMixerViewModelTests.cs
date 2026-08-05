@@ -451,4 +451,43 @@ public class AudioMixerViewModelTests
         // Recycled/blank DataContext must be a safe no-op (the handlers pass DataContext-as-row).
         AudioMixerView.ApplyAdjustingState(null, dragging: true, keyboardFocused: true);
     }
+
+    // ── Progress feedback (regression) ──
+    // AudioMixerView.xaml binds a progress bar to IsBusy and the sidebar spinner reads the same flag,
+    // but this VM never assigned it — so the initial COM enumeration of sessions and render devices
+    // showed nothing. Only the FIRST load reports progress; the 1 s reconcile loop deliberately does
+    // not, or the bar would strobe for as long as the tab stays open.
+
+    [Fact]
+    public async Task AfterTheInitialLoad_TheBusyFlagIsClear()
+    {
+        // The load raises the flag; it must be released when init finishes, or the bar would spin
+        // forever on a freshly opened tab. (The raise itself happens inside the constructor, before a
+        // test can subscribe — the reconcile-loop test below covers the "never set again" half.)
+        var vm = NewVm(ServiceWith(Session("s1")));
+
+        await vm.InitializationComplete;
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public async Task TheReconcileLoop_DoesNotStrobeTheProgressBar()
+    {
+        // Deliberate asymmetry, pinned so a later refactor does not "fix" it back: a per-reconcile
+        // flag would flash the bar on and off every second for as long as the tab is open.
+        var vm = NewVm(ServiceWith(Session("s1")));
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
+        };
+
+        await vm.ReconcileAsync();
+
+        Assert.Empty(seen);
+        Assert.False(vm.IsBusy);
+    }
 }

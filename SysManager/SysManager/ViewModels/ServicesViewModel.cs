@@ -20,6 +20,7 @@ namespace SysManager.ViewModels;
 public sealed partial class ServicesViewModel : ViewModelBase
 {
     private readonly IPowerShellRunner _ps;
+    private readonly ServiceStartupLedgerService _ledger;
     private List<ServiceEntry> _allServices = [];
 
     public BulkObservableCollection<ServiceEntry> Services { get; } = new();
@@ -37,9 +38,10 @@ public sealed partial class ServicesViewModel : ViewModelBase
     public string[] FilterOptions { get; } =
         { "All", "Running", "Stopped", "Safe", "Caution", "Critical" };
 
-    public ServicesViewModel(IPowerShellRunner ps)
+    public ServicesViewModel(IPowerShellRunner ps, ServiceStartupLedgerService? ledger = null)
     {
         _ps = ps;
+        _ledger = ledger ?? new ServiceStartupLedgerService();
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
@@ -70,6 +72,10 @@ public sealed partial class ServicesViewModel : ViewModelBase
         try
         {
             _allServices = await Task.Run(ServiceManagerService.GetAllServices);
+            // GetAllServices builds fresh ServiceEntry objects, so anything Disable recorded on
+            // the previous instances is gone. Re-attach it from the persisted ledger, or Enable
+            // would restore an Automatic service as Manual after any refresh or restart.
+            RehydratePreviousStartTypes();
             // Ensure collection updates happen on the UI thread to prevent
             // cross-thread exceptions when navigating during concurrent scans (#154).
             if (Application.Current?.Dispatcher is { } d && !d.CheckAccess())
@@ -80,6 +86,25 @@ public sealed partial class ServicesViewModel : ViewModelBase
         catch (InvalidOperationException ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
         catch (Win32Exception ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>
+    /// Copies each service's pre-disable startup type from the persisted ledger onto the freshly
+    /// scanned entries. Only applied to services Windows currently reports as Disabled: if the user
+    /// re-enabled one outside SysManager, a stale ledger entry must not override what the machine
+    /// actually says.
+    /// </summary>
+    private void RehydratePreviousStartTypes()
+    {
+        var ledger = _ledger.Load();
+        if (ledger.Count == 0) return;
+
+        foreach (var entry in _allServices)
+        {
+            if (!string.Equals(entry.StartType, "Disabled", StringComparison.OrdinalIgnoreCase)) continue;
+            if (ledger.TryGetValue(entry.Name, out var record))
+                entry.PreviousStartType = record.PreviousStartType;
+        }
     }
 
     private void ApplyFilterCore()
@@ -180,6 +205,10 @@ public sealed partial class ServicesViewModel : ViewModelBase
         {
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, "disabled", _ps);
             entry.PreviousStartType = previous;
+            // Persist it too. The in-memory value is lost by the next scan, which rebuilds every
+            // ServiceEntry — so without this, Enable after a refresh or restart silently restored
+            // an Automatic service as Manual while reporting success.
+            _ledger.Remember(entry.Name, previous, DateTimeOffset.UtcNow);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} set to Disabled.";
             Log.Information("Service disabled: {ServiceName} (was {Previous})", entry.Name, previous);
@@ -193,14 +222,18 @@ public sealed partial class ServicesViewModel : ViewModelBase
         if (entry is null) return;
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
-        // Restore the startup type the service had before SysManager disabled it. If we
-        // never disabled it this session, fall back to Manual (the conservative default).
-        var targetToken = ServiceManagerService.StartTypeToScToken(entry.PreviousStartType);
+        // Restore the startup type the service had before SysManager disabled it. Prefer the
+        // persisted ledger over the in-memory value: the property is wiped by every scan, so
+        // in-memory only survives until the next Refresh. If neither knows, fall back to Manual
+        // (the conservative default that StartTypeToScToken applies to an unknown value).
+        var previous = _ledger.PreviousStartTypeFor(entry.Name) ?? entry.PreviousStartType;
+        var targetToken = ServiceManagerService.StartTypeToScToken(previous);
 
         try
         {
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, targetToken, _ps);
             entry.PreviousStartType = null;
+            _ledger.Forget(entry.Name);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} set to {entry.StartType}.";
             Log.Information("Service enabled: {ServiceName} -> {StartType}", entry.Name, entry.StartType);

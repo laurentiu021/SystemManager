@@ -83,6 +83,7 @@ public static class ServiceRegistration
         services.AddSingleton<IWindowsThemeService, WindowsThemeService>();
         services.AddSingleton<StandbyMemoryService>();
         services.AddSingleton<StandbyPreferenceService>();
+        services.AddSingleton<ServiceStartupLedgerService>();
         services.AddSingleton<ResourceHistoryService>();
         services.AddSingleton<BandwidthHistoryService>();
         services.AddSingleton<ISettingsWatchdogService, SettingsWatchdogService>();

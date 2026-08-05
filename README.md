@@ -433,6 +433,11 @@ a confirmation before it runs:
 - **Threshold alert** — set a Mbps limit and the tab warns you when total download
   or upload goes over it (handy for catching a runaway background upload); set it to
   0 to turn the alert off
+- **Look back over the last hour, day, or week** — pick a range and the chart shows
+  the throughput it recorded, with how much you actually downloaded and uploaded over
+  that period and the fastest speed you hit. That answers "where did my data cap go?"
+  without any account or cloud service. History is recorded while the tab is open and
+  kept for 7 days, in a plain file on your own PC
 - Strictly local and read-only: SysManager only observes, never throttles or blocks,
   and nothing about your traffic leaves the machine
 
@@ -747,6 +752,10 @@ offers, "rate us" prompts:
 ### Drivers
 - Sortable DataGrid table of all installed system drivers
 - Columns: Device Name, Manufacturer, Version, Date — click headers to sort
+- **Hide built-in Windows drivers** — tick the filter to leave only the drivers your
+  hardware maker installed (graphics, audio, network, …), which is usually what you
+  care about when checking whether something needs updating. The count shows both
+  totals, so nothing looks like it vanished
 - Data parsed from `Get-CimInstance Win32_PnPSignedDriver`
 
 ### Dashboard

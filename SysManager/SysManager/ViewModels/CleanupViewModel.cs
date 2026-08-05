@@ -117,6 +117,13 @@ public sealed partial class CleanupViewModel : ViewModelBase
         // which is seconds of disk work on a neglected machine — and "Rescan" is a button the user
         // presses, so it needs to visibly do something. Kept separate from OnAnyRunningChanged's
         // derived flag: a pre-scan is not one of the four cleanup operations.
+        //
+        // Raised AFTER the first yield, not before it. Setting it synchronously would mean the
+        // constructor itself returned with the bar already on — which broke the long-standing
+        // "IsProgressIndeterminate starts false" test, and is a real behavioural claim: the tab is
+        // not busy until the scan is actually running. Yielding first also keeps construction free
+        // of visible side effects.
+        await Task.Yield();
         IsBusy = true;
         IsProgressIndeterminate = true;
         try

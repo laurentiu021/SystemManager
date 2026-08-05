@@ -69,11 +69,19 @@ public class DisplayProfileViewModelTests
     // interface, so these assert the observable end state rather than substituting the P/Invoke.
 
     [Fact]
-    public void AfterInit_TheBusyFlagIsClear()
+    public async Task AfterInitAndItsChainedModeLoad_TheBusyFlagIsClear()
     {
         // Covers both branches of LoadDisplaysAsync — displays found and none found — because either
         // way the finally must release the flag. Left set, the bar would spin forever on tab open.
-        var vm = NewVm();
+        //
+        // Init CHAINS: LoadDisplaysAsync assigns SelectedDisplay, whose handler calls InitializeAsync
+        // again — which REPLACES InitializationComplete with the mode-load task. So awaiting the
+        // handle once returns while the mode load is still running with the flag legitimately raised.
+        // Re-reading the property after the first await yields that second task; awaiting it too is
+        // what makes this deterministic instead of a race. (With no displays, the early return means
+        // no second task was ever created and the handle is simply already complete.)
+        var vm = NewVm();                        // NewVm already awaited the first task
+        await vm.InitializationComplete;         // re-read: the chained mode load, if one started
 
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);

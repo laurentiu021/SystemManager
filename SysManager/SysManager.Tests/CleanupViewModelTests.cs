@@ -470,18 +470,22 @@ public class CleanupViewModelTests
     }
 
     [Fact]
-    public void PreScan_RaisesTheBusyFlagWithoutWaitingForTheDiskWalk()
+    public void Construction_LeavesTheProgressBarOff()
     {
-        // Rescan and the constructor's pre-scan both walk every file under both Temp folders and the
-        // Recycle Bin — measured at 20,776 temp files and 163,188 in the bin on a real machine, which
-        // is exactly why the progress bar was worth fixing. Awaiting that walk here would make the
-        // test's DURATION depend on the developer's disk state, so this asserts only the synchronous
-        // half: the flag is raised before the first await, and the pre-scan's own finally releases it
-        // (covered by the derived-flag tests above, which need no IO at all).
+        // The pre-scan raises the flag only AFTER its first yield, so constructing the VM has no
+        // visible side effect — the tab is not "busy" until the scan is actually running. This is the
+        // same contract the older IsProgressIndeterminate_TogglesCleanly test depends on; stated
+        // explicitly here so the reason is discoverable from the progress-feedback tests too.
+        //
+        // The scan itself is deliberately not awaited anywhere in this class: it walks every file
+        // under both Temp folders and the Recycle Bin (measured at 20,776 and 163,188 files on a real
+        // machine — precisely why the bar was worth fixing), so awaiting it would make the test's
+        // duration depend on the developer's disk state. The derived-flag tests above cover the
+        // raise/clear behaviour with no IO at all.
         var vm = NewVm();
 
-        Assert.True(vm.IsBusy);
-        Assert.True(vm.IsProgressIndeterminate);
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
     }
 }
 

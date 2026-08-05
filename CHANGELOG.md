@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.57.1] - 2026-08-05
+
+### Fixed
+- **Fixed a crash in the new Bandwidth Monitor history view.** Switching the chart to a stored range while the tab was live could make the app read the graph's data while it was still being rebuilt, which threw an error instead of drawing the chart. The live reading and the history load no longer touch the graph at the same time, and cancelling a load part-way (by leaving the tab) no longer leaves the live chart frozen the next time you open it.
+
 ## [1.57.0] - 2026-08-05
 
 ### Added

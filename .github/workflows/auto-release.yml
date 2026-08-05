@@ -100,6 +100,32 @@ jobs:
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
           echo "Next version: $NEXT (bump=$BUMP from $TAG)"
 
+      # Verify the CHANGELOG BEFORE the tag exists. release.yml already refuses to publish a release
+      # whose version has no CHANGELOG section — but by then the tag is pushed, so the failure leaves
+      # a tag with no release, and the next fix: merge simply tags another one. Checking here means a
+      # missing entry costs a re-run instead of a stranded version.
+      #
+      # The author cannot reliably know this number in advance (it depends on the commit type AND the
+      # previous tag), so the message says exactly what to add rather than implying carelessness.
+      - name: Verify CHANGELOG has an entry for the computed version
+        if: steps.bump.outputs.type != 'none'
+        shell: bash
+        run: |
+          NEXT="${{ steps.next.outputs.version }}"
+          VERSION="${NEXT#v}"
+          ESCAPED=${VERSION//./\\.}
+          if ! grep -qE "^## \[${ESCAPED}\]" CHANGELOG.md; then
+            echo "::error::No CHANGELOG.md entry for $VERSION (a ${{ steps.bump.outputs.type }} bump from ${{ steps.latest.outputs.tag }}). Add a '## [$VERSION] - <date>' section, then re-run this workflow. No tag was created."
+            exit 1
+          fi
+          # A header with nothing under it would publish a release with empty notes.
+          SECTION=$(awk -v hdr="## [$VERSION]" 'index($0,hdr)==1{f=1;next} /^## \[/{f=0} f' CHANGELOG.md | tr -d '[:space:]')
+          if [ -z "$SECTION" ]; then
+            echo "::error::The CHANGELOG.md entry for $VERSION is empty. Add the notes under its header, then re-run. No tag was created."
+            exit 1
+          fi
+          echo "CHANGELOG has a non-empty entry for $VERSION."
+
       - name: Create and push tag
         if: steps.bump.outputs.type != 'none'
         shell: bash

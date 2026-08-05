@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.14] - 2026-08-05
+
+### Fixed
+- **Tidied up the log writer added in 1.56.13.** It created a small text buffer for every log line without releasing it, and rebuilt its formatter on each call. Both are now handled once, so logging allocates less and leaves nothing behind. No change to what ends up in the log.
+
 ## [1.56.13] - 2026-08-04
 
 ### Fixed

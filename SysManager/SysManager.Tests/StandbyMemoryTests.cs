@@ -41,4 +41,85 @@ public class StandbyMemoryTests
         Assert.Equal(0UL, MemoryStatus.Empty.TotalBytes);
         Assert.Equal("0 B", MemoryStatus.Empty.AvailableDisplay);
     }
+
+    // ── Progress feedback on the manual purge (regression) ──
+    // StandbyMemoryView.xaml binds a progress bar to IsBusy, but the VM never set it, so the bar was
+    // structurally incapable of appearing while a purge of a multi-gigabyte cache blocked.
+
+    private static StandbyMemoryViewModel NewVm(string configDir) =>
+        new(new Services.StandbyMemoryService(), new Services.StandbyPreferenceService(configDir));
+
+    [Fact]
+    public async Task ManualPurge_RaisesIsBusyThenClearsIt()
+    {
+        using var temp = new TempConfigDir();
+        var vm = NewVm(temp.Path);
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
+        };
+
+        await vm.PurgeCommand.ExecuteAsync(null);
+
+        if (vm.IsElevated)
+        {
+            // Elevated: the purge ran, so the flag went up and came back down.
+            Assert.Equal([true, false], seen);
+        }
+        else
+        {
+            // Not elevated: the command short-circuits before any work, so the bar must never appear
+            // — flashing it for an operation that was refused would be its own bug.
+            Assert.Empty(seen);
+            Assert.Contains("administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task ManualPurge_LeavesTheBarIndeterminateThenClear()
+    {
+        // There is no percentage to report for a native purge call, so the bar must be marquee.
+        using var temp = new TempConfigDir();
+        var vm = NewVm(temp.Path);
+
+        await vm.PurgeCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public void AutoPurgeIsDeliberatelyExcludedFromTheProgressBar()
+    {
+        // The 2 s auto-purge tick must NOT drive the bar: it would strobe on and off in the background
+        // every couple of seconds. Pinned so the next refactor does not "fix" the asymmetry back.
+        var tick = typeof(StandbyMemoryViewModel).GetMethod(
+            "Tick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        Assert.NotNull(tick);
+        // The guard flag the tick uses instead of IsBusy — a separate, non-UI-bound field.
+        Assert.NotNull(typeof(StandbyMemoryViewModel).GetField(
+            "_autoPurgeInFlight", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
+    }
+
+    /// <summary>A throwaway preference directory, so the developer's real settings are untouched.</summary>
+    private sealed class TempConfigDir : IDisposable
+    {
+        public string Path { get; }
+
+        public TempConfigDir()
+        {
+            Path = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "SysManagerStandbyVmTests", Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(Path);
+        }
+
+        public void Dispose()
+        {
+            try { if (System.IO.Directory.Exists(Path)) System.IO.Directory.Delete(Path, recursive: true); }
+            catch (System.IO.IOException) { /* a leftover temp dir must never fail a test run */ }
+        }
+    }
 }

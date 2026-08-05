@@ -38,6 +38,14 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     private const int MaxRows = 40;
     // Rolling live-chart window: 120 points at ~1s = the last ~2 minutes of throughput.
     private const int LiveChartPoints = 120;
+    // A stored range is downsampled to this many points before plotting — same cap and reason as
+    // ResourceHistoryViewModel: a chart reads fine at a few hundred points and costs CPU beyond that.
+    private const int MaxHistoryPoints = 400;
+    // How often a sample is persisted, in seconds. Bounds the file's growth (we poll every second).
+    private const double HistoryWriteIntervalSeconds = 5;
+    // Longest gap between two samples still treated as continuous monitoring, at 4× the write
+    // cadence. Beyond it the tab was closed, so the interval is skipped rather than extrapolated.
+    private const double MaxCreditedGapSeconds = HistoryWriteIntervalSeconds * 4;
 
     private readonly BandwidthHistoryService _history;
     private readonly Func<IBandwidthMonitorService> _connectionSourceFactory;
@@ -48,6 +56,37 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     private DateTime _lastHistoryWrite = DateTime.MinValue;
 
     public BulkObservableCollection<ProcessNetworkUsage> Processes { get; } = new();
+
+    /// <summary>
+    /// Time ranges for the throughput chart. "Live" is the in-memory rolling window; the rest load
+    /// the samples the poll loop has been persisting, capped at the service's 7-day retention.
+    /// </summary>
+    public IReadOnlyList<HistoryRange> RangeOptions { get; } =
+    [
+        new("Live (~2 min)", TimeSpan.Zero),
+        new("Last hour", TimeSpan.FromHours(1)),
+        new("Last 24 hours", TimeSpan.FromDays(1)),
+        new("Last 7 days", TimeSpan.FromDays(BandwidthHistoryService.RetentionDays)),
+    ];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ChartTitle))]
+    private HistoryRange _selectedRange;
+
+    /// <summary>True while a stored range is shown — the live poll then stops repainting the chart.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ChartTitle))]
+    private bool _showingHistory;
+
+    /// <summary>Set when a stored range was selected but no samples fall inside it.</summary>
+    [ObservableProperty] private bool _historyIsEmpty;
+
+    /// <summary>Totals for the loaded range, e.g. "Downloaded 4.2 GB · Uploaded 380 MB" — empty in live mode.</summary>
+    [ObservableProperty] private string _historySummary = "";
+
+    public string ChartTitle => ShowingHistory
+        ? $"Throughput — {SelectedRange.Label.ToLowerInvariant()}"
+        : "Throughput (last ~2 minutes)";
 
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private bool _hasProcesses;
@@ -118,6 +157,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         _connectionSourceFactory = connectionSourceFactory;
         _etwSourceFactory = etwSourceFactory;
         IsElevated = AdminHelper.IsElevated();
+        _selectedRange = RangeOptions[0]; // Live — the tab's job is the current moment first.
 
         ThroughputXAxes = [BuildTimeAxis()];
         ThroughputYAxes = [BuildRateAxis()];
@@ -201,14 +241,18 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         TotalUpBytesPerSec = snap.TotalUpBytesPerSec;
 
         // Setting the totals above already re-evaluates the alert via their changed-handlers.
-        AppendToLiveChart(DateTime.Now, snap.TotalDownBytesPerSec, snap.TotalUpBytesPerSec);
+        // Keep filling the live buffers only while the live range is shown; a stored range owns the
+        // chart until the user switches back, otherwise each poll would append a "now" point onto a
+        // week-long series and squash it.
+        if (!ShowingHistory)
+            AppendToLiveChart(DateTime.Now, snap.TotalDownBytesPerSec, snap.TotalUpBytesPerSec);
         MergeInto(snap.Processes);
         HasProcesses = Processes.Count > 0;
 
         // Feed the history graph at most once per ~5s so the file grows at a bounded rate even
         // though we poll every second (matches ResourceHistory's 10s-ish cadence intent).
         var now = DateTime.Now;
-        if ((now - _lastHistoryWrite).TotalSeconds >= 5)
+        if ((now - _lastHistoryWrite).TotalSeconds >= HistoryWriteIntervalSeconds)
         {
             _lastHistoryWrite = now;
             await _history.AppendAsync(
@@ -281,6 +325,89 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
 
         var which = down && up ? "Download and upload" : down ? "Download" : "Upload";
         AlertMessage = $"{which} exceeded {AlertThresholdMbps:0.#} Mbps (↓ {DownDisplay} · ↑ {UpDisplay}).";
+    }
+
+    partial void OnSelectedRangeChanged(HistoryRange value)
+    {
+        RefreshTimeAxisLabeler();
+        _ = ReloadHistoryAsync();
+    }
+
+    /// <summary>
+    /// Repaints the chart for the selected range. Live clears the buffers and hands them back to the
+    /// poll loop; a stored range loads the persisted samples, downsamples them, and freezes the chart
+    /// on that window.
+    /// <para>This is what the sample file is for. The poll loop has always written a sample every ~5s
+    /// (and pruned to a 7-day window), but nothing ever read it back, so the data was invisible —
+    /// pure disk churn. The service's Load/Downsample already existed and were unit-tested; only the
+    /// call was missing.</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task ReloadHistoryAsync()
+    {
+        var range = SelectedRange;
+        if (range.IsLive)
+        {
+            ShowingHistory = false;
+            HistoryIsEmpty = false;
+            HistorySummary = "";
+            // Start the live window from empty rather than showing stale points from before the
+            // history detour; the poll loop refills it within a second.
+            _downBuffer.Clear();
+            _upBuffer.Clear();
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var loaded = await _history.LoadAsync(range.Range, _pollCts?.Token ?? default).ConfigureAwait(true);
+            var points = BandwidthHistoryService.Downsample(loaded, MaxHistoryPoints);
+
+            _downBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.DownBytesPerSec)));
+            _upBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.UpBytesPerSec)));
+
+            ShowingHistory = true;
+            HistoryIsEmpty = loaded.Count == 0;
+            HistorySummary = BuildHistorySummary(loaded);
+            StatusMessage = loaded.Count > 0
+                ? $"Showing {loaded.Count} recorded sample(s) over {range.Label.ToLowerInvariant()}."
+                : "No history recorded for that range yet — samples are saved while this tab is open.";
+        }
+        catch (OperationCanceledException) { /* tab closed mid-load */ }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>
+    /// Totals and peaks for a loaded range: how much moved and how fast it peaked. Pure so it is
+    /// testable without WPF (mirrors <see cref="ResourceHistoryViewModel.BuildSummary"/>).
+    /// <para>Each sample is a rate, not a volume, so the byte totals are integrated over the gaps
+    /// between consecutive samples rather than summed — samples are ~5s apart while the tab is open
+    /// but arbitrarily far apart across sessions, and summing rates would invent traffic for every
+    /// minute the tab was closed.</para>
+    /// </summary>
+    internal static string BuildHistorySummary(IReadOnlyList<BandwidthSample> samples)
+    {
+        if (samples.Count == 0) return "";
+
+        double downBytes = 0, upBytes = 0, peakDown = 0, peakUp = 0;
+        for (int i = 0; i < samples.Count; i++)
+        {
+            peakDown = Math.Max(peakDown, samples[i].DownBytesPerSec);
+            peakUp = Math.Max(peakUp, samples[i].UpBytesPerSec);
+            if (i == 0) continue;
+
+            // Only credit a gap that plausibly belongs to one continuous stretch of monitoring. A
+            // longer gap means the tab (or the app) was closed and we have no idea what happened.
+            double gapSeconds = (samples[i].Timestamp - samples[i - 1].Timestamp).TotalSeconds;
+            if (gapSeconds <= 0 || gapSeconds > MaxCreditedGapSeconds) continue;
+            downBytes += samples[i].DownBytesPerSec * gapSeconds;
+            upBytes += samples[i].UpBytesPerSec * gapSeconds;
+        }
+
+        return $"Downloaded {BandwidthFormat.FormatBytes((long)downBytes)} · " +
+               $"Uploaded {BandwidthFormat.FormatBytes((long)upBytes)}   ·   " +
+               $"Peak ↓ {BandwidthFormat.FormatRate(peakDown)} · ↑ {BandwidthFormat.FormatRate(peakUp)}";
     }
 
     partial void OnPreciseRequestedChanged(bool value)
@@ -356,9 +483,28 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         };
     }
 
+    /// <summary>
+    /// Formats an axis tick. The live window spans two minutes so it needs seconds; a stored range
+    /// spans hours or days, where "HH:mm:ss" repeats the same label across a whole screen and hides
+    /// which day a spike was on. <paramref name="range"/> at or below zero means the live window.
+    /// </summary>
+    internal static string FormatAxisTick(double ticks, TimeSpan range)
+    {
+        if (ticks <= 0 || ticks >= DateTime.MaxValue.Ticks) return "";
+        var at = new DateTime((long)ticks);
+        if (range <= TimeSpan.Zero) return at.ToString("HH:mm:ss");
+        return range > TimeSpan.FromHours(24) ? at.ToString("MM-dd HH:mm") : at.ToString("HH:mm");
+    }
+
+    private void RefreshTimeAxisLabeler()
+    {
+        var range = SelectedRange.Range;
+        ThroughputXAxes[0].Labeler = v => FormatAxisTick(v, range);
+    }
+
     private static Axis BuildTimeAxis() => new()
     {
-        Labeler = v => v > 0 && v < DateTime.MaxValue.Ticks ? new DateTime((long)v).ToString("HH:mm:ss") : "",
+        Labeler = v => FormatAxisTick(v, TimeSpan.Zero),
         TextSize = 12,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },

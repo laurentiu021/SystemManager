@@ -2,8 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Reflection;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -326,5 +328,133 @@ public class ServicesViewModelTests
         var vm = await CreateWithDataAsync();
         var ex = await Record.ExceptionAsync(() => vm.StopServiceCommand.ExecuteAsync(null));
         Assert.Null(ex);
+    }
+
+    // ── Startup-type ledger rehydration (regression) ──
+
+    /// <summary>
+    /// Runs the private <c>RehydratePreviousStartTypes</c> against a seeded <c>_allServices</c>,
+    /// which is what <c>RefreshAsync</c> does after every scan.
+    /// </summary>
+    private static async Task<ServicesViewModel> CreateWithLedgerAsync(
+        List<ServiceEntry> services, ServiceStartupLedgerService ledger)
+    {
+        var vm = new ServicesViewModel(new Services.PowerShellRunner(), ledger);
+        await vm.InitializationComplete;
+
+        typeof(ServicesViewModel)
+            .GetField("_allServices", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(vm, services);
+        typeof(ServicesViewModel)
+            .GetMethod("RehydratePreviousStartTypes", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(vm, null);
+        return vm;
+    }
+
+    [Fact]
+    public async Task Refresh_RestoresThePreviousStartTypeFromTheLedger()
+    {
+        // The bug: GetAllServices builds brand-new ServiceEntry objects on every scan, so the
+        // in-memory PreviousStartType set by Disable was gone by the next Refresh. Enable then hit
+        // StartTypeToScToken's "demand" fallback and brought an Automatic service back as Manual,
+        // reporting success the whole time.
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        ledger.Remember("wuauserv", "Automatic", DateTimeOffset.UnixEpoch);
+
+        var scanned = new List<ServiceEntry>
+        {
+            // As Windows reports it after the disable: Disabled, and with no memory of what it was.
+            new() { Name = "wuauserv", DisplayName = "Windows Update", Status = "Stopped", StartType = "Disabled" },
+        };
+        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+
+        Assert.Equal("Automatic", scanned[0].PreviousStartType);
+    }
+
+    [Fact]
+    public async Task Refresh_DoesNotRehydrateAServiceWindowsReportsAsEnabled()
+    {
+        // If the user re-enabled the service outside SysManager, the machine is the authority. A
+        // stale ledger entry must not overwrite what Windows currently reports.
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        ledger.Remember("wuauserv", "Automatic", DateTimeOffset.UnixEpoch);
+
+        var scanned = new List<ServiceEntry>
+        {
+            new() { Name = "wuauserv", DisplayName = "Windows Update", Status = "Running", StartType = "Manual" },
+        };
+        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+
+        Assert.Null(scanned[0].PreviousStartType);
+    }
+
+    [Fact]
+    public async Task Refresh_LeavesServicesWithNoLedgerEntryAlone()
+    {
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        ledger.Remember("wuauserv", "Automatic", DateTimeOffset.UnixEpoch);
+
+        var scanned = new List<ServiceEntry>
+        {
+            new() { Name = "Spooler", DisplayName = "Print Spooler", Status = "Stopped", StartType = "Disabled" },
+        };
+        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+
+        // Null, not "Manual": Enable's own fallback decides that, so the ledger must not fake it.
+        Assert.Null(scanned[0].PreviousStartType);
+    }
+
+    [Fact]
+    public async Task Refresh_WithAnEmptyLedger_ChangesNothing()
+    {
+        using var temp = new TempLedgerDir();
+
+        var scanned = new List<ServiceEntry>
+        {
+            new() { Name = "wuauserv", DisplayName = "Windows Update", Status = "Stopped", StartType = "Disabled" },
+        };
+        using var vm = await CreateWithLedgerAsync(scanned, temp.NewLedger());
+
+        Assert.Null(scanned[0].PreviousStartType);
+    }
+
+    [Fact]
+    public async Task Refresh_MatchesTheLedgerCaseInsensitively()
+    {
+        // Service-name casing is not guaranteed identical between the ledger write and a later scan.
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        ledger.Remember("WuauServ", "Automatic", DateTimeOffset.UnixEpoch);
+
+        var scanned = new List<ServiceEntry>
+        {
+            new() { Name = "wuauserv", DisplayName = "Windows Update", Status = "Stopped", StartType = "disabled" },
+        };
+        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+
+        Assert.Equal("Automatic", scanned[0].PreviousStartType);
+    }
+
+    /// <summary>A throwaway ledger directory, so the developer's real %LOCALAPPDATA% file is untouched.</summary>
+    private sealed class TempLedgerDir : IDisposable
+    {
+        private readonly string _dir;
+
+        public TempLedgerDir()
+        {
+            _dir = Path.Combine(Path.GetTempPath(), "SysManagerServicesVmTests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_dir);
+        }
+
+        public ServiceStartupLedgerService NewLedger() => new(_dir);
+
+        public void Dispose()
+        {
+            try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
+            catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+        }
     }
 }

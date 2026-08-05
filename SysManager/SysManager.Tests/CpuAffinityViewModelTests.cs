@@ -236,4 +236,76 @@ public class CpuAffinityViewModelTests
         Assert.All(vm.Cores, c => Assert.Equal(c.Index == 1, c.IsSelected));
         Assert.Contains("Restored", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ── Progress feedback (regression) ──
+    // The view binds a progress bar to IsBusy and the sidebar spinner reads the same flag, but this
+    // VM never set it — so enumerating every process (reading each one's affinity) gave the user no
+    // feedback whatsoever. The bar was structurally incapable of appearing.
+
+    [Fact]
+    public async Task RefreshProcesses_RaisesIsBusyWhileWorkingAndClearsItAfter()
+    {
+        const int pid = 4242;
+        var service = FourCoreServiceWith(pid, 0b0001);
+        var vm = NewVm(service);
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
+        };
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        // Observed via the change notifications rather than a sampled read: the operation completes
+        // too fast to catch mid-flight, but the flag must still have gone up and then down.
+        Assert.Equal([true, false], seen);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task RefreshProcesses_SetsTheBarToIndeterminate()
+    {
+        // There is no percentage to report for a process enumeration, so the bar must be marquee —
+        // a determinate bar stuck at 0 reads as "stalled".
+        const int pid = 4242;
+        var vm = NewVm(FourCoreServiceWith(pid, 0b0001));
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.IsProgressIndeterminate)) seen.Add(vm.IsProgressIndeterminate);
+        };
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.Equal([true, false], seen);
+    }
+
+    [Fact]
+    public void AfterConstruction_TheBusyFlagIsClear()
+    {
+        // The initial topology + process load also sets the flag; it must be released once init ends,
+        // or the bar would spin forever on a freshly opened tab.
+        var vm = NewVm(FourCoreServiceWith(4242, 0b0001));
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public async Task RefreshProcesses_WhenTheServiceThrows_StillClearsTheBusyFlag()
+    {
+        // A failed scan must not leave the bar spinning forever.
+        var service = Substitute.For<ICpuAffinityService>();
+        service.LogicalProcessorCount.Returns(4);
+        service.GetCores().Returns([new CpuCore(0, 0, "Standard")]);
+        service.GetProcesses().Returns(_ => throw new InvalidOperationException("scan failed"));
+
+        var vm = new CpuAffinityViewModel(service);
+        await vm.InitializationComplete;   // the guarded helper logs the failure
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
 }

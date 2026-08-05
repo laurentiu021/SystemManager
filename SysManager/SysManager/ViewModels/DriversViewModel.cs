@@ -25,6 +25,17 @@ public sealed partial class DriversViewModel : ViewModelBase
     [ObservableProperty] private string _summary = "Click List drivers to scan installed drivers.";
     [ObservableProperty] private bool _hideSystemDrivers;
 
+    /// <summary>
+    /// True when a scan found drivers but the filter hid every one of them. Distinguishes "nothing
+    /// scanned yet" from "filtered to nothing" — with one shared empty state, checking the filter on
+    /// a machine whose drivers are all Microsoft-supplied told the user to click a button they had
+    /// already clicked. Same split as the Logs tab.
+    /// </summary>
+    [ObservableProperty] private bool _hasNoResults;
+
+    /// <summary>True before the first scan — drives the "click List drivers" prompt.</summary>
+    [ObservableProperty] private bool _hasNotScanned = true;
+
     public DriversViewModel(IPowerShellRunner runner)
     {
         _runner = runner;
@@ -79,8 +90,9 @@ public sealed partial class DriversViewModel : ViewModelBase
             finally { _runner.LineReceived -= Capture; }
 
             ParseDriverJson(json.ToString());
+            HasNotScanned = false;
             Summary = $"{_allDrivers.Count} drivers found" +
-                      (HideSystemDrivers ? $" ({DriverCount} shown, system drivers hidden)." : ".");
+                      (HideSystemDrivers ? $" ({DriverCount} shown, built-in Windows drivers hidden)." : ".");
             StatusMessage = "Done";
             ToastService.Instance.Show("Driver scan complete", $"{_allDrivers.Count} drivers found");
         }
@@ -145,13 +157,18 @@ public sealed partial class DriversViewModel : ViewModelBase
         Drivers.ReplaceWith(filtered);
 
         DriverCount = Drivers.Count;
+        HasNoResults = _allDrivers.Count > 0 && DriverCount == 0;
         if (_allDrivers.Count > 0)
             Summary = HideSystemDrivers
-                ? $"{_allDrivers.Count} drivers found ({DriverCount} shown, system drivers hidden)."
+                ? $"{_allDrivers.Count} drivers found ({DriverCount} shown, built-in Windows drivers hidden)."
                 : $"{_allDrivers.Count} drivers found.";
     }
 
-    private static bool IsSystemDriver(DriverEntry d)
+    /// <summary>
+    /// True for a driver Windows itself supplies, as opposed to one a hardware maker installed.
+    /// Matched on the publisher name because <c>Win32_PnPSignedDriver</c> exposes no "inbox" flag.
+    /// </summary>
+    internal static bool IsSystemDriver(DriverEntry d)
         => d.Manufacturer.Contains("Microsoft", StringComparison.OrdinalIgnoreCase) ||
            d.Manufacturer.Contains("Windows", StringComparison.OrdinalIgnoreCase);
 

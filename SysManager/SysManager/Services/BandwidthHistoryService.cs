@@ -23,13 +23,23 @@ public sealed class BandwidthHistoryService
     /// <summary>Retention window in days. A week of the tab being open is ample for this graph.</summary>
     public const int RetentionDays = 7;
 
-    private static readonly string DataDir = Path.Join(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
-    private static readonly string DataPath = Path.Join(DataDir, "bandwidth-history.ndjson");
-
     private static readonly JsonSerializerOptions SampleJson = new() { WriteIndented = false };
 
     private readonly SemaphoreSlim _fileLock = new(1, 1);
+    private readonly string _dataDir;
+    private readonly string _dataPath;
+
+    /// <summary>
+    /// Creates the service. <paramref name="configDir"/> is overridable so tests exercise the real
+    /// append/load/prune paths against a temp directory instead of the user's own history file —
+    /// same seam as <see cref="VolumePresetService"/> and <see cref="StandbyPreferenceService"/>.
+    /// </summary>
+    public BandwidthHistoryService(string? configDir = null)
+    {
+        _dataDir = configDir ?? Path.Join(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        _dataPath = Path.Join(_dataDir, "bandwidth-history.ndjson");
+    }
 
     /// <summary>Appends one sample. Best-effort — an IO error is logged and swallowed.</summary>
     public async Task AppendAsync(BandwidthSample sample, CancellationToken ct = default)
@@ -37,8 +47,8 @@ public sealed class BandwidthHistoryService
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            Directory.CreateDirectory(DataDir);
-            await File.AppendAllTextAsync(DataPath, Serialize(sample) + "\n", ct).ConfigureAwait(false);
+            Directory.CreateDirectory(_dataDir);
+            await File.AppendAllTextAsync(_dataPath, Serialize(sample) + "\n", ct).ConfigureAwait(false);
         }
         catch (IOException ex) { Log.Debug("Bandwidth history append failed: {Error}", ex.Message); }
         finally { _fileLock.Release(); }
@@ -53,8 +63,8 @@ public sealed class BandwidthHistoryService
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (!File.Exists(DataPath)) return [];
-            var lines = await File.ReadAllLinesAsync(DataPath, ct).ConfigureAwait(false);
+            if (!File.Exists(_dataPath)) return [];
+            var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
             var cutoff = DateTime.Now - range;
             var samples = new List<BandwidthSample>();
             for (int i = lines.Length - 1; i >= 0; i--)
@@ -77,13 +87,13 @@ public sealed class BandwidthHistoryService
         catch (OperationCanceledException) { return; }
         try
         {
-            if (!File.Exists(DataPath)) return;
-            var lines = await File.ReadAllLinesAsync(DataPath, ct).ConfigureAwait(false);
+            if (!File.Exists(_dataPath)) return;
+            var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
             var kept = Prune(lines, DateTime.Now, TimeSpan.FromDays(RetentionDays));
             if (kept.Count == lines.Length) return;
-            var tmp = DataPath + ".tmp";
+            var tmp = _dataPath + ".tmp";
             await File.WriteAllLinesAsync(tmp, kept, ct).ConfigureAwait(false);
-            File.Move(tmp, DataPath, overwrite: true);
+            File.Move(tmp, _dataPath, overwrite: true);
         }
         catch (OperationCanceledException) { /* shutdown */ }
         catch (IOException ex) { Log.Debug("Bandwidth history prune failed: {Error}", ex.Message); }

@@ -48,20 +48,38 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
 
     private async Task LoadAsync()
     {
-        var cores = await Task.Run(_service.GetCores).ConfigureAwait(true);
-        IsHybrid = cores.Any(c => c.IsPerformance) && cores.Any(c => c.IsEfficiency);
-        Cores.ReplaceWith(cores.Select(c => new CoreToggle { Core = c }));
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            var cores = await Task.Run(_service.GetCores).ConfigureAwait(true);
+            IsHybrid = cores.Any(c => c.IsPerformance) && cores.Any(c => c.IsEfficiency);
+            Cores.ReplaceWith(cores.Select(c => new CoreToggle { Core = c }));
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+
+        // Outside the block above, not nested inside it: RefreshProcessesAsync owns the flag for its
+        // own span, and overlapping the two would have it cleared while this one is still running.
         await RefreshProcessesAsync();
     }
 
     [RelayCommand]
     private async Task RefreshProcessesAsync()
     {
-        var procs = await Task.Run(_service.GetProcesses).ConfigureAwait(true);
-        Processes.ReplaceWith(procs);
-        StatusMessage = IsHybrid
-            ? "Hybrid CPU detected — P-cores and E-cores are labelled. Pick a process."
-            : "Pick a process, choose cores, then apply.";
+        // Enumerating every process and reading each one's affinity takes real time on a busy
+        // machine, and the view already binds a progress bar (plus the sidebar spinner) to IsBusy —
+        // without this the click produced no feedback at all.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            var procs = await Task.Run(_service.GetProcesses).ConfigureAwait(true);
+            Processes.ReplaceWith(procs);
+            StatusMessage = IsHybrid
+                ? "Hybrid CPU detected — P-cores and E-cores are labelled. Pick a process."
+                : "Pick a process, choose cores, then apply.";
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     partial void OnSelectedProcessChanged(RunningProcess? value)

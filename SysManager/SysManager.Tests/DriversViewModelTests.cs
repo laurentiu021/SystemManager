@@ -189,6 +189,141 @@ public class DriversViewModelTests
 
         Assert.Null(result);
     }
+
+    // ---------- HideSystemDrivers filter (regression) ----------
+    // The filter existed with a change handler, filtering logic and status text, but had ZERO
+    // bindings in DriversView.xaml — so no user could ever reach it. These pin the behaviour now
+    // that the checkbox exists.
+
+    private static void Parse(DriversViewModel vm, string json) =>
+        typeof(DriversViewModel)
+            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(vm, [json]);
+
+    private const string MixedDrivers = """
+    [
+        {"DeviceName":"Generic Monitor","Manufacturer":"Microsoft","DriverVersion":"10.0.1","DriverDate":null},
+        {"DeviceName":"Root Hub","Manufacturer":"Windows","DriverVersion":"10.0.1","DriverDate":null},
+        {"DeviceName":"NVIDIA GPU","Manufacturer":"NVIDIA","DriverVersion":"31.0.2","DriverDate":null},
+        {"DeviceName":"Realtek Audio","Manufacturer":"Realtek","DriverVersion":"6.0.1","DriverDate":null}
+    ]
+    """;
+
+    [Fact]
+    public void HideSystemDrivers_Off_ShowsEveryDriver()
+    {
+        var vm = NewVm();
+        Parse(vm, MixedDrivers);
+
+        Assert.False(vm.HideSystemDrivers);
+        Assert.Equal(4, vm.Drivers.Count);
+    }
+
+    [Fact]
+    public void HideSystemDrivers_On_KeepsOnlyThirdPartyDrivers()
+    {
+        var vm = NewVm();
+        Parse(vm, MixedDrivers);
+
+        vm.HideSystemDrivers = true;
+
+        Assert.Equal(2, vm.Drivers.Count);
+        Assert.All(vm.Drivers, d => Assert.False(DriversViewModel.IsSystemDriver(d)));
+    }
+
+    [Fact]
+    public void HideSystemDrivers_Toggling_RestoresTheFullList()
+    {
+        var vm = NewVm();
+        Parse(vm, MixedDrivers);
+
+        vm.HideSystemDrivers = true;
+        vm.HideSystemDrivers = false;
+
+        Assert.Equal(4, vm.Drivers.Count);
+    }
+
+    [Fact]
+    public void HideSystemDrivers_On_SummaryReportsBothCounts()
+    {
+        var vm = NewVm();
+        Parse(vm, MixedDrivers);
+
+        vm.HideSystemDrivers = true;
+
+        // "4 found (2 shown)" — the user must not think two drivers vanished.
+        Assert.Contains("4 drivers found", vm.Summary);
+        Assert.Contains("2 shown", vm.Summary);
+    }
+
+    [Theory]
+    [InlineData("Microsoft")]
+    [InlineData("microsoft")]                       // casing varies in Win32_PnPSignedDriver
+    [InlineData("Microsoft Corporation")]
+    [InlineData("Windows")]
+    [InlineData("(Standard system devices)Windows")] // substring match, as the real data has
+    public void IsSystemDriver_MatchesWindowsSuppliedPublishers(string manufacturer)
+        => Assert.True(DriversViewModel.IsSystemDriver(new DriverEntry { Manufacturer = manufacturer }));
+
+    [Theory]
+    [InlineData("NVIDIA")]
+    [InlineData("Intel")]
+    [InlineData("Realtek Semiconductor Corp.")]
+    [InlineData("")]
+    public void IsSystemDriver_DoesNotMatchThirdPartyPublishers(string manufacturer)
+        => Assert.False(DriversViewModel.IsSystemDriver(new DriverEntry { Manufacturer = manufacturer }));
+
+    // ---------- empty states: not-scanned vs filtered-to-nothing ----------
+
+    [Fact]
+    public void BeforeAnyScan_TheNotScannedStateIsShown()
+    {
+        var vm = NewVm();
+
+        Assert.True(vm.HasNotScanned);
+        Assert.False(vm.HasNoResults);
+    }
+
+    [Fact]
+    public void WhenTheFilterHidesEveryDriver_TheFilteredStateIsShownNotTheScanPrompt()
+    {
+        // On a machine where every driver is Microsoft-supplied, the single shared empty state told
+        // the user to click a button they had already clicked. Same defect as the Logs tab's.
+        var vm = NewVm();
+        Parse(vm, """
+        [
+            {"DeviceName":"Generic Monitor","Manufacturer":"Microsoft","DriverVersion":"10.0.1","DriverDate":null}
+        ]
+        """);
+
+        vm.HideSystemDrivers = true;
+
+        Assert.Empty(vm.Drivers);
+        Assert.True(vm.HasNoResults);
+    }
+
+    [Fact]
+    public void WithDriversShown_NeitherEmptyStateIsActive()
+    {
+        var vm = NewVm();
+        Parse(vm, MixedDrivers);
+
+        Assert.False(vm.HasNoResults);
+        Assert.NotEmpty(vm.Drivers);
+    }
+
+    [Fact]
+    public void AFailedScanThatFoundNothing_DoesNotClaimTheFilterHidThings()
+    {
+        // Zero drivers parsed is not "filtered to nothing" — HasNoResults must stay false so the
+        // wrong advice ("untick the checkbox") is never shown.
+        var vm = NewVm();
+        vm.HideSystemDrivers = true;
+
+        Parse(vm, "[]");
+
+        Assert.False(vm.HasNoResults);
+    }
 }
 
 // ---------- DriverEntry model ----------

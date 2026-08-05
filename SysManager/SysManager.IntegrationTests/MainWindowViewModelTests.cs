@@ -490,9 +490,9 @@ public class MainWindowViewModelTests
     }
 
     // Resource History (#13) is implemented but newly added — it's wired to a real
-    // view/VM and flagged PREVIEW (IsInDevelopment == true) until QA-verified, not a
-    // PlaceholderView stub. This pins both facts so an accidental regression to the
-    // placeholder, or a premature graduation, fails here.
+    // view/VM and flagged PREVIEW (IsInDevelopment == true) until QA-verified. This pins
+    // both facts so a premature graduation, or a regression to a stub view, fails here.
+    // (The old WIP placeholder view/VM was deleted once the last tab graduated off it.)
     [Fact]
     public void NavLeaf_ResourceHistory_IsImplementedAndInPreview()
     {
@@ -548,7 +548,8 @@ public class MainWindowViewModelTests
     }
 
     // Notification Blocker (#340) — graduated from the last WIP placeholder to a real
-    // view/VM, flagged PREVIEW. With this, no PlaceholderView tabs remain in the sidebar.
+    // view/VM, flagged PREVIEW. It was the final tab on the placeholder, so with this every
+    // sidebar entry is backed by a real view; the placeholder view/VM has since been deleted.
     [Fact]
     public void NavLeaf_NotificationBlocker_IsImplementedAndInPreview()
     {

@@ -53,6 +53,41 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Whether the main window is on screen. A tab's poll loop runs only while it is BOTH selected
+    /// and visible: closing to the tray hides the window without deselecting anything, so gating on
+    /// selection alone left the open tab sampling at 1 Hz for as long as the PC stayed on.
+    /// <para>Defaults to true because the window is shown before anything sets this, and the
+    /// pre-existing behaviour for a visible window must not change.</para>
+    /// </summary>
+    public bool IsWindowVisible
+    {
+        get => _isWindowVisible;
+        set
+        {
+            if (_isWindowVisible == value) return;
+            _isWindowVisible = value;
+            OnPropertyChanged();
+            ApplyPollGate(SelectedNav, value);
+        }
+    }
+
+    private bool _isWindowVisible = true;
+
+    /// <summary>
+    /// Applies the poll gate to <paramref name="item"/>: its loop runs only when the window is on
+    /// screen AND the tab is the selected one.
+    /// <para>Only touches a tab whose view-model was actually built — a never-opened lazy tab has
+    /// nothing polling, and reading <see cref="NavItem.Content"/> would construct it, undoing the
+    /// lazy-startup fix. Static and internal so the gate can be tested without the whole shell,
+    /// which cannot be constructed in the unit suite (it runs About's startup update check).</para>
+    /// </summary>
+    internal static void ApplyPollGate(NavItem? item, bool windowVisible)
+    {
+        if (item is { IsContentCreated: true } created)
+            SetActive(created.Content, windowVisible);
+    }
+
+    /// <summary>
     /// Parameterless constructor — used by XAML designer and tests.
     /// At runtime (DI container available) tab VMs are resolved LAZILY: each NavItem builds its
     /// view-model on first open, so the ~40 tabs that kick off a background scan/timer in their
@@ -267,7 +302,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // we left and activate the one we entered — but only touch a tab's VM if it was actually
         // built (a never-opened lazy tab has no VM and, by definition, nothing polling).
         if (oldValue is { IsContentCreated: true }) SetActive(oldValue.Content, false);
-        SetActive(newValue.Content, true); // accessing Content here materialises the entered tab's VM
+        // Gate on visibility as well: the tray menu can navigate while the window is hidden (see
+        // NavigateTo), and starting a loop nothing can see is the very cost this gate exists to avoid.
+        SetActive(newValue.Content, IsWindowVisible); // accessing Content materialises the entered tab's VM
     }
 
     internal static void UpdateSelectionState(NavItem? oldValue, NavItem? newValue)
@@ -278,7 +315,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // The three tabs with a visibility-gated poll expose an IsActive flag. Toggle it generically
     // so this doesn't depend on eager VM properties that no longer exist for lazy tabs.
-    private static void SetActive(object content, bool active)
+    // internal (not private) so a test can pin the gate without constructing the whole shell,
+    // exactly as UpdateSelectionState above is tested.
+    internal static void SetActive(object content, bool active)
     {
         switch (content)
         {

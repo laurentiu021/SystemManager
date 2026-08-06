@@ -492,4 +492,84 @@ public class BandwidthMonitorViewModelTests : IDisposable
     [Fact]
     public void FormatAxisTick_AtTheMaximumTickValue_YieldsAnEmptyLabel()
         => Assert.Equal("", BandwidthMonitorViewModel.FormatAxisTick(DateTime.MaxValue.Ticks, TimeSpan.Zero));
+
+    // ── The window-visibility poll gate ─────────────────────────────────────
+    // Closing to the tray calls Hide(), which does NOT deselect the open tab — so before this the
+    // selected tab's 1 Hz poll loop kept running for as long as the PC stayed on. Since "minimize
+    // to tray" is the default, that was the common all-day path.
+    //
+    // These exercise MainWindowViewModel.ApplyPollGate rather than the shell view-model itself: the
+    // shell cannot be constructed in the unit suite because About's constructor runs the startup
+    // update check (a network call), which is why its own tests live in the integration project —
+    // and CI only COMPILE-checks that project, so a regression pinned there would never run.
+
+    private static NavItem ItemFor(object content) => new()
+    {
+        Id = "nav-test",
+        Label = "Test",
+        Glyph = "",
+        ViewType = typeof(object),
+        Content = content,
+    };
+
+    [Fact]
+    public void HidingTheWindow_PausesTheTabsPollLoop()
+    {
+        var vm = NewVm();
+        vm.IsActive = true;
+
+        MainWindowViewModel.ApplyPollGate(ItemFor(vm), windowVisible: false);
+
+        Assert.False(vm.IsActive);
+    }
+
+    [Fact]
+    public void ShowingTheWindow_ResumesTheTabsPollLoop()
+    {
+        var vm = NewVm();
+        vm.IsActive = false;
+
+        MainWindowViewModel.ApplyPollGate(ItemFor(vm), windowVisible: true);
+
+        Assert.True(vm.IsActive);
+    }
+
+    [Fact]
+    public void TheGate_IgnoresATabWhoseViewModelWasNeverBuilt()
+    {
+        // Reading Content on a lazy NavItem would CONSTRUCT the view-model, undoing the lazy-startup
+        // fix — a never-opened tab has nothing polling, so the gate must skip it entirely.
+        int built = 0;
+        var lazy = new NavItem
+        {
+            Id = "nav-lazy",
+            Label = "Lazy",
+            Glyph = "",
+            ViewType = typeof(object),
+            ContentFactory = () => { built++; return new object(); },
+        };
+
+        MainWindowViewModel.ApplyPollGate(lazy, windowVisible: false);
+        MainWindowViewModel.ApplyPollGate(lazy, windowVisible: true);
+
+        Assert.Equal(0, built);
+        Assert.False(lazy.IsContentCreated);
+    }
+
+    [Fact]
+    public void TheGate_OnANullSelection_DoesNotThrow()
+    {
+        // SelectedNav is nullable and is null while the shell is still wiring up.
+        MainWindowViewModel.ApplyPollGate(null, windowVisible: false);
+        MainWindowViewModel.ApplyPollGate(null, windowVisible: true);
+    }
+
+    [Fact]
+    public void TheGate_OnATabWithNoPollLoop_IsANoOp()
+    {
+        // Most tabs are not in SetActive's switch because they have nothing to pause. Passing one
+        // must be harmless, since the gate runs for whichever tab happens to be selected.
+        MainWindowViewModel.ApplyPollGate(ItemFor(new object()), windowVisible: false);
+        MainWindowViewModel.ApplyPollGate(ItemFor(new object()), windowVisible: true);
+    }
 }

@@ -3,6 +3,7 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Helpers;
 
 namespace SysManager.Models;
 
@@ -45,14 +46,22 @@ public sealed partial class FriendlyEventEntry : ObservableObject
         _ => "•"
     };
 
+    /// <summary>
+    /// Theme resource key for the severity dot/text in the log list, resolved by
+    /// <c>HexToBrushConverter</c>. Keys rather than literals for the same reason as
+    /// <see cref="Helpers.StatusColors"/>: these were dark-calibrated hex constants that
+    /// <c>ThemeService</c> could not recompute, so on a light preset the severity colour rendered
+    /// pale on a near-white row. Critical keeps its own key because the log list gives it a distinct
+    /// treatment from a plain error.
+    /// </summary>
     public string SeverityColor => Severity switch
     {
-        EventSeverity.Critical => "#FF3B30",
-        EventSeverity.Error => "#FF6B6B",
-        EventSeverity.Warning => "#FFD166",
-        EventSeverity.Info => "#4CC9F0",
-        EventSeverity.Verbose => "#9AA0A6",
-        _ => "#9AA0A6"
+        EventSeverity.Critical => "CriticalText",
+        EventSeverity.Error => StatusColors.Bad,
+        EventSeverity.Warning => StatusColors.Warning,
+        EventSeverity.Info => StatusColors.Info,
+        EventSeverity.Verbose => StatusColors.Neutral,
+        _ => StatusColors.Neutral
     };
 
     /// <summary>

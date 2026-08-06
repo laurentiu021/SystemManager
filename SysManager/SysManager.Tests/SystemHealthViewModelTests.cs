@@ -67,10 +67,14 @@ public class SystemHealthViewModelTests
     }
 
     [Fact]
-    public void Constructor_MemoryHealthColorHex_IsHexColor()
+    public void Constructor_MemoryHealthColorHex_IsAThemeResourceKey()
     {
+        // Inverted deliberately: this used to require a leading '#'. The verdict colour now names a
+        // theme brush so it follows the active preset — a hex literal is exactly what made these
+        // verdicts illegible on the light themes.
         var vm = NewVm();
-        Assert.StartsWith("#", vm.MemoryHealthColorHex);
+        Assert.DoesNotMatch("^#", vm.MemoryHealthColorHex);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MemoryHealthColorHex));
     }
 
     [Fact]

@@ -3,6 +3,7 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Helpers;
 
 namespace SysManager.Models;
 
@@ -26,7 +27,9 @@ public sealed partial class HealthDiagnostic : ObservableObject
     [ObservableProperty] private HealthVerdict _verdict = HealthVerdict.Unknown;
     [ObservableProperty] private string _headline = "Waiting for data…";
     [ObservableProperty] private string _detail = "";
-    [ObservableProperty] private string _colorHex = "#9AA0A6";
+    // A theme key, not a literal — see StatusColors. This is the "waiting for data" state, so it
+    // must be as theme-aware as every value the analyzer later assigns.
+    [ObservableProperty] private string _colorHex = StatusColors.Neutral;
 
     // Rolled-up metrics for the status pills.
     [ObservableProperty] private double _worstLossPercent;

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -499,7 +500,7 @@ public class SfcResultParsingTests
         var lines = new[] { "Windows Resource Protection did not find any integrity violations." };
         var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
         Assert.Contains("No integrity violations", verdict);
-        Assert.Equal("#22C55E", color);
+        Assert.Equal(StatusColors.Good, color);
     }
 
     [Fact]
@@ -508,7 +509,7 @@ public class SfcResultParsingTests
         var lines = new[] { "Windows Resource Protection found corrupt files and successfully repaired them." };
         var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
         Assert.Contains("successfully repaired", verdict);
-        Assert.Equal("#F59E0B", color);
+        Assert.Equal(StatusColors.Warning, color);
     }
 
     [Fact]
@@ -517,7 +518,7 @@ public class SfcResultParsingTests
         var lines = new[] { "Windows Resource Protection found corrupt files but was unable to fix some of them." };
         var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
         Assert.Contains("could not repair", verdict);
-        Assert.Equal("#EF4444", color);
+        Assert.Equal(StatusColors.Bad, color);
     }
 
     [Fact]
@@ -526,7 +527,7 @@ public class SfcResultParsingTests
         var lines = new[] { "Windows Resource Protection could not perform the requested operation." };
         var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
         Assert.Contains("could not run", verdict);
-        Assert.Equal("#EF4444", color);
+        Assert.Equal(StatusColors.Bad, color);
     }
 
     [Fact]
@@ -535,7 +536,7 @@ public class SfcResultParsingTests
         var lines = new[] { "Some unrecognized output" };
         var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
         Assert.Contains("successfully", verdict);
-        Assert.Equal("#22C55E", color);
+        Assert.Equal(StatusColors.Good, color);
     }
 
     [Fact]
@@ -544,7 +545,7 @@ public class SfcResultParsingTests
         var lines = new[] { "Some unrecognized output" };
         var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 1);
         Assert.Contains("exit code 1", verdict);
-        Assert.Equal("#F59E0B", color);
+        Assert.Equal(StatusColors.Warning, color);
     }
 
     [Fact]
@@ -552,7 +553,7 @@ public class SfcResultParsingTests
     {
         var (verdict, color) = CleanupViewModel.ParseSfcResult([], 0);
         Assert.Contains("successfully", verdict);
-        Assert.Equal("#22C55E", color);
+        Assert.Equal(StatusColors.Good, color);
     }
 }
 
@@ -566,7 +567,7 @@ public class DismResultParsingTests
         var lines = new[] { "The restore operation completed successfully." };
         var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
         Assert.Contains("healthy", verdict);
-        Assert.Equal("#22C55E", color);
+        Assert.Equal(StatusColors.Good, color);
     }
 
     [Fact]
@@ -575,7 +576,7 @@ public class DismResultParsingTests
         var lines = new[] { "The component store corruption was repaired." };
         var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
         Assert.Contains("repaired", verdict);
-        Assert.Equal("#F59E0B", color);
+        Assert.Equal(StatusColors.Warning, color);
     }
 
     [Fact]
@@ -584,7 +585,7 @@ public class DismResultParsingTests
         var lines = new[] { "The source files could not be found." };
         var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
         Assert.Contains("source files", verdict);
-        Assert.Equal("#EF4444", color);
+        Assert.Equal(StatusColors.Bad, color);
     }
 
     [Fact]
@@ -593,7 +594,7 @@ public class DismResultParsingTests
         var lines = new[] { "Some unrecognized output" };
         var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
         Assert.Contains("successfully", verdict);
-        Assert.Equal("#22C55E", color);
+        Assert.Equal(StatusColors.Good, color);
     }
 
     [Fact]
@@ -602,7 +603,7 @@ public class DismResultParsingTests
         var lines = new[] { "Some unrecognized output" };
         var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 87);
         Assert.Contains("exit code 87", verdict);
-        Assert.Equal("#F59E0B", color);
+        Assert.Equal(StatusColors.Warning, color);
     }
 
     // RunSfcAsync/RunDismAsync now both acquire the SystemModification operation lock

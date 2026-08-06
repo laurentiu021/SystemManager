@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -94,7 +95,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 50,
             DiskResults = new List<DiskHealthSummary>
             {
-                new() { Name = "Disk0", Verdict = "Healthy", ColorHex = "#22C55E" }
+                new() { Name = "Disk0", Verdict = "Healthy", ColorHex = StatusColors.Good }
             }
         };
         Assert.Equal(0, result.WarningCount);
@@ -149,7 +150,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 50,
             DiskResults = new List<DiskHealthSummary>
             {
-                new() { Name = "Disk0", Verdict = "Warning", ColorHex = "#F59E0B" }
+                new() { Name = "Disk0", Verdict = "Warning", ColorHex = StatusColors.Warning }
             }
         };
         Assert.Equal(1, result.WarningCount);
@@ -165,8 +166,8 @@ public class TuneUpServiceTests
             RamUsedPercent = 92,
             DiskResults = new List<DiskHealthSummary>
             {
-                new() { Name = "Disk0", Verdict = "Warning", ColorHex = "#F59E0B" },
-                new() { Name = "Disk1", Verdict = "Healthy", ColorHex = "#22C55E" }
+                new() { Name = "Disk0", Verdict = "Warning", ColorHex = StatusColors.Warning },
+                new() { Name = "Disk1", Verdict = "Healthy", ColorHex = StatusColors.Good }
             }
         };
         // shortcuts(1) + uptime(1) + ram(1) + disk0(1) = 4
@@ -222,7 +223,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 50,
             DiskResults = []
         };
-        Assert.Equal("#22C55E", result.OverallColorHex);
+        Assert.Equal(StatusColors.Good, result.OverallColorHex);
     }
 
     [Fact]
@@ -235,7 +236,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 50,
             DiskResults = []
         };
-        Assert.Equal("#F59E0B", result.OverallColorHex);
+        Assert.Equal(StatusColors.Warning, result.OverallColorHex);
     }
 
     [Fact]
@@ -248,7 +249,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 92,
             DiskResults = []
         };
-        Assert.Equal("#EF4444", result.OverallColorHex);
+        Assert.Equal(StatusColors.Bad, result.OverallColorHex);
     }
 
     [Fact]
@@ -272,11 +273,11 @@ public class TuneUpServiceTests
         {
             Name = "Samsung 980 Pro",
             Verdict = "Healthy",
-            ColorHex = "#22C55E"
+            ColorHex = StatusColors.Good
         };
         Assert.Equal("Samsung 980 Pro", summary.Name);
         Assert.Equal("Healthy", summary.Verdict);
-        Assert.Equal("#22C55E", summary.ColorHex);
+        Assert.Equal(StatusColors.Good, summary.ColorHex);
     }
 
     // ---------- reparse-point safety (data-loss regression) ----------

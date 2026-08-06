@@ -18,7 +18,9 @@ public sealed record TemperatureReading(
 
     public string ColorHex => TemperatureC switch
     {
-        null => "#6B7B8F",
+        // No reading (no sensor, or admin required) — the muted tone the app uses everywhere for
+        // "nothing to report", rather than a literal that cannot follow the theme.
+        null => StatusColors.Neutral,
         <= 45 => StatusColors.Good,
         <= 65 => StatusColors.Info,
         <= 80 => StatusColors.Warning,

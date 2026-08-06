@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -28,7 +29,7 @@ public class DiskHealthReportTests
         Assert.Null(r.WriteErrors);
         Assert.Null(r.StartStopCount);
         Assert.Equal("", r.Verdict);
-        Assert.Equal("#9AA0A6", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Neutral, r.VerdictColorHex);
     }
 
     [Fact]
@@ -47,7 +48,7 @@ public class DiskHealthReportTests
         var r = new DiskHealthReport();
         var changed = new List<string>();
         r.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
-        r.VerdictColorHex = "#22C55E";
+        r.VerdictColorHex = StatusColors.Good;
         Assert.Contains("VerdictColorHex", changed);
     }
 
@@ -69,7 +70,7 @@ public class DiskHealthReportTests
             WriteErrors = 0,
             StartStopCount = 500,
             Verdict = "Healthy — 38 °C · wear 5%",
-            VerdictColorHex = "#22C55E"
+            VerdictColorHex = StatusColors.Good
         };
         Assert.Equal("Samsung 980 PRO", r.FriendlyName);
         Assert.Equal(38.0, r.TemperatureC);
@@ -131,10 +132,10 @@ public class DiskHealthReportTests
     // ---------- Health-percent color ----------
 
     [Theory]
-    [InlineData(0, "#22C55E")]   // 100% health (no wear) -> green
-    [InlineData(40, "#F59E0B")]  // 60% health -> amber
-    [InlineData(75, "#F87171")]  // 25% health (>=20) -> light red
-    [InlineData(85, "#EF4444")]  // 15% health (<20) -> red
+    [InlineData(0, StatusColors.Good)]   // 100% health (no wear) -> green
+    [InlineData(40, StatusColors.Warning)]  // 60% health -> amber
+    [InlineData(75, StatusColors.Elevated)]  // 25% health (>=20) -> light red
+    [InlineData(85, StatusColors.Bad)]  // 15% health (<20) -> red
     public void HealthPercentColorHex_ReturnsCorrectColor(int wear, string expected)
     {
         var r = new DiskHealthReport { WearPercent = wear, TemperatureC = 35, ReadErrors = 0, WriteErrors = 0 };
@@ -149,16 +150,16 @@ public class DiskHealthReportTests
         // consistent with TemperatureColorHex's null arm.
         var r = new DiskHealthReport { HealthStatus = "" };
         Assert.Null(r.HealthPercent);
-        Assert.Equal("#9AA0A6", r.HealthPercentColorHex);
+        Assert.Equal(StatusColors.Neutral, r.HealthPercentColorHex);
     }
 
     // ---------- Temperature color ----------
 
     [Theory]
-    [InlineData(30, "#22C55E")]
-    [InlineData(45, "#F59E0B")]
-    [InlineData(55, "#F87171")]
-    [InlineData(65, "#EF4444")]
+    [InlineData(30, StatusColors.Good)]
+    [InlineData(45, StatusColors.Warning)]
+    [InlineData(55, StatusColors.Elevated)]
+    [InlineData(65, StatusColors.Bad)]
     public void TemperatureColorHex_ReturnsCorrectColor(double temp, string expected)
     {
         var r = new DiskHealthReport { TemperatureC = temp };

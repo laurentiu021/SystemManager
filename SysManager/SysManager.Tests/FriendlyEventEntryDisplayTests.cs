@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -25,11 +26,11 @@ public class FriendlyEventEntryDisplayTests
     }
 
     [Theory]
-    [InlineData(EventSeverity.Critical, "#FF3B30")]
-    [InlineData(EventSeverity.Error, "#FF6B6B")]
-    [InlineData(EventSeverity.Warning, "#FFD166")]
-    [InlineData(EventSeverity.Info, "#4CC9F0")]
-    [InlineData(EventSeverity.Verbose, "#9AA0A6")]
+    [InlineData(EventSeverity.Critical, "CriticalText")]
+    [InlineData(EventSeverity.Error, StatusColors.Bad)]
+    [InlineData(EventSeverity.Warning, StatusColors.Warning)]
+    [InlineData(EventSeverity.Info, StatusColors.Info)]
+    [InlineData(EventSeverity.Verbose, StatusColors.Neutral)]
     public void SeverityColor_ReturnsExpected(EventSeverity severity, string expected)
     {
         var entry = new FriendlyEventEntry { Severity = severity };

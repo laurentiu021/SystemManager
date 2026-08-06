@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using static SysManager.Services.HealthAnalyzer;
@@ -26,7 +27,7 @@ public class HealthAnalyzerTests
         var d = Analyze([]);
         Assert.Equal(HealthVerdict.Unknown, d.Verdict);
         Assert.False(string.IsNullOrWhiteSpace(d.Headline));
-        Assert.Equal("#9AA0A6", d.ColorHex);
+        Assert.Equal(StatusColors.Neutral, d.ColorHex);
     }
 
     [Fact]
@@ -52,7 +53,7 @@ public class HealthAnalyzerTests
             M("game", TargetRole.GameServer, avg: 40, jitter: 3),
         });
         Assert.Equal(HealthVerdict.Good, d.Verdict);
-        Assert.Equal("#06D6A0", d.ColorHex);
+        Assert.Equal(StatusColors.Good, d.ColorHex);
     }
 
     // ---------- gateway bad ----------
@@ -66,7 +67,7 @@ public class HealthAnalyzerTests
             M("dns", TargetRole.PublicDns),
         });
         Assert.Equal(HealthVerdict.LocalNetwork, d.Verdict);
-        Assert.Equal("#FF6B6B", d.ColorHex);
+        Assert.Equal(StatusColors.Bad, d.ColorHex);
     }
 
     [Fact]
@@ -116,7 +117,7 @@ public class HealthAnalyzerTests
             M("game", TargetRole.GameServer),
         });
         Assert.Equal(HealthVerdict.IspOrUpstream, d.Verdict);
-        Assert.Equal("#FFD166", d.ColorHex);
+        Assert.Equal(StatusColors.Warning, d.ColorHex);
     }
 
     [Fact]
@@ -142,7 +143,7 @@ public class HealthAnalyzerTests
             M("cs2", TargetRole.GameServer, loss: 8),
         });
         Assert.Equal(HealthVerdict.GameServer, d.Verdict);
-        Assert.Equal("#F72585", d.ColorHex);
+        Assert.Equal(StatusColors.Info, d.ColorHex);
     }
 
     [Fact]
@@ -169,7 +170,7 @@ public class HealthAnalyzerTests
             M("yt", TargetRole.Streaming, loss: 5),
         });
         Assert.Equal(HealthVerdict.StreamingService, d.Verdict);
-        Assert.Equal("#B388FF", d.ColorHex);
+        Assert.Equal(StatusColors.Info, d.ColorHex);
     }
 
     // ---------- mixed ----------
@@ -202,7 +203,7 @@ public class HealthAnalyzerTests
         // streamBad && !dnsBad → false (dnsBad is true)
         // Falls through to Mixed
         Assert.Equal(HealthVerdict.Mixed, d.Verdict);
-        Assert.Equal("#FF6B6B", d.ColorHex);
+        Assert.Equal(StatusColors.Bad, d.ColorHex);
     }
 
     // ---------- threshold boundaries ----------
@@ -313,7 +314,7 @@ public class HealthAnalyzerTests
         var d = new HealthDiagnostic();
         Assert.Equal(HealthVerdict.Unknown, d.Verdict);
         Assert.False(string.IsNullOrWhiteSpace(d.Headline));
-        Assert.Equal("#9AA0A6", d.ColorHex);
+        Assert.Equal(StatusColors.Neutral, d.ColorHex);
         Assert.Equal(0, d.WorstLossPercent);
         Assert.Equal(0, d.WorstJitterMs);
         Assert.Equal(0, d.AveragePingMs);

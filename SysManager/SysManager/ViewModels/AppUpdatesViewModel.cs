@@ -23,9 +23,12 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     /// Shown when winget.exe cannot be launched — App Installer isn't present or its
     /// execution alias is off (common on older/LTSC/Server machines). Plain-language so
     /// the non-technical persona knows the tab needs App Installer, not that something broke.
+    /// <para>Forwards to <see cref="WingetFailure.WingetUnavailable"/>. The literal used to live here
+    /// and be referenced cross-VM, which is how Bulk Installer ended up not using it at all; the
+    /// shared helper is now the single source for all three winget tabs. Kept as an alias so the
+    /// existing call sites and their tests still read naturally.</para>
     /// </summary>
-    internal const string WingetUnavailableMessage =
-        "winget (App Installer) isn't available on this PC — install \"App Installer\" from the Microsoft Store to use this tab.";
+    internal const string WingetUnavailableMessage = WingetFailure.WingetUnavailable;
 
     public BulkObservableCollection<AppPackage> Packages { get; } = new();
     public ConsoleViewModel Console { get; } = new();

@@ -147,6 +147,12 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     /// </summary>
     private bool _historyOwnsChart;
 
+    /// <summary>
+    /// Serializes <see cref="ReloadHistoryAsync"/> so two reloads never rebuild the chart buffers at
+    /// once. See the comment there for why they overlap in the first place. Disposed with the VM.
+    /// </summary>
+    private readonly SemaphoreSlim _reloadGate = new(1, 1);
+
     /// <summary>Production constructor — safe source always available; ETW source built on demand when elevated.</summary>
     public BandwidthMonitorViewModel(BandwidthHistoryService history)
         : this(history, () => new ConnectionBandwidthSource(), () => new EtwBandwidthSource())
@@ -360,47 +366,63 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     [RelayCommand]
     private async Task ReloadHistoryAsync()
     {
-        var range = SelectedRange;
-        if (range.IsLive)
-        {
-            _historyOwnsChart = false;
-            ShowingHistory = false;
-            HistoryIsEmpty = false;
-            HistorySummary = "";
-            // Start the live window from empty rather than showing stale points from before the
-            // history detour; the poll loop refills it within a second.
-            _downBuffer.Clear();
-            _upBuffer.Clear();
-            return;
-        }
-
-        // Claimed BEFORE the await, not after the load lands: the poll loop must stop touching the
-        // buffers for the whole span in which this method may rebuild them, otherwise its Add races
-        // ReplaceWith on a collection LiveCharts is observing.
-        _historyOwnsChart = true;
-        IsBusy = true;
+        // Serialized: two reloads must never rebuild the chart buffers at the same time. They overlap
+        // easily — picking a range fires this from OnSelectedRangeChanged (fire-and-forget), and the
+        // Refresh button fires the same command directly, so a click during a load, or two quick range
+        // changes, gives two concurrent runs. Both then call ReplaceWith on collections LiveCharts is
+        // observing, and its observer keeps a HashSet it updates from the change notification — a
+        // second thread arriving mid-notification corrupts it ("Operations that change non-concurrent
+        // collections must have exclusive access"), which is how CI caught this.
+        //
+        // A gate rather than a lock: this is an async path, so it must not block, and dropping an
+        // overlapping reload is correct behaviour — the newest selection is what the user asked for
+        // and the queued run would repaint with identical data anyway.
+        await _reloadGate.WaitAsync().ConfigureAwait(true);
         try
         {
-            var loaded = await _history.LoadAsync(range.Range, _pollCts?.Token ?? default).ConfigureAwait(true);
-            var points = BandwidthHistoryService.Downsample(loaded, MaxHistoryPoints);
+            var range = SelectedRange;
+            if (range.IsLive)
+            {
+                _historyOwnsChart = false;
+                ShowingHistory = false;
+                HistoryIsEmpty = false;
+                HistorySummary = "";
+                // Start the live window from empty rather than showing stale points from before the
+                // history detour; the poll loop refills it within a second.
+                _downBuffer.Clear();
+                _upBuffer.Clear();
+                return;
+            }
 
-            _downBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.DownBytesPerSec)));
-            _upBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.UpBytesPerSec)));
+            // Claimed BEFORE the await, not after the load lands: the poll loop must stop touching the
+            // buffers for the whole span in which this method may rebuild them, otherwise its Add
+            // races ReplaceWith on a collection LiveCharts is observing.
+            _historyOwnsChart = true;
+            IsBusy = true;
+            try
+            {
+                var loaded = await _history.LoadAsync(range.Range, _pollCts?.Token ?? default).ConfigureAwait(true);
+                var points = BandwidthHistoryService.Downsample(loaded, MaxHistoryPoints);
 
-            ShowingHistory = true;
-            HistoryIsEmpty = loaded.Count == 0;
-            HistorySummary = BuildHistorySummary(loaded);
-            StatusMessage = loaded.Count > 0
-                ? $"Showing {loaded.Count} recorded sample(s) over {range.Label.ToLowerInvariant()}."
-                : "No history recorded for that range yet — samples are saved while this tab is open.";
+                _downBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.DownBytesPerSec)));
+                _upBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.UpBytesPerSec)));
+
+                ShowingHistory = true;
+                HistoryIsEmpty = loaded.Count == 0;
+                HistorySummary = BuildHistorySummary(loaded);
+                StatusMessage = loaded.Count > 0
+                    ? $"Showing {loaded.Count} recorded sample(s) over {range.Label.ToLowerInvariant()}."
+                    : "No history recorded for that range yet — samples are saved while this tab is open.";
+            }
+            catch (OperationCanceledException)
+            {
+                // Tab closed mid-load. Hand the buffers back, or a cancelled load would leave the live
+                // chart permanently frozen the next time the tab is opened.
+                _historyOwnsChart = false;
+            }
+            finally { IsBusy = false; }
         }
-        catch (OperationCanceledException)
-        {
-            // Tab closed mid-load. Hand the buffers back, or a cancelled load would leave the live
-            // chart permanently frozen the next time the tab is opened.
-            _historyOwnsChart = false;
-        }
-        finally { IsBusy = false; }
+        finally { _reloadGate.Release(); }
     }
 
     /// <summary>
@@ -569,6 +591,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
             _pollCts = null;
             _source?.Dispose();
             _source = null;
+            _reloadGate.Dispose();
 
             ThemeService.Instance.ThemeChanged -= ApplyChartTheme;
             foreach (var s in ThroughputSeries) DisposeSeries(s);

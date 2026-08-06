@@ -266,6 +266,68 @@ public class BandwidthMonitorViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task ConcurrentReloadsDoNotCorruptTheChartSeries()
+    {
+        // Regression pin for a flaky CI failure that took two attempts to diagnose correctly.
+        //
+        // Assigning SelectedRange fires ReloadHistoryAsync fire-and-forget from its changed-handler,
+        // and the Refresh button fires the same command directly — so a click during a load, or two
+        // quick range changes, runs two reloads at once. Both call ReplaceWith on buffers LiveCharts
+        // is observing, and its CollectionDeepObserver updates a HashSet from the change notification;
+        // a second thread arriving mid-notification corrupts it and throws either "Collection was
+        // modified" or "Operations that change non-concurrent collections must have exclusive access".
+        //
+        // My first fix guarded the POLL LOOP against the reload, which was the wrong culprit: this
+        // test never sets IsActive, so the poll loop never samples. Reloads racing EACH OTHER is the
+        // actual mechanism, hence a gate around the whole method.
+        var now = DateTime.Now;
+        var history = SeededHistory(
+            new BandwidthSample(now.AddDays(-3), 1_048_576, 0),
+            new BandwidthSample(now.AddMinutes(-10), 2_097_152, 262_144));
+        using var vm = NewVm(history: history);
+
+        var hourly = vm.RangeOptions.First(r => r.Range == TimeSpan.FromHours(1));
+        var weekly = vm.RangeOptions.First(r => r.Range == TimeSpan.FromDays(BandwidthHistoryService.RetentionDays));
+
+        // Force the overlap deliberately: fire many reloads without awaiting between them, alternating
+        // the range so each one has real work to do.
+        var inFlight = new List<Task>();
+        for (int i = 0; i < 24; i++)
+        {
+            vm.SelectedRange = i % 2 == 0 ? hourly : weekly;           // the handler starts one
+            inFlight.Add(vm.ReloadHistoryCommand.ExecuteAsync(null));   // and this starts another
+        }
+
+        // The assertion is that none of them threw — the corruption surfaced as an exception, not as
+        // wrong data. Task.WhenAll rethrows the first failure.
+        await Task.WhenAll(inFlight);
+
+        // And the chart is still coherent afterwards: both series present and equally long.
+        var down = (vm.ThroughputSeries[0].Values as System.Collections.IEnumerable)!.Cast<object>().Count();
+        var up = (vm.ThroughputSeries[1].Values as System.Collections.IEnumerable)!.Cast<object>().Count();
+        Assert.Equal(down, up);
+    }
+
+    [Fact]
+    public async Task ARedundantRefreshOnTheSameRangeStillEndsOnThatRange()
+    {
+        // The gate drops nothing user-visible: whichever range is selected is what ends up shown, even
+        // when a second reload arrives for it.
+        var now = DateTime.Now;
+        var history = SeededHistory(
+            new BandwidthSample(now.AddDays(-3), 1_048_576, 0),
+            new BandwidthSample(now.AddMinutes(-10), 1_048_576, 0));
+        using var vm = NewVm(history: history);
+
+        vm.SelectedRange = vm.RangeOptions.First(r => r.Range == TimeSpan.FromDays(BandwidthHistoryService.RetentionDays));
+        await vm.ReloadHistoryCommand.ExecuteAsync(null);
+        await vm.ReloadHistoryCommand.ExecuteAsync(null);   // a redundant Refresh on the same range
+
+        Assert.True(vm.ShowingHistory);
+        Assert.Contains("2 recorded sample(s)", vm.StatusMessage);
+    }
+
+    [Fact]
     public async Task AStoredRangeIsDownsampledToTheChartCap()
     {
         // A week of 5-second samples is ~120k points. Handing that to LiveCharts would stall the UI,

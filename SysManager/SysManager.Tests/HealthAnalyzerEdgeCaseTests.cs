@@ -1,6 +1,7 @@
 // SysManager · HealthAnalyzerEdgeCaseTests
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using static SysManager.Services.HealthAnalyzer;
@@ -14,7 +15,7 @@ public class HealthAnalyzerEdgeCaseTests
     {
         var result = HealthAnalyzer.Analyze([]);
         Assert.Equal(HealthVerdict.Unknown, result.Verdict);
-        Assert.Equal("#9AA0A6", result.ColorHex);
+        Assert.Equal(StatusColors.Neutral, result.ColorHex);
     }
 
     [Fact]
@@ -41,7 +42,7 @@ public class HealthAnalyzerEdgeCaseTests
         };
         var result = HealthAnalyzer.Analyze(metrics);
         Assert.Equal(HealthVerdict.Good, result.Verdict);
-        Assert.Equal("#06D6A0", result.ColorHex);
+        Assert.Equal(StatusColors.Good, result.ColorHex);
     }
 
     [Fact]
@@ -54,7 +55,7 @@ public class HealthAnalyzerEdgeCaseTests
         };
         var result = HealthAnalyzer.Analyze(metrics);
         Assert.Equal(HealthVerdict.LocalNetwork, result.Verdict);
-        Assert.Equal("#FF6B6B", result.ColorHex);
+        Assert.Equal(StatusColors.Bad, result.ColorHex);
     }
 
     [Fact]
@@ -91,7 +92,7 @@ public class HealthAnalyzerEdgeCaseTests
         };
         var result = HealthAnalyzer.Analyze(metrics);
         Assert.Equal(HealthVerdict.IspOrUpstream, result.Verdict);
-        Assert.Equal("#FFD166", result.ColorHex);
+        Assert.Equal(StatusColors.Warning, result.ColorHex);
     }
 
     [Fact]
@@ -117,7 +118,7 @@ public class HealthAnalyzerEdgeCaseTests
         };
         var result = HealthAnalyzer.Analyze(metrics);
         Assert.Equal(HealthVerdict.GameServer, result.Verdict);
-        Assert.Equal("#F72585", result.ColorHex);
+        Assert.Equal(StatusColors.Info, result.ColorHex);
     }
 
     [Fact]
@@ -131,7 +132,7 @@ public class HealthAnalyzerEdgeCaseTests
         };
         var result = HealthAnalyzer.Analyze(metrics);
         Assert.Equal(HealthVerdict.StreamingService, result.Verdict);
-        Assert.Equal("#B388FF", result.ColorHex);
+        Assert.Equal(StatusColors.Info, result.ColorHex);
     }
 
     [Fact]
@@ -160,7 +161,7 @@ public class HealthAnalyzerEdgeCaseTests
         };
         var result = HealthAnalyzer.Analyze(metrics);
         Assert.Equal(HealthVerdict.Mixed, result.Verdict);
-        Assert.Equal("#FF6B6B", result.ColorHex);
+        Assert.Equal(StatusColors.Bad, result.ColorHex);
     }
 
     [Fact]

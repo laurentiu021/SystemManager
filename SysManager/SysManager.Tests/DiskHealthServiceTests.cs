@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -84,7 +85,7 @@ public class DiskHealthServiceTests
         var r = new DiskHealthReport { HealthStatus = "Unhealthy" };
         InvokeApplyVerdict(r);
         Assert.Contains("failing", r.Verdict, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("#EF4444", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Bad, r.VerdictColorHex);
     }
 
     [Fact]
@@ -93,7 +94,7 @@ public class DiskHealthServiceTests
         var r = new DiskHealthReport { HealthStatus = "Warning" };
         InvokeApplyVerdict(r);
         Assert.Contains("warning", r.Verdict, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("#F59E0B", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Warning, r.VerdictColorHex);
     }
 
     [Fact]
@@ -102,7 +103,7 @@ public class DiskHealthServiceTests
         var r = new DiskHealthReport { HealthStatus = "Healthy", WearPercent = 95 };
         InvokeApplyVerdict(r);
         Assert.Contains("worn", r.Verdict, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("#F59E0B", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Warning, r.VerdictColorHex);
     }
 
     [Fact]
@@ -111,7 +112,7 @@ public class DiskHealthServiceTests
         var r = new DiskHealthReport { HealthStatus = "Healthy", TemperatureC = 75 };
         InvokeApplyVerdict(r);
         Assert.Contains("hot", r.Verdict, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("#F59E0B", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Warning, r.VerdictColorHex);
     }
 
     [Fact]
@@ -120,7 +121,7 @@ public class DiskHealthServiceTests
         var r = new DiskHealthReport { HealthStatus = "Healthy", ReadErrors = 5 };
         InvokeApplyVerdict(r);
         Assert.Contains("I/O errors", r.Verdict);
-        Assert.Equal("#F59E0B", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Warning, r.VerdictColorHex);
     }
 
     [Fact]
@@ -137,7 +138,7 @@ public class DiskHealthServiceTests
         var r = new DiskHealthReport { HealthStatus = "Healthy" };
         InvokeApplyVerdict(r);
         Assert.Contains("Healthy", r.Verdict);
-        Assert.Equal("#22C55E", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Good, r.VerdictColorHex);
     }
 
     [Fact]
@@ -162,7 +163,7 @@ public class DiskHealthServiceTests
         var r = new DiskHealthReport { HealthStatus = "Healthy", WearPercent = 89 };
         InvokeApplyVerdict(r);
         Assert.Contains("Healthy", r.Verdict);
-        Assert.Equal("#22C55E", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Good, r.VerdictColorHex);
     }
 
     [Fact]

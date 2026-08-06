@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -46,7 +47,7 @@ public static class HealthAnalyzer
             diag.Verdict = HealthVerdict.Unknown;
             diag.Headline = "No samples yet";
             diag.Detail = "Press Start and wait a few seconds.";
-            diag.ColorHex = "#9AA0A6";
+            diag.ColorHex = StatusColors.Neutral;
             return diag;
         }
 
@@ -68,7 +69,7 @@ public static class HealthAnalyzer
             diag.Verdict = HealthVerdict.Good;
             diag.Headline = "Connection is healthy";
             diag.Detail = $"Avg {diag.AveragePingMs:F0} ms · {diag.WorstLossPercent:F1}% worst loss · {diag.WorstJitterMs:F0} ms jitter.";
-            diag.ColorHex = "#06D6A0";
+            diag.ColorHex = StatusColors.Good;
             return diag;
         }
 
@@ -77,7 +78,7 @@ public static class HealthAnalyzer
             diag.Verdict = HealthVerdict.LocalNetwork;
             diag.Headline = "Problem on your local network";
             diag.Detail = "Your router/gateway is showing loss or high latency. Check Wi-Fi signal, restart the router, or try cable.";
-            diag.ColorHex = "#FF6B6B";
+            diag.ColorHex = StatusColors.Bad;
             return diag;
         }
 
@@ -86,7 +87,7 @@ public static class HealthAnalyzer
             diag.Verdict = HealthVerdict.IspOrUpstream;
             diag.Headline = "Problem at your ISP or upstream";
             diag.Detail = "Gateway is clean but public DNS is showing loss. Contact your ISP if this persists; the game server is probably fine.";
-            diag.ColorHex = "#FFD166";
+            diag.ColorHex = StatusColors.Warning;
             return diag;
         }
 
@@ -95,7 +96,7 @@ public static class HealthAnalyzer
             diag.Verdict = HealthVerdict.GameServer;
             diag.Headline = "It's the game server, not you";
             diag.Detail = "Your connection to DNS and gateway is clean — only the game server is showing loss/jitter. Try another region or wait it out.";
-            diag.ColorHex = "#F72585";
+            diag.ColorHex = StatusColors.Info;
             return diag;
         }
 
@@ -104,7 +105,7 @@ public static class HealthAnalyzer
             diag.Verdict = HealthVerdict.Mixed;
             diag.Headline = "Multiple layers affected";
             diag.Detail = "Both DNS and game server are showing trouble — likely an ISP or routing issue affecting multiple endpoints.";
-            diag.ColorHex = "#FF6B6B";
+            diag.ColorHex = StatusColors.Bad;
             return diag;
         }
 
@@ -113,14 +114,14 @@ public static class HealthAnalyzer
             diag.Verdict = HealthVerdict.StreamingService;
             diag.Headline = "Streaming service is slow";
             diag.Detail = "Only streaming endpoints (YouTube/Twitch) are showing trouble — likely a CDN issue, not your connection.";
-            diag.ColorHex = "#B388FF";
+            diag.ColorHex = StatusColors.Info;
             return diag;
         }
 
         diag.Verdict = HealthVerdict.Mixed;
         diag.Headline = "Multiple layers affected";
         diag.Detail = $"{layersBad} network layers are showing trouble. Check the per-target stats to localize.";
-        diag.ColorHex = "#FF6B6B";
+        diag.ColorHex = StatusColors.Bad;
         return diag;
     }
 

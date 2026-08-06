@@ -1,6 +1,7 @@
 // SysManager · DiskHealthReportEdgeCaseTests
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -116,7 +117,7 @@ public class DiskHealthReportEdgeCaseTests
     public void HealthPercentColorHex_HighHealth_Green()
     {
         var report = new DiskHealthReport { HealthStatus = "Healthy" };
-        Assert.Equal("#22C55E", report.HealthPercentColorHex);
+        Assert.Equal(StatusColors.Good, report.HealthPercentColorHex);
     }
 
     [Fact]
@@ -127,7 +128,7 @@ public class DiskHealthReportEdgeCaseTests
         // TemperatureColorHex's null arm below.
         var report = new DiskHealthReport { HealthStatus = "SomethingUnknown" };
         Assert.Null(report.HealthPercent);
-        Assert.Equal("#9AA0A6", report.HealthPercentColorHex);
+        Assert.Equal(StatusColors.Neutral, report.HealthPercentColorHex);
     }
 
     [Fact]
@@ -135,7 +136,7 @@ public class DiskHealthReportEdgeCaseTests
     {
         var report = new DiskHealthReport { TemperatureC = null };
         // QA-004 fix: null temperature returns grey (no sensor) instead of red
-        Assert.Equal("#9AA0A6", report.TemperatureColorHex);
+        Assert.Equal(StatusColors.Neutral, report.TemperatureColorHex);
     }
 
     [Fact]
@@ -191,21 +192,21 @@ public class DiskHealthReportEdgeCaseTests
     public void WearColorHex_NullWear_Grey()
     {
         var report = new DiskHealthReport { WearPercent = null };
-        Assert.Equal("#9AA0A6", report.WearColorHex);
+        Assert.Equal(StatusColors.Neutral, report.WearColorHex);
     }
 
     [Fact]
     public void WearColorHex_LowWear_Green()
     {
         var report = new DiskHealthReport { WearPercent = 10 };
-        Assert.Equal("#22C55E", report.WearColorHex);
+        Assert.Equal(StatusColors.Good, report.WearColorHex);
     }
 
     [Fact]
     public void WearColorHex_HighWear_Red()
     {
         var report = new DiskHealthReport { WearPercent = 95 };
-        Assert.Equal("#EF4444", report.WearColorHex);
+        Assert.Equal(StatusColors.Bad, report.WearColorHex);
     }
 
     [Fact]

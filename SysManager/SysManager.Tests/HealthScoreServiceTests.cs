@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -237,14 +238,14 @@ public class HealthScoreServiceTests
     public void HealthRecommendation_CriticalSeverity_RedColor()
     {
         var rec = new HealthRecommendation { Message = "Test", Severity = "critical" };
-        Assert.Equal("#EF4444", rec.ColorHex);
+        Assert.Equal(StatusColors.Bad, rec.ColorHex);
     }
 
     [Fact]
     public void HealthRecommendation_WarningSeverity_AmberColor()
     {
         var rec = new HealthRecommendation { Message = "Test", Severity = "warning" };
-        Assert.Equal("#F59E0B", rec.ColorHex);
+        Assert.Equal(StatusColors.Warning, rec.ColorHex);
     }
 
     // ---------- helpers ----------

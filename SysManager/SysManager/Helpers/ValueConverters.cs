@@ -89,31 +89,52 @@ public sealed class BoolToElevationBadgeBrushConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
-/// <summary>Converts a hex string like "#4CC9F0" to a SolidColorBrush.</summary>
+/// <summary>
+/// Converts a status colour to a brush. Accepts either a THEME RESOURCE KEY (the
+/// <see cref="StatusColors"/> names — "Success", "Warning", "Danger", "Info", "TextMuted") or a
+/// literal hex string like "#4CC9F0".
+/// <para>The key form is what makes status colours follow the theme. These values used to be
+/// dark-calibrated hex constants that <see cref="Services.ThemeService"/> could not recompute, so
+/// verdict text on System Health, Disk Health, the Dashboard health score and Cleanup's SFC/DISM
+/// results sat below the AA 4.5:1 contrast floor on every light preset. Resolving a key against
+/// the application resources picks up the per-mode brush the theme service already maintains —
+/// the same lookup <see cref="OutputKindToBrushConverter"/> uses.</para>
+/// <para>Literal hex is still honoured, so a caller with a genuinely fixed colour keeps working.</para>
+/// </summary>
 public sealed class HexToBrushConverter : IValueConverter
 {
     // Cache frozen brushes by hex value to reduce GC pressure on frequently-updating bindings.
+    // ONLY literal hex is cached. A theme brush must never be: the cache is static and its brushes
+    // are frozen, so caching one would keep serving the colour resolved at first render and the
+    // status text would stay dark-themed after a switch to a light preset. A resource lookup is a
+    // dictionary hit, so there is nothing to gain by caching it anyway.
     private static readonly ConcurrentDictionary<string, SolidColorBrush> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is string s && !string.IsNullOrWhiteSpace(s))
+        if (value is not string s || string.IsNullOrWhiteSpace(s)) return Brushes.Gray;
+
+        // A leading '#' is the only thing that marks a literal colour; anything else is a key.
+        if (!s.StartsWith('#'))
         {
-            return _cache.GetOrAdd(s, static hex =>
-            {
-                try
-                {
-                    var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-                    brush.Freeze();
-                    return brush;
-                }
-                catch (FormatException)
-                {
-                    return Brushes.Gray;
-                }
-            });
+            // Unknown key, or no Application at all (unit tests): fall back to Gray rather than
+            // throw — a converter exception would blank the verdict text it is meant to colour.
+            return Application.Current?.TryFindResource(s) is Brush themed ? themed : Brushes.Gray;
         }
-        return Brushes.Gray;
+
+        return _cache.GetOrAdd(s, static hex =>
+        {
+            try
+            {
+                var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+                brush.Freeze();
+                return brush;
+            }
+            catch (FormatException)
+            {
+                return Brushes.Gray;
+            }
+        });
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

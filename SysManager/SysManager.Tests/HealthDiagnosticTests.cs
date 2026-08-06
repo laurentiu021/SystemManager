@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -18,7 +19,7 @@ public class HealthDiagnosticTests
         Assert.Equal(HealthVerdict.Unknown, h.Verdict);
         Assert.Equal("Waiting for data…", h.Headline);
         Assert.Equal("", h.Detail);
-        Assert.Equal("#9AA0A6", h.ColorHex);
+        Assert.Equal(StatusColors.Neutral, h.ColorHex);
         Assert.Equal(0, h.WorstLossPercent);
         Assert.Equal(0, h.WorstJitterMs);
         Assert.Equal(0, h.AveragePingMs);

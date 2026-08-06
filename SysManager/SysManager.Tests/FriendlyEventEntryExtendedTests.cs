@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.ComponentModel;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -60,7 +61,7 @@ public class FriendlyEventEntryExtendedTests
     public void SeverityColor_UnknownSeverity_GivesFallback()
     {
         var e = new FriendlyEventEntry { Severity = (EventSeverity)999 };
-        Assert.Equal("#9AA0A6", e.SeverityColor);
+        Assert.Equal(StatusColors.Neutral, e.SeverityColor);
     }
 
     [Fact]

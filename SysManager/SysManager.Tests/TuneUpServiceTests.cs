@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -222,7 +223,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 50,
             DiskResults = []
         };
-        Assert.Equal("#22C55E", result.OverallColorHex);
+        Assert.Equal(StatusColors.Good, result.OverallColorHex);
     }
 
     [Fact]
@@ -235,7 +236,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 50,
             DiskResults = []
         };
-        Assert.Equal("#F59E0B", result.OverallColorHex);
+        Assert.Equal(StatusColors.Warning, result.OverallColorHex);
     }
 
     [Fact]
@@ -248,7 +249,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 92,
             DiskResults = []
         };
-        Assert.Equal("#EF4444", result.OverallColorHex);
+        Assert.Equal(StatusColors.Bad, result.OverallColorHex);
     }
 
     [Fact]
@@ -276,7 +277,7 @@ public class TuneUpServiceTests
         };
         Assert.Equal("Samsung 980 Pro", summary.Name);
         Assert.Equal("Healthy", summary.Verdict);
-        Assert.Equal("#22C55E", summary.ColorHex);
+        Assert.Equal(StatusColors.Good, summary.ColorHex);
     }
 
     // ---------- reparse-point safety (data-loss regression) ----------

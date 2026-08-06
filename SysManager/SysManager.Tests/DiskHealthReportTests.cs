@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -28,7 +29,7 @@ public class DiskHealthReportTests
         Assert.Null(r.WriteErrors);
         Assert.Null(r.StartStopCount);
         Assert.Equal("", r.Verdict);
-        Assert.Equal("#9AA0A6", r.VerdictColorHex);
+        Assert.Equal(StatusColors.Neutral, r.VerdictColorHex);
     }
 
     [Fact]
@@ -149,7 +150,7 @@ public class DiskHealthReportTests
         // consistent with TemperatureColorHex's null arm.
         var r = new DiskHealthReport { HealthStatus = "" };
         Assert.Null(r.HealthPercent);
-        Assert.Equal("#9AA0A6", r.HealthPercentColorHex);
+        Assert.Equal(StatusColors.Neutral, r.HealthPercentColorHex);
     }
 
     // ---------- Temperature color ----------

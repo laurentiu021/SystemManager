@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Windows.Media;
+using SysManager.Helpers;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -164,6 +165,121 @@ public class ThemeStatusBrushTests
         foreach (var key in new[] { "CriticalText", "BadgeIndigoText", "BadgePurpleText", "BadgePinkText" })
             Assert.NotEqual(Lookup(ThemeService.StatusPalette(true), key),
                             Lookup(ThemeService.StatusPalette(false), key));
+    }
+
+    // ── StatusColors: the string-hex path that was never migrated ───────────
+    // The *ColorHex properties (disk health, temperature, health score, tune-up, Cleanup verdicts,
+    // network health) fed HexToBrushConverter with dark-calibrated `const` hex. A const is baked in
+    // at compile time, so ThemeService could never recompute it — the identical regression this file
+    // already guards for the DynamicResource brushes, on the one route that bypassed them. They now
+    // carry a theme resource KEY instead, which is what these tests pin.
+
+    // Elevated intentionally aliases Warning (see StatusColors), so it is not a separate row —
+    // xUnit rejects duplicate InlineData. StatusColors_ElevatedAliasesWarning pins that on purpose.
+    [Theory]
+    [InlineData(StatusColors.Good)]
+    [InlineData(StatusColors.Warning)]
+    [InlineData(StatusColors.Info)]
+    [InlineData(StatusColors.Bad)]
+    [InlineData(StatusColors.Neutral)]
+    public void StatusColors_NameAThemedBrush_NotALiteral(string key)
+    {
+        // A '#' here means someone reintroduced a hardcoded colour, which is unthemeable by
+        // construction — the exact defect. Fail loudly rather than let it ship.
+        Assert.False(key.StartsWith('#'),
+            $"StatusColors must name a theme resource, not a literal colour; got '{key}'.");
+    }
+
+    [Theory]
+    [InlineData(StatusColors.Good)]
+    [InlineData(StatusColors.Warning)]
+    [InlineData(StatusColors.Info)]
+    [InlineData(StatusColors.Bad)]
+    public void StatusColors_ResolveInBothStatusPalettes(string key)
+    {
+        // A key ThemeService does not emit would resolve to nothing at runtime and the verdict text
+        // would silently fall back to grey — worse than the bug, because it looks deliberate.
+        foreach (var isDark in new[] { true, false })
+            Assert.Contains(key, ThemeService.StatusPalette(isDark).Select(p => p.Key));
+    }
+
+    [Fact]
+    public void StatusColors_Neutral_IsAPerPresetThemeBrush()
+    {
+        // Neutral maps to TextMuted, which Apply writes from the preset (ThemeService.cs SetBrush
+        // "TextMuted", theme.TextMuted) rather than from StatusPalette — so it is themed, just not
+        // via that list. Assert the property it actually comes from varies across presets, which is
+        // the property that matters: a single fixed grey is what the old #9AA0A6 constant was.
+        Assert.Equal("TextMuted", StatusColors.Neutral);
+        var muted = ThemePreset.Defaults.Values.Select(p => p.TextMuted).Distinct().Count();
+        Assert.True(muted > 1, $"TextMuted must differ across presets to be theme-aware; found {muted} distinct value(s).");
+    }
+
+    [Theory]
+    [InlineData(StatusColors.Good)]
+    [InlineData(StatusColors.Warning)]
+    [InlineData(StatusColors.Info)]
+    [InlineData(StatusColors.Bad)]
+    public void StatusColors_MeetWcagAaOnTheTintedLightSurface(string key)
+    {
+        // The measured failure: on a light preset the old constants ran 1.8:1 to 3.2:1 against the
+        // light card — a pale smear exactly where "is my PC OK?" gets answered.
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), LightTintedSurface);
+        Assert.True(ratio >= 4.5,
+            $"Light-theme status colour '{key}' must meet WCAG AA (4.5:1) as small verdict text on the most-tinted light card; got {ratio:F2}:1.");
+    }
+
+    [Theory]
+    [InlineData(StatusColors.Good)]
+    [InlineData(StatusColors.Warning)]
+    [InlineData(StatusColors.Info)]
+    [InlineData(StatusColors.Bad)]
+    public void StatusColors_StayLegibleOnDark(string key)
+    {
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(true), key), DarkSurface);
+        Assert.True(ratio >= 4.5,
+            $"Dark-theme status colour '{key}' must stay legible (4.5:1) on the dark surface; got {ratio:F2}:1.");
+    }
+
+    [Fact]
+    public void StatusColors_DivergeBetweenModes()
+    {
+        // Mode-awareness guard, as for the brushes above: identical values in both modes would mean
+        // the colour is not actually recomputed and the light-theme washout could silently return.
+        foreach (var key in new[] { StatusColors.Good, StatusColors.Warning, StatusColors.Info, StatusColors.Bad })
+            Assert.NotEqual(Lookup(ThemeService.StatusPalette(true), key),
+                            Lookup(ThemeService.StatusPalette(false), key));
+    }
+
+    [Fact]
+    public void StatusColors_ElevatedAliasesWarning()
+    {
+        // Deliberate: there is no separate "elevated" brush, and amber is the honest reading of
+        // "worse than fine, not yet failing". Pinned so the aliasing is a decision, not an accident —
+        // the old value was a light red that on a light surface was both illegible and easy to
+        // mistake for the failure colour.
+        Assert.Equal(StatusColors.Warning, StatusColors.Elevated);
+    }
+
+    [Fact]
+    public void StatusColors_GoodAndBad_AreDifferentColoursInBothModes()
+    {
+        // "Healthy" and "failing" are the two readings the persona acts on, so they must never be
+        // the same colour. Deliberately NOT a WCAG contrast check: that formula measures relative
+        // luminance, and the light palette's Success #166534 and Danger #B91C1C are about equally
+        // dark (1.10:1) while being obviously different hues. Compare the channels instead.
+        // Elevated shares Warning's brush by design, so it is not compared here.
+        foreach (var isDark in new[] { true, false })
+        {
+            var good = Lookup(ThemeService.StatusPalette(isDark), StatusColors.Good);
+            var bad = Lookup(ThemeService.StatusPalette(isDark), StatusColors.Bad);
+
+            // Manhattan distance in RGB: crude, but enough to catch "these became the same colour",
+            // which is the only failure mode worth guarding here.
+            var distance = Math.Abs(good.R - bad.R) + Math.Abs(good.G - bad.G) + Math.Abs(good.B - bad.B);
+            Assert.True(distance >= 120,
+                $"{(isDark ? "Dark" : "Light")}: Good {good} and Bad {bad} must read as different colours; RGB distance {distance}.");
+        }
     }
 
     private static Color Lookup(IReadOnlyList<(string Key, Color Color)> palette, string key)

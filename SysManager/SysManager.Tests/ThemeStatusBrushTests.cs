@@ -273,6 +273,13 @@ public class ThemeStatusBrushTests
             ("Severity.Warning",  new FriendlyEventEntry { Severity = EventSeverity.Warning }.SeverityColor),
             ("Severity.Info",     new FriendlyEventEntry { Severity = EventSeverity.Info }.SeverityColor),
             ("Severity.Verbose",  new FriendlyEventEntry { Severity = EventSeverity.Verbose }.SeverityColor),
+            // These two are DEFAULTS/fallbacks rather than assertions, so no grep of the test suite
+            // could ever have found them — CI did, on the second attempt.
+            ("HealthDiagnostic default", new HealthDiagnostic().ColorHex),
+            ("TemperatureReading(null)", new TemperatureReading("CPU", "Package", null).ColorHex),
+            ("TemperatureReading(40)",   new TemperatureReading("CPU", "Package", 40).ColorHex),
+            ("TemperatureReading(70)",   new TemperatureReading("CPU", "Package", 70).ColorHex),
+            ("TemperatureReading(95)",   new TemperatureReading("CPU", "Package", 95).ColorHex),
         };
 
         var literals = emitted.Where(e => e.Value.StartsWith('#')).ToList();

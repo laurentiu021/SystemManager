@@ -26,10 +26,14 @@ public class FriendlyEventEntryTests
     [InlineData(EventSeverity.Warning)]
     [InlineData(EventSeverity.Info)]
     [InlineData(EventSeverity.Verbose)]
-    public void SeverityColor_IsValidHex(EventSeverity sev)
+    public void SeverityColor_IsAThemeResourceKey(EventSeverity sev)
     {
+        // This used to assert a hex literal. Severity colours now name a theme brush so they follow
+        // the active preset — a hex here would be a colour ThemeService cannot repaint, which on a
+        // light theme left the severity dot pale on a near-white row.
         var e = new FriendlyEventEntry { Severity = sev };
-        Assert.Matches("^#[0-9A-Fa-f]{6}$", e.SeverityColor);
+        Assert.DoesNotMatch("^#", e.SeverityColor);
+        Assert.False(string.IsNullOrWhiteSpace(e.SeverityColor));
     }
 
     [Fact]

@@ -84,6 +84,7 @@ public static class ServiceRegistration
         services.AddSingleton<StandbyMemoryService>();
         services.AddSingleton<StandbyPreferenceService>();
         services.AddSingleton<ServiceStartupLedgerService>();
+        services.AddSingleton<CrashMarkerService>();
         services.AddSingleton<ResourceHistoryService>();
         services.AddSingleton<BandwidthHistoryService>();
         services.AddSingleton<ISettingsWatchdogService, SettingsWatchdogService>();

@@ -20,6 +20,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private readonly HealthScoreService _healthScore;
     private readonly TemperatureService _temps;
     private readonly IWingetService _winget;
+    private readonly CrashMarkerService _crashMarkers;
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _pollingCts;
 
@@ -90,19 +91,23 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private bool _isActive;
 
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
-        HealthScoreService healthScore, TemperatureService temps, IWingetService winget)
+        HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
+        CrashMarkerService? crashMarkers = null)
     {
         _sys = sys;
         _tuneUp = tuneUp;
         _healthScore = healthScore;
         _temps = temps;
         _winget = winget;
+        // Optional so the designer/test graph can construct this VM without a crash-marker store.
+        _crashMarkers = crashMarkers ?? new CrashMarkerService();
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
 
     private async Task InitAsync()
     {
+        ReportPreviousCrash();
         await LoadStaticInfoAsync();
         LoadDrives();
         LoadActivity();
@@ -110,6 +115,26 @@ public sealed partial class DashboardViewModel : ViewModelBase
         await LoadHealthScoreAsync();
         StartAlertScans();
         await LoadTemperaturesAsync();
+    }
+
+    /// <summary>
+    /// If the previous run died from an unhandled exception, say so once.
+    /// <para>A domain-level unhandled exception kills the process with no UI at all, so the user saw
+    /// the window vanish and had nothing to report but "it just closed" — while the app had already
+    /// written the details to its log. A toast is used rather than a dialog: this is information, and
+    /// a modal blocking the app on every start after one crash would be worse than the crash.</para>
+    /// <para>The marker is consumed (deleted) by the read, so one crash notifies exactly once.</para>
+    /// </summary>
+    private void ReportPreviousCrash()
+    {
+        var marker = _crashMarkers.TakePending(DateTimeOffset.UtcNow);
+        if (marker is null) return;
+
+        ToastService.Instance.Show("SysManager closed unexpectedly last time",
+            CrashMarkerService.DescribeForUser(marker), autoHideMs: 9000);
+        ActivityLogService.Instance.Log("Shell", "Recorded that the previous session ended unexpectedly");
+        Log.Information("Previous session crashed: {Type} in v{Version} at {WhenUtc}",
+            marker.ExceptionType, marker.Version, marker.WhenUtc);
     }
 
     // ══════════════════════════════════════════════════════════════════════

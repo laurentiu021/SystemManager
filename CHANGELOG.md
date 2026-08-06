@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.57.3] - 2026-08-06
+
+### Fixed
+- **Bulk Installer now explains why an install failed.** It wrote things like "Failed (exit 1618)" into the row, or the raw Windows error text — neither of which tells you what to do. The same numbers were already being translated into plain sentences on the Uninstaller tab, so that translation is now shared: "Another installation is already in progress — wait for it to finish and try again", "Access denied — retry and accept the installer's Windows UAC prompt", and so on. If a PC does not have App Installer at all, all three app tabs now say so in the same words instead of one of them showing an internal error.
+- **Switching the Bandwidth Monitor chart between ranges no longer risks an error.** Changing the range while another change was still loading could have both of them redraw the graph at the same time, which could fail instead of drawing. Only one redraw runs at a time now.
+
 ## [1.57.2] - 2026-08-06
 
 ### Fixed

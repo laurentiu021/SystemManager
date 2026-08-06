@@ -236,7 +236,10 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                     }
                     else
                     {
-                        app.Status = $"Failed (exit {exitCode})";
+                        // "Failed (exit 1618)" told the user nothing and read like a crash. The same
+                        // codes are already explained on the Uninstaller tab, so both now go through
+                        // one shared translator rather than a third private copy.
+                        app.Status = WingetFailure.DescribeInstallFailure(exitCode);
                         failed++;
                     }
                 }
@@ -244,6 +247,16 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                 {
                     app.Status = "Cancelled";
                     throw;
+                }
+                // winget.exe missing entirely: Process.Start throws Win32Exception. The two sibling
+                // winget tabs already catch this and show the same sentence; this tab was surfacing
+                // raw OS text per row instead ("The system cannot find the file specified").
+                catch (System.ComponentModel.Win32Exception ex)
+                {
+                    app.Status = "Failed — winget is not available";
+                    StatusMessage = WingetFailure.WingetUnavailable;
+                    failed++;
+                    Log.Warning(ex, "winget unavailable while installing {WingetId}", app.WingetId);
                 }
                 catch (Exception ex)
                 {
@@ -306,6 +319,14 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             // is sanitized against argument injection before it reaches the command line.
             var lines = await _service.SearchAsync(SearchQuery).ConfigureAwait(true);
             SearchResults.ReplaceWith(ParseSearchResults(string.Join("\n", lines)));
+        }
+        // Missing winget is the one search failure with a specific, actionable answer, so it is named
+        // rather than folded into "ensure winget is available" — which tells the user to check the very
+        // thing the app already knows is absent.
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Warning(ex, "winget unavailable while searching for {Query}", SearchQuery);
+            StatusMessage = WingetFailure.WingetUnavailable;
         }
         catch (Exception ex)
         {

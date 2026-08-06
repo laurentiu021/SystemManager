@@ -361,24 +361,14 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         exitCode is 1641 or 3010;
 
     /// <summary>
-    /// Translates a winget uninstall exit code into a human-readable message
-    /// so the user knows why the uninstall failed and what to try next.
+    /// Translates a winget uninstall exit code into a human-readable message so the user knows why
+    /// the uninstall failed and what to try next.
+    /// <para>The mapping itself moved to <see cref="WingetFailure.DescribeUninstallFailure"/>, next to
+    /// the install-side one, so the three winget tabs cannot drift apart again — Bulk Installer had
+    /// been writing raw exit codes while this tab explained the same numbers. This overload stays as
+    /// the call site (and its tests) already read it; <paramref name="appName"/> is not part of the
+    /// sentence, which is why it is unused here.</para>
     /// </summary>
-    internal static string DescribeUninstallFailure(int exitCode, string appName)
-    {
-        var reason = exitCode switch
-        {
-            1 => "The app's uninstaller reported a generic error.",
-            2 => "The uninstall was cancelled by the user or a UAC prompt was declined.",
-            5 => "Access denied - retry and accept the uninstaller's Windows UAC prompt, or remove the app from Windows Settings.",
-            87 => "Invalid parameter — the app may require a manual uninstall.",
-            1602 => "The uninstall was cancelled by the user.",
-            1603 => "The app's installer encountered a fatal error during removal.",
-            1605 => "The app is not currently installed (already removed?).",
-            1618 => "Another installation is in progress — wait and try again.",
-            _ => $"The app's uninstaller returned exit code {exitCode}."
-        };
-
-        return $"Failed — {reason}";
-    }
+    internal static string DescribeUninstallFailure(int exitCode, string appName) =>
+        WingetFailure.DescribeUninstallFailure(exitCode);
 }

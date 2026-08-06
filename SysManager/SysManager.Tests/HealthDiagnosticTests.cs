@@ -53,7 +53,7 @@ public class HealthDiagnosticTests
             Verdict = HealthVerdict.LocalNetwork,
             Headline = "Local network issue",
             Detail = "Gateway has high loss",
-            ColorHex = "#F59E0B",
+            ColorHex = StatusColors.Warning,
             WorstLossPercent = 15.5,
             WorstJitterMs = 8.2,
             AveragePingMs = 45.0

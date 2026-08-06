@@ -4,6 +4,7 @@
 
 using System.Windows.Media;
 using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -249,6 +250,35 @@ public class ThemeStatusBrushTests
         foreach (var key in new[] { StatusColors.Good, StatusColors.Warning, StatusColors.Info, StatusColors.Bad })
             Assert.NotEqual(Lookup(ThemeService.StatusPalette(true), key),
                             Lookup(ThemeService.StatusPalette(false), key));
+    }
+
+    [Fact]
+    public void NoProducer_EmitsAHardcodedColour()
+    {
+        // The mechanical guard. Rewriting the palette to keys was a migration across 8 producers and
+        // 13 test files, and the first attempt MISSED several: my sweep only matched
+        // Assert.Equal("#..."), so hex passed via [InlineData] survived and CI caught it. Worse,
+        // FriendlyEventEntry turned out to be a THIRD producer with its own drifted palette that the
+        // issue never mentioned. A grep-style assertion is the only thing that makes "no literals
+        // left" checkable instead of remembered.
+        //
+        // Every *ColorHex-style value the app can emit is enumerated here through its real code path.
+        var emitted = new List<(string Where, string Value)>
+        {
+            ("HealthScoreResult(100)", new HealthScoreResult { Score = 100 }.ColorHex),
+            ("HealthScoreResult(60)",  new HealthScoreResult { Score = 60 }.ColorHex),
+            ("HealthScoreResult(10)",  new HealthScoreResult { Score = 10 }.ColorHex),
+            ("Severity.Critical", new FriendlyEventEntry { Severity = EventSeverity.Critical }.SeverityColor),
+            ("Severity.Error",    new FriendlyEventEntry { Severity = EventSeverity.Error }.SeverityColor),
+            ("Severity.Warning",  new FriendlyEventEntry { Severity = EventSeverity.Warning }.SeverityColor),
+            ("Severity.Info",     new FriendlyEventEntry { Severity = EventSeverity.Info }.SeverityColor),
+            ("Severity.Verbose",  new FriendlyEventEntry { Severity = EventSeverity.Verbose }.SeverityColor),
+        };
+
+        var literals = emitted.Where(e => e.Value.StartsWith('#')).ToList();
+        Assert.True(literals.Count == 0,
+            "These still emit a hardcoded colour, which ThemeService cannot repaint: " +
+            string.Join(", ", literals.Select(l => $"{l.Where} => {l.Value}")));
     }
 
     [Fact]

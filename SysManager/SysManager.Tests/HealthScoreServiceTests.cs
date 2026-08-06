@@ -210,12 +210,12 @@ public class HealthScoreServiceTests
     // ---------- HealthScoreResult model ----------
 
     [Theory]
-    [InlineData(100, "#22C55E")]
-    [InlineData(80, "#22C55E")]
-    [InlineData(79, "#F59E0B")]
-    [InlineData(50, "#F59E0B")]
-    [InlineData(49, "#EF4444")]
-    [InlineData(0, "#EF4444")]
+    [InlineData(100, StatusColors.Good)]
+    [InlineData(80, StatusColors.Good)]
+    [InlineData(79, StatusColors.Warning)]
+    [InlineData(50, StatusColors.Warning)]
+    [InlineData(49, StatusColors.Bad)]
+    [InlineData(0, StatusColors.Bad)]
     public void HealthScoreResult_ColorHex_MatchesScore(int score, string expectedColor)
     {
         var result = new HealthScoreResult { Score = score };

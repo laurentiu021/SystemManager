@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 - **Health verdicts are readable again on the light themes.** The coloured answers to "is my PC OK?" — the System Health verdicts, disk health and wear percentages, drive temperatures, the Dashboard health score, Cleanup's repair results and the network-health headline — were painted in colours picked for the dark theme and never repainted when you chose a light one. On a light background they came out as a pale smear: measured against the lightest cards, every one of the six fell below the readable-contrast standard, the worst at about a third of the required difference. They now follow whichever theme you have, so green still reads as green and red as red on all of them. The colours on the dark themes are unchanged.
+- **The colour-coded severity in System Logs had the same problem.** Critical, Error, Warning, Info and Verbose entries were marked with their own set of fixed colours, separate from everywhere else in the app and equally unable to follow a light theme. They now use the same theme-aware colours as the rest.
 - **The same colours could also get stuck after switching theme.** Once a colour had been drawn it was cached and reused, so changing theme could leave the old one behind until the app restarted. Only genuinely fixed colours — like the per-target lines you pick yourself on the Ping chart — are cached now.
 
 ## [1.57.5] - 2026-08-06

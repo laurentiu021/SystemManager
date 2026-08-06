@@ -95,7 +95,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 50,
             DiskResults = new List<DiskHealthSummary>
             {
-                new() { Name = "Disk0", Verdict = "Healthy", ColorHex = "#22C55E" }
+                new() { Name = "Disk0", Verdict = "Healthy", ColorHex = StatusColors.Good }
             }
         };
         Assert.Equal(0, result.WarningCount);
@@ -150,7 +150,7 @@ public class TuneUpServiceTests
             RamUsedPercent = 50,
             DiskResults = new List<DiskHealthSummary>
             {
-                new() { Name = "Disk0", Verdict = "Warning", ColorHex = "#F59E0B" }
+                new() { Name = "Disk0", Verdict = "Warning", ColorHex = StatusColors.Warning }
             }
         };
         Assert.Equal(1, result.WarningCount);
@@ -166,8 +166,8 @@ public class TuneUpServiceTests
             RamUsedPercent = 92,
             DiskResults = new List<DiskHealthSummary>
             {
-                new() { Name = "Disk0", Verdict = "Warning", ColorHex = "#F59E0B" },
-                new() { Name = "Disk1", Verdict = "Healthy", ColorHex = "#22C55E" }
+                new() { Name = "Disk0", Verdict = "Warning", ColorHex = StatusColors.Warning },
+                new() { Name = "Disk1", Verdict = "Healthy", ColorHex = StatusColors.Good }
             }
         };
         // shortcuts(1) + uptime(1) + ram(1) + disk0(1) = 4
@@ -273,7 +273,7 @@ public class TuneUpServiceTests
         {
             Name = "Samsung 980 Pro",
             Verdict = "Healthy",
-            ColorHex = "#22C55E"
+            ColorHex = StatusColors.Good
         };
         Assert.Equal("Samsung 980 Pro", summary.Name);
         Assert.Equal("Healthy", summary.Verdict);

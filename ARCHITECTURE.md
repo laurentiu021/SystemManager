@@ -421,7 +421,9 @@ Key services:
   every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,
   with 7/14/30-day retention (periodic prune). Reuses `SystemInfoService` + NvAPIWrapper +
   `TemperatureService`; serialize/parse/prune/downsample/CSV are pure, unit-tested static
-  helpers. Strictly local — no system writes, nothing leaves the machine.
+  helpers, and the directory is injectable — like `BandwidthHistoryService` — so tests cover the
+  load and retention paths without touching the user's own history. Strictly local — no system
+  writes, nothing leaves the machine.
 - Bandwidth Monitor sources — `IBandwidthMonitorService` is the seam with two implementations:
   `ConnectionBandwidthSource` (default, no admin) sums `NetworkInterface` byte counters for total
   throughput and reads the extended TCP/UDP tables via iphlpapi P/Invoke (`GetExtendedTcpTable`/

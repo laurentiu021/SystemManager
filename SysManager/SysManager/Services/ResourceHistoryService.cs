@@ -31,16 +31,14 @@ public sealed class ResourceHistoryService : IDisposable
     // long-lived session doesn't let the file grow past the retention window on disk.
     private const int PruneEverySamples = 360; // 360 × 10s = 1 hour
 
-    private static readonly string DataDir = Path.Join(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
-    private static readonly string DataPath = Path.Join(DataDir, "resource-history.ndjson");
-    private static readonly string ConfigPath = Path.Join(DataDir, "resource-history-config.json");
-
     private static readonly JsonSerializerOptions SampleJson = new() { WriteIndented = false };
 
     private readonly SystemInfoService _sys;
     private readonly TemperatureService _temps;
     private readonly SemaphoreSlim _fileLock = new(1, 1);
+    private readonly string _dataDir;
+    private readonly string _dataPath;
+    private readonly string _configPath;
 
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
@@ -54,10 +52,23 @@ public sealed class ResourceHistoryService : IDisposable
 
     private int _retentionDays = 7;
 
-    public ResourceHistoryService(SystemInfoService sys, TemperatureService temps)
+    /// <summary>
+    /// Creates the service. <paramref name="configDir"/> is overridable so tests exercise the real
+    /// append/load/prune paths against a temp directory instead of the user's own history file —
+    /// same seam as <see cref="BandwidthHistoryService"/> and <see cref="StandbyPreferenceService"/>.
+    /// <para>The paths were previously <c>static readonly</c>, which made this service impossible to
+    /// test: <see cref="Environment.SpecialFolder.LocalApplicationData"/> resolves through the Win32
+    /// known-folder API and ignores the <c>LOCALAPPDATA</c> environment variable, so not even a child
+    /// process could redirect it away from the real profile.</para>
+    /// </summary>
+    public ResourceHistoryService(SystemInfoService sys, TemperatureService temps, string? configDir = null)
     {
         _sys = sys;
         _temps = temps;
+        _dataDir = configDir ?? Path.Join(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        _dataPath = Path.Join(_dataDir, "resource-history.ndjson");
+        _configPath = Path.Join(_dataDir, "resource-history-config.json");
         _retentionDays = LoadRetention();
     }
 
@@ -184,10 +195,15 @@ public sealed class ResourceHistoryService : IDisposable
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            Directory.CreateDirectory(DataDir);
-            await File.AppendAllTextAsync(DataPath, Serialize(sample) + "\n", ct).ConfigureAwait(false);
+            Directory.CreateDirectory(_dataDir);
+            await File.AppendAllTextAsync(_dataPath, Serialize(sample) + "\n", ct).ConfigureAwait(false);
         }
         catch (IOException ex) { Log.Debug("Resource history append failed: {Error}", ex.Message); }
+        // UnauthorizedAccessException is a SIBLING of IOException, not a subclass, so it escapes the
+        // catch above. It is what File APIs raise for a read-only or ACL-denied file, which is
+        // reachable if the profile folder is locked down — and an unhandled throw here would
+        // surface as a crash from a background sampler the user never invoked.
+        catch (UnauthorizedAccessException ex) { Log.Debug("Resource history append denied: {Error}", ex.Message); }
         finally { if (!_disposed) _fileLock.Release(); }
     }
 
@@ -200,8 +216,8 @@ public sealed class ResourceHistoryService : IDisposable
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (!File.Exists(DataPath)) return [];
-            var lines = await File.ReadAllLinesAsync(DataPath, ct).ConfigureAwait(false);
+            if (!File.Exists(_dataPath)) return [];
+            var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
             var cutoff = DateTime.Now - range;
             // The file is append-only and time-ordered, so the requested range is a suffix:
             // walk from the END and stop at the first line older than the cutoff. This bounds
@@ -218,6 +234,7 @@ public sealed class ResourceHistoryService : IDisposable
             return samples;
         }
         catch (IOException ex) { Log.Debug("Resource history load failed: {Error}", ex.Message); return []; }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Resource history load denied: {Error}", ex.Message); return []; }
         finally { if (!_disposed) _fileLock.Release(); }
     }
 
@@ -228,20 +245,21 @@ public sealed class ResourceHistoryService : IDisposable
         catch (OperationCanceledException) { return; }
         try
         {
-            if (!File.Exists(DataPath)) return;
-            var lines = await File.ReadAllLinesAsync(DataPath, ct).ConfigureAwait(false);
+            if (!File.Exists(_dataPath)) return;
+            var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
             var kept = Prune(lines, DateTime.Now, TimeSpan.FromDays(_retentionDays));
             // Only rewrite when something actually changed, to avoid needless disk churn.
             if (kept.Count == lines.Length) return;
             // Atomic rewrite: write to a temp file in the same directory, then swap it in
             // with a single File.Move. A crash mid-write can then only leave a stray .tmp
-            // (never read — the sampler reads DataPath), never a truncated history file.
-            var tmp = DataPath + ".tmp";
+            // (never read — the sampler reads _dataPath), never a truncated history file.
+            var tmp = _dataPath + ".tmp";
             await File.WriteAllLinesAsync(tmp, kept, ct).ConfigureAwait(false);
-            File.Move(tmp, DataPath, overwrite: true);
+            File.Move(tmp, _dataPath, overwrite: true);
         }
         catch (OperationCanceledException) { /* shutdown */ }
         catch (IOException ex) { Log.Debug("Resource history prune failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Resource history prune denied: {Error}", ex.Message); }
         finally { if (!_disposed) _fileLock.Release(); }
     }
 
@@ -339,12 +357,12 @@ public sealed class ResourceHistoryService : IDisposable
 
     private sealed record RetentionConfig(int RetentionDays);
 
-    private static int LoadRetention()
+    private int LoadRetention()
     {
         try
         {
-            if (!File.Exists(ConfigPath)) return 7;
-            var cfg = JsonSerializer.Deserialize<RetentionConfig>(File.ReadAllText(ConfigPath));
+            if (!File.Exists(_configPath)) return 7;
+            var cfg = JsonSerializer.Deserialize<RetentionConfig>(File.ReadAllText(_configPath));
             return cfg is not null && RetentionOptions.Contains(cfg.RetentionDays) ? cfg.RetentionDays : 7;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -354,14 +372,15 @@ public sealed class ResourceHistoryService : IDisposable
         }
     }
 
-    private static void SaveRetention(int days)
+    private void SaveRetention(int days)
     {
         try
         {
-            Directory.CreateDirectory(DataDir);
-            File.WriteAllText(ConfigPath, JsonSerializer.Serialize(new RetentionConfig(days)));
+            Directory.CreateDirectory(_dataDir);
+            File.WriteAllText(_configPath, JsonSerializer.Serialize(new RetentionConfig(days)));
         }
         catch (IOException ex) { Log.Debug("Resource history config save failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Resource history config save denied: {Error}", ex.Message); }
     }
 
     public void Dispose()

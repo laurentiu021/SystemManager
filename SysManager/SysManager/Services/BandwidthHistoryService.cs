@@ -51,6 +51,11 @@ public sealed class BandwidthHistoryService
             await File.AppendAllTextAsync(_dataPath, Serialize(sample) + "\n", ct).ConfigureAwait(false);
         }
         catch (IOException ex) { Log.Debug("Bandwidth history append failed: {Error}", ex.Message); }
+        // Same reason as ResourceHistoryService: UnauthorizedAccessException is a SIBLING of
+        // IOException, so it escapes the catch above. Here an escaping throw is worse — the
+        // caller sets _historyOwnsChart before awaiting, and only OperationCanceledException
+        // hands it back, so an unhandled access error would freeze the live chart for good.
+        catch (UnauthorizedAccessException ex) { Log.Debug("Bandwidth history append denied: {Error}", ex.Message); }
         finally { _fileLock.Release(); }
     }
 
@@ -77,6 +82,7 @@ public sealed class BandwidthHistoryService
             return samples;
         }
         catch (IOException ex) { Log.Debug("Bandwidth history load failed: {Error}", ex.Message); return []; }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Bandwidth history load denied: {Error}", ex.Message); return []; }
         finally { _fileLock.Release(); }
     }
 
@@ -97,6 +103,7 @@ public sealed class BandwidthHistoryService
         }
         catch (OperationCanceledException) { /* shutdown */ }
         catch (IOException ex) { Log.Debug("Bandwidth history prune failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Bandwidth history prune denied: {Error}", ex.Message); }
         finally { _fileLock.Release(); }
     }
 

@@ -97,7 +97,10 @@ public partial class MainWindow : Window
         if (PresentationSource.FromVisual(this) is HwndSource source)
         {
             source.AddHook(WndProc);
-            ApplyDarkTitleBar(source.Handle);
+            ApplyTitleBarTheme(source.Handle, ThemeService.Instance.CurrentTheme.IsDark);
+            // Re-apply on every switch: the OS title bar is not a WPF brush, so nothing else
+            // repaints it. Unsubscribed in OnClosed.
+            ThemeService.Instance.ThemeChanged += OnThemeChangedForTitleBar;
         }
 
         // Initialize tray icon after window handle is available. Pass a navigation callback so the
@@ -110,10 +113,26 @@ public partial class MainWindow : Window
             });
     }
 
-    private static void ApplyDarkTitleBar(IntPtr hwnd)
+    private void OnThemeChangedForTitleBar()
+    {
+        if (PresentationSource.FromVisual(this) is HwndSource source)
+            ApplyTitleBarTheme(source.Handle, ThemeService.Instance.CurrentTheme.IsDark);
+    }
+
+    /// <summary>
+    /// Tells the OS whether to draw the title bar dark or light.
+    /// <para>This used to pass a hardcoded 1 and run once at startup, so the title bar stayed dark
+    /// for the life of the process — on any of the six light presets the app was a near-white window
+    /// wearing a black title bar, the one piece of chrome the user could not theme. It is also the
+    /// only surface left pinned to dark after every brush, chart paint and control template was
+    /// migrated to invert per preset.</para>
+    /// <para>The return value is intentionally discarded: the attribute is unsupported before
+    /// Windows 10 1809, and failing to tint a title bar must never take the window down.</para>
+    /// </summary>
+    private static void ApplyTitleBarTheme(IntPtr hwnd, bool dark)
     {
         const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        int value = 1;
+        int value = dark ? 1 : 0;   // 0 is the documented default (light)
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
     }
 
@@ -217,6 +236,9 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        // ThemeService is a singleton that outlives the window, so a surviving subscription would
+        // keep this instance alive and fire against a dead handle on the next theme switch.
+        ThemeService.Instance.ThemeChanged -= OnThemeChangedForTitleBar;
         (DataContext as MainWindowViewModel)?.Dispose();
         base.OnClosed(e);
     }

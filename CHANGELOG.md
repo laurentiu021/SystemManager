@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.57.7] - 2026-08-06
+
+### Fixed
+- **Light themes no longer come with a black title bar.** The bar across the top of the window — the one Windows draws, with the close button — was always dark, whichever theme you picked. On any of the six light themes the app was a near-white window wearing a black strip, the one part of it that never matched. It now follows your theme, and changes straight away when you switch rather than waiting for a restart.
+
 ## [1.57.6] - 2026-08-06
 
 ### Fixed

@@ -68,6 +68,36 @@ public class ThemeTextContrastTests
             $"Preset '{presetId}': TextPrimary must meet WCAG AAA (7:1) on Background; got {ratio:F2}:1.");
     }
 
+    // ── The OS title bar follows the preset ─────────────────────────────────
+    // MainWindow tells DWM whether to draw the title bar dark via DWMWA_USE_IMMERSIVE_DARK_MODE, and
+    // it used to pass a hardcoded 1 exactly once at startup. So on the six light presets the app was
+    // a near-white window wearing a black title bar — the last surface still pinned to dark after
+    // every brush and control template had been migrated. The DWM call needs a real window, so what
+    // is asserted here is the SIGNAL that drives it: IsDark must classify every preset correctly, or
+    // the fix would confidently send the wrong value.
+
+    [Theory]
+    [MemberData(nameof(AllPresets))]
+    public void Preset_IsDark_AgreesWithItsOwnBackground(string presetId)
+    {
+        var p = ThemePreset.Defaults[presetId];
+        // 384 is the threshold the record itself applies to CUSTOM themes, so the built-ins must be
+        // consistent with it — otherwise a built-in and a custom theme of the same shade disagree.
+        var sum = p.Background.R + p.Background.G + p.Background.B;
+        Assert.Equal(sum < 384, p.IsDark);
+    }
+
+    [Fact]
+    public void BothDarkAndLightPresetsShip()
+    {
+        // If every preset were dark the title-bar bug could not manifest and the theory above would
+        // be silently vacuous. Pin that both kinds exist so it stays meaningful.
+        var dark = ThemePreset.Defaults.Values.Count(p => p.IsDark);
+        var light = ThemePreset.Defaults.Values.Count(p => !p.IsDark);
+        Assert.True(dark > 0, "No dark presets — the title-bar theory would be vacuous.");
+        Assert.True(light > 0, "No light presets — the title-bar bug could not manifest.");
+    }
+
     private static double ContrastRatio(Color a, Color b)
     {
         double la = RelLum(a), lb = RelLum(b);

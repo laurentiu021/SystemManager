@@ -17,6 +17,16 @@ public static partial class LogService
 {
     public static Logger? Logger { get; private set; }
 
+    /// <summary>
+    /// Per-file ceiling for the rolling log. With <see cref="RetainedFileCount"/> this bounds the
+    /// whole folder at roughly 140 MB, and keeps any single file small enough to attach to a bug
+    /// report — which is the documented way a user sends us evidence.
+    /// </summary>
+    internal const long MaxLogFileBytes = 10L * 1024 * 1024;
+
+    /// <summary>How many rolled files to keep. Combines with <see cref="MaxLogFileBytes"/>.</summary>
+    internal const int RetainedFileCount = 14;
+
     public static string LogDir { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager", "logs");
 
@@ -59,7 +69,7 @@ public static partial class LogService
             .WriteTo.Sink(new UserPathScrubbingSink(
                 Path.Combine(LogDir, "sysmanager-.log"),
                 rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 14))
+                retainedFileCountLimit: RetainedFileCount))
             .CreateLogger();
         Log.Logger = Logger;
         Logger.Information("SysManager started");
@@ -98,6 +108,15 @@ public static partial class LogService
                     path,
                     rollingInterval: rollingInterval,
                     retainedFileCountLimit: retainedFileCountLimit,
+                    // Bound each file AND roll when it fills. Without both, the sink took Serilog's
+                    // defaults — 1 GB per file with rollOnFileSizeLimit false — so a single daily
+                    // file could grow to a gigabyte with nothing rolling below it, and the only
+                    // bound on the folder was the 14-FILE count. That matters because the whole
+                    // support path is "attach the log" (SUPPORT.md, the bug-report template): a file
+                    // too large to upload breaks the evidence trail exactly when it is needed, and
+                    // Debug is a real volume tier here (290 Log.Debug call sites, some in loops).
+                    fileSizeLimitBytes: MaxLogFileBytes,
+                    rollOnFileSizeLimit: true,
                     outputTemplate: "{Message:lj}{NewLine}")
                 .CreateLogger();
         }

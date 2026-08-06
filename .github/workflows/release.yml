@@ -320,13 +320,42 @@ jobs:
             --jq '.behind_by' 2>/dev/null || echo "unknown")
           echo "Fork is now behind by: $after commit(s)"
 
+      # continue-on-error: publishing to winget depends on a third-party repository and on a PAT that
+      # can expire. When this broke on 1.57.2 ("does not have the correct permissions to execute
+      # CreateRef") it took down every step after it — so the release existed on GitHub with its
+      # binary, checksum, SBOM and attestation, but no announcement was ever posted. Telling users
+      # about a release that IS published must not depend on a second distribution channel. The
+      # failure is still surfaced: the step stays red and the step below writes a loud summary.
       - name: Update winget package
+        id: winget
+        continue-on-error: true
         uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         with:
           identifier: laurentiu021.SysManager
           installers-regex: '\.exe$'
           release-tag: ${{ steps.version.outputs.tag }}
           token: ${{ secrets.WINGET_TOKEN }}
+
+      # Make a skipped winget publish impossible to miss. With continue-on-error the job goes green
+      # (correctly — the release did publish), so without this the only trace would be one red step
+      # inside a passing run, which is exactly the kind of thing that goes unnoticed for weeks.
+      - name: Report a failed winget publish
+        if: steps.winget.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::warning title=winget publish failed::${{ steps.version.outputs.tag }} is published on GitHub but did NOT reach winget. Users upgrading via 'winget upgrade' will not see it until this is resolved."
+          {
+            echo "### winget publish failed"
+            echo
+            echo "\`${{ steps.version.outputs.tag }}\` **is** published on GitHub — binary, checksum, SBOM and attestation are all present."
+            echo "It did **not** reach winget, so \`winget upgrade\` will not offer it yet."
+            echo
+            echo "Most likely causes, in the order worth checking:"
+            echo "1. The \`WINGET_TOKEN\` secret has expired or been revoked — it is a PAT with a finite lifetime."
+            echo "2. The \`laurentiu021/winget-pkgs\` fork has drifted from upstream; the sync step above reports the count."
+            echo
+            echo "Re-run this workflow once fixed. The release itself does not need to be recreated."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post announcement to Discussions
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9

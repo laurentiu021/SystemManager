@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.57.5] - 2026-08-06
+
+### Fixed
+- **Closing SysManager to the tray now actually stops it working in the background.** Closing the window hides it rather than quitting — that is the default — but whichever tab was open kept checking your PC once a second for as long as it stayed on: re-listing every running process, or re-measuring network traffic and writing it to disk. Nothing was on screen to show it. Those checks now stop when the window is hidden or minimised and pick up again when you bring it back, so a PC left on all day is no longer doing invisible work. The background recording that is *meant* to keep running while hidden — the resource history graph, and the dark-mode schedule — is untouched.
+
 ## [1.57.4] - 2026-08-06
 
 ### Fixed

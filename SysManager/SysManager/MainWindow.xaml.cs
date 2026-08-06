@@ -30,6 +30,19 @@ public partial class MainWindow : Window
 
         ToastService.Instance.ToastRequested += OnToastRequested;
         ToastService.Instance.DismissRequested += OnToastDismiss;
+
+        // Closing to the tray calls Hide(), which does NOT deselect the open tab — so its poll loop
+        // kept sampling once a second for as long as the PC stayed on. IsVisibleChanged is the right
+        // hook rather than OnClosing: it also fires on Show(), and the tray's "Volume mixer" item
+        // shows the window BEFORE it navigates, so the flag must already be true by then or that tab
+        // would open paused.
+        IsVisibleChanged += (_, e) =>
+        {
+            if (DataContext is MainWindowViewModel vm && e.NewValue is bool visible)
+                // Same combined condition as OnStateChanged: a window that is shown but still
+                // minimized is not on screen either, so one hook must never contradict the other.
+                vm.IsWindowVisible = visible && WindowState != WindowState.Minimized;
+        };
     }
 
     private void OnToastRequested(string title, string detail)
@@ -57,6 +70,19 @@ public partial class MainWindow : Window
     private void OnApplicationExit(object sender, ExitEventArgs e)
     {
         (DataContext as MainWindowViewModel)?.Dispose();
+    }
+
+    /// <summary>
+    /// Pauses the open tab's poll loop while the window is minimized, and resumes it on restore.
+    /// <para>Separate from the <c>IsVisibleChanged</c> hook in the constructor because WPF keeps
+    /// <see cref="UIElement.IsVisible"/> true for a minimized window — so minimizing to the taskbar
+    /// alone would not have triggered it.</para>
+    /// </summary>
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+        if (DataContext is MainWindowViewModel vm)
+            vm.IsWindowVisible = IsVisible && WindowState != WindowState.Minimized;
     }
 
     /// <summary>

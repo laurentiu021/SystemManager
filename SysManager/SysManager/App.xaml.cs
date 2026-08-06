@@ -344,7 +344,7 @@ public partial class App : Application
             // dispatcher exception may itself originate from DialogService or
             // any of its dependencies, so we cannot rely on the app's own
             // dialog stack at this point. Direct WPF MessageBox always works.
-            MessageBox.Show(e.Exception.Message, "SysManager error",
+            MessageBox.Show(BuildCrashMessage(e.Exception), "SysManager error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -353,8 +353,95 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Composes the text shown in the last-resort crash dialog: what happened, that the app keeps
+    /// running, and WHERE the technical details were written.
+    /// <para>The dialog used to show <c>Exception.Message</c> alone, which for the commonest fault
+    /// reads "Object reference not set to an instance of an object." — a sentence that tells the user
+    /// nothing they can act on and does not mention that a log exists at all. The app knew exactly
+    /// where the evidence went and did not say, so a report arrived as "it just closed" with nothing
+    /// attached.</para>
+    /// <para>Deliberately built from string literals, the exception text, and one static property.
+    /// It must not touch DI, the theme, or any service: the unhandled exception may have come from
+    /// any of them, so anything else risks faulting inside the crash handler itself. Pure and
+    /// internal so it can be unit-tested without raising a real dispatcher exception.</para>
+    /// </summary>
+    internal static string BuildCrashMessage(Exception? ex)
+    {
+        // Some frameworks surface a wrapper whose own message is generic; the inner one is what
+        // actually describes the fault, so prefer it when present.
+        var detail = ex?.InnerException?.Message is { Length: > 0 } inner
+            ? inner
+            : ex?.Message;
+        if (string.IsNullOrWhiteSpace(detail))
+            detail = "An unexpected error occurred.";
+
+        return $"""
+            Something went wrong, but SysManager is still running.
+
+            {detail}
+
+            Technical details were saved to:
+            {LogService.LogDir}
+
+            If this keeps happening, that folder is what to attach when reporting it.
+            """;
+    }
+
     private static void OnDomain(object s, UnhandledExceptionEventArgs e)
-        => LogService.Logger?.Error(e.ExceptionObject as Exception, "Domain exception");
+    {
+        LogService.Logger?.Error(e.ExceptionObject as Exception, "Domain exception");
+
+        // A domain-level unhandled exception kills the process with no UI at all, so nothing told
+        // the user (or the next launch) that the previous session ended abnormally. Leave a marker so
+        // the next start can surface it — this is the only chance to record a fault that took the
+        // whole process down. Never written from OnUi, which handles the exception and keeps running.
+        WriteCrashMarker(e.ExceptionObject as Exception);
+    }
+
+    /// <summary>
+    /// Records that this process died from an unhandled exception, as JSON in
+    /// <c>%LocalAppData%\SysManager\last-crash.json</c>.
+    /// <para>Runs inside a dying process, so it is wrapped tightly and must never throw: an exception
+    /// escaping here would replace a logged crash with a silent one. Best-effort by design — if the
+    /// write fails, the crash is still in the log.</para>
+    /// </summary>
+    private static void WriteCrashMarker(Exception? ex)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "last-crash.json"), BuildCrashMarker(ex, DateTimeOffset.UtcNow));
+        }
+        // Deliberately broad: this runs while the process is tearing down, where the usual specific
+        // set (IO/Unauthorized) is not exhaustive — a security or serialization fault here must not
+        // turn a recorded crash into a silent exit. The crash itself is already in the log above.
+        catch (Exception writeFailure)
+        {
+            LogService.Logger?.Debug("Could not write the crash marker: {Error}", writeFailure.Message);
+        }
+    }
+
+    /// <summary>
+    /// Serializes the crash marker. Pure and internal so the shape is unit-testable without killing a
+    /// process; the timestamp is injected rather than read from the clock for the same reason.
+    /// <para>Goes through <see cref="CrashMarkerService.Serialize"/> and the shared
+    /// <see cref="CrashMarker"/> record rather than an anonymous object, so the writer here and the
+    /// reader on next launch cannot drift apart into a file that parses to nothing.</para>
+    /// </summary>
+    internal static string BuildCrashMarker(Exception? ex, DateTimeOffset whenUtc) =>
+        CrashMarkerService.Serialize(new CrashMarker(
+            whenUtc,
+            // The same source the About tab and the updater use, so a marker can be matched against a
+            // release. Reading it is a static assembly-name lookup — no service involved.
+            UpdateService.CurrentVersion.ToString(3),
+            ex?.GetType().FullName ?? "(unknown)",
+            // The message only — never the stack trace or any path. The full detail is in the log,
+            // which is scrubbed of the user name on the way to disk; this file exists to answer
+            // "did the last run crash?", not to duplicate the log.
+            ex?.Message ?? ""));
 
     private static void OnTask(object? s, UnobservedTaskExceptionEventArgs e)
     {

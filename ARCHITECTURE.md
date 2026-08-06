@@ -354,6 +354,18 @@ Key services:
   `Serialize`/`Parse`, file IO that never throws. Only the four types Windows accepts
   (`Automatic`/`Manual`/`Boot`/`System`) are stored, and rehydration applies only to services
   Windows currently reports as `Disabled`, so a stale entry can never override the machine.
+- `CrashMarkerService` — records that the process died from an unhandled exception, as JSON under
+  `%LocalAppData%\SysManager\last-crash.json`, so the next launch can say so. `App.OnDomain` writes
+  the marker (a domain-level unhandled exception kills the process with no UI at all, so this is the
+  only chance to record it) and `DashboardViewModel` consumes it on init, mirroring Gaming Profile's
+  leftover-session recovery. Both sides go through the shared `CrashMarker` record rather than an
+  anonymous object, so the writer and reader cannot drift into a file that parses to nothing. The
+  read DELETES the marker, so one crash notifies exactly once; markers older than 7 days, or
+  future-dated ones (clock change, file copied from another machine), are dropped. It carries no
+  stack trace and no paths — unlike the log, this file is not scrubbed of the user name, and it
+  exists to answer "did the last run crash?", not to duplicate the log. Never written from `OnUi`,
+  which handles the exception and keeps running. Same shape as the persisted-preference services
+  above: injectable directory, pure unit-tested `Parse`, file IO that never throws.
 - `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
   Profile tab: it composes the already-audited services (`PerformanceService`,
   `ITimerResolutionService`, `ICpuAffinityService`, `StandbyMemoryService`,

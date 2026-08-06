@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.57.2] - 2026-08-06
+
+### Fixed
+- **When something goes wrong, SysManager now tells you where the details are.** The error message showed only the raw technical text — most often "Object reference not set to an instance of an object.", which tells you nothing you can act on. It never mentioned that the app had already written the full details to a log, or where that log is. The message now says what happened, that the app is still running, and the exact folder holding the details, so a report can actually include something useful.
+- **A crash that closed the whole app is no longer silent.** If SysManager died outright, the window simply vanished: no message, and nothing on the next start to say the previous session had ended badly — so the only thing left to report was "it just closed". The app now records that it went down and, the next time you open it, tells you once when it happened and where to find the details. The note appears once per crash, never blocks the window, and is ignored if it is more than a week old.
+
+### Removed
+- Deleted a leftover screenshot of the Bandwidth Monitor from when that tab was still a placeholder. It was no longer shown anywhere, but it stayed in the repository claiming a finished feature was "Work in Progress".
+
 ## [1.57.1] - 2026-08-05
 
 ### Fixed

@@ -2,6 +2,12 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System;
+using System.IO;
+using System.Linq;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Threading.Tasks;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -211,4 +217,183 @@ public class ResourceHistoryServiceTests
     [Fact]
     public void RetentionOptions_AreSevenFourteenThirty()
         => Assert.Equal([7, 14, 30], ResourceHistoryService.RetentionOptions);
+}
+
+/// <summary>
+/// Disk-backed tests for <see cref="ResourceHistoryService"/>, using the injected temp directory
+/// so the developer's own history in %LOCALAPPDATA% is never read or written.
+/// <para>These could not exist before: the service pinned its paths to
+/// <see cref="Environment.SpecialFolder.LocalApplicationData"/> in <c>static readonly</c> fields, and
+/// that resolves through the Win32 known-folder API — it ignores the <c>LOCALAPPDATA</c> environment
+/// variable, so not even a child process could redirect it. Every test above had to stay on the pure
+/// helpers as a result, leaving the load/prune/retention paths uncovered.</para>
+/// </summary>
+public class ResourceHistoryServiceDiskTests : IDisposable
+{
+    private readonly string _dir;
+
+    public ResourceHistoryServiceDiskTests()
+    {
+        _dir = Path.Combine(Path.GetTempPath(), "SysManagerResourceHistoryTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_dir);
+    }
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+        GC.SuppressFinalize(this);
+    }
+
+    // skipHardwareInit: none of these tests read a sensor, and probing real hardware in a unit
+    // test would make it environment-dependent.
+    private ResourceHistoryService NewService() => new(
+        new SystemInfoService(),
+        new TemperatureService(new DiskHealthService(), skipHardwareInit: true),
+        _dir);
+
+    private string DataPath => Path.Combine(_dir, "resource-history.ndjson");
+
+    private void Seed(params ResourceSample[] samples)
+        => File.WriteAllLines(DataPath, samples.Select(ResourceHistoryService.Serialize));
+
+    private static ResourceSample At(DateTime t, double cpu = 10)
+        => new(t, cpu, 20, null, null, null);
+
+    // ── The seam itself ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task LoadAsync_WithNoFile_ReturnsEmpty()
+    {
+        using var service = NewService();
+        Assert.Empty(await service.LoadAsync(TimeSpan.FromDays(7)));
+    }
+
+    [Fact]
+    public async Task LoadAsync_ReadsOnlyItsOwnDirectory()
+    {
+        var now = DateTime.Now;
+        Seed(At(now.AddMinutes(-1)));
+
+        using var mine = NewService();
+        Assert.Single(await mine.LoadAsync(TimeSpan.FromHours(1)));
+
+        // A different directory must be independently empty — proof the path is genuinely injected
+        // and not silently falling back to the shared profile location.
+        var other = Path.Combine(_dir, "other");
+        Directory.CreateDirectory(other);
+        using var elsewhere = new ResourceHistoryService(
+            new SystemInfoService(),
+            new TemperatureService(new DiskHealthService(), skipHardwareInit: true),
+            other);
+        Assert.Empty(await elsewhere.LoadAsync(TimeSpan.FromDays(30)));
+    }
+
+    // ── Load: range filtering and ordering ──────────────────────────────────
+
+    [Fact]
+    public async Task LoadAsync_ExcludesSamplesOlderThanTheRange()
+    {
+        var now = DateTime.Now;
+        Seed(
+            At(now.AddDays(-3)),      // outside a 1-hour range
+            At(now.AddMinutes(-30)),  // inside
+            At(now.AddMinutes(-5)));  // inside
+
+        using var service = NewService();
+        var loaded = await service.LoadAsync(TimeSpan.FromHours(1));
+
+        Assert.Equal(2, loaded.Count);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ReturnsOldestFirst()
+    {
+        // The file is append-only and time-ordered, and LoadAsync walks it backwards then reverses.
+        // Chart code depends on this order, so it is asserted rather than assumed.
+        var now = DateTime.Now;
+        Seed(At(now.AddMinutes(-30), cpu: 1), At(now.AddMinutes(-20), cpu: 2), At(now.AddMinutes(-10), cpu: 3));
+
+        using var service = NewService();
+        var loaded = await service.LoadAsync(TimeSpan.FromHours(1));
+
+        Assert.Equal([1d, 2d, 3d], loaded.Select(s => s.CpuPercent));
+    }
+
+    [Fact]
+    public async Task LoadAsync_SkipsMalformedLinesWithoutFailing()
+    {
+        var now = DateTime.Now;
+        File.WriteAllLines(DataPath,
+        [
+            "not json at all",
+            ResourceHistoryService.Serialize(At(now.AddMinutes(-10))),
+            "{ truncated",
+        ]);
+
+        using var service = NewService();
+        var loaded = await service.LoadAsync(TimeSpan.FromHours(1));
+
+        Assert.Single(loaded);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WhenTheFileCannotBeRead_ReturnsEmptyRatherThanThrowing()
+    {
+        // UnauthorizedAccessException is a SIBLING of IOException, not a subclass, so it escaped the
+        // service's original single `catch (IOException)`. That matters because the history file is
+        // read by a background sampler the user never invoked: an unhandled throw there is a crash
+        // with no action that caused it. A deny-read ACL is what actually produces it — a directory
+        // in the file's place does not, because File.Exists returns false and the guard short-circuits.
+        Seed(At(DateTime.Now.AddMinutes(-1)));
+
+        var identity = WindowsIdentity.GetCurrent().User;
+        if (identity is null) return; // no SID to deny — nothing to assert on this host
+
+        var info = new FileInfo(DataPath);
+        var acl = info.GetAccessControl();
+        var deny = new FileSystemAccessRule(identity, FileSystemRights.Read, AccessControlType.Deny);
+        acl.AddAccessRule(deny);
+        info.SetAccessControl(acl);
+        try
+        {
+            using var service = NewService();
+            Assert.Empty(await service.LoadAsync(TimeSpan.FromDays(7)));
+        }
+        finally
+        {
+            // Remove the deny rule, or Dispose cannot delete the temp directory.
+            acl.RemoveAccessRule(deny);
+            info.SetAccessControl(acl);
+        }
+    }
+
+    // ── Retention persistence ───────────────────────────────────────────────
+
+    [Fact]
+    public void RetentionDays_DefaultsToSeven()
+    {
+        using var service = NewService();
+        Assert.Equal(7, service.RetentionDays);
+    }
+
+    [Fact]
+    public void RetentionDays_PersistsAcrossInstances()
+    {
+        using (var first = NewService())
+            first.RetentionDays = 30;
+
+        // A second instance, as after an app restart — the point of persisting at all.
+        using var second = NewService();
+        Assert.Equal(30, second.RetentionDays);
+        Assert.True(File.Exists(Path.Combine(_dir, "resource-history-config.json")));
+    }
+
+    [Fact]
+    public void RetentionDays_RejectsAValueOutsideTheOfferedOptions()
+    {
+        using var service = NewService();
+        service.RetentionDays = 999;
+        Assert.Equal(7, service.RetentionDays);
+    }
 }

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.57.4] - 2026-08-06
+
+### Fixed
+- **Switching the Resource History chart between ranges no longer risks an error.** Picking a different period while another one was still loading could have both of them rebuild the five graphs at the same time, which could fail instead of drawing. Only one rebuild runs at a time now. This is the same problem that was fixed on the Bandwidth Monitor in 1.57.3 — Resource History had it too, and it was missed then.
+- **An unreadable history file no longer crashes the recorder.** Both the Resource History and Bandwidth Monitor recorders handled a disk error while reading or writing their history, but not a permission error — and a locked-down or read-only file produces the second, not the first. Because the recording runs quietly in the background, that surfaced as the app failing over something the user never started. Both now log it and carry on with an empty chart, exactly as they already did for a disk error.
+
 ## [1.57.3] - 2026-08-06
 
 ### Fixed

@@ -73,6 +73,15 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     private readonly BulkObservableCollection<DateTimePoint> _cpuTempBuffer = new();
     private readonly BulkObservableCollection<DateTimePoint> _gpuTempBuffer = new();
 
+    // Serializes ReloadAsync. Same guard, same reason as BandwidthMonitorViewModel's: three
+    // independent entry points can overlap (the constructor's InitializeAsync, the
+    // fire-and-forget from OnSelectedRangeChanged, and the Refresh button's command), and each
+    // one calls ReplaceWith on buffers LiveCharts is observing. Its observer keeps a HashSet it
+    // updates from the change notification, so a second thread arriving mid-notification
+    // corrupts it — "Operations that change non-concurrent collections must have exclusive
+    // access", which is how CI caught the identical race on the bandwidth chart.
+    private readonly SemaphoreSlim _reloadGate = new(1, 1);
+
     public ResourceHistoryViewModel(ResourceHistoryService service)
     {
         _service = service;
@@ -110,6 +119,10 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     [RelayCommand]
     private async Task ReloadAsync()
     {
+        // A gate rather than a lock: this is an async path so it must not block the UI thread, and
+        // dropping nothing is important here — unlike a range switch, each caller may be asking for
+        // a different range, so every request runs, just strictly one at a time.
+        await _reloadGate.WaitAsync().ConfigureAwait(true);
         IsBusy = true;
         try
         {
@@ -132,7 +145,11 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
                 ? $"Showing {_loaded.Count} sample(s) over {SelectedRange.Label.ToLowerInvariant()}."
                 : "No history yet — samples are recorded every 10 seconds while the app runs.";
         }
-        finally { IsBusy = false; }
+        finally
+        {
+            IsBusy = false;
+            _reloadGate.Release();
+        }
     }
 
     /// <summary>Pure: averages/peaks for the summary strip. Testable without WPF.</summary>
@@ -252,6 +269,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
             (LegendBackgroundPaint as IDisposable)?.Dispose();
             (TooltipTextPaint as IDisposable)?.Dispose();
             (TooltipBackgroundPaint as IDisposable)?.Dispose();
+            _reloadGate.Dispose();
         }
         base.Dispose(disposing);
     }

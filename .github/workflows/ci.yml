@@ -90,6 +90,56 @@ jobs:
           }
           Write-Host "Version $csproj is consistent across csproj and CHANGELOG."
 
+      # The release workflow copies the matching CHANGELOG block VERBATIM into the release body and the
+      # auto-posted announcement, so whatever that entry starts with is the first thing a prospective
+      # user reads. When the friendly lead was a manual afterthought, five of the biggest feature
+      # releases (1.53.0, 1.54.0, 1.55.0, 1.55.1, 1.56.0) shipped opening with a bare semver heading
+      # followed by engineering prose — the ones a newcomer is most likely to open.
+      #
+      # Checked on the PR rather than at release time for the same reason as the version check above:
+      # here it costs one edit, there it blocks a release after the tag is already pushed. The release
+      # workflow keeps its own copy of this guard as the backstop, since a release can be dispatched
+      # manually without passing through this job.
+      - name: Check the newest CHANGELOG entry has a plain-English lead
+        shell: pwsh
+        run: |
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $head = [regex]::Match($changelog, '(?ms)^## \[(?<ver>[0-9]+\.[0-9]+\.[0-9]+)\].*?(?=^## \[|\z)')
+          if (-not $head.Success) { throw "No versioned '## [x.y.z]' entry found in CHANGELOG.md." }
+
+          $version = $head.Groups['ver'].Value
+          $afterHeader = ($head.Value -split "(?m)^## \[.*$", 2)[1]
+          $beforeFirstCategory = ($afterHeader -split "(?m)^### ", 2)[0]
+          # Only real prose counts — blank lines and horizontal rules do not. @() keeps this an array
+          # even for a one-line lead, which PowerShell would otherwise unwrap to a bare string.
+          $leadLines = @($beforeFirstCategory -split "`r?`n" |
+              Where-Object { $_.Trim() -ne "" -and $_.Trim() -notmatch "^(-{3,}|\*{3,}|_{3,})$" })
+
+          if ($leadLines.Count -eq 0) {
+              # Built by joining rather than with a here-string: PowerShell requires a here-string's
+              # body and its closing "@ at column 0, which terminates the YAML block scalar this script
+              # lives in. The two are incompatible, and the result is a workflow that will not parse.
+              $msg = @(
+                  "The CHANGELOG entry for $version has no plain-English lead."
+                  ""
+                  "Add one or two sentences directly under the '## [$version]' header, BEFORE the first"
+                  "'###' category, describing what changed in the words a user would use. The release"
+                  "workflow copies this entry verbatim, so that paragraph becomes the opening line of"
+                  "the release page and of the announcement discussion."
+                  ""
+                  "Example:"
+                  ""
+                  "  ## [$version] - <date>"
+                  ""
+                  "  Quick Tune-Up now shows you what it found, instead of throwing the results away."
+                  ""
+                  "  ### Fixed"
+                  "  - ..."
+              ) -join [Environment]::NewLine
+              throw $msg
+          }
+          Write-Host "CHANGELOG entry for $version opens with a lead ($($leadLines.Count) line(s))."
+
       - name: Build (Release)
         run: dotnet build SysManager/SysManager/SysManager.csproj -c Release --no-restore
 

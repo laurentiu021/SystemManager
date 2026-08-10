@@ -11,8 +11,10 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// Auto-traceroute + manual trace. Has its own Start/Stop for the
-/// auto-trace monitor, independent of the ping monitor.
+/// Auto-traceroute + manual trace. Has its own Start/Stop for the auto-trace monitor, but that
+/// monitor is <em>shared</em> with the Ping tab: <see cref="NetworkSharedState.StartMonitoring"/>
+/// and <see cref="NetworkSharedState.StopMonitoring"/> start and stop the very same
+/// <c>TraceMonitor</c>. Running state therefore lives on <see cref="NetworkSharedState"/>, not here.
 /// </summary>
 public sealed partial class TracerouteViewModel : ViewModelBase
 {
@@ -22,11 +24,27 @@ public sealed partial class TracerouteViewModel : ViewModelBase
     [ObservableProperty] private string _traceHost = "8.8.8.8";
     [ObservableProperty] private bool _isTracing;
     [ObservableProperty] private string _traceStatus = "";
-    [ObservableProperty] private bool _isAutoTraceRunning;
+
+    /// <summary>
+    /// Whether the shared auto-trace monitor is running — a read-through to
+    /// <see cref="NetworkSharedState.IsAutoTraceRunning"/>, which is the single owner of that state.
+    /// This used to be a local <c>[ObservableProperty]</c>, which went stale the moment the Ping tab
+    /// touched the monitor: Ping's Stop killed a live auto-trace while this tab still showed
+    /// "Stop auto-trace" and claimed it was running.
+    /// </summary>
+    public bool IsAutoTraceRunning => Shared.IsAutoTraceRunning;
 
     public TracerouteViewModel(NetworkSharedState shared)
     {
         Shared = shared;
+        // Re-raise so bindings on THIS VM's property update when the other tab flips the shared flag.
+        Shared.PropertyChanged += OnSharedPropertyChanged;
+    }
+
+    private void OnSharedPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NetworkSharedState.IsAutoTraceRunning))
+            OnPropertyChanged(nameof(IsAutoTraceRunning));
     }
 
     [RelayCommand]
@@ -39,7 +57,7 @@ public sealed partial class TracerouteViewModel : ViewModelBase
         Shared.TraceMonitor.Interval = TimeSpan.FromSeconds(
             Math.Max(10, Shared.TraceIntervalSeconds));
         Shared.TraceMonitor.Start();
-        IsAutoTraceRunning = true;
+        Shared.IsAutoTraceRunning = true;
         StatusMessage = $"Auto-trace running ({TraceHost})";
         Log.Information("Auto-traceroute started for {Host}", TraceHost);
 
@@ -51,7 +69,7 @@ public sealed partial class TracerouteViewModel : ViewModelBase
     private void StopAutoTrace()
     {
         Shared.TraceMonitor.Stop();
-        IsAutoTraceRunning = false;
+        Shared.IsAutoTraceRunning = false;
         StatusMessage = "Auto-trace stopped";
         Log.Information("Auto-traceroute stopped");
     }
@@ -110,6 +128,9 @@ public sealed partial class TracerouteViewModel : ViewModelBase
     {
         if (disposing)
         {
+            // NetworkSharedState is a DI singleton that outlives this VM, so a live handler here
+            // would keep the VM alive for the rest of the session.
+            Shared.PropertyChanged -= OnSharedPropertyChanged;
             _traceCts?.Dispose();
         }
         base.Dispose(disposing);

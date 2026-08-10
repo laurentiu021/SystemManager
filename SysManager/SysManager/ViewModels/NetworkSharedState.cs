@@ -82,6 +82,13 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     [ObservableProperty] private bool _isMonitoring;
 
+    // Auto-trace state lives HERE, not on TracerouteViewModel, because TraceMonitor is a single
+    // shared instance that both the Ping tab (via Start/StopMonitoring) and the Traceroute tab can
+    // start and stop. A per-VM copy went stale the moment the other tab touched the monitor — Ping's
+    // Stop killed a running auto-trace while Traceroute still showed "Stop auto-trace". One owner of
+    // the flag means the buttons cannot disagree with the monitor.
+    [ObservableProperty] private bool _isAutoTraceRunning;
+
     public NetworkSharedState(PingMonitorService pinger, TracerouteService tracer, TracerouteMonitorService traceMonitor, SpeedTestService speed, NetworkRepairService repair)
     {
         Pinger = pinger;
@@ -330,6 +337,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         TraceMonitor.Start();
         FlushTimer?.Start();
         IsMonitoring = true;
+        // Ping's Start really does start auto-traces against every enabled target, so the
+        // Traceroute tab must show that rather than still offering "Start auto-trace".
+        IsAutoTraceRunning = true;
     }
 
     public void StopMonitoring()
@@ -339,6 +349,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         FlushTimer?.Stop();
         FlushPending();
         IsMonitoring = false;
+        // …and Ping's Stop really does kill a running auto-trace.
+        IsAutoTraceRunning = false;
         // Release axis limits so the chart auto-fits to remaining data
         LatencyXAxes[0].MinLimit = null;
         LatencyXAxes[0].MaxLimit = null;

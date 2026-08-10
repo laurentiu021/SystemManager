@@ -8,6 +8,10 @@ using Xunit;
 
 namespace SysManager.Tests;
 
+// ClearHistory's confirmation gate swaps the global DialogService.Instance, so this class must
+// run in the serialized collection — otherwise a parallel class's substitute steals the Confirm
+// call and the gate assertions go flaky.
+[Collection("DialogService")]
 public class AppAlertsViewModelTests
 {
     [Fact]
@@ -34,16 +38,51 @@ public class AppAlertsViewModelTests
     }
 
     [Fact]
-    public void ClearHistory_RemovesAllAlerts()
+    public void ClearHistory_WhenConfirmed_RemovesAllAlerts()
     {
         var vm = new AppAlertsViewModel(new Services.AppAlertService());
         vm.Alerts.Add(new AppInstallEntry { Name = "App1" });
         vm.Alerts.Add(new AppInstallEntry { Name = "App2" });
+        vm.AlertCount = vm.Alerts.Count;   // the guard reads AlertCount, so it must be real here
 
+        using var _ = new DialogAnswer(true);
         vm.ClearHistoryCommand.Execute(null);
 
         Assert.Empty(vm.Alerts);
         Assert.Equal(0, vm.AlertCount);
+    }
+
+    [Fact]
+    public void ClearHistory_WhenDeclined_KeepsTheHistory()
+    {
+        // The alert list is never persisted, so this collection is the only record of what
+        // installed itself. Answering "No" must leave it completely untouched.
+        var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        vm.Alerts.Add(new AppInstallEntry { Name = "App1" });
+        vm.Alerts.Add(new AppInstallEntry { Name = "App2" });
+        vm.AlertCount = vm.Alerts.Count;
+        vm.UnacknowledgedCount = 2;
+
+        using var _ = new DialogAnswer(false);
+        vm.ClearHistoryCommand.Execute(null);
+
+        Assert.Equal(2, vm.Alerts.Count);
+        Assert.Equal(2, vm.AlertCount);
+        Assert.Equal(2, vm.UnacknowledgedCount);
+    }
+
+    [Fact]
+    public void ClearHistory_WithNothingToLose_DoesNotPrompt()
+    {
+        // An empty list has nothing to confirm; prompting there would be pure noise. Answer
+        // "No" and assert the clear still ran — proving no dialog gated it.
+        var vm = new AppAlertsViewModel(new Services.AppAlertService());
+
+        using var answer = new DialogAnswer(false);
+        vm.ClearHistoryCommand.Execute(null);
+
+        Assert.Equal(0, answer.Calls);
+        Assert.Contains("cleared", vm.MonitorStatus);
     }
 
     [Fact]

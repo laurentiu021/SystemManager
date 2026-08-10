@@ -78,6 +78,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
     private async Task RefreshAsync()
     {
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             var status = await _service.GetStatusAsync().ConfigureAwait(true);
@@ -93,7 +94,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         // command unobserved. Surface it as a status message instead.
         catch (InvalidOperationException ex) { StatusMessage = $"Could not read Defender status: {ex.Message}"; }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not read Defender status: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
@@ -101,6 +102,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
     {
         if (!Confirm($"{(PuaEnabled ? "Disable" : "Enable")} potentially-unwanted-app (PUA) protection?")) return;
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             int target = PuaEnabled ? 0 : 1;
@@ -110,7 +112,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Could not change PUA protection: {ex.Message}"; }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not change PUA protection: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
@@ -118,6 +120,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
     {
         if (!Confirm($"{(CfaEnabled ? "Disable" : "Enable")} Controlled Folder Access (ransomware protection)?")) return;
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             int target = CfaEnabled ? 0 : 1;
@@ -127,7 +130,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Could not change Controlled Folder Access: {ex.Message}"; }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not change Controlled Folder Access: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
@@ -145,6 +148,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         if (!Confirm($"Exclude \"{path}\" from Defender scanning?\n\nFiles in an excluded folder are not scanned for malware.")) return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             var status = await _service.AddExclusionPathAsync(path).ConfigureAwait(true);
@@ -153,7 +157,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Could not add the exclusion: {ex.Message}"; }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not add the exclusion: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(CanRemoveExclusion))]
@@ -164,6 +168,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         if (!Confirm($"Stop excluding \"{path}\"?\n\nThe folder will be scanned for malware again.")) return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             var status = await _service.RemoveExclusionPathAsync(path).ConfigureAwait(true);
@@ -172,7 +177,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Could not remove the exclusion: {ex.Message}"; }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not remove the exclusion: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     private bool HasSelectedExclusion => SelectedExclusion is not null;

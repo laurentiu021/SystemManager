@@ -150,8 +150,8 @@
 
             <!-- Empty state -->
             <v:EmptyState Glyph="&#xE838;"
-                          Title="No results yet"
-                          Message="Pick a folder and analyze to see what's using space."
+                          Title="{Binding EmptyTitle}"
+                          Message="{Binding EmptyMessage}"
                           Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>

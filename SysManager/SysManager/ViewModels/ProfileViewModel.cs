@@ -69,6 +69,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
         if (dlg.ShowDialog() != true) return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             var profile = _service.BuildProfile(DateTime.Now, chosen);
@@ -79,7 +80,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand]
@@ -93,6 +94,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
         if (dlg.ShowDialog() != true) return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             ConfigProfile? profile;
@@ -128,7 +130,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
         }
         catch (IOException ex) { StatusMessage = $"Import failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Import failed (access denied): {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand]

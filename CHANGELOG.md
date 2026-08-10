@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.2] - 2026-08-10
+
+### Fixed
+- **Three ways to permanently delete something now ask first.** "Clear History" on App Alerts is a red button sitting right next to the harmless "Acknowledge All" — and it wiped the entire list of what installed itself on your PC the instant you touched it, with no question asked and no way to get it back (that list is never saved to a file, so what is on screen is the only copy). Deleting a saved preset on Volume Control and clearing your saved speed-test results behaved the same way: the file was rewritten immediately, no undo. All three now ask you to confirm and say what will be lost. If the list is already empty there is nothing to confirm, so no pointless dialog appears.
+- **The Boot Analyzer's Cancel button was missing.** Reading your boot history means walking a Windows event log, which on a large or damaged log can take a while — and the tab starts that read by itself the first time you open it. There was no way to stop it short of closing SysManager. A Cancel button now appears next to Refresh while the read is running, exactly like the other tabs in that group.
+- **Progress bars that never moved now move.** On Cleanup, Debloater and Windows Update the app worked out exactly how far along it was — 1 of 15, 2 of 15 — and then drew an empty bar that never filled. Removing fifteen preinstalled apps looked identical to the app having frozen. Those bars now fill as the work happens.
+- **Bars that could not animate at all now animate.** Defender Tweaks, Context Menu, Profile Export/Import and Startup Manager each showed a small grey rectangle during a long operation that neither filled nor moved, then vanished. Context Menu's preset apply is the worst of them: it closes every File Explorer window while showing a motionless bar, which reads as a crash. They now show activity for as long as the work lasts.
+- **Disk Analyzer no longer tells you to do what you just did.** After analysing a folder that genuinely contains no subfolders, the middle of the screen said "No results yet — pick a folder and analyze", while the summary right next to it correctly said "No subfolders found." The two now agree: before a scan it asks you to pick a folder, and after one that found nothing it says so.
+
 ## [1.58.1] - 2026-08-10
 
 ### Fixed

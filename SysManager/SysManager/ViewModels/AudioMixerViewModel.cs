@@ -241,12 +241,20 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
             : $"No running apps matched \"{SelectedPreset.Name}\".";
     }
 
-    /// <summary>Delete the selected preset.</summary>
+    /// <summary>Delete the selected preset (with confirmation — the file is rewritten immediately).</summary>
     [RelayCommand]
     private void DeletePreset()
     {
         if (SelectedPreset is null) return;
         var name = SelectedPreset.Name;
+
+        // Delete() rewrites the presets file on disk straight away, so there is no undo.
+        if (!DialogService.Instance.Confirm(
+                $"Delete the preset \"{name}\"?\n\n" +
+                "The saved volume levels for its apps will be gone for good.",
+                "Delete Preset — Confirm"))
+            return;
+
         Presets.ReplaceWith(_presets.Delete(name));
         SelectedPreset = null;
         StatusMessage = $"Deleted preset \"{name}\".";

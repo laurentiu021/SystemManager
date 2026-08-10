@@ -155,17 +155,26 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task ClearHttpHistoryAsync()
-    {
-        await _history.ClearAsync("HTTP");
-        HttpHistory.Clear();
-    }
+    private Task ClearHttpHistoryAsync() => ClearHistoryAsync("HTTP", HttpHistory);
 
     [RelayCommand]
-    private async Task ClearOoklaHistoryAsync()
+    private Task ClearOoklaHistoryAsync() => ClearHistoryAsync("Ookla", OoklaHistory);
+
+    /// <summary>
+    /// Confirms, then drops one engine's saved results. ClearAsync rewrites the history file
+    /// immediately, so the past measurements cannot be recovered afterwards.
+    /// </summary>
+    private async Task ClearHistoryAsync(string engine, BulkObservableCollection<SpeedTestResult> history)
     {
-        await _history.ClearAsync("Ookla");
-        OoklaHistory.Clear();
+        int count = history.Count;
+        if (count > 0 && !DialogService.Instance.Confirm(
+                $"Delete all {count} saved {engine} result{(count == 1 ? "" : "s")}?\n\n" +
+                "The saved history is removed from disk and cannot be recovered.",
+                $"Clear {engine} History — Confirm"))
+            return;
+
+        await _history.ClearAsync(engine);
+        history.Clear();
     }
 
     [RelayCommand]

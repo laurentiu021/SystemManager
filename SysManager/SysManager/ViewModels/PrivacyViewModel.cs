@@ -164,6 +164,17 @@ public sealed partial class PrivacyViewModel : ViewModelBase
             Log.Warning("Privacy: {Applied} applied, {Failed} failed (likely elevation required)",
                 applied.Count, failed.Count);
         }
+
+        // Logged once for both branches, and only when something actually changed, so a partial apply
+        // is recorded honestly rather than claiming the full count. Counts only — naming the toggles
+        // would record which privacy settings this user cares about.
+        if (applied.Count > 0)
+        {
+            ActivityLogService.Instance.Log("Privacy",
+                failed.Count == 0
+                    ? $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}"
+                    : $"Applied {applied.Count} of {applied.Count + failed.Count} changes ({failed.Count} needed administrator)");
+        }
     }
 
     [RelayCommand]

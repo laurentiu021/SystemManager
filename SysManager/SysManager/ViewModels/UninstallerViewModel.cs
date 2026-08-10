@@ -290,6 +290,18 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                     toRemove.Count,
                     restartRequired);
             }
+
+            // Logged once after all three branches, so a cancelled or partly-failed batch is recorded
+            // as what it actually was rather than not at all. Counts only — the app NAMES are omitted
+            // deliberately: activity.json is plain text under %LocalAppData%, and which software
+            // someone removed is more revealing than how many.
+            if (removed > 0)
+            {
+                ActivityLogService.Instance.Log("Uninstaller",
+                    $"Uninstalled {removed:N0} app{(removed == 1 ? "" : "s")}" +
+                    (failed > 0 ? $" ({failed} failed)" : string.Empty) +
+                    (cancellationRequested ? " — cancelled partway" : string.Empty));
+            }
         }
         finally
         {

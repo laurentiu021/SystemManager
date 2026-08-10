@@ -285,13 +285,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Navigation is recorded here (Serilog) and NOT in the activity log. It used to write an
+        // "Opened <tab>" entry per navigation, which — against a 20-entry cap — meant a few minutes of
+        // clicking evicted every real action, so the Dashboard's "Recent activity" card listed tab
+        // visits while omitting the deletes it should have shown. The card now answers "what did this
+        // app change on my PC?" rather than "where have I clicked?".
         Log.Information("Tab navigated: {TabLabel}", newValue.Label);
-
-        // Record the feature the user opened in the Dashboard's "Recent activity"
-        // (skip Dashboard itself — Recent activity lives there, so logging every return
-        // to view it would just push real entries out of the list).
-        if (newValue.Id != "nav-dashboard")
-            ActivityLogService.Instance.Log("Opened", newValue.Label);
 
         // Auto-expand the parent group when a child is selected.
         var parentGroup = NavGroups.FirstOrDefault(g => g.Children.Contains(newValue));

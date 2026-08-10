@@ -776,8 +776,10 @@ offers, "rate us" prompts:
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't), with live
   indicator dots.
-- **Recent Activity** — the last features you opened and actions you ran
-  (cleanups, DNS changes, app removals, restore points, …) with timestamps.
+- **Recent Activity** — what SysManager actually changed on this PC, with timestamps:
+  cleanups, deletes, uninstalls, privacy and DNS changes, restore points, shredded
+  files. Counts and sizes only — never file names, since the log is plain text on
+  your own disk. Opening a tab isn't an action, so it isn't listed.
 - **Quick Tune-Up** — one-click wizard that cleans temp files, optionally
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays

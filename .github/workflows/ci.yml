@@ -130,6 +130,55 @@ jobs:
           path: TestResults/**
           retention-days: 14
 
+  # Catches a version that was never tagged — otherwise INVISIBLE. auto-release.yml serialises on a
+  # concurrency group, and GitHub keeps only ONE pending run per group, so merging two
+  # release-triggering PRs in close succession can displace the older queued run. A displaced run
+  # reports as `cancelled`, not failed, so the bump is silently dropped: main ends up claiming a
+  # version that has no tag and no release, with nothing red anywhere. That happened on the #1717
+  # merge (1.57.6) and took manual archaeology to find.
+  #
+  # A separate job on purpose, not a step in build-and-test: it waits for auto-release, which runs in
+  # parallel on the same push, and adding minutes of waiting to a job that already runs ~8 of its
+  # 10-minute budget would make CI fail for timing rather than for correctness. ubuntu-latest because
+  # this is git-only work.
+  tag-published:
+    name: Merged version is tagged
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # main only: on a PR, csproj is SUPPOSED to be ahead of the newest tag — that is the point of
+    # bumping it in the PR. It is only a defect once the merge has landed.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # tags are the whole point of this job
+
+      - name: Wait for the tag that matches csproj
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oE '<Version>[^<]+' SysManager/SysManager/SysManager.csproj | head -n1 | sed 's/<Version>//')
+          echo "csproj version: $VERSION"
+
+          # A chore:/docs:/ci:/test: merge does not release, so csproj legitimately still points at
+          # the version already tagged by the previous release-triggering merge. Only a MISSING tag
+          # for the current csproj version is a problem, which is exactly what this checks.
+          for attempt in $(seq 1 10); do
+            git fetch --tags --quiet origin
+            if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+              echo "v$VERSION is tagged."
+              exit 0
+            fi
+            echo "attempt $attempt: v$VERSION not tagged yet, waiting for auto-release..."
+            sleep 30
+          done
+
+          NEWEST=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)
+          echo "::error::csproj is at $VERSION but there is no v$VERSION tag (newest is $NEWEST). Auto-release did not tag this merge — check whether its run was CANCELLED rather than failed (a displaced queued run reports as cancelled). Recover with: git tag -a v$VERSION -m \"SysManager $VERSION\" <merge-sha> && git push origin v$VERSION — release.yml triggers on v*.*.* and publishes normally."
+          exit 1
+
   ui-tests:
     name: UI automation tests
     runs-on: windows-latest

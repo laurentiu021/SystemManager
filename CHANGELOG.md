@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.7] - 2026-08-10
+
+### Fixed
+- **"Recent activity" on the Dashboard now shows what the app actually changed.** It listed which tabs you had opened, while leaving out the things you would genuinely want a record of: a permanent Deep Cleanup delete, a browser clean that signed you out of sites, privacy settings written to the registry, an app uninstall, files erased with the shredder, and broken shortcuts deleted. None of those left a trace. All six are now recorded, and the card refreshes when you return to the Dashboard so a new entry shows up straight away instead of looking like it never registered.
+- **Only counts and sizes are recorded — never file names.** That list is a plain text file on your PC, so writing down the name of a file you chose to erase for good would leave behind exactly the trace the shredder exists to remove, and it would outlive the file. So it says "Securely erased 3 items (7-pass overwrite)" and nothing more. The same applies to the other five: how much was cleaned, not what.
+
+### Changed
+- **Opening a tab no longer counts as "activity".** Every tab you opened used to add an entry, and only the last 20 were kept — so a few minutes of clicking around pushed out any real action. Tab visits are still recorded in the app's diagnostic log, just not on this card, and the card now keeps 60 entries so a busy session cannot bury a cleanup.
+
 ## [1.58.6] - 2026-08-10
 
 ### Fixed

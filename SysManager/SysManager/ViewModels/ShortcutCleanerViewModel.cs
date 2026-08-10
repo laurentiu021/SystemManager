@@ -136,6 +136,11 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
         ScanStatus = $"Deleted {deleted} shortcut{(deleted == 1 ? "" : "s")}. {BrokenCount} remaining.";
         ToastService.Instance.Show("Shortcuts deleted", $"{deleted} shortcut{(deleted == 1 ? "" : "s")} removed");
+        // Records whether the shortcuts are recoverable, which is the part that matters if the user
+        // later wonders where one went. Counts only, no shortcut names.
+        ActivityLogService.Instance.Log("Shortcut Cleaner",
+            $"{(MoveToRecycleBin ? "Moved" : "Permanently deleted")} {deleted:N0} broken shortcut{(deleted == 1 ? "" : "s")}" +
+            (MoveToRecycleBin ? " to the Recycle Bin" : ""));
         Log.Information("Deleted {Count} broken shortcuts (recycle bin: {RecycleBin})", deleted, MoveToRecycleBin);
     }
 

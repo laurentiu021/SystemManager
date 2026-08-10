@@ -143,6 +143,15 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     partial void OnIsActiveChanged(bool value)
     {
+        if (value)
+        {
+            // Re-read the activity log whenever this tab is shown. The destructive tabs write their
+            // entries from their own ViewModels, and this one only reloaded on init or an explicit
+            // refresh — so coming back here after a Deep Cleanup or an uninstall showed a stale card,
+            // making the new entries look like they had not registered at all.
+            LoadActivity();
+        }
+
         if (value && _pollingCts is null)
             StartPollingLoop();
         else if (!value)

@@ -263,6 +263,10 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             CleanSummary = result.Summary;
             CleanStatusLine = "Clean complete.";
             ToastService.Instance.Show("Deep cleanup complete", result.Summary);
+            // This is the least reversible operation in the app — files are deleted outright, not sent
+            // to the Recycle Bin — and it left no trace in the app's own history. Summary is counts and
+            // sizes only, never paths: activity.json is plain text under %LocalAppData%.
+            ActivityLogService.Instance.Log("Deep Cleanup", result.Summary);
             Log.Information("Deep cleanup completed");
             await ScanCoreAsync();
         }

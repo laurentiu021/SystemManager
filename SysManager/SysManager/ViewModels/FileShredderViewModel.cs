@@ -195,6 +195,16 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
             StatusMessage = $"Complete — {completed} shredded, {failed} failed.";
             ToastService.Instance.Show("File Shredder complete", $"{completed} shredded, {failed} failed");
+
+            // COUNT ONLY — never a file name or path. activity.json is plain text under
+            // %LocalAppData%, so recording the name of a file the user chose to destroy beyond
+            // recovery would leave behind exactly the evidence the shred was meant to remove, and
+            // would outlive the file itself. The pass count is safe and is the useful part.
+            if (completed > 0)
+            {
+                ActivityLogService.Instance.Log("File Shredder",
+                    $"Securely erased {completed:N0} item{(completed == 1 ? "" : "s")} ({(int)SelectedMethod}-pass overwrite)");
+            }
         }
         catch (OperationCanceledException)
         {

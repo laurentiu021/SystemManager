@@ -122,6 +122,10 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
             var deleted = await _service.CleanAsync(selected, _cts.Token).ConfigureAwait(true);
             StatusMessage = $"Removed {deleted} file(s). Re-scanning…";
             ToastService.Instance.Show("Browser data cleaned", $"{deleted} files removed.");
+            // Counts only. Naming the categories would record which browser/profile data the user
+            // chose to erase, and activity.json is plain text under %LocalAppData%.
+            ActivityLogService.Instance.Log("Browser Cleaner",
+                $"Removed {deleted:N0} file{(deleted == 1 ? "" : "s")} from {selected.Count} categor{(selected.Count == 1 ? "y" : "ies")}");
             Log.Information("BrowserCleaner: cleaned {Count} categories, {Deleted} files", selected.Count, deleted);
             await ScanAsync().ConfigureAwait(true);
         }

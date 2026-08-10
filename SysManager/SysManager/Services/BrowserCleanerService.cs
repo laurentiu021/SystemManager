@@ -30,18 +30,86 @@ public sealed class BrowserCleanerService
 
     private sealed record Def(string Browser, string Category, string Description, bool Sensitive, string[] RelativePaths, bool Roaming = false);
 
-    // Chrome/Edge/Brave keep per-profile data under "<UserData>\Default\..." in LocalAppData.
-    private static Def[] ChromiumDefs(string browser, string userDataRel) =>
+    // Chrome/Edge/Brave keep per-profile data under "<UserData>\<profile>\..." in LocalAppData,
+    // where <profile> is "Default" for the first profile and "Profile 1", "Profile 2", … for each
+    // one the user adds. The profile segment used to be the literal "Default", so a second profile
+    // (personal + work, or one per family member) was never scanned, never sized and never cleaned —
+    // the tab reported a total that understated the real reclaimable space, and someone clearing
+    // "browsing traces" kept every trace in their other profile. Profiles are now enumerated at scan
+    // time, exactly as Firefox's already were (see ExpandFirefoxCachePaths).
+    private static Def[] ChromiumDefs(string browser, string userDataRel, string profileRel, string profileLabel) =>
     [
-        new(browser, "Cache", "Cached images and files.", false,
-            [$@"{userDataRel}\Default\Cache", $@"{userDataRel}\Default\Code Cache", $@"{userDataRel}\Default\GPUCache"]),
-        new(browser, "History", "Browsing and download history.", false,
-            [$@"{userDataRel}\Default\History", $@"{userDataRel}\Default\History-journal"]),
-        new(browser, "Cookies", "Cookies — clearing these signs you out of websites.", true,
-            [$@"{userDataRel}\Default\Network\Cookies", $@"{userDataRel}\Default\Network\Cookies-journal"]),
-        new(browser, "Sessions", "Open tabs / session restore data.", true,
-            [$@"{userDataRel}\Default\Sessions", $@"{userDataRel}\Default\Session Storage"]),
+        new(browser, "Cache", $"Cached images and files{profileLabel}.", false,
+            [$@"{profileRel}\Cache", $@"{profileRel}\Code Cache", $@"{profileRel}\GPUCache"]),
+        new(browser, "History", $"Browsing and download history{profileLabel}.", false,
+            [$@"{profileRel}\History", $@"{profileRel}\History-journal"]),
+        new(browser, "Cookies", $"Cookies{profileLabel} — clearing these signs you out of websites.", true,
+            [$@"{profileRel}\Network\Cookies", $@"{profileRel}\Network\Cookies-journal"]),
+        new(browser, "Sessions", $"Open tabs / session restore data{profileLabel}.", true,
+            [$@"{profileRel}\Sessions", $@"{profileRel}\Session Storage"]),
     ];
+
+    /// <summary>
+    /// One <see cref="Def"/> set per Chromium profile that actually exists on disk.
+    /// <para>
+    /// Only "Default" and "Profile N" directories are considered — Chromium keeps plenty of other
+    /// folders under <c>User Data</c> (<c>Crashpad</c>, <c>ShaderCache</c>, <c>System Profile</c>, …)
+    /// and none of them are user profiles, so matching every subdirectory would point a delete at
+    /// paths this tab never advertised. Reparse points are skipped and enumeration failures are
+    /// swallowed, matching <see cref="ExpandFirefoxCachePaths"/>.
+    /// </para>
+    /// <para>
+    /// When the browser is not installed this yields nothing, so no rows appear — the same outcome as
+    /// before, since ScanAsync already omits paths that do not exist.
+    /// </para>
+    /// </summary>
+    private IEnumerable<Def> ExpandChromiumDefs(string browser, string userDataRel)
+    {
+        var userDataAbs = Path.Combine(_localAppData, userDataRel);
+        if (!Directory.Exists(userDataAbs) || IsReparsePoint(userDataAbs)) yield break;
+
+        string[] candidates;
+        try { candidates = Directory.GetDirectories(userDataAbs); }
+        catch (IOException) { yield break; }
+        catch (UnauthorizedAccessException) { yield break; }
+
+        // "Default" first, then Profile 1, Profile 2, … so the grid reads in a stable, predictable
+        // order instead of whatever order the filesystem returned.
+        foreach (var dir in candidates
+                     .Select(Path.GetFileName)
+                     .Where(name => !string.IsNullOrEmpty(name) && IsProfileFolder(name!))
+                     .OrderBy(name => IsDefaultProfile(name!) ? 0 : 1)
+                     .ThenBy(name => name, StringComparer.OrdinalIgnoreCase))
+        {
+            if (IsReparsePoint(Path.Combine(userDataAbs, dir!))) continue;
+
+            // Name the profile in the Browser column so the user can see WHICH Chrome is being
+            // cleaned — the thing a flat "Google Chrome" checkbox in other cleaners never tells her.
+            // The default profile stays unlabelled, so the common single-profile case reads exactly
+            // as it did before and no existing row text changes.
+            var isDefault = IsDefaultProfile(dir!);
+            var displayName = isDefault ? browser : $"{browser} — {dir}";
+            var label = isDefault ? string.Empty : $" in {dir}";
+            foreach (var def in ChromiumDefs(displayName, userDataRel, $@"{userDataRel}\{dir}", label))
+                yield return def;
+        }
+    }
+
+    private static bool IsDefaultProfile(string name) =>
+        string.Equals(name, "Default", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True for "Default" and "Profile N" (N a positive integer) — the only directory names Chromium
+    /// uses for user profiles.
+    /// </summary>
+    private static bool IsProfileFolder(string name)
+    {
+        if (IsDefaultProfile(name)) return true;
+        if (!name.StartsWith("Profile ", StringComparison.OrdinalIgnoreCase)) return false;
+
+        var suffix = name["Profile ".Length..];
+        return suffix.Length > 0 && suffix.All(char.IsAsciiDigit);
+    }
 
     // Opera Stable is Chromium-based but does NOT use a "\Default\" profile segment: the
     // profile lives directly under "Opera Software\Opera Stable". It also splits its data
@@ -71,9 +139,11 @@ public sealed class BrowserCleanerService
     private List<Def> BuildDefs()
     {
         List<Def> defs = [];
-        defs.AddRange(ChromiumDefs("Google Chrome", @"Google\Chrome\User Data"));
-        defs.AddRange(ChromiumDefs("Microsoft Edge", @"Microsoft\Edge\User Data"));
-        defs.AddRange(ChromiumDefs("Brave", @"BraveSoftware\Brave-Browser\User Data"));
+        // Each Chromium browser can hold several profiles; every one that exists on disk is expanded
+        // at scan time so a second profile's data is no longer invisible to this tab.
+        defs.AddRange(ExpandChromiumDefs("Google Chrome", @"Google\Chrome\User Data"));
+        defs.AddRange(ExpandChromiumDefs("Microsoft Edge", @"Microsoft\Edge\User Data"));
+        defs.AddRange(ExpandChromiumDefs("Brave", @"BraveSoftware\Brave-Browser\User Data"));
         defs.AddRange(OperaDefs());
         // Firefox keeps profiles in roaming AppData, but the cache lives under LocalAppData
         // in per-profile "<profile>\cache2" folders. We target the cache2 subfolders only —

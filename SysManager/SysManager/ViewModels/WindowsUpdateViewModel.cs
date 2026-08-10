@@ -177,7 +177,21 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     }
 
     private void OnRunnerLineReceived(PowerShellLine l) => Console.Append(l);
-    private void OnRunnerProgressChanged(int p) => Progress = p;
+
+    /// <summary>
+    /// A real percentage arrived from the PowerShell progress stream, so switch the bar out of
+    /// indeterminate mode — WPF ignores <c>Value</c> entirely while <c>IsIndeterminate</c> is true, so
+    /// assigning <see cref="ViewModelBase.Progress"/> alone would keep the bar sweeping and never fill
+    /// it. Every command sets the flag back to true on entry and clears it in its own finally, so this
+    /// only ever narrows the indeterminate window to "before the first percentage". Mirrors
+    /// CleanupViewModel, which pairs the two assignments the same way.
+    /// </summary>
+    private void OnRunnerProgressChanged(int p)
+    {
+        Progress = p;
+        IsProgressIndeterminate = false;
+    }
+
     private void OnWuLog(string text) => Console.Append(PowerShellLine.Output(text));
 
     /// <summary>

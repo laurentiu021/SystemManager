@@ -18,9 +18,7 @@ public sealed class SpeedTestHistoryService : IDisposable
 {
     public const int MaxPerEngine = 20;
 
-    private static readonly string HistoryPath = Path.Join(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SysManager", "speedtest-history.json");
+    private readonly string _historyPath;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -32,6 +30,23 @@ public sealed class SpeedTestHistoryService : IDisposable
     // calls from racing (load-modify-save is not atomic). A SemaphoreSlim(1,1)
     // acts as an async-compatible mutex.
     private readonly SemaphoreSlim _fileLock = new(1, 1);
+
+    /// <summary>
+    /// Creates the service. <paramref name="configDir"/> is overridable so tests exercise the real
+    /// save/load/clear paths against a temp directory instead of the user's own history file — same
+    /// seam as <see cref="ResourceHistoryService"/> and <see cref="ClosePreferenceService"/>.
+    /// <para>The path was previously <c>static readonly</c>, which made this service impossible to
+    /// test safely: <see cref="Environment.SpecialFolder.LocalApplicationData"/> resolves through the
+    /// Win32 known-folder API and ignores the <c>LOCALAPPDATA</c> environment variable, so nothing
+    /// could redirect it away from the real profile. The tests consequently wrote fabricated results
+    /// into the user's live history and one of them deleted it outright.</para>
+    /// </summary>
+    public SpeedTestHistoryService(string? configDir = null)
+    {
+        var dir = configDir ?? Path.Join(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        _historyPath = Path.Join(dir, "speedtest-history.json");
+    }
 
     /// <inheritdoc />
     public void Dispose() => _fileLock.Dispose();
@@ -47,10 +62,10 @@ public sealed class SpeedTestHistoryService : IDisposable
     {
         try
         {
-            if (!File.Exists(HistoryPath))
+            if (!File.Exists(_historyPath))
                 return [];
 
-            var json = await File.ReadAllTextAsync(HistoryPath, ct).ConfigureAwait(false);
+            var json = await File.ReadAllTextAsync(_historyPath, ct).ConfigureAwait(false);
             var entries = JsonSerializer.Deserialize<List<SpeedTestHistoryEntry>>(json, JsonOpts);
             if (entries is null) return [];
 
@@ -108,11 +123,11 @@ public sealed class SpeedTestHistoryService : IDisposable
                 CompletedAt = r.CompletedAt
             }).ToList();
 
-            var dir = Path.GetDirectoryName(HistoryPath)!;
+            var dir = Path.GetDirectoryName(_historyPath)!;
             Directory.CreateDirectory(dir);
 
             var json = JsonSerializer.Serialize(entries, JsonOpts);
-            await File.WriteAllTextAsync(HistoryPath, json, ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(_historyPath, json, ct).ConfigureAwait(false);
         }
         catch (IOException ex)
         {
@@ -138,8 +153,8 @@ public sealed class SpeedTestHistoryService : IDisposable
         {
             if (engine is null)
             {
-                if (File.Exists(HistoryPath))
-                    File.Delete(HistoryPath);
+                if (File.Exists(_historyPath))
+                    File.Delete(_historyPath);
                 return;
             }
 
@@ -148,8 +163,8 @@ public sealed class SpeedTestHistoryService : IDisposable
 
             if (filtered.Count == 0)
             {
-                if (File.Exists(HistoryPath))
-                    File.Delete(HistoryPath);
+                if (File.Exists(_historyPath))
+                    File.Delete(_historyPath);
                 return;
             }
 
@@ -164,7 +179,7 @@ public sealed class SpeedTestHistoryService : IDisposable
             }).ToList();
 
             var json = JsonSerializer.Serialize(entries, JsonOpts);
-            await File.WriteAllTextAsync(HistoryPath, json, ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(_historyPath, json, ct).ConfigureAwait(false);
         }
         catch (IOException ex)
         {

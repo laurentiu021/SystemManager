@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.4] - 2026-08-10
+
+### Fixed
+- **The Windows Update progress bar now actually fills.** Version 1.58.2 claimed to fix this and only half did: the bar was told what percentage to show, but it was still stuck in "busy" mode, and in that mode Windows ignores the percentage completely and just sweeps back and forth. So installing updates — one of the longest things the app does — still gave no sense of how far along it was. It now switches to a real filling bar the moment Windows reports a percentage. The Cleanup and Debloater bars fixed in 1.58.2 were genuinely fixed; this was the one that was not.
+
+### Changed
+- **The app's own tests no longer touch your saved speed-test results.** Three tests were reading, writing and — in two cases — deleting the real speed-test history file, because that part of the app had no way to be pointed at a scratch location. It does now, so the tests run entirely on throwaway files. Nothing about how the app itself saves your results has changed. This only ever affected anyone running the test suite from source, not the released app, but it also meant those tests could barely check anything; they now verify the saved data properly, including that clearing one engine's results leaves the other's alone.
+
 ## [1.58.3] - 2026-08-10
 
 ### Fixed

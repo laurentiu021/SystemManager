@@ -118,4 +118,58 @@ public class DiskAnalyzerViewModelTests
         var vm = NewVm();
         Assert.False(vm.HasDriveInfo);
     }
+
+    // ── Empty state distinguishes "not run yet" from "ran, found nothing" ───
+
+    [Fact]
+    public void BeforeAnyScan_EmptyState_TellsTheUserToScan()
+    {
+        var vm = NewVm();
+        Assert.False(vm.HasScanned);
+        Assert.Equal("No results yet", vm.EmptyTitle);
+        Assert.Contains("analyze", vm.EmptyMessage);
+    }
+
+    [Fact]
+    public async Task AfterAScanThatFoundNothing_EmptyState_StopsAskingForAScan()
+    {
+        // The overlay used to hardcode "No results yet … Pick a folder and analyze", so a
+        // completed zero-result scan told the user to do the thing they had just done — while the
+        // summary card next to it correctly said "No subfolders found." Scan a genuinely empty
+        // directory and assert the two no longer contradict each other.
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var vm = NewVm();
+            vm.SelectedPath = dir;
+
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            Assert.Empty(vm.Entries);                       // nothing found, so the overlay shows
+            Assert.True(vm.HasScanned);
+            Assert.Equal("Nothing to show", vm.EmptyTitle);
+            Assert.DoesNotContain("Pick a folder", vm.EmptyMessage);
+            Assert.Equal("No subfolders found.", vm.ScanSummary);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void HasScanned_RaisesChangeNotificationsForTheEmptyStateText()
+    {
+        // The [NotifyPropertyChangedFor] attributes are what actually refresh the overlay; without
+        // them the computed strings would change but the bound EmptyState would keep the old text.
+        var vm = NewVm();
+        var raised = new List<string>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+
+        vm.HasScanned = true;
+
+        Assert.Contains(nameof(vm.EmptyTitle), raised);
+        Assert.Contains(nameof(vm.EmptyMessage), raised);
+    }
 }

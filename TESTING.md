@@ -92,6 +92,17 @@ collection definitions (all defined in `TestCollections.cs`, each with
 - `[Collection("IconCache")]` — tests touching the shared icon cache.
 - `[Collection("DialogService")]` — tests that swap the static `DialogService.Instance`.
 
+### Shared helpers
+
+- `DialogAnswer` — scopes a canned confirmation answer over `DialogService.Instance` and restores
+  the previous instance on dispose, so a confirmation gate can be driven without a UI:
+  `using var _ = new DialogAnswer(false);`. Its `Calls` counter lets a test assert a dialog was
+  *not* shown — asserting the side effect alone cannot distinguish "the user said yes" from
+  "no gate ran at all". Requires `[Collection("DialogService")]` on the test class.
+- `SyncProgress<T>` — a synchronous `IProgress<T>` that records reports on the calling thread, so
+  progress assertions need no `Task.Delay`.
+- `StaHelper` — runs a delegate on an STA thread for WPF-dependent types.
+
 ### Conventions
 
 - Pure logic tests (parsers, analyzers, converters) need no mocking.

@@ -33,6 +33,20 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [ObservableProperty] private int _entryCount;
     [ObservableProperty] private string _currentFolder = "";
 
+    // Distinguishes the un-run state from a completed zero-result scan so the big empty-state overlay
+    // doesn't tell the user to "pick a folder and analyze" right after they did exactly that. Set true
+    // only after a scan actually completes (see AnalyzeAsync); a cancelled/failed scan leaves it as-is.
+    // Mirrors DuplicateFileViewModel, the sibling tab in the same Storage group.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private bool _hasScanned;
+
+    public string EmptyTitle => HasScanned ? "Nothing to show" : "No results yet";
+    public string EmptyMessage => HasScanned
+        ? "This folder has no subfolders using measurable space."
+        : "Pick a folder and analyze to see what's using space.";
+
     // Drive-level info
     [ObservableProperty] private long _driveTotal;
     [ObservableProperty] private long _driveFree;
@@ -127,6 +141,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             ScanSummary = EntryCount == 0
                 ? "No subfolders found."
                 : $"{EntryCount} folders · {FormatSize(TotalSize)} total · {TotalFiles:N0} files";
+            HasScanned = true;
             StatusMessage = "Analysis complete.";
             ToastService.Instance.Show("Disk Analysis complete", $"{EntryCount} folders, {FormatSize(TotalSize)} total");
             Log.Information("Disk analysis completed: {Folders} folders, {Size} total",

@@ -98,6 +98,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     private async Task ScanAsync()
     {
         IsBusy = true;
+        IsProgressIndeterminate = true;
         StatusMessage = "Scanning context menu entries...";
         try
         {
@@ -121,7 +122,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         {
             StatusMessage = $"Scan failed: {ex.Message}";
         }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand]
@@ -195,6 +196,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         StatusMessage = $"Applying \"{preset.Name}\"...";
 
         try
@@ -252,7 +254,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         {
             StatusMessage = $"Failed: {ex.Message}";
         }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

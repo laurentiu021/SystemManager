@@ -28,6 +28,10 @@ namespace SysManager.Tests;
 /// (not unit-tested here — it needs a real endpoint), so these tests treat the service's
 /// filtering (expired dropped, system-sounds flagged) as a contract at the seam.
 /// </summary>
+// DeletePreset's confirmation gate swaps the global DialogService.Instance, so this class must
+// run in the serialized collection — otherwise a parallel class's substitute steals the Confirm
+// call and the gate assertions go flaky.
+[Collection("DialogService")]
 public class AudioMixerViewModelTests
 {
     private static AudioSessionInfo Session(
@@ -351,6 +355,57 @@ public class AudioMixerViewModelTests
         // Behavioral post-condition: Dispose stopped the meter and zeroed the lit bar (it must
         // not leave a stale level frozen on screen).
         Assert.Equal(0f, vm.Sessions.Single().PeakLevel);
+    }
+
+    // ── Preset deletion is confirmed (the file is rewritten immediately) ────
+
+    [Fact]
+    public async Task DeletePreset_WhenDeclined_KeepsThePresetOnDisk()
+    {
+        // VolumePresetService.Delete() calls Persist() -> File.WriteAllText straight away, so a
+        // stray click was unrecoverable. Answering "No" must leave both the in-memory list and
+        // the file exactly as they were.
+        var dir = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "SysManagerTests", System.Guid.NewGuid().ToString("N"));
+        var presets = new VolumePresetService(dir);
+        var service = ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f));
+        var vm = new AudioMixerViewModel(service, presets);
+        await vm.InitializationComplete;
+
+        vm.NewPresetName = "Movie night";
+        vm.SavePresetCommand.Execute(null);
+        Assert.Single(vm.Presets);
+        vm.SelectedPreset = vm.Presets[0];
+
+        using var answer = new DialogAnswer(false);
+        vm.DeletePresetCommand.Execute(null);
+
+        Assert.Equal(1, answer.Calls);                       // the gate really ran
+        Assert.Single(vm.Presets);                           // still in the list
+        Assert.Equal("Movie night", vm.Presets[0].Name);
+        Assert.Single(presets.Load());                       // and still on disk
+    }
+
+    [Fact]
+    public async Task DeletePreset_WhenConfirmed_RemovesIt()
+    {
+        var dir = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "SysManagerTests", System.Guid.NewGuid().ToString("N"));
+        var presets = new VolumePresetService(dir);
+        var service = ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f));
+        var vm = new AudioMixerViewModel(service, presets);
+        await vm.InitializationComplete;
+
+        vm.NewPresetName = "Movie night";
+        vm.SavePresetCommand.Execute(null);
+        vm.SelectedPreset = vm.Presets[0];
+
+        using var _ = new DialogAnswer(true);
+        vm.DeletePresetCommand.Execute(null);
+
+        Assert.Empty(vm.Presets);
+        Assert.Empty(presets.Load());
+        Assert.Null(vm.SelectedPreset);
     }
 
     // ── Input validation at the trust boundary (real service, no COM) ──────

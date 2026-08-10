@@ -82,6 +82,7 @@ public sealed partial class StartupViewModel : ViewModelBase
     private async Task ScanAsync()
     {
         IsBusy = true;
+        IsProgressIndeterminate = true;
         StatusMessage = "Scanning startup items…";
         try
         {
@@ -120,7 +121,7 @@ public sealed partial class StartupViewModel : ViewModelBase
         {
             StatusMessage = $"Scan failed: {ex.Message}";
         }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
@@ -171,6 +172,7 @@ public sealed partial class StartupViewModel : ViewModelBase
             return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             // Report the outcome honestly: SetEnabledAsync returns false (and sets the
@@ -200,6 +202,7 @@ public sealed partial class StartupViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
+            IsProgressIndeterminate = false;
         }
     }
 

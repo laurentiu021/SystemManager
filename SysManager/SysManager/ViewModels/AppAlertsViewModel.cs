@@ -84,6 +84,15 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     [RelayCommand]
     private void ClearHistory()
     {
+        // The alert list is never written to disk, so this collection IS the only record of
+        // what installed itself. Confirm before discarding it — but stay frictionless when
+        // there is nothing to lose, otherwise the prompt is pure noise.
+        if (AlertCount > 0 && !DialogService.Instance.Confirm(
+                $"Clear all {AlertCount} recorded alert{(AlertCount == 1 ? "" : "s")}?\n\n" +
+                "The history is not saved to disk, so this cannot be undone.",
+                "Clear History — Confirm"))
+            return;
+
         Alerts.Clear();
         AlertCount = 0;
         UnacknowledgedCount = 0;

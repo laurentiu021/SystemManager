@@ -153,6 +153,13 @@
             <Button DockPanel.Dock="Right" Content="Refresh" Command="{Binding RefreshCommand}"
                     AutomationProperties.Name="Refresh boot history"
                     Style="{StaticResource GhostButton}" Margin="0,0,12,0" Padding="10,2"/>
+            <!-- Declared after Refresh so right-docking places it to Refresh's left, matching
+                 SystemFixesView. Reading the Diagnostics-Performance log can be slow, so surface
+                 the cancellation path the ViewModel already implements. -->
+            <Button DockPanel.Dock="Right" Content="Cancel" Command="{Binding CancelCommand}"
+                    AutomationProperties.Name="Cancel reading boot history"
+                    Style="{StaticResource GhostButton}" Margin="0,0,12,0" Padding="10,2"
+                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
         </DockPanel>
     </Grid>

@@ -14,10 +14,15 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// Duplicate File Finder tab — scans a folder for files with identical
-/// content and shows them grouped by hash. Read-only: only "Show in
-/// Explorer" and "Copy path" are offered.
+/// Duplicate File Finder tab — scans a folder for files with identical content and shows them
+/// grouped by hash.
 /// </summary>
+/// <remarks>
+/// STILL NON-DESTRUCTIVE, deliberately: the actions are "Show in Explorer", "Copy path" and
+/// "Keep this one". Nothing is deleted, moved or renamed. A wrong deletion here costs the user their
+/// own photos and documents with no undo, which is the worst outcome this app can produce, so the tab
+/// suggests a decision and leaves the acting to the user in Explorer.
+/// </remarks>
 public sealed partial class DuplicateFileViewModel : ViewModelBase
 {
     private readonly DuplicateFileService _service;
@@ -128,6 +133,11 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
 
             var results = await _service.ScanAsync(SelectedFolder, minBytes, progress, ct);
 
+            // Suggest a keeper per group BEFORE binding, so no group is ever shown as N equal rows with
+            // no hint which file is the original.
+            foreach (var group in results)
+                group.ApplySuggestedKeeper();
+
             Groups.ReplaceWith(results);
 
             GroupCount = Groups.Count;
@@ -201,6 +211,21 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         if (entry is null) return;
         try { System.Windows.Clipboard.SetText(entry.Path); }
         catch (System.Runtime.InteropServices.ExternalException ex) { Log.Debug(ex, "Failed to copy path to clipboard"); }
+    }
+
+    /// <summary>
+    /// Moves the suggested keeper within a group. "Oldest wins" is only a heuristic — a copy that
+    /// preserved its timestamp, or a cloud-sync rewrite, breaks it — so the user has to be able to
+    /// disagree with it. The group is looked up from the entry rather than passed in, because the
+    /// per-file DataTemplate binds to the entry.
+    /// </summary>
+    [RelayCommand]
+    private void KeepThis(DuplicateFileEntry? entry)
+    {
+        if (entry is null) return;
+
+        var group = Groups.FirstOrDefault(g => g.Files.Contains(entry));
+        group?.SetKeeper(entry);
     }
 
     [RelayCommand]

@@ -180,4 +180,99 @@ public class DuplicateFileViewModelTests
         group.Files.Add(new DuplicateFileEntry { Name = "test.bin" });
         Assert.Single(group.Files);
     }
+
+    // ── Keep-this override (regression: IsSelected was declared and read by nothing) ──
+
+    private static DuplicateFileGroup SeededGroup(DuplicateFileViewModel vm)
+    {
+        var group = new DuplicateFileGroup { FileSize = 1024 };
+        group.Files.Add(new DuplicateFileEntry
+        {
+            Path = @"C:\a\photo.jpg", Name = "photo.jpg", LastModified = new DateTime(2019, 1, 1)
+        });
+        group.Files.Add(new DuplicateFileEntry
+        {
+            Path = @"C:\b\photo.jpg", Name = "photo.jpg", LastModified = new DateTime(2026, 1, 1)
+        });
+        group.Count = group.Files.Count;
+        group.ApplySuggestedKeeper();
+        vm.Groups.Add(group);
+        return group;
+    }
+
+    [Fact]
+    public void KeepThisCommand_Exists()
+    {
+        var vm = NewVm();
+        Assert.NotNull(vm.KeepThisCommand);
+    }
+
+    [Fact]
+    public void KeepThis_MovesTheKeeperWithinTheOwningGroup()
+    {
+        // The per-file DataTemplate binds the ENTRY, so the VM has to find the group itself. If that
+        // lookup failed the button would appear to do nothing.
+        var vm = NewVm();
+        var group = SeededGroup(vm);
+        var newer = group.Files.Single(f => f.Path == @"C:\b\photo.jpg");
+
+        vm.KeepThisCommand.Execute(newer);
+
+        Assert.True(newer.IsSelected);
+        Assert.Single(group.Files, f => f.IsSelected);
+    }
+
+    [Fact]
+    public void KeepThis_WithNull_IsIgnored()
+    {
+        var vm = NewVm();
+        var group = SeededGroup(vm);
+
+        var ex = Record.Exception(() => vm.KeepThisCommand.Execute(null));
+
+        Assert.Null(ex);
+        Assert.Single(group.Files, f => f.IsSelected);   // the existing suggestion survives
+    }
+
+    [Fact]
+    public void KeepThis_EntryFromNoLoadedGroup_IsIgnored()
+    {
+        var vm = NewVm();
+        var group = SeededGroup(vm);
+        var stale = new DuplicateFileEntry { Path = @"C:\gone\photo.jpg", Name = "photo.jpg" };
+
+        var ex = Record.Exception(() => vm.KeepThisCommand.Execute(stale));
+
+        Assert.Null(ex);
+        Assert.False(stale.IsSelected);
+        Assert.Single(group.Files, f => f.IsSelected);
+    }
+
+    [Fact]
+    public void DuplicateFileView_ShowsTheKeeperAndTheRule()
+    {
+        // The defect was a property nothing read. Asserting the model alone would pass on the unfixed
+        // code, so this checks the shipped markup renders the badge, offers the override, and states
+        // the rule — plus that it still promises nothing is deleted.
+        var xaml = File.ReadAllText(ViewPath("DuplicateFileView.xaml"));
+
+        Assert.Contains("KeepLabel", xaml);                  // the badge
+        Assert.Contains("KeepThisCommand", xaml);            // the override
+        Assert.Contains("oldest", xaml);                     // the rule, stated
+        Assert.Contains("Nothing is deleted", xaml);         // still non-destructive
+        Assert.Contains("LastModified", xaml);               // so "oldest" is checkable by eye
+    }
+
+    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
+    private static string ViewPath(string fileName)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);   // else the assertions above would silently test nothing
+        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
+        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
+        return path;
+    }
 }

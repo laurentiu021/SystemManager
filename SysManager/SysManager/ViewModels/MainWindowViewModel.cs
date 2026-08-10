@@ -340,23 +340,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     public void NavigateTo(string navId) => SelectNavById(navId);
 
+    // Only the About shortcut is bound (MainWindow.xaml's update banner, "View details"). Five
+    // sibling commands — OpenDeepCleanupTab, OpenDiskAnalyzerTab, OpenDuplicatesTab, OpenCleanupTab
+    // and OpenSystemHealthTab — existed here with no binding and no test, so they were removed rather
+    // than left looking like available navigation. Anything that needs to jump to a tab should use
+    // NavigateTo(navId) above, or DashboardViewModel's OpenTabCommand for a bindable version; one
+    // parameterised seam beats a per-tab command that has to be added by hand and can silently rot.
     [RelayCommand]
     private void OpenAboutTab() => SelectNavById("nav-about");
-
-    [RelayCommand]
-    private void OpenDeepCleanupTab() => SelectNavById("nav-deep-cleanup");
-
-    [RelayCommand]
-    private void OpenDiskAnalyzerTab() => SelectNavById("nav-disk-analyzer");
-
-    [RelayCommand]
-    private void OpenDuplicatesTab() => SelectNavById("nav-duplicates");
-
-    [RelayCommand]
-    private void OpenCleanupTab() => SelectNavById("nav-cleanup");
-
-    [RelayCommand]
-    private void OpenSystemHealthTab() => SelectNavById("nav-system-health");
 
     public void Dispose()
     {

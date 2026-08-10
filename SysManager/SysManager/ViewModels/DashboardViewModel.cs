@@ -721,13 +721,32 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private void NavigateToQuickActionTab()
     {
         if (_quickActionNavigateTarget is null) return;
-        // Navigate via MainWindowViewModel
+        SelectTab(_quickActionNavigateTarget);
+        DismissQuickAction();
+    }
+
+    /// <summary>
+    /// Opens the tab with the given nav id. Used by the Tune-Up result card so each finding links to the
+    /// tab that can act on it — "3 broken shortcuts" is only useful if it can take you to the cleaner.
+    /// <para>Shares one implementation with <see cref="NavigateToQuickActionTabCommand"/> rather than
+    /// duplicating the shell lookup, and deliberately does NOT dismiss the card: the user may want to
+    /// come back to the remaining findings.</para>
+    /// </summary>
+    [RelayCommand]
+    private void OpenTab(string? navId)
+    {
+        if (!string.IsNullOrEmpty(navId)) SelectTab(navId);
+    }
+
+    private static void SelectTab(string navId)
+    {
+        // The shell owns navigation; the Dashboard reaches it through the live MainWindow DataContext,
+        // which is the pattern this view model already used for the quick-action "go to tab" link.
         if (System.Windows.Application.Current?.MainWindow?.DataContext is MainWindowViewModel main)
         {
-            var target = main.NavItems.FirstOrDefault(n => n.Id == _quickActionNavigateTarget);
+            var target = main.NavItems.FirstOrDefault(n => n.Id == navId);
             if (target is not null) main.SelectedNav = target;
         }
-        DismissQuickAction();
     }
 
     [RelayCommand]

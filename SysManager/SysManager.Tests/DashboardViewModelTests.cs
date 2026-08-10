@@ -316,4 +316,64 @@ public class DashboardViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ---------- Tune-Up result card navigation ----------
+    // Each finding on the card links to the tab that can act on it ("3 broken shortcuts" is only useful
+    // if it can take you to the cleaner). Navigation resolves through the live MainWindow DataContext,
+    // which does not exist in a unit test — so these pin what can be checked without a shell: the
+    // command exists, and it degrades quietly rather than crashing when there is nothing to navigate to.
+    // The actual tab switch is covered by the shell's own navigation tests.
+
+    [Fact]
+    public void OpenTabCommand_Exists()
+    {
+        var vm = NewVm();
+        Assert.NotNull(vm.OpenTabCommand);
+    }
+
+    [Theory]
+    [InlineData("nav-shortcut-cleaner")]
+    [InlineData("nav-processes")]
+    [InlineData("nav-deep-cleanup")]
+    public void OpenTabCommand_WithNoShell_DoesNotThrow(string navId)
+    {
+        // Application.Current.MainWindow is null under the test host, so the lookup must degrade
+        // quietly. A throw here would take down the Dashboard whenever a finding button was clicked.
+        var vm = NewVm();
+
+        var ex = Record.Exception(() => vm.OpenTabCommand.Execute(navId));
+
+        Assert.Null(ex);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("nav-does-not-exist")]
+    public void OpenTabCommand_WithNothingToOpen_IsIgnored(string? navId)
+    {
+        // Parameter contract: null/empty are rejected before the lookup, and an unknown id finds no
+        // NavItem and does nothing rather than clearing the current selection.
+        var vm = NewVm();
+
+        var ex = Record.Exception(() => vm.OpenTabCommand.Execute(navId));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void TuneUpResultCard_StartsHidden_AndDismissClearsIt()
+    {
+        // HasTuneUpResult drives the card's Visibility and TuneUpResult its content; both were computed
+        // and never rendered, and DismissTuneUpResultCommand was unbound too.
+        var vm = NewVm();
+        Assert.False(vm.HasTuneUpResult);
+        Assert.Null(vm.TuneUpResult);
+
+        vm.HasTuneUpResult = true;
+        vm.DismissTuneUpResultCommand.Execute(null);
+
+        Assert.False(vm.HasTuneUpResult);
+        Assert.Null(vm.TuneUpResult);
+    }
 }

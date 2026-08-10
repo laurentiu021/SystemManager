@@ -20,12 +20,14 @@
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                         DockPanel.Dock="Right" VerticalAlignment="Center">
+                <!-- Bound to Shared.* (not a per-VM copy) because the Ping tab starts and stops the
+                     same monitor — mirroring how PingView already binds Shared.IsMonitoring. -->
                 <Button Content="Start auto-trace" Command="{Binding StartAutoTraceCommand}"
                         Style="{StaticResource PrimaryButton}"
-                        Visibility="{Binding IsAutoTraceRunning, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                        Visibility="{Binding Shared.IsAutoTraceRunning, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 <Button Content="Stop auto-trace" Command="{Binding StopAutoTraceCommand}"
                         Style="{StaticResource SecondaryButton}"
-                        Visibility="{Binding IsAutoTraceRunning, Converter={StaticResource FlexVis}}"/>
+                        Visibility="{Binding Shared.IsAutoTraceRunning, Converter={StaticResource FlexVis}}"/>
             </StackPanel>
         </DockPanel>
 

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.3] - 2026-08-10
+
+### Fixed
+- **The Traceroute tab no longer lies about whether it is running.** Ping and Traceroute look like two separate tabs with their own Start and Stop buttons, but behind them sits one shared monitor. So pressing Stop on Ping silently killed a running auto-trace while Traceroute still showed "Stop auto-trace" and claimed it was running — and pressing Start on Ping quietly began tracing every target while Traceroute still offered to start it. Both tabs now read the same state, so whichever one you use, the other tells you the truth.
+
 ## [1.58.2] - 2026-08-10
 
 ### Fixed

@@ -338,6 +338,20 @@ Key services:
   unit-tested `Serialize`/`Parse`, file IO that never throws. Every untrusted or unrecognized
   value degrades to `Ask` rather than to a concrete action, so a damaged file can never exit an
   app the user wanted kept in the tray.
+- `UpdateCheckPreferenceService` — gates the app's only self-initiated network call. Persists
+  whether the startup version check may run, plus when it last ran, as JSON under
+  `%AppData%\SysManager\update-check.json` (Roaming, like `theme.json`: a stated preference should
+  follow the user between machines). The check used to be hardcoded on with no setting and no
+  memory of the previous run, so every launch made two calls to `api.github.com` — which both
+  contradicted the "network only for features you explicitly use" claim and could exhaust GitHub's
+  anonymous limit (60/hour/IP) across repeated restarts. `ShouldCheckAtStartup` is a pure static
+  taking the clock as a parameter, so the 24h throttle is unit-tested without sleeping; a
+  future-dated timestamp is treated as stale so a bad clock cannot suppress checks indefinitely.
+  Malformed input degrades to ENABLED (unlike `ClosePreferenceService`'s `Ask`), because defaulting
+  to off would silently close the only channel that tells the user about a fix. `AboutViewModel`
+  applies it on the startup path only — the manual "Check for updates" and "Retry" buttons always
+  bypass the throttle. Registered in `ProfileService`'s catalog so it survives profile
+  export/import.
 - `StandbyPreferenceService` — persists the Standby List Cleaner's auto-purge toggle and
   threshold as JSON under `%LocalAppData%\SysManager\standby-preference.json`. Auto-purge is a
   set-and-forget setting, so losing it on every restart made it effectively unusable. Same shape
@@ -551,7 +565,9 @@ retained). The in-app Console mirrors the same stream per tab.
 ## Updates
 
 `UpdateService` hits `api.github.com/repos/laurentiu021/SystemManager/releases`
-at startup and on demand. Downloads land in
+on demand, and at startup only when `UpdateCheckPreferenceService` allows it — the user
+can switch the startup check off in About, and it is throttled to at most once a day
+regardless. Downloads land in
 `%LOCALAPPDATA%\SysManager\updates\SysManager-{version}.exe` with a companion
 `.sha256` so re-opening the app doesn't re-download a good copy. After a successful
 download, `PruneOldDownloads` deletes superseded binaries, their stale hashes, and

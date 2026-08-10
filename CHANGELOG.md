@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.0] - 2026-08-10
+
+### Added
+- **You can now turn off the version check that runs when SysManager starts.** There is a new checkbox on the About tab — "Check GitHub for a new version when SysManager starts". It is on by default, because that check is how you hear about a fix, but it is now yours to switch off. When it is off, nothing goes out until you press "Check for updates" yourself. Either way, nothing about you or your PC is ever sent: SysManager only asks GitHub's public releases page which version is newest.
+
+### Changed
+- **That check now runs at most once a day instead of on every launch.** Opening and closing SysManager a few times used to ask GitHub twice each time, which could hit the limit GitHub allows for anonymous requests — after which the About tab reported an error for no real reason. Pressing "Check for updates" or "Retry" still asks immediately, every time.
+
 ## [1.57.8] - 2026-08-06
 
 ### Fixed

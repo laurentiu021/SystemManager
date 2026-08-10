@@ -49,6 +49,7 @@ public sealed class ProfileService
     [
         ("theme", "Theme & appearance", "theme.json", Base.Roaming),        // ThemeService → Roaming
         ("speedtest", "Speed-test history", "speedtest-history.json", Base.Local), // SpeedTestHistoryService → Local
+        ("updatecheck", "Update-check preference", "update-check.json", Base.Roaming), // UpdateCheckPreferenceService → Roaming
     ];
 
     /// <summary>

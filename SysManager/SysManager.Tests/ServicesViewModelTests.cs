@@ -149,6 +149,60 @@ public class ServicesViewModelTests
         Assert.All(vm.Services, s => Assert.Equal(Models.SafetyLevel.Safe, s.SafetyLevel));
     }
 
+    // ── ApplyFilter: gaming recommendation ──
+    // A DIFFERENT dataset from the Safe/Caution/Critical safety level above: safety answers "will
+    // this break Windows", the recommendation answers "is this worth turning off for games, and
+    // why". Both were computed per service, but only the safety level was filterable — so README's
+    // "filter by … recommendation level" claim was untrue.
+
+    [Theory]
+    [InlineData("Safe to disable", "safe-to-disable")]
+    [InlineData("Keep enabled", "keep-enabled")]
+    [InlineData("Advanced", "advanced")]
+    public async Task ApplyFilter_Recommendation_ShowsOnlyThatRecommendation(string option, string stored)
+    {
+        var vm = await CreateWithDataAsync();
+
+        vm.SelectedFilter = option;
+
+        Assert.NotEmpty(vm.Services);   // a filter matching nothing would vacuously pass Assert.All
+        Assert.All(vm.Services, s => Assert.Equal(stored, s.Recommendation));
+    }
+
+    [Fact]
+    public async Task ApplyFilter_Recommendation_IsNotTheSafetyLevel()
+    {
+        // Discriminating assertion: "Safe to disable" must not collapse into the Safe safety level.
+        // In the fixture, Print Spooler is safe-to-disable but its SAFETY level is Caution — so a
+        // filter that confused the two datasets would drop it.
+        var vm = await CreateWithDataAsync();
+
+        vm.SelectedFilter = "Safe to disable";
+
+        Assert.Contains(vm.Services, s => s.Name == "Spooler");
+        Assert.Contains(vm.Services, s => s.SafetyLevel == Models.SafetyLevel.Caution);
+    }
+
+    [Fact]
+    public void FilterOptions_CoverEveryRecommendationTheGuideProduces()
+    {
+        // Mechanical guard: GamingGuide uses exactly three recommendation values. If a fourth is ever
+        // added, this fails rather than the new one silently having no filter — the class of bug that
+        // left these 25 explanations unreachable in the first place.
+        var produced = ServiceManagerService.GamingGuide.Values
+            .Select(v => v.Rec)
+            .Distinct()
+            .OrderBy(v => v, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["advanced", "keep-enabled", "safe-to-disable"], produced);
+
+        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        Assert.Contains("Safe to disable", vm.FilterOptions);
+        Assert.Contains("Keep enabled", vm.FilterOptions);
+        Assert.Contains("Advanced", vm.FilterOptions);
+    }
+
     // ── ApplyFilter: text filter ──
 
     [Fact]

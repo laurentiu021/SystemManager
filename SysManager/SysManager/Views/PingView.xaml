@@ -11,6 +11,9 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <!-- Status line. This tab was one of only two in the app with no status line at all, so
+                 Clear History wiped the chart and history with no confirmation on screen. -->
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -205,6 +208,10 @@
                                     TooltipBackgroundPaint="{Binding Shared.TooltipBackgroundPaint}"/>
             </Grid>
         </Border>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+                   Margin="28,12,28,24" TextWrapping="Wrap"/>
 
     </Grid>
 </UserControl>

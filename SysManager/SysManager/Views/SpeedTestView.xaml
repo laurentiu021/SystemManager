@@ -54,6 +54,12 @@
                         <TextBlock Text="{Binding OoklaResult.Server}" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}"/>
                         <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding OoklaStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
+                        <!-- The VM already maintains an EtaCalculator and updates EstimatedTime on every
+                             progress tick; nothing bound it, so the "time remaining" for a test that can
+                             run for minutes was computed and thrown away. Same shape as the ETA lines in
+                             AppUpdatesView / BulkInstallerView / CleanupView. -->
+                        <TextBlock Text="{Binding EstimatedTime}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
+                                   Visibility="{Binding EstimatedTime, Converter={StaticResource FlexVis}}"/>
                         <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" AutomationProperties.Name="Cancel Ookla speed test" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                 </Border>
@@ -79,6 +85,11 @@
                         </Grid>
                         <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding HttpStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
+                        <!-- Shares the single EstimatedTime property with the Ookla card above; only one
+                             engine runs at a time (both are gated on the shared SpeedProgress/CTS), so the
+                             two lines can never show conflicting figures. -->
+                        <TextBlock Text="{Binding EstimatedTime}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
+                                   Visibility="{Binding EstimatedTime, Converter={StaticResource FlexVis}}"/>
                         <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" AutomationProperties.Name="Cancel HTTP speed test" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                 </Border>

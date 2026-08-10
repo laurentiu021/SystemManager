@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.60.0] - 2026-08-10
+
+### Added
+- **Duplicate Finder now tells you which copy to keep.** It would find five identical photos, tell you they were wasting 4 GB, and then show them as five identical rows — leaving you to work out which one is the original, which is exactly the judgement the tab exists to help with. One file per group is now badged **Keep**: the oldest, because a copy is normally made after the file it came from. The rule is written on screen instead of applied quietly, every row shows its date so you can check the reasoning yourself, and **"Keep this one"** moves the badge when you know better — a copy that kept its original timestamp, or a file rewritten by cloud sync, will fool the guess. Groups with identical dates fall back to the copy nearest the top of the folder tree, so the badge never jumps around between scans.
+- **Still nothing is deleted.** The tab remains read-only on purpose: getting this wrong costs you your own photos and documents with no way back. It suggests a decision and points you at the file; the removing is yours to do, in Explorer.
+
 ## [1.59.0] - 2026-08-10
 
 ### Fixed

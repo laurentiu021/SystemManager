@@ -389,7 +389,14 @@ a confirmation before it runs:
 - Duplicate groups sorted by wasted space (descending)
 - Preset folders or custom folder selection
 - Configurable minimum file size filter
-- **Read-only** — "Show in Explorer" and "Copy path" only, no delete
+- **Suggests which copy to keep** — one file per group is badged **Keep**, chosen as the
+  oldest (usually the original). The rule is stated on screen rather than applied
+  silently, each row shows its date so you can check it, and "Keep this one" moves the
+  badge when you know better — a copy that preserved its timestamp, or a cloud-sync
+  rewrite, will fool the heuristic
+- **Read-only** — "Show in Explorer", "Copy path" and "Keep this one" only. Nothing is
+  deleted, moved or renamed; deciding which of five identical photos to remove is done by
+  you, in Explorer
 
 ### Disk Analyzer
 - Space breakdown by top-level folders with drill-down navigation

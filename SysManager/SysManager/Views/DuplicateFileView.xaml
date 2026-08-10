@@ -22,7 +22,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Duplicate Finder" Style="{StaticResource Display}"/>
-            <TextBlock Text="Find files with identical content. Read-only — nothing is deleted."
+            <TextBlock Text="Find files with identical content. Nothing is deleted — we suggest which copy to keep, and you decide."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
@@ -56,7 +56,18 @@
 
         <!-- Summary bar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
-            <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" FontSize="13"/>
+            <StackPanel>
+                <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" FontSize="13"/>
+                <!-- The keep-rule is stated, not hidden: a suggestion the user cannot see the reasoning
+                     for is one they cannot sensibly disagree with. "Oldest" is a heuristic that a
+                     timestamp-preserving copy or a cloud-sync rewrite will break, so it says "usually". -->
+                <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding GroupCount, Converter={StaticResource FlexVis}}">
+                    <Run Text="In each group we suggest keeping the"/>
+                    <Run Text="oldest" FontWeight="SemiBold"/>
+                    <Run Text="copy — that is usually the original. Use “Keep this one” if you know better. Nothing here deletes anything."/>
+                </TextBlock>
+            </StackPanel>
         </Border>
 
         <!-- Results: grouped list (virtualized for performance) -->
@@ -117,14 +128,37 @@
                                                             Command="{Binding DataContext.CopyPathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
-                                                            Margin="0,0,8,0"/>
+                                                            Margin="0,0,4,0"/>
+                                                    <!-- Lets the user disagree with the suggestion. Hidden on the row that is
+                                                         already the keeper, so there is never a button that does nothing. -->
+                                                    <Button Content="Keep this one" ToolTip="Suggest keeping this copy instead"
+                                                            AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Keep {0} instead'}"
+                                                            Command="{Binding DataContext.KeepThisCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
+                                                            Margin="0,0,8,0"
+                                                            Visibility="{Binding IsSelected, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                                                 </StackPanel>
+                                                <!-- Keep badge: marks the one suggested copy. Uses the Success palette
+                                                     ("this is the one to keep"), not a warning colour. -->
+                                                <Border DockPanel.Dock="Left" CornerRadius="8" Padding="6,2" Margin="0,0,8,0"
+                                                        VerticalAlignment="Center"
+                                                        Background="{DynamicResource SuccessBgSubtle}"
+                                                        BorderBrush="{DynamicResource SuccessBorder}" BorderThickness="1"
+                                                        ToolTip="Oldest copy in this group — usually the original"
+                                                        Visibility="{Binding IsSelected, Converter={StaticResource FlexVis}}">
+                                                    <TextBlock Text="{Binding KeepLabel}" FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource SuccessText}"/>
+                                                </Border>
                                                 <TextBlock VerticalAlignment="Center" FontSize="12"
                                                            TextTrimming="CharacterEllipsis"
                                                            ToolTip="{Binding Path}">
                                                     <Run Text="{Binding Name, Mode=OneWay}" FontWeight="Medium"/>
                                                     <Run Text=" — " Foreground="{DynamicResource TextDisabled}"/>
                                                     <Run Text="{Binding Path, Mode=OneWay}" Foreground="{DynamicResource TextMuted}"/>
+                                                    <Run Text=" · " Foreground="{DynamicResource TextDisabled}"/>
+                                                    <Run Text="{Binding LastModified, Mode=OneWay, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                                                         Foreground="{DynamicResource TextMuted}"/>
                                                 </TextBlock>
                                             </DockPanel>
                                         </DataTemplate>

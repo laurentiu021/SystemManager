@@ -620,6 +620,51 @@ public class WindowsUpdateViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ---------- progress reporting ----------
+
+    [Fact]
+    public void RunnerProgress_SwitchesTheBarOutOfIndeterminateMode()
+    {
+        // WPF ignores ProgressBar.Value entirely while IsIndeterminate is true, so assigning Progress
+        // without clearing the flag leaves the bar sweeping and never filling — which is what made the
+        // Value binding added in v1.58.2 inert on this tab. Every command sets the flag true on entry
+        // and clears it in its own finally, so the handler only narrows the indeterminate window to
+        // "before the first real percentage arrives".
+        using var vm = NewVm();
+        vm.IsProgressIndeterminate = true;
+
+        InvokeRunnerProgress(vm, 42);
+
+        Assert.Equal(42, vm.Progress);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public void RunnerProgress_KeepsReportingLaterPercentages()
+    {
+        // Once determinate it must stay determinate for the rest of the operation, and the value has to
+        // track each report rather than sticking at the first one.
+        using var vm = NewVm();
+        vm.IsProgressIndeterminate = true;
+
+        InvokeRunnerProgress(vm, 10);
+        InvokeRunnerProgress(vm, 75);
+        InvokeRunnerProgress(vm, 100);
+
+        Assert.Equal(100, vm.Progress);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    /// <summary>
+    /// Drives the private runner-progress handler. The event is raised by <see cref="PowerShellRunner"/>
+    /// from a live PowerShell progress stream, which a unit test cannot produce, so the handler is
+    /// invoked directly — the same reflection approach already used elsewhere in this file.
+    /// </summary>
+    private static void InvokeRunnerProgress(WindowsUpdateViewModel vm, int percent)
+        => typeof(WindowsUpdateViewModel)
+            .GetMethod("OnRunnerProgressChanged", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(vm, [percent]);
 }
 
 // ---------- UpdateEntry model ----------

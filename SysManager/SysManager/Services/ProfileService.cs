@@ -85,6 +85,7 @@ public sealed class ProfileService
             string json;
             try { json = File.ReadAllText(path); }
             catch (IOException ex) { Log.Debug("Profile: skipping {File} ({Error})", fileName, ex.Message); continue; }
+            catch (UnauthorizedAccessException ex) { Log.Debug("Profile: skipping {File} (access denied: {Error})", fileName, ex.Message); continue; }
             sections.Add(new ConfigSection(key, display, fileName, json));
         }
         return sections;

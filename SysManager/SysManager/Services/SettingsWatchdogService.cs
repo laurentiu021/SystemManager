@@ -186,6 +186,7 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
             File.WriteAllText(BaselinePath, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented));
         }
         catch (IOException ex) { Log.Debug("Settings baseline save failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Settings baseline save denied: {Error}", ex.Message); }
     }
 
     // ── Catalog ─────────────────────────────────────────────────────────────

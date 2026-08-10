@@ -24,6 +24,13 @@
             <h:SafetyLevelToBrushConverter x:Key="SafetyBrush"/>
             <h:SafetyLevelToBackgroundConverter x:Key="SafetyBg"/>
             <h:SafetyLevelToTextConverter x:Key="SafetyText"/>
+            <!-- Process provenance (System/Trusted/Unknown) is a STRING on ProcessEntry, not the
+                 Models.SafetyLevel enum the three above switch on — binding it to SafetyBrush/Bg/Text
+                 would miss every arm and fall through to red for all ~200 rows. Separate converters. -->
+            <h:ProcessSafetyToBrushConverter x:Key="ProcSafetyBrush"/>
+            <h:ProcessSafetyToBackgroundConverter x:Key="ProcSafetyBg"/>
+            <h:ProcessSafetyToTextConverter x:Key="ProcSafetyText"/>
+            <h:ProcessSafetyToTooltipConverter x:Key="ProcSafetyTip"/>
             <h:IntGreaterThanZeroConverter x:Key="GreaterThanZero"/>
             <h:EqualityConverter x:Key="IsEqual"/>
 

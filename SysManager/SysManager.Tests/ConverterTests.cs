@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using SysManager.Helpers;
@@ -314,5 +315,157 @@ public class ConverterTests
         var conv = new ProcessStatusToBrushConverter();
         Assert.Throws<NotSupportedException>(() =>
             conv.ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
+    }
+
+    // ---------- ProcessSafety* (Process Manager provenance chip) ----------
+    //
+    // These exist as SEPARATE converters from SafetyLevel* because ProcessEntry.SafetyLevel is a
+    // STRING (ProcessSafety: System/Trusted/Unknown) while SafetyLevel* switch on the Models
+    // SafetyLevel ENUM (Safe/Caution/Critical). Binding the string to the enum converters misses
+    // every arm and falls through to `_ => Critical`, i.e. every process rendered red. The first
+    // test below is what makes that mistake impossible to reintroduce silently.
+
+    [Theory]
+    [InlineData("System")]
+    [InlineData("Trusted")]
+    [InlineData("Unknown")]
+    public void SafetyLevelEnumConverters_CannotRenderProcessStrings(string provenance)
+    {
+        // Guard, not an endorsement: proves the enum converters treat all three provenance strings
+        // identically (the fall-through), so they are unusable here and the dedicated ones are required.
+        var text = new SafetyLevelToTextConverter();
+        Assert.Equal("Critical", text.Convert(provenance, typeof(string), null!, CultureInfo.InvariantCulture));
+    }
+
+    [Theory]
+    [InlineData("System", "Windows")]
+    [InlineData("system", "Windows")]          // database casing must not matter
+    [InlineData("Trusted", "Known app")]
+    [InlineData("Unknown", "Not recognised")]
+    [InlineData("", "Not recognised")]
+    [InlineData(null, "Not recognised")]
+    public void ProcSafetyText_UsesPlainLanguageLabels(string? provenance, string expected)
+    {
+        // The raw enum names are developer-facing. "Windows" / "Known app" / "Not recognised" answer
+        // the question the target user is actually asking.
+        var conv = new ProcessSafetyToTextConverter();
+        Assert.Equal(expected, conv.Convert(provenance!, typeof(string), null!, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void ProcSafetyBrush_ThreeProvenanceValues_AreVisuallyDistinct()
+    {
+        // If two of them resolved to the same brush the column would convey nothing.
+        var conv = new ProcessSafetyToBrushConverter();
+        var system = conv.Convert("System", typeof(Brush), null!, CultureInfo.InvariantCulture);
+        var trusted = conv.Convert("Trusted", typeof(Brush), null!, CultureInfo.InvariantCulture);
+        var unknown = conv.Convert("Unknown", typeof(Brush), null!, CultureInfo.InvariantCulture);
+
+        Assert.NotEqual(system, trusted);
+        Assert.NotEqual(system, unknown);
+        Assert.NotEqual(trusted, unknown);
+    }
+
+    [Fact]
+    public void ProcSafetyBrush_Unknown_IsMutedNotAWarningColour()
+    {
+        // The database holds 108 entries while a typical machine runs 200+ processes, so most rows are
+        // Unknown. Tinting them amber/red would make a normal machine look alarming and train the user
+        // to ignore the column. It uses the app's existing TextMuted grey — "no information", which is
+        // what Unknown means — and is asserted to be neither the warning nor the danger colour.
+        var (key, fallback) = ProcessSafetyPalette.TextBrushKey("Unknown");
+
+        Assert.Null(key);   // deliberately theme-independent
+        var muted = Assert.IsType<SolidColorBrush>(fallback);
+        Assert.Equal(Color.FromRgb(0x7B, 0x83, 0x96), muted.Color);   // TextMuted
+
+        // Desaturated: no channel dominates the way it does in an amber/red alert.
+        var max = Math.Max(muted.Color.R, Math.Max(muted.Color.G, muted.Color.B));
+        var min = Math.Min(muted.Color.R, Math.Min(muted.Color.G, muted.Color.B));
+        Assert.True(max - min < 0x30, $"spread {max - min:X} is too saturated for a neutral chip");
+    }
+
+    [Theory]
+    [InlineData("System")]
+    [InlineData("Trusted")]
+    public void ProcSafetyBrush_KnownProvenance_ResolvesThroughTheThemePalette(string provenance)
+    {
+        // Known values must go through a ThemeService.StatusPalette key so the chip stays legible on
+        // light presets, with a frozen dark brush as the design-time/unit-test fallback.
+        var (key, fallback) = ProcessSafetyPalette.TextBrushKey(provenance);
+
+        Assert.NotNull(key);
+        Assert.True(fallback.IsFrozen);
+    }
+
+    [Theory]
+    [InlineData("System", "will not crash")]
+    [InlineData("Trusted", "Safe to end")]
+    [InlineData("Unknown", "does not make it harmful")]
+    public void ProcSafetyTip_ExplainsWhetherEndingItIsSafe(string provenance, string expected)
+    {
+        // The chip is three words wide; the tooltip is where the consequence is actually stated. In
+        // particular "Windows" must not read as "do not touch" — that was the old, false, refusal.
+        var conv = new ProcessSafetyToTooltipConverter();
+        var tip = (string)conv.Convert(provenance, typeof(string), null!, CultureInfo.InvariantCulture);
+        Assert.Contains(expected, tip);
+    }
+
+    [Fact]
+    public void ProcSafety_AllConverters_ConvertBackThrows()
+    {
+        Assert.Throws<NotSupportedException>(() => new ProcessSafetyToBrushConverter()
+            .ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
+        Assert.Throws<NotSupportedException>(() => new ProcessSafetyToBackgroundConverter()
+            .ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
+        Assert.Throws<NotSupportedException>(() => new ProcessSafetyToTextConverter()
+            .ConvertBack("Windows", typeof(string), null!, CultureInfo.InvariantCulture));
+        Assert.Throws<NotSupportedException>(() => new ProcessSafetyToTooltipConverter()
+            .ConvertBack("tip", typeof(string), null!, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void ProcessManagerView_RendersTheSafetyColumn()
+    {
+        // The defect was that nothing referenced the value: the database was loaded, assigned to
+        // ProcessEntry.SafetyLevel and never displayed. Asserting the ViewModel property alone would
+        // pass on the unfixed code, so this checks the shipped markup binds it — and that the column
+        // uses the process converters rather than the enum ones.
+        var xaml = File.ReadAllText(ViewPath("ProcessManagerView.xaml"));
+
+        Assert.Contains("Header=\"Safety\"", xaml);
+        Assert.Contains("ProcSafetyText", xaml);
+        Assert.Contains("ProcSafetyBrush", xaml);
+        Assert.Contains("ProcSafetyBg", xaml);
+        Assert.Contains("ProcSafetyTip", xaml);
+        Assert.Contains("SortMemberPath=\"SafetyLevel\"", xaml);
+    }
+
+    [Fact]
+    public void App_RegistersTheProcessSafetyConverters()
+    {
+        // A binding to an unregistered StaticResource key is a runtime XAML failure, and the view test
+        // above only proves the key is USED.
+        var xaml = File.ReadAllText(ViewPath("App.xaml", inViews: false));
+
+        Assert.Contains("x:Key=\"ProcSafetyBrush\"", xaml);
+        Assert.Contains("x:Key=\"ProcSafetyBg\"", xaml);
+        Assert.Contains("x:Key=\"ProcSafetyText\"", xaml);
+        Assert.Contains("x:Key=\"ProcSafetyTip\"", xaml);
+    }
+
+    // Walks up from the test binaries to the app project — the .xaml is not copied to the output.
+    private static string ViewPath(string fileName, bool inViews = true)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);   // else the assertions below would silently test nothing
+        var path = inViews
+            ? Path.Combine(dir!.FullName, "SysManager", "Views", fileName)
+            : Path.Combine(dir!.FullName, "SysManager", fileName);
+        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
+        return path;
     }
 }

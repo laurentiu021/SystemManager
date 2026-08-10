@@ -200,6 +200,30 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
+                    <!-- The app carries a 108-entry process database (Data/ProcessDescriptions.json) whose
+                         provenance flag was loaded, assigned to ProcessEntry.SafetyLevel and never rendered —
+                         so "is this Windows, or something I installed?", the question this tab exists to
+                         answer, was invisible. Chip structure matches the Services tab's Safety column. -->
+                    <DataGridTemplateColumn Header="Safety" Width="110" MinWidth="100" SortMemberPath="SafetyLevel">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="8" Padding="6,3"
+                                        Background="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBg}}"
+                                        BorderBrush="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBg}}"
+                                        BorderThickness="1" HorizontalAlignment="Left"
+                                        ToolTip="{Binding SafetyLevel, Converter={StaticResource ProcSafetyTip}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                 Fill="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBrush}}"/>
+                                        <TextBlock Text="{Binding SafetyLevel, Converter={StaticResource ProcSafetyText}}"
+                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Foreground="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBrush}}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
                     <DataGridTemplateColumn Header="Actions" Width="120" MinWidth="120" CanUserSort="False" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>

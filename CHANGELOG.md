@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.59.0] - 2026-08-10
+
+### Fixed
+- **The app refused to end Notepad, and told you it would crash your PC.** Process Manager would not let you end 49 ordinary programs — Notepad, Calculator, Paint, Task Manager, Registry Editor, Command Prompt, PowerShell, Windows Terminal, Snipping Tool, Media Player, Explorer and more — and said each one "would cause a system crash (BSOD)". That was simply untrue. The check was reading the wrong thing: the built-in database records whether a program *ships with Windows*, and that was being used to mean "ending it will crash the machine". The processes Windows genuinely cannot survive losing (`winlogon`, `csrss`, `smss`, `services`, `lsass`, `wininit`, …) are still refused exactly as before. Everything else is now your decision.
+- **Windows components warn you honestly instead of blocking you.** Ending Explorer to fix a frozen taskbar, or Print Spooler when printing is stuck, are normal things to do. They now ask first and say what to actually expect — "will not crash Windows, but a feature may stop working until you sign out or restart" — rather than pretending it is impossible.
+
+### Added
+- **A Safety column in Process Manager, answering the question the tab exists for.** The app has always carried a 108-entry database that knows whether a process ships with Windows, is a well-known application, or is not recognised at all — and it never showed you. Every row now carries a label: **Windows**, **Known app** or **Not recognised**, each explaining on hover what that means for ending it. "Not recognised" is deliberately plain grey rather than a warning colour: most of what runs on any PC is not in a 108-entry list, and that alone says nothing bad about it. The column sorts, so everything unfamiliar can be grouped together and reviewed in one go.
+
 ## [1.58.8] - 2026-08-10
 
 ### Fixed

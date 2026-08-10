@@ -403,10 +403,14 @@ a confirmation before it runs:
 - Real-time filter by name, description, category, or PID
 - Sort by memory, CPU usage, name, or PID via clickable column headers
 - **Built-in description database** — 108 common Windows processes and popular
-  applications with plain-language descriptions, categories (System, Browser,
-  Development, Communication, Media, Gaming, etc.), and safety indicators
-  (System, Trusted, Unknown)
-- Kill process with confirmation dialog
+  applications with plain-language descriptions and categories (System, Browser,
+  Development, Communication, Media, Gaming, etc.)
+- **Safety column** — every process is labelled **Windows**, **Known app** or
+  **Not recognised**, with a hover explanation of what that means for ending it.
+  Sortable, so everything unrecognised can be grouped together at a glance
+- Kill process with confirmation dialog. Processes Windows genuinely cannot survive
+  losing (`winlogon`, `csrss`, `lsass`, …) are refused outright; other Windows
+  components can be ended after a warning that says what may stop working
 - Open file location in Explorer
 
 ### Resource History

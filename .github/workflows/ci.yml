@@ -17,7 +17,14 @@ jobs:
   build-and-test:
     name: Build & unit tests
     runs-on: windows-latest
-    timeout-minutes: 10
+    # 25, not 10. This job normally takes 5-8 minutes — the tests themselves are ~1 of those, the
+    # rest is checkout, SDK setup, restore and four sequential builds — so a 10-minute ceiling left
+    # only ~2 minutes of headroom. A slow runner then blew it, and a job killed by its timeout has
+    # conclusion `cancelled`, which `gh pr checks` renders as `fail`: indistinguishable from a real
+    # test failure, while the log still says "Passed! Failed: 0". That happened three times on
+    # 2026-08-06 and left a PR blocked for days over nothing. A ceiling is here to catch a HUNG job,
+    # and 25 minutes still does that. (ui-tests below already allows 30 for a ~4-minute job.)
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -95,6 +102,11 @@ jobs:
       - name: Build integration tests (compile check)
         run: dotnet build SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release --no-restore
 
+      # DIAGNOSING A RED CHECK HERE: read the "Passed! - Failed: N" line in this step's log first.
+      # If it says Failed: 0, the tests passed and the JOB was killed — either by the timeout above
+      # or by a transient GitHub failure ("Failed to resolve action download info"). A killed job's
+      # conclusion is `cancelled`, which `gh pr checks` displays as `fail`, so it looks identical to
+      # a broken test. The fix in that case is `gh run rerun <id> --failed`, not a code change.
       - name: Run unit tests
         run: >
           dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj

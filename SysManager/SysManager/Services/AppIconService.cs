@@ -22,13 +22,16 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class AppIconService
 {
-    private static readonly string CacheDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SysManager", "IconCache");
-
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SysManager", "icon-fetch.json");
+    // Instance fields, resolved from an injectable directory — NOT static readonly.
+    // Environment.GetFolderPath goes through the Win32 known-folder API and ignores the
+    // LOCALAPPDATA environment variable, so a static path cannot be redirected by any test, not even
+    // one in a child process. Held statically, these two made AppIconServiceTests write to the
+    // user's REAL profile: five tests call SetNetworkFetchEnabled, which persists, so the suite
+    // silently overwrote whatever icon-fetch preference the user had chosen and left it at whatever
+    // the last-executing test set (xUnit does not guarantee order). Same defect as
+    // SpeedTestHistoryService, whose tests deleted the user's speed-test history.
+    private readonly string _cacheDir;
+    private readonly string _settingsPath;
 
     private readonly HttpClient _http;
 
@@ -46,8 +49,19 @@ public sealed class AppIconService
     /// to redirect the download transport in tests; production uses the default
     /// handler with a 5-second timeout.
     /// </summary>
-    public AppIconService(HttpMessageHandler? handler = null)
+    /// <param name="handler">HTTP transport. Null uses the default handler.</param>
+    /// <param name="configDir">
+    /// Where the icon cache and the fetch preference live. Null uses
+    /// <c>%LocalAppData%\SysManager</c>, which is correct in production; tests MUST pass a temp
+    /// directory, or they operate on the user's real preference and icon cache.
+    /// </param>
+    public AppIconService(HttpMessageHandler? handler = null, string? configDir = null)
     {
+        var root = configDir ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        _cacheDir = Path.Combine(root, "IconCache");
+        _settingsPath = Path.Combine(root, "icon-fetch.json");
+
         _http = handler is null ? new HttpClient() : new HttpClient(handler);
         _http.Timeout = TimeSpan.FromSeconds(5);
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("SysManager/1.0");
@@ -65,12 +79,12 @@ public sealed class AppIconService
         return NetworkFetchEnabled;
     }
 
-    private static bool LoadPreference()
+    private bool LoadPreference()
     {
         try
         {
-            if (!File.Exists(SettingsPath)) return false; // default: no network
-            var pref = JsonSerializer.Deserialize<IconFetchPreference>(File.ReadAllText(SettingsPath));
+            if (!File.Exists(_settingsPath)) return false; // default: no network
+            var pref = JsonSerializer.Deserialize<IconFetchPreference>(File.ReadAllText(_settingsPath));
             return pref?.NetworkFetchEnabled ?? false;
         }
         catch (IOException ex) { Log.Debug(ex, "Icon-fetch preference read failed"); return false; }
@@ -78,12 +92,12 @@ public sealed class AppIconService
         catch (JsonException ex) { Log.Debug(ex, "Icon-fetch preference malformed"); return false; }
     }
 
-    private static void SavePreference(bool enabled)
+    private void SavePreference(bool enabled)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new IconFetchPreference(enabled)));
+            Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new IconFetchPreference(enabled)));
         }
         catch (IOException ex) { Log.Debug(ex, "Icon-fetch preference write failed"); }
         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Icon-fetch preference write denied"); }
@@ -98,7 +112,7 @@ public sealed class AppIconService
     /// </summary>
     public async Task<BitmapImage?> GetIconAsync(string appId, CancellationToken ct = default)
     {
-        var cachePath = Path.Combine(CacheDir, $"{SanitizeFileName(appId)}.png");
+        var cachePath = Path.Combine(_cacheDir, $"{SanitizeFileName(appId)}.png");
 
         // Return cached icon if it exists and is not empty. If the file is present
         // but fails to decode (truncated/corrupt download), delete it so we re-download
@@ -126,7 +140,7 @@ public sealed class AppIconService
             var bytes = await _http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
             if (bytes.Length == 0) return null;
 
-            Directory.CreateDirectory(CacheDir);
+            Directory.CreateDirectory(_cacheDir);
             await File.WriteAllBytesAsync(cachePath, bytes, ct).ConfigureAwait(false);
             return LoadFromFile(cachePath);
         }

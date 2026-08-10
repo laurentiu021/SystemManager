@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.60.1] - 2026-08-10
+
+Running the project's own test suite no longer overwrites your choice about whether app
+icons may be fetched from the web.
+
+### Fixed
+- **The test suite quietly changed one of your settings.** In the Bulk Installer you can allow app icons to be loaded from the web — off unless you turn it on, because the app is local-first. That choice lives in a small file in your profile, and the project's automated tests were writing to *that* file rather than a scratch copy: five of them flip the setting while checking the download behaves correctly. So running the tests left the setting at whatever the last one happened to set, and the value you had picked was gone. Nothing about the app itself was wrong — but if you build and test SysManager yourself, this was silently editing your own configuration, and the same tests could also write into your real icon cache. Both now use a temporary folder.
+
 ## [1.60.0] - 2026-08-10
 
 ### Added

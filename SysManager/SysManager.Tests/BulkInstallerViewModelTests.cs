@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -14,8 +15,12 @@ namespace SysManager.Tests;
 /// </summary>
 public class BulkInstallerViewModelTests
 {
+    // AppIconService gets a temp configDir. With the default it resolves the user's real
+    // %LocalAppData%\SysManager — these tests only construct it, but passing the seam keeps the rule
+    // uniform: the service is never built against a real profile in a test.
     private static BulkInstallerViewModel NewVm() =>
-        new(new BulkInstallerService(new PowerShellRunner()), new AppIconService());
+        new(new BulkInstallerService(new PowerShellRunner()),
+            new AppIconService(null, Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))));
 
     [Fact]
     public void Constructor_PopulatesAppsWithCuratedList()

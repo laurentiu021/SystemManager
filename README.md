@@ -403,7 +403,14 @@ a confirmation before it runs:
 - Drive usage bar with total/used/free
 - Preset paths (fixed drives, user profile, Program Files) or custom browse
 - Show in Explorer for each folder
-- Skips system paths automatically
+- **Says what it doesn't count** — four Windows system areas (`$Recycle.Bin`,
+  `System Volume Information`, `Windows\WinSxS`, `Windows\CSC`) are skipped because they are
+  slow or unreadable, and junctions are never followed, since following one would
+  double-count or lead outside the folder you asked about. `WinSxS` alone is often several
+  GB, so the tab states on screen that its total can be smaller than the free space Windows
+  reports, and names the exact folders on hover
+- Folders Windows wouldn't let it fully read are marked, so a partial figure never looks
+  like a complete one
 
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, and status

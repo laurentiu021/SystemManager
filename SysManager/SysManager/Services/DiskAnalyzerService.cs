@@ -23,6 +23,23 @@ public sealed class DiskAnalyzerService
         @"\windows\winsxs", @"\windows\csc"
     };
 
+    /// <summary>
+    /// The excluded subtrees, in the form a user would recognise, so the UI can say exactly what is
+    /// missing from the total instead of duplicating the list above and letting the two drift.
+    /// </summary>
+    /// <remarks>
+    /// These are excluded because they are slow or unreadable, not because they are small —
+    /// <c>Windows\WinSxS</c> alone is routinely several gigabytes. A total that omits them without
+    /// saying so reads as a bug when the user compares it against the free space Windows reports.
+    /// </remarks>
+    public static IReadOnlyList<string> ExcludedFolderNames { get; } =
+    [
+        @"$Recycle.Bin",
+        @"System Volume Information",
+        @"Windows\WinSxS",
+        @"Windows\CSC"
+    ];
+
     public Task<IReadOnlyList<DiskUsageEntry>> AnalyzeAsync(
         string rootPath,
         IProgress<AnalysisProgress>? progress = null,

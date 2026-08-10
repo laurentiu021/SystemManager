@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.60.2] - 2026-08-10
+
+Disk Analyzer now tells you that its total leaves some Windows folders out, so the number no
+longer looks wrong when you compare it against the free space Windows shows.
+
+### Fixed
+- **Disk Analyzer's total was quietly incomplete.** To stay fast, it skips four Windows areas it either cannot read or would take a long time to walk — the Recycle Bin, System Volume Information (where restore points live), and the `WinSxS` and `CSC` folders inside Windows. It also never follows shortcut-links between folders, because that would either count the same files twice or wander outside the folder you asked about. All of that is deliberate and stays. What was missing is that nothing told you: you would add up what the tab reported, compare it against the free space Windows shows, find a gap of several gigabytes — `WinSxS` alone is often that big on its own — and reasonably conclude the app was wrong. The tab now says so in one line under the summary, and hovering it names the exact folders.
+
 ## [1.60.0] - 2026-08-10
 
 Duplicate Finder now tells you which of several identical copies to keep, and why, instead

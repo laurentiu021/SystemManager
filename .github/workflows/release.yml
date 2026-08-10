@@ -216,6 +216,47 @@ jobs:
               # Header exists but the section is empty (no notes beneath it).
               throw "CHANGELOG.md entry for version $version is empty. Add release notes under the '## [$version]' header before releasing."
           }
+
+          # Third guard: the entry must open with plain-English prose, before its first "###" category.
+          #
+          # The release page and the auto-posted discussion are where someone decides whether to
+          # download this, and because the block above is copied VERBATIM, whatever the entry starts
+          # with is the first thing they read. For five of the biggest feature releases (1.53.0,
+          # 1.54.0, 1.55.0, 1.55.1, 1.56.0) that was a bare semver heading followed by engineering
+          # prose, because the friendly lead was pasted in by hand afterwards and those five were
+          # missed. A convention that depends on remembering is one that lapses.
+          #
+          # Enforcing it HERE, rather than adding a step that writes a summary, keeps CHANGELOG.md the
+          # single source of truth: the lead then reaches the release body and the discussion for free.
+          $afterHeader = ($body -split "(?m)^## \[.*$", 2)[1]
+          $beforeFirstCategory = ($afterHeader -split "(?m)^### ", 2)[0]
+          # Keep only lines that are real prose: blank lines and stray markdown rules do not count.
+          # @() keeps this an array even for a one-line lead, which PowerShell would otherwise unwrap.
+          $leadLines = @($beforeFirstCategory -split "`r?`n" |
+              Where-Object { $_.Trim() -ne "" -and $_.Trim() -notmatch "^(-{3,}|\*{3,}|_{3,})$" })
+          if ($leadLines.Count -eq 0) {
+              # Joined rather than a here-string: PowerShell wants a here-string's body and closing "@
+              # at column 0, which would terminate the YAML block scalar this script lives in.
+              $msg = @(
+                  "CHANGELOG.md entry for version $version has no plain-English lead."
+                  ""
+                  "Add one or two sentences directly under the '## [$version]' header, BEFORE the first"
+                  "'###' category, describing what changed in the words a user would use. That paragraph"
+                  "becomes the first thing readers see on the release page and in the announcement"
+                  "discussion, because this step copies the entry verbatim."
+                  ""
+                  "Example:"
+                  ""
+                  "  ## [$version] - <date>"
+                  ""
+                  "  Quick Tune-Up now shows you what it found, instead of throwing the results away."
+                  ""
+                  "  ### Fixed"
+                  "  - ..."
+              ) -join [Environment]::NewLine
+              throw $msg
+          }
+
           $body | Out-File -FilePath $notesPath -Encoding utf8
           "path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 

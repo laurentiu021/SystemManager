@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Every version entry opens with one or two sentences of plain English, before its first
+`###` category, describing what changed in the words someone using the app would use.
+That paragraph is not decoration: the release workflow copies each entry verbatim into
+the GitHub release body and the announcement discussion, so it is the first thing a
+prospective user reads. CI fails a pull request whose newest entry is missing it.
+
 ## [1.60.1] - 2026-08-10
 
 Running the project's own test suite no longer overwrites your choice about whether app
@@ -14,11 +20,18 @@ icons may be fetched from the web.
 
 ## [1.60.0] - 2026-08-10
 
+Duplicate Finder now tells you which of several identical copies to keep, and why, instead
+of listing them as equal rows and leaving the decision entirely to you.
+
 ### Added
 - **Duplicate Finder now tells you which copy to keep.** It would find five identical photos, tell you they were wasting 4 GB, and then show them as five identical rows — leaving you to work out which one is the original, which is exactly the judgement the tab exists to help with. One file per group is now badged **Keep**: the oldest, because a copy is normally made after the file it came from. The rule is written on screen instead of applied quietly, every row shows its date so you can check the reasoning yourself, and **"Keep this one"** moves the badge when you know better — a copy that kept its original timestamp, or a file rewritten by cloud sync, will fool the guess. Groups with identical dates fall back to the copy nearest the top of the folder tree, so the badge never jumps around between scans.
 - **Still nothing is deleted.** The tab remains read-only on purpose: getting this wrong costs you your own photos and documents with no way back. It suggests a decision and points you at the file; the removing is yours to do, in Explorer.
 
 ## [1.59.0] - 2026-08-10
+
+Process Manager stops misjudging what is safe to close: it no longer refuses to end
+Notepad, and every row now says whether a process is part of Windows, a known app, or
+something it does not recognise.
 
 ### Fixed
 - **The app refused to end Notepad, and told you it would crash your PC.** Process Manager would not let you end 49 ordinary programs — Notepad, Calculator, Paint, Task Manager, Registry Editor, Command Prompt, PowerShell, Windows Terminal, Snipping Tool, Media Player, Explorer and more — and said each one "would cause a system crash (BSOD)". That was simply untrue. The check was reading the wrong thing: the built-in database records whether a program *ships with Windows*, and that was being used to mean "ending it will crash the machine". The processes Windows genuinely cannot survive losing (`winlogon`, `csrss`, `smss`, `services`, `lsass`, `wininit`, …) are still refused exactly as before. Everything else is now your decision.

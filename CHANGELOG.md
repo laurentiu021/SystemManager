@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.60.3] - 2026-08-10
+
+Closes a hole in the update check before it can ever matter: when SysManager starts being
+code-signed, an update signed by someone else will be refused instead of accepted.
+
+### Fixed
+- **The update check would have trusted any signature, not just ours.** When you install an update from inside the app, the download is verified against the published checksum — that part was and remains the real protection, and it is what catches a tampered file. The app also looks at the file's digital signature. That second check only confirmed *a* signature existed; it never asked **whose**. SysManager isn't signed yet, so nothing was exposed — but the moment a signing certificate arrives, the reasonable assumption would be "we sign now, so that check protects us", and it would not have: a file signed by anyone at all, including someone who made their own certificate, would have passed exactly like a genuine build. Now a signature has to belong to the expected publisher *and* trace back to a trusted authority, or the update is refused. Unsigned builds keep installing normally, so nothing changes for you today.
+
 ## [1.60.1] - 2026-08-10
 
 Running the project's own test suite no longer overwrites your choice about whether app

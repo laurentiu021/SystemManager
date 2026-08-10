@@ -118,11 +118,19 @@ What the app can and cannot do by design:
   Releases endpoint. The app does not auto-install without an explicit
   click. Before applying, the downloaded binary's SHA256 is compared against
   the `.sha256` published with the release — that comparison is the integrity
-  gate. The binary is also inspected for an Authenticode signature, but since
-  SysManager ships unsigned that check is informational: an unsigned build is
-  accepted, and a signature that cannot be parsed is rejected. It is not a
-  publisher check and does not detect a tampered signed binary; the SHA256
-  comparison is what catches a modified download. The swap is then performed
+  gate, and it is what catches a modified download. The binary is also inspected
+  for an Authenticode signature: an unsigned build is accepted, because SysManager
+  currently ships unsigned, while a signature that cannot be parsed is rejected.
+  If a signature IS present, the signer must match the pinned publisher and its
+  certificate chain must validate to a trusted root with online revocation —
+  the same policy already applied to the third-party Ookla CLI. That pin is a
+  single constant, empty until a code-signing certificate exists, so the check
+  cannot quietly become a no-op the day signing is switched on: without it, merely
+  *carrying* a signature would pass, and a binary signed by an attacker's own
+  self-issued certificate would be accepted like a legitimate build. Note that
+  Authenticode inspection reads the signer certificate; it does not by itself
+  validate the file against the signature, which is why SHA256 remains the
+  integrity gate rather than a fallback. The swap is then performed
   from within the downloaded executable itself (no intermediate script on
   disk) using a staged atomic file move, so an interrupted update cannot
   leave a half-written, unstartable binary. You can also download manually

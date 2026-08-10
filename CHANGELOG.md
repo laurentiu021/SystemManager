@@ -4,7 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.58.7] - 2026-08-10
+## [1.58.8] - 2026-08-10
+
+### Fixed
+- **Quick Tune-Up used to throw away everything it found.** You pressed the button, it cleaned temp files, emptied the Recycle Bin and checked your shortcuts, memory, uptime and disks — and then showed you nothing but a toast. The results card it was building all along (how much was freed, how many broken shortcuts, which disk needs attention, whether the PC wants a restart) now actually appears, with a plain-language line for each finding. Where something can be acted on, there's a button that takes you straight to the right tab: broken shortcuts to Shortcut Cleaner, high memory to Process Manager, more to reclaim to Deep Cleanup. If nothing needs attention it says so, rather than leaving you guessing.
+- **You can now see the Tune-Up working, and stop it.** It runs six steps and showed no progress at all while doing it. There's now a progress bar with the current step, and a Cancel button — the ability to cancel was already built, it just had no button.
+
+### Changed
+- **Removed five internal shortcuts that led nowhere.** Five "jump to this tab" commands existed in the code with nothing connected to them. They've been removed rather than left looking like features; the one that *is* used (View details on the update notice) is untouched.
 
 ### Fixed
 - **"Recent activity" on the Dashboard now shows what the app actually changed.** It listed which tabs you had opened, while leaving out the things you would genuinely want a record of: a permanent Deep Cleanup delete, a browser clean that signed you out of sites, privacy settings written to the registry, an app uninstall, files erased with the shredder, and broken shortcuts deleted. None of those left a trace. All six are now recorded, and the card refreshes when you return to the Dashboard so a new entry shows up straight away instead of looking like it never registered.

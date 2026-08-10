@@ -81,16 +81,17 @@ public class ArchitectureTests
     public void Services_DoNotHoldUserDataPathsInStaticFields()
     {
         // Known offenders, kept ONLY so this ratchet could be added without a repo-wide refactor in one
-        // change. Of these, AppIconService, SettingsWatchdogService, ThemeService and WindowsThemeService
-        // are referenced by tests today, so they carry the same latent risk SpeedTestHistoryService
-        // realised; LogService is not test-exercised.
-        // Removing a name from this list is the goal — tracked in issue #1741. ActivityLogService came
-        // off it when the destructive operations started logging: a test asserting they do would
-        // otherwise have written into the user's own activity history. Six to go.
+        // change. Of these, SettingsWatchdogService, ThemeService and WindowsThemeService are referenced
+        // by tests today, so they carry the same latent risk SpeedTestHistoryService realised;
+        // LogService is not test-exercised.
+        //
+        // Removing a name from this list is the goal — tracked in issue #1741. Two have come off so far:
+        // ActivityLogService, when the destructive operations started logging (a test asserting they do
+        // would otherwise have written into the user's own activity history), and AppIconService, whose
+        // case was not latent at all — five tests called SetNetworkFetchEnabled, which persists, so the
+        // suite overwrote the user's real icon-fetch preference on every run (#1758). Four to go.
         string[] known =
         [
-            "AppIconService.CacheDir",
-            "AppIconService.SettingsPath",
             "LogService.<LogDir>k__BackingField",
             "SettingsWatchdogService.BaselinePath",
             "ThemeService.SettingsPath",

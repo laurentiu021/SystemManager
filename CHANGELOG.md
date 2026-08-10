@@ -17,6 +17,13 @@ longer looks wrong when you compare it against the free space Windows shows.
 
 ### Fixed
 - **Disk Analyzer's total was quietly incomplete.** To stay fast, it skips four Windows areas it either cannot read or would take a long time to walk — the Recycle Bin, System Volume Information (where restore points live), and the `WinSxS` and `CSC` folders inside Windows. It also never follows shortcut-links between folders, because that would either count the same files twice or wander outside the folder you asked about. All of that is deliberate and stays. What was missing is that nothing told you: you would add up what the tab reported, compare it against the free space Windows shows, find a gap of several gigabytes — `WinSxS` alone is often that big on its own — and reasonably conclude the app was wrong. The tab now says so in one line under the summary, and hovering it names the exact folders.
+## [1.60.1] - 2026-08-10
+
+Running the project's own test suite no longer overwrites your choice about whether app
+icons may be fetched from the web.
+
+### Fixed
+- **The test suite quietly changed one of your settings.** In the Bulk Installer you can allow app icons to be loaded from the web — off unless you turn it on, because the app is local-first. That choice lives in a small file in your profile, and the project's automated tests were writing to *that* file rather than a scratch copy: five of them flip the setting while checking the download behaves correctly. So running the tests left the setting at whatever the last one happened to set, and the value you had picked was gone. Nothing about the app itself was wrong — but if you build and test SysManager yourself, this was silently editing your own configuration, and the same tests could also write into your real icon cache. Both now use a temporary folder.
 
 ## [1.60.0] - 2026-08-10
 

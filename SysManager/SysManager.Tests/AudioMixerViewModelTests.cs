@@ -372,8 +372,13 @@ public class AudioMixerViewModelTests
         var vm = new AudioMixerViewModel(service, presets);
         await vm.InitializationComplete;
 
-        vm.NewPresetName = "Movie night";
-        vm.SavePresetCommand.Execute(null);
+        // Seed through the service rather than SavePresetCommand: that command derives entries from
+        // each row's exe path, and the shared Session(...) helper leaves ExePath empty, so it would
+        // correctly no-op ("No apps to save into a preset right now") and save nothing. What is under
+        // test here is the DELETE gate, so the preset is put on disk directly.
+        presets.Save(new VolumePreset("Movie night",
+            [new VolumePresetEntry("chrome.exe", "Chrome", 0.8f, false)]));
+        vm.Presets.ReplaceWith(presets.Load());
         Assert.Single(vm.Presets);
         vm.SelectedPreset = vm.Presets[0];
 
@@ -396,8 +401,10 @@ public class AudioMixerViewModelTests
         var vm = new AudioMixerViewModel(service, presets);
         await vm.InitializationComplete;
 
-        vm.NewPresetName = "Movie night";
-        vm.SavePresetCommand.Execute(null);
+        // Seeded directly for the same reason as the declined case above.
+        presets.Save(new VolumePreset("Movie night",
+            [new VolumePresetEntry("chrome.exe", "Chrome", 0.8f, false)]));
+        vm.Presets.ReplaceWith(presets.Load());
         vm.SelectedPreset = vm.Presets[0];
 
         using var _ = new DialogAnswer(true);

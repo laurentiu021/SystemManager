@@ -250,3 +250,145 @@ public sealed class SafetyLevelToTextConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+// ── Process provenance (Process Manager) ─────────────────────────────────────────────────────
+// Deliberately SEPARATE from the SafetyLevel* converters above. Those switch on the
+// Models.SafetyLevel enum (Safe/Caution/Critical) used by Services and Windows Features;
+// ProcessEntry.SafetyLevel is a STRING carrying ProcessSafety (System/Trusted/Unknown), so
+// binding it to those converters would miss every arm and fall through to `_ => Critical`,
+// painting all ~200 rows red. Different domain, different scale, own converters.
+
+/// <summary>
+/// Maps <see cref="SysManager.Services.ProcessSafety"/> (as a string) to the chip's text/dot brush.
+/// </summary>
+public sealed class ProcessSafetyToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => ProcessSafetyPalette.ResolveText(value as string);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// Maps <see cref="SysManager.Services.ProcessSafety"/> (as a string) to the chip's background tint.
+/// </summary>
+public sealed class ProcessSafetyToBackgroundConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => ProcessSafetyPalette.ResolveBackground(value as string);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// Maps <see cref="SysManager.Services.ProcessSafety"/> (as a string) to the label the user reads.
+/// The raw enum names are developer-facing; "Windows" / "Known app" / "Not recognised" say what
+/// the value actually means to someone deciding whether to end a process.
+/// </summary>
+public sealed class ProcessSafetyToTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => ProcessSafetyPalette.Label(value as string);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// Explains a provenance value on hover. The chip is only three words wide; the tooltip is where the
+/// user learns whether ending the process is actually safe.
+/// </summary>
+public sealed class ProcessSafetyToTooltipConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => ProcessSafetyPalette.Tooltip(value as string);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// The colour and wording decisions for process provenance, in one place so the three converters
+/// cannot drift apart, and so the mapping is unit-testable without a WPF Application.
+/// </summary>
+public static class ProcessSafetyPalette
+{
+    // TextMuted / Surface3 are the app's existing "no emphasis" pair, so an unrecognised process
+    // looks like ordinary de-emphasised text rather than a bespoke grey invented for this column.
+    private static readonly SolidColorBrush UnknownText = Frozen(Color.FromRgb(0x7B, 0x83, 0x96));
+    private static readonly SolidColorBrush UnknownBg = Frozen(Color.FromArgb(0x20, 0x7B, 0x83, 0x96));
+    private static readonly SolidColorBrush SystemText = Frozen(Color.FromRgb(0x7D, 0xD3, 0xFC));
+    private static readonly SolidColorBrush SystemBg = Frozen(Color.FromArgb(0x1A, 0x38, 0xBD, 0xF8));
+    private static readonly SolidColorBrush TrustedText = Frozen(Color.FromRgb(0x4A, 0xDE, 0x80));
+    private static readonly SolidColorBrush TrustedBg = Frozen(Color.FromArgb(0x1A, 0x22, 0xC5, 0x5E));
+
+    private static SolidColorBrush Frozen(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>
+    /// Theme resource key + hardcoded fallback for the chip's text/dot colour. A null key means the
+    /// value is intentionally theme-independent.
+    /// </summary>
+    /// <remarks>
+    /// Unknown is deliberately neutral grey, NOT a warning colour. The database holds 108 entries
+    /// while a typical machine runs 200+ processes, so most rows are Unknown; tinting them amber
+    /// would make the whole grid look alarming and teach the user to ignore the column. Grey reads
+    /// as "no information", which is what it means.
+    /// </remarks>
+    public static (string? Key, Brush Fallback) TextBrushKey(string? safety) => safety switch
+    {
+        var s when Is(s, nameof(Services.ProcessSafety.System)) => ("InfoText", SystemText),
+        var s when Is(s, nameof(Services.ProcessSafety.Trusted)) => ("SuccessText", TrustedText),
+        _ => (null, UnknownText)
+    };
+
+    /// <summary>Theme resource key + hardcoded fallback for the chip's background tint.</summary>
+    public static (string? Key, Brush Fallback) BackgroundBrushKey(string? safety) => safety switch
+    {
+        var s when Is(s, nameof(Services.ProcessSafety.System)) => ("InfoBgSubtle", SystemBg),
+        var s when Is(s, nameof(Services.ProcessSafety.Trusted)) => ("SuccessBgSubtle", TrustedBg),
+        _ => (null, UnknownBg)
+    };
+
+    /// <summary>The user-facing label for a provenance value.</summary>
+    public static string Label(string? safety) => safety switch
+    {
+        var s when Is(s, nameof(Services.ProcessSafety.System)) => "Windows",
+        var s when Is(s, nameof(Services.ProcessSafety.Trusted)) => "Known app",
+        _ => "Not recognised"
+    };
+
+    /// <summary>The chip tooltip — says what the label means and whether ending it is safe.</summary>
+    public static string Tooltip(string? safety) => safety switch
+    {
+        var s when Is(s, nameof(Services.ProcessSafety.System)) =>
+            "Ships with Windows. Ending it will not crash your PC, but a feature may stop working " +
+            "until you sign out or restart.",
+        var s when Is(s, nameof(Services.ProcessSafety.Trusted)) =>
+            "A well-known application. Safe to end, though you may lose unsaved work.",
+        _ =>
+            "Not in the built-in database — that on its own does not make it harmful, only unrecognised. " +
+            "Use Open to see where it runs from before ending it."
+    };
+
+    public static Brush ResolveText(string? safety) => Live(TextBrushKey(safety));
+
+    public static Brush ResolveBackground(string? safety) => Live(BackgroundBrushKey(safety));
+
+    // Prefer the live theme brush (recomputed per preset by ThemeService.StatusPalette) so the chip
+    // stays legible on light themes; fall back to the frozen dark values when there is no
+    // Application, i.e. design-time and unit tests.
+    private static Brush Live((string? Key, Brush Fallback) spec)
+        => spec.Key is not null && Application.Current?.TryFindResource(spec.Key) is Brush b
+            ? b
+            : spec.Fallback;
+
+    private static bool Is(string? value, string name)
+        => string.Equals(value, name, StringComparison.OrdinalIgnoreCase);
+}

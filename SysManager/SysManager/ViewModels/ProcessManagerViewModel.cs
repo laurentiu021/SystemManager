@@ -213,9 +213,17 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             return;
         }
 
-        if (!DialogService.Instance.Confirm(
-            $"Are you sure you want to kill \"{entry.Name}\" (PID {entry.Pid})?\n\nThis may cause unsaved data loss.",
-            "Kill process")) return;
+        // A Windows-shipped process that is NOT boot-critical is killable, but it deserves a
+        // stronger warning than a third-party app: ending Explorer blanks the taskbar until it
+        // restarts, and ending Print Spooler stops printing. Say what actually happens rather
+        // than refusing outright (the old behaviour) or treating it like any other app.
+        var prompt = IsWindowsComponent(entry)
+            ? $"\"{entry.Name}\" is part of Windows (PID {entry.Pid}).\n\n" +
+              "Ending it will not crash Windows, but a feature may stop working or look broken " +
+              "until you sign out or restart. Continue?"
+            : $"Are you sure you want to kill \"{entry.Name}\" (PID {entry.Pid})?\n\nThis may cause unsaved data loss.";
+
+        if (!DialogService.Instance.Confirm(prompt, "Kill process")) return;
 
         var success = ProcessManagerService.KillProcess(entry.Pid);
         if (success)
@@ -233,14 +241,28 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// True only for processes whose death actually takes Windows down, so the refusal message
+    /// ("would cause a system crash") is factually true.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately keyed on <see cref="BootCriticalProcesses"/> alone. It used to also refuse any
+    /// entry whose <see cref="ProcessEntry.SafetyLevel"/> was "System", but that value is
+    /// PROVENANCE from the description database ("known Windows component" — see
+    /// <see cref="ProcessSafety"/>), not criticality. 59 of the 108 database entries carry it,
+    /// including notepad, calc, mspaint, Taskmgr, regedit and explorer — so the app refused to end
+    /// Notepad and told the user it would blue-screen the machine. Nothing is lost by dropping it:
+    /// this set is matched by name, and covers every genuinely unkillable process.
+    /// </remarks>
     private static bool IsKernelCritical(ProcessEntry entry)
-    {
-        if (string.Equals(entry.SafetyLevel, "System", StringComparison.OrdinalIgnoreCase))
-            return true;
+        => BootCriticalProcesses.Contains(Path.GetFileNameWithoutExtension(entry.Name));
 
-        var name = Path.GetFileNameWithoutExtension(entry.Name);
-        return BootCriticalProcesses.Contains(name);
-    }
+    /// <summary>
+    /// True when the description database marks the process as a Windows component. Drives the
+    /// stronger kill warning — informational only, never a refusal.
+    /// </summary>
+    private static bool IsWindowsComponent(ProcessEntry entry)
+        => string.Equals(entry.SafetyLevel, nameof(ProcessSafety.System), StringComparison.OrdinalIgnoreCase);
 
     [RelayCommand]
     private static void OpenFileLocation(ProcessEntry? entry)

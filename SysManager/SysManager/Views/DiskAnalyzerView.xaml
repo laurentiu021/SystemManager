@@ -117,7 +117,19 @@
 
                             <!-- Name + file count -->
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                    <!-- The scan already records when a folder could not be fully read
+                                         (IsAccessDenied), but nothing showed it, so the size was quietly
+                                         too small and the user was told nothing. Informational rather than
+                                         alarming: a locked AppData subfolder is a normal, common case. -->
+                                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                               Foreground="{DynamicResource Warning}"
+                                               VerticalAlignment="Center" Margin="6,0,0,0"
+                                               AutomationProperties.Name="Partly unreadable"
+                                               ToolTip="Part of this folder could not be read, so it may be using more space than shown."
+                                               Visibility="{Binding IsAccessDenied, Converter={StaticResource FlexVis}}"/>
+                                </StackPanel>
                                 <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
                                     <Run Text="{Binding FileCount, Mode=OneWay, StringFormat='{}{0:N0} files'}"/>
                                     <Run Text=" · " Foreground="{DynamicResource TextDisabled}"/>

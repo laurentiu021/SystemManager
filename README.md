@@ -591,6 +591,10 @@ Remove preinstalled Windows Store apps you don't use:
 ### Browser Cleaner
 Reclaim space and clear browsing traces, per browser:
 - **Auto-detects** Chrome, Edge, Brave, Opera, and Firefox
+- **Every profile, not just the first** — if you keep separate Chrome/Edge/Brave profiles
+  (personal and work, or one per person), each is scanned and named in its own row
+  ("Google Chrome — Profile 1"), so you can see which one you're cleaning. Cleaning one
+  profile never touches another
 - **Per-category** with size shown: Cache, History, Cookies, Sessions
 - **Cookies/sessions are flagged and left unticked** by default — cleaning them
   signs you out, so it's always an explicit choice; cache and history are pre-selected

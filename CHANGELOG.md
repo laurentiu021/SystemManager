@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.5] - 2026-08-10
+
+### Fixed
+- **Browser Cleaner was only ever cleaning your first browser profile.** If you have more than one profile in Chrome, Edge or Brave — a personal one and a work one, or one per person in the house — only the first was scanned. The others' cache, history and cookies were never found, never counted in the total, and never cleaned. So someone clearing their browsing traces kept every trace in the other profile, with nothing on screen to hint at it. Every profile is now included, and each row says which one it belongs to ("Google Chrome — Profile 1"), so you can see exactly what you are about to clean. Cookies stay unticked by default in every profile, just as before, and cleaning one profile cannot touch another. Firefox was already handled correctly and is unchanged.
+- **Disk Analyzer now tells you when a folder was only partly readable.** Windows blocks access to parts of some folders even for you, and when that happened the folder's size was quietly reported too small with no hint anything was missing — so you could go hunting for space in the wrong place. Those folders now carry a small amber warning mark, and hovering it explains that the folder may be using more space than shown. The app already knew this; it just never said so.
+
 ## [1.58.4] - 2026-08-10
 
 ### Fixed

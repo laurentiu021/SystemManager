@@ -331,6 +331,15 @@ public sealed class UpdateService
             Serilog.Log.Warning(ex, "Could not read downloaded file for hash verification");
             return (false, null, null);
         }
+        // UnauthorizedAccessException is a SIBLING of IOException, not a subclass, so it escaped the
+        // catch above — File.OpenRead raises it for an ACL-denied cached binary. This method's whole
+        // contract is "false means verification failed", so letting it propagate turned a safe
+        // refusal into a crash on the install path. Treated like every other failure mode here.
+        catch (UnauthorizedAccessException ex)
+        {
+            Serilog.Log.Warning(ex, "Could not read downloaded file for hash verification (access denied)");
+            return (false, null, null);
+        }
     }
 
     /// <summary>

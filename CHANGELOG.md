@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.1] - 2026-08-10
+
+### Fixed
+- **A file SysManager is not allowed to read no longer breaks the job it was part of.** Six places treated "the disk had a problem" and "Windows would not let me read this" as different things and only handled the first — so a single locked-down file could stop the whole operation instead of being skipped. The clearest case: exporting your settings gave up entirely if one of the files could not be read, losing the ones that could. Now the unreadable file is skipped and the rest still export. The same applies to checking a downloaded update, saving the Settings Watchdog baseline, reading the gaming-profile store, loading an app icon, and adding a file to the shredder list.
+
 ## [1.58.0] - 2026-08-10
 
 ### Added

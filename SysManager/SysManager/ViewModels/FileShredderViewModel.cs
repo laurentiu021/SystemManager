@@ -64,6 +64,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             {
                 Log.Warning(ex, "Could not read file info: {Path}", filePath);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                // A file the user dragged in but cannot read — skip it rather than aborting the
+                // whole drop. UnauthorizedAccessException is a sibling of IOException, not a
+                // subclass, so the catch above never covered it.
+                Log.Warning(ex, "Access denied reading file info: {Path}", filePath);
+            }
         }
     }
 

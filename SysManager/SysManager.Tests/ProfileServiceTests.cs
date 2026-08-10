@@ -177,4 +177,44 @@ public class ProfileServiceTests : IDisposable
         Assert.NotNull(imported);
         Assert.Contains(imported!.Sections, s => s.Key == "theme" && s.Json.Contains("violet-night"));
     }
+
+    // ---------- Unreadable config files ----------
+
+    [Fact]
+    public void AvailableSections_SkipsAFileItCannotRead_RatherThanThrowing()
+    {
+        // UnauthorizedAccessException is a SIBLING of IOException, not a subclass, so the
+        // `catch (IOException)` around File.ReadAllText never covered an ACL-denied file — the
+        // exception escaped and took the whole export with it, losing the sections that WERE
+        // readable. A deny-read ACL is what actually produces it; a missing file is filtered out by
+        // the File.Exists guard before the read, so it cannot exercise this path.
+        WriteConfig("theme.json", "{\"preset\":\"midnight\"}");
+        WriteConfig("speedtest-history.json", "[1,2,3]");
+
+        var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User;
+        if (sid is null) return;   // no SID to deny — nothing to assert on this host
+
+        var denied = new FileInfo(Path.Combine(_dir, "theme.json"));
+        var acl = denied.GetAccessControl();
+        var rule = new System.Security.AccessControl.FileSystemAccessRule(
+            sid,
+            System.Security.AccessControl.FileSystemRights.Read,
+            System.Security.AccessControl.AccessControlType.Deny);
+        acl.AddAccessRule(rule);
+        denied.SetAccessControl(acl);
+        try
+        {
+            var sections = _svc.AvailableSections();
+
+            // The readable one still comes through; the denied one is simply absent.
+            Assert.Contains(sections, s => s.Key == "speedtest");
+            Assert.DoesNotContain(sections, s => s.Key == "theme");
+        }
+        finally
+        {
+            // Remove the deny rule, or Dispose cannot delete the temp directory.
+            acl.RemoveAccessRule(rule);
+            denied.SetAccessControl(acl);
+        }
+    }
 }

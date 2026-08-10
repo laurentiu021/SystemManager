@@ -202,6 +202,7 @@ public sealed partial class IconExtractorService
         }
         catch (ExternalException) { return _appFallback.Value; }
         catch (IOException) { return _appFallback.Value; }
+        catch (UnauthorizedAccessException) { return _appFallback.Value; }
     }
 
     /// <summary>

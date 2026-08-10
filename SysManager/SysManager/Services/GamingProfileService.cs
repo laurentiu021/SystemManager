@@ -455,6 +455,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             return store;
         }
         catch (IOException ex) { Log.Warning(ex, "Failed to read gaming profile store"); }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied reading gaming profile store"); }
         catch (JsonException ex) { Log.Warning(ex, "Failed to parse gaming profile store"); }
         return new GamingProfileStore { SchemaVersion = CurrentSchemaVersion };
     }

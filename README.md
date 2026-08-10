@@ -47,11 +47,17 @@ Everything runs on the machine itself. No cloud, no telemetry, no account.
 
 > **When SysManager uses the network.** There is no background phone-home — the app
 > never sends usage data. Network access only happens for features you explicitly
-> use: the network diagnostics (ping / traceroute / speed test), checking GitHub for
-> a new release on the About tab, and downloading an app you chose to install via
-> winget. App icons in the Bulk Installer are an **opt-in** extra — off by default, and
-> only when you tick "Load app icons from the web" does it fetch them from Google's
-> favicon service. Nothing else leaves your PC.
+> use: the network diagnostics (ping / traceroute / speed test), and downloading an app
+> you chose to install via winget. App icons in the Bulk Installer are an **opt-in**
+> extra — off by default, and only when you tick "Load app icons from the web" does it
+> fetch them from Google's favicon service. Nothing else leaves your PC.
+>
+> The one call SysManager makes on its own is the version check: at startup it asks
+> GitHub's public releases page which release is newest, so it can tell you when a fix
+> is available. Nothing about you or your PC is sent. It runs at most once a day, and
+> the About tab has a checkbox — "Check GitHub for a new version when SysManager
+> starts" — that switches it off entirely. The **Check for updates** button still works
+> on demand either way.
 >
 > The local diagnostic log keeps 14 days of rolling files in
 > `%LocalAppData%\SysManager\logs`, and your Windows user name is replaced with `[user]`

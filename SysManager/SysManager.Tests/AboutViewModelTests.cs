@@ -282,3 +282,106 @@ public class AboutViewModelTests
     // Tracked separately; until then the guarantee is enforced by code review: this method
     // must not write anywhere the user did not pick.
 }
+
+/// <summary>
+/// The startup update-check gate, as the view-model applies it.
+/// <para><see cref="UpdateCheckPreferenceServiceTests"/> covers the decision in isolation; these
+/// cover the wiring, which is where the defect was — the check was hardcoded on with no setting and
+/// no memory of the previous run, so every launch made two calls to api.github.com.</para>
+/// <para><see cref="UpdateService"/> is sealed with no interface, so the request itself cannot be
+/// counted. What IS observable is that the gated path never populates the update state and explains
+/// why, which is what these assert. Each test injects a temp directory, so the developer's own
+/// preference file is never read or written.</para>
+/// </summary>
+public sealed class AboutViewModelUpdateGateTests : IDisposable
+{
+    private readonly string _dir;
+
+    public AboutViewModelUpdateGateTests()
+    {
+        _dir = Path.Combine(Path.GetTempPath(), "SysManagerAboutGateTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_dir);
+    }
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// autoCheck stays TRUE on purpose: the preference — not that flag — has to be what stops the
+    /// call. Passing false would test nothing.
+    /// </summary>
+    private AboutViewModel NewVm(UpdateCheckPreferenceService preferences) =>
+        new(new UpdateService(),
+            new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            autoCheck: true,
+            preferences);
+
+    [Fact]
+    public async Task WithTheCheckTurnedOff_NoVersionIsFetchedAndTheReasonIsShown()
+    {
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        prefs.SetCheckOnStartup(false);
+
+        using var vm = NewVm(prefs);
+        await vm.InitializationComplete;
+
+        Assert.False(vm.CheckForUpdatesOnStartup);
+        Assert.Empty(vm.LatestVersionLabel);        // nothing came back, because nothing was asked
+        Assert.False(vm.UpdateCheckFailed);         // and it is not presented as an error
+        Assert.Contains("off", vm.UpdateStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WithARecentCheck_TheStartupCallIsSkippedButTheSettingStaysOn()
+    {
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        prefs.RecordCheck(DateTimeOffset.UtcNow);
+
+        using var vm = NewVm(prefs);
+        await vm.InitializationComplete;
+
+        Assert.True(vm.CheckForUpdatesOnStartup);   // throttled is not the same as disabled
+        Assert.False(vm.UpdateCheckFailed);
+        Assert.Contains("recently", vm.UpdateStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheCheckboxReflectsTheStoredPreference()
+    {
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        prefs.SetCheckOnStartup(false);
+
+        using var vm = NewVm(prefs);
+
+        Assert.False(vm.CheckForUpdatesOnStartup);
+    }
+
+    [Fact]
+    public void TogglingTheCheckbox_PersistsTheChoice()
+    {
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        using var vm = NewVm(prefs);
+
+        vm.CheckForUpdatesOnStartup = false;
+
+        Assert.False(new UpdateCheckPreferenceService(_dir).Load().CheckOnStartup);
+    }
+
+    [Fact]
+    public void LoadingThePreference_DoesNotRewriteTheFile()
+    {
+        // The constructor assigns the bound property, which would otherwise fire the save handler
+        // and rewrite the file on every launch — including for a user who never touched the setting.
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        var path = Path.Combine(_dir, UpdateCheckPreferenceService.FileName);
+        Assert.False(File.Exists(path));
+
+        using var vm = NewVm(prefs);
+
+        Assert.False(File.Exists(path));
+    }
+}

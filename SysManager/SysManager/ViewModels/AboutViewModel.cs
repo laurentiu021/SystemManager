@@ -21,7 +21,12 @@ public sealed partial class AboutViewModel : ViewModelBase
 {
     private readonly UpdateService _updates;
     private readonly SystemReportService _reportService;
+    private readonly UpdateCheckPreferenceService _preferences;
     private UpdateService.ReleaseInfo? _latest;
+
+    // Suppresses saving while the constructor applies the loaded value, so restoring the
+    // preference does not immediately rewrite the same file.
+    private bool _loadingPreference;
 
     [ObservableProperty] private IReadOnlyList<ReleaseNote> _releaseHistory = [];
 
@@ -65,6 +70,13 @@ public sealed partial class AboutViewModel : ViewModelBase
     // Report export state
     [ObservableProperty] private bool _isGeneratingReport;
 
+    /// <summary>
+    /// Whether SysManager checks GitHub for a newer version when it starts. Bound to the About
+    /// tab's checkbox and persisted, so the app's one outbound call is something the user can see
+    /// and switch off — the manual "Check for updates" button always works regardless.
+    /// </summary>
+    [ObservableProperty] private bool _checkForUpdatesOnStartup = true;
+
     public AboutViewModel() : this(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService())) { }
 
     public AboutViewModel(UpdateService updates, SystemReportService reportService)
@@ -75,13 +87,35 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// startup update-check (a live network call that populates the update
     /// properties) runs. Production always passes true; tests pass false to
     /// assert the constructor's default state without racing the async fetch.
+    /// <para><paramref name="preferences"/> is overridable so tests exercise the real gate against
+    /// a temp directory instead of the developer's own preference file.</para>
     /// </summary>
-    internal AboutViewModel(UpdateService updates, SystemReportService reportService, bool autoCheck)
+    internal AboutViewModel(
+        UpdateService updates,
+        SystemReportService reportService,
+        bool autoCheck,
+        UpdateCheckPreferenceService? preferences = null)
     {
         _updates = updates;
         _reportService = reportService;
+        _preferences = preferences ?? new UpdateCheckPreferenceService();
+
+        // Load before any check can run, and suppress the save that binding the value would
+        // otherwise trigger — restoring a preference must not rewrite the file it came from.
+        _loadingPreference = true;
+        CheckForUpdatesOnStartup = _preferences.Load().CheckOnStartup;
+        _loadingPreference = false;
+
         if (autoCheck)
             InitializeAsync(InitAsync);
+    }
+
+    // Persist on change rather than on close: the app can be closed to the tray or killed, and a
+    // setting the user visibly toggled should survive either.
+    partial void OnCheckForUpdatesOnStartupChanged(bool value)
+    {
+        if (_loadingPreference) return;
+        _preferences.SetCheckOnStartup(value);
     }
 
     private async Task InitAsync()
@@ -97,11 +131,31 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     private async Task CheckAtStartupAsync()
     {
+        // The gate. Two calls used to go out on EVERY launch — latest release plus the last ten —
+        // with no setting and no memory of the previous check. Skipping here rather than inside
+        // CheckForUpdatesAsync is deliberate: the manual button and Retry route through that same
+        // command, and they must always work. This is the startup path only.
+        var preference = _preferences.Load();
+        if (!UpdateCheckPreferenceService.ShouldCheckAtStartup(preference, DateTimeOffset.UtcNow))
+        {
+            Log.Debug("Startup update check skipped (enabled={Enabled}, last={Last})",
+                preference.CheckOnStartup, preference.LastCheckUtc);
+            // Still show the local version history — it is read from the app itself, not the
+            // network, so suppressing it would hide information the user already has.
+            UpdateStatus = preference.CheckOnStartup
+                ? "Checked recently. Use Check for updates to look again."
+                : "Startup update check is off. Use Check for updates to look now.";
+            return;
+        }
+
         try
         {
             await Task.Yield();     // let the UI settle
             await CheckForUpdatesAsync();
             await LoadHistoryAsync();
+            // Record only after the calls actually went out, so a failed check does not start the
+            // 24h clock and leave the user with stale information for a day.
+            _preferences.RecordCheck(DateTimeOffset.UtcNow);
         }
         catch (HttpRequestException ex) { Log.Debug("About startup check skipped (network): {Error}", ex.Message); }
         catch (TaskCanceledException ex) { Log.Debug("About startup check timed out: {Error}", ex.Message); }

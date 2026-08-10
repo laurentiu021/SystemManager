@@ -26,6 +26,8 @@
                             <RowDefinition Height="Auto"/>
                             <!-- Report / environment status line, added below the button row. -->
                             <RowDefinition Height="Auto"/>
+                            <!-- Startup update-check preference. -->
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Column="0">
                             <StackPanel Orientation="Horizontal">
@@ -77,6 +79,17 @@
                         <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding ReportStatus}"
                                    Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
                                    Visibility="{Binding ReportStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
+
+                        <!-- The app's only outbound call, now something the user can see and switch
+                             off. Same shape and wording style as Bulk Installer's "Load app icons
+                             from the web" toggle: plain language, plus a tooltip naming exactly what
+                             does and does not leave the machine. Unchecking does NOT disable the
+                             "Check for updates" button above — that stays available on demand. -->
+                        <CheckBox Grid.Row="2" Grid.ColumnSpan="2" Margin="0,10,0,0"
+                                  Content="Check GitHub for a new version when SysManager starts"
+                                  IsChecked="{Binding CheckForUpdatesOnStartup, Mode=TwoWay}"
+                                  AutomationProperties.Name="Check GitHub for a new version when SysManager starts"
+                                  ToolTip="On by default, so you hear about fixes. SysManager asks GitHub's public releases page which version is newest — nothing about you or your PC is sent. Turn it off and the check runs only when you press Check for updates."/>
                     </Grid>
                 </Border>
 

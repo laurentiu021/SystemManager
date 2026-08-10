@@ -35,8 +35,14 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [ObservableProperty] private int _cautionCount;
     [ObservableProperty] private int _criticalCount;
 
+    // "Safe to disable" / "Advanced" filter on the GAMING RECOMMENDATION, which is a different
+    // dataset from the Safe/Caution/Critical SAFETY level above it: safety says "will this break
+    // Windows", the recommendation says "is this worth turning off for games, and why". Both were
+    // computed; only the safety level was filterable, so README's "filter by recommendation level"
+    // claim was untrue.
     public string[] FilterOptions { get; } =
-        { "All", "Running", "Stopped", "Safe", "Caution", "Critical" };
+        { "All", "Running", "Stopped", "Safe", "Caution", "Critical",
+          "Safe to disable", "Keep enabled", "Advanced" };
 
     public ServicesViewModel(IPowerShellRunner ps, ServiceStartupLedgerService? ledger = null)
     {
@@ -258,6 +264,12 @@ public sealed partial class ServicesViewModel : ViewModelBase
             "Safe" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Safe),
             "Caution" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Caution),
             "Critical" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Critical),
+            // Gaming recommendation, not safety level — see FilterOptions. The stored values are the
+            // literals from ServiceManagerService.GamingGuide, which uses exactly three:
+            // safe-to-disable (12 entries), keep-enabled (9) and advanced (4).
+            "Safe to disable" => filtered.Where(s => s.Recommendation == "safe-to-disable"),
+            "Keep enabled" => filtered.Where(s => s.Recommendation == "keep-enabled"),
+            "Advanced" => filtered.Where(s => s.Recommendation == "advanced"),
             _ => filtered
         };
 

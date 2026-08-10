@@ -754,8 +754,10 @@ offers, "rate us" prompts:
 ### Services
 - Lists all Windows services with current status and startup type
 - **Gaming recommendations**: services tagged as "safe to disable", "advanced",
-  or "keep enabled" with per-service explanations
-- Filter by status (Running/Stopped), recommendation level, or free-text search
+  or "keep enabled" — hover a row's description to read why, in plain language
+  instead of Microsoft's own wording
+- Filter by status (Running/Stopped), safety level (Safe/Caution/Critical),
+  gaming recommendation, or free-text search
 - Start, stop, disable, or enable services with confirmation dialogs
 - Requires admin for all mutations
 

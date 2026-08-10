@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.6] - 2026-08-10
+
+### Fixed
+- **"How long is left?" now actually appears.** Speed Test and Deep Cleanup both worked out a time estimate on every tick of a job that can run for minutes — and then had nowhere to show it, so you watched a bar with no idea whether to wait or walk away. Both now show it, the same way App Updates, Bulk Installer, Uninstaller and Quick Cleanup already did.
+- **Ping and Traceroute now confirm what they did.** These were the only two tabs in the app with no status line at all. Pressing "Clear History" on Ping emptied the chart and the whole history and said nothing, so there was no way to tell it had worked. Starting or stopping the automatic traceroute was equally silent. Both tabs now report what happened.
+- **The plain-language explanation of every service was written and never shown.** SysManager carries 25 hand-written descriptions of what a Windows service actually does and whether it is safe to turn off — "Superfetch — preloads apps into RAM. Disabling frees RAM for games and reduces disk I/O." — while the Services tab showed only Microsoft's own dense wording. The tab's own subtitle and this README both promised those explanations. Hover any row's description to read it. You can also now filter the list by recommendation ("Safe to disable", "Keep enabled", "Advanced"), which the README claimed you could but you could not — that is a separate thing from the Safe/Caution/Critical safety mark, which answers "will this break Windows" rather than "is it worth turning off".
+
 ## [1.58.5] - 2026-08-10
 
 ### Fixed

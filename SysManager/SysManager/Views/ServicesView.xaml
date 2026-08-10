@@ -142,6 +142,17 @@
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <!-- Microsoft's own Description text is dense jargon. The app already carries
+                                 25 hand-written plain-language explanations (ServiceManagerService.GamingGuide
+                                 -> RecommendationReason) and nothing displayed them, so the friendly copy that
+                                 makes this tab usable was shipping dead. Shown on hover where one exists;
+                                 services outside the guide fall back to Microsoft's description. -->
+                            <Setter Property="ToolTip" Value="{Binding RecommendationReason}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding RecommendationReason}" Value="">
+                                    <Setter Property="ToolTip" Value="{Binding Description}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>

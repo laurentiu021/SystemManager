@@ -9,6 +9,11 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <!-- Auto-trace status. Distinct from TraceStatus inside the manual-trace card below:
+                 that reports one on-demand trace ("hop 7", "Done — 12 hops"), while this reports
+                 whether the background auto-trace is running. Both writes existed; only this one
+                 had nowhere to appear. -->
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header with own Start/Stop -->
@@ -99,6 +104,10 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+                   Margin="28,12,28,24" TextWrapping="Wrap"/>
 
     </Grid>
 </UserControl>

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.57.8] - 2026-08-06
+
+### Fixed
+- **The log file can no longer grow big enough to be unusable.** SysManager keeps a diary of what it does, and that file is what you attach when reporting a problem. It had no size limit — one day's file was allowed to reach a gigabyte, which is far past what you could upload anywhere. Each file is now capped at 10 MB and a fresh one is started when it fills, keeping at most two weeks of them, so the diary stays small enough to send and takes a predictable amount of disk.
+- **The Volume Control tab no longer floods that log.** If an app's audio could not be read, the tab wrote the same complaint twenty times a second for as long as it stayed open — filling the file with one repeated line and pushing out everything actually worth reading. It is now noted once, and again only if something genuinely changes.
+
 ## [1.57.7] - 2026-08-06
 
 ### Fixed

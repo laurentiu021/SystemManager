@@ -196,4 +196,61 @@ public sealed class LogServiceSinkScrubbingTests : IDisposable
         // Every line is individually intact — no two events rendered into each other.
         Assert.All(lines, line => Assert.Matches(@"\[INF\] Line \d+ at ", line));
     }
+
+    // ── The log file is bounded ──────────────────────────────────────────────
+    // The sink passed no fileSizeLimitBytes and no rollOnFileSizeLimit, so it took Serilog's
+    // defaults: 1 GB per file with rolling OFF. The only bound on the folder was the 14-FILE count,
+    // so one daily file could grow to a gigabyte. Debug is a real volume tier here (290 Log.Debug
+    // call sites) and the documented support path is "attach the log" — an unattachable file breaks
+    // the evidence trail exactly when it is needed.
+
+    [Fact]
+    public void TheSizeLimit_IsSmallEnoughToAttachToABugReport()
+    {
+        // 25 MB is GitHub's per-file attachment ceiling. A log the user cannot upload is the failure
+        // this bound exists to prevent, so the intent is pinned rather than just the number.
+        Assert.True(LogService.MaxLogFileBytes <= 25L * 1024 * 1024,
+            $"A {LogService.MaxLogFileBytes / 1024 / 1024} MB log file is too large to attach to an issue.");
+        Assert.True(LogService.MaxLogFileBytes >= 1024 * 1024,
+            "Too small to hold useful context for a crash report.");
+    }
+
+    [Fact]
+    public void TheWholeLogFolder_IsBounded()
+    {
+        // The point of the pair: per-file ceiling × retained count is a predictable worst case,
+        // which is what the 14-file-count-alone version never gave.
+        var worstCase = LogService.MaxLogFileBytes * LogService.RetainedFileCount;
+        Assert.True(worstCase <= 250L * 1024 * 1024,
+            $"Worst-case log folder is {worstCase / 1024 / 1024} MB — too much for a low-end laptop.");
+    }
+
+    [Fact]
+    public void TheSink_KeepsEveryFileUnderTheLimit()
+    {
+        // Asserting the constants alone would pass even if the sink never received them — the defect
+        // was a missing ARGUMENT, not a wrong number. So drive the real sink hard and check the files
+        // it actually produced.
+        //
+        // RollingInterval.Infinite so the only thing that could create a second file is the size
+        // limit: with a daily interval a date change could produce one and this would pass for the
+        // wrong reason.
+        var sinkType = typeof(LogService).GetNestedType("UserPathScrubbingSink", BindingFlags.NonPublic)!;
+        var path = Path.Combine(_dir, "roll.log");
+        var sink = (ILogEventSink)Activator.CreateInstance(
+            sinkType, [path, RollingInterval.Infinite, LogService.RetainedFileCount])!;
+
+        using (var logger = new LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger())
+        {
+            var filler = new string('x', 1024);   // ~1 KB per line
+            for (int i = 0; i < 2000; i++) logger.Information("{Index} {Filler}", i, filler);
+        }
+        (sink as IDisposable)?.Dispose();
+
+        var written = Directory.GetFiles(_dir, "roll*.log");
+        Assert.NotEmpty(written);
+        Assert.All(written, f =>
+            Assert.True(new FileInfo(f).Length <= LogService.MaxLogFileBytes + 64 * 1024,
+                $"{Path.GetFileName(f)} is {new FileInfo(f).Length} bytes, over the {LogService.MaxLogFileBytes}-byte limit."));
+    }
 }

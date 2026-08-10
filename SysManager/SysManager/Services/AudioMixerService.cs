@@ -287,11 +287,28 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
                 {
                     if (meter.GetPeakValue(out float value) == 0 && value > peak) peak = value;
                 }
-                catch (COMException ex) { Log.Debug("GetPeak failed: {Error}", ex.Message); }
+                catch (COMException ex)
+                {
+                    // Log once per session-handle generation, not per call. GetPeak is driven by the
+                    // Volume Control tab's 50 ms peak-meter timer, so one bad audio session wrote
+                    // ~20 identical Debug lines a second for as long as the tab stayed open — the
+                    // log's single biggest flood path. The message is identical every tick, so
+                    // repeating it adds nothing; ReleaseGroups resets the flag, meaning a genuinely
+                    // new failure after a device change is still reported. Mirrors the existing
+                    // one-shot probe pattern (_routingProbed / _routingSupported).
+                    if (!_peakFailureLogged)
+                    {
+                        _peakFailureLogged = true;
+                        Log.Debug("GetPeak failed: {Error}", ex.Message);
+                    }
+                }
             }
             return peak;
         }
     }
+
+    // Reset by ReleaseGroups, so it is per session-handle generation rather than per process.
+    private bool _peakFailureLogged;
 
     // ── Output-device enumeration (documented API) ─────────────────────────
 
@@ -492,6 +509,9 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             foreach (var control in controls)
                 Release(control);
         _groups.Clear();
+        // New handles mean a new chance to succeed — and a failure against them is new information,
+        // so allow it to be logged once more rather than staying silent for the whole session.
+        _peakFailureLogged = false;
     }
 
     private static void Release(object? comObject)

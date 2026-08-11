@@ -286,6 +286,10 @@ jobs:
           This build is not code-signed, so Windows will warn on first launch. That is
           expected for a small independent app: [see what the warning says and what to
           click](https://github.com/laurentiu021/SystemManager#first-launch-windows-will-warn-you).
+          Code signing is planned through the [SignPath Foundation](https://signpath.org/),
+          which provides free certificates to open-source projects, with signing performed by
+          [SignPath.io](https://signpath.io/). Until then, the SHA256 above and the build
+          attestation below are what establish that a download is the genuine build.
 
           ### Verify where this binary came from
 

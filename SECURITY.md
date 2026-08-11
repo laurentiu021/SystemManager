@@ -150,6 +150,69 @@ What the app can and cannot do by design:
   build under `Program Files` (not user-writable) is planned alongside code
   signing once a certificate is available.
 
+## Privacy
+
+**SysManager collects nothing.** There is no telemetry, no analytics, no crash
+reporting service, no account, and no cloud component. Nothing about you, your
+machine, or your usage is transmitted anywhere — there is no server side to
+transmit it to. The application is a single portable executable that reads and
+writes only on the machine it runs on.
+
+### What the app stores, and where
+
+All of it stays on your PC, inside your own user profile. None of it is
+encrypted, because none of it is secret: you can open any of these files in a
+text editor, and you can delete any of them at any time without breaking the
+app.
+
+| What | Where | Why it exists |
+|---|---|---|
+| Appearance and theme choice | `%LocalAppData%\SysManager` | So the app looks the same next launch |
+| Dark-mode schedule | `%AppData%\SysManager` | Your chosen on/off times |
+| Speed-test history | `%LocalAppData%\SysManager` | So you can compare results over time |
+| Recent-activity list | `%LocalAppData%\SysManager` | Counts and sizes of actions you performed — never file names |
+| Settings-watchdog baseline | `%LocalAppData%\SysManager` | A snapshot of the Windows settings you chose, to detect later drift |
+| Resource history | `%LocalAppData%\SysManager` | CPU / RAM / temperature samples, for the history graphs |
+| Diagnostic log | `%LocalAppData%\SysManager\logs` | 14 days of rolling files, so a problem can be diagnosed |
+| Downloaded updates | `%LocalAppData%\SysManager\updates` | The build you downloaded, plus one previous version for rollback |
+
+Your Windows user name is replaced with `[user]` in every log line — including
+inside error messages — so a log you choose to share does not carry your account
+name with it.
+
+### When the app uses the network
+
+Only for things you explicitly ask for, plus one optional check:
+
+- **Network diagnostics** — ping, traceroute and speed test contact the servers
+  you select, because that is the measurement.
+- **App updates** — installing an application you chose downloads it through
+  winget.
+- **App icons in the Bulk Installer** — **off by default.** Only if you tick
+  "Load app icons from the web" does it fetch them from Google's favicon
+  service.
+- **Version check** — at startup the app asks GitHub's public releases endpoint
+  which release is newest, so it can tell you when a fix is available. Nothing
+  about you or your PC is sent. It runs at most once a day, and the About tab
+  has a checkbox that switches it off entirely; the manual **Check for updates**
+  button still works either way.
+
+Nothing else leaves your PC. There is no background phone-home.
+
+### Third parties
+
+The application talks to no third-party service beyond those listed above. The
+project's development infrastructure — GitHub, for source code, releases and
+discussions — is covered by GitHub's own privacy policy, which applies to you
+only if you visit the repository or download a release in a browser.
+
+### Questions
+
+Privacy questions can be raised through
+[GitHub Issues](https://github.com/laurentiu021/SystemManager/issues), or
+privately through the channel described under
+[Reporting a vulnerability](#reporting-a-vulnerability).
+
 ## Verifying a release
 
 Every release on GitHub ships a versioned `SysManager-v<version>.exe`, a matching

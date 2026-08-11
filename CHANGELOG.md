@@ -18,6 +18,14 @@ code-signed, an update signed by someone else will be refused instead of accepte
 ### Fixed
 - **The update check would have trusted any signature, not just ours.** When you install an update from inside the app, the download is verified against the published checksum — that part was and remains the real protection, and it is what catches a tampered file. The app also looks at the file's digital signature. That second check only confirmed *a* signature existed; it never asked **whose**. SysManager isn't signed yet, so nothing was exposed — but the moment a signing certificate arrives, the reasonable assumption would be "we sign now, so that check protects us", and it would not have: a file signed by anyone at all, including someone who made their own certificate, would have passed exactly like a genuine build. Now a signature has to belong to the expected publisher *and* trace back to a trusted authority, or the update is refused. Unsigned builds keep installing normally, so nothing changes for you today.
 
+## [1.60.2] - 2026-08-10
+
+Disk Analyzer now tells you that its total leaves some Windows folders out, so the number no
+longer looks wrong when you compare it against the free space Windows shows.
+
+### Fixed
+- **Disk Analyzer's total was quietly incomplete.** To stay fast, it skips four Windows areas it either cannot read or would take a long time to walk — the Recycle Bin, System Volume Information (where restore points live), and the `WinSxS` and `CSC` folders inside Windows. It also never follows shortcut-links between folders, because that would either count the same files twice or wander outside the folder you asked about. All of that is deliberate and stays. What was missing is that nothing told you: you would add up what the tab reported, compare it against the free space Windows shows, find a gap of several gigabytes — `WinSxS` alone is often that big on its own — and reasonably conclude the app was wrong. The tab now says so in one line under the summary, and hovering it names the exact folders.
+
 ## [1.60.1] - 2026-08-10
 
 Running the project's own test suite no longer overwrites your choice about whether app

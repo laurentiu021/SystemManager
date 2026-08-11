@@ -51,6 +51,16 @@
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <StackPanel>
                 <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                <!-- The total is partial BY DESIGN: four Windows system subtrees are skipped because they
+                     are slow or unreadable, and junctions are never followed (following one would
+                     double-count, or walk outside the folder that was asked about). WinSxS alone is
+                     routinely several GB, so without this line the user compares the total against the
+                     free space Windows reports, sees a multi-gigabyte gap, and reasonably concludes the
+                     app is wrong. Hover names the exact folders. Same header-level expectation-setting
+                     as Bandwidth Monitor and Deep Cleanup. -->
+                <TextBlock Text="{Binding ExclusionNote}" Style="{StaticResource Caption}"
+                           TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"
+                           Margin="0,0,0,2" ToolTip="{Binding ExclusionDetail}"/>
                 <!-- Drive usage bar (visible only when drive info is available) -->
                 <Grid Visibility="{Binding HasDriveInfo, Converter={StaticResource BoolToVis}}" Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>

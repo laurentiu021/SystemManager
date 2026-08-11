@@ -54,6 +54,26 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [ObservableProperty] private double _driveUsedPercent;
     [ObservableProperty] private bool _hasDriveInfo;
 
+    /// <summary>
+    /// Says that the total is partial by design. Without this the user compares it against the free
+    /// space Windows reports, finds a multi-gigabyte gap — <c>Windows\WinSxS</c> alone is routinely
+    /// several GB — and has no way to learn the difference is intentional.
+    /// </summary>
+    /// <remarks>
+    /// Instance, not static, even though the value never varies: a <c>{Binding}</c> to a static member
+    /// resolves to nothing and renders EMPTY, which would reintroduce the very silence this fixes.
+    /// (Nothing in Views/ uses <c>x:Static</c>, so an instance property is also the uniform choice.)
+    /// </remarks>
+    public string ExclusionNote =>
+        "Windows system areas and shortcut-links (junctions) aren't counted, so this total can be " +
+        "smaller than the space Windows reports.";
+
+    /// <summary>The exact excluded folders, for the curious — derived from the service's own list.</summary>
+    public string ExclusionDetail =>
+        "Not counted: " + string.Join(", ", DiskAnalyzerService.ExcludedFolderNames) +
+        ", plus any junction or symbolic link (following one would double-count, or lead outside the " +
+        "folder you asked about).";
+
     public DiskAnalyzerViewModel(DiskAnalyzerService service)
     {
         _service = service;

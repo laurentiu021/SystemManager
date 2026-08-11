@@ -1,4 +1,4 @@
-# SysManager
+# SysManager for Windows
 
 A modern Windows system monitoring and management toolkit: live network
 diagnostics with gamer-friendly presets, Windows updates, disk and memory

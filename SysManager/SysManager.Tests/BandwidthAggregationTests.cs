@@ -114,30 +114,47 @@ public class BandwidthAggregationTests
     // continuously while the tab was open, and nothing in the ViewModel looked wrong, because the
     // signature claimed to be async.
 
-    private sealed class ThreadRecordingSource : ConnectionBandwidthSource
+    private sealed class ContextRecordingSource : ConnectionBandwidthSource
     {
-        public int WorkThreadId { get; private set; }
+        public bool Ran { get; private set; }
+        public SynchronizationContext? ContextDuringWork { get; private set; }
 
         protected override IReadOnlyList<ConnectionRow> EnumerateConnections()
         {
-            WorkThreadId = Environment.CurrentManagedThreadId;
+            Ran = true;
+            ContextDuringWork = SynchronizationContext.Current;
             return [new(100, "chrome.exe", 443, true)];
         }
     }
 
+    /// <summary>A stand-in for the UI's dispatcher context — only its identity matters here.</summary>
+    private sealed class MarkerContext : SynchronizationContext;
+
     [Fact]
-    public async Task SampleAsync_RunsTheWorkOffTheCallingThread()
+    public async Task SampleAsync_DoesNotRunTheWorkOnTheCallersContext()
     {
-        // Records the thread the work actually runs on. A Task.FromResult implementation runs it on the
-        // CALLER's thread, so this fails on the unfixed code.
-        var src = new ThreadRecordingSource();
-        src.Start();
-        var callerThreadId = Environment.CurrentManagedThreadId;
+        // Asserted through the SynchronizationContext rather than the thread id. A thread-id comparison
+        // looks like the obvious test and is quietly flaky: xUnit runs the test on a pool thread, that
+        // thread returns to the pool the moment this method awaits, and Task.Run may then legitimately
+        // pick the very same thread — which is exactly how it failed in CI, not because the offload was
+        // missing. The context is deterministic instead: Task.Run always schedules onto the pool, where
+        // Current is null, while a synchronous implementation runs inline and would observe the marker
+        // installed below — standing in for the real dispatcher context on the UI thread.
+        var previous = SynchronizationContext.Current;
+        var marker = new MarkerContext();
+        SynchronizationContext.SetSynchronizationContext(marker);
+        try
+        {
+            var src = new ContextRecordingSource();
+            src.Start();
 
-        await src.SampleAsync();
+            await src.SampleAsync();
 
-        Assert.NotEqual(0, src.WorkThreadId);   // the work ran at all
-        Assert.NotEqual(callerThreadId, src.WorkThreadId);
+            Assert.True(src.Ran);   // the work ran at all
+            Assert.NotSame(marker, src.ContextDuringWork);
+            Assert.Null(src.ContextDuringWork);
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     /// <summary>

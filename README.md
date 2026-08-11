@@ -1104,6 +1104,26 @@ first-launch prompt does not appear.
 > **and** whose hash you verified. The same dialog protects you from genuinely malicious
 > files, so it is worth reading rather than reflexively dismissing.
 
+### Code signing
+
+Releases are currently **unsigned**, which is why the warning above appears. Code signing
+for this project is planned through the [SignPath Foundation](https://signpath.org/) — a
+programme that provides free code-signing certificates to open-source projects, with the
+signing itself performed by [SignPath.io](https://signpath.io/). Certificates issued under
+that programme are held in SignPath Foundation's name rather than an individual's.
+
+Until a certificate is in place, the two checks above — the published SHA-256 and the
+GitHub build-provenance attestation — are what establish that a download is the genuine,
+unmodified build. The attestation is the stronger of the two, and it will remain useful
+after signing arrives: it records *which commit and workflow* produced a given binary,
+which a signature alone does not.
+
+The update path is already prepared for signing. When a downloaded build carries a
+signature, the app checks that it belongs to the expected publisher and that its
+certificate chain validates, and refuses the update otherwise — so the check cannot
+quietly become a formality on the day signing is switched on. See
+[SECURITY.md](SECURITY.md#security-model) for the detail.
+
 ## Build from source
 
 Prerequisites: Windows 10 or newer and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).

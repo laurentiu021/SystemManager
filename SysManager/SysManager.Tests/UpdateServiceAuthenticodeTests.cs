@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Reflection;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -85,5 +86,95 @@ public class UpdateServiceAuthenticodeTests
             Assert.True(UpdateService.VerifyAuthenticode(path));
         }
         finally { File.Delete(path); }
+    }
+
+    // ── Publisher pinning ────────────────────────────────────────────────────────────────────
+    //
+    // Before this, the signed branch logged cert.Subject and returned true — no subject comparison,
+    // no chain build. So once SysManager is signed, a binary signed by ANY certificate, including an
+    // attacker's own self-issued one, would pass identically to a legitimate build. The dangerous part
+    // is the assumption that arrives with the certificate: "we sign now, so the signature check
+    // protects us."
+    //
+    // The correct pattern was already in this codebase for a THIRD-PARTY download —
+    // SpeedTestService.VerifyOoklaSignature pins the subject then builds an X509Chain with online
+    // revocation, because (its own comment) "subject alone is forgeable". These tests pin that the
+    // update path now shares that shape.
+
+    [Fact]
+    public void ExpectedSignerSubject_ExistsAsASinglePinPoint()
+    {
+        // The point is that enabling signing becomes a ONE-LINE change here, not a security redesign
+        // under release pressure. If this constant disappears, the pin has gone with it.
+        var field = typeof(UpdateService).GetField("ExpectedSignerSubject",
+            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+
+        Assert.NotNull(field);
+        Assert.Equal(typeof(string), field!.FieldType);
+        Assert.True(field.IsLiteral, "must be a const so it cannot be reassigned at runtime");
+    }
+
+    [Fact]
+    public void ExpectedSignerSubject_IsEmptyWhileBuildsAreUnsigned()
+    {
+        // Empty means "nothing to pin against yet", which keeps the signed branch permissive for
+        // exactly as long as that is true. This is a REMINDER rather than a permanent expectation:
+        // when a certificate arrives, this is the assertion that fails, and it points at the pinning
+        // tests that will then need real signed fixtures.
+        var value = (string)typeof(UpdateService)
+            .GetField("ExpectedSignerSubject", BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetRawConstantValue()!;
+
+        Assert.Equal("", value);
+    }
+
+    [Fact]
+    public void VerifyAuthenticode_PinsThePublisherAndBuildsAChain()
+    {
+        // Asserted against the source rather than by execution, deliberately and with the limitation
+        // stated: producing a genuinely signed binary with a controllable publisher needs a test
+        // certificate and signtool, which this unit-test project does not have. What CAN be checked
+        // mechanically is that the signed branch does both things the Ookla path does — compare
+        // against the pin AND validate the chain. Either one alone is bypassable.
+        var source = File.ReadAllText(ServiceSourcePath("UpdateService.cs"));
+        var start = source.IndexOf("public static bool VerifyAuthenticode", StringComparison.Ordinal);
+        Assert.True(start >= 0, "VerifyAuthenticode not found — this test would otherwise assert nothing");
+        var end = source.IndexOf("private static void CleanupFile", start, StringComparison.Ordinal);
+        Assert.True(end > start, "method boundary not found");
+        var method = source[start..end];
+
+        Assert.Contains("ExpectedSignerSubject", method);          // the pin is consulted
+        Assert.Contains("X509Chain", method);                      // the chain is built
+        Assert.Contains("X509RevocationMode.Online", method);      // revocation is checked
+        Assert.Contains("chain.Build(cert)", method);
+        Assert.Contains("return false", method);                   // and it fails closed
+    }
+
+    [Fact]
+    public void VerifyAuthenticode_UnsignedFile_StillAllowed_AfterThePinWasAdded()
+    {
+        // Regression guard on the LIVE path: SysManager's builds are unsigned today, so the
+        // no-signature branch must stay permissive. Tightening the signed branch must not block every
+        // current install — every update aborting with "invalid digital signature" is the bug this
+        // test file was originally written for.
+        var path = WriteTempFile([0x4D, 0x5A, 0x90, 0x00]);
+        try
+        {
+            Assert.True(UpdateService.VerifyAuthenticode(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    // Walks up to the app project — source is not copied to the test output.
+    private static string ServiceSourcePath(string fileName)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Services")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);   // else the assertions above would silently test nothing
+        var path = Path.Combine(dir!.FullName, "SysManager", "Services", fileName);
+        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
+        return path;
     }
 }

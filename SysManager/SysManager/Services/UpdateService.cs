@@ -411,10 +411,23 @@ public sealed class UpdateService
     private const int CryptENoMatch = unchecked((int)0x80092009);
 
     /// <summary>
-    /// Reports the Authenticode state of a downloaded update binary. Returns true when
-    /// the binary is validly embedded-signed OR carries no signature at all (SysManager
-    /// ships unsigned open-source builds). Returns false only when reading the signature
-    /// fails for a reason other than "no signature present".
+    /// The publisher this app's own signed builds must carry, once a code-signing certificate
+    /// exists. EMPTY means "not signing yet", which keeps the signed branch permissive exactly as
+    /// long as there is nothing to pin against.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a single named constant so that turning signing on is a one-line change here,
+    /// rather than a security redesign made under release pressure. Pinned on the ORGANIZATION
+    /// substring rather than a thumbprint so certificate renewal — which changes the thumbprint but
+    /// not the subject — does not brick self-update for everyone.
+    /// </remarks>
+    internal const string ExpectedSignerSubject = "";
+
+    /// <summary>
+    /// Reports the Authenticode state of a downloaded update binary. Returns true when the binary
+    /// carries no signature at all (SysManager ships unsigned open-source builds), or is signed by
+    /// the expected publisher with a chain that validates. Returns false when a signature is present
+    /// but wrong, unreadable, or unverifiable.
     ///
     /// This is NOT the integrity gate: file integrity is enforced by the SHA256 check
     /// (<see cref="VerifyHashAsync"/>) against the published .sha256, which runs first in
@@ -422,18 +435,62 @@ public sealed class UpdateService
     /// does not by itself validate the file against the signature, so it cannot detect a
     /// tampered signed binary — the SHA256 comparison is what catches a modified download.
     /// </summary>
+    /// <remarks>
+    /// The signed branch pins the publisher and builds a chain, mirroring
+    /// <c>SpeedTestService.VerifyOoklaSignature</c> — which already does this for a THIRD-PARTY
+    /// download, and whose own comment notes that "subject alone is forgeable (anyone can issue a
+    /// self-signed 'Ookla' cert)". Without the pin, merely *having* a signature passed this gate, so
+    /// the day a certificate arrives, a binary signed by an attacker's self-issued cert would have
+    /// been accepted identically to a legitimate build — while the natural assumption would be "we
+    /// sign now, so the signature check protects us". Keeping the two paths symmetric is the point.
+    /// </remarks>
     public static bool VerifyAuthenticode(string filePath)
     {
         try
         {
 #pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete
-            var cert = System.Security.Cryptography.X509Certificates.X509Certificate
+            var signer = System.Security.Cryptography.X509Certificates.X509Certificate
                 .CreateFromSignedFile(filePath);
 #pragma warning restore SYSLIB0057
             // A non-null cert means an embedded Authenticode signature was found and its
             // signer certificate could be read. (Unsigned files throw below rather than
             // returning null, so this branch is the signed case.)
-            Serilog.Log.Information("Update binary is Authenticode-signed: {Subject}", cert.Subject);
+            using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(signer);
+
+            if (ExpectedSignerSubject.Length == 0)
+            {
+                // No certificate of our own yet, so there is nothing to compare against. Allowing a
+                // signed binary through is still safe: SHA256 against the published hash is the real
+                // gate and has already run.
+                Serilog.Log.Information(
+                    "Update binary is Authenticode-signed: {Subject} (no expected publisher pinned yet)",
+                    cert.Subject);
+                return true;
+            }
+
+            if (!cert.Subject.Contains(ExpectedSignerSubject, StringComparison.OrdinalIgnoreCase))
+            {
+                Serilog.Log.Warning(
+                    "Update binary signed by an unexpected publisher: {Subject} (expected to contain {Expected})",
+                    cert.Subject, ExpectedSignerSubject);
+                return false;
+            }
+
+            // Subject alone is forgeable — anyone can issue a self-signed certificate carrying any
+            // subject string — so validate the whole chain to a trusted root, with online
+            // revocation, and fail closed. Same policy as VerifyOoklaSignature.
+            using var chain = new System.Security.Cryptography.X509Certificates.X509Chain();
+            chain.ChainPolicy.RevocationMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.Online;
+            chain.ChainPolicy.RevocationFlag = System.Security.Cryptography.X509Certificates.X509RevocationFlag.ExcludeRoot;
+            chain.ChainPolicy.VerificationFlags = System.Security.Cryptography.X509Certificates.X509VerificationFlags.NoFlag;
+            if (!chain.Build(cert))
+            {
+                var statuses = string.Join(", ", chain.ChainStatus.Select(s => s.Status.ToString()));
+                Serilog.Log.Warning("Update binary certificate chain did not validate: {Status}", statuses);
+                return false;
+            }
+
+            Serilog.Log.Information("Update binary Authenticode chain verified: {Subject}", cert.Subject);
             return true;
         }
         catch (System.Security.Cryptography.CryptographicException ex) when (ex.HResult == CryptENoMatch)

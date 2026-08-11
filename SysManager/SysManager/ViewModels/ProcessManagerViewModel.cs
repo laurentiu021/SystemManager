@@ -200,6 +200,35 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         "svchost", "ctfmon", "userinit"
     };
 
+    /// <summary>
+    /// Windows components that are killable, but whose death costs more than "a feature may look
+    /// broken until you sign out" — so the ordinary Windows-component warning would be untrue for them.
+    /// </summary>
+    /// <remarks>
+    /// Dropping the provenance arm from <see cref="IsKernelCritical"/> made 49 database entries
+    /// killable, which was the point — the app had been refusing to end Notepad. But the single warning
+    /// that replaced the refusal promises "will not crash Windows … a feature may stop working", and
+    /// that sentence is wrong for two groups inside those 49:
+    /// <list type="bullet">
+    /// <item>Security: ending <c>MsMpEng</c> or <c>SecurityHealthService</c> is an antivirus-disable
+    /// step, not a cosmetic one. (It fails on a protected-process OS — but the prompt should not be
+    /// reassuring about an attempt to switch off the machine's defences.)</item>
+    /// <item>Servicing: <c>ProcessManagerService.KillProcess</c> uses
+    /// <c>Kill(entireProcessTree: true)</c>, so ending <c>TrustedInstaller</c> or <c>msiexec</c>
+    /// mid-operation can leave a half-applied update or a corrupt component store — damage that
+    /// survives the restart the ordinary message offers as the remedy.</item>
+    /// </list>
+    /// Still a confirmation and not a refusal: it is the user's machine, and unlike the boot-critical
+    /// set these really can be ended. What changes is that the prompt names the actual risk (#1773).
+    /// </remarks>
+    private static readonly HashSet<string> HighConsequenceProcesses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Security — Defender's engine, its network inspection service, and the Security Centre.
+        "MsMpEng", "NisSrv", "SecurityHealthService", "SecurityHealthSystray",
+        // Servicing / installers — killing these mid-write is what corrupts state.
+        "TrustedInstaller", "msiexec", "WmiPrvSE", "WUDFHost",
+    };
+
     [RelayCommand]
     private void KillProcess(ProcessEntry? entry)
     {
@@ -213,15 +242,28 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             return;
         }
 
-        // A Windows-shipped process that is NOT boot-critical is killable, but it deserves a
-        // stronger warning than a third-party app: ending Explorer blanks the taskbar until it
-        // restarts, and ending Print Spooler stops printing. Say what actually happens rather
-        // than refusing outright (the old behaviour) or treating it like any other app.
-        var prompt = IsWindowsComponent(entry)
-            ? $"\"{entry.Name}\" is part of Windows (PID {entry.Pid}).\n\n" +
-              "Ending it will not crash Windows, but a feature may stop working or look broken " +
-              "until you sign out or restart. Continue?"
-            : $"Are you sure you want to kill \"{entry.Name}\" (PID {entry.Pid})?\n\nThis may cause unsaved data loss.";
+        // Three tiers, because one warning could not be true for all of them. Ending Explorer blanks
+        // the taskbar until it restarts — recoverable, and the ordinary Windows-component message says
+        // so honestly. Ending Defender's engine or Windows' installer mid-write is a different
+        // magnitude, and telling that user "a feature may look broken until you sign out" would be a
+        // false reassurance from the app itself. Every tier still asks rather than refusing; only the
+        // boot-critical set above is refused outright.
+        var prompt = entry switch
+        {
+            _ when IsHighConsequence(entry) =>
+                $"\"{entry.Name}\" is a Windows security or servicing process (PID {entry.Pid}).\n\n" +
+                "This is riskier than ending a normal program. Depending on what it is doing right " +
+                "now, closing it can switch off protection or interrupt a Windows update part-way " +
+                "through, and that damage is not undone by restarting.\n\n" +
+                "Only continue if you know why you need to. Continue?",
+
+            _ when IsWindowsComponent(entry) =>
+                $"\"{entry.Name}\" is part of Windows (PID {entry.Pid}).\n\n" +
+                "Ending it will not crash Windows, but a feature may stop working or look broken " +
+                "until you sign out or restart. Continue?",
+
+            _ => $"Are you sure you want to kill \"{entry.Name}\" (PID {entry.Pid})?\n\nThis may cause unsaved data loss.",
+        };
 
         if (!DialogService.Instance.Confirm(prompt, "Kill process")) return;
 
@@ -263,6 +305,19 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     /// </summary>
     private static bool IsWindowsComponent(ProcessEntry entry)
         => string.Equals(entry.SafetyLevel, nameof(ProcessSafety.System), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True for the security and servicing processes in <see cref="HighConsequenceProcesses"/>, whose
+    /// consequence the ordinary Windows-component warning would understate. Drives the strongest
+    /// prompt — still a confirmation, never a refusal.
+    /// </summary>
+    /// <remarks>
+    /// Matched by NAME rather than by the database's category field, for the same reason
+    /// <see cref="IsKernelCritical"/> is: the categories are provenance, and a process absent from the
+    /// database (or renamed in it) must not silently fall out of this tier.
+    /// </remarks>
+    private static bool IsHighConsequence(ProcessEntry entry)
+        => HighConsequenceProcesses.Contains(Path.GetFileNameWithoutExtension(entry.Name));
 
     [RelayCommand]
     private static void OpenFileLocation(ProcessEntry? entry)

@@ -261,6 +261,71 @@ public class ProcessManagerViewModelTests
         }
     }
 
+    // ── Third tier: security / servicing processes ──────────────────────
+    //
+    // Dropping the provenance arm from IsKernelCritical made 49 database entries killable, which was
+    // the point. But the single warning that replaced the refusal promises "will not crash Windows …
+    // a feature may stop working", and that is untrue for two groups inside those 49: Defender's
+    // engine (ending it is an AV-disable step) and Windows' servicing/installer processes (KillProcess
+    // uses entireProcessTree, so a mid-write kill can leave a corrupt component store — damage the
+    // "restart and it comes back" remedy does not repair). These pin the honest third message.
+
+    [Theory]
+    [InlineData("MsMpEng.exe")]
+    [InlineData("NisSrv.exe")]
+    [InlineData("SecurityHealthService.exe")]
+    [InlineData("TrustedInstaller.exe")]
+    [InlineData("msiexec.exe")]
+    [InlineData("WmiPrvSE.exe")]
+    public void KillProcess_SecurityOrServicing_WarnsAboutTheRealDamage(string name)
+    {
+        var vm = new ProcessManagerViewModel(new ProcessManagerService());
+        using var dialog = new DialogAnswer(confirm: false);
+
+        vm.KillProcessCommand.Execute(Named(name, nameof(ProcessSafety.System)));
+
+        // The reassurance from the ordinary Windows-component tier must NOT appear here.
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m =>
+                m.Contains("security or servicing")
+                && m.Contains("not undone by restarting")
+                && !m.Contains("will not crash")),
+            Arg.Any<string>());
+    }
+
+    [Fact]
+    public void KillProcess_SecurityOrServicing_IsStillAskedNotRefused()
+    {
+        // The tier is a warning, not a second refusal list. These processes really can be ended, and
+        // it is the user's machine — what changed is that the prompt tells the truth about the cost.
+        var refused = WasRefused(Named("MsMpEng.exe", nameof(ProcessSafety.System)), out var status);
+
+        Assert.False(refused);
+        Assert.DoesNotContain("cannot be ended", status);
+    }
+
+    [Fact]
+    public void HighConsequenceAndBootCritical_DoNotOverlap()
+    {
+        // The tiers are checked in order, so a name in both sets would be refused and its warning
+        // never seen — making the entry look present while being dead. Asserted rather than assumed,
+        // because both sets are hand-maintained string lists.
+        var boot = PrivateNames("BootCriticalProcesses");
+        var high = PrivateNames("HighConsequenceProcesses");
+
+        Assert.NotEmpty(boot);
+        Assert.NotEmpty(high);
+        Assert.Empty(boot.Intersect(high, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static HashSet<string> PrivateNames(string fieldName)
+    {
+        var field = typeof(ProcessManagerViewModel).GetField(fieldName,
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        return (HashSet<string>)field.GetValue(null)!;
+    }
+
     [Theory]
     [InlineData(nameof(ProcessSafety.Trusted))]
     [InlineData(nameof(ProcessSafety.Unknown))]

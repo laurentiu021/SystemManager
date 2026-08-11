@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.7] - 2026-08-11
+
+The Settings Watchdog now shows what it is watching, instead of only telling you once something
+has already changed.
+
+### Fixed
+- **Settings Watchdog never showed what it watches.** The tab monitors eight Windows settings that feature updates tend to reset — telemetry, the advertising ID, activity history, web search in Start, Widgets, Start-menu suggestions and two more — and it loaded that list every time you opened it, but nothing on screen ever displayed it. Until something actually drifted, all you saw was the intro sentence naming four of them as examples, then an empty panel. Being asked to trust a monitor without being told what it monitors is a fair thing to hesitate over, so the list is now on the page: every watched setting with its category, its value right now in the same plain English the change list uses ("Off", "Full", "Not set"), and the reason it is watched. Hovering a row also shows the exact registry location, so anyone who wants to check the claim can. The values refresh with the rest of the tab rather than being read once at startup, and a setting that has drifted is tinted here too — so this list and the changed-settings list above it can never appear to disagree about the same setting.
+
+---
+
 ## [1.61.6] - 2026-08-11
 
 Five buttons that were missing: the "row highlight" for System Logs and Services announced back in

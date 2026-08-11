@@ -172,4 +172,84 @@ public class DiskAnalyzerViewModelTests
         Assert.Contains(nameof(vm.EmptyTitle), raised);
         Assert.Contains(nameof(vm.EmptyMessage), raised);
     }
+
+    // ── Exclusion disclosure (the total is partial by design) ────────────────────────────────
+    //
+    // Four Windows subtrees are skipped because they are slow or unreadable, and junctions are never
+    // followed. Windows\WinSxS alone is routinely several GB, so a user comparing this total against
+    // the free space Windows reports sees a multi-gigabyte gap. Nothing in the tab said so.
+
+    [Fact]
+    public void ExclusionNote_SaysTheTotalCanBeSmallerThanWindowsReports()
+    {
+        // The one sentence that stops the number reading as a bug.
+        var note = NewVm().ExclusionNote;
+
+        Assert.False(string.IsNullOrWhiteSpace(note));
+        Assert.Contains("aren't counted", note);
+        Assert.Contains("smaller than the space Windows reports", note);
+    }
+
+    [Fact]
+    public void ExclusionDetail_NamesEveryFolderTheServiceActuallySkips()
+    {
+        // Derived from DiskAnalyzerService.ExcludedFolderNames rather than retyped, so the tooltip
+        // cannot drift from the real SkipSegments list. Adding a fifth exclusion without updating the
+        // disclosure fails here.
+        var detail = NewVm().ExclusionDetail;
+
+        Assert.NotEmpty(Services.DiskAnalyzerService.ExcludedFolderNames);
+        foreach (var name in Services.DiskAnalyzerService.ExcludedFolderNames)
+            Assert.Contains(name, detail);
+    }
+
+    [Fact]
+    public void ExclusionDetail_ExplainsWhyJunctionsAreSkipped()
+    {
+        // The reparse-point guard is a correctness property, not an oversight — say why, so it does
+        // not read as a missing feature.
+        var detail = NewVm().ExclusionDetail;
+
+        Assert.Contains("junction", detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("double-count", detail);
+    }
+
+    [Fact]
+    public void ExclusionText_IsInstanceNotStatic_SoItActuallyBinds()
+    {
+        // A {Binding} to a static member resolves to nothing and renders EMPTY — reintroducing exactly
+        // the silence this change fixes, while still compiling and still passing any test that read the
+        // property straight off the type. Nothing in Views/ uses x:Static, so instance is also uniform.
+        foreach (var name in new[] { nameof(DiskAnalyzerViewModel.ExclusionNote),
+                                     nameof(DiskAnalyzerViewModel.ExclusionDetail) })
+        {
+            var prop = typeof(DiskAnalyzerViewModel).GetProperty(name);
+            Assert.NotNull(prop);
+            Assert.False(prop!.GetGetMethod()!.IsStatic, $"{name} must be an instance property to bind.");
+        }
+    }
+
+    [Fact]
+    public void DiskAnalyzerView_ShowsTheExclusionNote()
+    {
+        // The defect was that nothing in the tab disclosed it — a grep for excluded/skip/system area in
+        // the view returned 0. Asserting the ViewModel alone would pass on the unfixed code.
+        var xaml = File.ReadAllText(ViewPath("DiskAnalyzerView.xaml"));
+
+        Assert.Contains("ExclusionNote", xaml);
+        Assert.Contains("ExclusionDetail", xaml);   // the hover naming the exact folders
+    }
+
+    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
+    private static string ViewPath(string fileName)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);   // else the assertions above would silently test nothing
+        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
+        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
+        return path;
+    }
 }

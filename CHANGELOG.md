@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.2] - 2026-08-11
+
+Ending a Windows security or update process now warns you about what actually happens,
+instead of saying a feature might look broken until you sign out.
+
+### Fixed
+- **The "End task" warning was too reassuring for some Windows processes.** Version 1.59.0 fixed the opposite problem — the app used to refuse to end Notepad and claimed doing so would blue-screen your PC — but the message that replaced the refusal said the same thing for every Windows process: that it "will not crash Windows" and at worst "a feature may stop working until you sign out or restart". That is true for something like Explorer, which comes back on its own. It is not true for Windows Defender's engine, where closing it is a step towards switching off your protection, and it is not true for Windows Installer and the servicing processes, where interrupting one part-way through can leave an update half-applied — and restarting does not put that right. Those now get their own prompt that says so plainly. The processes Windows genuinely cannot survive losing are still refused outright, ordinary Windows components keep the existing warning, and normal programs keep the plain one, so nothing you could end before has become harder to end.
+
 ## [1.61.1] - 2026-08-11
 
 Two more of the project's own tests can no longer touch your real settings: the Settings
@@ -17,6 +25,7 @@ Watchdog baseline and the dark-mode schedule.
 
 ### Fixed
 - **Two more places where running the tests could overwrite your own files.** This only affects people who build and test SysManager themselves, not normal use — but it is the same problem that was fixed for app icons in 1.60.1, and it is worth closing properly. The Settings Watchdog keeps a snapshot of your chosen Windows settings, and the Dark Mode scheduler keeps your on/off times; both were stored at a location the tests had no way to redirect, so a test that saved a baseline or a schedule wrote over yours. Both now accept a scratch folder, and every test uses one. The dark-mode schedule stays exactly where it has always been for real users, so nothing of yours moves.
+
 ## [1.61.0] - 2026-08-11
 
 If an update ever leaves SysManager not working, you can now go back to the version you had

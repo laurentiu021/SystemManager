@@ -74,7 +74,13 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `StartupViewModel` — startup program management (enable/disable via registry).
 - `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
 - `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down.
-- `ProcessManagerViewModel` — running processes with kill, filter, sort.
+- `ProcessManagerViewModel` — running processes with kill, filter, sort. The kill path has three
+  tiers, because one message cannot be true for all of them: `BootCriticalProcesses` (13 names) is
+  refused outright, `HighConsequenceProcesses` (Defender's engine, Windows Installer and the servicing
+  processes) is confirmed with a prompt naming the real damage, and any other Windows component gets
+  the "a feature may look broken until you sign out" warning. Both sets are matched by process NAME,
+  not by the description database's `safety` field — that field is provenance, and treating it as
+  criticality is what made the app refuse to end Notepad while claiming a BSOD.
 - `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI.
 - `UninstallerViewModel` — winget-based app uninstaller with batch support.
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.

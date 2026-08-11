@@ -422,9 +422,13 @@ a confirmation before it runs:
 - **Safety column** — every process is labelled **Windows**, **Known app** or
   **Not recognised**, with a hover explanation of what that means for ending it.
   Sortable, so everything unrecognised can be grouped together at a glance
-- Kill process with confirmation dialog. Processes Windows genuinely cannot survive
-  losing (`winlogon`, `csrss`, `lsass`, …) are refused outright; other Windows
-  components can be ended after a warning that says what may stop working
+- Kill process with confirmation dialog, and the warning matches the real cost.
+  Processes Windows genuinely cannot survive losing (`winlogon`, `csrss`, `lsass`, …)
+  are refused outright. Security and servicing processes (Defender's engine, Windows
+  Installer) can be ended, but only after a prompt that says plainly it can switch off
+  protection or interrupt an update part-way, and that a restart does not undo that.
+  Other Windows components get a warning that a feature may look broken until you
+  sign out. Everything else gets the ordinary "unsaved work may be lost" confirm
 - Open file location in Explorer
 
 ### Resource History

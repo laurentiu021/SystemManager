@@ -825,11 +825,17 @@ offers, "rate us" prompts:
   browser.
 - SHA256 hash verification before install — the downloaded build is checked
   against the published `.sha256`, so a corrupted or tampered download is
-  blocked. (The build is also inspected for an Authenticode signature; since
-  SysManager currently ships unsigned, the SHA256 match is what guarantees
-  integrity.)
+  blocked. The build is also inspected for an Authenticode signature: if one is
+  present it must belong to the expected publisher and its certificate chain must
+  validate, so a build signed by someone else is refused. SysManager currently
+  ships unsigned, so today the SHA256 match is what guarantees integrity.
 - One-click "Install" replaces the running executable in-place and
   restarts automatically (no manual file copying needed).
+- **"Go back to the previous version"** — the build being replaced is kept, so an
+  update that installs cleanly but turns out to be broken is not a dead end. The
+  button appears in the About tab only when a retained copy exists, asks for
+  confirmation, and notes that whatever the newer version fixed will come back too.
+  One generation is kept, so it never accumulates copies of the app.
 - Full release-note history pulled live from GitHub.
 
 ### Profile Export / Import

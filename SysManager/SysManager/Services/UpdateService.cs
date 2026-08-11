@@ -543,6 +543,14 @@ public sealed class UpdateService
                     continue;
                 }
 
+                // Never prune the retained previous build. It matches the SysManager-*.exe pattern,
+                // so without this the very next update download would delete the one copy that makes
+                // rollback possible — silently, since pruning is best-effort and logs at Debug.
+                if (name.Equals(UpdateApplier.PreviousBuildFileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 try
                 {
                     File.Delete(path);

@@ -17,6 +17,13 @@ Watchdog baseline and the dark-mode schedule.
 
 ### Fixed
 - **Two more places where running the tests could overwrite your own files.** This only affects people who build and test SysManager themselves, not normal use — but it is the same problem that was fixed for app icons in 1.60.1, and it is worth closing properly. The Settings Watchdog keeps a snapshot of your chosen Windows settings, and the Dark Mode scheduler keeps your on/off times; both were stored at a location the tests had no way to redirect, so a test that saved a baseline or a schedule wrote over yours. Both now accept a scratch folder, and every test uses one. The dark-mode schedule stays exactly where it has always been for real users, so nothing of yours moves.
+## [1.61.0] - 2026-08-11
+
+If an update ever leaves SysManager not working, you can now go back to the version you had
+before with one click.
+
+### Added
+- **A way back from a bad update.** Until now, installing an update replaced the old SysManager permanently. If a new version turned out to have a problem — and this app has shipped two releases that wouldn't start — your only option was to work out on your own that you needed to find an older release on GitHub and download it by hand. The app now keeps the version you were running before the last update, and the About tab shows a **"Go back to the previous version"** button when there's something to go back to. It asks first, explains that anything the newer version fixed will come back too, and leaves your settings alone. Only one older version is kept, so this doesn't quietly fill your disk with copies of the app — and if there's no room to keep one, the update still installs as normal rather than failing.
 
 ## [1.60.3] - 2026-08-10
 

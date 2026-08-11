@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.5] - 2026-08-11
+
+Two places where SysManager told you something that was not true: the tray warning that a
+perfectly healthy drive might be failing, and Cleanup reporting that it emptied a Recycle Bin
+Windows had refused to empty.
+
+### Fixed
+- **The tray could warn that a healthy drive was failing.** SysManager reads disk health from two different places in Windows depending on what the machine offers, and the second one describes a good drive as "OK" rather than "Healthy". The background check only accepted the exact word "Healthy", so on those machines it treated every drive as a problem and showed "Disk Health Warning — reports status: OK. Consider backing up important data." every four hours: a warning that contradicts itself in its own sentence, over nothing. It now recognises what each source actually says, warns for the values that genuinely mean trouble, and stays quiet when it cannot read the status at all — inventing urgency from a value it could not read would be worse than saying nothing. Drives that really are failing still warn, including the abbreviated wording ("Pred Fail", "NonRecover") that Windows uses in the second source.
+- **Emptying the Recycle Bin reported success even when Windows refused.** Windows reports a refused empty by returning a failure code rather than by raising an error, and Cleanup ignored that code — so if the Recycle Bin was open in Explorer or a file inside it was still in use, the status read "Done" and a "Operation finished successfully" notification appeared while the bin was still full. It now says plainly that Windows would not empty it, suggests why, and records it in the log. Deep Cleanup and the One-Click Tune-Up already handled this correctly; Cleanup was the one place that did not.
+
+---
+
 ## [1.61.4] - 2026-08-11
 
 The Tune-Up card no longer shows a drive as plainly "Healthy" while the headline above it warns

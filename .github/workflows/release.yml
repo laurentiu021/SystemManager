@@ -375,6 +375,8 @@ jobs:
           after=$(gh api "repos/microsoft/winget-pkgs/compare/master...laurentiu021:winget-pkgs:master" \
             --jq '.behind_by' 2>/dev/null || echo "unknown")
           echo "Fork is now behind by: $after commit(s)"
+          # A small non-zero value here is NORMAL, not a failure: upstream moved while we synced.
+          # The retry below is what makes that survivable — see its comment.
 
       # continue-on-error: publishing to winget depends on a third-party repository and on a PAT that
       # can expire. When this broke on 1.57.2 ("does not have the correct permissions to execute
@@ -382,8 +384,20 @@ jobs:
       # binary, checksum, SBOM and attestation, but no announcement was ever posted. Telling users
       # about a release that IS published must not depend on a second distribution channel. The
       # failure is still surfaced: the step stays red and the step below writes a loud summary.
-      - name: Update winget package
-        id: winget
+      #
+      # RETRIED, because syncing once is not enough. v1.61.3 published on GitHub and never reached
+      # winget; the log showed the sync working (38 commits behind -> 1) and the publish failing
+      # moments later with "Ref cannot be created". microsoft/winget-pkgs merges continuously, so the
+      # fork was stale again within seconds of being synced. Nothing was wrong with the token (no
+      # 403/422 in that run) or with the sync logic — it is a race against a very busy upstream.
+      #
+      # Each attempt re-syncs IMMEDIATELY before it, so the window between "fork is current" and
+      # "create the branch" is as small as this workflow can make it. Three attempts, because the
+      # failure is probabilistic: one retry already makes a repeat unlikely, and a third costs
+      # seconds. A version that still cannot land after three is a real problem worth reporting
+      # rather than retrying forever.
+      - name: Update winget package (attempt 1)
+        id: winget1
         continue-on-error: true
         uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         with:
@@ -392,23 +406,92 @@ jobs:
           release-tag: ${{ steps.version.outputs.tag }}
           token: ${{ secrets.WINGET_TOKEN }}
 
+      - name: Re-sync the fork before retrying
+        if: steps.winget1.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -o pipefail
+          echo "Attempt 1 failed. Re-syncing the fork immediately before retrying."
+          gh api -X POST repos/laurentiu021/winget-pkgs/merge-upstream -f branch=master \
+            --jq '"\(.merge_type): \(.message)"' || echo "merge-upstream reported no change"
+
+      - name: Update winget package (attempt 2)
+        id: winget2
+        if: steps.winget1.outcome == 'failure'
+        continue-on-error: true
+        uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        with:
+          identifier: laurentiu021.SysManager
+          installers-regex: '\.exe$'
+          release-tag: ${{ steps.version.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Re-sync the fork before the final attempt
+        if: steps.winget1.outcome == 'failure' && steps.winget2.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -o pipefail
+          echo "Attempt 2 failed. Re-syncing once more before the final attempt."
+          gh api -X POST repos/laurentiu021/winget-pkgs/merge-upstream -f branch=master \
+            --jq '"\(.merge_type): \(.message)"' || echo "merge-upstream reported no change"
+
+      - name: Update winget package (attempt 3)
+        id: winget3
+        if: steps.winget1.outcome == 'failure' && steps.winget2.outcome == 'failure'
+        continue-on-error: true
+        uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        with:
+          identifier: laurentiu021.SysManager
+          installers-regex: '\.exe$'
+          release-tag: ${{ steps.version.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
+      # Collapse the three attempts into one outcome, so the reporting step below has a single
+      # condition to test and the summary can say WHICH attempt worked. Written as a step rather
+      # than a compound `if:` because the three-way expression would otherwise be repeated in the
+      # report and could drift out of agreement with reality.
+      - name: Determine the winget outcome
+        id: wingetresult
+        shell: bash
+        run: |
+          if [ "${{ steps.winget1.outcome }}" = "success" ]; then
+            echo "outcome=success" >> "$GITHUB_OUTPUT"; echo "attempt=1" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.winget2.outcome }}" = "success" ]; then
+            echo "outcome=success" >> "$GITHUB_OUTPUT"; echo "attempt=2" >> "$GITHUB_OUTPUT"
+            echo "::notice title=winget published on retry::Attempt 1 failed (upstream moved); attempt 2 succeeded."
+          elif [ "${{ steps.winget3.outcome }}" = "success" ]; then
+            echo "outcome=success" >> "$GITHUB_OUTPUT"; echo "attempt=3" >> "$GITHUB_OUTPUT"
+            echo "::notice title=winget published on retry::Attempts 1 and 2 failed (upstream moved); attempt 3 succeeded."
+          else
+            echo "outcome=failure" >> "$GITHUB_OUTPUT"; echo "attempt=3" >> "$GITHUB_OUTPUT"
+          fi
+
       # Make a skipped winget publish impossible to miss. With continue-on-error the job goes green
       # (correctly — the release did publish), so without this the only trace would be one red step
       # inside a passing run, which is exactly the kind of thing that goes unnoticed for weeks.
       - name: Report a failed winget publish
-        if: steps.winget.outcome == 'failure'
+        if: steps.wingetresult.outputs.outcome == 'failure'
         shell: bash
         run: |
-          echo "::warning title=winget publish failed::${{ steps.version.outputs.tag }} is published on GitHub but did NOT reach winget. Users upgrading via 'winget upgrade' will not see it until this is resolved."
+          echo "::warning title=winget publish failed::${{ steps.version.outputs.tag }} is published on GitHub but did NOT reach winget after 3 attempts. Users upgrading via 'winget upgrade' will not see it until this is resolved."
           {
-            echo "### winget publish failed"
+            echo "### winget publish failed — all 3 attempts"
             echo
             echo "\`${{ steps.version.outputs.tag }}\` **is** published on GitHub — binary, checksum, SBOM and attestation are all present."
             echo "It did **not** reach winget, so \`winget upgrade\` will not offer it yet."
             echo
-            echo "Most likely causes, in the order worth checking:"
+            echo "Each attempt re-synced the fork immediately beforehand, so this is unlikely to be the"
+            echo "upstream race that caused the v1.61.3 miss. Check, in this order:"
             echo "1. The \`WINGET_TOKEN\` secret has expired or been revoked — it is a PAT with a finite lifetime."
-            echo "2. The \`laurentiu021/winget-pkgs\` fork has drifted from upstream; the sync step above reports the count."
+            echo "2. A branch for this version already exists on the \`laurentiu021/winget-pkgs\` fork from an earlier"
+            echo "   partial run — \`Ref cannot be created\` also means \"already there\". Delete it and re-run."
+            echo "3. Upstream has rejected the manifest shape (a schema version bump on their side)."
             echo
             echo "Re-run this workflow once fixed. The release itself does not need to be recreated."
           } >> "$GITHUB_STEP_SUMMARY"

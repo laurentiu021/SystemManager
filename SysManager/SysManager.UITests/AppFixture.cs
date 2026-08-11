@@ -188,6 +188,24 @@ public sealed class AppFixture : IDisposable
     public bool HasButtonWithName(string accessibleName, int timeoutSeconds = 1) =>
         FindButtonByAccessibleName(accessibleName, timeoutSeconds) is not null;
 
+    /// <summary>
+    /// Find the first Button whose accessible name STARTS WITH the given prefix.
+    /// </summary>
+    /// <remarks>
+    /// For per-row buttons inside a DataGrid, which cannot carry a stable AutomationId — there is one
+    /// per row, and an id must be unique — so their identity comes from a name built per item
+    /// ("Mark or unmark this service: Print Spooler"). The exact-match overload above cannot find those
+    /// without knowing which service the machine happens to list first, which would make the test depend
+    /// on the machine rather than on the app.
+    /// </remarks>
+    public Button? FindButtonByAccessibleNamePrefix(string prefix, int timeoutSeconds = 5) =>
+        Retry.WhileNull(() =>
+            CurrentViewHost
+                .FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+                .FirstOrDefault(button =>
+                    button.Name?.StartsWith(prefix, StringComparison.Ordinal) is true),
+            TimeSpan.FromSeconds(timeoutSeconds)).Result?.AsButton();
+
     private static AutomationElement? FindUniqueDescendantById(
         AutomationElement root,
         string automationId)

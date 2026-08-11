@@ -47,6 +47,40 @@ public class FunctionalUiTests
     }
 
     [Fact]
+    public void Services_ClearMarksButton_AppearsOnlyOnceSomethingIsMarked()
+    {
+        // The mark feature was announced in 0.40.0 and shipped with no UI at all, so this drives it as a
+        // user would: with nothing marked the "Clear marks" button must be ABSENT — a permanently
+        // visible no-op button is the same class of defect the fix removes — and marking a row must make
+        // it appear, which also proves the per-row flag button is reachable and actually toggles.
+        _fx.GoToTab("nav-services");
+        Assert.Null(_fx.FindButtonById("btn-services-clear-marks", timeoutSeconds: 1));
+
+        // Wait for the list to populate, then click the first row's mark button. Per-row buttons cannot
+        // carry a stable AutomationId (one per row, and ids must be unique), so each is named per
+        // service — "Mark or unmark this service: Print Spooler" — and is matched on the prefix. Matching
+        // the full name would make the test depend on which service this machine lists first.
+        Assert.NotNull(_fx.WaitForText("total", 15));
+        var mark = _fx.FindButtonByAccessibleNamePrefix("Mark or unmark this service", timeoutSeconds: 15);
+
+        Assert.NotNull(mark);
+        mark!.Invoke();
+
+        var clear = FlaUI.Core.Tools.Retry.WhileNull(
+            () => _fx.FindButtonById("btn-services-clear-marks", timeoutSeconds: 1),
+            TimeSpan.FromSeconds(10)).Result;
+        Assert.NotNull(clear);
+
+        // …and clearing puts it back out of sight, so the button never lingers claiming marks that no
+        // longer exist.
+        clear!.Invoke();
+        var gone = FlaUI.Core.Tools.Retry.WhileTrue(
+            () => _fx.FindButtonById("btn-services-clear-marks", timeoutSeconds: 1) is not null,
+            TimeSpan.FromSeconds(10)).Success;
+        Assert.True(gone, "\"Clear marks\" stayed visible after every mark was cleared.");
+    }
+
+    [Fact]
     public void Logs_Refresh_LoadsEventsOrReportsState()
     {
         _fx.GoToTab("nav-logs");

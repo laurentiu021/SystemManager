@@ -432,8 +432,11 @@ Key services:
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time
   polling with 2s interval.
-- `ActivityLogService` — persists last 20 user actions to JSON file for
-  Dashboard recent activity display.
+- `ActivityLogService` — persists the last 60 user actions to a JSON file for the
+  Dashboard's recent-activity card. Records the six destructive operations (deep
+  cleanup, browser clean, privacy write, uninstall, shred, shortcut delete) as
+  counts and sizes only, never file names. Takes a `configDir` seam so tests never
+  write to the user's real history.
 - `ResourceHistoryService` — always-on background sampler (started at app startup,
   runs while minimized to tray) that records CPU/RAM/GPU usage + CPU/GPU temperatures
   every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,
@@ -582,18 +585,39 @@ treats a file locked by a running instance as ordinary (it survives to the next
 round). The "Install"
 button verifies the download's SHA256 against the published `.sha256` — the actual
 integrity gate — and additionally inspects the file for an Authenticode signature.
-That second check is informational, not a publisher check: `VerifyAuthenticode`
-returns true both for a validly-signed binary and for one with no signature at all
-(SysManager ships unsigned), and rejects only a signature that cannot be parsed.
-`CreateFromSignedFile` reads the signer certificate without validating the file
-against it, so it cannot detect a tampered signed binary; the SHA256 comparison,
-which runs first, is what catches a modified download. It then hands
-off to `UpdateApplier`: the freshly-downloaded exe is relaunched with
+`VerifyAuthenticode` accepts a binary with no signature at all — SysManager ships
+unsigned, so that is the live path — and rejects a signature that cannot be parsed.
+When a signature IS present it is now a real publisher check: the signer must
+contain `ExpectedSignerSubject` and its certificate chain must build with online
+revocation, or the method returns false. That pin is a single `const`, empty until
+a code-signing certificate exists, so the check cannot quietly become a no-op the
+day signing is switched on — without it, merely *carrying* a signature would pass,
+and an attacker's self-issued certificate would be accepted like a legitimate
+build. The policy deliberately mirrors `SpeedTestService.VerifyOoklaSignature`,
+which already pinned subject + chain for a third-party download.
+
+SHA256 remains the integrity gate rather than a fallback: `CreateFromSignedFile`
+reads the signer certificate without validating the file against it, so it cannot
+detect a tampered signed binary, and the hash comparison runs first.
+
+It then hands off to `UpdateApplier`: the freshly-downloaded exe is relaunched with
 `--apply-update`, which `App.OnStartup` intercepts before any window opens. That
 process waits for the old instance to exit, swaps itself over the old executable
 via a staged atomic move (a sibling `.new` file plus `File.Move`, so an
 interrupted copy can never leave a half-written binary), and relaunches —
 inheriting the original's elevation. No on-disk script is involved.
+
+Before that move, `PreserveCurrentBuild` copies the outgoing executable to
+`SysManager-previous.exe` in the same updates folder. The atomic move makes an
+*interrupted* update safe; it does nothing for an update that *succeeds* into a
+build that will not start, and this project has shipped two such regressions. One
+generation is retained (each copy overwrites the last), `PruneOldDownloads`
+explicitly skips that name — it matches the `SysManager-*.exe` pattern and would
+otherwise be deleted by the next download — and retention is best-effort: if the
+folder cannot be written the update still proceeds. `AboutViewModel.CanRollBack`
+surfaces a "Go back to the previous version" button only when the copy exists, and
+the rollback reuses this same applier path rather than a second file-copy
+implementation.
 
 ## Testing
 

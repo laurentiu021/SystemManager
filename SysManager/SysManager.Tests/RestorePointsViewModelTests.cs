@@ -29,6 +29,11 @@ public class RestorePointsViewModelTests
     private static RestorePointsViewModel NewVm(out IPowerShellRunner runner)
     {
         runner = Substitute.For<IPowerShellRunner>();
+        // Stubbed, not left to NSubstitute's default: an unstubbed Task-returning member yields a Task
+        // whose Result is null, and RestorePointService calls .Any() on it — the test would then fail
+        // with an ArgumentNullException from inside LINQ instead of telling us anything about the gate.
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(new System.Collections.ObjectModel.Collection<System.Management.Automation.PSObject>());
         return new RestorePointsViewModel(new RestorePointService(runner));
     }
 
@@ -36,7 +41,8 @@ public class RestorePointsViewModelTests
     public async Task Create_WhenUserDeclines_RunsNothing()
     {
         var vm = NewVm(out var runner);
-        runner.ClearReceivedCalls();   // the constructor's initial list is not what this test is about
+        await vm.InitializationComplete;   // the constructor's initial list is not what this test is about
+        runner.ClearReceivedCalls();
 
         using var dialog = new DialogAnswer(confirm: false);
         await vm.CreateCommand.ExecuteAsync(null);
@@ -75,6 +81,7 @@ public class RestorePointsViewModelTests
     {
         // The other half: the gate must not have turned the button into a no-op.
         var vm = NewVm(out var runner);
+        await vm.InitializationComplete;   // the constructor's initial list is not what this asserts
         runner.ClearReceivedCalls();
 
         using var dialog = new DialogAnswer(confirm: true);

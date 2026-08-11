@@ -45,6 +45,15 @@ public class AudioMixerViewModelTests
         float peak = 0f) =>
         new(id, pid, name, ExePath: "", volume, muted, state, systemSounds, peak);
 
+    // A session WITH an executable path. SavePreset derives each preset entry's key from the exe
+    // name and drops entries whose name is empty, so the ExePath-less Session() helper above
+    // produces an empty preset and SavePreset returns "No apps to save" before any confirm.
+    private static AudioSessionInfo SessionWithExe(
+        string id = "s1", uint pid = 10, string name = "Chrome", float volume = 0.5f,
+        string exePath = @"C:\Program Files\Test\chrome.exe") =>
+        new(id, pid, name, exePath, volume, IsMuted: false, AudioSessionState.Active,
+            IsSystemSounds: false, PeakLevel: 0f);
+
     // A substitute service that returns a fixed session list from GetSessions.
     private static IAudioMixerService ServiceWith(params AudioSessionInfo[] sessions)
     {
@@ -565,7 +574,7 @@ public class AudioMixerViewModelTests
     {
         // A new name is not destructive, so it must NOT prompt — otherwise the confirmation becomes
         // noise that people learn to dismiss without reading.
-        var vm = NewVm(ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f)));
+        var vm = NewVm(ServiceWith(SessionWithExe(volume: 0.8f)));
         vm.NewPresetName = "Gaming";
 
         using var dialog = new DialogAnswer(confirm: false);
@@ -578,7 +587,7 @@ public class AudioMixerViewModelTests
     [Fact]
     public void SavePreset_OverAnExistingName_WhenDeclined_KeepsTheOldPreset()
     {
-        var vm = NewVm(ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f)));
+        var vm = NewVm(ServiceWith(SessionWithExe(volume: 0.8f)));
         vm.NewPresetName = "Gaming";
         using (new DialogAnswer(confirm: false)) vm.SavePresetCommand.Execute(null);
         var originalVolume = Assert.Single(vm.Presets, p => p.Name == "Gaming").Entries[0].Volume;
@@ -599,7 +608,7 @@ public class AudioMixerViewModelTests
     public void SavePreset_OverAnExistingName_WhenConfirmed_Overwrites()
     {
         // The other half: the gate must not have turned saving into a no-op.
-        var vm = NewVm(ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f)));
+        var vm = NewVm(ServiceWith(SessionWithExe(volume: 0.8f)));
         vm.NewPresetName = "Gaming";
         using (new DialogAnswer(confirm: false)) vm.SavePresetCommand.Execute(null);
 
@@ -619,7 +628,7 @@ public class AudioMixerViewModelTests
     {
         // Windows users do not distinguish "Gaming" from "gaming", and the presets file does not either —
         // saving as "gaming" replaces "Gaming", so it has to prompt like any other overwrite.
-        var vm = NewVm(ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f)));
+        var vm = NewVm(ServiceWith(SessionWithExe(volume: 0.8f)));
         vm.NewPresetName = "Gaming";
         using (new DialogAnswer(confirm: false)) vm.SavePresetCommand.Execute(null);
 

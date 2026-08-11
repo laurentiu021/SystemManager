@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Reflection;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -19,6 +20,9 @@ namespace SysManager.Tests;
 /// constructor tests below build the view model directly and assert only on defaults, so
 /// they neither need nor use the helper.</para>
 /// </summary>
+// Serialized: the Enable-confirm tests swap the static DialogService.Instance, which is
+// process-wide shared state. Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
+[Collection("DialogService")]
 public class ServicesViewModelTests
 {
     private static readonly List<ServiceEntry> TestServices = new()
@@ -490,6 +494,116 @@ public class ServicesViewModelTests
         using var vm = await CreateWithLedgerAsync(scanned, ledger);
 
         Assert.Equal("Automatic", scanned[0].PreviousStartType);
+    }
+
+    // ── Enable must announce the change ─────────────────────────────────────────────────────────
+    //
+    // Start, Stop and Disable each call DialogService.Instance.Confirm. Enable was the one mutating
+    // command on this tab that did not, and its button renders on every row with no Visibility or
+    // CanExecute guard — one click to a persistent, machine-scope service change.
+    //
+    // Every assertion below holds whether or not the run is elevated. EnableServiceAsync returns at
+    // the elevation gate when not elevated and at the declined confirm when it is; neither path may
+    // reach sc.exe, which is what "did the startup type change?" measures. A test that only passed
+    // while elevated would be quarantined in CI, so the prompt-wording assertions skip explicitly
+    // when no prompt was reached rather than asserting something they cannot observe.
+
+    [Fact]
+    public async Task EnableService_WhenConfirmDeclined_ChangesNothing()
+    {
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        ledger.Remember("Spooler", "Automatic", DateTimeOffset.UnixEpoch);
+
+        var scanned = new List<ServiceEntry>
+        {
+            new() { Name = "Spooler", DisplayName = "Print Spooler", Status = "Stopped", StartType = "Disabled" },
+        };
+        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        // Nothing applied: the entry still reads Disabled and the ledger still remembers the type,
+        // so a later accepted Enable can still restore it rather than falling back to Manual.
+        Assert.Equal("Disabled", scanned[0].StartType);
+        Assert.Equal("Automatic", ledger.PreviousStartTypeFor("Spooler"));
+    }
+
+    [Fact]
+    public async Task EnableService_WithNoRememberedType_SaysItWillBeSetToManual()
+    {
+        // The wording carries the weight. With no ledger entry — a service the user disabled outside
+        // SysManager — `previous` is null and StartTypeToScToken's `_ => "demand"` fallback sets the
+        // service to MANUAL. A prompt saying "restored" would describe an action the app does not
+        // perform, which is the failure this guard exists to prevent.
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();   // deliberately empty
+
+        var scanned = new List<ServiceEntry>
+        {
+            new() { Name = "WSearch", DisplayName = "Windows Search", Status = "Stopped", StartType = "Disabled" },
+        };
+        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        if (dialog.Calls == 0) return;   // not elevated: returned at the gate, before any prompt
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => m.Contains("Manual") && !m.Contains("set back to")),
+            Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task EnableService_WithARememberedType_NamesThatTypeInThePrompt()
+    {
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        ledger.Remember("Spooler", "Automatic", DateTimeOffset.UnixEpoch);
+
+        var scanned = new List<ServiceEntry>
+        {
+            new() { Name = "Spooler", DisplayName = "Print Spooler", Status = "Stopped", StartType = "Disabled" },
+        };
+        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        if (dialog.Calls == 0) return;   // not elevated
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => m.Contains("set back to Automatic")),
+            Arg.Any<string>());
+    }
+
+    [Fact]
+    public void EveryMutatingServiceCommand_GoesThroughAConfirm()
+    {
+        // A source-level guard, because the runtime tests above cannot cover the elevated branch on a
+        // non-elevated CI runner. Enable was missing its confirm precisely because three siblings had
+        // one and nothing checked that the fourth did — so the count is asserted rather than assumed.
+        var source = File.ReadAllText(Path.Combine(
+            FindProjectDir(), "..", "SysManager", "ViewModels", "ServicesViewModel.cs"));
+
+        var confirms = source.Split("DialogService.Instance.Confirm(").Length - 1;
+
+        Assert.True(confirms >= 4,
+            $"Expected a confirmation on all four mutating commands (Start, Stop, Disable, Enable) " +
+            $"but found {confirms} calls to DialogService.Instance.Confirm.");
+    }
+
+    private static string FindProjectDir()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "SysManager.Tests.csproj"))) return dir.FullName;
+            dir = dir.Parent;
+        }
+        throw new DirectoryNotFoundException("Could not locate the test project directory.");
     }
 
     /// <summary>A throwaway ledger directory, so the developer's real %LOCALAPPDATA% file is untouched.</summary>

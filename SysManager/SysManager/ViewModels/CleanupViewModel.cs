@@ -323,11 +323,27 @@ public sealed partial class CleanupViewModel : ViewModelBase
             // Clear-RecycleBin can leave behind, and keeps this in step with Deep Cleanup
             // and the One-Click Tune-Up. Run off the UI thread.
             var ct = _binCts.Token;
-            await Task.Run(RecycleBinHelper.EmptyAllDrives, ct);
-            StatusMessage = "Done";
-            ToastService.Instance.Show("Cleanup complete", "Operation finished successfully");
+            // EmptyAllDrives reports failure through its RETURN VALUE, not an exception:
+            // SHEmptyRecycleBin is a LibraryImport returning an HRESULT, so there is nothing to catch.
+            // The result used to be discarded, which meant "Done — Operation finished successfully"
+            // appeared even when the shell refused and the bin was still full. A cleanup tool claiming
+            // it cleaned when it did not is the one thing it must never do.
+            var emptied = await Task.Run(RecycleBinHelper.EmptyAllDrives, ct);
+            if (emptied)
+            {
+                StatusMessage = "Done";
+                ToastService.Instance.Show("Cleanup complete", "Operation finished successfully");
+            }
+            else
+            {
+                StatusMessage = "Could not empty the Recycle Bin — Windows refused the request.";
+                ToastService.Instance.Show("Recycle Bin not emptied",
+                    "Windows would not empty it. It may be open in Explorer, or a file may be in use.");
+                Log.Warning("Empty Recycle Bin: the shell API reported failure");
+            }
             // The operation's own flag still holds the bar (it clears in finally), so this
-            // refresh must not take it over.
+            // refresh must not take it over. Runs either way, so the size shown matches reality
+            // whether the empty succeeded or not.
             await PreScanAsync(reportProgress: false);
         }
         catch (OperationCanceledException) { StatusMessage = "Recycle Bin cleanup cancelled."; }

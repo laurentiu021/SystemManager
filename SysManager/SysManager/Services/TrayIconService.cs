@@ -259,8 +259,17 @@ public sealed class TrayIconService : IDisposable
                 $"Your PC has been running for {(int)snapshot.Os.Uptime.TotalDays} days. A restart can improve performance.");
         }
 
-        // Disk health warning
-        var unhealthyDisk = snapshot.Disks.FirstOrDefault(d => d.HealthStatus != "Healthy");
+        // Disk health warning.
+        //
+        // Matched against the values that MEAN a problem, rather than "anything that is not the word
+        // Healthy". SystemInfoService.QueryDisks has two producer arms: the MSFT_PhysicalDisk arm maps
+        // to "Healthy"/"Warning"/"Unhealthy"/"Unknown", but the Win32_DiskDrive FALLBACK passes
+        // Win32_DiskDrive.Status straight through — and that reports "OK" for a perfectly good disk.
+        // So on any machine that took the fallback, `!= "Healthy"` fired on every drive and the tray
+        // popped "Disk Health Warning — reports status: OK", a toast that contradicts itself and tells
+        // a non-technical user to back up over nothing. "Unknown" is excluded deliberately: not
+        // knowing is not a failure, and it is what both arms emit when the value is unreadable.
+        var unhealthyDisk = snapshot.Disks.FirstOrDefault(d => IsDiskProblem(d.HealthStatus));
         if (unhealthyDisk is not null && now - _lastDiskNotification > NotificationCooldown)
         {
             _lastDiskNotification = now;
@@ -268,6 +277,39 @@ public sealed class TrayIconService : IDisposable
                 $"{unhealthyDisk.FriendlyName} reports status: {unhealthyDisk.HealthStatus}. Consider backing up important data.");
         }
     }
+
+    /// <summary>
+    /// True when a disk's reported status actually indicates trouble, across BOTH shapes
+    /// <see cref="SystemInfoService"/> can produce for <c>DiskInfo.HealthStatus</c>: the
+    /// MSFT_PhysicalDisk mapping ("Warning" / "Unhealthy") and the Win32_DiskDrive fallback, which
+    /// passes <c>Win32_DiskDrive.Status</c> through raw ("OK", "Degraded", "Pred Fail", …).
+    /// </summary>
+    /// <remarks>
+    /// <para>Keyed on the problem values rather than on "not Healthy" so a healthy disk described with
+    /// any other wording — most importantly the fallback's "OK" — cannot raise a false alarm. Anything
+    /// unrecognised, including "Unknown" and an empty value, is treated as NOT a problem: this drives
+    /// an unprompted toast telling the user to back up, and inventing urgency from a value the app
+    /// could not read is worse than staying quiet. The Disk Health tab still shows the raw status.</para>
+    /// <para>The fallback's vocabulary is CIM's <c>Status</c> string set, which is ABBREVIATED to fit a
+    /// 10-character field — "Pred Fail", "NonRecover", "Lost Comm" — and is NOT the long-form
+    /// <c>OperationalStatus</c> wording ("Predictive Failure", "Non-Recoverable Error") that
+    /// SystemInfoService's own <c>OpStatusName</c> map produces. Those long names only ever reach
+    /// <c>DiskInfo.OperationalStatus</c>, a different property this method never sees, so matching them
+    /// here would be dead code hiding the very failures it looks like it covers. Both vocabularies are
+    /// accepted anyway: it costs nothing, and it keeps the predicate correct if a caller ever passes the
+    /// operational status instead.</para>
+    /// </remarks>
+    internal static bool IsDiskProblem(string? status) => status?.Trim() switch
+    {
+        // MSFT_PhysicalDisk mapping (SystemInfoService's primary arm).
+        "Warning" or "Unhealthy" => true,
+        // Win32_DiskDrive.Status — CIM's abbreviated vocabulary, the fallback arm's actual values.
+        "Degraded" or "Stressed" or "Pred Fail" or "Error" => true,
+        "NonRecover" or "Lost Comm" or "No Contact" => true,
+        // Long-form OperationalStatus wording, accepted for free in case a caller passes that instead.
+        "Predictive Failure" or "Non-Recoverable Error" => true,
+        _ => false,
+    };
 
     private void ShowNotification(string title, string message)
     {

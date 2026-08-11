@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Reflection;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -487,6 +488,61 @@ public class CleanupViewModelTests
 
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    // ---------- the Recycle Bin must not claim a success it did not get ----------
+
+    [Fact]
+    public void EmptyRecycleBin_UsesTheShellResult_RatherThanAssumingSuccess()
+    {
+        // RecycleBinHelper.EmptyAllDrives wraps SHEmptyRecycleBin, a LibraryImport that returns an
+        // HRESULT: a refusal (bin open in Explorer, a file still locked) comes back as `false`, never as
+        // an exception. The VM discarded that bool, so the try block always fell through to
+        // StatusMessage = "Done" and a "Operation finished successfully" toast — the app told the user
+        // it had emptied a bin that was still full. For a cleanup tool that is the worst possible lie,
+        // and it is invisible: nothing throws, nothing logs, the label just reads Done.
+        //
+        // Asserted at source level on purpose, and this is the one place where that is not a compromise
+        // but the only safe option: driving the command would empty THIS machine's real Recycle Bin.
+        // There is no seam to fake — the helper is a static shell P/Invoke — and inventing one to make a
+        // three-line status branch mockable would be a larger change than the fix. The check is precise
+        // regardless: it looks at the call statement's shape, so it can only pass if the result is bound
+        // to something, and only fail if the call stands alone as a discarded statement.
+        var source = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "ViewModels", "CleanupViewModel.cs"));
+
+        var callSites = source
+            .Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.Contains("RecycleBinHelper.EmptyAllDrives", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(callSites); // guards the test itself: a rename must fail loudly, not vacuously
+        Assert.All(callSites, line =>
+            Assert.False(line.StartsWith("await Task.Run", StringComparison.Ordinal),
+                "The Recycle Bin result is discarded — a refused empty would still report success: " + line));
+        Assert.Contains(callSites, l => l.Contains("= await Task.Run", StringComparison.Ordinal));
+
+        // …and the failure path has to actually SAY something different. Capturing the bool but
+        // printing "Done" either way would satisfy the check above and fix nothing.
+        Assert.Contains("Could not empty the Recycle Bin", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The app project directory. No .cs files are copied into the test output, so the assembly
+    /// location cannot answer this on its own.
+    /// </summary>
+    private static string FindAppProjectDir()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, "SysManager", "SysManager.csproj");
+            if (File.Exists(candidate)) return Path.Combine(dir.FullName, "SysManager");
+            dir = dir.Parent;
+        }
+        throw new DirectoryNotFoundException(
+            "Could not locate the SysManager app project from " + AppContext.BaseDirectory);
     }
 }
 

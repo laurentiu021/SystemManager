@@ -132,4 +132,112 @@ public class TrayIconServiceTests
             new List<DiskInfo>(),
             DateTime.Now);
     }
+
+    // ── Disk-health notification: which statuses are actually a problem ──────────────────────────
+    //
+    // The check was `d.HealthStatus != "Healthy"`, and SystemInfoService.QueryDisks has TWO producer
+    // arms. The MSFT_PhysicalDisk arm maps to "Healthy"/"Warning"/"Unhealthy"/"Unknown", but the
+    // Win32_DiskDrive FALLBACK passes Win32_DiskDrive.Status straight through — and that reports "OK"
+    // for a perfectly good disk. So on any machine that took the fallback the tray fired on every
+    // drive and popped "Disk Health Warning — reports status: OK": a toast that contradicts itself and
+    // tells a non-technical user to back up over nothing.
+
+    [Theory]
+    [InlineData("Healthy")]      // MSFT_PhysicalDisk, healthy
+    [InlineData("OK")]           // Win32_DiskDrive fallback, healthy — the false alarm
+    [InlineData("Unknown")]      // unreadable: not knowing is not a failure
+    [InlineData("")]             // absent value
+    [InlineData(null)]
+    public void IsDiskProblem_HealthyOrUnknownStatus_DoesNotWarn(string? status)
+    {
+        Assert.False(TrayIconService.IsDiskProblem(status));
+    }
+
+    [Theory]
+    [InlineData("Warning")]              // MSFT_PhysicalDisk mapping
+    [InlineData("Unhealthy")]
+    public void IsDiskProblem_PhysicalDiskProblemStatus_Warns(string status)
+    {
+        // The other half: keying on problem values rather than "not Healthy" must not stop the tray
+        // warning about a drive that genuinely is failing.
+        Assert.True(TrayIconService.IsDiskProblem(status));
+    }
+
+    [Theory]
+    [InlineData("Degraded")]
+    [InlineData("Stressed")]
+    [InlineData("Pred Fail")]
+    [InlineData("Error")]
+    [InlineData("NonRecover")]
+    [InlineData("Lost Comm")]
+    [InlineData("No Contact")]
+    public void IsDiskProblem_Win32FallbackProblemStatus_Warns(string status)
+    {
+        // These are the values the FALLBACK arm can actually produce, and they matter more than they
+        // look. Win32_DiskDrive.Status uses CIM's ABBREVIATED vocabulary — capped at 10 characters, so
+        // "Pred Fail" and "NonRecover", never "Predictive Failure" or "Non-Recoverable Error". Those
+        // long forms belong to OperationalStatus, a different DiskInfo property the tray never reads.
+        //
+        // Worth stating because the first version of this fix keyed on the long names only: it read as
+        // full coverage of failing drives while in fact matching nothing the fallback emits, so a disk
+        // reporting "Pred Fail" — a drive announcing its own imminent death — would have fallen through
+        // to "unrecognised, therefore fine" and warned nobody. Trading a false alarm for a missed real
+        // failure would have been a strictly worse bug than the one being fixed.
+        Assert.True(TrayIconService.IsDiskProblem(status));
+    }
+
+    [Theory]
+    [InlineData("Predictive Failure")]
+    [InlineData("Non-Recoverable Error")]
+    public void IsDiskProblem_LongFormOperationalStatus_AlsoWarns(string status)
+    {
+        // No current caller passes OperationalStatus here, but accepting its wording costs nothing and
+        // keeps the predicate honest if one ever does.
+        Assert.True(TrayIconService.IsDiskProblem(status));
+    }
+
+    [Fact]
+    public void IsDiskProblem_ToleratesSurroundingWhitespace()
+    {
+        // WMI string values arrive as-is from the provider; a padded value must not silently become
+        // "unrecognised, therefore fine".
+        Assert.True(TrayIconService.IsDiskProblem("  Unhealthy  "));
+        Assert.False(TrayIconService.IsDiskProblem("  OK  "));
+    }
+
+    [Fact]
+    public void IsDiskProblem_AgreesWithEveryStatusTheProducerCanEmit()
+    {
+        // The guard the first attempt at this fix needed and did not have. A predicate keyed on literal
+        // strings is only correct while those strings match what the PRODUCER writes, and nothing in the
+        // compiler connects the two: SystemInfoService.QueryDisks builds DiskInfo.HealthStatus from two
+        // unrelated vocabularies, and getting one wrong fails OPEN — an unmatched value reads as "no
+        // problem", so a failing drive warns nobody and no test notices.
+        //
+        // Enumerating the producer's full value set here closes that. The Win32 half is not a guess: it
+        // is the complete ValueMap the CIM schema declares for Win32_DiskDrive.Status, read off this
+        // machine with Get-CimClass — all twelve values, partitioned into the two verdicts.
+        var win32Ok = new[] { "OK", "Unknown", "Starting", "Stopping", "Service" };
+        var win32Problem = new[] { "Error", "Degraded", "Pred Fail", "Stressed", "NonRecover", "No Contact", "Lost Comm" };
+
+        // MSFT_PhysicalDisk's HealthStatus map, the primary arm's three outcomes plus its unknown.
+        var physicalOk = new[] { "Healthy", "Unknown" };
+        var physicalProblem = new[] { "Warning", "Unhealthy" };
+
+        Assert.All([.. win32Ok, .. physicalOk], (string s) =>
+            Assert.False(TrayIconService.IsDiskProblem(s),
+                $"\"{s}\" is not a failure, but it would raise a back-up-your-data toast."));
+        Assert.All([.. win32Problem, .. physicalProblem], (string s) =>
+            Assert.True(TrayIconService.IsDiskProblem(s),
+                $"\"{s}\" IS a failure the producer can emit, and it would warn nobody."));
+
+        // The two Win32 groups must together be the WHOLE ValueMap — an unclassified value is precisely
+        // the fail-open hole described above, so leaving one out has to break this test rather than pass
+        // quietly. Twelve is the schema's count, not a number chosen to match the arrays.
+        Assert.Equal(12, win32Ok.Length + win32Problem.Length);
+
+        // "Service"/"Starting"/"Stopping" are transient states, not failures — a disk being serviced is
+        // not a disk dying, and an unprompted "back up important data" toast over one would be exactly
+        // the false alarm this fix removes.
+    }
 }

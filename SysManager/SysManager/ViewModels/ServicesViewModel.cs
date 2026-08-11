@@ -35,6 +35,13 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [ObservableProperty] private int _cautionCount;
     [ObservableProperty] private int _criticalCount;
 
+    /// <summary>
+    /// How many rows the user has marked. Drives the visibility of the "Clear marks" button — with no
+    /// marks there is nothing to clear, and a permanently visible dead button is the kind of control
+    /// this fix exists to remove.
+    /// </summary>
+    [ObservableProperty] private int _highlightedCount;
+
     // "Safe to disable" / "Advanced" filter on the GAMING RECOMMENDATION, which is a different
     // dataset from the Safe/Caution/Critical SAFETY level above it: safety says "will this break
     // Windows", the recommendation says "is this worth turning off for games, and why". Both were
@@ -117,6 +124,9 @@ public sealed partial class ServicesViewModel : ViewModelBase
     {
         TotalCount = _allServices.Count;
         RunningCount = _allServices.Count(s => s.Status == "Running");
+        // A refresh replaces every ServiceEntry, so the marks are gone with them — recount rather than
+        // leaving a stale non-zero count that would keep offering to clear marks that no longer exist.
+        UpdateHighlightCount();
         ApplyFilter();
         StatusMessage = $"Loaded {TotalCount} services ({RunningCount} running).";
         ToastService.Instance.Show("Services refreshed", $"{TotalCount} services ({RunningCount} running)");
@@ -311,10 +321,36 @@ public sealed partial class ServicesViewModel : ViewModelBase
         CriticalCount = critical;
     }
 
+    /// <summary>
+    /// Marks or unmarks one service row, so a user working through a long list can keep track of the
+    /// entries they care about. Bound from the grid's mark column.
+    /// </summary>
+    /// <remarks>
+    /// The mark lives on the <see cref="ServiceEntry"/> instance, and <see cref="ApplyFilter"/> filters
+    /// and sorts the SAME instances out of <c>_allServices</c> rather than projecting new ones, so a
+    /// mark survives searching, filter chips and column sorting. A Refresh re-queries Windows and
+    /// therefore builds new entries, which clears the marks — correct, since the rows are no longer the
+    /// same observations.
+    /// </remarks>
     [RelayCommand]
     private void ToggleHighlight(object? parameter)
     {
-        if (parameter is ServiceEntry entry)
-            entry.IsHighlighted = !entry.IsHighlighted;
+        if (parameter is not ServiceEntry entry) return;
+        entry.IsHighlighted = !entry.IsHighlighted;
+        UpdateHighlightCount();
     }
+
+    /// <summary>Clears every mark, so the user is never stuck hunting marked rows one by one.</summary>
+    [RelayCommand]
+    private void ClearHighlights()
+    {
+        // _allServices, not Services: a mark can be on a row the current filter hides, and "Clear
+        // marks" that left invisible marks behind would be the same broken promise as the feature
+        // having no button at all.
+        foreach (var entry in _allServices)
+            entry.IsHighlighted = false;
+        UpdateHighlightCount();
+    }
+
+    private void UpdateHighlightCount() => HighlightedCount = _allServices.Count(s => s.IsHighlighted);
 }

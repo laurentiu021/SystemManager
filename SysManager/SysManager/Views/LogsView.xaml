@@ -175,6 +175,14 @@
 
                     <Button Content="Refresh" AutomationProperties.AutomationId="btn-logs-refresh" AutomationProperties.Name="Refresh logs" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}"/>
                     <Button Content="Cancel" AutomationProperties.Name="Cancel log loading" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                    <!-- Only shown once something is marked: with no marks there is nothing to clear,
+                         and a permanently visible no-op button is the defect this fix removes. The
+                         count makes it clear the marks include rows the current filter may be hiding. -->
+                    <Button Content="{Binding HighlightedCount, StringFormat='Clear {0} marks'}"
+                            AutomationProperties.Name="Clear all marked events"
+                            Command="{Binding ClearHighlightsCommand}"
+                            Style="{StaticResource GhostButton}" Margin="6,0,0,0"
+                            Visibility="{Binding HighlightedCount, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -255,20 +263,63 @@
                               SelectionMode="Single"
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling">
+                    <!-- BasedOn the implicit DataGridRow style, NOT a replacement for it. Declaring a
+                         local style without BasedOn overrides the App.xaml one wholesale, which is how
+                         this grid quietly lost the app-wide IsMouseOver -> RowHover tint: it was the only
+                         view in the app that overrode RowStyle, so System Logs was the only table where
+                         pointing at a row gave no feedback. Inheriting keeps hover and the
+                         selected+hovered MultiTrigger, and leaves only the highlight trigger local. -->
                     <DataGrid.RowStyle>
-                        <Style TargetType="DataGridRow">
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-                            <Setter Property="BorderThickness" Value="0"/>
+                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
                             <Style.Triggers>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Surface3}"/>
-                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-                                </Trigger>
+                                <!-- User-marked row. A background tint rather than a stripe because the
+                                     marker has to stay visible while the row is also hovered or selected,
+                                     and those states own the row background; the tint is subtle enough to
+                                     read underneath both. Ordered LAST so it wins over the inherited
+                                     hover/selection setters when a row is marked. -->
+                                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource WarningBgSubtle}"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </DataGrid.RowStyle>
                     <DataGrid.Columns>
+                        <!-- Mark column. This is the entry point the row-highlight feature never had:
+                             ToggleHighlightCommand and IsHighlighted have existed since the feature
+                             commit, but no view ever bound them, so the announced "toggle highlight on
+                             any log entry" was unreachable. Same routing as StartupView's per-row
+                             commands (DataContext via AncestorType=UserControl, the row as parameter)
+                             and the same two-state glyph Button as AudioMixerView's mute control —
+                             a plain Button, since GhostButton targets Button and would throw on a
+                             ToggleButton. Not sortable/resizable, like the other action columns. -->
+                        <DataGridTemplateColumn Header="" Width="46" MinWidth="46" CanUserSort="False" CanUserResize="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource GhostButton}" Padding="6,2"
+                                            Command="{Binding DataContext.ToggleHighlightCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            AutomationProperties.Name="{Binding Message, StringFormat='Mark or unmark this event: {0}'}"
+                                            ToolTip="Mark this event so it stays easy to find while you scroll"
+                                            VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <!-- Outline flag when unmarked, solid amber when marked. -->
+                                                    <Setter Property="Text" Value="&#xEB4F;"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                            <Setter Property="Text" Value="&#xEB4C;"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource WarningStripe}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Button>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <!-- Severity column: a coloured dot PLUS the word. The dot alone conveyed
                              severity by colour only — invisible to a colour-blind user and to a
                              screen reader, since the column had no header, no text and no tooltip.

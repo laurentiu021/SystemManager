@@ -71,6 +71,19 @@ public class OtherTabsUiTests
     }
 
     [Fact]
+    public void WindowsUpdate_CheckModuleButton_IsAvailableWhileTheCheckIsDeferred()
+    {
+        // The startup state is deliberately optimistic — the module is only needed for History, so the
+        // tab does not probe for it while loading. CheckModuleCommand performs that probe on demand and
+        // existed from the start with nothing bound to it, so the only way to learn the real state was
+        // to run Update History and read a failure. This pins the button to the state it exists FOR:
+        // the same deferred state the test above describes, where the install button is absent.
+        _fx.GoToTab("nav-windows-update");
+        Assert.NotNull(_fx.WaitForTextInCurrentTab("used for the History view only"));
+        Assert.NotNull(_fx.FindButtonById("btn-windows-update-check-module"));
+    }
+
+    [Fact]
     public void WindowsUpdate_ListUpdatesButton_Exists()
     {
         _fx.GoToTab("nav-windows-update");

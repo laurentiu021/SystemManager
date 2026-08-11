@@ -86,13 +86,28 @@
             </Grid>
         </Border>
 
-        <!-- Module status: deferred check / confirmed available -->
+        <!-- Module status: deferred check / confirmed available.
+             The startup state here is deliberately optimistic — PSWindowsUpdate is only needed for
+             the History view, so the tab does not probe for it while loading, and this row says as
+             much ("used for the History view only"). CheckModuleCommand performs that probe on
+             demand and has existed since the tab shipped, but nothing ever bound it, so the only way
+             to learn the module's real state was to run Update History and read a failure. The
+             "Check now" button below is that missing entry point. -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
                 Visibility="{Binding ModuleAvailable, Converter={StaticResource FlexVis}}">
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource Info}"/>
-                <TextBlock Text="{Binding ModuleStatus}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-            </StackPanel>
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Check now"
+                        Command="{Binding CheckModuleCommand}"
+                        AutomationProperties.AutomationId="btn-windows-update-check-module"
+                        AutomationProperties.Name="Check whether PSWindowsUpdate is installed"
+                        ToolTip="Confirm now whether the PSWindowsUpdate module is available"
+                        Style="{StaticResource GhostButton}" Padding="12,4" Margin="16,0,0,0"
+                        VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource Info}"/>
+                    <TextBlock Text="{Binding ModuleStatus}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- Action buttons -->

@@ -211,6 +211,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Browse System, Application, Security, and Setup logs
 - Each event gets a plain-English explanation and recommended next steps
 - Filter by severity and time range, plus full-text search
+- Mark any event with the flag button to keep it findable while you keep scrolling or
+  change filters. "Clear marks" removes them all, including any a filter is hiding
 - Export to CSV, with a "search online" link for unknown events
 - The Security log requires administrator rights. Without them the page says so
   outright rather than showing an empty list that looks like "no events"
@@ -328,7 +330,9 @@ a confirmation before it runs:
 - Admin banner with a one-click "Run as Administrator" relaunch
 - PSWindowsUpdate is optional now (used only for the History view); install it
   from a normal, non-administrator SysManager session. The installer validates
-  the official PowerShell Gallery endpoint and uses the current-user module directory
+  the official PowerShell Gallery endpoint and uses the current-user module directory.
+  A **Check now** button confirms on demand whether the module is present, so you
+  don't have to run Update History to find out
 - **Update timing & deferral** — defer feature updates by N days while security
   patches keep flowing, pause all updates for a bounded window (max 35 days, then
   Windows auto-resumes), or restore defaults. Uses the documented Windows Update
@@ -574,7 +578,8 @@ a confirmation before it runs:
 - Select multiple apps and install all via winget in one batch operation
 - **Custom winget search** — search the entire winget repository and add
   any package to your install queue
-- Category filter and text search across the catalog
+- Category filter and text search across the catalog, plus a button that ticks
+  every app in the chosen category at once
 - Per-package install status tracking with ETA
 - Live console output showing winget progress
 - GroupedView with visual category headers
@@ -780,6 +785,8 @@ offers, "rate us" prompts:
   instead of Microsoft's own wording
 - Filter by status (Running/Stopped), safety level (Safe/Caution/Critical),
   gaming recommendation, or free-text search
+- Mark any row with the flag button to keep it findable while you keep filtering or
+  searching. "Clear marks" removes them all, including any a filter is hiding
 - Start, stop, disable, or enable services with confirmation dialogs
 - Requires admin for all mutations
 

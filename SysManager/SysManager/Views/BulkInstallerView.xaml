@@ -80,6 +80,19 @@
                         Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
                 <Button Content="Select All" Command="{Binding SelectAllCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
+                <!-- Ticks every app in the chosen category. A different action from the Category combo
+                     above, which FILTERS the list — this SELECTS for install. SelectCategoryCommand has
+                     existed since the tab shipped with nothing bound to it, so the only way to install a
+                     whole category was to filter to it and press Select All, which also picks up
+                     whatever the search box happens to be narrowing to. Hidden while "All" is chosen,
+                     where it would duplicate Select All exactly. -->
+                <Button Content="{Binding SelectedCategory, StringFormat='Select {0}'}"
+                        Command="{Binding SelectCategoryCommand}"
+                        CommandParameter="{Binding SelectedCategory}"
+                        AutomationProperties.Name="Select every app in the chosen category"
+                        ToolTip="Tick every app in the category chosen above, ready to install"
+                        Style="{StaticResource GhostButton}" Margin="0,0,4,0"
+                        Visibility="{Binding CanSelectWholeCategory, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="Deselect All" Command="{Binding DeselectAllCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}"

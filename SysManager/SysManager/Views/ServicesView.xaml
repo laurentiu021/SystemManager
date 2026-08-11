@@ -69,6 +69,13 @@
                         <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
                                  Width="240" VerticalContentAlignment="Center"
                                  AutomationProperties.Name="Filter services"/>
+                        <!-- Only shown once something is marked; see LogsView for the same pair. -->
+                        <Button Content="{Binding HighlightedCount, StringFormat='Clear {0} marks'}"
+                                AutomationProperties.AutomationId="btn-services-clear-marks"
+                                AutomationProperties.Name="Clear all marked services"
+                                Command="{Binding ClearHighlightsCommand}"
+                                Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                                Visibility="{Binding HighlightedCount, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                         <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center">
@@ -119,7 +126,48 @@
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
+            <!-- Marked rows keep a tint through hover and selection; BasedOn so the app-wide
+                 DataGridRow style (hover, selection, the selected+hovered MultiTrigger) is inherited
+                 rather than replaced. See LogsView for the same pair. -->
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource WarningBgSubtle}"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
             <DataGrid.Columns>
+                <!-- Mark column — the entry point ToggleHighlightCommand never had. Same glyph Button
+                     and command routing as the Actions column below and as LogsView's mark column. -->
+                <DataGridTemplateColumn Header="" Width="46" MinWidth="46" CanUserSort="False" CanUserResize="False">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource GhostButton}" Padding="6,2"
+                                    Command="{Binding DataContext.ToggleHighlightCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    AutomationProperties.Name="{Binding DisplayName, StringFormat='Mark or unmark this service: {0}'}"
+                                    ToolTip="Mark this service so it stays easy to find while you scroll"
+                                    VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="&#xEB4F;"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                    <Setter Property="Text" Value="&#xEB4C;"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource WarningStripe}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="200" MinWidth="120" SortMemberPath="DisplayName">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">

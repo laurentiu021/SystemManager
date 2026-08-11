@@ -62,6 +62,12 @@ public sealed partial class LogsViewModel : ViewModelBase
     [ObservableProperty] private string _logFolder = LogService.LogDir;
     [ObservableProperty] private int _visibleCount;
     [ObservableProperty] private bool _hasNoResults;
+    /// <summary>
+    /// How many rows the user has marked. Drives the visibility of the "Clear marks" button — with no
+    /// marks there is nothing to clear, and a permanently visible dead control is the kind of thing
+    /// this fix exists to remove.
+    /// </summary>
+    [ObservableProperty] private int _highlightedCount;
     // True when the log itself could not be read (access denied / missing / unavailable), as
     // opposed to being read and yielding nothing. Drives a separate empty state, because
     // "no events match your filters" is misleading when the filters never ran.
@@ -349,6 +355,9 @@ public sealed partial class LogsViewModel : ViewModelBase
     private void ResetCounts()
     {
         CriticalCount = 0; ErrorCount = 0; WarningCount = 0; InfoCount = 0;
+        // Called right after Entries.Clear(), so every marked row is gone with it. Without this the
+        // count would stay non-zero and keep offering to clear marks that no longer exist.
+        HighlightedCount = 0;
     }
 
     private void UpdateCounts(FriendlyEventEntry e, int delta)
@@ -376,10 +385,35 @@ public sealed partial class LogsViewModel : ViewModelBase
         return s;
     }
 
+    /// <summary>
+    /// Marks or unmarks one event row, so a user reading through hundreds of events can keep the ones
+    /// that matter findable. Bound from the grid's mark column.
+    /// </summary>
+    /// <remarks>
+    /// The mark lives on the <see cref="FriendlyEventEntry"/> instance, and the severity checkboxes and
+    /// search box filter through <see cref="EntriesView"/> — an <see cref="ICollectionView"/> over those
+    /// same instances — so a mark survives filtering and column sorting. Loading a different log or time
+    /// range clears <see cref="Entries"/> and builds new ones, which drops the marks; those are
+    /// different events, so carrying the marks over would be wrong.
+    /// </remarks>
     [RelayCommand]
     private void ToggleHighlight(object? parameter)
     {
-        if (parameter is FriendlyEventEntry entry)
-            entry.IsHighlighted = !entry.IsHighlighted;
+        if (parameter is not FriendlyEventEntry entry) return;
+        entry.IsHighlighted = !entry.IsHighlighted;
+        UpdateHighlightCount();
     }
+
+    /// <summary>Clears every mark, so the user is never left hunting marked rows one at a time.</summary>
+    [RelayCommand]
+    private void ClearHighlights()
+    {
+        // Entries, not EntriesView: a mark can sit on a row the current severity/search filter hides,
+        // and a "Clear marks" that left invisible marks behind would be its own small broken promise.
+        foreach (var entry in Entries)
+            entry.IsHighlighted = false;
+        UpdateHighlightCount();
+    }
+
+    private void UpdateHighlightCount() => HighlightedCount = Entries.Count(e => e.IsHighlighted);
 }

@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.6] - 2026-08-11
+
+Turning a Windows service back on now asks first — like starting, stopping and disabling one
+already did — and it tells you what it is about to set.
+
+### Fixed
+- **"Enable" changed a Windows service without asking.** On the Services tab, Start, Stop and Disable each ask before doing anything. Enable did not: one click and the service's startup type changed. It also was not always putting things back the way they were — if SysManager had no record of how the service was set before, which is the case for anything you disabled yourself outside the app, it quietly set it to **Manual** instead. It now asks first and says exactly what it will do: either the original setting by name, or plainly that it will use Manual because the original is not known, so you can decide rather than find out afterwards.
+
 ## [1.61.4] - 2026-08-11
 
 Quick Tune-Up said "2 recommendations" on a perfectly healthy PC. It now says "All good"

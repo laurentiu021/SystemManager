@@ -235,6 +235,27 @@ public sealed partial class ServicesViewModel : ViewModelBase
         var previous = _ledger.PreviousStartTypeFor(entry.Name) ?? entry.PreviousStartType;
         var targetToken = ServiceManagerService.StartTypeToScToken(previous);
 
+        // Confirm, like Start / Stop / Disable already do. This is a persistent, machine-scope change
+        // to a Windows service, and it was the ONE mutating command on this tab with no prompt —
+        // reachable in a single click, because the Enable button renders on every row with no
+        // Visibility or CanExecute guard.
+        //
+        // The wording branches on whether the original type is known, because when it is not this
+        // command does NOT restore anything: `previous` is null and StartTypeToScToken's `_ =>
+        // "demand"` fallback sets the service to Manual. That is the likely case for a service the
+        // user disabled outside SysManager, so the prompt must say "set to Manual" rather than
+        // "restored" — otherwise it describes an action the app is not performing.
+        var message = string.IsNullOrWhiteSpace(previous)
+            ? $"Enable service \"{entry.DisplayName}\"?\n\n" +
+              "SysManager has no record of how this service was set before, so it will be set to " +
+              "Manual — Windows starts it when something needs it, rather than at every boot. If it " +
+              "used to start automatically, you can change that yourself afterwards."
+            : $"Enable service \"{entry.DisplayName}\"?\n\n" +
+              $"Its startup type will be set back to {previous}, which is what it was before " +
+              "SysManager disabled it.";
+
+        if (!DialogService.Instance.Confirm(message, "Enable Service — Confirm")) return;
+
         try
         {
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, targetToken, _ps);

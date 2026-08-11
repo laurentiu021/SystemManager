@@ -81,21 +81,26 @@ public class ArchitectureTests
     public void Services_DoNotHoldUserDataPathsInStaticFields()
     {
         // Known offenders, kept ONLY so this ratchet could be added without a repo-wide refactor in one
-        // change. Of these, SettingsWatchdogService, ThemeService and WindowsThemeService are referenced
-        // by tests today, so they carry the same latent risk SpeedTestHistoryService realised;
-        // LogService is not test-exercised.
+        // change. Removing a name from this list is the goal — tracked in issue #1741. FOUR have come
+        // off so far:
+        //   · ActivityLogService — when the destructive operations started logging, a test asserting
+        //     they do would otherwise have written into the user's own activity history.
+        //   · AppIconService — not latent at all: five tests called SetNetworkFetchEnabled, which
+        //     persists, so the suite overwrote the user's real icon-fetch preference every run (#1758).
+        //   · SettingsWatchdogService and WindowsThemeService — both constructed concretely by tests,
+        //     both now behind the shared `string? configDir = null` seam.
         //
-        // Removing a name from this list is the goal — tracked in issue #1741. Two have come off so far:
-        // ActivityLogService, when the destructive operations started logging (a test asserting they do
-        // would otherwise have written into the user's own activity history), and AppIconService, whose
-        // case was not latent at all — five tests called SetNetworkFetchEnabled, which persists, so the
-        // suite overwrote the user's real icon-fetch preference on every run (#1758). Four to go.
+        // The two that remain are the two hard ones, and they are hard for different reasons:
+        //   · ThemeService is heavily static (20 static members) and is reached from XAML resource
+        //     resolution, so a constructor seam is a wider refactor than a path change.
+        //   · LogService is a `static partial class` by design — Serilog's sink is configured once per
+        //     process — so it has no instance to hang a seam on. It is also the only one no test
+        //     constructs, so its risk is the lowest of the set.
+        // Both need a design decision rather than a mechanical edit; neither is touched here.
         string[] known =
         [
             "LogService.<LogDir>k__BackingField",
-            "SettingsWatchdogService.BaselinePath",
             "ThemeService.SettingsPath",
-            "WindowsThemeService.SchedulePath",
         ];
 
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

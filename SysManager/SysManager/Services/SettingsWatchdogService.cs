@@ -21,9 +21,29 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class SettingsWatchdogService : ISettingsWatchdogService
 {
-    private static readonly string BaselinePath = Path.Join(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SysManager", "settings-baseline.json");
+    // Instance, not static readonly. Environment.GetFolderPath resolves through the Win32
+    // known-folder API and ignores the LOCALAPPDATA environment variable, so a static path cannot be
+    // redirected by any test — not even one in a child process. SpeedTestHistoryService held its path
+    // that way and its tests deleted the user's real speed-test history; AppIconService did the same
+    // and its tests overwrote a real setting on every run (#1758). See
+    // ArchitectureTests.Services_DoNotHoldUserDataPathsInStaticFields.
+    private readonly string _baselinePath;
+
+    /// <summary>
+    /// Creates the service.
+    /// </summary>
+    /// <param name="configDir">
+    /// Where the baseline snapshot lives. Null uses <c>%LocalAppData%\SysManager</c>, which is
+    /// correct in production; tests MUST pass a temp directory, or they read and write the user's
+    /// real baseline.
+    /// </param>
+    public SettingsWatchdogService(string? configDir = null)
+    {
+        _baselinePath = Path.Join(
+            configDir ?? Path.Join(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager"),
+            "settings-baseline.json");
+    }
 
     /// <summary>The catalog of settings the watchdog tracks. Stable order for the UI.</summary>
     public IReadOnlyList<WatchedSetting> Catalog { get; } = BuildCatalog();
@@ -50,8 +70,8 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     {
         try
         {
-            if (!File.Exists(BaselinePath)) return null;
-            var snapshot = JsonSerializer.Deserialize<BaselineSnapshot>(File.ReadAllText(BaselinePath));
+            if (!File.Exists(_baselinePath)) return null;
+            var snapshot = JsonSerializer.Deserialize<BaselineSnapshot>(File.ReadAllText(_baselinePath));
             // A baseline file that parses as JSON but omits the "Values" property deserializes
             // with Values == null (System.Text.Json does not enforce non-null on positional
             // record params). Normalize it to an empty map so downstream diffing never NREs on
@@ -65,7 +85,7 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         }
     }
 
-    public bool HasBaseline => File.Exists(BaselinePath);
+    public bool HasBaseline => File.Exists(_baselinePath);
 
     /// <summary>
     /// Compares the saved baseline against the live system and returns the drifted settings.
@@ -178,12 +198,13 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         return writable ? hive.CreateSubKey(subPath, writable: true) : hive.OpenSubKey(subPath, writable: false);
     }
 
-    private static void Persist(BaselineSnapshot snapshot)
+    // Instance, because the baseline path is now per-instance (the configDir seam).
+    private void Persist(BaselineSnapshot snapshot)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(BaselinePath)!);
-            File.WriteAllText(BaselinePath, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented));
+            Directory.CreateDirectory(Path.GetDirectoryName(_baselinePath)!);
+            File.WriteAllText(_baselinePath, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented));
         }
         catch (IOException ex) { Log.Debug("Settings baseline save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Settings baseline save denied: {Error}", ex.Message); }

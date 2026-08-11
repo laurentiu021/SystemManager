@@ -1,4 +1,4 @@
-# SysManager
+# SysManager for Windows
 
 A modern Windows system monitoring and management toolkit: live network
 diagnostics with gamer-friendly presets, Windows updates, disk and memory
@@ -1127,6 +1127,66 @@ signature, the app checks that it belongs to the expected publisher and that its
 certificate chain validates, and refuses the update otherwise — so the check cannot
 quietly become a formality on the day signing is switched on. See
 [SECURITY.md](SECURITY.md#security-model) for the detail.
+
+### Code signing policy
+
+*Free code signing provided by [SignPath.io](https://signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/).*
+
+**Team roles.** SysManager is maintained by a single developer, so all three roles below are
+held by the same person. That is stated plainly rather than dressed up as a team, because it
+is the honest description of who can change the code and who approves a release.
+
+- **Authors** (may commit to the repository): [laurentiu021](https://github.com/laurentiu021)
+- **Reviewers** (must review any change proposed by a non-committer):
+  [laurentiu021](https://github.com/laurentiu021)
+- **Approvers** (decide whether a given release may be signed):
+  [laurentiu021](https://github.com/laurentiu021)
+
+Every change reaches `main` through a pull request whose build-and-test check has passed;
+`main` is protected, requires branches to be up to date before merging, and force-pushes and
+deletions are disabled. Releases are built only by GitHub Actions from this public repository
+— no binary is ever built or uploaded from a developer machine — and each carries a SHA-256
+checksum, a CycloneDX SBOM, and a GitHub build-provenance attestation recording the exact
+commit and workflow that produced it. That attestation is the load-bearing guarantee here:
+because a single maintainer necessarily holds administrative rights, the meaningful assurance
+is not "the rules cannot be bypassed" but "every published binary is verifiably the output of
+a public workflow run against a public commit", which anyone can check with
+`gh attestation verify`.
+
+**Privacy policy.** This program will not transfer any information to other networked systems
+unless specifically requested by the user or the person installing or operating it. The full
+policy — including a table of every file the app writes on your own machine, and the four
+situations in which it uses the network at all — is in [SECURITY.md](SECURITY.md#privacy).
+
+Third-party components are listed in the SBOM published with every release. The network
+features that contact anything outside your machine do so only against a destination you
+choose (ping, traceroute and speed-test targets; app installs through winget), plus one
+optional daily version check against the GitHub Releases API that can be switched off.
+
+## Uninstalling
+
+SysManager is a single portable executable. There is no installer, nothing is copied into
+`Program Files`, and no system-wide registry keys are created for the app itself.
+
+To remove it completely:
+
+1. **Delete the executable** — `SysManager-vX.Y.Z.exe`, wherever you saved it. That is the
+   whole program.
+2. **Delete its settings and logs** (optional, a few hundred kilobytes):
+   - `%LocalAppData%\SysManager`
+   - `%AppData%\SysManager`
+3. **Remove the scheduled task, if you created one.** Only applies if you used **Scheduled
+   Maintenance**: open that tab and remove the schedule, and the app unregisters the task for
+   you. It is the only thing SysManager registers with Windows, and only ever when you
+   explicitly ask for it.
+
+If you installed through winget, `winget uninstall laurentiu021.SysManager` covers step 1.
+
+Changes you asked SysManager to make to Windows — privacy toggles, context-menu entries,
+services, tweaks — are Windows settings rather than part of the app, so they stay as you set
+them. Every tab that changes something offers the reverse action, so undo anything you want
+reverted **before** deleting the executable.
 
 ## Build from source
 

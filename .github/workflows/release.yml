@@ -291,6 +291,17 @@ jobs:
           [SignPath.io](https://signpath.io/). Until then, the SHA256 above and the build
           attestation below are what establish that a download is the genuine build.
 
+          ### Code signing policy
+
+          Free code signing provided by [SignPath.io](https://signpath.io/), certificate by
+          [SignPath Foundation](https://signpath.org/). Team roles, the release-approval process
+          and the privacy policy are documented under [Code signing
+          policy](https://github.com/laurentiu021/SystemManager#code-signing-policy).
+
+          This program will not transfer any information to other networked systems unless
+          specifically requested by the user or the person installing or operating it. Full
+          [privacy policy](https://github.com/laurentiu021/SystemManager/blob/main/SECURITY.md#privacy).
+
           ### Verify where this binary came from
 
           This exe was built by GitHub Actions from this public source, and the build is

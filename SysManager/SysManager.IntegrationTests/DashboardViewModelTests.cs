@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -19,7 +20,10 @@ public class DashboardViewModelTests
             new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
             new TemperatureService(diskHealth, skipHardwareInit: true),
-            new WingetService(new PowerShellRunner()));
+            new WingetService(new PowerShellRunner()),
+            // Redirected on purpose: reading a crash marker CONSUMES it, so pointing this at the real
+            // profile would delete a genuine crash report before the user saw it (#1772).
+            new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")));
     }
 
     [Fact]

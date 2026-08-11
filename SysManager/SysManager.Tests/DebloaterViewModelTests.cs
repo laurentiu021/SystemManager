@@ -17,6 +17,12 @@ namespace SysManager.Tests;
 /// zero results) so it never contradicts the status bar. Constructed with a mocked
 /// <see cref="IPowerShellRunner"/> so no real PowerShell runs.
 /// </summary>
+// Serialized: RemoveSelected_RunspaceFault swaps the static DialogService.Instance, which is
+// process-wide shared state. Without this attribute the class ran in PARALLEL with the 24 classes
+// that ARE in the collection (parallelizeTestCollections is true), so two tests could interleave
+// their save/restore and leave a foreign substitute installed in the singleton for the rest of the
+// run — a confirmation gate answering with another test's canned answer.
+[Collection("DialogService")]
 public class DebloaterViewModelTests
 {
     private static DebloaterViewModel NewVm() =>
@@ -71,27 +77,21 @@ public class DebloaterViewModelTests
         runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>())
             .Returns<Task<Collection<PSObject>>>(_ => throw new InvalidOperationException("runspace is not open"));
 
-        var prevDialog = DialogService.Instance;
-        var dialog = Substitute.For<IDialogService>();
-        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user clicks "Yes"
-        DialogService.Instance = dialog;
-        try
-        {
-            var vm = new DebloaterViewModel(new DebloaterService(runner));
-            var a = Removable("Contoso.AppA");
-            var b = Removable("Contoso.AppB");
-            vm.Apps.Add(a);
-            vm.Apps.Add(b);
+        // DialogAnswer(true) — the user clicks "Yes". The shared helper replaces a hand-rolled
+        // save/restore: it is what the other 24 classes use, and its restore is equally
+        // exception-safe.
+        using var dialog = new DialogAnswer(confirm: true);
 
-            var ex = await Record.ExceptionAsync(() => vm.RemoveSelectedCommand.ExecuteAsync(null));
+        var vm = new DebloaterViewModel(new DebloaterService(runner));
+        var a = Removable("Contoso.AppA");
+        var b = Removable("Contoso.AppB");
+        vm.Apps.Add(a);
+        vm.Apps.Add(b);
 
-            Assert.Null(ex);                       // must not fault the command
-            Assert.Equal("Failed", a.Status);      // first row failed, not frozen at "Removing…"
-            Assert.Equal("Failed", b.Status);      // batch continued to the second row
-        }
-        finally
-        {
-            DialogService.Instance = prevDialog;
-        }
+        var ex = await Record.ExceptionAsync(() => vm.RemoveSelectedCommand.ExecuteAsync(null));
+
+        Assert.Null(ex);                       // must not fault the command
+        Assert.Equal("Failed", a.Status);      // first row failed, not frozen at "Removing…"
+        Assert.Equal("Failed", b.Status);      // batch continued to the second row
     }
 }

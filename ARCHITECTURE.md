@@ -380,6 +380,10 @@ Key services:
   only chance to record it) and `DashboardViewModel` consumes it on init, mirroring Gaming Profile's
   leftover-session recovery. Both sides go through the shared `CrashMarker` record rather than an
   anonymous object, so the writer and reader cannot drift into a file that parses to nothing. The
+  read DELETES the marker, so `DashboardViewModel` takes it as a REQUIRED constructor argument
+  rather than one defaulting to `new CrashMarkerService()` — the convenience default resolved the real
+  profile, so every test that built the ViewModel consumed a genuine crash report before the user was
+  ever shown it. A destructive read is exactly where an optional dependency must not be optional. The
   read DELETES the marker, so one crash notifies exactly once; markers older than 7 days, or
   future-dated ones (clock change, file copied from another machine), are dropped. It carries no
   stack trace and no paths — unlike the log, this file is not scrubbed of the user name, and it

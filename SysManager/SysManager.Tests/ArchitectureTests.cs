@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Reflection;
 using NetArchTest.Rules;
 using SysManager.Services;
@@ -143,5 +144,135 @@ public class ArchitectureTests
         Assert.True(fixedSince.Count == 0,
             "These no longer hold a static user-profile path, so remove them from the `known` list " +
             "above — a stale allowance silently weakens this guard:\n  " + string.Join("\n  ", fixedSince));
+    }
+
+    /// <summary>
+    /// Any test class that swaps <c>DialogService.Instance</c> must be in the serialized collection.
+    /// <para>
+    /// The collection exists and 24 classes use it correctly, but the attribute is easy to forget and
+    /// nothing enforced it: <c>DebloaterViewModelTests</c> and <c>DialogServiceTests</c> both touched
+    /// the static while running in PARALLEL with the serialized group, because
+    /// <c>parallelizeTestCollections</c> is true. The failure mode is not a clean crash — one class
+    /// restores the singleton to a value another class is still using, so a confirmation gate answers
+    /// with a foreign canned answer and a destructive-op test passes for the wrong reason.
+    /// </para>
+    /// <para>
+    /// Source-level, deliberately. The attribute is a compile-time fact about a test class, so a
+    /// reflection scan over the test assembly would work too — but reading the source also catches a
+    /// class that swaps the static inside a helper, and the same source-scan approach is already used
+    /// for the destructive-op logging guard in ActivityLogServiceTests.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void DialogServiceSwappers_AreInTheSerializedCollection()
+    {
+        var testDir = FindTestSourceDirectory();
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.GetFiles(testDir, "*.cs"))
+        {
+            var name = Path.GetFileName(file);
+            if (name is "DialogAnswer.cs" or "ArchitectureTests.cs") continue;   // the helper and this test
+
+            var source = File.ReadAllText(file);
+
+            // Either shape counts: assigning the static directly, or using the scoped helper — both
+            // install a substitute into process-wide state for the duration of the test.
+            var swaps = source.Contains("DialogService.Instance =", StringComparison.Ordinal)
+                     || source.Contains("new DialogAnswer(", StringComparison.Ordinal);
+            if (!swaps) continue;
+
+            if (!source.Contains("[Collection(\"DialogService\")]", StringComparison.Ordinal))
+                offenders.Add(name);
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These test classes swap the process-wide DialogService.Instance but are not in the " +
+            "serialized \"DialogService\" collection, so they race the classes that are — a test can " +
+            "restore a substitute another test is still using. Add [Collection(\"DialogService\")]:\n  " +
+            string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Walks up from the test binary to the directory holding this project's sources. The build copies
+    /// no .cs files to the output, so the assembly location alone cannot answer this.
+    /// </summary>
+    private static string FindTestSourceDirectory()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "SysManager.Tests.csproj"))) return dir.FullName;
+            dir = dir.Parent;
+        }
+
+        throw new DirectoryNotFoundException(
+            "Could not locate the SysManager.Tests source directory from " + AppContext.BaseDirectory);
+    }
+
+    /// <summary>
+    /// Every static method that RESOLVES a user-data path must let the caller redirect it.
+    /// <para>
+    /// The sibling ratchet above scans <c>static readonly</c> string FIELDS. This closes the adjacent
+    /// shape it cannot see: a static METHOD that resolves the profile with no override parameter at
+    /// all. <c>UpdateApplier.PreviousBuildPath</c> is why the gap was noticed — the field scan walked
+    /// straight past it — though that method did already take an optional <c>updatesDir</c>. The
+    /// actual #1772 defect was one level up, in its CALLER, and is pinned behaviourally by
+    /// <c>UpdateApplierTests.ApplyCopy_DoesNotTouchTheRealProfile</c>; that assertion fails against
+    /// the unfixed code, which is the evidence this reflection scan cannot provide.
+    /// </para>
+    /// <para>
+    /// The rule this encodes is the narrow, mechanically checkable half: if a static member can
+    /// produce a path under the user profile, it must at least offer an override. A default is fine —
+    /// having no parameter to override is not.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void StaticPathMethods_AcceptARedirect()
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.False(string.IsNullOrEmpty(profile));   // else every check below would be vacuous
+
+        var offenders = new List<string>();
+
+        foreach (var type in AppAssembly.GetTypes()
+                     .Where(t => t.Namespace == "SysManager.Services" && !t.IsNested))
+        {
+            foreach (var method in type.GetMethods(
+                         BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |
+                         BindingFlags.DeclaredOnly))
+            {
+                if (method.ReturnType != typeof(string)) continue;
+                if (method.IsSpecialName) continue;   // property getters are covered by the field scan
+
+                // Only parameterless-invocable methods can be probed. One that REQUIRES arguments is
+                // not a silent default in the first place — the caller had to decide something.
+                var parameters = method.GetParameters();
+                if (parameters.Any(p => !p.IsOptional)) continue;
+
+                string? value;
+                try
+                {
+                    value = method.Invoke(null, parameters.Select(p => p.DefaultValue).ToArray()) as string;
+                }
+                catch (TargetInvocationException)
+                {
+                    continue;   // a method that throws on defaults cannot silently write anywhere
+                }
+
+                if (string.IsNullOrEmpty(value)) continue;
+                if (!value.StartsWith(profile, StringComparison.OrdinalIgnoreCase)) continue;
+
+                // It resolves under the profile — that is allowed, but ONLY if a caller can override it.
+                if (parameters.Length == 0)
+                    offenders.Add($"{type.Name}.{method.Name}() takes no override parameter");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These static members resolve a path under the user's profile with no way for a caller to " +
+            "redirect it, so any test reaching them operates on REAL user data. Add an optional " +
+            "override parameter — and thread it through every caller, because an override nobody can " +
+            "pass is not a seam:\n  " + string.Join("\n  ", offenders));
     }
 }

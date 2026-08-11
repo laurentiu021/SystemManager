@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
@@ -26,7 +27,12 @@ public class DashboardViewModelTests
             new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
             new TemperatureService(diskHealth, skipHardwareInit: true),
-            winget ?? new WingetService(new PowerShellRunner()));
+            winget ?? new WingetService(new PowerShellRunner()),
+            // Redirected on purpose. The constructor's InitAsync reads the crash marker, and reading
+            // CONSUMES it — pointed at the real profile (which is what the old optional parameter
+            // defaulted to) these tests would delete a genuine crash report before the user was ever
+            // told about it (#1772).
+            new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")));
     }
 
     // ---------- construction & defaults ----------

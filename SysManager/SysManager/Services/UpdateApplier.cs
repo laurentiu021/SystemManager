@@ -88,7 +88,15 @@ internal static class UpdateApplier
     /// target path, so a failure mid-copy leaves the existing executable intact.
     /// Returns true on success.
     /// </summary>
-    internal static bool ApplyCopy(string sourceExe, string targetExe, int maxAttempts = 10, int delayMs = 500)
+    /// <param name="updatesDir">
+    /// Where the retained previous generation is written; null resolves the real profile. This
+    /// parameter exists because omitting it is not a harmless default in a test: the retained copy
+    /// went to the caller's own <c>%LocalAppData%\SysManager\updates</c> and overwrote their genuine
+    /// rollback build with a temp fixture. Redirecting <paramref name="targetExe"/> alone is not
+    /// enough — see the ratchet note in ArchitectureTests and issue #1772.
+    /// </param>
+    internal static bool ApplyCopy(
+        string sourceExe, string targetExe, int maxAttempts = 10, int delayMs = 500, string? updatesDir = null)
     {
         // A missing source is non-recoverable — without this guard File.Copy throws
         // FileNotFoundException (an IOException subtype), which the retry block below
@@ -110,7 +118,7 @@ internal static class UpdateApplier
                 // leaves nothing to go back to — and this project has shipped two launch-blocking
                 // regressions. Best-effort: failing to retain a copy must never abort an update that
                 // is otherwise fine, so PreserveCurrentBuild swallows its own errors.
-                PreserveCurrentBuild(targetExe);
+                PreserveCurrentBuild(targetExe, updatesDir);
                 File.Move(staging, targetExe, overwrite: true);
                 return true;
             }

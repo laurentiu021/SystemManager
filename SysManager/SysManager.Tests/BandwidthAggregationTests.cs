@@ -104,4 +104,75 @@ public class BandwidthAggregationTests
         Assert.Equal(100, snap.Processes[0].ProcessId);       // chrome has 2 connections → first
         Assert.Equal(2, snap.Processes[0].ConnectionCount);
     }
+
+    // ── The sample must not run on the caller's thread ────────────────────────────────────────────
+    //
+    // SampleAsync was Task-returning but fully synchronous: it did all the work inline and handed back
+    // Task.FromResult. BandwidthMonitorViewModel awaits it with ConfigureAwait(true), so every tick of
+    // the 1 Hz poll ran on the UI thread — enumerating every network interface and its IP statistics, two
+    // native TCP/UDP table queries, and a Process.GetProcessById per uncached PID. The window stuttered
+    // continuously while the tab was open, and nothing in the ViewModel looked wrong, because the
+    // signature claimed to be async.
+
+    private sealed class ThreadRecordingSource : ConnectionBandwidthSource
+    {
+        public int WorkThreadId { get; private set; }
+
+        protected override IReadOnlyList<ConnectionRow> EnumerateConnections()
+        {
+            WorkThreadId = Environment.CurrentManagedThreadId;
+            return [new(100, "chrome.exe", 443, true)];
+        }
+    }
+
+    [Fact]
+    public async Task SampleAsync_RunsTheWorkOffTheCallingThread()
+    {
+        // Records the thread the work actually runs on. A Task.FromResult implementation runs it on the
+        // CALLER's thread, so this fails on the unfixed code.
+        var src = new ThreadRecordingSource();
+        src.Start();
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        await src.SampleAsync();
+
+        Assert.NotEqual(0, src.WorkThreadId);   // the work ran at all
+        Assert.NotEqual(callerThreadId, src.WorkThreadId);
+    }
+
+    /// <summary>
+    /// Blocks inside the enumeration until released, then reports one row.
+    /// </summary>
+    /// <remarks>
+    /// The wait is BOUNDED rather than indefinite on purpose. Against a synchronous implementation the
+    /// caller would block inside SampleAsync on a gate only it can release — a deadlock, which in CI
+    /// means the whole job hangs to its ceiling instead of reporting a failure. A short timeout turns
+    /// that into a clean, fast assertion failure.
+    /// </remarks>
+    private sealed class GatedSource(SemaphoreSlim gate) : ConnectionBandwidthSource
+    {
+        protected override IReadOnlyList<ConnectionRow> EnumerateConnections()
+        {
+            gate.Wait(TimeSpan.FromSeconds(5));
+            return [new(100, "chrome.exe", 443, true)];
+        }
+    }
+
+    [Fact]
+    public async Task SampleAsync_ReturnsBeforeTheWorkCompletes()
+    {
+        // The stronger statement: the returned Task must be genuinely incomplete while the work is still
+        // running. A synchronous implementation completes the whole sample before returning, so
+        // IsCompleted would already be true here.
+        var gate = new SemaphoreSlim(0);
+        var src = new GatedSource(gate);
+        src.Start();
+
+        var pending = src.SampleAsync();
+
+        Assert.False(pending.IsCompleted);   // still working, on some other thread
+        gate.Release();
+        var snap = await pending;
+        Assert.Single(snap.Processes);
+    }
 }

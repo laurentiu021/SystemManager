@@ -49,10 +49,35 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         return true;
     }
 
+    /// <summary>
+    /// Takes one snapshot, entirely on a worker thread.
+    /// </summary>
+    /// <remarks>
+    /// <para>The offload is the point. This method was <c>Task</c>-returning but fully synchronous — it
+    /// did all the work inline and handed back <c>Task.FromResult</c> — and the ViewModel awaits it with
+    /// <c>ConfigureAwait(true)</c>, so every tick of the 1 Hz poll ran on the UI thread: enumerating all
+    /// network interfaces and reading per-interface IP statistics, two native TCP/UDP table queries, and a
+    /// <c>Process.GetProcessById</c> for each PID not yet in the name cache. None of that is bounded by a
+    /// small constant — a machine with many adapters or a browser holding dozens of sockets pays for all
+    /// of it — so the window stuttered continuously for as long as the tab was open. A signature that says
+    /// "async" while blocking the caller is the worst version of this: nothing in the ViewModel looks
+    /// wrong.</para>
+    /// <para>Everything the poll touches is confined to this call and its own fields, which only this
+    /// timer-driven path writes, so moving it wholesale is safe. The returned snapshot is immutable; the
+    /// ViewModel marshals back to the UI thread when it assigns properties, exactly as before.</para>
+    /// </remarks>
     public Task<BandwidthSnapshot> SampleAsync(CancellationToken ct = default)
     {
         if (!_primed) Start();
+        return Task.Run(() => SampleCore(), ct);
+    }
 
+    /// <summary>
+    /// The actual sample. Separated from <see cref="SampleAsync"/> so the work is one plain synchronous
+    /// unit that the offload wraps, rather than being interleaved with scheduling concerns.
+    /// </summary>
+    private BandwidthSnapshot SampleCore()
+    {
         var (rx, tx) = ReadInterfaceTotals();
         long nowTicks = NowTicks();
         double elapsed = Math.Max(0, (nowTicks - _prevTimestampTicks) / (double)TimeSpan.TicksPerSecond);
@@ -65,7 +90,7 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         _prevTimestampTicks = nowTicks;
 
         var processes = AggregateConnections(EnumerateConnections());
-        return Task.FromResult(new BandwidthSnapshot(BandwidthMode.Connections, down, up, processes));
+        return new BandwidthSnapshot(BandwidthMode.Connections, down, up, processes);
     }
 
     /// <summary>
@@ -115,8 +140,11 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         var rows = new List<ConnectionRow>();
         try
         {
-            NativeTables.CollectTcp(rows);
-            NativeTables.CollectUdp(rows);
+            // One name cache per enumeration, owned here — see ResolveName for why it is not static.
+            // Shared across the TCP and UDP passes so a PID with both is resolved once, not twice.
+            var nameCache = new Dictionary<int, string>();
+            NativeTables.CollectTcp(rows, nameCache);
+            NativeTables.CollectUdp(rows, nameCache);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or OutOfMemoryException)
         {
@@ -164,36 +192,46 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         private const int TcpTableOwnerPidAll = 5;
         private const int UdpTableOwnerPid = 1;
 
-        internal static void CollectTcp(List<ConnectionBandwidthSource.ConnectionRow> rows)
+        internal static void CollectTcp(
+            List<ConnectionBandwidthSource.ConnectionRow> rows, Dictionary<int, string> nameCache)
         {
             foreach (var (pid, remotePort) in QueryTable(isTcp: true))
-                rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid), remotePort, IsTcp: true));
+                rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid, nameCache), remotePort, IsTcp: true));
         }
 
-        internal static void CollectUdp(List<ConnectionBandwidthSource.ConnectionRow> rows)
+        internal static void CollectUdp(
+            List<ConnectionBandwidthSource.ConnectionRow> rows, Dictionary<int, string> nameCache)
         {
             foreach (var (pid, remotePort) in QueryTable(isTcp: false))
-                rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid), remotePort, IsTcp: false));
+                rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid, nameCache), remotePort, IsTcp: false));
         }
 
-        // Cheap PID→name resolution with a per-enumeration cache, so repeated PIDs (a browser
-        // with 20 sockets) cost one Process.GetProcessById. Names only; no MainModule/path read.
-        private static readonly Dictionary<int, string> _nameCache = new();
-
-        private static string ResolveName(int pid)
+        /// <summary>
+        /// PID→name resolution against a cache the CALLER owns, so repeated PIDs (a browser holding
+        /// twenty sockets) cost one <c>Process.GetProcessById</c>. Names only; no MainModule/path read.
+        /// </summary>
+        /// <remarks>
+        /// The cache used to be a private STATIC Dictionary that <c>QueryTable</c> cleared on entry. Two
+        /// problems, both fixed by making it a parameter. It was shared process-wide across every source
+        /// instance while a plain Dictionary is not thread-safe — harmless while the poll ran on the UI
+        /// thread, but the sample now runs on a worker, and a mode switch constructing a new source could
+        /// mutate it concurrently. And the clear-on-entry meant the UDP pass wiped the names the TCP pass
+        /// had just resolved, so a PID with both kinds of socket was looked up twice per poll for nothing.
+        /// One cache per sample: correct lifetime, no sharing, no clearing.
+        /// </remarks>
+        private static string ResolveName(int pid, Dictionary<int, string> nameCache)
         {
-            if (_nameCache.TryGetValue(pid, out var cached)) return cached;
+            if (nameCache.TryGetValue(pid, out var cached)) return cached;
             string name;
             try { using var p = System.Diagnostics.Process.GetProcessById(pid); name = p.ProcessName + ".exe"; }
             catch (ArgumentException) { name = $"PID {pid}"; }   // process exited between table read and lookup
             catch (InvalidOperationException) { name = $"PID {pid}"; }
-            _nameCache[pid] = name;
+            nameCache[pid] = name;
             return name;
         }
 
         private static IEnumerable<(int Pid, int RemotePort)> QueryTable(bool isTcp)
         {
-            _nameCache.Clear();
             int size = 0;
             int tableClass = isTcp ? TcpTableOwnerPidAll : UdpTableOwnerPid;
 

@@ -10,6 +10,15 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.4] - 2026-08-11
+
+The Tune-Up card no longer shows a drive as plainly "Healthy" while the headline above it warns
+you about that same drive.
+
+### Fixed
+- **Quick Tune-Up showed the wrong wording for each drive.** The per-drive line in the Tune-Up result showed a bare status word — "Healthy", "Warning" — instead of the full plain-English summary the rest of the app shows, such as "Healthy — 38 °C · wear 2% · 4210 h on". On a drive that genuinely needed attention that produced an amber "1 recommendation" heading sitting directly above a row reading simply "Healthy", so the card contradicted itself. It now shows the same sentence everywhere, which is also the text the colour beside it was always derived from.
+- **Running the project's own tests rewrote your "check for updates at startup" setting.** This affects only people who build and test SysManager themselves, not normal use. The About tab remembers whether you want the startup version check, and the tests had no way to point that at a scratch folder — so every test that built the About tab wrote to your real setting file. That is the same problem fixed for four other files in 1.60.1, 1.61.1 and 1.61.2, arriving through the one route those fixes did not cover. Fixed the same way, plus a test that fails if it ever comes back.
+
 ## [1.61.3] - 2026-08-11
 
 Quick Tune-Up says "All good" when your PC actually is, ending a Windows security or update

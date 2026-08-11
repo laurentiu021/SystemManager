@@ -21,6 +21,14 @@ public class AllViewModelsSweepTests
     /// A throwaway crash-marker store. Reading a marker CONSUMES it, so a Dashboard constructed
     /// against the real profile would delete a genuine crash report before the user saw it (#1772).
     /// </summary>
+    /// <summary>
+    /// A throwaway config directory for AboutViewModel. Its startup-check preference lives in
+    /// %AppData%\SysManager, and the convenience constructors used to resolve that unconditionally —
+    /// so constructing it here rewrote the developer's real preference file (#1785).
+    /// </summary>
+    private static string AboutConfigDir()
+        => Path.Combine(Path.GetTempPath(), "SysManagerTests", "sweep-about");
+
     private static CrashMarkerService TempCrashMarkers()
         => new(Path.Combine(Path.GetTempPath(), "SysManagerTests", "sweep-crash"));
 
@@ -32,7 +40,7 @@ public class AllViewModelsSweepTests
     [Fact] public void DeepCleanup_Constructs() => Assert.NotNull(new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()));
     [Fact] public void Drivers_Constructs() => Assert.NotNull(new DriversViewModel(new PowerShellRunner()));
     [Fact] public void Logs_Constructs() => Assert.NotNull(new LogsViewModel(new EventLogService()));
-    [Fact] public void About_Constructs() => Assert.NotNull(new AboutViewModel());
+    [Fact] public void About_Constructs() => Assert.NotNull(new AboutViewModel(AboutConfigDir()));
     [Fact] public void MainWindow_Constructs() => Assert.NotNull(new MainWindowViewModel());
 
     [Fact]
@@ -82,7 +90,7 @@ public class AllViewModelsSweepTests
     [Fact]
     public void About_HasCollection()
     {
-        var vm = new AboutViewModel();
+        var vm = new AboutViewModel(AboutConfigDir());
         Assert.NotNull(vm.ReleaseHistory);
     }
 

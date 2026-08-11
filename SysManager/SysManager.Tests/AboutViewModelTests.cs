@@ -11,46 +11,73 @@ namespace SysManager.Tests;
 public class AboutViewModelTests
 {
     /// <summary>
+    /// A per-run scratch directory every AboutViewModel built here is pointed at, so no test in this
+    /// file can write the startup-check preference into the developer's real <c>%AppData%\SysManager</c>.
+    /// </summary>
+    /// <remarks>
+    /// The core constructor already documented a <c>preferences</c> seam for exactly this, but the two
+    /// convenience overloads did not thread it — so all 23 constructions in this file went around it,
+    /// and each one rewrote the real preference file. The seam being present and documented was not
+    /// enough: it has to exist on the constructor the tests actually call. Fourth instance of the shape
+    /// fixed in #1772 (#1785).
+    /// <para>Static and deliberately not cleaned up: it outlives every test here, there is no
+    /// after-all hook, and a few bytes left in TEMP is strictly better than one byte written into the
+    /// real profile.</para>
+    /// </remarks>
+    private static readonly string ConfigDir = CreateScratchDir();
+
+    private static string CreateScratchDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerAboutVmTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>Default-service AboutViewModel, redirected away from the real profile.</summary>
+    private static AboutViewModel NewVm() => new(ConfigDir);
+
+    /// <summary>
     /// Builds an AboutViewModel WITHOUT the startup update-check, so default-state
     /// assertions don't race the constructor's async network fetch (which populates
     /// UpdateStatus / LatestNotes / LatestVersionLabel / LatestPublishedLabel /
     /// UpdateAvailable).
     /// </summary>
     private static AboutViewModel NewVmNoAutoCheck() =>
-        new(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()), autoCheck: false);
+        new(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            autoCheck: false, preferences: new UpdateCheckPreferenceService(ConfigDir), updatesDir: ConfigDir);
 
     [Fact]
     public void Constructs_WithDefaultService()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.NotNull(vm);
     }
 
     [Fact]
     public void Constructs_WithInjectedService()
     {
-        var vm = new AboutViewModel(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()));
+        var vm = new AboutViewModel(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()), ConfigDir);
         Assert.NotNull(vm);
     }
 
     [Fact]
     public void CurrentVersion_NonEmpty()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.False(string.IsNullOrWhiteSpace(vm.CurrentVersion));
     }
 
     [Fact]
     public void CurrentVersion_ParsesAsVersion()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.True(Version.TryParse(vm.CurrentVersion, out _));
     }
 
     [Fact]
     public void ReleaseHistory_StartsEmpty()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.NotNull(vm.ReleaseHistory);
         // May or may not have populated yet depending on async startup —
         // just make sure the collection is there.
@@ -73,28 +100,28 @@ public class AboutViewModelTests
     [Fact]
     public void IsDownloading_DefaultsFalse()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.False(vm.IsDownloading);
     }
 
     [Fact]
     public void DownloadPercent_DefaultsZero()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.Equal(0, vm.DownloadPercent);
     }
 
     [Fact]
     public void DownloadedPath_DefaultsNull()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.Null(vm.DownloadedPath);
     }
 
     [Fact]
     public void AutoDownloadFailed_DefaultsFalse()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.False(vm.AutoDownloadFailed);
     }
 
@@ -109,7 +136,7 @@ public class AboutViewModelTests
     [InlineData("OpenDownloadFolderCommand")]
     public void CommandExists(string propertyName)
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         var prop = vm.GetType().GetProperty(propertyName);
         Assert.NotNull(prop);
         Assert.NotNull(prop!.GetValue(vm));
@@ -118,7 +145,7 @@ public class AboutViewModelTests
     [Fact]
     public void OpenRepoCommand_DoesNotThrow()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         // Shell execute is wrapped in try/catch; even if no browser is
         // associated, it must not throw.
         var ex = Record.Exception(() => vm.OpenRepoCommand.Execute(null));
@@ -128,7 +155,7 @@ public class AboutViewModelTests
     [Fact]
     public void OpenLicenseCommand_DoesNotThrow()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         var ex = Record.Exception(() => vm.OpenLicenseCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -136,7 +163,7 @@ public class AboutViewModelTests
     [Fact]
     public void OpenManualDownloadCommand_DoesNotThrow()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         var ex = Record.Exception(() => vm.OpenManualDownloadCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -144,7 +171,7 @@ public class AboutViewModelTests
     [Fact]
     public void OpenDownloadFolderCommand_NoPath_DoesNotThrow()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         var ex = Record.Exception(() => vm.OpenDownloadFolderCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -152,7 +179,7 @@ public class AboutViewModelTests
     [Fact]
     public async Task InstallUpdateCommand_WithoutDownload_SetsErrorStatus()
     {
-        var vm = new AboutViewModel { DownloadedPath = null };
+        var vm = new AboutViewModel(ConfigDir) { DownloadedPath = null };
         await vm.InstallUpdateCommand.ExecuteAsync(null);
         Assert.Contains("No downloaded", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
     }
@@ -160,7 +187,7 @@ public class AboutViewModelTests
     [Fact]
     public async Task InstallUpdateCommand_WithFakePath_SetsNoFileStatus()
     {
-        var vm = new AboutViewModel { DownloadedPath = @"C:\nonexistent\fake.exe" };
+        var vm = new AboutViewModel(ConfigDir) { DownloadedPath = @"C:\nonexistent\fake.exe" };
         await vm.InstallUpdateCommand.ExecuteAsync(null);
         Assert.Contains("No downloaded", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
     }
@@ -172,7 +199,7 @@ public class AboutViewModelTests
         var tmp = Path.GetTempFileName();
         try
         {
-            var vm = new AboutViewModel { DownloadedPath = tmp };
+            var vm = new AboutViewModel(ConfigDir) { DownloadedPath = tmp };
             await vm.InstallUpdateCommand.ExecuteAsync(null);
             Assert.Contains("No release info", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
         }
@@ -185,7 +212,7 @@ public class AboutViewModelTests
     [Fact]
     public async Task LoadHistoryCommand_NeverThrows()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         var ex = await Record.ExceptionAsync(() => ((Task?)vm.LoadHistoryCommand.ExecuteAsync(null) ?? Task.CompletedTask));
         Assert.Null(ex);
     }
@@ -193,7 +220,7 @@ public class AboutViewModelTests
     [Fact]
     public async Task CheckForUpdatesCommand_NeverThrows()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         var ex = await Record.ExceptionAsync(() => ((Task?)vm.CheckForUpdatesCommand.ExecuteAsync(null) ?? Task.CompletedTask));
         Assert.Null(ex);
     }
@@ -222,7 +249,7 @@ public class AboutViewModelTests
     [Fact]
     public void DownloadStatus_DefaultsEmpty()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.Equal(string.Empty, vm.DownloadStatus);
     }
 
@@ -234,14 +261,14 @@ public class AboutViewModelTests
     [InlineData(100)]
     public void DownloadPercent_AcceptsFullRange(int pct)
     {
-        var vm = new AboutViewModel { DownloadPercent = pct };
+        var vm = new AboutViewModel(ConfigDir) { DownloadPercent = pct };
         Assert.Equal(pct, vm.DownloadPercent);
     }
 
     [Fact]
     public void BuildDate_IsString()
     {
-        var vm = new AboutViewModel();
+        var vm = NewVm();
         Assert.NotNull(vm.BuildDate);
     }
 
@@ -281,6 +308,36 @@ public class AboutViewModelTests
     // (an IFileDialogService), which is a broader refactor than a bug fix should carry.
     // Tracked separately; until then the guarantee is enforced by code review: this method
     // must not write anywhere the user did not pick.
+    [Fact]
+    public void ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile()
+    {
+        // The end-to-end guarantee, stated against the actual user path rather than a proxy. Building
+        // an AboutViewModel and toggling the startup-check checkbox — which every test in this file
+        // does, directly or via the constructor — must leave %AppData%\SysManager exactly as it was.
+        //
+        // This is the assertion that was failing silently: the core constructor documented a
+        // `preferences` seam for exactly this, but the two convenience overloads the tests actually
+        // call did not thread it, so all 28 constructions rewrote the developer's real file. Fails
+        // against the old code, where the default constructor had no configDir to accept.
+        var realPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SysManager", "update-check.json");
+        var existedBefore = File.Exists(realPath);
+        var contentBefore = existedBefore ? File.ReadAllText(realPath) : null;
+
+        var vm = NewVm();
+        vm.CheckForUpdatesOnStartup = false;
+        vm.CheckForUpdatesOnStartup = true;
+
+        Assert.Equal(existedBefore, File.Exists(realPath));
+        if (existedBefore) Assert.Equal(contentBefore, File.ReadAllText(realPath));
+
+        // …and it went to the redirected directory instead, so the seam is genuinely wired through
+        // rather than merely accepted and ignored.
+        Assert.True(File.Exists(Path.Combine(ConfigDir, "update-check.json")),
+            "the preference was not written to the override directory — configDir is accepted but unused");
+    }
+
 }
 
 /// <summary>

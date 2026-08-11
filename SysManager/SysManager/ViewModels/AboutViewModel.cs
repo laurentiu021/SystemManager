@@ -94,10 +94,29 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty] private bool _checkForUpdatesOnStartup = true;
 
-    public AboutViewModel() : this(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService())) { }
+    /// <summary>
+    /// Production/designer constructor. <paramref name="configDir"/> exists so these convenience
+    /// overloads are not a way AROUND the seam on the core constructor below.
+    /// </summary>
+    /// <remarks>
+    /// The core constructor documents that <c>preferences</c> is overridable "so tests exercise the
+    /// real gate against a temp directory instead of the developer's own preference file" — and all 23
+    /// test constructions went through THESE overloads, which did not thread it. The seam existed, was
+    /// documented, and was bypassed: every one of those tests wrote the startup-check preference into
+    /// the real <c>%AppData%\SysManager</c>. Fourth instance of the shape fixed in #1772, invisible to
+    /// both path ratchets for the same reason — a defaulting parameter, not a static field (#1785).
+    /// </remarks>
+    public AboutViewModel(string? configDir = null)
+        : this(new UpdateService(),
+               new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+               autoCheck: true,
+               preferences: configDir is null ? null : new UpdateCheckPreferenceService(configDir),
+               updatesDir: configDir) { }
 
-    public AboutViewModel(UpdateService updates, SystemReportService reportService)
-        : this(updates, reportService, autoCheck: true) { }
+    public AboutViewModel(UpdateService updates, SystemReportService reportService, string? configDir = null)
+        : this(updates, reportService, autoCheck: true,
+               preferences: configDir is null ? null : new UpdateCheckPreferenceService(configDir),
+               updatesDir: configDir) { }
 
     /// <summary>
     /// Core constructor. <paramref name="autoCheck"/> controls whether the

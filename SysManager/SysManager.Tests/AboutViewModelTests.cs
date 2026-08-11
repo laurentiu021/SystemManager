@@ -385,3 +385,124 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         Assert.False(File.Exists(path));
     }
 }
+
+/// <summary>
+/// Tests for the rollback offer on the About tab.
+/// <para>The updater was the one mutating feature in the app with no way back: the atomic move that
+/// makes an INTERRUPTED update safe also destroyed the outgoing executable, so a SUCCESSFUL update
+/// into a broken build left the user with nothing to return to. A winget user can
+/// <c>winget install --version</c>; an in-app updater user had to find an older GitHub release on
+/// their own, which for the target persona is a dead end.</para>
+/// <para>Each test injects a temp updates directory, so the check never reads — or comes to depend
+/// on — whatever happens to be in the developer's real profile.</para>
+/// </summary>
+public sealed class AboutViewModelRollbackTests : IDisposable
+{
+    private readonly string _dir;
+
+    public AboutViewModelRollbackTests()
+    {
+        _dir = Path.Combine(Path.GetTempPath(), "SysManagerAboutRollbackTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_dir);
+    }
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+        GC.SuppressFinalize(this);
+    }
+
+    // autoCheck: false — these assert constructor state, so they must not race the network fetch.
+    private AboutViewModel NewVm() =>
+        new(new UpdateService(),
+            new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            autoCheck: false,
+            preferences: new UpdateCheckPreferenceService(_dir),
+            updatesDir: _dir);
+
+    private string PreviousBuild => Path.Combine(_dir, UpdateApplier.PreviousBuildFileName);
+
+    [Fact]
+    public void CanRollBack_IsFalse_WhenNoPreviousBuildWasRetained()
+    {
+        // A fresh install, or a user who has never updated: the button must not appear, because
+        // pressing it could do nothing.
+        Assert.False(File.Exists(PreviousBuild));
+
+        using var vm = NewVm();
+
+        Assert.False(vm.CanRollBack);
+    }
+
+    [Fact]
+    public void CanRollBack_IsTrue_WhenAPreviousBuildExists()
+    {
+        File.WriteAllText(PreviousBuild, "OLD-BUILD");
+
+        using var vm = NewVm();
+
+        Assert.True(vm.CanRollBack);
+    }
+
+    [Fact]
+    public void RollBackCommand_Exists()
+    {
+        using var vm = NewVm();
+        Assert.NotNull(vm.RollBackCommand);
+    }
+
+    [Fact]
+    public async Task RollBack_WhenThePreviousBuildVanished_SaysSo_AndHidesTheOffer()
+    {
+        // The file can disappear between the button appearing and being pressed (manual cleanup, disk
+        // tools, another instance). That must produce an explanation and a corrected UI rather than a
+        // silent no-op or a crash.
+        File.WriteAllText(PreviousBuild, "OLD-BUILD");
+        using var vm = NewVm();
+        Assert.True(vm.CanRollBack);
+
+        File.Delete(PreviousBuild);
+        await vm.RollBackCommand.ExecuteAsync(null);
+
+        Assert.False(vm.CanRollBack);
+        Assert.Contains("no longer available", vm.RollBackStatus);
+    }
+
+    [Fact]
+    public void RollBackLabel_IsPlainLanguage_NotAMechanism()
+    {
+        // The target user does not think in terms of executables or version numbers on disk.
+        using var vm = NewVm();
+
+        Assert.Contains("previous version", vm.RollBackLabel);
+        Assert.DoesNotContain(".exe", vm.RollBackLabel);
+    }
+
+    [Fact]
+    public void AboutView_RendersTheRollbackButtonAndItsStatus()
+    {
+        // CanRollBack / RollBackStatus existing on the ViewModel proves nothing if the view never
+        // binds them — that is precisely the dead-property class of defect this codebase has hit
+        // repeatedly. Assert against the shipped markup.
+        var xaml = File.ReadAllText(ViewPath("AboutView.xaml"));
+
+        Assert.Contains("RollBackCommand", xaml);
+        Assert.Contains("CanRollBack", xaml);      // gates visibility
+        Assert.Contains("RollBackLabel", xaml);
+        Assert.Contains("RollBackStatus", xaml);   // feedback is rendered, not dead
+    }
+
+    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
+    private static string ViewPath(string fileName)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);   // else the assertions above would silently test nothing
+        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
+        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
+        return path;
+    }
+}

@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.0] - 2026-08-11
+
+If an update ever leaves SysManager not working, you can now go back to the version you had
+before with one click.
+
+### Added
+- **A way back from a bad update.** Until now, installing an update replaced the old SysManager permanently. If a new version turned out to have a problem — and this app has shipped two releases that wouldn't start — your only option was to work out on your own that you needed to find an older release on GitHub and download it by hand. The app now keeps the version you were running before the last update, and the About tab shows a **"Go back to the previous version"** button when there's something to go back to. It asks first, explains that anything the newer version fixed will come back too, and leaves your settings alone. Only one older version is kept, so this doesn't quietly fill your disk with copies of the app — and if there's no room to keep one, the update still installs as normal rather than failing.
+
 ## [1.60.3] - 2026-08-10
 
 Closes a hole in the update check before it can ever matter: when SysManager starts being

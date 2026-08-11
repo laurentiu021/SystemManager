@@ -101,6 +101,83 @@ public class TuneUpServiceTests
         Assert.Equal(0, result.WarningCount);
     }
 
+    // ── The verdict strings DiskHealthService actually produces ──────────────────────────────────
+    //
+    // The test above passed against the old `d.Verdict != "Healthy"` check only because its fixture
+    // hand-wrote a bare "Healthy" — a value the service never emits. ApplyVerdict writes
+    // "Healthy — 38 °C · wear 2% · 4210 h on" when any SMART counter is readable, and "Healthy."
+    // (with a period) when none is. So every healthy disk on a real machine counted as a warning
+    // while this test said otherwise: the fixture was the bug's alibi. These use the real shapes,
+    // copied from DiskHealthService.ApplyVerdict, so the fixture can no longer disagree with
+    // production.
+
+    [Theory]
+    [InlineData("Healthy — 38 °C · wear 2% · 4210 h on")]   // SMART counters readable
+    [InlineData("Healthy.")]                                 // no counters available
+    public void TuneUpResult_WarningCount_HealthyDiskWithRealVerdictText_IsNotAWarning(string verdict)
+    {
+        var result = new TuneUpResult
+        {
+            BrokenShortcutsFound = 0,
+            Uptime = TimeSpan.FromDays(1),
+            RamUsedPercent = 50,
+            DiskResults = new List<DiskHealthSummary>
+            {
+                new() { Name = "Disk0", Verdict = verdict, ColorHex = StatusColors.Good }
+            }
+        };
+
+        Assert.Equal(0, result.WarningCount);
+        Assert.Equal("All good", result.OverallVerdict);
+        Assert.Equal(StatusColors.Good, result.OverallColorHex);
+    }
+
+    [Fact]
+    public void TuneUpResult_TwoHealthyDisks_DoNotReportTwoRecommendations()
+    {
+        // The exact user-visible symptom: an ordinary PC with two healthy drives and nothing else
+        // wrong reported "2 recommendations" in amber — and then listed two disks whose own text said
+        // "Healthy". The headline contradicted the detail directly beneath it.
+        var result = new TuneUpResult
+        {
+            BrokenShortcutsFound = 0,
+            Uptime = TimeSpan.FromDays(1),
+            RamUsedPercent = 50,
+            DiskResults = new List<DiskHealthSummary>
+            {
+                new() { Name = "Disk0", Verdict = "Healthy — 38 °C · wear 2% · 4210 h on", ColorHex = StatusColors.Good },
+                new() { Name = "Disk1", Verdict = "Healthy.", ColorHex = StatusColors.Good },
+            }
+        };
+
+        Assert.Equal(0, result.WarningCount);
+        Assert.Equal("All good", result.OverallVerdict);
+    }
+
+    [Theory]
+    [InlineData("Drive is failing — back up now and replace it.", StatusColors.Bad)]
+    [InlineData("SSD 87% worn out — plan a replacement.", StatusColors.Warning)]
+    [InlineData("Running hot (61 °C). Check cooling / airflow.", StatusColors.Warning)]
+    [InlineData("12 I/O errors logged. Monitor closely.", StatusColors.Warning)]
+    public void TuneUpResult_WarningCount_RealProblemVerdicts_StillCount(string verdict, string colour)
+    {
+        // The other half: keying on the colour must not stop counting genuine problems. These are the
+        // real strings from every non-healthy branch of ApplyVerdict.
+        var result = new TuneUpResult
+        {
+            BrokenShortcutsFound = 0,
+            Uptime = TimeSpan.FromDays(1),
+            RamUsedPercent = 50,
+            DiskResults = new List<DiskHealthSummary>
+            {
+                new() { Name = "Disk0", Verdict = verdict, ColorHex = colour }
+            }
+        };
+
+        Assert.Equal(1, result.WarningCount);
+        Assert.Equal("1 recommendation", result.OverallVerdict);
+    }
+
     [Fact]
     public void TuneUpResult_WarningCount_CountsBrokenShortcuts()
     {

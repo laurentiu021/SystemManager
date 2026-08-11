@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.4] - 2026-08-11
+
+Quick Tune-Up said "2 recommendations" on a perfectly healthy PC. It now says "All good"
+when everything is actually fine.
+
+### Fixed
+- **Quick Tune-Up counted every healthy disk as a problem.** If you have two drives and nothing wrong with your PC — no broken shortcuts, plenty of free memory, recently restarted — the Tune-Up result still opened with **"2 recommendations"** in amber, showed the "what to look at" section, and then listed those same two drives with their own verdict reading *"Healthy — 38 °C"*. The headline contradicted the detail directly underneath it. The check was comparing the disk's verdict against the word "Healthy" on its own, but the app never writes that exact wording — it always adds the temperature and wear, or a full stop. So every healthy drive matched "not healthy". It now decides from the same green/amber/red signal the disk row itself uses, so a healthy PC reads "All good" and a drive that genuinely needs attention still counts.
+
 ## [1.61.2] - 2026-08-11
 
 Nothing changes in the app itself. This closes three ways the project's own tests could reach

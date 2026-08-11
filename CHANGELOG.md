@@ -73,12 +73,19 @@ something it does not recognise.
 
 ## [1.58.8] - 2026-08-10
 
+Quick Tune-Up now shows you what it found, and lets you watch it work and stop it.
+
 ### Fixed
 - **Quick Tune-Up used to throw away everything it found.** You pressed the button, it cleaned temp files, emptied the Recycle Bin and checked your shortcuts, memory, uptime and disks — and then showed you nothing but a toast. The results card it was building all along (how much was freed, how many broken shortcuts, which disk needs attention, whether the PC wants a restart) now actually appears, with a plain-language line for each finding. Where something can be acted on, there's a button that takes you straight to the right tab: broken shortcuts to Shortcut Cleaner, high memory to Process Manager, more to reclaim to Deep Cleanup. If nothing needs attention it says so, rather than leaving you guessing.
 - **You can now see the Tune-Up working, and stop it.** It runs six steps and showed no progress at all while doing it. There's now a progress bar with the current step, and a Cancel button — the ability to cancel was already built, it just had no button.
 
 ### Changed
 - **Removed five internal shortcuts that led nowhere.** Five "jump to this tab" commands existed in the code with nothing connected to them. They've been removed rather than left looking like features; the one that *is* used (View details on the update notice) is untouched.
+
+## [1.58.7] - 2026-08-10
+
+The Dashboard's "Recent activity" card now answers the question it was always meant to:
+what did this app change on my PC?
 
 ### Fixed
 - **"Recent activity" on the Dashboard now shows what the app actually changed.** It listed which tabs you had opened, while leaving out the things you would genuinely want a record of: a permanent Deep Cleanup delete, a browser clean that signed you out of sites, privacy settings written to the registry, an app uninstall, files erased with the shredder, and broken shortcuts deleted. None of those left a trace. All six are now recorded, and the card refreshes when you return to the Dashboard so a new entry shows up straight away instead of looking like it never registered.
@@ -89,6 +96,9 @@ something it does not recognise.
 
 ## [1.58.6] - 2026-08-10
 
+Jobs that can run for minutes now tell you how long is left, instead of leaving you
+watching a bar.
+
 ### Fixed
 - **"How long is left?" now actually appears.** Speed Test and Deep Cleanup both worked out a time estimate on every tick of a job that can run for minutes — and then had nowhere to show it, so you watched a bar with no idea whether to wait or walk away. Both now show it, the same way App Updates, Bulk Installer, Uninstaller and Quick Cleanup already did.
 - **Ping and Traceroute now confirm what they did.** These were the only two tabs in the app with no status line at all. Pressing "Clear History" on Ping emptied the chart and the whole history and said nothing, so there was no way to tell it had worked. Starting or stopping the automatic traceroute was equally silent. Both tabs now report what happened.
@@ -96,11 +106,17 @@ something it does not recognise.
 
 ## [1.58.5] - 2026-08-10
 
+Browser Cleaner now finds every browser profile, not just the first one — so traces you
+asked it to clear are actually cleared.
+
 ### Fixed
 - **Browser Cleaner was only ever cleaning your first browser profile.** If you have more than one profile in Chrome, Edge or Brave — a personal one and a work one, or one per person in the house — only the first was scanned. The others' cache, history and cookies were never found, never counted in the total, and never cleaned. So someone clearing their browsing traces kept every trace in the other profile, with nothing on screen to hint at it. Every profile is now included, and each row says which one it belongs to ("Google Chrome — Profile 1"), so you can see exactly what you are about to clean. Cookies stay unticked by default in every profile, just as before, and cleaning one profile cannot touch another. Firefox was already handled correctly and is unchanged.
 - **Disk Analyzer now tells you when a folder was only partly readable.** Windows blocks access to parts of some folders even for you, and when that happened the folder's size was quietly reported too small with no hint anything was missing — so you could go hunting for space in the wrong place. Those folders now carry a small amber warning mark, and hovering it explains that the folder may be using more space than shown. The app already knew this; it just never said so.
 
 ## [1.58.4] - 2026-08-10
+
+The Windows Update progress bar now really fills, which the previous version claimed to
+fix and only half did.
 
 ### Fixed
 - **The Windows Update progress bar now actually fills.** Version 1.58.2 claimed to fix this and only half did: the bar was told what percentage to show, but it was still stuck in "busy" mode, and in that mode Windows ignores the percentage completely and just sweeps back and forth. So installing updates — one of the longest things the app does — still gave no sense of how far along it was. It now switches to a real filling bar the moment Windows reports a percentage. The Cleanup and Debloater bars fixed in 1.58.2 were genuinely fixed; this was the one that was not.
@@ -110,10 +126,15 @@ something it does not recognise.
 
 ## [1.58.3] - 2026-08-10
 
+The Ping and Traceroute tabs no longer contradict each other about whether a trace is
+running.
+
 ### Fixed
 - **The Traceroute tab no longer lies about whether it is running.** Ping and Traceroute look like two separate tabs with their own Start and Stop buttons, but behind them sits one shared monitor. So pressing Stop on Ping silently killed a running auto-trace while Traceroute still showed "Stop auto-trace" and claimed it was running — and pressing Start on Ping quietly began tracing every target while Traceroute still offered to start it. Both tabs now read the same state, so whichever one you use, the other tells you the truth.
 
 ## [1.58.2] - 2026-08-10
+
+Three buttons that permanently deleted something without asking now ask first.
 
 ### Fixed
 - **Three ways to permanently delete something now ask first.** "Clear History" on App Alerts is a red button sitting right next to the harmless "Acknowledge All" — and it wiped the entire list of what installed itself on your PC the instant you touched it, with no question asked and no way to get it back (that list is never saved to a file, so what is on screen is the only copy). Deleting a saved preset on Volume Control and clearing your saved speed-test results behaved the same way: the file was rewritten immediately, no undo. All three now ask you to confirm and say what will be lost. If the list is already empty there is nothing to confirm, so no pointless dialog appears.

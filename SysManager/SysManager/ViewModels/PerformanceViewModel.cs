@@ -493,7 +493,20 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             return;
         }
 
-        if (!DialogService.Instance.Confirm("Create a System Restore point?\n\nThis saves the current system state so you can roll back later if something goes wrong.", "Restore Point — Confirm")) return;
+        // Same disclosure as the Restore Points tab: creating a checkpoint enables System Protection for
+        // the Windows drive first, because Checkpoint-Computer fails when it is off. Both entry points
+        // reach the same service call, so both have to say so — a prompt that is honest in one tab and
+        // silent in the other still leaves the user surprised.
+        if (!DialogService.Instance.Confirm(
+                "Create a System Restore point?\n\n" +
+                "This saves the current system state so you can roll back later if something goes wrong.\n\n" +
+                "If System Protection is currently off for the Windows drive, SysManager will turn it " +
+                "back on — Windows cannot create a restore point otherwise. Protection then reserves " +
+                "some disk space for restore points until you turn it off again in System Properties.",
+                "Restore Point — Confirm"))
+        {
+            return;
+        }
 
         // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Create restore point");

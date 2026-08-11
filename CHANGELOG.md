@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.8] - 2026-08-11
+
+Six places where SysManager either did not ask before doing something irreversible, or asked a
+question it did not mean.
+
+### Fixed
+- **Deep Cleanup's confirmation said the Recycle Bin was not involved while it was about to empty it.** The prompt ended with "These files are removed directly, not sent to the Recycle Bin." That was meant to say the deletion is permanent, but it reads as a promise that your Recycle Bin is left alone — and "Recycle Bin (all drives)" is one of the categories, ticked automatically whenever the bin has anything in it. So the single dialog standing between you and an emptied Recycle Bin implied the opposite of what the Clean button would do. It now says plainly that the Recycle Bin will be emptied when that category is selected, and keeps the "cannot be recovered" warning when it is not.
+- **"Upgrade selected" upgraded every ticked app without asking.** The same action on the Dashboard has always asked first. Now both do, and the App Updates prompt names the apps when there are five or fewer, since "3 apps" tells you less than which three. One prompt covers the whole batch, not one per app.
+- **"Restore default" wiped your Windows Update settings without asking.** Of the three buttons in the update-timing panel, the two that *apply* a setting both asked for confirmation; the one that *discards* everything you had configured did not. It now asks, and the prompt shows the current deferral or pause so you can see what you are giving up.
+- **"Create restore point" silently turned System Protection back on.** Windows cannot create a restore point while System Protection is off for the Windows drive, so SysManager quietly switched it on first. That is the right thing to do — but it is a lasting change that starts reserving disk space, and it happened with no mention anywhere. Both places that create a restore point (Restore Points and Performance Mode) now say so before doing it.
+- **Saving a volume preset silently replaced an existing one.** Deleting a preset asked for confirmation because the change is written to disk immediately with no undo; saving over one destroys exactly the same data and did not ask. Now it does — matching names case-insensitively, since "gaming" and "Gaming" are the same preset — while saving under a new name is never interrupted.
+- **A "cannot end this process" message was shown as a Yes/No question.** Trying to end a critical system process from the File Lock Detector opened a dialog with two buttons that did the same thing, and the answer was thrown away. It is now a plain notice with a single button. Dialogs that ask nothing should not look like questions; that habit is what teaches people to dismiss the ones that matter.
+
+---
+
 ## [1.61.7] - 2026-08-11
 
 The Settings Watchdog now shows what it is watching, instead of only telling you once something

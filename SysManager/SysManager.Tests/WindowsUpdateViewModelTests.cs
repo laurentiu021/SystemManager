@@ -621,6 +621,81 @@ public class WindowsUpdateViewModelTests
         }
     }
 
+    // ── "Restore default" is the destructive one of the three policy buttons ──────────────────────
+    //
+    // DeferFeatureUpdates and PauseUpdates confirmed from the start; Restore — which DISCARDS whatever
+    // deferral or pause those two produced — was the one that did not ask. All three are pinned here so
+    // the asymmetry cannot come back.
+    //
+    // Driven with isElevated: true and a DECLINED confirm, deliberately. WindowsUpdatePolicyService is
+    // sealed with no interface, so it cannot be substituted; on an elevated machine a confirmed Restore
+    // would really delete six values under HKLM\…\WindowsUpdate — the developer's own update policy.
+    // Declining is the assertion that matters anyway (the gate exists and it blocks), and it reaches the
+    // Confirm without ever reaching the registry.
+
+    [Theory]
+    [InlineData("RestoreUpdatePolicyCommand")]
+    [InlineData("DeferFeatureUpdatesCommand")]
+    [InlineData("PauseUpdatesCommand")]
+    public void EveryPolicyButton_AsksBeforeItChangesAnything(string commandName)
+    {
+        var vm = new WindowsUpdateViewModel(
+            Substitute.For<IPowerShellRunner>(),
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => true);
+
+        var before = vm.PolicySummary;
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // user clicks "No"
+        DialogService.Instance = dialog;
+        try
+        {
+            var command = (System.Windows.Input.ICommand)vm.GetType().GetProperty(commandName)!.GetValue(vm)!;
+            command.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            // Declining returns before the policy write, so the summary is untouched.
+            Assert.Equal(before, vm.PolicySummary);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void RestoreUpdatePolicy_TellsTheUserWhatStateIsBeingDiscarded()
+    {
+        // A confirmation that says only "are you sure?" leaves the user guessing what they are giving
+        // up. The prompt quotes the current policy summary — the very thing Restore erases.
+        var vm = new WindowsUpdateViewModel(
+            Substitute.For<IPowerShellRunner>(),
+            new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(),
+            static () => true);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        string? shown = null;
+        dialog.Confirm(Arg.Do<string>(m => shown = m), Arg.Any<string>()).Returns(false);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.RestoreUpdatePolicyCommand.Execute(null);
+
+            Assert.NotNull(shown);
+            Assert.Contains("default", shown!, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(vm.PolicySummary, shown!, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
     // ---------- progress reporting ----------
 
     [Fact]

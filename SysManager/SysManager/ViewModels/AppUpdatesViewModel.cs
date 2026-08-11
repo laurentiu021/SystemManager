@@ -122,6 +122,21 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         var toUpgrade = Packages.Where(p => p.IsSelected).ToList();
         if (toUpgrade.Count == 0) { StatusMessage = "No packages selected"; return; }
 
+        // Confirm, because upgrading restarts apps and cannot be undone — and because the SAME action on
+        // the Dashboard already asks ("Confirm Update All Apps"), so without this the app asked in one
+        // place and not the other for identical consequences. Names the apps when there are few enough to
+        // read, since "3 apps" tells the user less than which three.
+        var names = toUpgrade.Count <= 5
+            ? "\n\n" + string.Join("\n", toUpgrade.Select(p => "• " + p.Name))
+            : "";
+        if (!DialogService.Instance.Confirm(
+                $"Upgrade {toUpgrade.Count} app{(toUpgrade.Count == 1 ? "" : "s")} via winget?{names}\n\n" +
+                "Apps may restart during the upgrade, and an upgrade cannot be undone.",
+                "Confirm App Upgrade"))
+        {
+            return;
+        }
+
         IsBusy = true;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();

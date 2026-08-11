@@ -620,4 +620,66 @@ public class DeepCleanupViewModelTests
             try { Directory.Delete(dir, recursive: true); } catch { }
         }
     }
+
+    // ── The confirmation must describe what will actually happen ──────────────────────────────────
+    //
+    // The wording was "These files are removed directly, not sent to the Recycle Bin." Intended as
+    // "this is permanent", it reads as "your Recycle Bin is not touched" — while the
+    // "Recycle Bin (all drives)" category is pre-ticked whenever the bin is non-empty
+    // (DeepCleanupService selects everything with size and no destructive hint). So the one dialog
+    // between the user and an emptied Recycle Bin implied the opposite of what Clean would do.
+    //
+    // Neither test creates a file or cleans anything: the user declines, so the assertion is purely on
+    // the message text captured from the dialog.
+
+    private static string CapturedCleanPrompt(bool includeRecycleBin)
+    {
+        string? shown = null;
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Do<string>(m => shown = m), Arg.Any<string>()).Returns(false);
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = NewVm();
+            vm.Categories.Add(new CleanupCategory
+            {
+                Name = includeRecycleBin ? "Recycle Bin (all drives)" : "Temp",
+                Description = "test",
+                Paths = [],
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsRecycleBin = includeRecycleBin,
+                IsSelected = true
+            });
+
+            vm.CleanCommand.Execute(null);
+        }
+        finally { DialogService.Instance = prevDialog; }
+
+        Assert.NotNull(shown);
+        return shown!;
+    }
+
+    [Fact]
+    public void Clean_WhenTheRecycleBinIsSelected_TheConfirmationSaysSo()
+    {
+        var prompt = CapturedCleanPrompt(includeRecycleBin: true);
+
+        Assert.Contains("Recycle Bin", prompt, StringComparison.Ordinal);
+        Assert.Contains("emptying", prompt, StringComparison.OrdinalIgnoreCase);
+        // And it must NOT still carry the old phrasing, which reads as a promise the bin is untouched.
+        Assert.DoesNotContain("not sent to the Recycle Bin", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Clean_WhenTheRecycleBinIsNotSelected_StillWarnsThatDeletionIsPermanent()
+    {
+        // The other half: dropping the misleading sentence must not lose the "this is permanent"
+        // warning, which is the reason that sentence existed at all.
+        var prompt = CapturedCleanPrompt(includeRecycleBin: false);
+
+        Assert.Contains("cannot be recovered", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("emptying the Recycle Bin", prompt, StringComparison.OrdinalIgnoreCase);
+    }
 }

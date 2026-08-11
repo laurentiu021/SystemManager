@@ -110,14 +110,18 @@ public class FileLockViewModelTests
     }
 
     [Fact]
-    public void KillSelected_OnCriticalProcess_ShowsBlockDialog_AndDoesNotKill()
+    public void KillSelected_OnCriticalProcess_InformsWithoutAsking_AndDoesNotKill()
     {
-        // A critical (RmCritical) locker must be blocked: the VM shows a single informational
-        // confirm and returns without ever attempting to terminate it. No kill is issued, so
-        // this exercises the guard branch safely without touching a real process.
+        // A critical (RmCritical) locker must be blocked: the VM states that it cannot be ended and
+        // returns without attempting to terminate it. No kill is issued, so this exercises the guard
+        // branch safely without touching a real process.
+        //
+        // Inform, not Confirm. This used to be a Yes/No dialog whose answer was discarded — the user
+        // chose between two buttons that did the same thing — which is how people learn to click through
+        // prompts without reading them, weakening the confirmations that DO gate something destructive.
+        // The assertion is deliberately two-sided: the notice appears AND no question is asked.
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
-        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
         DialogService.Instance = dialog;
         try
         {
@@ -126,8 +130,8 @@ public class FileLockViewModelTests
 
             vm.KillSelectedCommand.Execute(null);
 
-            // Exactly one (informational) confirm for the "cannot end" message; nothing else.
-            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            dialog.Received(1).Inform(Arg.Any<string>(), Arg.Any<string>());
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
         }
         finally
         {

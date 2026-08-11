@@ -37,4 +37,17 @@ public interface IDialogService
     /// without making one of them the ambiguous default.
     /// </summary>
     CloseChoice AskCloseOrMinimize(string message, string title);
+
+    /// <summary>
+    /// Show a message with nothing to decide — one dismiss button, no return value.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Confirm"/> for the same reason <see cref="AskCloseOrMinimize"/> is: the
+    /// shape of the dialog should match the shape of the decision. Using Confirm for a pure notice
+    /// presented "this process cannot be safely ended" as a Yes/No question and then discarded the
+    /// answer, so the user chose between two buttons that did the same thing. That is how people learn
+    /// to click through dialogs without reading them, which quietly erodes the confirmations that DO
+    /// gate something destructive.
+    /// </remarks>
+    void Inform(string message, string title);
 }

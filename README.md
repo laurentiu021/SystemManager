@@ -495,6 +495,9 @@ a confirmation before it runs:
 - **Catch the settings Windows Update silently resets** — feature and quality
   updates often flip telemetry back to Full, re-enable web search, the Widgets
   board, lock-screen ads, and Start-menu suggestions
+- **See exactly what is being watched** — the full list of monitored settings, each
+  with its value right now in plain language and the reason it is watched, visible
+  from the moment you open the tab rather than only after something has changed
 - **Save a baseline** of your current preferences with one click; the watchdog
   remembers exactly what each watched setting was
 - **Check now** re-reads the live values and lists any drift in plain language —

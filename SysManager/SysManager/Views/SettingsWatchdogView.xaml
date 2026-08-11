@@ -18,6 +18,10 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <!-- Row 6: the watched-settings list. Auto rather than star so the drift list above keeps
+                 the flexible space — drift is the actionable content, and this list is bounded by its
+                 own MaxHeight (the catalog is a fixed eight entries). -->
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -124,8 +128,65 @@
             </Grid>
         </Border>
 
+        <!-- What is being watched.
+             The list the tab always had in memory and never showed: `Watched` was filled in the
+             constructor and bound by nothing, so before a drift the page held only the intro sentence,
+             which names four of the eight settings as examples. A watchdog that will not say what it
+             watches is asking for trust it has not earned — and every entry already carries a
+             human-readable name, a category and a plain-English reason.
+             Always visible, unlike the drift list: its whole purpose is to be there BEFORE anything
+             drifts. Same DataGrid settings as the drift grid above. -->
+        <Border Grid.Row="6" Style="{StaticResource Card}" Margin="28,16,28,0">
+            <StackPanel>
+                <TextBlock Text="What SysManager is watching" Style="{StaticResource SectionTitle}" Margin="0,0,0,4"/>
+                <TextBlock Text="These are the settings checked against your baseline, with their values right now. Nothing here is changed unless you press Restore."
+                           Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                <DataGrid ItemsSource="{Binding Watched}" AutoGenerateColumns="False" IsReadOnly="True"
+                          HeadersVisibility="Column" GridLinesVisibility="None" Background="Transparent"
+                          BorderThickness="0" CanUserAddRows="False"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          MaxHeight="260"
+                          AutomationProperties.Name="Settings being watched">
+                    <DataGrid.RowStyle>
+                        <!-- BasedOn so the app-wide hover and selection are inherited, not replaced. -->
+                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                            <Style.Triggers>
+                                <!-- A setting that has drifted is tinted here too, so this list and the
+                                     drift list above can never appear to disagree about the same row. -->
+                                <DataTrigger Binding="{Binding HasDrifted}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource WarningBgSubtle}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Setting" Binding="{Binding Name}" Width="2*"/>
+                        <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="*"/>
+                        <DataGridTextColumn Header="Now" Binding="{Binding CurrentLabel}" Width="*"/>
+                        <DataGridTextColumn Header="Why it is watched" Binding="{Binding Description}" Width="3*">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                    <!-- Full reason plus the exact registry location, for anyone who
+                                         wants to verify the claim without reading the source. -->
+                                    <Setter Property="ToolTip">
+                                        <Setter.Value>
+                                            <MultiBinding StringFormat="{}{0}&#x0a;{1}">
+                                                <Binding Path="Description"/>
+                                                <Binding Path="Location"/>
+                                            </MultiBinding>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </Border>
+
         <!-- Status -->
-        <TextBlock Grid.Row="6" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+        <TextBlock Grid.Row="7" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
                    Margin="28,12,28,24" TextWrapping="Wrap"/>
     </Grid>
 </UserControl>

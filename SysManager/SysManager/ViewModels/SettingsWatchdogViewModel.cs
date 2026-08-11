@@ -22,7 +22,20 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     private readonly ISettingsWatchdogService _service;
 
     public BulkObservableCollection<DriftRow> Drifts { get; } = new();
-    public BulkObservableCollection<WatchedSetting> Watched { get; } = new();
+
+    /// <summary>
+    /// Everything the watchdog monitors, with each setting's live value — the answer to the first
+    /// question anyone asks of a monitor: what exactly are you watching?
+    /// </summary>
+    /// <remarks>
+    /// This used to hold bare <see cref="WatchedSetting"/> records and be bound by nothing: it was
+    /// filled in the constructor and never read, so the tab showed only settings that had ALREADY
+    /// drifted. Before a drift there was nothing on screen but the intro sentence, which names four of
+    /// the eight as examples. Asking a non-technical user to trust a watchdog over an unseen list is
+    /// worse than showing them the list, especially when every entry already carries a human-readable
+    /// name, a category and a plain-English reason written for exactly this purpose.
+    /// </remarks>
+    public BulkObservableCollection<WatchedRow> Watched { get; } = new();
 
     [ObservableProperty] private bool _hasBaseline;
     [ObservableProperty] private string _baselineTaken = "";
@@ -33,7 +46,6 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();
-        Watched.ReplaceWith(_service.Catalog);
         InitializeAsync(() => { Refresh(); return System.Threading.Tasks.Task.CompletedTask; });
     }
 
@@ -44,7 +56,7 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
             System.Windows.Application.Current?.Shutdown();
     }
 
-    /// <summary>Re-reads the baseline and live state and rebuilds the drift list.</summary>
+    /// <summary>Re-reads the baseline and live state and rebuilds both the watched list and the drifts.</summary>
     [RelayCommand]
     private void Refresh()
     {
@@ -56,6 +68,15 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         Drifts.ReplaceWith(drifts.Select(d => new DriftRow(d)));
         HasDrift = Drifts.Count > 0;
         RestoreSelectedCommand.NotifyCanExecuteChanged();
+
+        // Rebuilt on every refresh rather than once in the constructor, so the values shown are the
+        // LIVE ones — a list of watched settings with stale values would be its own quiet lie, and this
+        // is the same read DetectDrift performs. Drifted settings are marked so the two lists agree:
+        // the same setting cannot read as settled here while the drift list flags it below.
+        var current = _service.ReadCurrent();
+        var drifted = drifts.Select(d => d.Setting.Key).ToHashSet(StringComparer.Ordinal);
+        Watched.ReplaceWith(_service.Catalog.Select(s =>
+            new WatchedRow(s, current.TryGetValue(s.Key, out var v) ? v : null, drifted.Contains(s.Key))));
 
         StatusMessage = !HasBaseline
             ? "No baseline yet — save your current settings to start watching for changes."
@@ -121,5 +142,34 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         public string BaselineLabel => Drift.BaselineLabel;
         public string CurrentLabel => Drift.CurrentLabel;
         public bool CanRestore => Drift.CanRestore;
+    }
+
+    /// <summary>
+    /// One watched setting with its live value, for the "what is being watched" list.
+    /// </summary>
+    /// <remarks>
+    /// A row type rather than binding <see cref="WatchedSetting"/> directly, because the record carries
+    /// only the DEFINITION — it has no current value, and a list of names with no values would not tell
+    /// the user whether anything is actually set. <see cref="WatchedSetting.Describe"/> renders the raw
+    /// number in the same plain language the drift list uses ("Off", "Full", "Not set"), so one setting
+    /// reads identically in both places.
+    /// </remarks>
+    public sealed partial class WatchedRow(WatchedSetting setting, int? currentValue, bool hasDrifted)
+        : ObservableObject
+    {
+        public WatchedSetting Setting { get; } = setting;
+        public string Name => Setting.Name;
+        public string Category => Setting.Category;
+        public string Description => Setting.Description;
+        public string CurrentLabel => Setting.Describe(currentValue);
+
+        /// <summary>True when this setting is also in the drift list, so the two views cannot disagree.</summary>
+        public bool HasDrifted { get; } = hasDrifted;
+
+        /// <summary>
+        /// The registry location, shown as a tooltip. Deliberately not a column: the target user does not
+        /// read registry paths, but anyone who wants to verify a claim should not have to read the source.
+        /// </summary>
+        public string Location => $@"{Setting.RegistryPath}\{Setting.ValueName}";
     }
 }

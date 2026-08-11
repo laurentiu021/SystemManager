@@ -164,6 +164,15 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     private void RestoreUpdatePolicy()
     {
         if (!RequireAdminForPolicy()) return;
+        // Confirmed like its two siblings above. This is the one button on the panel that DISCARDS
+        // configuration — it clears whatever deferral and pause window the user set — and it was the
+        // only one of the three that did not ask. The summary line describes the state being thrown
+        // away, so the user can see what they are giving up before agreeing to it.
+        if (!DialogService.Instance.Confirm(
+                "Restore Windows Update to its default settings?\n\n" +
+                $"This clears any deferral or pause you have configured. Current state: {PolicySummary}",
+                "Restore update defaults"))
+            return;
         PolicySummary = _policy.RestoreDefault()
             ? _policy.Read(DateTime.Now).Summary
             : "Couldn't restore the policy — administrator rights are required.";

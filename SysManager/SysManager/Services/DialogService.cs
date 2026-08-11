@@ -47,4 +47,14 @@ public sealed class DialogService : IDialogService
             _ => CloseChoice.Cancel
         };
     }
+
+    /// <inheritdoc/>
+    public void Inform(string message, string title)
+    {
+        // One OK button and an information glyph, not the Question glyph a Yes/No prompt gets: nothing
+        // here is being asked. Same no-UI guard as the others (unit tests, shutdown) — there is nothing
+        // to return, so it simply does not show.
+        if (Application.Current == null) return;
+        MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+    }
 }

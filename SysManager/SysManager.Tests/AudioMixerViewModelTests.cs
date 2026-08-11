@@ -552,4 +552,82 @@ public class AudioMixerViewModelTests
         Assert.Empty(seen);
         Assert.False(vm.IsBusy);
     }
+
+    // ── Saving over an existing preset confirms, like deleting one already did ─────────────────────
+    //
+    // Save() rewrites the presets file on disk immediately, so overwriting destroys exactly the same data
+    // as deleting, with the same absence of undo — and DeletePreset confirmed for precisely that reason
+    // while SavePreset did not. Its own doc comment stated the behaviour plainly ("Overwrites a
+    // same-named preset") without the UI ever telling the user.
+
+    [Fact]
+    public void SavePreset_WithANewName_DoesNotInterrupt()
+    {
+        // A new name is not destructive, so it must NOT prompt — otherwise the confirmation becomes
+        // noise that people learn to dismiss without reading.
+        var vm = NewVm(ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f)));
+        vm.NewPresetName = "Gaming";
+
+        using var dialog = new DialogAnswer(confirm: false);
+        vm.SavePresetCommand.Execute(null);
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Contains(vm.Presets, p => p.Name == "Gaming");
+    }
+
+    [Fact]
+    public void SavePreset_OverAnExistingName_WhenDeclined_KeepsTheOldPreset()
+    {
+        var vm = NewVm(ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f)));
+        vm.NewPresetName = "Gaming";
+        using (new DialogAnswer(confirm: false)) vm.SavePresetCommand.Execute(null);
+        var originalVolume = Assert.Single(vm.Presets, p => p.Name == "Gaming").Entries[0].Volume;
+
+        // Change the live volume, then try to save over the same name and decline.
+        vm.Sessions[0].Volume = 0.2f;
+        vm.NewPresetName = "Gaming";
+
+        using var dialog = new DialogAnswer(confirm: false);
+        vm.SavePresetCommand.Execute(null);
+
+        Assert.Equal(1, dialog.Calls);   // the gate ran…
+        var after = Assert.Single(vm.Presets, p => p.Name == "Gaming");
+        Assert.Equal(originalVolume, after.Entries[0].Volume);   // …and the old values survived
+    }
+
+    [Fact]
+    public void SavePreset_OverAnExistingName_WhenConfirmed_Overwrites()
+    {
+        // The other half: the gate must not have turned saving into a no-op.
+        var vm = NewVm(ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f)));
+        vm.NewPresetName = "Gaming";
+        using (new DialogAnswer(confirm: false)) vm.SavePresetCommand.Execute(null);
+
+        vm.Sessions[0].Volume = 0.2f;
+        vm.NewPresetName = "Gaming";
+
+        using var dialog = new DialogAnswer(confirm: true);
+        vm.SavePresetCommand.Execute(null);
+
+        Assert.Equal(1, dialog.Calls);
+        var after = Assert.Single(vm.Presets, p => p.Name == "Gaming");
+        Assert.Equal(0.2f, after.Entries[0].Volume, precision: 3);
+    }
+
+    [Fact]
+    public void SavePreset_OverAnExistingName_MatchesCaseInsensitively()
+    {
+        // Windows users do not distinguish "Gaming" from "gaming", and the presets file does not either —
+        // saving as "gaming" replaces "Gaming", so it has to prompt like any other overwrite.
+        var vm = NewVm(ServiceWith(Session("s1", pid: 10, name: "Chrome", volume: 0.8f)));
+        vm.NewPresetName = "Gaming";
+        using (new DialogAnswer(confirm: false)) vm.SavePresetCommand.Execute(null);
+
+        vm.NewPresetName = "gaming";
+
+        using var dialog = new DialogAnswer(confirm: false);
+        vm.SavePresetCommand.Execute(null);
+
+        Assert.Equal(1, dialog.Calls);
+    }
 }

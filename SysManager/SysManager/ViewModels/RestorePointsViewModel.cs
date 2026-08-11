@@ -89,6 +89,24 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
             ? $"SysManager — {DateTime.Now:yyyy-MM-dd HH:mm}"
             : NewDescription.Trim();
 
+        // Disclose the side effect BEFORE doing it. Creating a checkpoint runs
+        // `Enable-ComputerRestore -Drive $env:SystemDrive` first (RestorePointService), because
+        // Checkpoint-Computer fails outright when protection is off. That is a real, persistent change to
+        // system configuration: someone who deliberately turned System Protection off — a common step on a
+        // small SSD, since it then reserves disk space indefinitely — got it switched back on by pressing
+        // a button that only advertised "create a restore point", with no prompt and no mention anywhere
+        // in the UI. Enabling it is the right behaviour (a restore point is useless otherwise); doing it
+        // without saying so is not.
+        if (!DialogService.Instance.Confirm(
+                $"Create a restore point named \"{description}\"?\n\n" +
+                "If System Protection is currently off for the Windows drive, SysManager will turn it " +
+                "back on — Windows cannot create a restore point otherwise. Protection then reserves " +
+                "some disk space for restore points until you turn it off again in System Properties.",
+                "Create Restore Point"))
+        {
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Creating restore point…";

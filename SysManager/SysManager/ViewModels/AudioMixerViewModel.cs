@@ -193,7 +193,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
     /// <summary>
     /// Save the current per-app volume/mute as a named preset (keyed by exe name so it re-applies
-    /// across restarts). Overwrites a same-named preset. No-ops on a blank name.
+    /// across restarts). Confirms before overwriting a same-named preset. No-ops on a blank name.
     /// </summary>
     [RelayCommand]
     private void SavePreset()
@@ -209,6 +209,20 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
             .ToList();
 
         if (entries.Count == 0) { StatusMessage = "No apps to save into a preset right now."; return; }
+
+        // Overwriting destroys exactly the same data as deleting, with the same absence of undo —
+        // Save() rewrites the presets file on disk immediately — and DeletePreset below already confirms
+        // for that reason. So saving over an existing name asks too. A NEW name is not destructive and
+        // is not interrupted; only the overwrite is.
+        var existing = Presets.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null && !DialogService.Instance.Confirm(
+                $"Replace the existing preset \"{existing.Name}\"?\n\n" +
+                $"Its saved levels for {existing.Entries.Count} app{(existing.Entries.Count == 1 ? "" : "s")} " +
+                "will be overwritten with the current ones, and the old values are gone for good.",
+                "Replace Preset — Confirm"))
+        {
+            return;
+        }
 
         Presets.ReplaceWith(_presets.Save(new VolumePreset(name, entries)));
         NewPresetName = "";

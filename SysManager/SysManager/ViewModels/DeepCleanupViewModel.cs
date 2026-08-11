@@ -223,15 +223,26 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     {
         if (IsCleaning || !Categories.Any(c => c.IsSelected)) return;
 
-        // Deletion is permanent (files are not sent to the Recycle Bin). Confirm
-        // first, showing how much will be removed so the choice is informed.
+        // Deletion is permanent. Confirm first, showing how much will be removed so the choice is
+        // informed — and naming the Recycle Bin explicitly whenever it is one of the selected categories.
+        //
+        // The previous wording was only "These files are removed directly, not sent to the Recycle Bin."
+        // That was meant as "this is permanent", but it reads as "your Recycle Bin is not touched" — and
+        // the "Recycle Bin (all drives)" category is SELECTED BY DEFAULT whenever the bin is non-empty
+        // (DeepCleanupService pre-ticks every category that has size and no destructive hint). So the one
+        // dialog standing between the user and an emptied Recycle Bin appeared to promise the opposite of
+        // what pressing Clean would actually do.
         var selected = Categories.Where(c => c.IsSelected).ToList();
         var totalBytes = selected.Sum(c => c.TotalSizeBytes);
         var fileCount = selected.Sum(c => c.FileCount);
         if (!DialogService.Instance.Confirm(
                 $"Permanently delete {fileCount:N0} files (~{FormatHelper.FormatSize(totalBytes)}) " +
                 $"across {selected.Count} categor{(selected.Count == 1 ? "y" : "ies")}?\n\n" +
-                "These files are removed directly, not sent to the Recycle Bin.",
+                (selected.Any(c => c.IsRecycleBin)
+                    ? "This includes emptying the Recycle Bin on every drive, so whatever is in it now " +
+                      "goes too. Nothing deleted here can be recovered afterwards."
+                    : "These files are deleted outright — they do not go to the Recycle Bin, so they " +
+                      "cannot be recovered afterwards."),
                 "Confirm Deep Cleanup"))
         {
             return;

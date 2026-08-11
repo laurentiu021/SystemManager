@@ -107,7 +107,10 @@ public sealed partial class FileLockViewModel : ViewModelBase
 
         if (locker.IsCritical)
         {
-            DialogService.Instance.Confirm(
+            // Inform, not Confirm. Nothing is being decided — the process will not be ended either way —
+            // but this was a Yes/No dialog whose answer was discarded, so the user chose between two
+            // buttons that did the same thing.
+            DialogService.Instance.Inform(
                 $"\"{locker.ProcessName}\" is a critical system process and cannot be safely ended from here.",
                 "Cannot End Process");
             return;

@@ -10,6 +10,9 @@ using SysManager.ViewModels;
 
 namespace SysManager.Tests;
 
+// Serialized: the confirmation-gate tests swap the static DialogService.Instance, which is
+// process-wide shared state. Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
+[Collection("DialogService")]
 public class AppUpdatesViewModelTests
 {
     private static readonly PowerShellRunner _sharedRunner = new();
@@ -234,9 +237,69 @@ public class AppUpdatesViewModelTests
         var vm = new AppUpdatesViewModel(winget);
         vm.Packages.Add(new AppPackage { Name = "A", Id = "a", CurrentVersion = "1", AvailableVersion = "2", IsSelected = true });
 
+        // Upgrading now confirms first, so this test has to answer the prompt to reach the code it is
+        // actually about.
+        using var _ = new DialogAnswer(confirm: true);
         var ex = await Record.ExceptionAsync(() => vm.UpgradeSelectedCommand.ExecuteAsync(null));
 
         Assert.Null(ex);
         Assert.Equal(AppUpdatesViewModel.WingetUnavailableMessage, vm.StatusMessage);
+    }
+
+    // ── Upgrading confirms, like the same action on the Dashboard already did ──────────────────────
+    //
+    // DashboardViewModel.QuickUpdateApps has always confirmed ("Confirm Update All Apps") before
+    // UpgradeAllAsync. This tab ran the identical operation — restarting apps, no undo — without asking,
+    // so the app prompted in one place and not the other for the same consequences.
+
+    [Fact]
+    public async Task UpgradeSelected_WhenUserDeclines_UpgradesNothing()
+    {
+        var winget = Substitute.For<IWingetService>();
+        var vm = new AppUpdatesViewModel(winget);
+        vm.Packages.Add(new AppPackage { Name = "A", Id = "a", CurrentVersion = "1", AvailableVersion = "2", IsSelected = true });
+
+        using var dialog = new DialogAnswer(confirm: false);
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);   // the gate ran…
+        await winget.DidNotReceiveWithAnyArgs().UpgradeAsync(default!, default);   // …and it blocked
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task UpgradeSelected_WhenConfirmed_StillUpgrades()
+    {
+        // The other half: the gate must not have turned the button into a no-op.
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new WingetResult(0, true, ""));
+        var vm = new AppUpdatesViewModel(winget);
+        vm.Packages.Add(new AppPackage { Name = "A", Id = "a", CurrentVersion = "1", AvailableVersion = "2", IsSelected = true });
+
+        using var dialog = new DialogAnswer(confirm: true);
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);
+        await winget.Received(1).UpgradeAsync("a", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpgradeSelected_AsksOnce_ForTheWholeBatch()
+    {
+        // One prompt for the batch, not one per app. Three dialogs in a row for a three-app upgrade is
+        // how people learn to click through prompts without reading them.
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new WingetResult(0, true, ""));
+        var vm = new AppUpdatesViewModel(winget);
+        for (var i = 0; i < 3; i++)
+            vm.Packages.Add(new AppPackage { Name = $"App{i}", Id = $"id{i}", CurrentVersion = "1", AvailableVersion = "2", IsSelected = true });
+
+        using var dialog = new DialogAnswer(confirm: true);
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);
+        await winget.Received(3).UpgradeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }

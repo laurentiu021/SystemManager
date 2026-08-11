@@ -64,8 +64,20 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     [ObservableProperty] private bool _isSearching;
     public BulkObservableCollection<InstallableApp> SearchResults { get; } = new();
 
+    /// <summary>
+    /// True when "Select &lt;category&gt;" is worth offering: only once a real category is chosen.
+    /// While the filter is "All" that button would tick exactly what Select All already does, and two
+    /// controls doing the same thing under different names is its own small confusion.
+    /// </summary>
+    public bool CanSelectWholeCategory => SelectedCategory != "All";
+
     partial void OnFilterTextChanged(string value) => ApplyFilter();
-    partial void OnSelectedCategoryChanged(string value) => ApplyFilter();
+
+    partial void OnSelectedCategoryChanged(string value)
+    {
+        ApplyFilter();
+        OnPropertyChanged(nameof(CanSelectWholeCategory));
+    }
 
     partial void OnLoadWebIconsChanged(bool value)
     {

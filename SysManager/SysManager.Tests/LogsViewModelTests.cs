@@ -136,4 +136,123 @@ public class LogsViewModelTests
         vm.IsBusy = false;
         Assert.True(vm.RefreshCommand.CanExecute(null));   // done → allowed again
     }
+
+    // ── Row marking ──────────────────────────────────────────────────────────────────────────────
+    //
+    // ToggleHighlightCommand and FriendlyEventEntry.IsHighlighted shipped with the "row highlight"
+    // feature commit, which touched two models, two view models and the CHANGELOG — and no view. The
+    // announced ability to "toggle highlight on any log entry" therefore had no control to invoke it,
+    // and nothing rendered the mark. RowMarkBindingTests covers the binding half; these cover the
+    // behaviour the UI now relies on.
+
+    private static LogsViewModel WithEntries(params FriendlyEventEntry[] entries)
+    {
+        var vm = new LogsViewModel(new Services.EventLogService());
+        foreach (var e in entries) vm.Entries.Add(e);
+        return vm;
+    }
+
+    [Fact]
+    public void ToggleHighlight_MarksTheEntry_AndCountsIt()
+    {
+        var target = Make(EventSeverity.Error, "disk controller reset");
+        var vm = WithEntries(Make(EventSeverity.Warning, "other"), target);
+
+        Assert.False(target.IsHighlighted);
+        Assert.Equal(0, vm.HighlightedCount);
+
+        vm.ToggleHighlightCommand.Execute(target);
+
+        Assert.True(target.IsHighlighted);
+        Assert.Equal(1, vm.HighlightedCount);
+    }
+
+    [Fact]
+    public void ToggleHighlight_Twice_UnmarksTheEntry()
+    {
+        var target = Make(EventSeverity.Error, "disk controller reset");
+        var vm = WithEntries(target);
+
+        vm.ToggleHighlightCommand.Execute(target);
+        vm.ToggleHighlightCommand.Execute(target);
+
+        Assert.False(target.IsHighlighted);
+        Assert.Equal(0, vm.HighlightedCount);
+    }
+
+    [Fact]
+    public void ToggleHighlight_IgnoresAnythingThatIsNotAnEventRow()
+    {
+        // The command takes object? because the row arrives as CommandParameter. A stray parameter has
+        // to be a no-op rather than a cast exception on the UI thread.
+        var vm = WithEntries(Make(EventSeverity.Error, "x"));
+
+        Assert.Null(Record.Exception(() => vm.ToggleHighlightCommand.Execute(null)));
+        Assert.Null(Record.Exception(() => vm.ToggleHighlightCommand.Execute(42)));
+        Assert.Equal(0, vm.HighlightedCount);
+    }
+
+    [Fact]
+    public void AMarkedEntry_StaysMarkedWhenTheSeverityFilterHidesIt()
+    {
+        // The whole point: mark an event, carry on filtering, still find it afterwards. Filtering runs
+        // through EntriesView — an ICollectionView over the same instances — so the mark rides along.
+        var info = Make(EventSeverity.Info, "informational note");
+        var vm = WithEntries(info);
+        vm.ShowInfo = true;
+
+        vm.ToggleHighlightCommand.Execute(info);
+        Assert.True(InvokeFilter(vm, info));    // visible and marked
+
+        vm.ShowInfo = false;                    // filtered out of sight
+        Assert.False(InvokeFilter(vm, info));
+        Assert.True(info.IsHighlighted);        // still marked
+        Assert.Equal(1, vm.HighlightedCount);   // and still counted
+
+        vm.ShowInfo = true;
+        Assert.True(InvokeFilter(vm, info));
+        Assert.True(info.IsHighlighted);
+    }
+
+    [Fact]
+    public void ClearHighlights_ClearsMarksOnEntriesTheFilterIsHiding()
+    {
+        // The negative case worth pinning. Clearing only what the view currently shows would leave
+        // marks on hidden rows, so "Clear 2 marks" would clear one and the button would remain,
+        // claiming a mark the user cannot see or reach.
+        var visible = Make(EventSeverity.Error, "visible");
+        var hidden = Make(EventSeverity.Info, "hidden by the severity filter");
+        var vm = WithEntries(visible, hidden);
+
+        vm.ToggleHighlightCommand.Execute(visible);
+        vm.ToggleHighlightCommand.Execute(hidden);
+        Assert.Equal(2, vm.HighlightedCount);
+
+        Assert.False(InvokeFilter(vm, hidden));   // Info is off by default — genuinely hidden
+
+        vm.ClearHighlightsCommand.Execute(null);
+
+        Assert.False(visible.IsHighlighted);
+        Assert.False(hidden.IsHighlighted);
+        Assert.Equal(0, vm.HighlightedCount);
+    }
+
+    [Fact]
+    public void LoadingADifferentLog_DropsTheMarkCount()
+    {
+        // Entries are rebuilt per load, so the marked objects are gone; a stale count would keep the
+        // "Clear N marks" button on screen offering to clear marks that no longer exist.
+        var entry = Make(EventSeverity.Error, "from the previous log");
+        var vm = WithEntries(entry);
+        vm.ToggleHighlightCommand.Execute(entry);
+        Assert.Equal(1, vm.HighlightedCount);
+
+        // What RefreshAsync does before querying: clear, then reset the counters.
+        vm.Entries.Clear();
+        typeof(LogsViewModel)
+            .GetMethod("ResetCounts", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(vm, null);
+
+        Assert.Equal(0, vm.HighlightedCount);
+    }
 }

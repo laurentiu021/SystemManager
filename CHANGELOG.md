@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.6] - 2026-08-11
+
+Five buttons that were missing: the "row highlight" for System Logs and Services announced back in
+May, a "What's new" link on About, a way to select a whole category in the App Installer, and a
+"Check now" for the Windows Update module. System Logs also gets back the row hover every other
+table in the app has.
+
+### Fixed
+- **"Row highlight" for System Logs and Services was announced but could not be used.** Both tabs were given the ability to mark a row in 0.40.0 (12 May 2026), and the release notes said so — but the buttons to do it were never added, and nothing on screen ever showed a mark, so there was no way to reach the feature at all. Both tabs now have a flag button on every row: click it to mark an event or a service, and the row keeps a soft amber tint so you can find it again after scrolling, searching, filtering or sorting. A "Clear marks" button appears next to the search box once anything is marked, showing how many there are, and it clears every one — including marks on rows the current filter is hiding, which would otherwise be impossible to find and unmark.
+- **System Logs was the only table with no hover feedback.** Pointing at a row in System Logs did nothing, while every other table in the app tints the row under the mouse. The tab defined its own row styling that accidentally replaced the app-wide styling rather than building on it, and the hover was part of what it replaced. The hover is back, selection still looks the same, and both tables are now checked automatically so a future style edit cannot quietly drop it again.
+- **Three more buttons that were written but never added to a screen.** Checking for the row highlight turned up the same omission elsewhere, so all of them are now reachable: **About** gets a **"What's new"** button beside "View license" that opens the changelog — previously the release notes could only be found by going to the repository by hand. The **App Installer** gets a **"Select …"** button, named after the chosen category, that ticks every app in it; before, installing a whole category meant filtering to it and pressing Select All, which also picked up anything the search box was narrowing to. **Windows Update** gets **"Check now"** next to the PSWindowsUpdate status, so you can confirm whether the module is installed instead of having to run Update History and read a failure message.
+- **A check now prevents this from happening again.** The build fails if any button action exists in the code without something on screen able to trigger it. That is what let a feature be announced in the release notes while remaining impossible to use: nothing about an unused action looks broken to a compiler or to a test that calls it directly.
+
+---
+
 ## [1.61.5] - 2026-08-11
 
 Two places where SysManager told you something that was not true: the tray warning that a

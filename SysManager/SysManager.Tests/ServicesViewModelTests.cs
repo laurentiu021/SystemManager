@@ -595,6 +595,113 @@ public class ServicesViewModelTests
             $"but found {confirms} calls to DialogService.Instance.Confirm.");
     }
 
+    // ── Row marking ──────────────────────────────────────────────────────────────────────────────
+    //
+    // ToggleHighlightCommand and ServiceEntry.IsHighlighted shipped with the "row highlight" feature
+    // commit, which touched two models, two view models and the CHANGELOG — and no view. So the
+    // announced ability to "toggle highlight on any service row" had no button, and nothing rendered
+    // IsHighlighted either. These tests cover the behaviour the UI now depends on; the binding itself
+    // is asserted separately in ServicesViewMarkColumnTests, since a command the view does not bind is
+    // exactly how this went unnoticed for so long.
+    //
+    // Each test seeds its OWN entries rather than the shared TestServices list: marking mutates the
+    // entry, and mutating a static fixture would leak a mark into whichever test ran next.
+
+    private static List<ServiceEntry> FreshEntries() =>
+    [
+        new() { Name = "wuauserv", DisplayName = "Windows Update", Description = "Manages Windows updates", Status = "Running", StartType = "Automatic", Recommendation = "keep-enabled", SafetyLevel = Models.SafetyLevel.Caution },
+        new() { Name = "Spooler", DisplayName = "Print Spooler", Description = "Manages print jobs", Status = "Running", StartType = "Automatic", Recommendation = "safe-to-disable", SafetyLevel = Models.SafetyLevel.Caution },
+        new() { Name = "XboxGipSvc", DisplayName = "Xbox Accessory Management", Description = "Manages Xbox accessories", Status = "Stopped", StartType = "Manual", Recommendation = "safe-to-disable", SafetyLevel = Models.SafetyLevel.Safe },
+    ];
+
+    [Fact]
+    public async Task ToggleHighlight_MarksTheRow_AndCountsIt()
+    {
+        var entries = FreshEntries();
+        var vm = await CreateWithDataAsync(entries);
+        var target = entries[1];
+
+        Assert.False(target.IsHighlighted);
+        Assert.Equal(0, vm.HighlightedCount);
+
+        vm.ToggleHighlightCommand.Execute(target);
+
+        Assert.True(target.IsHighlighted);
+        Assert.Equal(1, vm.HighlightedCount);
+    }
+
+    [Fact]
+    public async Task ToggleHighlight_Twice_UnmarksTheRow()
+    {
+        var entries = FreshEntries();
+        var vm = await CreateWithDataAsync(entries);
+        var target = entries[0];
+
+        vm.ToggleHighlightCommand.Execute(target);
+        vm.ToggleHighlightCommand.Execute(target);
+
+        Assert.False(target.IsHighlighted);
+        Assert.Equal(0, vm.HighlightedCount);
+    }
+
+    [Fact]
+    public async Task ToggleHighlight_IgnoresAnythingThatIsNotAServiceRow()
+    {
+        // The command takes object? because it is invoked with the row as CommandParameter. A stray
+        // parameter must be a no-op, not a cast exception on the UI thread.
+        var vm = await CreateWithDataAsync(FreshEntries());
+
+        Assert.Null(Record.Exception(() => vm.ToggleHighlightCommand.Execute(null)));
+        Assert.Null(Record.Exception(() => vm.ToggleHighlightCommand.Execute("not a service")));
+        Assert.Equal(0, vm.HighlightedCount);
+    }
+
+    [Fact]
+    public async Task AMarkedRow_SurvivesFilteringAndSearching()
+    {
+        // The point of the feature: mark a row, keep working, still find it. ApplyFilter re-projects
+        // from the SAME _allServices instances, so the mark rides along — this test pins that, because
+        // a future change to rebuild entries per filter pass would silently drop every mark.
+        var entries = FreshEntries();
+        var vm = await CreateWithDataAsync(entries);
+        var spooler = entries[1];
+
+        vm.ToggleHighlightCommand.Execute(spooler);
+
+        vm.FilterText = "print";                       // narrow to the marked row
+        Assert.Contains(vm.Services, s => ReferenceEquals(s, spooler) && s.IsHighlighted);
+
+        vm.FilterText = "xbox";                        // filter it out entirely
+        Assert.DoesNotContain(vm.Services, s => ReferenceEquals(s, spooler));
+        Assert.True(spooler.IsHighlighted);            // still marked while hidden
+        Assert.Equal(1, vm.HighlightedCount);          // and still counted
+
+        vm.FilterText = "";                            // bring it back
+        Assert.Contains(vm.Services, s => ReferenceEquals(s, spooler) && s.IsHighlighted);
+    }
+
+    [Fact]
+    public async Task ClearHighlights_ClearsMarksOnRowsTheFilterIsHiding()
+    {
+        // The negative case that matters. Clearing from the VISIBLE collection would leave marks on
+        // filtered-out rows, so "Clear 3 marks" would clear one and the button would stay on screen
+        // claiming two more — a worse experience than no button at all. ClearHighlights walks
+        // _allServices for exactly this reason.
+        var entries = FreshEntries();
+        var vm = await CreateWithDataAsync(entries);
+
+        foreach (var e in entries) vm.ToggleHighlightCommand.Execute(e);
+        Assert.Equal(3, vm.HighlightedCount);
+
+        vm.FilterText = "print";                       // only one of the three is visible now
+        Assert.Single(vm.Services);
+
+        vm.ClearHighlightsCommand.Execute(null);
+
+        Assert.All(entries, e => Assert.False(e.IsHighlighted));
+        Assert.Equal(0, vm.HighlightedCount);
+    }
+
     private static string FindProjectDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

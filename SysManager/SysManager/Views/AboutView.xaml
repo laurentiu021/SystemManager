@@ -78,6 +78,14 @@
                                     ToolTip="Reinstall the version you had before the last update. SysManager will close and reopen; your settings are not affected."/>
                             <Button Content="View license" Command="{Binding OpenLicenseCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
+                            <!-- OpenChangelogCommand existed alongside OpenRepo and OpenLicense from the
+                                 start, and was the one sibling nothing ever bound: the release notes
+                                 were only reachable by finding the repository by hand. Same style and
+                                 spacing as the license button beside it. -->
+                            <Button Content="What's new" Command="{Binding OpenChangelogCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    AutomationProperties.Name="Open the changelog on GitHub"
+                                    ToolTip="See what changed in this and previous versions"/>
                         </StackPanel>
 
                         <!-- Report / environment results live here, next to the buttons that produce

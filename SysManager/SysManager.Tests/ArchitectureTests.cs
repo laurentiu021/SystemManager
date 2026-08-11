@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NetArchTest.Rules;
 using SysManager.Services;
 
@@ -16,7 +17,7 @@ namespace SysManager.Tests;
 /// of going through the injected service). They run in CI against the shipped assembly, so
 /// the layering is enforced mechanically rather than by review discipline alone.
 /// </summary>
-public class ArchitectureTests
+public partial class ArchitectureTests
 {
     // Any public type from the app assembly anchors NetArchTest to SysManager.dll.
     private static Assembly AppAssembly => typeof(WingetService).Assembly;
@@ -274,5 +275,100 @@ public class ArchitectureTests
             "redirect it, so any test reaching them operates on REAL user data. Add an optional " +
             "override parameter — and thread it through every caller, because an override nobody can " +
             "pass is not a seam:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Every command a ViewModel exposes must be reachable from the markup — bound in a View, in
+    /// App.xaml, or invoked by another ViewModel.
+    /// </summary>
+    /// <remarks>
+    /// <para>The ratchet for a defect class this codebase has hit repeatedly, most starkly with "row
+    /// highlight": a feature commit added the models and the ViewModel commands, updated the CHANGELOG,
+    /// closed two issues — and touched no view. The announced feature had no button for months. Nothing
+    /// caught it, because a command with no binding still compiles, still passes its own unit tests, and
+    /// still runs correctly when invoked from a test. The absence only exists in the markup.</para>
+    /// <para>Reflection over the generated <c>IRelayCommand</c> properties is what makes this
+    /// mechanical rather than a habit: <c>[RelayCommand]</c> generates one property per command, so the
+    /// list of things that MUST be reachable is derivable, and a newly added command joins the check
+    /// automatically. A command invoked only from C# (chained by another ViewModel) is legitimate and
+    /// counts as reachable.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryViewModelCommand_IsReachableFromTheUi()
+    {
+        var appDir = FindAppProjectDir();
+        var markup = Directory
+            .GetFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Select(File.ReadAllText)
+            .ToList();
+        Assert.NotEmpty(markup);   // else every assertion below would pass vacuously
+
+        // C# lines, so a command whose work is triggered from code is not reported as dead. DECLARATION
+        // lines are excluded up front: `private void OpenChangelog() => …` itself contains
+        // "OpenChangelog(", so a naive substring search finds every method's own signature and the whole
+        // check passes vacuously — it would assert nothing at all while looking thorough.
+        var callLines = Directory
+            .GetFiles(Path.Combine(appDir, "ViewModels"), "*.cs", SearchOption.AllDirectories)
+            .SelectMany(File.ReadAllLines)
+            .Select(l => l.Trim())
+            .Where(l => !DeclarationLine().IsMatch(l))
+            .ToList();
+        Assert.NotEmpty(callLines);
+
+        var unreachable = new List<string>();
+
+        foreach (var type in AppAssembly.GetTypes()
+                     .Where(t => t.Namespace == "SysManager.ViewModels" && !t.IsNested))
+        {
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            {
+                if (!prop.Name.EndsWith("Command", StringComparison.Ordinal)) continue;
+                if (!typeof(System.Windows.Input.ICommand).IsAssignableFrom(prop.PropertyType)) continue;
+
+                if (markup.Any(m => m.Contains(prop.Name, StringComparison.Ordinal))) continue;
+
+                // Invoked through the command object from code.
+                if (callLines.Any(l => l.Contains($"{prop.Name}.Execute", StringComparison.Ordinal))) continue;
+
+                // …or the underlying METHOD is called directly, which is the common shape here: a poll
+                // loop awaits RefreshTemperaturesAsync() and a dismiss path calls DismissQuickAction(),
+                // so the generated command is a redundant wrapper rather than a dead feature. Checking
+                // only ".Execute" reported three such commands as unreachable — a false positive that
+                // would have pushed pointless buttons into the UI just to satisfy this test.
+                var method = prop.Name[..^"Command".Length];
+                if (callLines.Any(l => l.Contains($"{method}(", StringComparison.Ordinal)
+                                    || l.Contains($"{method}Async(", StringComparison.Ordinal))) continue;
+
+                unreachable.Add($"{type.Name}.{prop.Name}");
+            }
+        }
+
+        Assert.True(unreachable.Count == 0,
+            "These commands exist on a ViewModel but nothing in the UI binds them and no other " +
+            "ViewModel invokes them, so a user cannot reach the feature they implement. Either bind " +
+            "them in the View or remove them — shipping an unreachable command means the CHANGELOG " +
+            "can announce a feature that does not exist:\n  " + string.Join("\n  ", unreachable));
+    }
+
+    /// <summary>
+    /// A method DECLARATION rather than a call — `private void Foo()`, `private async Task FooAsync(`,
+    /// `internal Task Foo(`. Used to drop declaration lines before searching for call sites, so a
+    /// method is never counted as its own caller.
+    /// </summary>
+    [GeneratedRegex(@"^\s*(private|internal|public|protected)\b.*\b\w+\s*\(", RegexOptions.Compiled)]
+    private static partial Regex DeclarationLine();
+
+    /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
+    private static string FindAppProjectDir()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, "SysManager", "SysManager.csproj");
+            if (File.Exists(candidate)) return Path.Combine(dir.FullName, "SysManager");
+            dir = dir.Parent;
+        }
+        throw new DirectoryNotFoundException(
+            "Could not locate the SysManager app project from " + AppContext.BaseDirectory);
     }
 }

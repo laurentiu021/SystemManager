@@ -252,7 +252,9 @@ The build is **not** currently code-signed, so Windows SmartScreen shows a
 warning on first launch; this is expected until a code-signing certificate is
 available. The README walks through
 [what that dialog says and what to click](README.md#first-launch-windows-will-warn-you),
-with hash verification as the precondition.
+with hash verification as the precondition. The
+[code signing policy](README.md#code-signing-policy) states who may commit, who
+reviews, and who approves a release for signing.
 
 ## Dependencies and supply chain
 

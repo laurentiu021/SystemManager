@@ -31,6 +31,23 @@ internal static class UpdateApplier
     /// <summary>Command-line sentinel that puts a started process into applier mode.</summary>
     public const string ApplyUpdateArg = "--apply-update";
 
+    /// <summary>File name of the retained previous generation. One only, never a history.</summary>
+    internal const string PreviousBuildFileName = "SysManager-previous.exe";
+
+    /// <summary>
+    /// Where the outgoing executable is kept so a bad update can be undone.
+    /// </summary>
+    /// <remarks>
+    /// Lives in the existing <c>%LocalAppData%\SysManager\updates</c> folder rather than beside the
+    /// portable .exe, so the "single portable file" identity is preserved — a user who copies the
+    /// app to a USB stick still has exactly one file.
+    /// </remarks>
+    internal static string PreviousBuildPath(string? updatesDir = null) => Path.Join(
+        updatesDir ?? Path.Join(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SysManager", "updates"),
+        PreviousBuildFileName);
+
     /// <summary>
     /// Builds the command-line arguments handed to the downloaded executable so
     /// it applies itself over <paramref name="targetExe"/> after process
@@ -88,6 +105,12 @@ internal static class UpdateApplier
             try
             {
                 File.Copy(sourceExe, staging, overwrite: true);
+                // Keep the outgoing build BEFORE the move destroys it. The move is what makes an
+                // interrupted copy safe, but it also means a SUCCESSFUL update into a broken build
+                // leaves nothing to go back to — and this project has shipped two launch-blocking
+                // regressions. Best-effort: failing to retain a copy must never abort an update that
+                // is otherwise fine, so PreserveCurrentBuild swallows its own errors.
+                PreserveCurrentBuild(targetExe);
                 File.Move(staging, targetExe, overwrite: true);
                 return true;
             }
@@ -106,6 +129,41 @@ internal static class UpdateApplier
         }
         Log.Error("Update apply: gave up after {Max} attempts — {Target} stayed locked", maxAttempts, LogService.SanitizePath(targetExe));
         return false;
+    }
+
+    /// <summary>
+    /// Copies the build currently at <paramref name="targetExe"/> aside as the one retained
+    /// previous generation, so a successful-but-broken update can be undone.
+    /// </summary>
+    /// <remarks>
+    /// BEST-EFFORT by design. Everything here is a nice-to-have compared with completing the update:
+    /// if the disk is full or the folder is unwritable, the update must still proceed rather than
+    /// fail because a safety net could not be stretched. That is why every failure is swallowed and
+    /// logged at Debug/Warning instead of propagating.
+    /// <para>Exactly ONE generation is kept: the copy overwrites any earlier one, so retention is
+    /// "current + one previous" rather than an unbounded pile of full-size executables.</para>
+    /// </remarks>
+    internal static void PreserveCurrentBuild(string targetExe, string? updatesDir = null)
+    {
+        try
+        {
+            if (!File.Exists(targetExe)) return;   // first install — nothing to preserve
+
+            var previous = PreviousBuildPath(updatesDir);
+            var dir = Path.GetDirectoryName(previous);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+            File.Copy(targetExe, previous, overwrite: true);
+            Log.Information("Update apply: retained the outgoing build for rollback");
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "Update apply: could not retain the previous build — rollback will be unavailable");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Update apply: access denied retaining the previous build — rollback will be unavailable");
+        }
     }
 
     /// <summary>

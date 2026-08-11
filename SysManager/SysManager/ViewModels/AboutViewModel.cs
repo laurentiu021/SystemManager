@@ -22,6 +22,9 @@ public sealed partial class AboutViewModel : ViewModelBase
     private readonly UpdateService _updates;
     private readonly SystemReportService _reportService;
     private readonly UpdateCheckPreferenceService _preferences;
+
+    /// <summary>Overrides where the retained previous build is looked for. Null = the real profile.</summary>
+    private readonly string? _updatesDir;
     private UpdateService.ReleaseInfo? _latest;
 
     // Suppresses saving while the constructor applies the loaded value, so restoring the
@@ -67,6 +70,20 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     public bool ShowDownloadButton => !IsDownloading && string.IsNullOrEmpty(DownloadedPath);
 
+    /// <summary>
+    /// True when the previous build was retained and can be restored. Drives the visibility of the
+    /// rollback button, so it only appears when there is genuinely something to go back to.
+    /// </summary>
+    [ObservableProperty] private bool _canRollBack;
+
+    /// <summary>
+    /// Plain-language label for the rollback button. Says WHAT it does rather than naming a
+    /// mechanism — the target user does not think in terms of executables or versions on disk.
+    /// </summary>
+    [ObservableProperty] private string _rollBackLabel = "Go back to the previous version";
+
+    [ObservableProperty] private string _rollBackStatus = string.Empty;
+
     // Report export state
     [ObservableProperty] private bool _isGeneratingReport;
 
@@ -88,17 +105,22 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// properties) runs. Production always passes true; tests pass false to
     /// assert the constructor's default state without racing the async fetch.
     /// <para><paramref name="preferences"/> is overridable so tests exercise the real gate against
-    /// a temp directory instead of the developer's own preference file.</para>
+    /// a temp directory instead of the developer's own preference file. <paramref name="updatesDir"/>
+    /// is overridable for the same reason: the rollback check looks for a retained build under
+    /// <c>%LocalAppData%</c>, and a test must be able to point that at a temp folder rather than read
+    /// (or come to depend on) whatever is in the developer's real profile.</para>
     /// </summary>
     internal AboutViewModel(
         UpdateService updates,
         SystemReportService reportService,
         bool autoCheck,
-        UpdateCheckPreferenceService? preferences = null)
+        UpdateCheckPreferenceService? preferences = null,
+        string? updatesDir = null)
     {
         _updates = updates;
         _reportService = reportService;
         _preferences = preferences ?? new UpdateCheckPreferenceService();
+        _updatesDir = updatesDir;
 
         // Load before any check can run, and suppress the save that binding the value would
         // otherwise trigger — restoring a preference must not rewrite the file it came from.
@@ -106,8 +128,31 @@ public sealed partial class AboutViewModel : ViewModelBase
         CheckForUpdatesOnStartup = _preferences.Load().CheckOnStartup;
         _loadingPreference = false;
 
+        RefreshRollbackAvailability();
+
         if (autoCheck)
             InitializeAsync(InitAsync);
+    }
+
+    /// <summary>
+    /// Re-reads whether a retained previous build exists. Called on construction and after a
+    /// rollback, so the button disappears once the copy has been consumed.
+    /// </summary>
+    private void RefreshRollbackAvailability()
+    {
+        try
+        {
+            CanRollBack = File.Exists(UpdateApplier.PreviousBuildPath(_updatesDir));
+        }
+        catch (IOException)
+        {
+            // An unreadable folder simply means no rollback offer — never a crash on the About tab.
+            CanRollBack = false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            CanRollBack = false;
+        }
     }
 
     // Persist on change rather than on close: the app can be closed to the tray or killed, and a
@@ -671,6 +716,73 @@ public sealed partial class AboutViewModel : ViewModelBase
         finally
         {
             lockedStream.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Restores the retained previous build over the running executable.
+    /// </summary>
+    /// <remarks>
+    /// Reuses the SAME applier path as an install — <c>BuildArguments</c> + launch the source binary
+    /// with the sentinel — rather than copying files from here. That path already handles waiting for
+    /// this process to exit, retrying while the target is locked, and staging via an atomic move; a
+    /// second, parallel implementation would be the one without those properties.
+    /// <para>Confirms first, naming what is about to happen: rolling back re-exposes whatever the
+    /// newer build fixed, so it must be a deliberate choice rather than a stray click.</para>
+    /// </remarks>
+    [RelayCommand]
+    private async Task RollBackAsync()
+    {
+        var previous = UpdateApplier.PreviousBuildPath(_updatesDir);
+        if (!File.Exists(previous))
+        {
+            // Vanished since the button appeared (manual cleanup, disk tools). Reflect reality.
+            RollBackStatus = "The previous version is no longer available.";
+            RefreshRollbackAvailability();
+            return;
+        }
+
+        var currentExe = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(currentExe))
+        {
+            RollBackStatus = "Could not determine where SysManager is running from.";
+            return;
+        }
+
+        if (!DialogService.Instance.Confirm(
+                $"Go back to the version you had before the last update?\n\n" +
+                "SysManager will close and reopen on the older version. Anything the newer version " +
+                "fixed will come back, and your settings are not affected.",
+                "Go back to the previous version"))
+        {
+            return;
+        }
+
+        try
+        {
+            var args = UpdateApplier.BuildArguments(currentExe, Environment.ProcessId);
+            RollBackStatus = "Going back — SysManager will restart…";
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = previous,
+                Arguments = args,
+                UseShellExecute = true
+            })?.Dispose();
+
+            ActivityLogService.Instance.Log("Update", "Went back to the previously installed version");
+
+            // Let the applier start before this process exits.
+            await Task.Delay(500);
+            System.Windows.Application.Current?.Shutdown();
+        }
+        catch (InvalidOperationException ex)
+        {
+            RollBackStatus = $"Could not go back: {ex.Message}";
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            RollBackStatus = $"Could not go back: {ex.Message}";
         }
     }
 

@@ -142,4 +142,141 @@ public class UpdateApplierTests
             dir.Delete(recursive: true);
         }
     }
+
+    // ── Rollback: retaining the outgoing build ───────────────────────────────────────────────
+    //
+    // The atomic move that makes an INTERRUPTED update safe also destroyed the previous executable, so
+    // a SUCCESSFUL update into a broken build left nothing to go back to. The docs were precise about
+    // the interruption case and silent about this one. This project has shipped two launch-blocking
+    // regressions, so it is not hypothetical — and the updater was the only mutating feature in the app
+    // without the snapshot-style reversibility everything else already has.
+
+    [Fact]
+    public void ApplyCopy_RetainsTheOutgoingBuild()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierKeep_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Path.Combine(dir.FullName, "updates");
+            File.WriteAllText(source, "NEW-BUILD");
+            File.WriteAllText(target, "OLD-BUILD");
+
+            UpdateApplier.PreserveCurrentBuild(target, updates);
+            Assert.True(UpdateApplier.ApplyCopy(source, target));
+
+            // The update landed…
+            Assert.Equal("NEW-BUILD", File.ReadAllText(target));
+            // …and the build it replaced is still recoverable.
+            var previous = UpdateApplier.PreviousBuildPath(updates);
+            Assert.True(File.Exists(previous));
+            Assert.Equal("OLD-BUILD", File.ReadAllText(previous));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void PreserveCurrentBuild_KeepsExactlyOneGeneration()
+    {
+        // Retention is "current + one previous", not a history: each copy overwrites the last, so the
+        // folder can never accumulate full-size executables.
+        var dir = Directory.CreateTempSubdirectory("ApplierOneGen_");
+        try
+        {
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Path.Combine(dir.FullName, "updates");
+
+            File.WriteAllText(target, "BUILD-1");
+            UpdateApplier.PreserveCurrentBuild(target, updates);
+            File.WriteAllText(target, "BUILD-2");
+            UpdateApplier.PreserveCurrentBuild(target, updates);
+
+            Assert.Single(Directory.GetFiles(updates, "SysManager-previous.exe"));
+            Assert.Equal("BUILD-2", File.ReadAllText(UpdateApplier.PreviousBuildPath(updates)));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void PreserveCurrentBuild_FirstInstall_DoesNothing()
+    {
+        // Nothing at the target yet (a fresh install), so there is nothing to retain — and certainly no
+        // reason to throw.
+        var dir = Directory.CreateTempSubdirectory("ApplierFirst_");
+        try
+        {
+            var target = Path.Combine(dir.FullName, "not-there-yet.exe");
+            var updates = Path.Combine(dir.FullName, "updates");
+
+            var ex = Record.Exception(() => UpdateApplier.PreserveCurrentBuild(target, updates));
+
+            Assert.Null(ex);
+            Assert.False(File.Exists(UpdateApplier.PreviousBuildPath(updates)));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void PreserveCurrentBuild_IsBestEffort_AndNeverBlocksAnUpdate()
+    {
+        // Retaining a copy is a safety net, not the job. If the folder cannot be written — full disk,
+        // permissions, a file where the directory should be — the update must still proceed rather than
+        // fail because the net could not be stretched. Simulated by putting a FILE where the updates
+        // directory needs to be, so CreateDirectory fails.
+        var dir = Directory.CreateTempSubdirectory("ApplierBestEffort_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var blocked = Path.Combine(dir.FullName, "updates");
+            File.WriteAllText(source, "NEW-BUILD");
+            File.WriteAllText(target, "OLD-BUILD");
+            File.WriteAllText(blocked, "not a directory");
+
+            var ex = Record.Exception(() => UpdateApplier.PreserveCurrentBuild(target, blocked));
+            Assert.Null(ex);                                      // swallowed, logged, not thrown
+
+            Assert.True(UpdateApplier.ApplyCopy(source, target));  // the update still succeeds
+            Assert.Equal("NEW-BUILD", File.ReadAllText(target));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void PreviousBuildPath_LivesInTheUpdatesFolder_NotBesideThePortableExe()
+    {
+        // Keeping it beside the .exe would break the "single portable file" identity: copy the app to a
+        // USB stick and you would get two executables, one of them an old version.
+        var path = UpdateApplier.PreviousBuildPath();
+
+        Assert.Equal("SysManager-previous.exe", Path.GetFileName(path));
+        Assert.Equal("updates", Path.GetFileName(Path.GetDirectoryName(path)));
+        Assert.Contains("SysManager", path);
+    }
+
+    [Fact]
+    public void PruneOldDownloads_DoesNotDeleteTheRetainedBuild()
+    {
+        // SysManager-previous.exe matches the SysManager-*.exe pruning pattern, so without an explicit
+        // exclusion the very next update download would delete the one copy that makes rollback
+        // possible — silently, because pruning is best-effort and logs at Debug.
+        var dir = Directory.CreateTempSubdirectory("ApplierPrune_");
+        try
+        {
+            var keep = Path.Combine(dir.FullName, "SysManager-9.9.9.exe");
+            var previous = Path.Combine(dir.FullName, UpdateApplier.PreviousBuildFileName);
+            var stale = Path.Combine(dir.FullName, "SysManager-1.0.0.exe");
+            File.WriteAllText(keep, "current");
+            File.WriteAllText(previous, "rollback");
+            File.WriteAllText(stale, "superseded");
+
+            UpdateService.PruneOldDownloads(dir.FullName, keep);
+
+            Assert.True(File.Exists(previous), "the retained previous build must survive pruning");
+            Assert.True(File.Exists(keep));
+            Assert.False(File.Exists(stale));   // control: pruning still works
+        }
+        finally { dir.Delete(recursive: true); }
+    }
 }

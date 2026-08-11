@@ -12,8 +12,8 @@ older build, the first step is usually to update.
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 1.60.x   | :white_check_mark: |
-| < 1.60   | :x:                |
+| 1.61.x   | :white_check_mark: |
+| < 1.61   | :x:                |
 
 ## Reporting a vulnerability
 
@@ -133,8 +133,13 @@ What the app can and cannot do by design:
   integrity gate rather than a fallback. The swap is then performed
   from within the downloaded executable itself (no intermediate script on
   disk) using a staged atomic file move, so an interrupted update cannot
-  leave a half-written, unstartable binary. You can also download manually
-  and verify the binary yourself.
+  leave a half-written, unstartable binary. Separately, the build being replaced
+  is copied aside first, so an update that *succeeds* into a version that does not
+  work is also recoverable: the About tab offers "Go back to the previous version"
+  whenever a retained copy exists. Exactly one generation is kept, in
+  `%LocalAppData%\SysManager\updates`, and retaining it is best-effort — if it
+  cannot be written the update still proceeds rather than failing. You can also
+  download manually and verify the binary yourself.
 - **Portable distribution model**: the standard distribution is a portable,
   self-contained `.exe` (also published to winget as a portable package),
   which lives in a per-user, user-writable location. This means a process

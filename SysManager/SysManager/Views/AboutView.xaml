@@ -66,6 +66,16 @@
                                     Command="{Binding CopyEnvironmentInfoCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
                                     ToolTip="Copy your SysManager version, Windows version, architecture and elevation state — ready to paste into a bug report."/>
+                            <!-- Only appears when a previous build was actually retained, so this is never
+                                 a button that cannot do anything. The updater used to be the one mutation
+                                 in the app with no way back: the atomic move that makes an INTERRUPTED
+                                 update safe also destroyed the outgoing executable, so a SUCCESSFUL
+                                 update into a broken build left nothing to return to. -->
+                            <Button Content="{Binding RollBackLabel}" Command="{Binding RollBackCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Visibility="{Binding CanRollBack, Converter={StaticResource BoolToVis}}"
+                                    AutomationProperties.Name="Go back to the previous version of SysManager"
+                                    ToolTip="Reinstall the version you had before the last update. SysManager will close and reopen; your settings are not affected."/>
                             <Button Content="View license" Command="{Binding OpenLicenseCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
                         </StackPanel>
@@ -76,9 +86,17 @@
                              "Report saved" — losing the more important message and making the update
                              card describe something unrelated. Collapsed until there is something
                              to say, so the row does not reserve empty space. -->
-                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding ReportStatus}"
-                                   Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
-                                   Visibility="{Binding ReportStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
+                        <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
+                            <TextBlock Text="{Binding ReportStatus}"
+                                       Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
+                                       Visibility="{Binding ReportStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
+                            <!-- Rollback feedback lives beside its own button rather than in the update
+                                 card below, for the same reason ReportStatus was moved here: writing to a
+                                 shared status line makes one action overwrite another's message. -->
+                            <TextBlock Text="{Binding RollBackStatus}"
+                                       Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
+                                       Visibility="{Binding RollBackStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
+                        </StackPanel>
 
                         <!-- The app's only outbound call, now something the user can see and switch
                              off. Same shape and wording style as Bulk Installer's "Load app icons

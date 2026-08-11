@@ -91,7 +91,14 @@ public sealed class TuneUpService
                 diskSummaries.Add(new DiskHealthSummary
                 {
                     Name = r.FriendlyName,
-                    Verdict = r.HealthStatus,
+                    // Verdict, NOT HealthStatus. HealthStatus is the raw WMI enum word that MapHealth
+                    // produces ("Healthy" / "Warning" / "Unhealthy"); Verdict is the plain-English
+                    // sentence ApplyVerdict writes, which is what every other surface shows and what
+                    // ColorHex on the next line is derived from. Taking the enum here put an amber
+                    // "1 recommendation" headline next to a disk row reading plainly "Healthy" — the
+                    // card contradicting itself, on the one tab a non-technical user opens to find out
+                    // whether their PC is fine (#1785).
+                    Verdict = r.Verdict,
                     ColorHex = r.VerdictColorHex
                 });
             }

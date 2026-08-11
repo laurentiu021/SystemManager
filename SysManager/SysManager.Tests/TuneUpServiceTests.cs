@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -152,6 +153,42 @@ public class TuneUpServiceTests
 
         Assert.Equal(0, result.WarningCount);
         Assert.Equal("All good", result.OverallVerdict);
+    }
+
+    [Fact]
+    public void TuneUpService_CopiesTheVerdictSentence_NotTheRawHealthStatusEnum()
+    {
+        // The earlier fix made WarningCount read ColorHex instead of matching verdict TEXT, so the
+        // amber-vs-green decision became correct. But TuneUpService was still copying
+        // DiskHealthReport.HealthStatus — the raw WMI enum word MapHealth produces — into
+        // DiskHealthSummary.Verdict, which is the field the Dashboard RENDERS. So a genuinely degraded
+        // disk produced an amber "1 recommendation" headline sitting directly above a row that read
+        // plainly "Healthy": the same card contradicting itself, in the opposite direction.
+        //
+        // Asserted at source level deliberately. The runtime value depends on this machine's actual
+        // drives, so a behavioural test would be non-deterministic across machines and would pass
+        // vacuously on a box whose disks report no SMART counters. The property NAME is the contract.
+        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "TuneUpService.cs"));
+
+        Assert.Contains("Verdict = r.Verdict", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Verdict = r.HealthStatus", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The app project directory. The build copies no .cs files into the test output, so the assembly
+    /// location alone cannot answer this.
+    /// </summary>
+    private static string FindAppProjectDir()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, "SysManager", "SysManager.csproj");
+            if (File.Exists(candidate)) return Path.Combine(dir.FullName, "SysManager");
+            dir = dir.Parent;
+        }
+        throw new DirectoryNotFoundException(
+            "Could not locate the SysManager app project from " + AppContext.BaseDirectory);
     }
 
     [Theory]

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using SysManager.ViewModels;
@@ -12,6 +13,14 @@ namespace SysManager.IntegrationTests;
 [Collection("Network")]
 public class AboutViewUiTests
 {
+    /// <summary>
+    /// A throwaway config directory. AboutViewModel persists its startup-check preference under
+    /// %AppData%\SysManager, and the convenience constructors used to resolve that unconditionally,
+    /// so building one here rewrote the developer's real preference file (#1785).
+    /// </summary>
+    private static string AboutConfigDir()
+        => Path.Combine(Path.GetTempPath(), "SysManagerTests", "about-ui");
+
     [Fact]
     public void View_Instantiates_OnStaThread()
     {
@@ -29,7 +38,7 @@ public class AboutViewUiTests
         StaHelper.Run(() =>
         {
             EnsureAppResources();
-            var view = new AboutView { DataContext = new AboutViewModel() };
+            var view = new AboutView { DataContext = new AboutViewModel(AboutConfigDir()) };
             view.ApplyTemplate();
             Assert.IsType<AboutViewModel>(view.DataContext);
         });
@@ -57,7 +66,7 @@ public class AboutViewUiTests
         StaHelper.Run(() =>
         {
             EnsureAppResources();
-            var vm = new AboutViewModel();
+            var vm = new AboutViewModel(AboutConfigDir());
             var view = new AboutView { DataContext = vm };
             Assert.NotNull(vm.CurrentVersion);
         });
@@ -69,7 +78,7 @@ public class AboutViewUiTests
         StaHelper.Run(() =>
         {
             EnsureAppResources();
-            var vm = new AboutViewModel();
+            var vm = new AboutViewModel(AboutConfigDir());
             Assert.NotNull(vm.CheckForUpdatesCommand);
             Assert.NotNull(vm.LoadHistoryCommand);
             Assert.NotNull(vm.InstallUpdateCommand);

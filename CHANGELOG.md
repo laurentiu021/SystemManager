@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.2] - 2026-08-11
+
+Nothing changes in the app itself. This closes three ways the project's own tests could reach
+into your real SysManager data — including one that could delete the copy the new
+"go back to the previous version" button depends on.
+
+### Fixed
+- **The tests could destroy your rollback copy.** Version 1.61.0 added the ability to go back to the previous version by keeping one copy of the build you were running. Running the project's own test suite overwrote that copy with a 9-byte scratch file — so the About tab would still offer "Go back to the previous version", and pressing it could not work. This only affects people who build and test SysManager themselves, not normal use. The retention step now takes a folder from whoever calls it and every test passes a temporary one; a new test asserts the real location is untouched after the applier runs, and it fails against the old code.
+- **The tests wrote into your activity history.** The Dashboard's list of recent actions is, as its own code says, the only record of what the app changed on your PC. Any test that exercised a real action — changing DNS, running Deep Cleanup, removing a shortcut — appended to *your* list instead of a scratch one, because the shared logger had no way to be pointed elsewhere. It is now redirectable and the test run redirects it once, before any test starts, so no future test can forget to.
+- **The tests consumed your crash report.** When SysManager closes unexpectedly it leaves a note so the next start can tell you. Reading that note deletes it, and every test that constructed the Dashboard read it from the real location — silently throwing away a genuine crash report before you were ever shown it. The crash-note store is now a required argument rather than one that quietly defaults to your own profile.
+- **Two test classes could corrupt each other's confirmation prompts.** Two classes swapped the shared dialog service without joining the group that runs them one at a time, so in parallel one could restore a stand-in another was still using — a test about a "are you sure?" prompt silently answering with a different test's answer. Both now join it, and a new check fails the build if a future test class forgets.
+
 ## [1.61.1] - 2026-08-11
 
 Two more of the project's own tests can no longer touch your real settings: the Settings
@@ -17,6 +29,7 @@ Watchdog baseline and the dark-mode schedule.
 
 ### Fixed
 - **Two more places where running the tests could overwrite your own files.** This only affects people who build and test SysManager themselves, not normal use — but it is the same problem that was fixed for app icons in 1.60.1, and it is worth closing properly. The Settings Watchdog keeps a snapshot of your chosen Windows settings, and the Dark Mode scheduler keeps your on/off times; both were stored at a location the tests had no way to redirect, so a test that saved a baseline or a schedule wrote over yours. Both now accept a scratch folder, and every test uses one. The dark-mode schedule stays exactly where it has always been for real users, so nothing of yours moves.
+
 ## [1.61.0] - 2026-08-11
 
 If an update ever leaves SysManager not working, you can now go back to the version you had

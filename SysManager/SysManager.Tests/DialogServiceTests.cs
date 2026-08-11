@@ -12,6 +12,10 @@ namespace SysManager.Tests;
 /// contract: with no Application present the service must report a safe answer rather
 /// than acting on the user's behalf or throwing.
 /// </summary>
+// Serialized: Instance_RejectsNull touches the static DialogService.Instance. The assignment is
+// rejected, so nothing is actually swapped — but the read-then-restore still races a parallel class
+// that IS mid-swap, which would restore that class's substitute after it had finished with it.
+[Collection("DialogService")]
 public class DialogServiceTests
 {
     [Fact]

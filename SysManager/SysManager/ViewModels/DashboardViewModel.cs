@@ -90,17 +90,24 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // ── IsActive (pause polling when tab not visible) ────────────────────
     [ObservableProperty] private bool _isActive;
 
+    /// <param name="crashMarkers">
+    /// Required, not optional. It used to default to <c>new CrashMarkerService()</c>, which resolved
+    /// the real profile — and because <see cref="CrashMarkerService.TakePending"/> CONSUMES the marker
+    /// by deleting it, every test that constructed this ViewModel silently ate a genuine crash report
+    /// before the user could ever be told about it. The convenience of an optional argument is not
+    /// worth a defaulting path into user data; the DI container and the designer graph both have one
+    /// to hand (#1772).
+    /// </param>
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
-        CrashMarkerService? crashMarkers = null)
+        CrashMarkerService crashMarkers)
     {
         _sys = sys;
         _tuneUp = tuneUp;
         _healthScore = healthScore;
         _temps = temps;
         _winget = winget;
-        // Optional so the designer/test graph can construct this VM without a crash-marker store.
-        _crashMarkers = crashMarkers ?? new CrashMarkerService();
+        _crashMarkers = crashMarkers;
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }

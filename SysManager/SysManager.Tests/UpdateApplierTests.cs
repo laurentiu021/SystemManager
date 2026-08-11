@@ -18,6 +18,20 @@ namespace SysManager.Tests;
 /// </summary>
 public class UpdateApplierTests
 {
+    /// <summary>
+    /// The updates directory every <see cref="UpdateApplier.ApplyCopy"/> call in this file must be
+    /// pointed at. Omitting it is not a harmless default: ApplyCopy retains the outgoing build, and
+    /// with no override that copy lands in the REAL <c>%LocalAppData%\SysManager\updates</c> and
+    /// overwrites the developer's own rollback build with a temp fixture (#1772).
+    /// </summary>
+    private static string Updates(DirectoryInfo dir) => Path.Combine(dir.FullName, "updates");
+
+    private static string Sha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+    }
+
     [Fact]
     public void BuildArguments_RoundTripsThroughTryParse()
     {
@@ -81,7 +95,8 @@ public class UpdateApplierTests
             File.WriteAllText(source, "NEW-BUILD");
             File.WriteAllText(target, "OLD-BUILD");
 
-            var ok = UpdateApplier.ApplyCopy(source, target, maxAttempts: 1, delayMs: 0);
+            var ok = UpdateApplier.ApplyCopy(
+                source, target, maxAttempts: 1, delayMs: 0, updatesDir: Updates(dir));
 
             Assert.True(ok);
             Assert.Equal("NEW-BUILD", File.ReadAllText(target));
@@ -104,7 +119,8 @@ public class UpdateApplierTests
             var target = Path.Combine(dir.FullName, "current.exe");
             File.WriteAllText(source, "NEW-BUILD");
 
-            var ok = UpdateApplier.ApplyCopy(source, target, maxAttempts: 1, delayMs: 0);
+            var ok = UpdateApplier.ApplyCopy(
+                source, target, maxAttempts: 1, delayMs: 0, updatesDir: Updates(dir));
 
             Assert.True(ok);
             Assert.Equal("NEW-BUILD", File.ReadAllText(target));
@@ -130,7 +146,8 @@ public class UpdateApplierTests
             // loop (it would otherwise misread FileNotFoundException as a transient lock).
             // delayMs is large on purpose — if the guard regressed and the loop ran, the
             // test would hang noticeably rather than return instantly.
-            var ok = UpdateApplier.ApplyCopy(source, target, maxAttempts: 10, delayMs: 10_000);
+            var ok = UpdateApplier.ApplyCopy(
+                source, target, maxAttempts: 10, delayMs: 10_000, updatesDir: Updates(dir));
 
             // A failed copy must never destroy the working executable.
             Assert.False(ok);
@@ -164,7 +181,7 @@ public class UpdateApplierTests
             File.WriteAllText(target, "OLD-BUILD");
 
             UpdateApplier.PreserveCurrentBuild(target, updates);
-            Assert.True(UpdateApplier.ApplyCopy(source, target));
+            Assert.True(UpdateApplier.ApplyCopy(source, target, updatesDir: updates));
 
             // The update landed…
             Assert.Equal("NEW-BUILD", File.ReadAllText(target));
@@ -237,7 +254,9 @@ public class UpdateApplierTests
             var ex = Record.Exception(() => UpdateApplier.PreserveCurrentBuild(target, blocked));
             Assert.Null(ex);                                      // swallowed, logged, not thrown
 
-            Assert.True(UpdateApplier.ApplyCopy(source, target));  // the update still succeeds
+            // Same blocked directory: the update must survive the retention failing INSIDE ApplyCopy,
+            // not merely when PreserveCurrentBuild is called separately beforehand.
+            Assert.True(UpdateApplier.ApplyCopy(source, target, updatesDir: blocked));
             Assert.Equal("NEW-BUILD", File.ReadAllText(target));
         }
         finally { dir.Delete(recursive: true); }
@@ -253,6 +272,61 @@ public class UpdateApplierTests
         Assert.Equal("SysManager-previous.exe", Path.GetFileName(path));
         Assert.Equal("updates", Path.GetFileName(Path.GetDirectoryName(path)));
         Assert.Contains("SysManager", path);
+    }
+
+    [Fact]
+    public void ApplyCopy_RetentionHonoursTheRedirectedUpdatesDirectory()
+    {
+        // The bug this pins: ApplyCopy accepted no updatesDir, so the retention step inside it always
+        // resolved the REAL profile no matter where the caller pointed source/target. A test could
+        // redirect every path it knew about and still write an executable into the user's own
+        // %LocalAppData%\SysManager\updates. Accepting the parameter is not enough — it has to reach
+        // PreserveCurrentBuild, which is what this asserts.
+        var dir = Directory.CreateTempSubdirectory("ApplierRedirect_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Updates(dir);
+            File.WriteAllText(source, "NEW-BUILD");
+            File.WriteAllText(target, "OLD-BUILD");
+
+            // No separate PreserveCurrentBuild call — ApplyCopy's own retention must do the work.
+            Assert.True(UpdateApplier.ApplyCopy(source, target, maxAttempts: 1, delayMs: 0, updatesDir: updates));
+
+            Assert.Equal("OLD-BUILD", File.ReadAllText(UpdateApplier.PreviousBuildPath(updates)));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void ApplyCopy_DoesNotTouchTheRealProfile()
+    {
+        // The end-to-end guarantee, stated against the actual user path rather than a proxy: running
+        // the applier in a test must leave the developer's own retained build exactly as it was. This
+        // is the assertion that was failing silently — the file was being overwritten with a 9-byte
+        // fixture while every other test in the file passed.
+        var real = UpdateApplier.PreviousBuildPath();
+        var existedBefore = File.Exists(real);
+        var hashBefore = existedBefore ? Sha256(real) : null;
+
+        var dir = Directory.CreateTempSubdirectory("ApplierNoLeak_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            File.WriteAllText(source, "NEW-BUILD");
+            File.WriteAllText(target, "OLD-BUILD");
+
+            UpdateApplier.ApplyCopy(source, target, maxAttempts: 1, delayMs: 0, updatesDir: Updates(dir));
+        }
+        finally { dir.Delete(recursive: true); }
+
+        // Either it never existed and still does not, or it existed and is byte-identical. A length
+        // check would pass on a same-size replacement, so compare the content hash.
+        Assert.Equal(existedBefore, File.Exists(real));
+        if (existedBefore)
+            Assert.Equal(hashBefore, Sha256(real));
     }
 
     [Fact]

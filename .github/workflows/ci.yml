@@ -29,6 +29,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Tags are needed by "Check the version is the one the merge will tag" below, which
+          # compares the PR's version against a bump from the newest tag. A shallow clone carries no
+          # tags, so that check would silently pass against nothing.
+          fetch-depth: 0
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -89,6 +94,55 @@ jobs:
                     "version the merge will actually tag."
           }
           Write-Host "Version $csproj is consistent across csproj and CHANGELOG."
+
+      # The check above proves csproj and CHANGELOG agree with EACH OTHER. It does not prove they agree
+      # with the version the merge will actually tag — a different number, computed by auto-release as a
+      # bump from the newest TAG, not from whatever the files say.
+      #
+      # That gap stranded two versions on 2026-08-11. Several fix: PRs were open at once; each resolved
+      # its CHANGELOG conflict by taking the next free number, so main ended up carrying entries for
+      # 1.61.4 and 1.61.6 while the newest tag was still v1.61.2. Auto-release computed 1.61.3, found no
+      # entry for it, and refused — twice. Its own guard worked (no tag was created, so nothing was left
+      # half-published), but the cost landed AFTER the merge and the remedy was another PR.
+      #
+      # Checking it here turns that into one edit on the PR. Mirrors auto-release's arithmetic
+      # deliberately — same tag selection, same bump rules — so the two cannot drift apart on what
+      # "next" means.
+      - name: Check the version is the one the merge will tag
+        shell: bash
+        run: |
+          set -o pipefail
+
+          MATCHES=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          TAG=${MATCHES%%$'\n'*}
+          if [ -z "$TAG" ]; then
+            echo "No release tag found — nothing to compute a bump from, skipping."
+            exit 0
+          fi
+
+          CSPROJ=$(grep -oPm1 '(?<=<Version>)[^<]+' SysManager/SysManager/SysManager.csproj)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${TAG#v}"
+
+          # A PR's commit type is not reliably available here, so accept ANY of the three legal bumps
+          # rather than guessing. That still catches the real failure: a version that is not a single
+          # bump from the newest tag, which is exactly what "1.61.6 while the tag is v1.61.2" was.
+          PATCH_NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          MINOR_NEXT="${MAJOR}.$((MINOR + 1)).0"
+          MAJOR_NEXT="$((MAJOR + 1)).0.0"
+
+          if [ "$CSPROJ" = "$PATCH_NEXT" ] || [ "$CSPROJ" = "$MINOR_NEXT" ] || [ "$CSPROJ" = "$MAJOR_NEXT" ]; then
+            echo "Version $CSPROJ is a valid bump from $TAG."
+            exit 0
+          fi
+
+          # Unchanged is fine: docs:/test:/ci:/chore: PRs do not release, so they never touch it.
+          if [ "$CSPROJ" = "${TAG#v}" ]; then
+            echo "Version $CSPROJ equals the newest tag — no release expected from this PR."
+            exit 0
+          fi
+
+          echo "::error::Version $CSPROJ is not what this merge will tag. The newest tag is $TAG, so auto-release will compute $PATCH_NEXT (fix:), $MINOR_NEXT (feat:) or $MAJOR_NEXT (breaking). Set csproj Version AND the newest CHANGELOG header to whichever applies. If another PR merged first and took your number, re-resolve against main rather than picking the next free one — a gap makes auto-release fail after the merge instead of before it."
+          exit 1
 
       # The release workflow copies the matching CHANGELOG block VERBATIM into the release body and the
       # auto-posted announcement, so whatever that entry starts with is the first thing a prospective

@@ -10,21 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.61.6] - 2026-08-11
+## [1.61.3] - 2026-08-11
 
-Turning a Windows service back on now asks first — like starting, stopping and disabling one
-already did — and it tells you what it is about to set.
-
-### Fixed
-- **"Enable" changed a Windows service without asking.** On the Services tab, Start, Stop and Disable each ask before doing anything. Enable did not: one click and the service's startup type changed. It also was not always putting things back the way they were — if SysManager had no record of how the service was set before, which is the case for anything you disabled yourself outside the app, it quietly set it to **Manual** instead. It now asks first and says exactly what it will do: either the original setting by name, or plainly that it will use Manual because the original is not known, so you can decide rather than find out afterwards.
-
-## [1.61.4] - 2026-08-11
-
-Quick Tune-Up said "2 recommendations" on a perfectly healthy PC. It now says "All good"
-when everything is actually fine.
+Quick Tune-Up says "All good" when your PC actually is, and turning a Windows service back
+on now asks first and tells you what it is about to set.
 
 ### Fixed
 - **Quick Tune-Up counted every healthy disk as a problem.** If you have two drives and nothing wrong with your PC — no broken shortcuts, plenty of free memory, recently restarted — the Tune-Up result still opened with **"2 recommendations"** in amber, showed the "what to look at" section, and then listed those same two drives with their own verdict reading *"Healthy — 38 °C"*. The headline contradicted the detail directly underneath it. The check was comparing the disk's verdict against the word "Healthy" on its own, but the app never writes that exact wording — it always adds the temperature and wear, or a full stop. So every healthy drive matched "not healthy". It now decides from the same green/amber/red signal the disk row itself uses, so a healthy PC reads "All good" and a drive that genuinely needs attention still counts.
+- **"Enable" changed a Windows service without asking.** On the Services tab, Start, Stop and Disable each ask before doing anything. Enable did not: one click and the service's startup type changed. It also was not always putting things back the way they were — if SysManager had no record of how the service was set before, which is the case for anything you disabled yourself outside the app, it quietly set it to **Manual** instead. It now asks first and says exactly what it will do: either the original setting by name, or plainly that it will use Manual because the original is not known, so you can decide rather than find out afterwards.
+
+### Changed
+- **The build now refuses a version number that does not match what the release will be tagged.** Internal only — it does not change anything you see in the app. Two versions had ended up written into the changelog without ever being published, because several fixes were in flight at once and each picked the next free number; the release step then looked for a version that was not there and stopped. The check that catches this now runs while the change is still being reviewed, so it costs one correction instead of a stalled release.
 
 ## [1.61.2] - 2026-08-11
 

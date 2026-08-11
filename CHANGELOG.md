@@ -10,13 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.61.2] - 2026-08-11
+## [1.61.3] - 2026-08-11
 
 Ending a Windows security or update process now warns you about what actually happens,
 instead of saying a feature might look broken until you sign out.
 
 ### Fixed
 - **The "End task" warning was too reassuring for some Windows processes.** Version 1.59.0 fixed the opposite problem — the app used to refuse to end Notepad and claimed doing so would blue-screen your PC — but the message that replaced the refusal said the same thing for every Windows process: that it "will not crash Windows" and at worst "a feature may stop working until you sign out or restart". That is true for something like Explorer, which comes back on its own. It is not true for Windows Defender's engine, where closing it is a step towards switching off your protection, and it is not true for Windows Installer and the servicing processes, where interrupting one part-way through can leave an update half-applied — and restarting does not put that right. Those now get their own prompt that says so plainly. The processes Windows genuinely cannot survive losing are still refused outright, ordinary Windows components keep the existing warning, and normal programs keep the plain one, so nothing you could end before has become harder to end.
+
+## [1.61.2] - 2026-08-11
+
+Nothing changes in the app itself. This closes three ways the project's own tests could reach
+into your real SysManager data — including one that could delete the copy the new
+"go back to the previous version" button depends on.
+
+### Fixed
+- **The tests could destroy your rollback copy.** Version 1.61.0 added the ability to go back to the previous version by keeping one copy of the build you were running. Running the project's own test suite overwrote that copy with a 9-byte scratch file — so the About tab would still offer "Go back to the previous version", and pressing it could not work. This only affects people who build and test SysManager themselves, not normal use. The retention step now takes a folder from whoever calls it and every test passes a temporary one; a new test asserts the real location is untouched after the applier runs, and it fails against the old code.
+- **The tests wrote into your activity history.** The Dashboard's list of recent actions is, as its own code says, the only record of what the app changed on your PC. Any test that exercised a real action — changing DNS, running Deep Cleanup, removing a shortcut — appended to *your* list instead of a scratch one, because the shared logger had no way to be pointed elsewhere. It is now redirectable and the test run redirects it once, before any test starts, so no future test can forget to.
+- **The tests consumed your crash report.** When SysManager closes unexpectedly it leaves a note so the next start can tell you. Reading that note deletes it, and every test that constructed the Dashboard read it from the real location — silently throwing away a genuine crash report before you were ever shown it. The crash-note store is now a required argument rather than one that quietly defaults to your own profile.
+- **Two test classes could corrupt each other's confirmation prompts.** Two classes swapped the shared dialog service without joining the group that runs them one at a time, so in parallel one could restore a stand-in another was still using — a test about a "are you sure?" prompt silently answering with a different test's answer. Both now join it, and a new check fails the build if a future test class forgets.
 
 ## [1.61.1] - 2026-08-11
 

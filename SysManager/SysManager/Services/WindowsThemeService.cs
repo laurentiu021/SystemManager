@@ -32,9 +32,28 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
     private const string AppsValue = "AppsUseLightTheme";
     private const string SystemValue = "SystemUsesLightTheme";
 
-    private static readonly string SchedulePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "SysManager", "darkmode-schedule.json");
+    // Instance, not static readonly: Environment.GetFolderPath goes through the Win32 known-folder
+    // API and ignores the APPDATA environment variable, so a static path is unredirectable by any
+    // test. See ArchitectureTests.Services_DoNotHoldUserDataPathsInStaticFields — the realised
+    // consequences were SpeedTestHistoryService's tests deleting the user's history and
+    // AppIconService's overwriting a real setting every run (#1758).
+    private readonly string _schedulePath;
+
+    /// <summary>
+    /// Creates the service.
+    /// </summary>
+    /// <param name="configDir">
+    /// Where the dark-mode schedule lives. Null uses <c>%AppData%\SysManager</c> — note ROAMING, not
+    /// Local, which is where this file has always lived; changing that would strand an existing
+    /// user's schedule. Tests MUST pass a temp directory.
+    /// </param>
+    public WindowsThemeService(string? configDir = null)
+    {
+        _schedulePath = Path.Combine(
+            configDir ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager"),
+            "darkmode-schedule.json");
+    }
 
     /// <summary>Read the current Windows app theme (absent value = Light, the OS default).</summary>
     public WindowsTheme GetCurrentTheme()
@@ -80,9 +99,9 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
     {
         try
         {
-            if (File.Exists(SchedulePath))
+            if (File.Exists(_schedulePath))
             {
-                string json = File.ReadAllText(SchedulePath);
+                string json = File.ReadAllText(_schedulePath);
                 var s = JsonSerializer.Deserialize<DarkModeSchedule>(json);
                 if (s is not null) return s;
             }
@@ -98,9 +117,9 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(SchedulePath)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(_schedulePath)!);
             string json = JsonSerializer.Serialize(schedule, JsonDefaults.Indented);
-            File.WriteAllText(SchedulePath, json);
+            File.WriteAllText(_schedulePath, json);
         }
         catch (IOException ex) { Log.Warning("Dark-mode schedule save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Warning("Dark-mode schedule save denied: {Error}", ex.Message); }

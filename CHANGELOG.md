@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.1] - 2026-08-11
+
+Two more of the project's own tests can no longer touch your real settings: the Settings
+Watchdog baseline and the dark-mode schedule.
+
+### Fixed
+- **Two more places where running the tests could overwrite your own files.** This only affects people who build and test SysManager themselves, not normal use — but it is the same problem that was fixed for app icons in 1.60.1, and it is worth closing properly. The Settings Watchdog keeps a snapshot of your chosen Windows settings, and the Dark Mode scheduler keeps your on/off times; both were stored at a location the tests had no way to redirect, so a test that saved a baseline or a schedule wrote over yours. Both now accept a scratch folder, and every test uses one. The dark-mode schedule stays exactly where it has always been for real users, so nothing of yours moves.
+
 ## [1.60.3] - 2026-08-10
 
 Closes a hole in the update check before it can ever matter: when SysManager starts being

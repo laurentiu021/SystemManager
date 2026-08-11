@@ -3,6 +3,7 @@
 // License: MIT
 
 using NSubstitute;
+using System.IO;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -25,7 +26,12 @@ namespace SysManager.Tests;
 /// </summary>
 public class DarkModeViewModelTests
 {
-    private static DarkModeViewModel NewVm() => new(new WindowsThemeService());
+    // A TEMP configDir, so constructing the service never reads (or writes) the user's real
+    // %AppData%\SysManager\darkmode-schedule.json. The registry reads below are read-only and stay.
+    private static WindowsThemeService NewRealService() =>
+        new(Path.Combine(Path.GetTempPath(), "SysManagerDarkModeTests", Guid.NewGuid().ToString("N")));
+
+    private static DarkModeViewModel NewVm() => new(NewRealService());
 
     private static DarkModeViewModel NewVm(IWindowsThemeService service) => new(service);
 
@@ -60,7 +66,7 @@ public class DarkModeViewModelTests
     {
         var vm = NewVm();
         // The VM seeds IsDarkNow from the live registry read; it must agree with a direct query.
-        bool live = new WindowsThemeService().GetCurrentTheme() == WindowsTheme.Dark;
+        bool live = NewRealService().GetCurrentTheme() == WindowsTheme.Dark;
         Assert.Equal(live, vm.IsDarkNow);
     }
 

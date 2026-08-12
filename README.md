@@ -35,6 +35,24 @@ winget install laurentiu021.SysManager
 
 ---
 
+## Table of contents
+
+- [What it is](#what-it-is)
+- [Why SysManager?](#why-sysmanager)
+- [Features](#features) — all 58 tabs, grouped
+- [Screenshots](#screenshots)
+- [Install](#install)
+- [Uninstalling](#uninstalling)
+- [Build from source](#build-from-source)
+- [First-time flow](#first-time-flow)
+- [Documentation](#documentation)
+- [Reporting bugs and requesting features](#reporting-bugs-and-requesting-features)
+- [Tech stack](#tech-stack)
+- [Privacy](#privacy)
+- [Contributing](#contributing)
+- [Support](#support)
+- [License](#license)
+
 ## What it is
 
 SysManager is a local-first desktop tool for keeping an eye on a Windows PC.
@@ -1273,7 +1291,9 @@ Found something broken? Missing a feature you'd love to have?
 - 🐛 **Bugs** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=bug_report.yml)
   using the bug report template.
 - 💡 **Features** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=feature_request.yml)
-  using the feature request template.
+  using the feature request template, or post in
+  [Discussions › Ideas](https://github.com/laurentiu021/SystemManager/discussions/categories/ideas)
+  if it's still a rough idea rather than a concrete request.
 - 💬 **Questions and how-to's** — use
   [Discussions › Q&A](https://github.com/laurentiu021/SystemManager/discussions/categories/q-a)
   instead of issues for anything open-ended.

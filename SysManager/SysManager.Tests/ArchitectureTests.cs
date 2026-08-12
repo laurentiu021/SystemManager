@@ -774,6 +774,98 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"/discussions/categories/q-a", RegexOptions.Compiled)]
     private static partial Regex QuestionCategoryLink();
 
+    /// <summary>
+    /// Every discussion-category deep link must name a category that exists. GitHub answers an unknown
+    /// slug with a 404, and the docs are the one place a typo would go unnoticed — nothing compiles them.
+    /// The list mirrors the repository's configured categories.
+    /// </summary>
+    [Fact]
+    public void EveryDiscussionCategoryLink_NamesACategoryThatExists()
+    {
+        string[] slugs = ["announcements", "general", "ideas", "polls", "q-a", "show-and-tell"];
+        var root = FindRepoRoot();
+
+        var offenders = new List<string>();
+        var links = 0;
+
+        foreach (var path in Directory.EnumerateFiles(root, "*.md", SearchOption.TopDirectoryOnly)
+                     .Concat(Directory.EnumerateFiles(Path.Combine(root, ".github", "ISSUE_TEMPLATE"), "*.yml")))
+        {
+            var lines = File.ReadAllLines(path);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (var hit in CategoryLink().Matches(lines[i]).Cast<Match>())
+                {
+                    links++;
+                    var slug = hit.Groups[1].Value;
+                    if (!slugs.Contains(slug))
+                        offenders.Add($"{Path.GetFileName(path)}:{i + 1}  unknown category '{slug}'");
+                }
+            }
+        }
+
+        Assert.True(links >= 4, $"expected the category deep links to be present, found {links}");
+        Assert.True(offenders.Count == 0,
+            "these links name a discussion category that does not exist (GitHub answers 404):\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A discussion-category deep link, capturing the slug.</summary>
+    [GeneratedRegex(@"/discussions/categories/([a-z0-9-]+)", RegexOptions.Compiled)]
+    private static partial Regex CategoryLink();
+
+    /// <summary>
+    /// The README's table of contents must resolve. It is 1300+ lines long, so the contents list is the
+    /// only practical way to navigate it — and a heading rename silently breaks an anchor, which renders
+    /// as a link that quietly does nothing rather than as an error.
+    /// </summary>
+    [Fact]
+    public void TheReadmeTableOfContents_HasNoDeadAnchors()
+    {
+        var lines = File.ReadAllLines(Path.Combine(FindRepoRoot(), "README.md"));
+
+        // GitHub's anchor rule: lower-case, drop everything but word characters, spaces and hyphens,
+        // then replace runs of whitespace with a single hyphen.
+        var anchors = lines
+            .Select(l => HeadingLine().Match(l))
+            .Where(m => m.Success)
+            .Select(m => Slug(m.Groups[1].Value))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var start = Array.FindIndex(lines, l => l.Trim() == "## Table of contents");
+        Assert.True(start >= 0, "README.md has no '## Table of contents' section — the guard is vacuous");
+
+        var dead = new List<string>();
+        var entries = 0;
+        for (var i = start + 1; i < lines.Length && !lines[i].StartsWith("## ", StringComparison.Ordinal); i++)
+        {
+            var m = InPageLink().Match(lines[i]);
+            if (!m.Success) continue;
+            entries++;
+            if (!anchors.Contains(m.Groups[1].Value))
+                dead.Add($"README.md:{i + 1}  #{m.Groups[1].Value}");
+        }
+
+        Assert.True(entries >= 10, $"expected the full contents list, found {entries} entries");
+        Assert.True(dead.Count == 0,
+            "these table-of-contents links point at headings that do not exist:\n  " + string.Join("\n  ", dead));
+    }
+
+    private static string Slug(string heading) =>
+        WhitespaceRun().Replace(NonAnchorCharacter().Replace(heading.Trim().ToLowerInvariant(), string.Empty).Trim(), "-");
+
+    /// <summary>A markdown heading of level 2 or deeper, capturing its text.</summary>
+    [GeneratedRegex(@"^#{2,}\s+(.*)$", RegexOptions.Compiled)]
+    private static partial Regex HeadingLine();
+
+    /// <summary>An in-page markdown link, capturing the anchor.</summary>
+    [GeneratedRegex(@"\]\(#([^)]+)\)", RegexOptions.Compiled)]
+    private static partial Regex InPageLink();
+
+    /// <summary>Characters GitHub strips when building an anchor.</summary>
+    [GeneratedRegex(@"[^\w\s-]", RegexOptions.Compiled)]
+    private static partial Regex NonAnchorCharacter();
+
     /// <summary>The repository root — the docs the guards read are not copied to the test output.</summary>
     private static string FindRepoRoot()
     {

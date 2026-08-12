@@ -21,7 +21,7 @@ namespace SysManager.Tests;
 /// <para>Serialized on the DialogService collection: the Start/Stop confirm-gate tests swap
 /// the process-wide <see cref="DialogService.Instance"/>, matching the established pattern.</para>
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class GamingProfileViewModelTests
 {
     // Swap DialogService.Instance with a substitute that returns <paramref name="confirm"/>,

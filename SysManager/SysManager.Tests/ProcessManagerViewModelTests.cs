@@ -16,7 +16,7 @@ namespace SysManager.Tests;
 /// </summary>
 // Serialized: the kill-guard tests swap the static DialogService.Instance, which is
 // process-wide shared state.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class ProcessManagerViewModelTests
 {
     [Fact]

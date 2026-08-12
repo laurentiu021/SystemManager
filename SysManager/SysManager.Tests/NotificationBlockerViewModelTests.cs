@@ -14,7 +14,7 @@ namespace SysManager.Tests;
 /// pending-change tracking (per-app and master), the confirm gate, partial-failure baseline
 /// handling, and discard — all against a substituted service (no registry).
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class NotificationBlockerViewModelTests
 {
     private static NotificationApp App(string aumid, bool enabled = true, string? name = null) =>

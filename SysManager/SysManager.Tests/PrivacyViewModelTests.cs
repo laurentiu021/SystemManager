@@ -13,7 +13,7 @@ namespace SysManager.Tests;
 /// category filtering, pending-change tracking, and discard behavior
 /// without writing to the registry.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class PrivacyViewModelTests
 {
     // The VM loads its toggles asynchronously off the UI thread (so startup isn't blocked);

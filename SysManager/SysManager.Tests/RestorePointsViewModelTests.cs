@@ -23,7 +23,7 @@ namespace SysManager.Tests;
 /// </remarks>
 // Serialized: these swap the static DialogService.Instance, which is process-wide shared state.
 // Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class RestorePointsViewModelTests
 {
     private static RestorePointsViewModel NewVm(out IPowerShellRunner runner)

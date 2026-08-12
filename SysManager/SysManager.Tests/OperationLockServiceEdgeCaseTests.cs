@@ -5,7 +5,7 @@ using SysManager.Services;
 
 namespace SysManager.Tests;
 
-[Collection("OperationLock")]
+[Collection("ProcessWideStatics")]
 public class OperationLockServiceEdgeCaseTests
 {
     private static OperationLockService Service => OperationLockService.Instance;

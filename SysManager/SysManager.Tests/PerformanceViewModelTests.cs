@@ -19,7 +19,7 @@ namespace SysManager.Tests;
 /// tests below swap the global <see cref="DialogService.Instance"/> and take the
 /// shared <see cref="OperationLockService"/>, both process-wide singletons.
 /// </remarks>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class PerformanceViewModelTests
 {
     private static PerformanceViewModel NewVm(bool completeInitialization = false)

@@ -17,7 +17,7 @@ namespace SysManager.Tests;
 /// (NotBusy) that serialises the mutating Defender commands so two overlapping
 /// Set-MpPreference operations can't race the read-back verification.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class DefenderViewModelTests
 {
     private static DefenderViewModel NewVm()

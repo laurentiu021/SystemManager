@@ -22,7 +22,7 @@ namespace SysManager.Tests;
 /// </summary>
 // Serialized: the Enable-confirm tests swap the static DialogService.Instance, which is
 // process-wide shared state. Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class ServicesViewModelTests
 {
     private static readonly List<ServiceEntry> TestServices = new()

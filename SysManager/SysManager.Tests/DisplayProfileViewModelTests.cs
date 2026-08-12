@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// ChangeDisplaySettingsEx) runs off the UI thread and the auto-revert DispatcherTimer
 /// keeps ticking during a mode switch.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class DisplayProfileViewModelTests
 {
     private static DisplayProfileViewModel NewVm()

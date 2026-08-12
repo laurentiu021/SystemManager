@@ -148,50 +148,75 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// Any test class that swaps <c>DialogService.Instance</c> must be in the serialized collection.
+    /// Any test class that touches a process-wide mutable singleton must be in the serialized collection.
+    /// </summary>
+    /// <remarks>
     /// <para>
-    /// The collection exists and 24 classes use it correctly, but the attribute is easy to forget and
+    /// The collection exists and most classes use it correctly, but the attribute is easy to forget and
     /// nothing enforced it: <c>DebloaterViewModelTests</c> and <c>DialogServiceTests</c> both touched
-    /// the static while running in PARALLEL with the serialized group, because
+    /// <c>DialogService.Instance</c> while running in PARALLEL with the serialized group, because
     /// <c>parallelizeTestCollections</c> is true. The failure mode is not a clean crash — one class
     /// restores the singleton to a value another class is still using, so a confirmation gate answers
     /// with a foreign canned answer and a destructive-op test passes for the wrong reason.
     /// </para>
     /// <para>
-    /// Source-level, deliberately. The attribute is a compile-time fact about a test class, so a
-    /// reflection scan over the test assembly would work too — but reading the source also catches a
-    /// class that swaps the static inside a helper, and the same source-scan approach is already used
-    /// for the destructive-op logging guard in ActivityLogServiceTests.
+    /// This originally scanned for <c>DialogService.Instance</c> ONLY, and that gap let exactly the same
+    /// defect through for a second singleton: <c>CleanupViewModelTests</c> acquired the process-wide
+    /// <c>OperationLockService.Instance</c> and asserted which operation held it, with no collection
+    /// attribute at all. The list of watched statics is therefore data, not a hardcoded string — adding
+    /// the next one is one row.
     /// </para>
-    /// </summary>
+    /// <para>
+    /// Source-level, deliberately. The attribute is a compile-time fact so reflection would work too, but
+    /// reading the source also catches a class that touches the static inside a helper, and the same
+    /// approach is already used for the destructive-op logging guard in ActivityLogServiceTests.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public void DialogServiceSwappers_AreInTheSerializedCollection()
+    public void ProcessWideStaticUsers_AreInTheSerializedCollection()
     {
+        // marker → what it is, for the failure message. Both shapes of the dialog swap count: assigning
+        // the static directly, or using the scoped DialogAnswer helper.
+        (string Marker, string What)[] watched =
+        [
+            ("DialogService.Instance =", "DialogService.Instance"),
+            ("new DialogAnswer(", "DialogService.Instance (via the DialogAnswer helper)"),
+            ("OperationLockService.Instance", "OperationLockService.Instance"),
+        ];
+
         var testDir = FindTestSourceDirectory();
         var offenders = new List<string>();
+        var inspected = 0;
 
         foreach (var file in Directory.GetFiles(testDir, "*.cs"))
         {
             var name = Path.GetFileName(file);
-            if (name is "DialogAnswer.cs" or "ArchitectureTests.cs") continue;   // the helper and this test
+            // The helper itself, this test, and the collection definitions are not test classes.
+            if (name is "DialogAnswer.cs" or "ArchitectureTests.cs" or "TestCollections.cs") continue;
 
             var source = File.ReadAllText(file);
 
-            // Either shape counts: assigning the static directly, or using the scoped helper — both
-            // install a substitute into process-wide state for the duration of the test.
-            var swaps = source.Contains("DialogService.Instance =", StringComparison.Ordinal)
-                     || source.Contains("new DialogAnswer(", StringComparison.Ordinal);
-            if (!swaps) continue;
+            var touched = watched.Where(w => source.Contains(w.Marker, StringComparison.Ordinal))
+                                 .Select(w => w.What)
+                                 .Distinct()
+                                 .ToList();
+            if (touched.Count == 0) continue;
 
-            if (!source.Contains("[Collection(\"DialogService\")]", StringComparison.Ordinal))
-                offenders.Add(name);
+            inspected++;
+            if (!source.Contains("[Collection(\"ProcessWideStatics\")]", StringComparison.Ordinal))
+                offenders.Add($"{name} — touches {string.Join(", ", touched)}");
         }
 
+        // Vacuity floor: if the markers stopped matching, this would pass while inspecting nothing.
+        Assert.True(inspected >= 25,
+            $"Expected at least 25 classes touching a process-wide singleton, found {inspected} — " +
+            "the markers are probably out of date.");
+
         Assert.True(offenders.Count == 0,
-            "These test classes swap the process-wide DialogService.Instance but are not in the " +
-            "serialized \"DialogService\" collection, so they race the classes that are — a test can " +
-            "restore a substitute another test is still using. Add [Collection(\"DialogService\")]:\n  " +
-            string.Join("\n  ", offenders));
+            "These test classes touch a process-wide mutable singleton but are not in the serialized "
+            + "\"ProcessWideStatics\" collection, so they race the classes that are — a test can observe "
+            + "state another test owns, and pass or fail for a foreign reason. Add "
+            + "[Collection(\"ProcessWideStatics\")]:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>

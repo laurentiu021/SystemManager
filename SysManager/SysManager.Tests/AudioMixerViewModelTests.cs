@@ -31,7 +31,7 @@ namespace SysManager.Tests;
 // DeletePreset's confirmation gate swaps the global DialogService.Instance, so this class must
 // run in the serialized collection — otherwise a parallel class's substitute steals the Confirm
 // call and the gate assertions go flaky.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class AudioMixerViewModelTests
 {
     private static AudioSessionInfo Session(

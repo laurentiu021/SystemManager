@@ -10,7 +10,7 @@ using SysManager.ViewModels;
 namespace SysManager.Tests;
 
 // Serialized: the confirm-gate tests swap the static DialogService.Instance.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class TweaksHubViewModelTests
 {
     private static TweakItem Tweak(string name, string hive, bool applied)

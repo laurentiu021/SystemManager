@@ -106,7 +106,7 @@ public class UninstallerViewModelTests
 /// serialized "DialogService" collection. Process execution is substituted through
 /// <see cref="IPowerShellRunner"/> so success, failure, and cancellation stay deterministic.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class UninstallerViewModelGateTests
 {
     private static UninstallerViewModel NewVm(IPowerShellRunner? runner = null)

@@ -13,7 +13,7 @@ namespace SysManager.Tests;
 /// Regression coverage for the persisted Performance Mode recovery point.
 /// Every test uses an isolated directory and never touches the real app profile.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public sealed class PerformanceSnapshotRestartTests
 {
     private static IPowerShellRunner NewRunner()

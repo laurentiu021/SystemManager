@@ -19,7 +19,7 @@ namespace SysManager.Tests;
 /// binds to. The service is constructed over redirected HKCU roots and a substituted runner, so
 /// no process, scheduled task, or real machine key is touched.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public sealed class EdgeOneDriveViewModelTests : IDisposable
 {
     private readonly string _rootName = @"Software\SysManagerTests\EdgeOneDriveVm_" + Guid.NewGuid().ToString("N");

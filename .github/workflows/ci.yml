@@ -93,7 +93,21 @@ jobs:
                     "A feat: PR bumps the MINOR component and a fix: PR the PATCH — set both to the " +
                     "version the merge will actually tag."
           }
-          Write-Host "Version $csproj is consistent across csproj and CHANGELOG."
+          # SECURITY.md names the supported minor line. It is prose, so nothing recomputes it and it
+          # drifted three minors behind (it still said 1.61.x at 1.64.0) — on the page that decides
+          # whether someone bothers to report a vulnerability at all, and where a user on a NEWER build
+          # reads their own version as unsupported. Only the MINOR line is checked: patch releases are
+          # frequent and must not each require a docs edit.
+          $minor = ($csproj -split '\.')[0..1] -join '.'
+          $supported = (Select-String -Path SECURITY.md -Pattern '^\|\s*([0-9]+\.[0-9]+)\.x\s*\|' |
+                        Select-Object -First 1).Matches[0].Groups[1].Value
+          if ($supported -ne $minor) {
+              throw "SECURITY.md says $supported.x is supported but this release is $csproj. " +
+                    "Update the supported-versions table to $minor.x — a user on the current build " +
+                    "must not read their own version as unsupported."
+          }
+
+          Write-Host "Version $csproj is consistent across csproj, CHANGELOG and SECURITY.md."
 
       # The check above proves csproj and CHANGELOG agree with EACH OTHER. It does not prove they agree
       # with the version the merge will actually tag — a different number, computed by auto-release as a

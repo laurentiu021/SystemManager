@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.4] - 2026-08-12
+
+Choosing "close SysManager" now actually closes it. It used to leave SysManager running invisibly, with
+no window and no icon next to the clock to get it back.
+
+### Fixed
+- **"Close SysManager" left it running with no way to see it or stop it.** When you press X, SysManager asks once whether to keep running next to the clock or close completely — and remembers your answer. Choosing to close completely made the window disappear, but the program kept running: no window, and no icon next to the clock either, so there was nothing to click. Worse, it then blocked itself from starting again — launching SysManager would hand over to the invisible copy and quit immediately, so it looked like the app simply would not open. Because your answer is remembered, this happened every time, and the only way out was Task Manager. Closing completely now really does end the program. Keeping it next to the clock, and pressing Cancel to go back, both work exactly as before.
+
+---
+
 ## [1.64.3] - 2026-08-12
 
 The Standby List Cleaner used to keep checking your memory every two seconds for as long as SysManager

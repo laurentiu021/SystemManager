@@ -144,3 +144,88 @@ public class ClosePreferenceServiceTests : IDisposable
         Assert.Equal(CloseBehavior.Exit, new ClosePreferenceService(nested).Load());
     }
 }
+
+/// <summary>
+/// What closing the window resolves to. This lives outside <c>MainWindow.OnClosing</c> precisely so it
+/// can be asserted: the Exit branch used to fall through to <c>base.OnClosing</c> without calling
+/// <c>Shutdown</c>, and because <c>App</c> sets <c>ShutdownMode.OnExplicitShutdown</c> the process kept
+/// running with no window and no tray icon — the icon is disposed in <c>App.OnExit</c>, which nothing had
+/// triggered. The single-instance mutex stayed held, so the next launch handed itself to an invisible
+/// instance and quit, and the remembered answer made it recur on every launch (#1827).
+/// </summary>
+public class CloseDecisionTests
+{
+    [Fact]
+    public void RememberedExit_EndsTheProcess()
+    {
+        // The defect. Nothing else in the app exits on the user's behalf, so this must resolve to a
+        // shutdown and not merely to "close the window".
+        Assert.Equal(
+            CloseAction.ExitApplication,
+            CloseDecision.Resolve(CloseBehavior.Exit, answer: null));
+    }
+
+    [Fact]
+    public void RememberedTray_HidesInsteadOfExiting()
+        => Assert.Equal(
+            CloseAction.HideToTray,
+            CloseDecision.Resolve(CloseBehavior.MinimizeToTray, answer: null));
+
+    [Theory]
+    [InlineData(CloseChoice.Exit, CloseAction.ExitApplication)]
+    [InlineData(CloseChoice.MinimizeToTray, CloseAction.HideToTray)]
+    [InlineData(CloseChoice.Cancel, CloseAction.KeepOpen)]
+    public void WithNothingRemembered_TheAnswerDecides(CloseChoice answer, CloseAction expected)
+        => Assert.Equal(expected, CloseDecision.Resolve(CloseBehavior.Ask, answer));
+
+    [Fact]
+    public void ARememberedAnswerIsNotOverriddenByAStaleChoice()
+    {
+        // A remembered preference must win outright. If the stored value were ever ignored in favour of
+        // an answer, a user who chose "keep running" would be exited by a leftover value.
+        Assert.Equal(
+            CloseAction.HideToTray,
+            CloseDecision.Resolve(CloseBehavior.MinimizeToTray, CloseChoice.Exit));
+        Assert.Equal(
+            CloseAction.ExitApplication,
+            CloseDecision.Resolve(CloseBehavior.Exit, CloseChoice.MinimizeToTray));
+    }
+
+    [Fact]
+    public void UnansweredPrompt_LeavesTheWindowOpenRatherThanExiting()
+    {
+        // "We could not ask" is not consent to quit. Losing a window is recoverable; exiting unasked
+        // during an operation is not — so the unknown case must be the harmless one.
+        Assert.Equal(
+            CloseAction.KeepOpen,
+            CloseDecision.Resolve(CloseBehavior.Ask, answer: null));
+    }
+
+    [Theory]
+    [InlineData(CloseChoice.Exit, CloseBehavior.Exit)]
+    [InlineData(CloseChoice.MinimizeToTray, CloseBehavior.MinimizeToTray)]
+    public void AnAnsweredPromptIsRemembered(CloseChoice answer, CloseBehavior expected)
+        => Assert.Equal(expected, CloseDecision.PreferenceToSave(answer));
+
+    [Fact]
+    public void CancellingRemembersNothing()
+    {
+        // Cancel means "not now", not a preference. Saving anything here would silently answer the
+        // question for the user and they would never be asked again.
+        Assert.Null(CloseDecision.PreferenceToSave(CloseChoice.Cancel));
+    }
+
+    [Fact]
+    public void EveryChoiceAndBehaviourIsResolved()
+    {
+        // Total by construction: no combination may fall through to an unintended arm. The old switch
+        // relied on a `default:` meaning Exit, which is safe only as long as every other member is
+        // listed above it — a new CloseChoice member would silently have become "exit the app".
+        foreach (var behavior in Enum.GetValues<CloseBehavior>())
+        {
+            Assert.Contains(CloseDecision.Resolve(behavior, null), Enum.GetValues<CloseAction>());
+            foreach (var choice in Enum.GetValues<CloseChoice>())
+                Assert.Contains(CloseDecision.Resolve(behavior, choice), Enum.GetValues<CloseAction>());
+        }
+    }
+}

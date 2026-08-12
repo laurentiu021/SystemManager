@@ -127,6 +127,42 @@ jobs:
           }
           Write-Host "No premature code-signing attribution found."
 
+          # The release-notes footer that release.yml appends must be ASCII-only, and release.yml
+          # enforces that AT RELEASE TIME — which is too late: the check runs after the merge, so a
+          # single em dash in that template failed the v1.64.8 release and shipped no binary at all.
+          # The rule is now also checked here, on the pull request, where a violation is a red check
+          # instead of a missing release. Only the appended footer is constrained; the CHANGELOG body
+          # the notes are built from keeps its punctuation.
+          $releaseYml = Get-Content '.github/workflows/release.yml'
+          $start = ($releaseYml | Select-String -Pattern '^\s*\$template = @''' | Select-Object -First 1)
+          if (-not $start) {
+              throw "Could not find the release-notes template in .github/workflows/release.yml. " +
+                    "If it was renamed, update this gate in the same PR."
+          }
+          $end = $releaseYml |
+              Select-String -Pattern "^\s*'@\s*$" |
+              Where-Object { $_.LineNumber -gt $start.LineNumber } |
+              Select-Object -First 1
+          if (-not $end) { throw "The release-notes template is not terminated; check release.yml." }
+
+          $footer = $releaseYml[$start.LineNumber..($end.LineNumber - 2)]
+          $offenders = @()
+          for ($i = 0; $i -lt $footer.Count; $i++) {
+              foreach ($m in [regex]::Matches($footer[$i], '[^\x00-\x7F]')) {
+                  $offenders += "release.yml line $($start.LineNumber + $i + 1): '$($m.Value)'"
+              }
+          }
+          if ($offenders.Count -gt 0) {
+              throw "The appended release-notes footer must be ASCII-only (release.yml enforces this " +
+                    "at release time, which fails the release instead of the PR). Found: " +
+                    ($offenders -join '; ')
+          }
+          if ($footer.Count -lt 20) {
+              throw "Only $($footer.Count) template lines were scanned; the gate is not reading the " +
+                    "real footer. Fix the gate rather than trusting the pass."
+          }
+          Write-Host "Release-notes footer is ASCII-only ($($footer.Count) lines scanned)."
+
           # The newest CHANGELOG entry must be for that same version, or the release step that reads
           # release notes out of the CHANGELOG finds nothing.
           $head = (Select-String -Path CHANGELOG.md -Pattern '^## \[([0-9]+\.[0-9]+\.[0-9]+)\]' |

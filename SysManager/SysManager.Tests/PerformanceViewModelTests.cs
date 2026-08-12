@@ -357,4 +357,71 @@ public class PerformanceViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ── Disposal and the recovery snapshot ──
+    // Every Apply secures a snapshot first so the change can be reverted. Dispose clears that snapshot
+    // and disposes the gate that makes it exclusive, so a tab closed mid-Apply is the moment where a
+    // tweak could be applied with nothing left to revert it.
+
+    [Fact]
+    public async Task ApplyAfterDispose_RefusesRatherThanChangingAnythingUnprotected()
+    {
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+
+        try
+        {
+            vm.Dispose();
+
+            // The snapshot path cannot secure a snapshot on a disposed view model, so the Apply must
+            // report the refusal rather than proceeding. The command catches the refusal itself, so what
+            // is observable is the status text — and crucially NOT a success message.
+            await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+
+            Assert.DoesNotContain("Switched", vm.StatusMessage);
+            Assert.DoesNotContain("Applied", vm.StatusMessage);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public async Task DoubleDispose_IsHarmless()
+    {
+        // MainWindowViewModel disposes every tab at shutdown, and a tab can also be disposed by its own
+        // teardown — the second call must not throw on the already-disposed snapshot gate.
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+
+        vm.Dispose();
+        vm.Dispose();
+    }
+
+    [Fact]
+    public async Task Dispose_ClearsTheSnapshotItHeld()
+    {
+        // The clear moved inside the gate; it must still happen, or Dispose would leak a snapshot
+        // reference and the "cleared on teardown" behaviour would silently disappear.
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+
+        var field = typeof(PerformanceViewModel)
+            .GetField("_snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        field.SetValue(vm, new PerformanceService.OriginalSnapshot(
+            PowerPlanGuid: "guid", PowerPlanName: "Balanced", UiEffectsEnabled: true,
+            GameModeEnabled: true, XboxGameBarEnabled: true, XboxGameDvrEnabled: true,
+            GpuDynamicPstate: true, ProcessorMinPercentAc: 5, NvidiaSubKey: null));
+        Assert.NotNull(field.GetValue(vm));
+
+        vm.Dispose();
+
+        Assert.Null(field.GetValue(vm));
+    }
 }

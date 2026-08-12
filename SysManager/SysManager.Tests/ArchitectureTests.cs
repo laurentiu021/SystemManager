@@ -724,6 +724,56 @@ public partial class ArchitectureTests
     private static partial Regex CancellationFieldAssignment();
 
     /// <summary>
+    /// A type that disposes a <see cref="SemaphoreSlim"/> must track its own disposal, because an
+    /// operation already inside the gate resumes after teardown: entering a disposed gate throws, and
+    /// releasing one throws out of a <c>finally</c> block, turning a clean teardown into an unhandled
+    /// exception. The sibling of <see cref="EveryDisposedCancellationSource_IsCancelledFirst"/>, and the
+    /// same class of half-migration — the correct shape existed in three types while six others, two of
+    /// them view models disposed on every tab close, had no flag at all.
+    /// </summary>
+    [Fact]
+    public void EveryTypeThatDisposesAGate_TracksItsOwnDisposal()
+    {
+        var appDir = FindAppProjectDir();
+        var offenders = new List<string>();
+        var checkedTypes = 0;
+
+        foreach (var file in Directory.GetFiles(Path.Combine(appDir, "Services"), "*.cs")
+                     .Concat(Directory.GetFiles(Path.Combine(appDir, "ViewModels"), "*.cs")))
+        {
+            var source = File.ReadAllText(file);
+
+            var fields = GateFieldDeclaration().Matches(source)
+                .Select(m => m.Groups[1].Value)
+                .Where(f => source.Contains($"{f}.Dispose()", StringComparison.Ordinal))
+                .ToList();
+            if (fields.Count == 0) continue;
+
+            checkedTypes++;
+
+            // Either its own flag, or the one ViewModelBase exposes for exactly this purpose.
+            if (!source.Contains("_disposed", StringComparison.Ordinal)
+                && !source.Contains("IsDisposed", StringComparison.Ordinal))
+                offenders.Add($"{Path.GetFileName(file)} · disposes {string.Join(", ", fields)} with no disposal flag");
+        }
+
+        // Vacuity floor: if the declaration regex stopped matching, this would inspect nothing and pass.
+        Assert.True(checkedTypes >= 10,
+            $"Expected at least 10 types that dispose a gate, found {checkedTypes} — the detection is "
+            + "probably no longer matching the field declarations.");
+
+        Assert.True(offenders.Count == 0,
+            "These types dispose a SemaphoreSlim without tracking disposal, so an operation still inside "
+            + "the gate throws on release after teardown. Guard the wait and the release against a "
+            + "disposal flag (ViewModelBase.IsDisposed for view models):\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A field declared as a gate, e.g. <c>private readonly SemaphoreSlim _gate = new(1, 1);</c>.</summary>
+    [GeneratedRegex(@"SemaphoreSlim\??\s+(_[A-Za-z]\w*)", RegexOptions.Compiled)]
+    private static partial Regex GateFieldDeclaration();
+
+    /// <summary>
     /// Every place that sends a user somewhere to ask a question must deep-link the Q&amp;A category,
     /// never the Discussions root. Each release auto-posts an announcement, so the root is a wall of
     /// changelogs; four separate surfaces (the in-app button, SUPPORT.md, README.md and the issue

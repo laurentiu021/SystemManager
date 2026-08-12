@@ -14,7 +14,17 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     [ObservableProperty] private int _progress; // 0-100
     [ObservableProperty] private bool _isProgressIndeterminate;
 
-    private bool _disposed;
+    /// <summary>
+    /// True from the moment <see cref="Dispose()"/> is entered, before any derived override runs.
+    /// <para>An async command that resumes after a tab closes must not touch state a
+    /// <c>Dispose(bool)</c> override has already released — the recurring failure here was a
+    /// <see cref="SemaphoreSlim"/> disposed while an in-flight command still held it. Derived classes
+    /// check this before awaiting and again after every await.</para>
+    /// <para>Set in the public <see cref="Dispose()"/> rather than in <c>Dispose(bool)</c> on purpose:
+    /// overrides call <c>base.Dispose(disposing)</c> <em>last</em>, so a flag set there would still be
+    /// false while the override was releasing everything — exactly the window that needs guarding.</para>
+    /// </summary>
+    protected bool IsDisposed { get; private set; }
 
     /// <summary>
     /// Completes when the constructor's <see cref="InitializeAsync"/> work has finished
@@ -74,12 +84,12 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     /// </summary>
     protected virtual void Dispose(bool disposing)
     {
-        if (_disposed) return;
-        _disposed = true;
     }
 
     public void Dispose()
     {
+        if (IsDisposed) return;
+        IsDisposed = true;
         Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }

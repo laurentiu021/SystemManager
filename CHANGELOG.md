@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.5] - 2026-08-12
+
+A right-click menu entry with an unusual name can no longer make SysManager write a file where it should
+not. Nothing about using the Context Menu tab changes.
+
+### Security
+- **A crafted right-click menu entry could redirect SysManager's backup file.** Before turning a right-click menu entry on or off, SysManager saves a copy of the relevant registry key so the change can be undone. It built the command for that backup using the entry's own name — and a program running on your PC can create an entry whose name contains a quotation mark, which broke the command apart and let the rest of the name decide where the backup was written. Since SysManager is often started as administrator, that file could have landed somewhere it had no business being. SysManager now checks the name first and skips the backup with a note in its log if the name cannot be used safely, instead of running the command anyway. Ordinary entry names — spaces, dashes, brackets, symbols — are unaffected, and the same check was already being applied elsewhere in SysManager for the same reason; this was the one place it had been missed.
+
+---
+
 ## [1.64.4] - 2026-08-12
 
 Choosing "close SysManager" now actually closes it. It used to leave SysManager running invisibly, with

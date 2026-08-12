@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.9] - 2026-08-12
+
+Closing the Performance Mode tab in the middle of applying a tweak can no longer throw away the
+saved settings that "Restore all" needs. Closing the Bandwidth Monitor mid-load no longer risks an
+error on the way out.
+
+### Fixed
+- **Closing Performance Mode while a change was being applied could leave that change with nothing to undo it.** Before touching any Windows setting, SysManager saves a snapshot of how things were, so "Restore all" can put them back. Closing the tab clears that snapshot — but it did so without waiting for a change that was still in progress, so in the moment between "saving your original settings" and "applying the new one", closing the tab could take the snapshot away from the very operation that was relying on it. The result would be a setting changed with no recorded way back. The tab now waits for any in-progress change before clearing anything, and an attempt to apply a change to a tab that is already closing is refused outright instead of going ahead unprotected.
+- **Closing a tab mid-operation could log an error on an otherwise clean exit.** Eleven parts of the app take an internal turn-taking lock so two operations cannot run over each other. Six of them — the Bandwidth Monitor, Performance Mode, and the DNS, network-repair, speed-test-history and system-fix helpers — released that lock on shutdown without checking whether it had already been packed away, which reports an error during what is otherwise a normal exit. The other five already did this correctly; all eleven now behave the same way, and a new automatic check stops a twelfth from being added with the old pattern.
+
+---
+
 ## [1.64.8] - 2026-08-12
 
 "Ask a question" now takes you to the questions area instead of the release-announcements wall.

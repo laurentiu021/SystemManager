@@ -387,7 +387,23 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         // A gate rather than a lock: this is an async path, so it must not block, and dropping an
         // overlapping reload is correct behaviour — the newest selection is what the user asked for
         // and the queued run would repaint with identical data anyway.
-        await _reloadGate.WaitAsync().ConfigureAwait(true);
+        //
+        // Nothing to reload into once the tab is gone, and Dispose disposes the gate below — so entering
+        // it after teardown throws instead of doing work, and completing a load would repaint chart
+        // buffers whose paints and typefaces Dispose has already released.
+        if (IsDisposed) return;
+
+        try
+        {
+            await _reloadGate.WaitAsync().ConfigureAwait(true);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposed between the check above and the wait: the tab closed mid-reload. Nothing to
+            // release, because the wait never succeeded.
+            return;
+        }
+
         try
         {
             var range = SelectedRange;
@@ -432,7 +448,17 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
             }
             finally { IsBusy = false; }
         }
-        finally { _reloadGate.Release(); }
+        finally
+        {
+            // Release only if the gate is still alive: Dispose can land while the load is in flight, and
+            // releasing a disposed SemaphoreSlim throws — out of a finally block, which would replace a
+            // clean teardown with an unhandled exception.
+            if (!IsDisposed)
+            {
+                try { _reloadGate.Release(); }
+                catch (ObjectDisposedException) { /* disposed mid-reload; nothing left to release */ }
+            }
+        }
     }
 
     /// <summary>

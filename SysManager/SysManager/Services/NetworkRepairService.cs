@@ -15,10 +15,32 @@ public sealed class NetworkRepairService : IDisposable
     private readonly IPowerShellRunner _ps;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
+    // Idempotent, and paired with the guarded releases below: this is a DI singleton disposed at
+    // process exit, so a request in flight at shutdown would otherwise release a disposed gate from a
+    // finally block and log an error on a clean exit.
+    private bool _disposed;
+
     public NetworkRepairService(IPowerShellRunner ps) => _ps = ps;
 
     /// <inheritdoc />
-    public void Dispose() => _gate.Dispose();
+    /// <summary>
+    /// Releases the gate unless <see cref="Dispose"/> has already claimed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and every call site is a <c>finally</c> block, where that
+    /// would replace a clean shutdown — or a real error — with an unhandled exception.
+    /// </summary>
+    private void ReleaseGate()
+    {
+        if (_disposed) return;
+        try { _gate.Release(); }
+        catch (ObjectDisposedException) { /* disposed mid-request at shutdown */ }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _gate.Dispose();
+    }
 
     /// <summary>
     /// Flush the DNS resolver cache. Does not require a reboot.
@@ -39,7 +61,7 @@ public sealed class NetworkRepairService : IDisposable
                 string.Join(Environment.NewLine, output),
                 NeedsReboot: false);
         }
-        finally { _ps.LineReceived -= OnLine; _gate.Release(); }
+        finally { _ps.LineReceived -= OnLine; ReleaseGate(); }
     }
 
     /// <summary>
@@ -61,7 +83,7 @@ public sealed class NetworkRepairService : IDisposable
                 string.Join(Environment.NewLine, output),
                 NeedsReboot: true);
         }
-        finally { _ps.LineReceived -= OnLine; _gate.Release(); }
+        finally { _ps.LineReceived -= OnLine; ReleaseGate(); }
     }
 
     /// <summary>
@@ -83,6 +105,6 @@ public sealed class NetworkRepairService : IDisposable
                 string.Join(Environment.NewLine, output),
                 NeedsReboot: true);
         }
-        finally { _ps.LineReceived -= OnLine; _gate.Release(); }
+        finally { _ps.LineReceived -= OnLine; ReleaseGate(); }
     }
 }

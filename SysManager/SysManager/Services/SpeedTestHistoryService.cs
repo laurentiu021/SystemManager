@@ -31,6 +31,11 @@ public sealed class SpeedTestHistoryService : IDisposable
     // acts as an async-compatible mutex.
     private readonly SemaphoreSlim _fileLock = new(1, 1);
 
+    // Idempotent, and paired with the guarded releases below: this is a DI singleton disposed at
+    // process exit, so a request in flight at shutdown would otherwise release a disposed gate from a
+    // finally block and log an error on a clean exit.
+    private bool _disposed;
+
     /// <summary>
     /// Creates the service. <paramref name="configDir"/> is overridable so tests exercise the real
     /// save/load/clear paths against a temp directory instead of the user's own history file — same
@@ -49,7 +54,24 @@ public sealed class SpeedTestHistoryService : IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => _fileLock.Dispose();
+    /// <summary>
+    /// Releases the gate unless <see cref="Dispose"/> has already claimed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and every call site is a <c>finally</c> block, where that
+    /// would replace a clean shutdown — or a real error — with an unhandled exception.
+    /// </summary>
+    private void ReleaseFilelock()
+    {
+        if (_disposed) return;
+        try { _fileLock.Release(); }
+        catch (ObjectDisposedException) { /* disposed mid-request at shutdown */ }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _fileLock.Dispose();
+    }
 
     /// <summary>
     /// Loads all saved results from disk. Returns empty list on any error.
@@ -139,7 +161,7 @@ public sealed class SpeedTestHistoryService : IDisposable
         }
         finally
         {
-            _fileLock.Release();
+            ReleaseFilelock();
         }
     }
 
@@ -191,7 +213,7 @@ public sealed class SpeedTestHistoryService : IDisposable
         }
         finally
         {
-            _fileLock.Release();
+            ReleaseFilelock();
         }
     }
 

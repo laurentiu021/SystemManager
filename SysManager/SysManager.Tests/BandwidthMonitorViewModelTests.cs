@@ -631,4 +631,38 @@ public class BandwidthMonitorViewModelTests : IDisposable
         Assert.Equal(0, vm.TotalUpBytesPerSec);     // snapshot's 456 was never applied
         Assert.Empty(vm.Processes);                 // MergeInto never ran
     }
+
+    // ── Reload after teardown ──
+    // The reload path is serialized by a gate that Dispose disposes. Entering or releasing a disposed
+    // SemaphoreSlim throws — the release out of a finally block, which would turn a clean tab close into
+    // an unhandled exception. Both tests go through the public command, i.e. the same route the Refresh
+    // button and a range change take.
+
+    [Fact]
+    public async Task ReloadAfterDispose_IsANoOpRatherThanAThrow()
+    {
+        var now = DateTime.UtcNow;
+        var history = SeededHistory(new BandwidthSample(now.AddMinutes(-10), 1_048_576, 131_072));
+        var vm = NewVm(history: history);
+        vm.SelectedRange = vm.RangeOptions.First(r => r.Range == TimeSpan.FromHours(1));
+
+        vm.Dispose();
+
+        // No throw, and nothing repainted: the chart buffers' paints and typefaces are already released,
+        // so a completed reload here would draw through disposed SkiaSharp handles.
+        await vm.ReloadHistoryCommand.ExecuteAsync(null);
+        Assert.False(vm.ShowingHistory);
+    }
+
+    [Fact]
+    public async Task DoubleDispose_IsHarmless()
+    {
+        // MainWindowViewModel disposes every tab on shutdown, and a tab can also be disposed by its own
+        // teardown — the second call must not throw on the already-disposed gate, paints or source.
+        var vm = NewVm();
+        await vm.ReloadHistoryCommand.ExecuteAsync(null);
+
+        vm.Dispose();
+        vm.Dispose();
+    }
 }

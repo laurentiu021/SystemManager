@@ -65,7 +65,19 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
     private async Task InitAsync()
     {
-        await _snapshotGate.WaitAsync();
+        // Fire-and-forget from the constructor: a tab opened and closed quickly can dispose the gate
+        // before this runs. Nothing to initialise into at that point.
+        if (IsDisposed) return;
+
+        try
+        {
+            await _snapshotGate.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
         try
         {
             // Recovery must not wait behind live powercfg probes. A blocked or unavailable
@@ -73,7 +85,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             _snapshot ??= await Task.Run(_service.LoadSnapshot);
             HasSnapshot = _snapshot is not null;
         }
-        finally { _snapshotGate.Release(); }
+        finally { ReleaseSnapshotGate(); }
 
         try { await RefreshAsync(); }
         catch (InvalidOperationException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
@@ -84,7 +96,22 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     /// <summary>Ensure snapshot exists before any change.</summary>
     private async Task EnsureSnapshotAsync()
     {
-        await _snapshotGate.WaitAsync();
+        // Every Apply command awaits this before touching the system, so a tab closed mid-command
+        // resumes here with a disposed gate. Returning quietly would let the caller carry on and mutate
+        // the system with no snapshot to revert it — strictly worse than failing. So this reports the
+        // same refusal the "snapshot could not be saved" path already uses, and every caller already
+        // catches InvalidOperationException and abandons the change.
+        if (IsDisposed) throw SnapshotUnavailable();
+
+        try
+        {
+            await _snapshotGate.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            throw SnapshotUnavailable();
+        }
+
         try
         {
             if (_snapshot is null)
@@ -98,17 +125,33 @@ public sealed partial class PerformanceViewModel : ViewModelBase
                 {
                     var captured = await _service.TakeSnapshotAsync();
                     var saved = await Task.Run(() => _service.SaveSnapshot(captured));
-                    if (!saved)
-                    {
-                        throw new InvalidOperationException(
-                            "The recovery snapshot could not be saved, so no setting was changed.");
-                    }
+                    if (!saved) throw SnapshotUnavailable();
                     _snapshot = captured;
                 }
             }
             HasSnapshot = true;
         }
-        finally { _snapshotGate.Release(); }
+        finally { ReleaseSnapshotGate(); }
+    }
+
+    /// <summary>
+    /// The single refusal for "no recovery snapshot, so nothing was changed". Every Apply command
+    /// catches <see cref="InvalidOperationException"/> and abandons the change, which is what makes
+    /// this safe to throw from anywhere in the snapshot path.
+    /// </summary>
+    private static InvalidOperationException SnapshotUnavailable() =>
+        new("The recovery snapshot could not be saved, so no setting was changed.");
+
+    /// <summary>
+    /// Releases the snapshot gate unless disposal has already claimed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and this runs from a <c>finally</c>, where an exception
+    /// would replace a clean teardown — or a real error — with an unhandled one.
+    /// </summary>
+    private void ReleaseSnapshotGate()
+    {
+        if (IsDisposed) return;
+        try { _snapshotGate.Release(); }
+        catch (ObjectDisposedException) { /* disposed mid-operation; nothing left to release */ }
     }
 
     private void UpdateSummary()
@@ -746,7 +789,17 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     {
         if (disposing)
         {
-            _snapshot = null;
+            // Clear the snapshot INSIDE the gate. Clearing it outside meant a tab closed mid-Apply
+            // could null the recovery snapshot while EnsureSnapshotAsync was still capturing or saving
+            // it — the exact "a tweak applied with no snapshot left to revert it" outcome the gate
+            // exists to prevent. Bounded, like GamingProfileService's Dispose: the holder finishes in
+            // well under this, and a teardown must never hang waiting for it.
+            if (_snapshotGate.Wait(TimeSpan.FromSeconds(2)))
+            {
+                try { _snapshot = null; }
+                finally { _snapshotGate.Release(); }
+            }
+
             _snapshotGate.Dispose();
         }
         base.Dispose(disposing);

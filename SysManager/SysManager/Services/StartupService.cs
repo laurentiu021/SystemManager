@@ -75,7 +75,114 @@ public sealed class StartupService
         // Check StartupApproved to determine enabled/disabled state
         ApplyApprovedState(results);
 
+        // Attach the plain-language description + provenance the app already ships in
+        // ProcessDescriptions.json. Done once, over the finished list, rather than at each of the three
+        // construction sites, so every source (registry, startup folder, scheduled task) is enriched the
+        // same way and there is one place to test.
+        EnrichWithDescriptions(results);
+
         return results;
+    }
+
+    /// <summary>
+    /// Fills <see cref="StartupEntry.Description"/> and <see cref="StartupEntry.Safety"/> from the
+    /// built-in process database, keyed on the executable's base name. An entry the database does not
+    /// know is left with both empty — the view falls back to the publisher, and NO safety chip renders,
+    /// so the tab never asserts "safe" on a guess (the report's stated risk).
+    /// </summary>
+    internal static void EnrichWithDescriptions(IReadOnlyList<StartupEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            var exe = ExecutableNameFromCommand(entry.Command);
+            if (exe.Length == 0) continue;
+
+            var info = ProcessDescriptionService.Instance.Lookup(exe);
+            if (info is null) continue;
+
+            entry.Description = info.Description;
+            entry.Safety = info.Safety.ToString();
+        }
+    }
+
+    /// <summary>
+    /// The bare executable name (no path, no ".exe", no arguments) from a startup command line, or an
+    /// empty string when none can be read. Handles the three shapes the scanners produce: a quoted path
+    /// with arguments (<c>"C:\Program Files\App\app.exe" --flag</c>), an unquoted path with arguments
+    /// (<c>C:\Windows\system32\app.exe /run</c>), and a bare name already resolved from a shortcut.
+    /// </summary>
+    /// <remarks>
+    /// Pure and static so the parsing — which is the fiddly part — is unit-testable without touching the
+    /// registry. Kept conservative: it returns the token the database is keyed on, and
+    /// <see cref="ProcessDescriptionService.Lookup"/> handles the case-insensitive match and the ".exe"
+    /// strip, so a miss here costs only the enrichment, never a wrong description.
+    /// </remarks>
+    internal static string ExecutableNameFromCommand(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return "";
+
+        var text = command.Trim();
+        string path;
+
+        if (text.StartsWith('"'))
+        {
+            // Quoted executable: everything up to the closing quote is the path, args follow.
+            var end = text.IndexOf('"', 1);
+            path = end > 1 ? text[1..end] : text.Trim('"');
+        }
+        else
+        {
+            // Unquoted: the executable ends at its extension, NOT at the first space — an unquoted path
+            // like "C:\Program Files\Spotify\Spotify.exe" contains spaces and is entirely the path.
+            // Find the first known executable extension that is followed by end-of-string or a space;
+            // everything up to and including it is the path, and the rest are arguments.
+            path = SplitUnquotedExecutable(text);
+        }
+
+        try
+        {
+            return System.IO.Path.GetFileNameWithoutExtension(path.Trim());
+        }
+        catch (ArgumentException)
+        {
+            // Illegal path characters (e.g. a rundll32 entry point spec) — not something the database
+            // keys on anyway.
+            return "";
+        }
+    }
+
+    // Executable extensions that can appear at the end of the path portion of an unquoted command.
+    // .exe covers all but a handful; the others are the launchers Windows actually invokes at logon.
+    private static readonly string[] ExecutableExtensions = [".exe", ".com", ".bat", ".cmd", ".scr"];
+
+    /// <summary>
+    /// Splits an UNQUOTED command line into its executable path, treating a space as an argument
+    /// separator ONLY after the executable's extension. "C:\Program Files\App\app.exe --flag" returns
+    /// "C:\Program Files\App\app.exe" (the spaces before .exe are part of the path); "app.exe /run"
+    /// returns "app.exe". Falls back to the first space-delimited token when no known extension is
+    /// present, which still handles the common "app.exe" bare case via the whole string.
+    /// </summary>
+    private static string SplitUnquotedExecutable(string text)
+    {
+        foreach (var ext in ExecutableExtensions)
+        {
+            var idx = text.IndexOf(ext, StringComparison.OrdinalIgnoreCase);
+            while (idx >= 0)
+            {
+                var after = idx + ext.Length;
+                // The extension ends the path only if the executable token ends here — i.e. end of
+                // string or a space begins the arguments. Guards against matching ".com" inside a folder
+                // like "C:\Company\...": require the next char to be a separator or nothing.
+                if (after == text.Length || text[after] == ' ')
+                    return text[..after];
+                idx = text.IndexOf(ext, after, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        // No recognised extension (e.g. a bare token, or a path to something unusual). Fall back to the
+        // first token; a wrong split just means no database hit, never a wrong description.
+        var space = text.IndexOf(' ');
+        return space > 0 ? text[..space] : text;
     }
 
     private static void ReadStartupFolder(string folderPath, string locationLabel, bool isCommon, List<StartupEntry> results)

@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.63.0] - 2026-08-12
+
+The Startup Manager now tells you what each program is and whether it is safe to turn off, instead of
+showing a raw file path you would have to decode.
+
+### Added
+- **Plain-language descriptions and a safety label in the Startup Manager.** The tab listed each startup program by name and its raw command line — a full file path with switches, like `"C:\Program Files\NVIDIA Corporation\NvContainer\nvcontainer.exe"` — and left you to work out whether turning it off was safe. It now shows a short description of what the program actually is (drawn from the same built-in database the Process Manager already uses) and a Safety chip: **Windows** for parts of the operating system, **Known app** for recognised software, or **Not recognised** for everything else. So you can tell "nvcontainer" (part of your graphics driver, leave it) from "Spotify" (safe to turn off) at a glance. Programs the database does not recognise keep showing their file path and get no safety label — the app never guesses that something is safe to disable. The full path is always available on hover.
+
+---
+
 ## [1.62.1] - 2026-08-12
 
 Several on-screen warnings and admin notices that were being cut off mid-sentence on a narrow window now

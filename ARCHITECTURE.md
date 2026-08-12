@@ -203,7 +203,9 @@ Key services:
 - `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the
   old one and restart, before any DI/UI is built (see the Updates flow below).
 - `StartupService` — enumerate and toggle startup programs via registry
-  Run / RunOnce keys.
+  Run / RunOnce keys. Enriches each entry from `ProcessDescriptionService`
+  (plain-language description + `ProcessSafety`) keyed on the executable's base
+  name; unrecognised programs are left blank so the UI never guesses a safety.
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →
   partial hash pre-filter → full SHA-256). Read-only, never deletes.
 - `DiskAnalyzerService` — folder-level space breakdown with progress

@@ -203,6 +203,10 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Speed tests: HTTP (Cloudflare) and the official Ookla CLI (auto-downloaded)
   with persistent history (last 20 results per engine) for tracking service
   degradation over time
+- Every speed result comes with a plain-English verdict — what that speed is
+  actually enough for (video calls, HD, 4K, several devices at once) rather than
+  just a number — plus one line comparing it with your previous test on the same
+  engine
 - Jitter, loss %, and average ping per target rolled up into health pills
 - **Network repair tools**: DNS flush, Winsock reset, TCP/IP reset with
   confirmation dialogs and admin checks

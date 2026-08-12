@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.62.0] - 2026-08-12
+
+The Speed Test tab now tells you whether your speed is any good, instead of leaving you to work it
+out from a number in Mbps.
+
+### Added
+- **A plain-English verdict on every speed test.** The tab measured your connection and then showed you "43.2 Mbps", which answers "what is my speed" and not the question most people open the tab with — "is that actually good?". Each result now comes with a short verdict saying what that speed is enough for in terms you can check against your own household: whether video calls and HD video will struggle, whether 4K on several devices at once is comfortable. The Ping tab next door has explained itself in plain English for a long time; this brings Speed Test in line with it, using the same layout so the two read as one app.
+- **A comparison with your last test.** When there is an earlier result for the same test engine, the verdict adds one line putting the two side by side — "About the same as your last test (45 Mbps)" or "Noticeably slower than your last test (was 92 Mbps)". That is the difference between a number and evidence: it is what you can point at when calling your provider. Results have always been stored, so nothing new is saved to do this, and small run-to-run differences are treated as noise rather than reported as news — a speed test varies on an unchanged line.
+- A slow result is never coloured as a fault. If you are on a modest plan, the app says the speed will limit some things; it does not tell you something is broken when nothing is.
+
+---
+
 ## [1.61.11] - 2026-08-12
 
 The Uninstaller tab no longer looks broken when you open it after granting administrator access

@@ -73,11 +73,14 @@
             <Grid>
                 <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                         Margin="-12,-8,0,-8"/>
-                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
-                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width
+                     along its orientation, so this banner's TextWrapping was inert and clipped on a
+                     narrow window (#1807). The stripe Border above is untouched. -->
+                <DockPanel Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Top" DockPanel.Dock="Left"/>
                     <TextBlock Text="Running as administrator — machine-wide watched settings can be restored, not just per-user ones."
                                Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                </StackPanel>
+                </DockPanel>
             </Grid>
         </Border>
 
@@ -96,13 +99,15 @@
         <Border Grid.Row="4" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
                 BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="28,12,28,0"
                 Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
+                 its orientation, so TextWrapping was inert and this drift notice clipped (#1807). -->
+            <DockPanel>
+                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
+                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                 <TextBlock Text="Some settings have changed since your baseline. Review them below and restore if they weren't your doing."
                            Foreground="{DynamicResource WarningText}" FontSize="12.5"
                            VerticalAlignment="Center" TextWrapping="Wrap"/>
-            </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- Drift list -->

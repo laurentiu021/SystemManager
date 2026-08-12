@@ -397,6 +397,86 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// <c>TextWrapping="Wrap"</c> must not sit inside a horizontal <c>StackPanel</c>, where it does
+    /// nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>A StackPanel measures its children with infinite width along its orientation, so a TextBlock
+    /// inside a horizontal one never learns a width to wrap against: the attribute is inert and the text
+    /// is laid out on a single line, with whatever exceeds the panel silently clipped. It reads as
+    /// protection and provides none.</para>
+    /// <para>14 TextBlocks across 13 views did this, every one of them a warning or an explanation — an
+    /// SSD-shredding caveat, a Tamper-Protection notice, admin-requirement banners — so the truncation
+    /// dropped the caveat and kept the setup. The correct parent is a <c>DockPanel</c> (glyph docked
+    /// left, message filling) or a <c>Grid</c>, both of which give the text a real width. This test keeps
+    /// the next hand-written banner from reintroducing the class.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTextWrapping_IsInertInsideAHorizontalStackPanel()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            System.Xml.Linq.XDocument doc;
+            try { doc = System.Xml.Linq.XDocument.Load(file); }
+            catch (System.Xml.XmlException) { continue; }
+
+            foreach (var tb in doc.Descendants().Where(e => e.Name.LocalName == "TextBlock"))
+            {
+                scanned++;
+                if (((string?)tb.Attribute("TextWrapping") ?? "") != "Wrap") continue;
+                if (!InsideHorizontalStackPanel(tb)) continue;
+
+                var text = WhitespaceRun().Replace((string?)tb.Attribute("Text") ?? "", " ").Trim();
+                // Bound values and short glyphs cannot meaningfully clip; only real prose does.
+                if (text.Length < 40 || text.StartsWith('{')) continue;
+
+                offenders.Add($"{Path.GetFileName(file)}: \"{(text.Length > 60 ? text[..60] + "…" : text)}\"");
+            }
+        }
+
+        Assert.True(scanned > 100, $"Only {scanned} TextBlocks parsed — the check is not reading the views.");
+
+        Assert.True(offenders.Count == 0,
+            "These TextBlocks set TextWrapping=\"Wrap\" but their nearest layout ancestor is a horizontal " +
+            "StackPanel, which hands children infinite width — so wrapping does nothing and the text is " +
+            "clipped instead. Put the message in a DockPanel (glyph docked left) or a Grid so it has a " +
+            "real width to wrap in:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// True if the nearest ancestor that constrains width along an axis is a horizontal StackPanel.
+    /// A Grid, DockPanel, Border, ScrollViewer or vertical StackPanel between the TextBlock and any
+    /// horizontal StackPanel gives the text a real width, so the decision is made on the FIRST layout
+    /// container encountered walking outward — only an unbroken path into a horizontal StackPanel is inert.
+    /// </summary>
+    private static bool InsideHorizontalStackPanel(System.Xml.Linq.XElement textBlock)
+    {
+        for (var e = textBlock.Parent; e is not null; e = e.Parent)
+        {
+            switch (e.Name.LocalName)
+            {
+                case "StackPanel":
+                    // No Orientation attribute defaults to Vertical, which constrains width — not a problem.
+                    return (((string?)e.Attribute("Orientation")) ?? "Vertical") == "Horizontal";
+                case "Grid":
+                case "DockPanel":
+                case "Border":
+                case "ScrollViewer":
+                case "WrapPanel":
+                case "UserControl":
+                case "GroupBox":
+                case "ToolTip":
+                    return false;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Messages inside a Border that is (a) shown WHEN elevated and (b) painted with the gold
     /// WarningBgSubtle. Parsed rather than grepped: the not-elevated banner sits in the same
     /// <c>Grid.Row</c> in every one of these views, so a file-wide text search would read the wrong one.

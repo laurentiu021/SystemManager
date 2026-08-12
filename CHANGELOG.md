@@ -10,6 +10,15 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.7] - 2026-08-12
+
+Internal hardening in the "go back to the previous version" check. Nothing you do with SysManager changes.
+
+### Fixed
+- **The rollback check could keep a saved version locked if reading it failed unexpectedly.** Before starting your previous version, SysManager opens the saved copy, locks it so nothing can swap it, and checks it against a recorded checksum. Every ordinary outcome — checksum missing, unreadable, or not matching — released that lock correctly. But if reading the file failed in an unusual way, the lock could be left in place until SysManager closed, and while it was held, no future update could refresh your saved copy — so you could quietly end up with an out-of-date version to go back to. The lock is now released the same way on every possible outcome, including ones that have not happened. Found by the project's own automated security scan flagging code added in 1.64.2; nobody reported it, and no user is known to have hit it.
+
+---
+
 ## [1.64.6] - 2026-08-12
 
 Closing a tab, or closing SysManager, now actually stops what that tab was doing. Scans, cleanups and

@@ -345,6 +345,15 @@ internal static class UpdateApplier
         var hashFile = PreviousBuildHashPath(updatesDir);
 
         FileStream? stream = null;
+        // Ownership transfers to the caller ONLY on the success path. Every other exit — an early return
+        // OR an exception of any type — must close the handle here, and a per-branch stream.Dispose()
+        // could not promise that: File.ReadAllText and SHA256.HashData can throw types outside the two
+        // catches below, and that path leaked the handle (CodeQL cs/dispose-not-called-on-throw).
+        //
+        // A leaked deny-write handle here is worse than an ordinary handle leak: nothing could replace
+        // SysManager-previous.exe until the process exited, so the NEXT legitimate update would fail to
+        // refresh the rollback copy and quietly leave the user with a stale one. A single finally keyed on
+        // whether ownership moved covers every exit, including ones not yet imagined.
         try
         {
             // Open with deny-write BEFORE hashing, and keep it open on the way out: from this point the
@@ -354,7 +363,6 @@ internal static class UpdateApplier
             if (!File.Exists(hashFile))
             {
                 reason = "there is no recorded checksum for the saved version";
-                stream.Dispose();
                 return false;
             }
 
@@ -362,7 +370,6 @@ internal static class UpdateApplier
             if (expected.Length != 64)
             {
                 reason = "the recorded checksum for the saved version is not readable";
-                stream.Dispose();
                 return false;
             }
 
@@ -373,7 +380,6 @@ internal static class UpdateApplier
                     "Rollback: retained build hash mismatch — expected {Expected}, got {Actual}",
                     expected, actual);
                 reason = "the saved version has changed since it was saved";
-                stream.Dispose();
                 return false;
             }
 
@@ -384,15 +390,19 @@ internal static class UpdateApplier
         {
             Log.Warning(ex, "Rollback: could not read the retained build to verify it");
             reason = "the saved version could not be read";
-            stream?.Dispose();
             return false;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Rollback: access denied reading the retained build to verify it");
             reason = "the saved version could not be read";
-            stream?.Dispose();
             return false;
+        }
+        finally
+        {
+            // verifiedStream is non-null only where the caller took ownership; anywhere else the handle
+            // is still ours to close.
+            if (verifiedStream is null) stream?.Dispose();
         }
     }
 

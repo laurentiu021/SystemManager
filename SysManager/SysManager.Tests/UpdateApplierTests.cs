@@ -605,4 +605,60 @@ public class UpdateApplierTests
         }
         finally { dir.Delete(recursive: true); }
     }
+
+    [Theory]
+    [InlineData(null)]           // no checksum file
+    [InlineData("")]             // present but empty
+    [InlineData("not-a-hash")]   // unusable
+    [InlineData("00000000000000000000000000000000000000000000000000000000000000FF")]  // valid shape, wrong value
+    public void VerifiedPreviousBuild_ReleasesTheHandleOnEveryRefusal(string? hashContent)
+    {
+        // The verification opens the retained build with FileShare.Read (deny-write) BEFORE hashing it.
+        // Every refusal path must close that handle, and a leak here is worse than an ordinary handle
+        // leak: while it is held, nothing can replace SysManager-previous.exe, so the next legitimate
+        // update silently fails to refresh the rollback copy and leaves the user with a stale one.
+        // Proven by DELETING the file afterwards — Windows refuses that while a handle is open, so a
+        // successful delete IS the evidence the handle was released.
+        var dir = Directory.CreateTempSubdirectory("ApplierHandle_");
+        try
+        {
+            var updates = Directory.CreateDirectory(Updates(dir)).FullName;
+            var previous = UpdateApplier.PreviousBuildPath(updates);
+            File.WriteAllText(previous, "some build");
+            if (hashContent is not null)
+                File.WriteAllText(UpdateApplier.PreviousBuildHashPath(updates), hashContent);
+
+            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out _));
+            Assert.Null(stream);
+
+            File.Delete(previous);   // throws IOException if the handle is still open
+            Assert.False(File.Exists(previous));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void VerifiedPreviousBuild_OnSuccess_KeepsTheHandleOpenForTheCaller()
+    {
+        // The control for the test above: the success path must NOT release the handle, because holding it
+        // across Process.Start is the whole point — it is what stops the verified bytes being swapped
+        // between the check and the launch. A finally that disposed unconditionally would pass the
+        // refusal tests and silently destroy this guarantee.
+        var dir = Directory.CreateTempSubdirectory("ApplierHandle_");
+        try
+        {
+            var updates = Updates(dir);
+            var current = Path.Combine(dir.FullName, "SysManager.exe");
+            File.WriteAllText(current, "the outgoing build");
+            UpdateApplier.PreserveCurrentBuild(current, updates);
+
+            Assert.True(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var why), why);
+            using (stream)
+            {
+                Assert.NotNull(stream);
+                Assert.Throws<IOException>(() => File.Delete(UpdateApplier.PreviousBuildPath(updates)));
+            }
+        }
+        finally { dir.Delete(recursive: true); }
+    }
 }

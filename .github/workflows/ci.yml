@@ -58,12 +58,32 @@ jobs:
       # Format-check every C# project the workflow builds, not just the main one —
       # the same .editorconfig governs the test projects, so otherwise their style
       # could drift past CI silently.
+      #
+      # `shell: bash` with an explicit failure sweep, NOT four bare lines. A multi-line `run:` uses the
+      # default shell, where only the LAST command's exit code decides the step — so a project that
+      # failed formatting printed its errors as annotations and the step still went green. That is how
+      # five real violations (DuplicateFileViewModelTests, DarkModeViewModelTests, AboutViewModel)
+      # reached main across several PRs while every run looked clean: the UITests project happened to
+      # pass last. Each project's status is now captured and the step fails if ANY of them did.
       - name: Check formatting
+        shell: bash
         run: |
-          dotnet format SysManager/SysManager/SysManager.csproj --verify-no-changes --verbosity diagnostic
-          dotnet format SysManager/SysManager.Tests/SysManager.Tests.csproj --verify-no-changes --verbosity diagnostic
-          dotnet format SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj --verify-no-changes --verbosity diagnostic
-          dotnet format SysManager/SysManager.UITests/SysManager.UITests.csproj --verify-no-changes --verbosity diagnostic
+          failed=""
+          for proj in \
+            SysManager/SysManager/SysManager.csproj \
+            SysManager/SysManager.Tests/SysManager.Tests.csproj \
+            SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj \
+            SysManager/SysManager.UITests/SysManager.UITests.csproj
+          do
+            if ! dotnet format "$proj" --verify-no-changes --verbosity diagnostic; then
+              failed="$failed $proj"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::Formatting violations in:$failed — run 'dotnet format <project>' to fix."
+            exit 1
+          fi
+          echo "All four projects are correctly formatted."
 
       # The release workflow derives its notes from the CHANGELOG section matching the TAG that
       # auto-release computed from the commit type (feat: -> minor, fix: -> patch). If the csproj

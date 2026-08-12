@@ -104,6 +104,29 @@ jobs:
           if ($file -ne "$csproj.0") { throw "FileVersion ($file) does not match Version ($csproj)." }
           if ($asm -ne "$csproj.0") { throw "AssemblyVersion ($asm) does not match Version ($csproj)." }
 
+          # A code-signing attribution must never be published before a certificate exists. The README
+          # and the release-notes template both carried "Free code signing provided by SignPath.io,
+          # certificate by SignPath Foundation" in the present tense while no certificate had been
+          # issued — the Foundation had in fact declined the application. It reached 22 published
+          # release pages before anyone noticed, because the release template reproduces it every time.
+          # Claiming a sponsor that has not accepted you is a credibility problem, not a typo, so the
+          # claim is now blocked mechanically rather than trusted to review.
+          #
+          # When a certificate IS issued: delete this gate in the same PR that adds the attribution.
+          # That is the intended way out, and it makes the gate self-documenting rather than an
+          # obstacle someone works around.
+          $signingClaim = 'code signing provided by|certificate by \[?SignPath'
+          foreach ($file in @('README.md', '.github/workflows/release.yml')) {
+              $hit = Select-String -Path $file -Pattern $signingClaim
+              if ($hit) {
+                  throw "$file line $($hit[0].LineNumber) states a code-signing provider as fact: " +
+                        "'$($hit[0].Line.Trim())'. No certificate is in place, so this must not be " +
+                        "published. Remove the claim, or delete this gate in the same PR that adds a " +
+                        "real certificate."
+              }
+          }
+          Write-Host "No premature code-signing attribution found."
+
           # The newest CHANGELOG entry must be for that same version, or the release step that reads
           # release notes out of the CHANGELOG finds nothing.
           $head = (Select-String -Path CHANGELOG.md -Pattern '^## \[([0-9]+\.[0-9]+\.[0-9]+)\]' |

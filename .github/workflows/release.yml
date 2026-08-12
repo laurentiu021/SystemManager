@@ -315,10 +315,13 @@ jobs:
 
           ### Code signing policy
 
-          Free code signing provided by [SignPath.io](https://signpath.io/), certificate by
-          [SignPath Foundation](https://signpath.org/). Team roles, the release-approval process
-          and the privacy policy are documented under [Code signing
-          policy](https://github.com/laurentiu021/SystemManager#code-signing-policy).
+          This release is **not** code-signed. The team roles, release-approval process and
+          privacy policy required by the [SignPath Foundation](https://signpath.org/) programme
+          are documented in advance under [Code signing
+          policy](https://github.com/laurentiu021/SystemManager#code-signing-policy) — that
+          documentation is a prerequisite for applying, not evidence of a certificate. The
+          attribution line naming SignPath as the signing provider will appear here once a
+          certificate is actually issued.
 
           This program will not transfer any information to other networked systems unless
           specifically requested by the user or the person installing or operating it. Full

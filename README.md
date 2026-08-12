@@ -1132,11 +1132,14 @@ first-launch prompt does not appear.
 
 ### Code signing
 
-Releases are currently **unsigned**, which is why the warning above appears. Code signing
-for this project is planned through the [SignPath Foundation](https://signpath.org/) — a
-programme that provides free code-signing certificates to open-source projects, with the
-signing itself performed by [SignPath.io](https://signpath.io/). Certificates issued under
-that programme are held in SignPath Foundation's name rather than an individual's.
+Releases are currently **unsigned**, which is why the warning above appears. The intention is
+to sign them through the [SignPath Foundation](https://signpath.org/) — a programme that
+provides free code-signing certificates to open-source projects, with the signing performed
+by [SignPath.io](https://signpath.io/) — and an application there is the plan for this
+project. It has not happened yet: the Foundation asks for a level of public visibility
+(stars, external write-ups, independent references) that a three-month-old project does not
+have, which is a fair bar for a certificate issued in their name. Until a certificate is
+actually in place, this section says so plainly rather than implying one exists.
 
 Until a certificate is in place, the two checks above — the published SHA-256 and the
 GitHub build-provenance attestation — are what establish that a download is the genuine,
@@ -1152,8 +1155,13 @@ quietly become a formality on the day signing is switched on. See
 
 ### Code signing policy
 
-*Free code signing provided by [SignPath.io](https://signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).*
+> **Not yet in effect.** This policy is written in advance of any certificate, because the
+> [SignPath Foundation](https://signpath.org/) programme the project hopes to sign through
+> requires the roles and approval process below to be documented and public before an
+> application is considered. Nothing here describes a signing arrangement that exists today —
+> releases are unsigned, and the SHA-256 plus build attestation above are what verify a
+> download. The provider attribution that belongs in this section will be added on the day a
+> certificate is actually issued, and not a day earlier.
 
 **Team roles.** SysManager is maintained by a single developer, so all three roles below are
 held by the same person. That is stated plainly rather than dressed up as a team, because it

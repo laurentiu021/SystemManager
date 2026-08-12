@@ -859,6 +859,10 @@ offers, "rate us" prompts:
   confirmation, and notes that whatever the newer version fixed will come back too.
   One generation is kept, so it never accumulates copies of the app.
 - Full release-note history pulled live from GitHub.
+- **"Report a problem"** opens the GitHub bug-report form with your SysManager
+  version and administrator state already filled in — the two fields reports most
+  often miss — and **"Ask a question"** opens Discussions for anything that is not
+  a bug. Both are in the About tab; a browser tab opens only when you press them.
 
 ### Profile Export / Import
 - Export your SysManager settings — theme/appearance and speed-test history — to

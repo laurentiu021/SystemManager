@@ -338,6 +338,49 @@ public class AboutViewModelTests
             "the preference was not written to the override directory — configDir is accepted but unused");
     }
 
+    // ── BuildBugReportUrl (pure — the "Report a problem" pre-fill) ──
+    // The Preview banner asks users to report on GitHub; these pin that the in-app link lands on the
+    // right form with the two required fields pre-filled. Pre-fill is query-param based and GitHub
+    // silently drops an unknown field id, so a template drift degrades to a blank field — hence a test.
+
+    [Fact]
+    public void BuildBugReportUrl_TargetsTheBugTemplateOnTheRealRepo()
+    {
+        var url = AboutViewModel.BuildBugReportUrl("1.63.1", isElevated: false);
+
+        Assert.StartsWith($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/issues/new", url);
+        // The field id must match .github/ISSUE_TEMPLATE/bug_report.yml, or GitHub opens a blank chooser.
+        Assert.Contains("template=bug_report.yml", url);
+    }
+
+    [Fact]
+    public void BuildBugReportUrl_PrefillsTheVersionField()
+    {
+        var url = AboutViewModel.BuildBugReportUrl("1.63.1", isElevated: false);
+        Assert.Contains("version=1.63.1", url);
+    }
+
+    [Theory]
+    // The dropdown option strings must match bug_report.yml exactly (spaces + parentheses, URL-encoded).
+    [InlineData(true, "Yes%20%28elevated%29")]
+    [InlineData(false, "No%20%28standard%20user%29")]
+    public void BuildBugReportUrl_PrefillsElevationWithTheExactDropdownOption(bool elevated, string encoded)
+    {
+        var url = AboutViewModel.BuildBugReportUrl("1.63.1", elevated);
+        Assert.Contains($"elevation={encoded}", url);
+    }
+
+    [Fact]
+    public void BuildBugReportUrl_EncodesTheValues_NoRawSpacesOrParens()
+    {
+        // A raw space or bracket in a URL is invalid and some launchers truncate at it, dropping the
+        // pre-fill silently. The query must be fully encoded.
+        var url = AboutViewModel.BuildBugReportUrl("1.63.1", isElevated: true);
+        var query = url[(url.IndexOf('?') + 1)..];
+        Assert.DoesNotContain(' ', query);
+        Assert.DoesNotContain('(', query);
+        Assert.DoesNotContain(')', query);
+    }
 }
 
 /// <summary>

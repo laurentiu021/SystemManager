@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.0] - 2026-08-12
+
+There is now a way to report a problem from inside the app, instead of being told to "report it on
+GitHub" with no link to get there.
+
+### Added
+- **"Report a problem" and "Ask a question" in the About tab.** Preview-feature banners asked you to report anything unexpected on GitHub, but nothing in the app took you there — so a problem usually went unreported. The About tab now has a "Report a problem" button that opens the bug-report form on GitHub with your SysManager version and whether you were running as administrator already filled in (the two details reports most often leave out), and an "Ask a question" button that opens Discussions for anything that is not a bug. The Preview banner now points at that button instead of a dead end. A browser tab opens only when you press one of the buttons — nothing is sent automatically.
+
+---
+
 ## [1.63.1] - 2026-08-12
 
 A rare crash that could happen if you closed the window at the exact moment the Bandwidth Monitor was

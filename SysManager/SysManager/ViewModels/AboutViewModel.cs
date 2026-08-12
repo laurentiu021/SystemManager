@@ -370,6 +370,40 @@ public sealed partial class AboutViewModel : ViewModelBase
     private void OpenLicense() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/blob/main/LICENSE");
 
     /// <summary>
+    /// Opens the repository's bug-report form with the version and elevation fields pre-filled. The
+    /// Preview banner tells users to "report anything unexpected on GitHub" but nothing in the app
+    /// gave them a way there — so a bug simply never got reported. Version and elevation are the two
+    /// fields the template marks required and that users most often leave blank or get wrong, and the
+    /// app already knows both.
+    /// </summary>
+    [RelayCommand]
+    private void ReportProblem() => OpenUrl(BuildBugReportUrl(UpdateService.CurrentVersion.ToString(3), AdminHelper.IsElevated()));
+
+    /// <summary>Opens Discussions for questions, mirroring SUPPORT.md's bug-vs-question split.</summary>
+    [RelayCommand]
+    private void OpenDiscussions() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/discussions");
+
+    /// <summary>
+    /// The GitHub issue-form URL with the <c>version</c> and <c>elevation</c> fields pre-filled through
+    /// query parameters. Pure and static so the pre-fill — which silently breaks if a template field id
+    /// or a dropdown option string drifts — is unit-testable without opening a browser.
+    /// </summary>
+    /// <remarks>
+    /// The field ids (<c>version</c>, <c>elevation</c>) and the elevation option strings
+    /// ("Yes (elevated)" / "No (standard user)") must match <c>.github/ISSUE_TEMPLATE/bug_report.yml</c>
+    /// exactly; GitHub silently ignores an unknown id, so a drift degrades to an empty field rather than
+    /// an error. Values are URL-encoded because the option strings contain spaces and parentheses.
+    /// </remarks>
+    internal static string BuildBugReportUrl(string version, bool isElevated)
+    {
+        var elevation = isElevated ? "Yes (elevated)" : "No (standard user)";
+        return $"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/issues/new"
+             + "?template=bug_report.yml"
+             + $"&version={Uri.EscapeDataString(version)}"
+             + $"&elevation={Uri.EscapeDataString(elevation)}";
+    }
+
+    /// <summary>
     /// Copy a bug-report-ready block with SysManager version, Windows version,
     /// architecture, .NET runtime, elevation state, and hardware diagnostics
     /// (CPU, RAM, GPU, storage, display) to the clipboard.

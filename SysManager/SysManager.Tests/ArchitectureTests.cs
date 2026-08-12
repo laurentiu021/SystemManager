@@ -583,6 +583,39 @@ public partial class ArchitectureTests
             string.Join("\n  ", missing));
     }
 
+    /// <summary>
+    /// <c>MainWindow.OnClosing</c> must request an application shutdown, not merely close the window.
+    /// </summary>
+    /// <remarks>
+    /// <c>App</c> sets <c>ShutdownMode.OnExplicitShutdown</c> so SysManager can live in the notification
+    /// area, which means closing the last window does NOT end the process. The Exit branch used to fall
+    /// through to <c>base.OnClosing</c> with no <c>Shutdown</c> call, leaving the app running with no
+    /// window and no tray icon (the icon is disposed in <c>App.OnExit</c>, which nothing had triggered),
+    /// still holding the single-instance mutex — so the next launch handed itself over to an invisible
+    /// instance and quit, and because the answer is remembered that repeated on every launch (#1827).
+    /// <para>
+    /// The decision itself is unit-tested through <c>CloseDecision</c>; this pins the one part that
+    /// cannot be: that the window's own code actually performs the shutdown. Source-level because
+    /// <c>OnClosing</c> is protected WPF code-behind a headless test cannot invoke.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ClosingTheWindowToExit_RequestsAnApplicationShutdown()
+    {
+        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "MainWindow.xaml.cs"));
+
+        var start = source.IndexOf("protected override void OnClosing(", StringComparison.Ordinal);
+        Assert.True(start >= 0, "OnClosing not found — this check is not reading what it thinks it is.");
+        var end = source.IndexOf("protected override void OnClosed(", start, StringComparison.Ordinal);
+        Assert.True(end > start, "Could not delimit the OnClosing body.");
+        var body = source[start..end];
+
+        // Vacuity floor: the body must still contain the branch this is about, otherwise the assertion
+        // below could pass against an OnClosing that no longer decides anything.
+        Assert.Contains("CloseAction", body);
+        Assert.Contains("Shutdown()", body);
+    }
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

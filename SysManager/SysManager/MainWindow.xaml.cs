@@ -187,9 +187,10 @@ public partial class MainWindow : Window
         }
 
         var behavior = _closePreference.Load();
+        CloseChoice? answer = null;
         if (behavior == CloseBehavior.Ask)
         {
-            var choice = DialogService.Instance.AskCloseOrMinimize(
+            answer = DialogService.Instance.AskCloseOrMinimize(
                 "SysManager can keep running in the notification area (the icons next to the "
                 + "clock) so it continues watching your system, or it can close completely.\n\n"
                 + "Yes — keep it running in the notification area\n"
@@ -199,39 +200,47 @@ public partial class MainWindow : Window
                 + "to reopen the window or exit at any time.",
                 "Close SysManager?");
 
-            switch (choice)
-            {
-                case CloseChoice.Cancel:
-                    e.Cancel = true;
-                    return;
-                case CloseChoice.MinimizeToTray:
-                    behavior = CloseBehavior.MinimizeToTray;
-                    break;
-                default:
-                    behavior = CloseBehavior.Exit;
-                    break;
-            }
-
-            _closePreference.Save(behavior);
+            // Cancel saves nothing — the user has not chosen a behaviour, so they must be asked again.
+            // Expressed as a nullable rather than an early return so the save rule sits next to the
+            // resolve rule and both are unit-testable.
+            if (CloseDecision.PreferenceToSave(answer.Value) is { } chosen)
+                _closePreference.Save(chosen);
         }
 
-        if (behavior == CloseBehavior.MinimizeToTray)
+        switch (CloseDecision.Resolve(behavior, answer))
         {
-            e.Cancel = true;
-            TrayIconService.HideWindow(this);
-            // Say where the window went the first time it happens. Without this the window
-            // simply vanishes, which reads as a crash rather than as running in the tray.
-            if (!_trayHintShown)
-            {
-                _trayHintShown = true;
-                ToastService.Instance.Show(
-                    "SysManager is still running",
-                    "Find it next to the clock. Right-click the icon to reopen or exit.");
-            }
-            return;
-        }
+            case CloseAction.KeepOpen:
+                e.Cancel = true;
+                return;
 
-        base.OnClosing(e);
+            case CloseAction.HideToTray:
+                e.Cancel = true;
+                TrayIconService.HideWindow(this);
+                // Say where the window went the first time it happens. Without this the window
+                // simply vanishes, which reads as a crash rather than as running in the tray.
+                if (!_trayHintShown)
+                {
+                    _trayHintShown = true;
+                    ToastService.Instance.Show(
+                        "SysManager is still running",
+                        "Find it next to the clock. Right-click the icon to reopen or exit.");
+                }
+                return;
+
+            default:
+                // Closing the window is NOT enough to end the process: App sets
+                // ShutdownMode.OnExplicitShutdown so SysManager can live in the notification area,
+                // which means WPF never exits on its own when the last window closes. Every other exit
+                // path calls Shutdown (the tray's Exit item, every RelaunchAsAdmin handler) — this one
+                // fell through to base.OnClosing and left the process running with no window AND no
+                // tray icon, because the icon is disposed in App.OnExit, which nothing had triggered.
+                // The single-instance mutex stayed held too, so the next launch handed itself over to
+                // an invisible instance and quit; and because the answer above is REMEMBERED, that
+                // repeated on every launch until the user found it in Task Manager.
+                Application.Current?.Shutdown();
+                base.OnClosing(e);
+                return;
+        }
     }
 
     protected override void OnClosed(EventArgs e)

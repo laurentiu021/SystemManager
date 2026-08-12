@@ -616,6 +616,88 @@ public partial class ArchitectureTests
         Assert.Contains("Shutdown()", body);
     }
 
+    /// <summary>
+    /// A <c>Dispose</c> that disposes a <see cref="CancellationTokenSource"/> must cancel it first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>CancellationTokenSource.Dispose()</c> does NOT cancel — that is documented behaviour, and it
+    /// is easy to read a lone <c>_cts?.Dispose()</c> as "stop the work" when it means the opposite. 28
+    /// sources across 23 view models had that shape, so closing a tab (or the whole app) left whatever
+    /// they started running: <c>FileShredderViewModel</c> kept overwriting files after teardown,
+    /// <c>DeepCleanupViewModel</c> and <c>BrowserCleanerViewModel</c> kept deleting, and
+    /// <c>DashboardViewModel</c>'s one-click Tune-Up kept mutating system state. Every one is reachable
+    /// at exit, because <c>MainWindowViewModel.Dispose</c> disposes each nav item.
+    /// </para>
+    /// <para>
+    /// Keyed on the FIELD DECLARATION, not on what the Dispose body mentions. Scanning the body alone
+    /// gets the answer wrong in both directions — it misses a class whose field is declared elsewhere and
+    /// it flags one that cancels through a differently-shaped call. I made both mistakes by hand while
+    /// triaging this, which is the argument for the check existing at all.
+    /// </para>
+    /// <para>
+    /// Accepts any cancel on the field (<c>_cts.Cancel()</c>, <c>_cts?.Cancel()</c>, or a
+    /// try/catch-wrapped one as <c>DnsHostsViewModel</c> uses), because the requirement is that
+    /// cancellation happens, not that it is spelled a particular way.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EveryDisposedCancellationSource_IsCancelledFirst()
+    {
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var offenders = new List<string>();
+        var checkedFields = 0;
+
+        foreach (var file in Directory.GetFiles(vmDir, "*.cs"))
+        {
+            var source = File.ReadAllText(file);
+
+            var start = source.IndexOf("protected override void Dispose(bool", StringComparison.Ordinal);
+            if (start < 0) continue;
+            var end = source.IndexOf("\n    }", start, StringComparison.Ordinal);
+            if (end < 0) continue;
+            var body = source[start..end];
+
+            // Fields this type declares as a cancellation source, however they are initialised.
+            var fields = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Match m in CancellationFieldDeclaration().Matches(source))
+                fields.Add(m.Groups[1].Value);
+            foreach (Match m in CancellationFieldAssignment().Matches(source))
+                fields.Add(m.Groups[1].Value);
+
+            foreach (var field in fields)
+            {
+                if (!body.Contains($"{field}?.Dispose()", StringComparison.Ordinal)
+                    && !body.Contains($"{field}.Dispose()", StringComparison.Ordinal))
+                    continue;   // not disposed here — nothing to require
+
+                checkedFields++;
+                if (!body.Contains($"{field}?.Cancel()", StringComparison.Ordinal)
+                    && !body.Contains($"{field}.Cancel()", StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(file)} · {field}");
+            }
+        }
+
+        // Vacuity floor: if the field-detection regexes stopped matching, every assertion here would
+        // pass while inspecting nothing.
+        Assert.True(checkedFields >= 25,
+            $"Expected at least 25 disposed cancellation sources, found {checkedFields} — " +
+            "the detection is probably no longer matching the field declarations.");
+
+        Assert.True(offenders.Count == 0,
+            "These cancellation sources are disposed without being cancelled, so work already in "
+            + "flight keeps running after teardown — Dispose() does not cancel. Add a Cancel() before "
+            + "the Dispose():\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A field declared as a cancellation source, e.g. <c>private CancellationTokenSource? _cts;</c>.</summary>
+    [GeneratedRegex(@"CancellationTokenSource\??\s+(_[A-Za-z]\w*)", RegexOptions.Compiled)]
+    private static partial Regex CancellationFieldDeclaration();
+
+    /// <summary>A field assigned a new cancellation source, for types that declare it via <c>var</c>-like shapes.</summary>
+    [GeneratedRegex(@"(_[A-Za-z]\w*)\s*=\s*new CancellationTokenSource", RegexOptions.Compiled)]
+    private static partial Regex CancellationFieldAssignment();
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

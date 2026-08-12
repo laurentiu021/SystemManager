@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.6] - 2026-08-12
+
+Closing a tab, or closing SysManager, now actually stops what that tab was doing. Scans, cleanups and
+file shredding used to keep running in the background after you closed them.
+
+### Fixed
+- **Work carried on after you closed the tab or the app.** Every tab that runs something you can wait on — a scan, a cleanup, a speed test, shredding files, the one-click Tune-Up — is supposed to stop when you close it. Behind the scenes, SysManager was releasing the "stop" signal without ever giving it, so 28 of those operations across 23 tabs simply carried on: file shredding kept overwriting files after you closed the window, Deep Cleanup and the browser cleaner kept deleting, a speed test kept using your connection, and the Tune-Up kept changing settings. Nothing was corrupted by this — the work was real work you had started — but it continued when you had every reason to think it had stopped, and it kept your PC busy after SysManager appeared to be gone. All of them now stop when you close the tab or quit, exactly as the Cancel button already did. A new automatic check makes sure a future tab cannot be added with the same mistake.
+
+---
+
 ## [1.64.5] - 2026-08-12
 
 A right-click menu entry with an unusual name can no longer make SysManager write a file where it should

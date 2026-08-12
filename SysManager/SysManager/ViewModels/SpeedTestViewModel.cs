@@ -209,6 +209,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     {
         if (disposing)
         {
+            _speedCts?.Cancel();
             _speedCts?.Dispose();
         }
         base.Dispose(disposing);

@@ -139,6 +139,7 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         {
             _service.LineReceived -= OnLine;
             PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

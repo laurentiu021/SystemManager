@@ -111,6 +111,7 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
         if (disposing)
         {
             PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

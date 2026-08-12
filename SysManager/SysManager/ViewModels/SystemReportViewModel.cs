@@ -132,6 +132,7 @@ public sealed partial class SystemReportViewModel : ViewModelBase
         if (disposing)
         {
             PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

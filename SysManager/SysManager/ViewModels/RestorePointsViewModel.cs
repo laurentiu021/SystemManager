@@ -202,6 +202,7 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
         if (disposing)
         {
             PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

@@ -232,6 +232,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             _runner.ProgressChanged -= OnRunnerProgressChanged;
             _wu.Log -= OnWuLog;
             PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

@@ -131,6 +131,7 @@ public sealed partial class TracerouteViewModel : ViewModelBase
             // NetworkSharedState is a DI singleton that outlives this VM, so a live handler here
             // would keep the VM alive for the rest of the session.
             Shared.PropertyChanged -= OnSharedPropertyChanged;
+            _traceCts?.Cancel();
             _traceCts?.Dispose();
         }
         base.Dispose(disposing);

@@ -7,7 +7,7 @@ useful. Here's where to go depending on what you need.
 
 | Kind of question                                    | Go here                                                               |
 | --------------------------------------------------- | --------------------------------------------------------------------- |
-| "How do I...?" / "Is this possible?"                | [Discussions › Q&A](https://github.com/laurentiu021/SystemManager/discussions) |
+| "How do I...?" / "Is this possible?"                | [Discussions › Q&A](https://github.com/laurentiu021/SystemManager/discussions/categories/q-a) — nobody has asked anything there yet, so yours will be the first rather than buried |
 | "This feature would be useful"                      | [Feature request issue](https://github.com/laurentiu021/SystemManager/issues/new?template=feature_request.yml) |
 | "Something is broken"                               | [Bug report issue](https://github.com/laurentiu021/SystemManager/issues/new?template=bug_report.yml) |
 | "I found a security problem"                        | [Security Advisory](https://github.com/laurentiu021/SystemManager/security/advisories/new) (private) · see [SECURITY.md](SECURITY.md) |

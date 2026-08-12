@@ -723,6 +723,72 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(_[A-Za-z]\w*)\s*=\s*new CancellationTokenSource", RegexOptions.Compiled)]
     private static partial Regex CancellationFieldAssignment();
 
+    /// <summary>
+    /// Every place that sends a user somewhere to ask a question must deep-link the Q&amp;A category,
+    /// never the Discussions root. Each release auto-posts an announcement, so the root is a wall of
+    /// changelogs; four separate surfaces (the in-app button, SUPPORT.md, README.md and the issue
+    /// chooser) all pointed there, and each was written independently — exactly the drift a fitness
+    /// function catches better than review does.
+    /// </summary>
+    [Fact]
+    public void EverySupportRoute_DeepLinksTheQuestionCategory_NotTheDiscussionsRoot()
+    {
+        var root = FindRepoRoot();
+        string[] surfaces = ["SUPPORT.md", "README.md", Path.Combine(".github", "ISSUE_TEMPLATE", "config.yml")];
+
+        var offenders = new List<string>();
+        var deepLinks = 0;
+
+        foreach (var relative in surfaces)
+        {
+            var path = Path.Combine(root, relative);
+            Assert.True(File.Exists(path), $"{relative} not found at {path} — the guard would pass vacuously");
+
+            var lines = File.ReadAllLines(path);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (var hit in DiscussionsRootLink().Matches(lines[i]).Cast<Match>())
+                    offenders.Add($"{relative}:{i + 1}  {hit.Value}");
+
+                deepLinks += QuestionCategoryLink().Matches(lines[i]).Count;
+            }
+        }
+
+        // Vacuity floor: the three doc surfaces plus the view-model must actually carry the deep link,
+        // so an accidental find-and-delete can't turn this into a test that asserts nothing.
+        Assert.True(deepLinks >= 3,
+            $"expected the Q&A deep link on all three doc surfaces, found {deepLinks} — the guard has gone vacuous");
+        Assert.Equal($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/discussions/categories/q-a",
+            SysManager.ViewModels.AboutViewModel.QuestionsUrl);
+
+        Assert.True(offenders.Count == 0,
+            "these support routes still point at the Discussions root instead of /discussions/categories/q-a:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A link to the Discussions root — <c>/discussions</c> not followed by a category path.</summary>
+    [GeneratedRegex(@"/discussions(?![/\w-])", RegexOptions.Compiled)]
+    private static partial Regex DiscussionsRootLink();
+
+    /// <summary>A link that correctly deep-links the Q&amp;A category.</summary>
+    [GeneratedRegex(@"/discussions/categories/q-a", RegexOptions.Compiled)]
+    private static partial Regex QuestionCategoryLink();
+
+    /// <summary>The repository root — the docs the guards read are not copied to the test output.</summary>
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "SUPPORT.md"))
+                && File.Exists(Path.Combine(dir.FullName, "README.md")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        throw new DirectoryNotFoundException(
+            "Could not locate the repository root from " + AppContext.BaseDirectory);
+    }
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

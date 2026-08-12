@@ -1,7 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  # Deep-links the Q&A category rather than the Discussions root. The root is dominated by
+  # auto-posted release announcements, so someone arriving with a question landed in a wall of
+  # changelogs and had to work out where to post. blank_issues_enabled is false, which makes this
+  # chooser the highest-traffic route of the four that pointed at the root.
   - name: Ask a question / general discussion
-    url: https://github.com/laurentiu021/SystemManager/discussions
+    url: https://github.com/laurentiu021/SystemManager/discussions/categories/q-a
     about: For how-to questions, help setting things up, or open-ended discussion.
   - name: Report a security vulnerability
     url: https://github.com/laurentiu021/SystemManager/security/advisories/new

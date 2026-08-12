@@ -30,8 +30,8 @@ body:
     id: version
     attributes:
       label: SysManager version
-      description: Visible in the **About** tab.
-      placeholder: "0.12.5"
+      description: Shown at the top of the **About** tab, and in the title bar.
+      placeholder: e.g. the version shown on the About tab
     validations:
       required: true
 
@@ -42,22 +42,63 @@ body:
       multiple: true
       options:
         - Dashboard
-        - App updates
+        - System Health
         - Windows Update
-        - System health
-        - Cleanup
-        - Deep cleanup
-        - Startup
-        - Duplicates
+        - Performance Mode
+        - Services
+        - Startup Manager
+        - Windows Features
+        - Restore Points
+        - Task Scheduler
+        - Boot Analyzer
+        - System Fixes
+        - Tweaks Hub
+        - Gaming Profile
+        - Standby List Cleaner
+        - Timer Resolution
+        - CPU Core Affinity
+        - Display Profiles
+        - Process Manager
+        - Resource History
+        - Camera/Mic/Location
+        - App Alerts
+        - File Lock Detector
+        - Settings Watchdog
+        - Bandwidth Monitor
+        - Quick Cleanup
+        - Deep Cleanup
+        - Shortcut Cleaner
+        - Scheduled Maintenance
         - Disk Analyzer
-        - Processes
-        - Battery
+        - Duplicate Finder
+        - Ping
+        - Traceroute
+        - Speed Test
+        - Network Repair
+        - DNS & Hosts
+        - App Updates
+        - Bulk Installer
         - Uninstaller
-        - Performance
-        - Network
+        - Privacy & Telemetry
+        - File Shredder
+        - App Blocker
+        - Debloater & Ads
+        - Browser Cleaner
+        - Edge/OneDrive Remover
+        - Defender Tweaks
+        - Notification Blocker
+        - Context Menu
+        - Dark Mode Scheduler
+        - Volume Control
         - Drivers
-        - Logs
-        - About / updates
+        - Battery Health
+        - System Logs
+        - System Report
+        - Legacy Panels
+        - About
+        - Profile Export/Import
+        - CLI Interface
+        - Environment Variables
         - Multiple / general UI
         - Not sure
     validations:

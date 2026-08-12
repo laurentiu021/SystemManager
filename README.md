@@ -13,11 +13,11 @@ toggle, and a friendly Event Log viewer — all in one WPF desktop app.
 [![CodeQL](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml)
 [![codecov](https://codecov.io/gh/laurentiu021/SystemManager/branch/main/graph/badge.svg)](https://codecov.io/gh/laurentiu021/SystemManager)
 [![Release](https://img.shields.io/github/v/release/laurentiu021/SystemManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SystemManager/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/laurentiu021/SystemManager/total)](https://github.com/laurentiu021/SystemManager/releases)
+[![Asset downloads](https://img.shields.io/github/downloads/laurentiu021/SystemManager/total?label=asset%20downloads)](https://github.com/laurentiu021/SystemManager/releases)
 [![Issues](https://img.shields.io/github/issues/laurentiu021/SystemManager)](https://github.com/laurentiu021/SystemManager/issues)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
-[![winget](https://img.shields.io/badge/winget-laurentiu021.SysManager-0078D4?logo=windows)](https://github.com/laurentiu021/SystemManager/releases/latest)
+[![winget](https://img.shields.io/badge/winget-laurentiu021.SysManager-0078D4?logo=windows)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/l/laurentiu021/SysManager)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/laurentiu021/SystemManager?style=social)](https://github.com/laurentiu021/SystemManager/stargazers)
 
@@ -1086,6 +1086,13 @@ Grab `SysManager-v<version>.exe` (the `<version>` shown on the latest release) f
 [latest release](https://github.com/laurentiu021/SystemManager/releases/latest)
 and double-click it. The executable is self-contained — no installer, no .NET
 runtime required.
+
+> **About the download counter.** The badge above counts release-asset downloads, not
+> people. Most of that number is machinery: SysManager's own in-app updater fetches the
+> exe, winget installs fetch it, and Microsoft's manifest validation fetches it for every
+> submitted version. Across all releases the exe has been fetched roughly 88 times for
+> every checksum file — and a human verifying a download takes both. Treat the badge as
+> traffic, not as an install base.
 
 ### Verifying the download
 

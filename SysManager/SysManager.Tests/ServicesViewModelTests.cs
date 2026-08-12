@@ -236,6 +236,12 @@ public class ServicesViewModelTests
 
         // Fixture: Running = wuauserv, Spooler, WSearch (3); Stopped = XboxGipSvc, BITS (2);
         // safe-to-disable = Spooler, XboxGipSvc (2); keep-enabled = wuauserv, BITS (2); advanced = WSearch (1).
+        //
+        // Total and Running are asserted alongside the rest because they are computed alongside the rest.
+        // They used to be assigned in ApplyFilterCore, one caller up, so every other path into ApplyFilter
+        // refreshed seven counts and left these two behind — visible here as the machine's real service
+        // count sitting next to a five-entry fixture.
+        Assert.Equal(5, vm.TotalCount);
         Assert.Equal(3, vm.RunningCount);
         Assert.Equal(2, vm.StoppedCount);
         Assert.Equal(2, vm.SafeToDisableCount);
@@ -269,6 +275,7 @@ public class ServicesViewModelTests
         };
         var vm = await CreateWithDataAsync(entries);
 
+        Assert.Equal(3, vm.TotalCount);
         Assert.Equal(1, vm.RunningCount);
         Assert.Equal(1, vm.StoppedCount);          // not 2 — StartPending is neither
         Assert.NotEqual(vm.TotalCount - vm.RunningCount, vm.StoppedCount);

@@ -187,6 +187,109 @@ public class ServicesViewModelTests
         Assert.Contains(vm.Services, s => s.SafetyLevel == Models.SafetyLevel.Caution);
     }
 
+    // ── Every filter must be SELECTABLE, not merely implemented ───────────────────────────────────
+    //
+    // The tests above prove all nine filters WORK. They passed the whole time five of them had no control
+    // in the view: Running, Stopped and the three gaming recommendations could only be reached by
+    // assigning SelectedFilter from code, exactly as these tests do. Meanwhile the README promised
+    // filtering "by status (Running/Stopped)" and "gaming recommendation".
+    //
+    // That gap can only be closed against the markup — a view-model test cannot see a missing chip. Same
+    // class as the ICommand reachability ratchet in ArchitectureTests, which does not cover filter values.
+
+    [Fact]
+    public void EveryFilterOption_HasAChipInTheView()
+    {
+        var xaml = System.Xml.Linq.XDocument.Load(ViewPath("ServicesView.xaml"));
+
+        // The parameter each chip feeds the IsEqual converter IS the filter value it selects.
+        var chipValues = xaml.Descendants()
+            .Select(e => (string?)e.Attribute("IsChecked") ?? "")
+            .Where(v => v.Contains("SelectedFilter", StringComparison.Ordinal)
+                     && v.Contains("ConverterParameter=", StringComparison.Ordinal))
+            .Select(v => v.Split("ConverterParameter=")[1].TrimEnd('}').Trim().Trim('\''))
+            .ToList();
+
+        Assert.NotEmpty(chipValues);   // else this would pass by finding nothing
+
+        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var missing = vm.FilterOptions.Except(chipValues, StringComparer.Ordinal).ToList();
+
+        Assert.True(missing.Count == 0,
+            "These filters are implemented in ApplyFilter but no control in ServicesView selects them, " +
+            "so a user cannot reach them: " + string.Join(", ", missing));
+
+        // And the reverse: a chip for a value ApplyFilter does not handle would silently show everything.
+        var unknown = chipValues.Except(vm.FilterOptions, StringComparer.Ordinal).ToList();
+        Assert.True(unknown.Count == 0,
+            "These chips select a value ApplyFilter does not handle, so they fall through to the " +
+            "unfiltered default: " + string.Join(", ", unknown));
+    }
+
+    [Fact]
+    public async Task EveryChipCount_ReportsWhatItsFilterWouldMatch()
+    {
+        // Each chip shows its own count, so the count has to agree with the filter beside it — a chip
+        // reading "(0)" next to a filter that would return rows is its own small lie. Counted over the
+        // whole list rather than the filtered view, so selecting one chip does not zero the others.
+        var vm = await CreateWithDataAsync();
+
+        // Fixture: Running = wuauserv, Spooler, WSearch (3); Stopped = XboxGipSvc, BITS (2);
+        // safe-to-disable = Spooler, XboxGipSvc (2); keep-enabled = wuauserv, BITS (2); advanced = WSearch (1).
+        Assert.Equal(3, vm.RunningCount);
+        Assert.Equal(2, vm.StoppedCount);
+        Assert.Equal(2, vm.SafeToDisableCount);
+        Assert.Equal(2, vm.KeepEnabledCount);
+        Assert.Equal(1, vm.AdvancedCount);
+
+        // Each count equals what its filter actually returns.
+        foreach (var (option, expected) in new[]
+                 {
+                     ("Running", vm.RunningCount), ("Stopped", vm.StoppedCount),
+                     ("Safe to disable", vm.SafeToDisableCount),
+                     ("Keep enabled", vm.KeepEnabledCount), ("Advanced", vm.AdvancedCount),
+                 })
+        {
+            vm.SelectedFilter = option;
+            Assert.Equal(expected, vm.Services.Count);
+        }
+    }
+
+    [Fact]
+    public async Task StoppedCount_IsNotTotalMinusRunning()
+    {
+        // Windows also reports StartPending / StopPending / Paused, so Running and Stopped are NOT
+        // complements. Deriving Stopped by subtraction would over-count the moment a service is
+        // mid-transition — the chip would promise more rows than the filter returns.
+        var entries = new List<ServiceEntry>
+        {
+            new() { Name = "a", DisplayName = "A", Description = "", Status = "Running", StartType = "Automatic", Recommendation = "", SafetyLevel = Models.SafetyLevel.Safe },
+            new() { Name = "b", DisplayName = "B", Description = "", Status = "Stopped", StartType = "Manual", Recommendation = "", SafetyLevel = Models.SafetyLevel.Safe },
+            new() { Name = "c", DisplayName = "C", Description = "", Status = "StartPending", StartType = "Automatic", Recommendation = "", SafetyLevel = Models.SafetyLevel.Safe },
+        };
+        var vm = await CreateWithDataAsync(entries);
+
+        Assert.Equal(1, vm.RunningCount);
+        Assert.Equal(1, vm.StoppedCount);          // not 2 — StartPending is neither
+        Assert.NotEqual(vm.TotalCount - vm.RunningCount, vm.StoppedCount);
+
+        vm.SelectedFilter = "Stopped";
+        Assert.Single(vm.Services);                // and the filter agrees with the count
+    }
+
+    /// <summary>The app's Views folder — .xaml is not copied to the test output.</summary>
+    private static string ViewPath(string fileName)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);
+        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
+        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
+        return path;
+    }
+
     [Fact]
     public void FilterOptions_CoverEveryRecommendationTheGuideProduces()
     {

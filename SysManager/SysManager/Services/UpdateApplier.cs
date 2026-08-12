@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using Serilog;
 
 [assembly: InternalsVisibleTo("SysManager.Tests")]
@@ -35,6 +36,13 @@ internal static class UpdateApplier
     internal const string PreviousBuildFileName = "SysManager-previous.exe";
 
     /// <summary>
+    /// The one file name the applier is allowed to write. Derived from the running assembly rather
+    /// than hardcoded, so a rename of the produced executable cannot silently disable the check.
+    /// </summary>
+    private static string OwnExecutableName =>
+        Path.GetFileName(Environment.ProcessPath) is { Length: > 0 } name ? name : "SysManager.exe";
+
+    /// <summary>
     /// Where the outgoing executable is kept so a bad update can be undone.
     /// </summary>
     /// <remarks>
@@ -47,6 +55,25 @@ internal static class UpdateApplier
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysManager", "updates"),
         PreviousBuildFileName);
+
+    /// <summary>
+    /// Where the SHA-256 of the retained previous build is recorded, so rollback can prove the binary
+    /// it is about to launch is the one this app wrote.
+    /// </summary>
+    /// <remarks>
+    /// SEC: the retained build lives in a user-writable directory and persists indefinitely between
+    /// being written and the user clicking "Go back". Provenance is not integrity — any process running
+    /// as the user can replace it, and rollback launches it with <c>UseShellExecute</c>, inheriting
+    /// SysManager's token. The install path solves this with a hash check against the published
+    /// <c>.sha256</c>; rollback has no published hash to compare with, so the applier records one at
+    /// the moment it makes the copy.
+    /// <para>The sidecar is no more tamper-proof than the binary — an attacker who can write one can
+    /// write both. It is not meant to stop a determined local attacker; it removes the SILENT case,
+    /// where a binary swapped by anything else (a half-finished copy, an unrelated tool, malware that
+    /// does not know SysManager) is executed with no check at all.</para>
+    /// </remarks>
+    internal static string PreviousBuildHashPath(string? updatesDir = null) =>
+        PreviousBuildPath(updatesDir) + ".sha256";
 
     /// <summary>
     /// Builds the command-line arguments handed to the downloaded executable so
@@ -78,6 +105,112 @@ internal static class UpdateApplier
         if (!int.TryParse(args[2], out pid) || pid <= 0) return false;
         targetExe = args[1];
         return true;
+    }
+
+    /// <summary>
+    /// Decides whether <paramref name="targetExe"/> is a path the applier may overwrite.
+    /// </summary>
+    /// <remarks>
+    /// SEC: this is the ONLY thing standing between <c>--apply-update</c> and an arbitrary-file
+    /// overwrite. The applier branch in <c>App.OnStartup</c> runs before the single-instance mutex, DI
+    /// and the CLI guard, so its target path arrives straight from <c>argv</c> — from whoever started
+    /// the process, not necessarily from <see cref="BuildArguments"/>. The quote check in
+    /// BuildArguments constrains only the string this app EMITS; an attacker types the command line
+    /// directly, so the inbound side has to re-establish trust on its own.
+    /// <para>Without this, <c>SysManager.exe --apply-update "&lt;any writable path&gt;" &lt;pid&gt;</c> copies this
+    /// 85 MB executable over that path and then launches it — and because the app's documented
+    /// workflow is "Run as administrator", the writable set can be every file on the machine.</para>
+    /// <para>The rule is deliberately narrow: an update replaces SysManager with SysManager, so the
+    /// target must be an EXISTING file (never a creation) whose name is this executable's own name.
+    /// Requiring existence matters as much as the name: a first install has nothing to update, and it
+    /// stops the applier being used to plant a new file where none was. Rejecting a target under a
+    /// system root is belt-and-braces for the case where someone has legitimately named a file
+    /// SysManager.exe inside Windows.</para>
+    /// <para>Returns a reason rather than a bare bool so the refusal can be logged specifically —
+    /// a silent no-op here would look identical to a successful update.</para>
+    /// </remarks>
+    internal static bool IsValidApplyTarget(string targetExe, out string reason)
+    {
+        reason = "";
+
+        if (string.IsNullOrWhiteSpace(targetExe))
+        {
+            reason = "the target path is empty";
+            return false;
+        }
+
+        string full;
+        try
+        {
+            // Canonicalise first: validate and act on the SAME string, so ".." segments or a relative
+            // path resolved against the current directory cannot mean one thing here and another at
+            // File.Move. Mirrors how UninstallerService validates fullPath then launches fullPath.
+            full = Path.GetFullPath(targetExe);
+        }
+        catch (ArgumentException)
+        {
+            reason = "the target path is not a valid path";
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            reason = "the target path is not a valid path";
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            reason = "the target path is too long";
+            return false;
+        }
+
+        if (!Path.GetFileName(full).Equals(OwnExecutableName, StringComparison.OrdinalIgnoreCase))
+        {
+            reason = $"the target is not named {OwnExecutableName}";
+            return false;
+        }
+
+        // Location before existence: whether a path is protected is a property of the path, not of
+        // whether a file happens to be sitting there. Checking it first also keeps this branch
+        // deterministically reachable instead of being shadowed by the existence check below.
+        if (IsUnderSystemRoot(full))
+        {
+            reason = "the target is inside a protected system directory";
+            return false;
+        }
+
+        if (!File.Exists(full))
+        {
+            // An update REPLACES an install; it never creates one. This is what stops the applier
+            // being aimed at a path that does not exist yet.
+            reason = "the target does not exist, and an update only ever replaces an existing build";
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// True when <paramref name="fullPath"/> sits under the Windows or Program Files roots. Compared
+    /// on a directory boundary so a sibling like <c>C:\WindowsApps</c> is not mistaken for
+    /// <c>C:\Windows</c> — the same boundary rule FileShredderService and UninstallerService use.
+    /// </summary>
+    private static bool IsUnderSystemRoot(string fullPath)
+    {
+        foreach (var folder in (Environment.SpecialFolder[])
+                 [
+                     Environment.SpecialFolder.Windows,
+                     Environment.SpecialFolder.System,
+                     Environment.SpecialFolder.ProgramFiles,
+                     Environment.SpecialFolder.ProgramFilesX86,
+                 ])
+        {
+            var root = Environment.GetFolderPath(folder);
+            if (string.IsNullOrEmpty(root)) continue;
+
+            var prefix = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -162,6 +295,13 @@ internal static class UpdateApplier
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
             File.Copy(targetExe, previous, overwrite: true);
+
+            // Record the hash of what we just wrote, so RollBackAsync can prove the binary it launches
+            // is still that copy. Hashed from the RETAINED file rather than the source, so the recorded
+            // value describes the bytes that actually landed on disk. Written after the copy: a hash
+            // present without its binary is harmless (rollback checks the binary exists first), whereas
+            // a binary present without its hash is what we must never leave behind.
+            File.WriteAllText(previous + ".sha256", ComputeFileHash(previous));
             Log.Information("Update apply: retained the outgoing build for rollback");
         }
         catch (IOException ex)
@@ -174,6 +314,88 @@ internal static class UpdateApplier
         }
     }
 
+    /// <summary>SHA-256 of a file as an uppercase hex string, matching the published .sha256 format.</summary>
+    internal static string ComputeFileHash(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return Convert.ToHexString(SHA256.HashData(stream));
+    }
+
+    /// <summary>
+    /// Verifies the retained previous build against the hash recorded when it was written, returning
+    /// the open read handle on success so the caller can launch the very bytes that were verified.
+    /// </summary>
+    /// <remarks>
+    /// SEC: returns the HANDLE, not a bool. Verifying by path and then launching by path is two
+    /// independent opens of a mutable file in a user-writable directory — the exact TOCTOU the install
+    /// path closes by holding a <c>FileShare.Read</c> handle across <c>Process.Start</c>
+    /// (see the comment in <c>AboutViewModel.InstallUpdateAsync</c>). Handing the handle back makes the
+    /// caller inherit that property instead of re-opening.
+    /// <para>Fails CLOSED: a missing or unreadable hash sidecar means "cannot prove this", which is a
+    /// refusal, not a skip — the same decision <c>UpdateService</c> makes for a missing published
+    /// <c>.sha256</c>.</para>
+    /// </remarks>
+    internal static bool TryOpenVerifiedPreviousBuild(
+        string? updatesDir, out FileStream? verifiedStream, out string reason)
+    {
+        verifiedStream = null;
+        reason = "";
+
+        var previous = PreviousBuildPath(updatesDir);
+        var hashFile = PreviousBuildHashPath(updatesDir);
+
+        FileStream? stream = null;
+        try
+        {
+            // Open with deny-write BEFORE hashing, and keep it open on the way out: from this point the
+            // bytes cannot change under us.
+            stream = new FileStream(previous, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            if (!File.Exists(hashFile))
+            {
+                reason = "there is no recorded checksum for the saved version";
+                stream.Dispose();
+                return false;
+            }
+
+            var expected = File.ReadAllText(hashFile).Trim();
+            if (expected.Length != 64)
+            {
+                reason = "the recorded checksum for the saved version is not readable";
+                stream.Dispose();
+                return false;
+            }
+
+            var actual = Convert.ToHexString(SHA256.HashData(stream));
+            if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning(
+                    "Rollback: retained build hash mismatch — expected {Expected}, got {Actual}",
+                    expected, actual);
+                reason = "the saved version has changed since it was saved";
+                stream.Dispose();
+                return false;
+            }
+
+            verifiedStream = stream;
+            return true;
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "Rollback: could not read the retained build to verify it");
+            reason = "the saved version could not be read";
+            stream?.Dispose();
+            return false;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Rollback: access denied reading the retained build to verify it");
+            reason = "the saved version could not be read";
+            stream?.Dispose();
+            return false;
+        }
+    }
+
     /// <summary>
     /// Runs the full applier sequence on the current (downloaded) process: wait
     /// for the old process to exit, swap this executable over the old one, then
@@ -182,6 +404,17 @@ internal static class UpdateApplier
     /// </summary>
     public static void Run(string targetExe, int oldPid)
     {
+        // SEC: the gate sits here rather than in TryParseArgs so it cannot be bypassed by a future
+        // second caller — Run is the only thing that writes, so Run is what must refuse.
+        if (!IsValidApplyTarget(targetExe, out var reason))
+        {
+            Log.Error(
+                "Update apply: refusing to write {Target} — {Reason}. An update may only replace this " +
+                "application's own executable.",
+                LogService.SanitizePath(targetExe), reason);
+            return;
+        }
+
         var sourceExe = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(sourceExe))
         {

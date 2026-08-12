@@ -353,4 +353,256 @@ public class UpdateApplierTests
         }
         finally { dir.Delete(recursive: true); }
     }
+
+    // ── The --apply-update target is attacker-supplied ──────────────────────────────────────────────
+    // App.OnStartup takes the applier branch before the mutex, DI and the CLI guard, so targetExe comes
+    // straight from argv. TryParseArgs only ever checked SHAPE (sentinel, non-blank, numeric pid), which
+    // made `SysManager.exe --apply-update "<any writable path>" <pid>` copy this executable over that
+    // path and launch it — with whatever token started the process, and the app's documented workflow is
+    // "Run as administrator". These tests assert the hostile input is REFUSED, per the rule that a
+    // validation which is the sole defense must be explicitly tested.
+
+    /// <summary>
+    /// The name the applier will accept, derived the same way production does. In the test host this is
+    /// the runner's own executable, which is the point: the rule is "my own name", not a literal.
+    /// </summary>
+    private static string OwnExeName() => Path.GetFileName(Environment.ProcessPath)!;
+
+    [Fact]
+    public void ApplyTarget_AcceptsAnExistingCopyOfThisExecutable()
+    {
+        // The legitimate case, so the negative tests below cannot pass by refusing everything.
+        var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
+        try
+        {
+            var target = Path.Combine(dir.FullName, OwnExeName());
+            File.WriteAllText(target, "the installed build");
+
+            Assert.True(UpdateApplier.IsValidApplyTarget(target, out var reason), reason);
+            Assert.Equal("", reason);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("hosts")]                 // the file an attacker would aim at first
+    [InlineData("evil.exe")]
+    [InlineData("SysManager.dll")]        // right stem, wrong extension
+    [InlineData("notepad.exe")]
+    public void ApplyTarget_RefusesAFileThatIsNotThisExecutable(string fileName)
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
+        try
+        {
+            // Existing and writable — the ONLY thing wrong with it is that it is not our own binary.
+            var target = Path.Combine(dir.FullName, fileName);
+            File.WriteAllText(target, "someone else's file");
+
+            Assert.False(UpdateApplier.IsValidApplyTarget(target, out var reason));
+            Assert.Contains("not named", reason);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void ApplyTarget_RefusesAPathThatDoesNotExistYet()
+    {
+        // An update REPLACES an install; it never creates one. Without this the applier could be used to
+        // plant a new 85 MB executable at a path of the attacker's choosing — a startup folder, a
+        // scheduled-task target — even with the name check in place.
+        var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
+        try
+        {
+            var target = Path.Combine(dir.FullName, OwnExeName());   // correct name, never created
+
+            Assert.False(UpdateApplier.IsValidApplyTarget(target, out var reason));
+            Assert.Contains("does not exist", reason);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void ApplyTarget_RefusesAPathInsideTheWindowsDirectory()
+    {
+        // Belt-and-braces for a file legitimately named like ours inside a system root: an elevated
+        // SysManager must not be steerable into writing there, whatever the file is called.
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var target = Path.Combine(windows, "System32", OwnExeName());
+
+        Assert.False(UpdateApplier.IsValidApplyTarget(target, out var reason));
+        // Specifically for BEING in a system root — the location check runs before the existence check,
+        // so this cannot pass merely because no file happens to sit at that path.
+        Assert.Contains("system directory", reason);
+    }
+
+    [Fact]
+    public void ApplyTarget_RefusesARealExistingSystemBinary()
+    {
+        // A file that genuinely exists, so this cannot pass via the existence check — the only thing
+        // that can refuse it is the name rule. Together with the test above (a system-root path bearing
+        // OUR name, refused for its location) this pins both branches as reachable rather than dead.
+        var existing = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System), "notepad.exe");
+        Assert.True(File.Exists(existing), "probe file missing — this test needs a real System32 file");
+
+        Assert.False(UpdateApplier.IsValidApplyTarget(existing, out var reason));
+        Assert.Contains("not named", reason);
+    }
+
+    [Fact]
+    public void ApplyTarget_ResolvesDotSegmentsBeforeDeciding()
+    {
+        // Validate and act on the SAME string. A target of "<temp>\sub\..\hosts" has the file name
+        // "hosts" only after canonicalisation; comparing the raw string would see "..".
+        var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
+        try
+        {
+            var sub = Directory.CreateDirectory(Path.Combine(dir.FullName, "sub"));
+            var real = Path.Combine(dir.FullName, "hosts");
+            File.WriteAllText(real, "someone else's file");
+
+            var traversal = Path.Combine(sub.FullName, "..", "hosts");
+
+            Assert.False(UpdateApplier.IsValidApplyTarget(traversal, out var reason));
+            Assert.Contains("not named", reason);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void Run_WithAHostileTarget_LeavesThatFileUntouched()
+    {
+        // The end-to-end proof: Run is what writes, so Run is what must refuse. Drives the real entry
+        // point the startup branch calls, and asserts the would-be victim file is byte-identical after.
+        var dir = Directory.CreateTempSubdirectory("ApplierRun_");
+        try
+        {
+            var victim = Path.Combine(dir.FullName, "hosts");
+            File.WriteAllText(victim, "127.0.0.1 localhost");
+            var before = Sha256(victim);
+
+            // A pid that cannot exist, so Run does not wait: this is exactly what an attacker supplies.
+            UpdateApplier.Run(victim, 999999);
+
+            Assert.True(File.Exists(victim));
+            Assert.Equal(before, Sha256(victim));
+            Assert.False(File.Exists(victim + ".new"));   // not even a staging file was written
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    // ── The retained rollback build lives in a user-writable folder ─────────────────────────────────
+    // RollBackAsync launched %LOCALAPPDATA%\SysManager\updates\SysManager-previous.exe on File.Exists
+    // alone, with UseShellExecute — so anything running as the user could replace it and have it start
+    // with SysManager's token. The install path hardens this exact shape (hash from a held handle, then
+    // launch without reopening); these tests pin that rollback now does the same.
+
+    [Fact]
+    public void PreserveCurrentBuild_RecordsTheChecksumOfWhatItWrote()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierPreserve_");
+        try
+        {
+            var updates = Updates(dir);
+            var current = Path.Combine(dir.FullName, "SysManager.exe");
+            File.WriteAllText(current, "the outgoing build");
+
+            UpdateApplier.PreserveCurrentBuild(current, updates);
+
+            var previous = UpdateApplier.PreviousBuildPath(updates);
+            var hashFile = UpdateApplier.PreviousBuildHashPath(updates);
+            Assert.True(File.Exists(previous));
+            Assert.True(File.Exists(hashFile), "a retained build without its checksum can never be verified");
+            // The recorded hash must describe the RETAINED bytes, not the source's.
+            Assert.Equal(Sha256(previous), File.ReadAllText(hashFile).Trim());
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void VerifiedPreviousBuild_AcceptsAnUntouchedRetainedBuild()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierVerify_");
+        try
+        {
+            var updates = Updates(dir);
+            var current = Path.Combine(dir.FullName, "SysManager.exe");
+            File.WriteAllText(current, "the outgoing build");
+            UpdateApplier.PreserveCurrentBuild(current, updates);
+
+            Assert.True(
+                UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason),
+                reason);
+            using (stream)
+            {
+                Assert.NotNull(stream);
+                // The handle is returned so the caller launches the very bytes that were verified,
+                // instead of reopening the path and reintroducing the swap window.
+                Assert.Throws<IOException>(() => new FileStream(
+                    UpdateApplier.PreviousBuildPath(updates),
+                    FileMode.Open, FileAccess.Write, FileShare.None));
+            }
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void VerifiedPreviousBuild_RefusesABuildSwappedAfterItWasSaved()
+    {
+        // THE attack: the retained copy is replaced between the update and the click on "Go back".
+        var dir = Directory.CreateTempSubdirectory("ApplierVerify_");
+        try
+        {
+            var updates = Updates(dir);
+            var current = Path.Combine(dir.FullName, "SysManager.exe");
+            File.WriteAllText(current, "the outgoing build");
+            UpdateApplier.PreserveCurrentBuild(current, updates);
+
+            File.WriteAllText(UpdateApplier.PreviousBuildPath(updates), "attacker payload");
+
+            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason));
+            Assert.Null(stream);   // nothing left open on a refusal
+            Assert.Contains("changed", reason);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Theory]
+    [InlineData(null)]                                   // no checksum recorded at all
+    [InlineData("")]                                     // present but empty
+    [InlineData("not-a-hash")]                           // present but unusable
+    [InlineData("DEADBEEF")]                             // right alphabet, wrong length
+    public void VerifiedPreviousBuild_FailsClosedWithoutAUsableChecksum(string? hashContent)
+    {
+        // "Cannot prove this" is a refusal, not a skip — the same call UpdateService makes for a missing
+        // published .sha256. A permissive branch here would undo the whole check.
+        var dir = Directory.CreateTempSubdirectory("ApplierVerify_");
+        try
+        {
+            var updates = Directory.CreateDirectory(Updates(dir)).FullName;
+            File.WriteAllText(UpdateApplier.PreviousBuildPath(updates), "some build");
+            if (hashContent is not null)
+                File.WriteAllText(UpdateApplier.PreviousBuildHashPath(updates), hashContent);
+
+            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason));
+            Assert.Null(stream);
+            Assert.NotEqual("", reason);   // and it says why, so the UI never refuses silently
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void VerifiedPreviousBuild_RefusesWhenThereIsNoRetainedBuild()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierVerify_");
+        try
+        {
+            var updates = Directory.CreateDirectory(Updates(dir)).FullName;
+
+            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason));
+            Assert.Null(stream);
+            Assert.NotEqual("", reason);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
 }

@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.2] - 2026-08-12
+
+Two ways the built-in updater could be tricked into damaging your PC are now closed off. Nothing about
+normal updating changes.
+
+### Security
+- **SysManager could be told to overwrite the wrong file.** When SysManager installs an update, it starts the newly downloaded copy with a hidden instruction naming the file to replace. That instruction was only checked for the right shape, not for what it actually pointed at — so anyone who could start SysManager with a crafted command line (a shortcut, a scheduled task, a script someone talked you into running) could name any file on your PC and have SysManager write over it. If you were running SysManager as administrator at the time, that meant almost any file, including ones Windows needs. SysManager now refuses unless the file it is told to replace really is an existing copy of SysManager itself, outside protected system folders, and writes a note in its log saying why it refused. Normal updates are unaffected; they always pointed at the right file.
+- **"Go back to the previous version" now checks the saved copy before starting it.** SysManager keeps one copy of your previous version so you can go back after a bad update, and that copy sits in your own user folder where other programs can also write. Starting it was previously based only on the file being there — so anything running on your PC could have swapped that copy for something else and had SysManager launch it, with administrator rights if SysManager was elevated. SysManager now records a checksum when it saves the copy and verifies it right before starting it, keeping the file locked in between so it cannot be swapped in the meantime. If the copy has changed, or was saved by a version before this one and has no checksum, the button is not offered and you are told why instead of it happening silently. Installing an update already worked this way; going back now does too.
+
+---
+
 ## [1.64.1] - 2026-08-12
 
 A rare crash that could happen if you closed the window while the Resource History tab was loading

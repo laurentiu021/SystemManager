@@ -157,11 +157,18 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// Re-reads whether a retained previous build exists. Called on construction and after a
     /// rollback, so the button disappears once the copy has been consumed.
     /// </summary>
+    /// <remarks>
+    /// Requires the recorded checksum as well as the binary: we can only offer a rollback we are able
+    /// to verify, so a copy with no checksum is not offered rather than offered-then-refused. This also
+    /// means a build retained by a version that predates the checksum is not offered — that is the
+    /// intended outcome, since its integrity was never recorded, and the next update writes both files.
+    /// </remarks>
     private void RefreshRollbackAvailability()
     {
         try
         {
-            CanRollBack = File.Exists(UpdateApplier.PreviousBuildPath(_updatesDir));
+            CanRollBack = File.Exists(UpdateApplier.PreviousBuildPath(_updatesDir))
+                       && File.Exists(UpdateApplier.PreviousBuildHashPath(_updatesDir));
         }
         catch (IOException)
         {
@@ -811,6 +818,17 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
+        // SEC: verify the retained build against the checksum recorded when it was written, and hold the
+        // verified handle across Process.Start. The retained copy sits in a user-writable folder and can
+        // have been replaced at any point since the update was applied; rollback previously ran on
+        // File.Exists alone, while the install path directly above closes this same window this same way.
+        if (!UpdateApplier.TryOpenVerifiedPreviousBuild(_updatesDir, out var verifiedStream, out var why))
+        {
+            RollBackStatus = $"Cannot go back safely — {why}.";
+            RefreshRollbackAvailability();
+            return;
+        }
+
         try
         {
             var args = UpdateApplier.BuildArguments(currentExe, Environment.ProcessId);
@@ -836,6 +854,12 @@ public sealed partial class AboutViewModel : ViewModelBase
         catch (System.ComponentModel.Win32Exception ex)
         {
             RollBackStatus = $"Could not go back: {ex.Message}";
+        }
+        finally
+        {
+            // Released only after the launch: Windows holds the image section open for the new process's
+            // lifetime, so the binary stays immutable once it has loaded.
+            verifiedStream?.Dispose();
         }
     }
 

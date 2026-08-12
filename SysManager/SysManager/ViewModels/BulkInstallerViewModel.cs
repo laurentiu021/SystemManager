@@ -517,6 +517,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         if (disposing)
         {
             PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

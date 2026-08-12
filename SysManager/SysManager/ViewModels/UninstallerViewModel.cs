@@ -320,6 +320,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         {
             _service.LineReceived -= _lineHandler;
             PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

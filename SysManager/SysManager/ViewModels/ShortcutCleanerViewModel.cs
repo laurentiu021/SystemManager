@@ -173,6 +173,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         {
             foreach (var s in BrokenShortcuts)
                 s.PropertyChanged -= OnShortcutPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

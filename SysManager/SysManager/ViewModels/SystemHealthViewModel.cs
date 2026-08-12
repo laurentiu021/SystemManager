@@ -78,6 +78,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         if (disposing)
         {
             _runner.LineReceived -= OnRunnerLineReceived;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

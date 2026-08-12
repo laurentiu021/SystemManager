@@ -183,6 +183,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     {
         if (disposing)
         {
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

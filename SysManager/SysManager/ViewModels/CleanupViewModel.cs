@@ -104,9 +104,13 @@ public sealed partial class CleanupViewModel : ViewModelBase
         {
             _runner.LineReceived -= OnRunnerLineReceived;
             _runner.ProgressChanged -= OnRunnerProgressChanged;
+            _tempCts?.Cancel();
             _tempCts?.Dispose();
+            _binCts?.Cancel();
             _binCts?.Dispose();
+            _sfcCts?.Cancel();
             _sfcCts?.Dispose();
+            _dismCts?.Cancel();
             _dismCts?.Dispose();
         }
         base.Dispose(disposing);

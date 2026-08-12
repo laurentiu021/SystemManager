@@ -203,6 +203,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         {
             _winget.LineReceived -= _lineHandler;
             PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

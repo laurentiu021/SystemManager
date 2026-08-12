@@ -146,6 +146,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
         {
             PropertyChanged -= OnVmPropertyChanged;
             foreach (var i in Items) i.PropertyChanged -= OnItemSelectionChanged;
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

@@ -194,6 +194,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     {
         if (disposing)
         {
+            _cts?.Cancel();
             _cts?.Dispose();
         }
         base.Dispose(disposing);

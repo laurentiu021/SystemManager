@@ -143,8 +143,11 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         {
             foreach (var c in Categories)
                 c.PropertyChanged -= OnCategoryPropertyChanged;
+            _scanCts?.Cancel();
             _scanCts?.Dispose();
+            _cleanCts?.Cancel();
             _cleanCts?.Dispose();
+            _largeCts?.Cancel();
             _largeCts?.Dispose();
         }
         base.Dispose(disposing);

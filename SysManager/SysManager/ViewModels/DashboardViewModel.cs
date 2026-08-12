@@ -911,6 +911,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             _pollingCts?.Cancel();
             _pollingCts?.Dispose();
+            _tuneUpCts?.Cancel();
             _tuneUpCts?.Dispose();
         }
         base.Dispose(disposing);

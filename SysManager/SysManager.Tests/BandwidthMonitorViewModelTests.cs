@@ -572,4 +572,63 @@ public class BandwidthMonitorViewModelTests : IDisposable
         MainWindowViewModel.ApplyPollGate(ItemFor(new object()), windowVisible: false);
         MainWindowViewModel.ApplyPollGate(ItemFor(new object()), windowVisible: true);
     }
+
+    // ── Dispose during an in-flight poll ────────────────────────────────────
+    // SampleAsync now genuinely yields (its work runs on a worker thread), so the window can close —
+    // disposing the view model, its source, and every SkiaSharp paint — while a sample is still in
+    // flight. The cancellation token only stops a sample from STARTING; one already running completes
+    // and its continuation would resume on the torn-down view model, mutating the LiveCharts buffers
+    // and repainting through disposed native paint handles. PollOnceAsync re-checks disposal after the
+    // await to bail before touching any of that.
+
+    // A source whose SampleAsync blocks until released, so a Dispose() can be interleaved deterministically
+    // between the await starting and its continuation running — no sleeps, no wall-clock.
+    private sealed class GatedSource : IBandwidthMonitorService
+    {
+        private readonly ManualResetEventSlim _release = new(false);
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task Entered => _entered.Task;
+        public BandwidthMode Mode => BandwidthMode.Connections;
+        public bool IsAvailable => true;
+        public bool Start() => true;
+
+        public Task<BandwidthSnapshot> SampleAsync(CancellationToken ct = default) => Task.Run(() =>
+        {
+            _entered.TrySetResult();                       // signal we are inside the sample
+            _release.Wait(TimeSpan.FromSeconds(5));        // bounded, so a broken test fails instead of hanging CI
+            return new BandwidthSnapshot(BandwidthMode.Connections, 123, 456,
+                [new ProcessNetworkUsage { ProcessId = 1, ProcessName = "app.exe", DownBytesPerSec = 1 }]);
+        }, ct);
+
+        public void ReleaseSample() => _release.Set();
+        public void Dispose() => _release.Set();   // Dispose must not deadlock a waiting sample
+    }
+
+    [Fact]
+    public async Task DisposeDuringAnInFlightPoll_DoesNotTouchTheTornDownViewModel()
+    {
+        var gated = new GatedSource();
+        var vm = NewVm(connFactory: () => gated);
+
+        // Invoke the poll directly so the in-flight moment is controllable. PollOnceAsync is private —
+        // it is the seam the crash lives on, and there is no public trigger that pauses mid-sample.
+        var poll = typeof(BandwidthMonitorViewModel)
+            .GetMethod("PollOnceAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var pollTask = (Task)poll.Invoke(vm, [CancellationToken.None])!;
+
+        // Wait until the sample is genuinely running, THEN dispose — this is the interleave the fix guards.
+        await gated.Entered;
+        vm.Dispose();
+        gated.ReleaseSample();
+
+        // The continuation must complete without throwing (no repaint through disposed SkiaSharp handles)
+        // and must NOT have applied the snapshot to the disposed view model.
+        var completed = await Task.WhenAny(pollTask, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(pollTask, completed);
+        await pollTask;   // re-throws anything the continuation threw
+
+        Assert.Equal(0, vm.TotalDownBytesPerSec);   // snapshot's 123 was never applied
+        Assert.Equal(0, vm.TotalUpBytesPerSec);     // snapshot's 456 was never applied
+        Assert.Empty(vm.Processes);                 // MergeInto never ran
+    }
 }

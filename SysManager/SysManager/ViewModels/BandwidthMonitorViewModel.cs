@@ -253,6 +253,16 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         if (_source is null) return;
         var snap = await _source.SampleAsync(ct).ConfigureAwait(true);
 
+        // Re-check AFTER the await, not just before it. SampleAsync now genuinely yields (its work runs
+        // on a worker thread), so Dispose() — which cancels _pollCts and disposes _source plus every
+        // SkiaSharp paint — can run while a sample is in flight. The cancellation token only prevents a
+        // sample from STARTING; one already running completes and would resume here, writing bound
+        // state, mutating the LiveCharts buffers and repainting through disposed native paint handles on
+        // a torn-down view model (the window can close mid-poll — ShutdownMode is OnExplicitShutdown, so
+        // the dispatcher keeps pumping this queued continuation). Same guard the init path already uses
+        // after its awaits (see InitAsync). _source is nulled in Dispose, so this covers it directly.
+        if (_source is null || _pollCts is null || ct.IsCancellationRequested) return;
+
         TotalDownBytesPerSec = snap.TotalDownBytesPerSec;
         TotalUpBytesPerSec = snap.TotalUpBytesPerSec;
 

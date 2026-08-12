@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.63.1] - 2026-08-12
+
+A rare crash that could happen if you closed the window at the exact moment the Bandwidth Monitor was
+taking a reading.
+
+### Fixed
+- **Closing the window while the Bandwidth Monitor was mid-measurement could crash the app.** In 1.61.9 the network measurement moved onto a background thread so the window stops stuttering. That introduced a small window: if you closed SysManager (or it minimised to tray during shutdown) in the fraction of a second while a measurement was in flight, the finished measurement tried to update a tab that had already been torn down — including its chart, whose drawing resources were already released — which could throw. The measurement now checks whether the tab is still alive before touching anything, and quietly stops if it is not. Only the Bandwidth Monitor tab was affected, and only at the moment of closing.
+
+---
+
 ## [1.63.0] - 2026-08-12
 
 The Startup Manager now tells you what each program is and whether it is safe to turn off, instead of

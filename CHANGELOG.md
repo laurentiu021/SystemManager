@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.1] - 2026-08-12
+
+A rare crash that could happen if you closed the window while the Resource History tab was loading
+its charts.
+
+### Fixed
+- **Closing the window while Resource History was loading could crash the app.** The tab reads your recorded history from disk in the background and then redraws five chart lines. If you closed SysManager during that read — which is easy to hit, because the read starts on its own when you open the tab, when you change the time range, and when you press Refresh — the finished read tried to redraw charts whose drawing resources had already been released during shutdown. There were three separate ways it could fail, including one that turned a clean shutdown into an error. The loading path now checks whether the tab is still there before touching anything and stops quietly if it is not. Same kind of problem as the Bandwidth Monitor crash fixed in 1.63.1: after that fix every other tab was checked for the same pattern, and this was the one that had it. Only the Resource History tab was affected, and only at the moment of closing.
+
+---
+
 ## [1.64.0] - 2026-08-12
 
 There is now a way to report a problem from inside the app, instead of being told to "report it on

@@ -32,8 +32,9 @@ SysManager/
 ## Tabs (view models)
 
 The sidebar organises tabs into 12 groups (11 collapsible + a flat top-level Dashboard) via `NavGroup` →
-`NavItem` hierarchy built by `BuildNavGroups()` using `Group()` and
-`Item()` helper methods. Dashboard renders as a flat top-level entry.
+`NavItem` hierarchy built by `BuildNavGroups()` using `Group()` plus one of two item helpers:
+`Tab<TVm>()`, which defers resolving the view-model until the tab is first opened, and `EagerItem()`
+for the few entries whose view-model must exist at startup. Dashboard renders as a flat top-level entry.
 Collapsed groups show a child count badge, subtitle (derived
 from child labels joined with " · "), and tooltip.
 `MainWindowViewModel.SelectedNav` mirrors selection into `NavItem.IsSelected`.
@@ -135,12 +136,22 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam — currently `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
-`IAppBlockerService` (AppBlockerService), `IDialogService` (DialogService),
-`ICpuAffinityService`, `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`,
-`ITimerResolutionService`, `ITweaksHubService`, `IWindowsThemeService`,
-`IAudioMixerService`, and `IGamingProfileService` — each registered against its
-implementation and mock-substitutable (see `ServiceRegistration.cs`).
+an interface seam. Twelve are registered against their implementation in `ServiceRegistration.cs` and
+constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
+`IAppBlockerService` (AppBlockerService), `ICpuAffinityService`, `IFileLockService`,
+`INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
+`ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, and `IGamingProfileService`
+(the last via a factory).
+
+Two further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
+finds nothing:
+
+- `IDialogService` — consumed through the static `DialogService.Instance`, which tests swap for a
+  stub. That is why the swapping tests must sit in the serialized `DialogService` xUnit collection;
+  a fitness function in `ArchitectureTests` enforces it.
+- `IBandwidthMonitorService` — the one seam with two shipping implementations
+  (`ConnectionBandwidthSource` and `EtwBandwidthSource`), injected as factories so the Bandwidth
+  Monitor can switch source at runtime. See the sources note further down.
 
 Key services:
 - `PingMonitorService` / `TracerouteService` / `TracerouteMonitorService` —

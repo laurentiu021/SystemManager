@@ -111,12 +111,14 @@ public sealed partial class AboutViewModel : ViewModelBase
                new SystemReportService(new SystemInfoService(), new DiskHealthService()),
                autoCheck: true,
                preferences: configDir is null ? null : new UpdateCheckPreferenceService(configDir),
-               updatesDir: configDir) { }
+               updatesDir: configDir)
+    { }
 
     public AboutViewModel(UpdateService updates, SystemReportService reportService, string? configDir = null)
         : this(updates, reportService, autoCheck: true,
                preferences: configDir is null ? null : new UpdateCheckPreferenceService(configDir),
-               updatesDir: configDir) { }
+               updatesDir: configDir)
+    { }
 
     /// <summary>
     /// Core constructor. <paramref name="autoCheck"/> controls whether the

@@ -188,11 +188,15 @@ public class DuplicateFileViewModelTests
         var group = new DuplicateFileGroup { FileSize = 1024 };
         group.Files.Add(new DuplicateFileEntry
         {
-            Path = @"C:\a\photo.jpg", Name = "photo.jpg", LastModified = new DateTime(2019, 1, 1)
+            Path = @"C:\a\photo.jpg",
+            Name = "photo.jpg",
+            LastModified = new DateTime(2019, 1, 1)
         });
         group.Files.Add(new DuplicateFileEntry
         {
-            Path = @"C:\b\photo.jpg", Name = "photo.jpg", LastModified = new DateTime(2026, 1, 1)
+            Path = @"C:\b\photo.jpg",
+            Name = "photo.jpg",
+            LastModified = new DateTime(2026, 1, 1)
         });
         group.Count = group.Files.Count;
         group.ApplySuggestedKeeper();

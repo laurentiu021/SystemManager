@@ -246,11 +246,51 @@ public sealed partial class ContextMenuService
     }
 
     /// <summary>
+    /// True when <paramref name="registryPath"/> is safe to interpolate into a <c>reg.exe</c> command
+    /// line.
+    /// </summary>
+    /// <remarks>
+    /// SEC: the path is built from a subkey NAME enumerated out of HKEY_CLASSES_ROOT
+    /// (<c>GetSubKeyNames</c>), and <c>HKCR\*\shell</c> merges <c>HKCU\Software\Classes</c>, which an
+    /// unprivileged user can write. Registry key names may legally contain a double quote, so a key
+    /// named <c>evil" "C:\somewhere\out.reg" /y</c> closed the intended <c>"{fullPath}"</c> argument
+    /// early and appended further arguments to <c>reg.exe</c> — controlling the export DESTINATION.
+    /// With <c>UseShellExecute = false</c> that is argument injection rather than command chaining, so
+    /// the impact is bounded at writing a .reg export to a chosen path; but SysManager is commonly run
+    /// as administrator, and then that write lands with administrator rights outside the intended
+    /// backup root.
+    /// <para>The sanitisation that already existed applied only to the backup FILE NAME
+    /// (<c>Path.GetInvalidFileNameChars</c>); the value interpolated into the arguments was raw. The
+    /// identical guard is already applied to the analogous <c>schtasks</c> call in
+    /// <c>StartupService.SetTaskEnabled</c> — this is a missed instance of a pattern the project had
+    /// already decided on, which is why the check is that same shape rather than a new invention.</para>
+    /// <para>NUL is rejected for the reason it is in the sibling guard: it terminates the native command
+    /// line, so everything after it silently disappears.</para>
+    /// </remarks>
+    internal static bool IsSafeRegistryPath(string registryPath) =>
+        !string.IsNullOrWhiteSpace(registryPath)
+        && !registryPath.Contains('"')
+        && !registryPath.Contains('\0');
+
+    /// <summary>
     /// Exports the registry key to a .reg file before modification.
     /// Uses <c>reg export</c> which is available on all Windows versions.
     /// </summary>
     public static void BackupRegistry(string registryPath)
     {
+        // Refuse before anything is built: a path that cannot be passed safely cannot be backed up
+        // safely either, and the backup is best-effort — skipping one is strictly better than handing
+        // attacker-controlled arguments to a possibly-elevated reg.exe. Logged at Warning, unlike the
+        // ordinary "reg export returned non-zero" case below, because this means the enumerated key name
+        // itself is hostile.
+        if (!IsSafeRegistryPath(registryPath))
+        {
+            Log.Warning(
+                "Registry backup refused — the key name contains a character that cannot be passed "
+                + "safely to reg.exe: {Path}", registryPath);
+            return;
+        }
+
         try
         {
             var backupDir = Path.Combine(

@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.62.1] - 2026-08-12
+
+Several on-screen warnings and admin notices that were being cut off mid-sentence on a narrow window now
+wrap and show in full.
+
+### Fixed
+- **14 warning and information messages could be truncated instead of wrapping.** Across 13 tabs, notices like the File Shredder's "SSD users: overwrite-based shredding is unreliable…" caveat, Windows Defender's Tamper Protection notice, and the "requires administrator" banners were laid out in a way that told them to wrap but never gave them a width to wrap into — so on a narrow or default-width window the text was cut off at the right edge rather than continuing on a second line. The three longest were clipped even at the default window size. They now wrap and show in full. This is a layout fix only; no wording changed.
+
+---
+
 ## [1.62.0] - 2026-08-12
 
 The Speed Test tab now tells you whether your speed is any good, instead of leaving you to work it

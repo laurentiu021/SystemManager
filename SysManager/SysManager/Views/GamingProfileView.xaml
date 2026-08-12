@@ -38,12 +38,14 @@
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
                         AutomationProperties.Name="Run as administrator"/>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE7EF;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
-                    <TextBlock Text="Most optimizations apply as-is. Freeing standby memory and pausing search indexing need administrator."
-                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                </StackPanel>
+                <!-- Glyph docked left of the message, not a nested horizontal StackPanel: a StackPanel
+                     gives its children infinite width along its orientation, so the message's
+                     TextWrapping was inert and clipped at a narrow width (#1807). As the DockPanel's fill
+                     child the message now has a real width to wrap in. -->
+                <TextBlock Text="&#xE7EF;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
+                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Top" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock Text="Most optimizations apply as-is. Freeing standby memory and pausing search indexing need administrator."
+                           Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
             </DockPanel>
         </Border>
 
@@ -54,11 +56,14 @@
             <Grid>
                 <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                         Margin="-12,-8,0,-8"/>
-                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
-                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
+                <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width
+                     along its orientation, so this banner's TextWrapping was inert and clipped on a
+                     narrow window (#1807). The stripe Border above is untouched. -->
+                <DockPanel Margin="6,0,0,0">
+                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Top" DockPanel.Dock="Left"/>
                     <TextBlock Text="Running as administrator — every optimization, including freeing standby memory and pausing search indexing, can be applied."
                                Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                </StackPanel>
+                </DockPanel>
             </Grid>
         </Border>
 

@@ -33,12 +33,15 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
             <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1" CornerRadius="8"
                     Margin="0,10,0,0" Padding="10,8">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <!-- DockPanel, not a horizontal StackPanel: a StackPanel measures children with infinite
+                     width along its orientation, so TextWrapping is inert there and this warning clips
+                     instead of wrapping (#1807). Glyph docked left, message fills the rest. -->
+                <DockPanel>
+                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
+                               FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,8,0"/>
                     <TextBlock Foreground="{DynamicResource WarningText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
                                Text="SSD users: overwrite-based shredding is unreliable on solid-state drives due to wear-leveling. Use full-disk encryption (BitLocker/VeraCrypt) for secure data disposal on SSDs."/>
-                </StackPanel>
+                </DockPanel>
             </Border>
         </StackPanel>
 

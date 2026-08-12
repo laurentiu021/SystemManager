@@ -34,12 +34,14 @@
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
                         AutomationProperties.Name="Restart SysManager as administrator"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
-                    <TextBlock Text="These repairs modify system services and settings, so they require administrator privileges."
-                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                </StackPanel>
+                <!-- Glyph docked left of the message, not a nested horizontal StackPanel: a StackPanel
+                     gives its children infinite width along its orientation, so the message's
+                     TextWrapping was inert and clipped at a narrow width (#1807). As the DockPanel's fill
+                     child the message now has a real width to wrap in. -->
+                <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
+                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Top" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock Text="These repairs modify system services and settings, so they require administrator privileges."
+                           Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
             </DockPanel>
         </Border>
 

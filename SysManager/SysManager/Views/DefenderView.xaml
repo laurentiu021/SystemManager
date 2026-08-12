@@ -66,12 +66,14 @@
         <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
                 BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="0,0,0,12"
                 Visibility="{Binding IsTamperProtected, Converter={StaticResource FlexVis}}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#xE730;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
+                 its orientation, so TextWrapping was inert and this warning clipped (#1807). -->
+            <DockPanel>
+                <TextBlock Text="&#xE730;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
+                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                 <TextBlock Text="Tamper Protection is ON. Windows may silently ignore changes here until you turn it off in Windows Security."
                            Foreground="{DynamicResource WarningText}" FontSize="12.5" VerticalAlignment="Center" TextWrapping="Wrap"/>
-            </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- Status cards -->

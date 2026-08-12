@@ -36,12 +36,14 @@
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
                         AutomationProperties.Name="Run as administrator"/>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
-                    <TextBlock Text="Total speed and per-app activity are shown below. Run as administrator to unlock exact per-app upload/download speeds."
-                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                </StackPanel>
+                <!-- Glyph docked left of the message, not a nested horizontal StackPanel: a StackPanel
+                     gives its children infinite width along its orientation, so the message's
+                     TextWrapping was inert and clipped at a narrow width (#1807). As the DockPanel's fill
+                     child the message now has a real width to wrap in. -->
+                <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
+                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Top" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock Text="Total speed and per-app activity are shown below. Run as administrator to unlock exact per-app upload/download speeds."
+                           Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
             </DockPanel>
         </Border>
 
@@ -123,12 +125,15 @@
         <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
                 BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="28,12,28,0"
                 Visibility="{Binding HasAlert, Converter={StaticResource FlexVis}}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
+                 its orientation, so TextWrapping was inert and a long alert clipped (#1807). AlertMessage
+                 is bound, so its length is not fixed — wrapping matters more here, not less. -->
+            <DockPanel>
+                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
+                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                 <TextBlock Text="{Binding AlertMessage}" Foreground="{DynamicResource WarningText}"
                            FontSize="12.5" VerticalAlignment="Center" TextWrapping="Wrap"/>
-            </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- Chart + top consumers -->

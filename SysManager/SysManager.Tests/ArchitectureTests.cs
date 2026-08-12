@@ -815,6 +815,132 @@ public partial class ArchitectureTests
     private static partial Regex CategoryLink();
 
     /// <summary>
+    /// Every issue template that asks which tab is affected must offer the real tabs. Two of the three
+    /// templates were still offering an 18-entry list from when the app had roughly that many tabs, with
+    /// names that no longer matched the sidebar ("Cleanup" for "Quick Cleanup") and one entry — "Network"
+    /// — that is a nav group, not a tab. A reporter could not name 41 of the 58 tabs, so reports arrived
+    /// mis-labelled or unlabelled. Nothing compiles a YAML dropdown, so only a test catches the drift.
+    /// </summary>
+    [Theory]
+    [InlineData("bug_report.yml", "tab")]
+    [InlineData("feature_request.yml", "scope")]
+    [InlineData("general_issue.yml", "tab")]
+    public void EveryIssueTemplateTabList_OffersTheRealTabs(string template, string dropdownId)
+    {
+        var labels = SidebarTabLabels();
+        Assert.True(labels.Count >= 50,
+            $"only {labels.Count} tab labels were parsed from MainWindowViewModel — the guard is vacuous");
+
+        var options = DropdownOptions(
+            Path.Combine(FindRepoRoot(), ".github", "ISSUE_TEMPLATE", template), dropdownId);
+        Assert.NotEmpty(options);
+
+        // Every real tab must be offerable. Extra options are fine: each template ends with its own
+        // catch-alls ("Not sure", "New tab / cross-cutting"), which are deliberate, not tab names.
+        var missing = labels.Where(l => !options.Contains(l)).ToList();
+        Assert.True(missing.Count == 0,
+            $"{template} ({dropdownId}) cannot describe {missing.Count} of the {labels.Count} tabs:\n  "
+            + string.Join("\n  ", missing));
+
+        // And no option may name a tab that does not exist — a stale name is as misleading as a gap.
+        string[] catchAlls = ["Multiple / general UI", "Not sure", "New tab / cross-cutting"];
+        var unknown = options.Where(o => !labels.Contains(o) && !catchAlls.Contains(o)).ToList();
+        Assert.True(unknown.Count == 0,
+            $"{template} ({dropdownId}) offers options that are not tabs (nor known catch-alls):\n  "
+            + string.Join("\n  ", unknown));
+    }
+
+    /// <summary>
+    /// The version field of an issue template must not pin an example release. Both templates showed
+    /// <c>0.12.x</c> — roughly 130 releases stale — so a reporter copying the placeholder filed against
+    /// a version that never shipped, in the field used for triage. Writing today's number in only resets
+    /// the clock, so the rule is that no version literal belongs there at all.
+    /// </summary>
+    [Theory]
+    [InlineData("bug_report.yml")]
+    [InlineData("general_issue.yml")]
+    public void TheIssueTemplateVersionField_PinsNoExampleRelease(string template)
+    {
+        var path = Path.Combine(FindRepoRoot(), ".github", "ISSUE_TEMPLATE", template);
+        Assert.True(File.Exists(path), $"{template} not found — the guard would pass vacuously");
+
+        var lines = File.ReadAllLines(path);
+        var field = Array.FindIndex(lines, l => l.Trim() == "id: version");
+        Assert.True(field >= 0, $"{template} has no version field — the guard is vacuous");
+
+        var pinned = new List<string>();
+        for (var i = field; i < lines.Length; i++)
+        {
+            if (i > field && lines[i].TrimStart().StartsWith("- type:", StringComparison.Ordinal)) break;
+
+            var m = SemanticVersion().Match(lines[i]);
+            if (m.Success) pinned.Add($"{template}:{i + 1}  {m.Groups[1].Value}");
+        }
+
+        Assert.True(pinned.Count == 0,
+            "the version field pins an example release, which goes stale on the next release:\n  "
+            + string.Join("\n  ", pinned));
+    }
+
+    /// <summary>A three-part version number.</summary>
+    [GeneratedRegex(@"\b(\d+\.\d+\.\d+)\b", RegexOptions.Compiled)]
+    private static partial Regex SemanticVersion();
+
+    /// <summary>The tab labels exactly as the sidebar registers them.</summary>
+    private static HashSet<string> SidebarTabLabels()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+
+        // Both registration helpers take (id, label, …); the label is the second string argument.
+        return NavRegistration().Matches(source)
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>A nav registration, capturing the user-visible label.</summary>
+    [GeneratedRegex(@"(?:Tab<\w+>|EagerItem)\(\s*""[\w-]+""\s*,\s*""([^""]+)""", RegexOptions.Compiled)]
+    private static partial Regex NavRegistration();
+
+    /// <summary>
+    /// The options of one dropdown in an issue-form template, read line-wise. A full YAML parse is
+    /// avoided deliberately: these files contain unquoted colons inside descriptions, which several
+    /// parsers reject, and a guard that cannot read the file is worse than no guard.
+    /// </summary>
+    private static List<string> DropdownOptions(string path, string dropdownId)
+    {
+        Assert.True(File.Exists(path), $"{path} not found — the guard would pass vacuously");
+
+        var lines = File.ReadAllLines(path);
+        var options = new List<string>();
+        var inDropdown = false;
+        var inOptions = false;
+
+        foreach (var line in lines)
+        {
+            if (line.TrimStart().StartsWith("- type:", StringComparison.Ordinal))
+            {
+                inDropdown = false;
+                inOptions = false;
+            }
+
+            if (line.Trim() == $"id: {dropdownId}") inDropdown = true;
+            if (!inDropdown) continue;
+
+            if (line.Trim() == "options:") { inOptions = true; continue; }
+            if (!inOptions) continue;
+
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("- ", StringComparison.Ordinal))
+                options.Add(trimmed[2..].Trim().Trim('"'));
+            else if (trimmed.Length > 0)
+                break;      // the dropdown's option list ended
+        }
+
+        return options;
+    }
+
+    /// <summary>
     /// The README's table of contents must resolve. It is 1300+ lines long, so the contents list is the
     /// only practical way to navigate it — and a heading rename silently breaks an anchor, which renders
     /// as a link that quietly does nothing rather than as an error.

@@ -19,8 +19,10 @@ body:
     id: version
     attributes:
       label: SysManager version
-      description: Visible in the **About** tab. Example: `0.12.1`.
-      placeholder: "0.12.1"
+      description: >-
+        Shown at the top of the **About** tab, and in the title bar. The "Copy environment info"
+        button there puts it on your clipboard along with your Windows version.
+      placeholder: e.g. the version shown on the About tab
     validations:
       required: true
 

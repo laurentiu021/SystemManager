@@ -6,7 +6,7 @@ SysManager has three test projects, each with a distinct scope and runner.
 
 | Project | What it tests | Runs on CI |
 |---|---|---|
-| `SysManager.Tests` | Unit tests — mostly pure logic, but some tests touch lightweight OS APIs (registry reads, process enumeration, Task Scheduler queries) and a few exercise STA/UI-thread code via `Xunit.StaFact` (`[StaFact]` / `[UIFact]`). No WMI, no network I/O, no admin required. | ✅ Every push / PR |
+| `SysManager.Tests` | Unit tests — mostly pure logic, but some tests touch lightweight OS APIs (registry reads, process enumeration, Task Scheduler queries) and a few exercise STA/UI-thread code via `Xunit.StaFact` (`[StaFact]`). No WMI, no network I/O, no admin required. | ✅ Every push / PR |
 | `SysManager.IntegrationTests` | Integration tests — real Windows APIs (Event Log, WMI, PowerShell, ICMP, WPF dispatcher) | ❌ Local only |
 | `SysManager.UITests` | End-to-end UI automation via FlaUI — needs an interactive desktop session; runs in CI on a desktop-enabled runner, non-blocking (`continue-on-error`) and skipped on fork PRs | ⚠️ CI (non-blocking) |
 
@@ -76,9 +76,14 @@ Coverage is collected automatically on CI via `coverlet` and uploaded to
 | Package | Purpose |
 |---|---|
 | xUnit 2.9 | Test framework |
-| NSubstitute 5.3 | Mocking/substitution for interface-based testing |
+| NSubstitute 6.1 | Mocking/substitution for interface-based testing |
+| NetArchTest.Rules 1.3 | Architecture fitness functions — MVVM dependency direction, and guards that pin recurring defect classes |
 | coverlet | Code coverage collection |
 | Xunit.StaFact | STA thread support for WPF-dependent tests |
+
+Package versions are managed centrally in `SysManager/Directory.Packages.props`
+(`ManagePackageVersionsCentrally`), so a `PackageReference` in a `.csproj` carries no
+`Version` attribute — adding one fails the restore.
 
 ### Parallelism
 
@@ -87,10 +92,16 @@ Tests that share state or touch OS resources are isolated via xUnit
 collection definitions (all defined in `TestCollections.cs`, each with
 `DisableParallelization = true`):
 
-- `[Collection("Network")]` — tests using ICMP sockets.
-- `[Collection("OperationLock")]` — tests that acquire the shared `OperationLockService`.
+- `[Collection("ProcessWideStatics")]` — tests that touch **any** process-wide static: swapping
+  `DialogService.Instance`, or acquiring `OperationLockService.Instance`. This was once two
+  collections, `"DialogService"` and `"OperationLock"`, and the split was itself the defect: two
+  *different* serialized collections still run in parallel **with each other**, so a test swapping
+  the dialog could race a test holding the lock. xUnit allows one collection per class, so the fix
+  was to merge them. This is the collection most of the suite uses.
+- `[Collection("ProcessEnvironment")]` — tests that mutate the process's environment variables.
 - `[Collection("IconCache")]` — tests touching the shared icon cache.
-- `[Collection("DialogService")]` — tests that swap the static `DialogService.Instance`.
+- `[Collection("Network")]` — tests using ICMP sockets. Defined here, but currently used only by
+  `SysManager.IntegrationTests`.
 
 ### Shared helpers
 
@@ -98,7 +109,8 @@ collection definitions (all defined in `TestCollections.cs`, each with
   the previous instance on dispose, so a confirmation gate can be driven without a UI:
   `using var _ = new DialogAnswer(false);`. Its `Calls` counter lets a test assert a dialog was
   *not* shown — asserting the side effect alone cannot distinguish "the user said yes" from
-  "no gate ran at all". Requires `[Collection("DialogService")]` on the test class.
+  "no gate ran at all". Requires `[Collection("ProcessWideStatics")]` on the test class — a fitness
+  function in `ArchitectureTests` fails the build if a class swaps a process-wide static without it.
 - `SyncProgress<T>` — a synchronous `IProgress<T>` that records reports on the calling thread, so
   progress assertions need no `Task.Delay`.
 - `StaHelper` — runs a delegate on an STA thread for WPF-dependent types.

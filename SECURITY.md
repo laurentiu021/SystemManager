@@ -172,7 +172,7 @@ app.
 
 | What | Where | Why it exists |
 |---|---|---|
-| Appearance and theme choice | `%LocalAppData%\SysManager` | So the app looks the same next launch |
+| Appearance and theme choice | `%AppData%\SysManager` | So the app looks the same next launch |
 | Dark-mode schedule | `%AppData%\SysManager` | Your chosen on/off times |
 | Speed-test history | `%LocalAppData%\SysManager` | So you can compare results over time |
 | Recent-activity list | `%LocalAppData%\SysManager` | Counts and sizes of actions you performed — never file names |
@@ -180,6 +180,13 @@ app.
 | Resource history | `%LocalAppData%\SysManager` | CPU / RAM / temperature samples, for the history graphs |
 | Diagnostic log | `%LocalAppData%\SysManager\logs` | 14 days of rolling files, so a problem can be diagnosed |
 | Downloaded updates | `%LocalAppData%\SysManager\updates` | The build you downloaded, plus one previous version for rollback |
+| Startup version-check on/off | `%AppData%\SysManager` | The About-tab checkbox that controls the once-a-day version check |
+| Your saved sets and choices | `%LocalAppData%\SysManager` | Gaming profiles, volume presets, what closing the window does, the standby-cleaner choice, saved environment variables |
+| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | A performance snapshot to restore from, a ledger of the service startup types it changed, whether the last session crashed, cached app-icon lookups |
+
+Every one of these sits inside your own user profile, opens in a text editor, and can be
+deleted without breaking the app. Two folders are involved only because Windows separates
+roaming settings from machine-local data; nothing is hidden in either.
 
 Your Windows user name is replaced with `[user]` in every log line — including
 inside error messages — so a log you choose to share does not carry your account

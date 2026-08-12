@@ -132,11 +132,11 @@ public sealed class StartupService
         }
         else
         {
-            // Unquoted: the path is the run up to the first space. A space inside an unquoted path is
-            // ambiguous and rare for autostart entries; taking the first token matches how Windows itself
-            // resolves an unquoted command, and a wrong split just means no database hit.
-            var space = text.IndexOf(' ');
-            path = space > 0 ? text[..space] : text;
+            // Unquoted: the executable ends at its extension, NOT at the first space — an unquoted path
+            // like "C:\Program Files\Spotify\Spotify.exe" contains spaces and is entirely the path.
+            // Find the first known executable extension that is followed by end-of-string or a space;
+            // everything up to and including it is the path, and the rest are arguments.
+            path = SplitUnquotedExecutable(text);
         }
 
         try
@@ -149,6 +149,40 @@ public sealed class StartupService
             // keys on anyway.
             return "";
         }
+    }
+
+    // Executable extensions that can appear at the end of the path portion of an unquoted command.
+    // .exe covers all but a handful; the others are the launchers Windows actually invokes at logon.
+    private static readonly string[] ExecutableExtensions = [".exe", ".com", ".bat", ".cmd", ".scr"];
+
+    /// <summary>
+    /// Splits an UNQUOTED command line into its executable path, treating a space as an argument
+    /// separator ONLY after the executable's extension. "C:\Program Files\App\app.exe --flag" returns
+    /// "C:\Program Files\App\app.exe" (the spaces before .exe are part of the path); "app.exe /run"
+    /// returns "app.exe". Falls back to the first space-delimited token when no known extension is
+    /// present, which still handles the common "app.exe" bare case via the whole string.
+    /// </summary>
+    private static string SplitUnquotedExecutable(string text)
+    {
+        foreach (var ext in ExecutableExtensions)
+        {
+            var idx = text.IndexOf(ext, StringComparison.OrdinalIgnoreCase);
+            while (idx >= 0)
+            {
+                var after = idx + ext.Length;
+                // The extension ends the path only if the executable token ends here — i.e. end of
+                // string or a space begins the arguments. Guards against matching ".com" inside a folder
+                // like "C:\Company\...": require the next char to be a separator or nothing.
+                if (after == text.Length || text[after] == ' ')
+                    return text[..after];
+                idx = text.IndexOf(ext, after, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        // No recognised extension (e.g. a bare token, or a path to something unusual). Fall back to the
+        // first token; a wrong split just means no database hit, never a wrong description.
+        var space = text.IndexOf(' ');
+        return space > 0 ? text[..space] : text;
     }
 
     private static void ReadStartupFolder(string folderPath, string locationLabel, bool isCommon, List<StartupEntry> results)

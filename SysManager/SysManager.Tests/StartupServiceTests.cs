@@ -188,6 +188,11 @@ public class StartupServiceTests
     [InlineData(@"C:\Program Files\Spotify\Spotify.exe", "Spotify")]
     // A resolved shortcut target with spaces in the folder but no arguments.
     [InlineData(@"C:\Program Files (x86)\Steam\steam.exe", "steam")]
+    // Unquoted path with spaces in the folder AND arguments — the extension, not the first space,
+    // ends the path.
+    [InlineData(@"C:\Program Files\App\app.exe --background /silent", "app")]
+    // A folder name containing ".com" must not be mistaken for the executable extension.
+    [InlineData(@"C:\Company Tools\updater.exe /run", "updater")]
     // Quoted path, no arguments.
     [InlineData("\"C:\\Program Files\\NVIDIA Corporation\\NvContainer\\nvcontainer.exe\"", "nvcontainer")]
     // Already just a name.

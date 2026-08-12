@@ -76,6 +76,17 @@
                                     Visibility="{Binding CanRollBack, Converter={StaticResource BoolToVis}}"
                                     AutomationProperties.Name="Go back to the previous version of SysManager"
                                     ToolTip="Reinstall the version you had before the last update. SysManager will close and reopen; your settings are not affected."/>
+                            <!-- The Preview banner asks users to "report anything unexpected on GitHub"
+                                 but nothing in the app took them there. This opens the bug form with the
+                                 version and elevation fields already filled in (see ReportProblem). -->
+                            <Button Content="Report a problem" Command="{Binding ReportProblemCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    AutomationProperties.Name="Report a problem on GitHub"
+                                    ToolTip="Open the bug-report form on GitHub, with your version and elevation state already filled in."/>
+                            <Button Content="Ask a question" Command="{Binding OpenDiscussionsCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    AutomationProperties.Name="Open GitHub Discussions"
+                                    ToolTip="Open GitHub Discussions for questions and ideas — for anything that is not a bug."/>
                             <Button Content="View license" Command="{Binding OpenLicenseCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
                             <!-- OpenChangelogCommand existed alongside OpenRepo and OpenLicense from the

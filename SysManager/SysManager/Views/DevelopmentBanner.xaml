@@ -20,7 +20,11 @@
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="Preview feature" FontSize="13" FontWeight="SemiBold"
                                Foreground="{DynamicResource Info}"/>
-                    <TextBlock Text="This feature is newly added and still being verified. Please report anything unexpected on GitHub."
+                    <!-- Names the About tab rather than a bare "on GitHub": that is where "Report a
+                         problem" now lives (it opens the bug form pre-filled), so the instruction points
+                         at something the user can actually reach. The banner is a plain UserControl with
+                         no DataContext, so it names the route rather than binding the command itself. -->
+                    <TextBlock Text="This feature is newly added and still being verified. If something looks wrong, use “Report a problem” on the About tab."
                                FontSize="11.5" Foreground="{DynamicResource TextSecondary}"
                                Margin="0,2,0,0" TextWrapping="Wrap"/>
                 </StackPanel>

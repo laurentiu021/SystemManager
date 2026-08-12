@@ -257,6 +257,28 @@ jobs:
               throw $msg
           }
 
+          # Normalize the entry's DATE to the day this release actually publishes (#1806).
+          #
+          # The header date is written by hand while a pull request is being prepared, but the release it
+          # describes publishes when that PR merges. A merge that crosses midnight UTC therefore ships
+          # yesterday's date — and because $body is copied VERBATIM into the release body and the
+          # announcement discussion, the wrong date reaches three public surfaces at once. It happened
+          # twice consecutively: 1.61.9 and 1.61.10 both read 2026-08-11 and published on the 12th.
+          #
+          # Keep a Changelog defines this field as the RELEASE date, so the workflow — the only
+          # participant that knows that date — owns it instead of asking a human to predict it.
+          #
+          # Scope: this corrects the three PUBLISHED surfaces (release body, announcement discussion, and
+          # the notes artifact), which is where a wrong date is actually read. CHANGELOG.md in the repo
+          # keeps whatever date the author typed; correcting the file too would mean this workflow pushing
+          # a commit to main, which is a bigger decision than a date fix and is deliberately left out.
+          # The consequence is bounded and visible: the file may read one day earlier than the release it
+          # describes, while every public surface reads correctly.
+          $today = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
+          $headerPattern = "^## \[$([regex]::Escape($version))\].*$"
+          $body = [regex]::Replace($body, $headerPattern, "## [$version] - $today", 'Multiline')
+          "date=$today" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
           $body | Out-File -FilePath $notesPath -Encoding utf8
           "path=$notesPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 

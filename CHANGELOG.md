@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.9] - 2026-08-11
+
+The Bandwidth Monitor no longer makes the window stutter while it is open.
+
+### Fixed
+- **The Bandwidth Monitor made the whole window hitch about once a second.** The tab measures network activity every second, and all of that measuring was happening on the same thread that draws the window — listing every network adapter and reading its counters, asking Windows for the full table of open TCP and UDP connections, and looking up the name of each program holding one. On a PC with a few adapters (Wi-Fi plus Ethernet, or a VPN or virtual-machine adapter) or a browser holding dozens of connections, that is enough work to be visible: scrolling, dragging the window and switching the chart range all stuttered in step with the once-a-second refresh. The measurement now runs on a background thread, so only the finished numbers touch the window. Nothing about what the tab shows has changed, and the precise (administrator) mode was never affected — its work was already just arithmetic on counters collected in the background.
+- **A related inefficiency in the same code.** The lookup that turns a process ID into a program name was cached, but the cache was emptied halfway through each refresh, so any program holding both a TCP and a UDP connection was looked up twice per second instead of once. The cache now lives for the whole refresh.
+
+---
+
 ## [1.61.8] - 2026-08-11
 
 Six places where SysManager either did not ask before doing something irreversible, or asked a

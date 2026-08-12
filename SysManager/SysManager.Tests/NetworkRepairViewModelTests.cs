@@ -9,7 +9,7 @@ using SysManager.ViewModels;
 namespace SysManager.Tests;
 
 // Serialized: the flush-DNS gate test swaps the static DialogService.Instance.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class NetworkRepairViewModelTests
 {
     private static NetworkSharedState NewShared() =>

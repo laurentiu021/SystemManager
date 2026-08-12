@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// Tests that require PSWindowsUpdate module are in IntegrationTests.
 /// </summary>
 // Serialized: the confirm-gate test swaps the static DialogService.Instance.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class WindowsUpdateViewModelTests
 {
     private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());

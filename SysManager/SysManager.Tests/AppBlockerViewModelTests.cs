@@ -12,7 +12,7 @@ namespace SysManager.Tests;
 
 // Serialized: the confirm-gate tests swap the static DialogService.Instance, which is
 // process-wide shared state (see the DialogService test-collection used elsewhere).
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class AppBlockerViewModelTests
 {
     // A blocker that reports nothing blocked — keeps the VM ctor's RefreshList()

@@ -11,7 +11,7 @@ using Xunit;
 namespace SysManager.Tests;
 
 // Serialized: the DeleteSelected gate tests swap the static DialogService.Instance.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class ShortcutCleanerViewModelTests
 {
     [Fact]

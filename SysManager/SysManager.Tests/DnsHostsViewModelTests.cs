@@ -103,7 +103,7 @@ public class DnsHostsViewModelTests
 /// (never touches System32). <c>IsElevated</c> is set true in-test to pass the admin guard
 /// that sits before each gate.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class DnsHostsViewModelGateTests
 {
     private const string TestInterfaceGuid = "11111111-2222-3333-4444-555555555555";

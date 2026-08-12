@@ -21,7 +21,7 @@ namespace SysManager.Tests;
 ///
 /// Serialized because several tests swap the global <see cref="DialogService.Instance"/> static.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class FileLockViewModelTests
 {
     private static FileLockViewModel NewVm() => new(new FileLockService());

@@ -12,26 +12,37 @@ namespace SysManager.Tests;
 public class NetworkCollection { }
 
 /// <summary>
-/// Groups tests that use the shared OperationLockService singleton so they
-/// run sequentially and avoid cross-test lock contention.
-/// </summary>
-[CollectionDefinition("OperationLock", DisableParallelization = true)]
-public class OperationLockCollection { }
-
-/// <summary>
 /// Groups tests that use the shared IconExtractorService static cache.
 /// </summary>
 [CollectionDefinition("IconCache", DisableParallelization = true)]
 public class IconCacheCollection { }
 
 /// <summary>
-/// Groups tests that swap the global <c>DialogService.Instance</c> static so they
-/// run sequentially. Without this, two collections setting the shared static in
-/// parallel race each other — one test's substitute receives (or misses) another's
-/// Confirm call, making the confirmation-gate tests flaky.
+/// Groups every test class that touches a process-wide mutable singleton — <c>DialogService.Instance</c>
+/// or <c>OperationLockService.Instance</c> — so they run sequentially.
 /// </summary>
-[CollectionDefinition("DialogService", DisableParallelization = true)]
-public class DialogServiceCollection { }
+/// <remarks>
+/// <para>
+/// Without serialization, two classes setting <c>DialogService.Instance</c> in parallel race each other:
+/// one test's substitute receives (or misses) another's Confirm call, so a confirmation gate answers with
+/// a foreign canned answer and a destructive-op test passes for the wrong reason.
+/// </para>
+/// <para>
+/// This replaces two separate collections, "DialogService" and "OperationLock", and the split was itself
+/// the defect rather than untidiness. <c>parallelizeTestCollections</c> is true, so two DIFFERENT
+/// serialized collections still run in parallel with EACH OTHER — and <c>PerformanceViewModelTests</c>
+/// and <c>ShortcutCleanerViewModelTests</c> touch both singletons. xUnit allows a class only one
+/// collection, so with two names those classes were serialized against the dialog group while racing the
+/// lock group, whichever name they picked. No correct answer was available.
+/// </para>
+/// <para>
+/// One collection spanning both statics is the only shape that can express "serialize against everything
+/// sharing this state". The cost is roughly 500 tests running sequentially instead of 460; the benefit is
+/// that a test asserting which operation holds the lock can no longer observe a foreign one.
+/// </para>
+/// </remarks>
+[CollectionDefinition("ProcessWideStatics", DisableParallelization = true)]
+public class ProcessWideStaticsCollection { }
 
 /// <summary>
 /// Groups tests that temporarily replace process environment variables.

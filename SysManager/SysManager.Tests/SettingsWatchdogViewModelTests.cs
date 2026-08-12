@@ -10,7 +10,7 @@ using SysManager.ViewModels;
 namespace SysManager.Tests;
 
 // Serialized: the confirm-gate tests swap the static DialogService.Instance.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class SettingsWatchdogViewModelTests
 {
     private static WatchedSetting Setting(string key) => new(

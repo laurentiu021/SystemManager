@@ -17,7 +17,7 @@ namespace SysManager.Tests;
 /// ShredAll command routes through <see cref="DialogService.Instance"/>.Confirm
 /// (audit finding tests #2 — the "every destructive op needs Confirm" contract).
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class FileShredderViewModelTests
 {
     private static FileShredderViewModel NewVm() =>

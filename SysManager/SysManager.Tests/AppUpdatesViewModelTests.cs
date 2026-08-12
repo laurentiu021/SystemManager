@@ -12,7 +12,7 @@ namespace SysManager.Tests;
 
 // Serialized: the confirmation-gate tests swap the static DialogService.Instance, which is
 // process-wide shared state. Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class AppUpdatesViewModelTests
 {
     private static readonly PowerShellRunner _sharedRunner = new();

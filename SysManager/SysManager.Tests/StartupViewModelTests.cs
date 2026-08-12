@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// Serialized under the DialogService collection: the confirm-gate test swaps the
 /// process-wide static <see cref="DialogService.Instance"/>.
 /// </summary>
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class StartupViewModelTests
 {
     [Fact]

@@ -15,7 +15,12 @@ namespace SysManager.Tests;
 /// Pure unit tests for <see cref="CleanupViewModel"/> that don't touch the
 /// real PowerShell runner, the WPF dispatcher, or spawn any processes.
 /// Heavier end-to-end scenarios live in SysManager.IntegrationTests.
+/// <para>Serialized because <c>SystemModificationLock_IsMutuallyExclusive</c> acquires the process-wide
+/// <see cref="OperationLockService"/> and asserts which operation holds it. Without the attribute this
+/// class ran fully in parallel with the other classes that take the same lock, so it could observe a
+/// foreign operation's name — or be observed holding one.</para>
 /// </summary>
+[Collection("ProcessWideStatics")]
 public class CleanupViewModelTests
 {
     private static CleanupViewModel NewVm() => new(new PowerShellRunner());

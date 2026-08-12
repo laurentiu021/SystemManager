@@ -16,7 +16,7 @@ namespace SysManager.Tests;
 /// </summary>
 // Serialized: the confirm-gate tests swap the static DialogService.Instance,
 // which is process-wide shared state.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class DashboardViewModelTests
 {
     private static DashboardViewModel NewVm(IWingetService? winget = null)

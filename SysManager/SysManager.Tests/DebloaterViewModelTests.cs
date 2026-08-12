@@ -22,7 +22,7 @@ namespace SysManager.Tests;
 // that ARE in the collection (parallelizeTestCollections is true), so two tests could interleave
 // their save/restore and leave a foreign substitute installed in the singleton for the rest of the
 // run — a confirmation gate answering with another test's canned answer.
-[Collection("DialogService")]
+[Collection("ProcessWideStatics")]
 public class DebloaterViewModelTests
 {
     private static DebloaterViewModel NewVm() =>

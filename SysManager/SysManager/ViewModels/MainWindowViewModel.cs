@@ -312,10 +312,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (newValue is not null) newValue.IsSelected = true;
     }
 
-    // The three tabs with a visibility-gated poll expose an IsActive flag. Toggle it generically
-    // so this doesn't depend on eager VM properties that no longer exist for lazy tabs.
+    // Every tab with a visibility-gated poll exposes an IsActive flag. Toggle it generically so this
+    // doesn't depend on eager VM properties that no longer exist for lazy tabs.
     // internal (not private) so a test can pin the gate without constructing the whole shell,
     // exactly as UpdateSelectionState above is tested.
+    //
+    // This list is hand-maintained, which means a NEW polling tab is opted OUT of the gate by default
+    // and nothing about the omission looks wrong — that is how Standby List Cleaner ended up polling
+    // every 2 seconds for the whole session after being opened once. ArchitectureTests now asserts
+    // every view model declaring IsActive appears here, so the next one cannot be forgotten silently.
     internal static void SetActive(object content, bool active)
     {
         switch (content)
@@ -324,6 +329,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case DashboardViewModel db: db.IsActive = active; break;
             case AudioMixerViewModel am: am.IsActive = active; break;
             case BandwidthMonitorViewModel bw: bw.IsActive = active; break;
+            case StandbyMemoryViewModel sm: sm.IsActive = active; break;
         }
     }
 

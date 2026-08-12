@@ -34,6 +34,18 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
     [ObservableProperty] private bool _autoPurgeEnabled;
     [ObservableProperty] private double _thresholdMb = StandbyPreferenceService.DefaultThresholdMb;
 
+    /// <summary>
+    /// True while this tab is the visible one. Set by <c>MainWindowViewModel.SetActive</c>, like the
+    /// other polling tabs.
+    /// </summary>
+    /// <remarks>
+    /// The poll used to start in the constructor and never stop, so opening this tab ONCE left a
+    /// 2-second dispatcher tick running for the rest of the session — behind another tab, minimised,
+    /// and closed to the tray. See <see cref="ShouldPoll"/> for why visibility alone is not the
+    /// condition.
+    /// </remarks>
+    [ObservableProperty] private bool _isActive;
+
     public StandbyMemoryViewModel(StandbyMemoryService service, StandbyPreferenceService? preferences = null)
     {
         _service = service;
@@ -61,7 +73,10 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
                 Interval = TimeSpan.FromSeconds(2),
             };
             _timer.Tick += (_, _) => Tick();
-            _timer.Start();
+            // NOT started here. The tab is constructed on first open, and MainWindowViewModel sets
+            // IsActive immediately after, which starts it — so the visible case is unaffected while a
+            // hidden tab no longer polls forever.
+            SyncTimer();
         }
     }
 
@@ -69,9 +84,48 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
     public static bool ShouldAutoPurge(double availableMb, double thresholdMb)
         => thresholdMb > 0 && availableMb > 0 && availableMb < thresholdMb;
 
+    /// <summary>
+    /// Pure: should the 2-second poll be running? True while the tab is visible, OR while auto-purge is
+    /// armed and could actually act.
+    /// </summary>
+    /// <remarks>
+    /// Visibility alone is the WRONG condition here, unlike the other polling tabs. Auto-purge is
+    /// deliberately set-and-forget — the user arms it, navigates away, and expects it to keep watching
+    /// free memory — so gating purely on IsActive would silently turn the feature off the moment the tab
+    /// lost focus, which is a worse bug than the one being fixed.
+    /// <para>Elevation is part of the condition because a purge needs administrator: without it the tick
+    /// could never do anything but re-read memory into a hidden tab, which is exactly the waste this
+    /// change removes.</para>
+    /// </remarks>
+    internal static bool ShouldPoll(bool isActive, bool autoPurgeEnabled, bool isElevated)
+        => isActive || (autoPurgeEnabled && isElevated);
+
+    /// <summary>Starts or stops the poll to match <see cref="ShouldPoll"/>.</summary>
+    private void SyncTimer()
+    {
+        if (_timer is null) return;
+
+        if (ShouldPoll(IsActive, AutoPurgeEnabled, IsElevated))
+        {
+            if (!_timer.IsEnabled) _timer.Start();
+        }
+        else if (_timer.IsEnabled)
+        {
+            _timer.Stop();
+        }
+    }
+
+    partial void OnIsActiveChanged(bool value) => SyncTimer();
+
     // Persist on change rather than on close: the app can be closed to the tray or killed, and a
     // setting the user visibly toggled should survive either.
-    partial void OnAutoPurgeEnabledChanged(bool value) => SavePreferences();
+    partial void OnAutoPurgeEnabledChanged(bool value)
+    {
+        SavePreferences();
+        // Arming auto-purge has to be able to START the poll, and disarming it while the tab is hidden
+        // has to STOP it — otherwise the "set and forget" path would either never watch or never stop.
+        SyncTimer();
+    }
 
     partial void OnThresholdMbChanged(double value) => SavePreferences();
 

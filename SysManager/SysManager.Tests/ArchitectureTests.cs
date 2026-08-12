@@ -519,6 +519,70 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\s+", RegexOptions.Compiled)]
     private static partial Regex WhitespaceRun();
 
+    /// <summary>
+    /// Every view model that declares an <c>IsActive</c> flag must be handled by
+    /// <c>MainWindowViewModel.SetActive</c>, or its poll is never gated by visibility.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>SetActive</c> is a hand-maintained switch, so a new polling tab is opted OUT of the gate by
+    /// default and nothing about the omission looks wrong — no compiler error, no failing test, and the
+    /// tab still works. That is exactly how the Standby List Cleaner ended up running a 2-second
+    /// dispatcher tick for the whole session after being opened once: behind another tab, minimised, and
+    /// closed to the tray, with an unsupervised privileged purge reachable from it.
+    /// </para>
+    /// <para>
+    /// Reflection rather than a source scan: declaring <c>IsActive</c> is a compile-time fact about the
+    /// type, so the assembly is the more reliable source. The switch arms are read from source, because
+    /// a <c>switch</c> pattern arm is not visible through reflection.
+    /// </para>
+    /// <para>
+    /// Deliberately keyed on <c>IsActive</c> and not on "owns a timer": <c>IsActive</c> IS the gate
+    /// contract. A view model that polls without declaring it would slip past this — which is why the
+    /// floor below asserts the check found the flags it expects, so a rename cannot make it vacuous.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EveryViewModelWithAnIsActiveFlag_IsHandledBySetActive()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+
+        // Only the SetActive body counts. Searching the whole file would let an unrelated mention of a
+        // view model's name pass the check — the same cross-type pooling trap the command-reachability
+        // guard has to work around.
+        var start = source.IndexOf("internal static void SetActive(", StringComparison.Ordinal);
+        Assert.True(start >= 0, "SetActive not found — this check is not reading what it thinks it is.");
+        var end = source.IndexOf("\n    }", start, StringComparison.Ordinal);
+        Assert.True(end > start, "Could not delimit the SetActive body.");
+        var body = source[start..end];
+
+        var gated = typeof(SysManager.ViewModels.MainWindowViewModel).Assembly
+            .GetTypes()
+            .Where(t => t.Namespace == "SysManager.ViewModels"
+                     && t.Name.EndsWith("ViewModel", StringComparison.Ordinal)
+                     && t.GetProperty("IsActive") is not null)
+            // Row-level view models are not tabs, so the shell never navigates to them.
+            .Where(t => t.Name != "AudioSessionRowViewModel")
+            .ToList();
+
+        // Vacuity floor: if a rename made the reflection find nothing, every assertion below would pass
+        // while checking nothing at all.
+        Assert.True(gated.Count >= 5,
+            $"Expected at least 5 view models with an IsActive flag, found {gated.Count} — " +
+            "the reflection filter is probably no longer matching.");
+
+        var missing = gated
+            .Where(t => !body.Contains(t.Name, StringComparison.Ordinal))
+            .Select(t => t.Name)
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            "These view models declare an IsActive flag but MainWindowViewModel.SetActive never sets " +
+            "it, so their poll keeps running while the tab is hidden. Add a case arm:\n  " +
+            string.Join("\n  ", missing));
+    }
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

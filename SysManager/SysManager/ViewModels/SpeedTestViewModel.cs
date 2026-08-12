@@ -23,6 +23,12 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
 
     [ObservableProperty] private SpeedTestResult? _httpResult;
     [ObservableProperty] private SpeedTestResult? _ooklaResult;
+
+    // The plain-English reading of each engine's latest result. The tab used to show only the raw Mbps,
+    // which answers "what is my speed" and not the question people actually open it with — "is that
+    // good". One per engine, because each has its own result card and its own history to compare against.
+    [ObservableProperty] private SpeedVerdict? _httpVerdict;
+    [ObservableProperty] private SpeedVerdict? _ooklaVerdict;
     [ObservableProperty] private string _selectedOoklaServer = "Auto (nearest)";
 
     public string[] OoklaServerOptions { get; } = {
@@ -99,6 +105,11 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             Log.Information("HTTP speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 HttpResult.DownloadMbps, HttpResult.UploadMbps);
 
+            // Read the verdict BEFORE the history insert below: HttpHistory[0] is the previous run only
+            // until this one is prepended. Same-engine history, so the comparison never puts an HTTP
+            // result next to an Ookla one — the two engines measure differently.
+            HttpVerdict = SpeedVerdictAnalyzer.Analyze(HttpResult, HttpHistory.FirstOrDefault());
+
             // Persist result to history.
             await _history.SaveAsync(HttpResult);
             HttpHistory.Insert(0, HttpResult);
@@ -139,6 +150,9 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             OoklaStatus = "Ookla done";
             Log.Information("Ookla speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 OoklaResult.DownloadMbps, OoklaResult.UploadMbps);
+
+            // Before the insert, for the same reason as the HTTP path above.
+            OoklaVerdict = SpeedVerdictAnalyzer.Analyze(OoklaResult, OoklaHistory.FirstOrDefault());
 
             // Persist result to history.
             await _history.SaveAsync(OoklaResult);

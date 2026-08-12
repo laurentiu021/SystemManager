@@ -169,6 +169,11 @@ Key services:
   log needs elevation, and swallowing that made the UI report "0 events". Reset at
   the start of every query so a past refusal cannot outlive it.
 - `HealthAnalyzer` — raw SMART / ping data into verdict pills.
+- `SpeedVerdictAnalyzer` — a speed-test result into a plain-English verdict
+  ("Fast connection", what that allows) plus a comparison against the previous
+  run on the same engine. Pure and static like `HealthAnalyzer`, so the
+  judgement is unit-testable without a network; deliberately never emits the
+  failure colour, because a slow plan is not a fault.
 - `SystemInfoService` — OS / CPU / RAM / uptime snapshot.
 - `BiosService` — read-only BIOS/firmware + motherboard info (Win32_BIOS,
   Win32_BaseBoard, UEFI/Secure-Boot registry) plus a pure manufacturer

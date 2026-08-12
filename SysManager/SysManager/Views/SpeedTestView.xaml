@@ -3,6 +3,39 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <UserControl.Resources>
+        <!-- The verdict callout, defined once and used by both engine cards. Two hand-written copies of
+             one thing is how the elevation banner ended up saying the opposite on one tab out of thirty;
+             the ContentControls below bind a SpeedVerdict and this template renders it.
+             Styling follows the Ping tab's health verdict (PingView.xaml:48-65) — colour dot, SemiBold
+             headline in the verdict's own colour, secondary detail line — because that tab answers the
+             same kind of question and the two should not look like unrelated features. -->
+        <DataTemplate x:Key="SpeedVerdictTemplate">
+            <Border Style="{StaticResource CardInner}" Margin="0,12,0,0" Padding="12,10"
+                    BorderBrush="{Binding ColorKey, Converter={StaticResource HexBrush}}"
+                    BorderThickness="1">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center"
+                                 Fill="{Binding ColorKey, Converter={StaticResource HexBrush}}"/>
+                        <TextBlock Text="{Binding Headline}" FontSize="14" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Foreground="{Binding ColorKey, Converter={StaticResource HexBrush}}"/>
+                    </StackPanel>
+                    <!-- Stacked vertically rather than beside the dot: a horizontal StackPanel measures
+                         children with infinite width, so TextWrapping inside one is inert and long copy is
+                         clipped instead of wrapped (#1807). These two lines are the whole point of the
+                         callout, so they must not be the ones that get cut. -->
+                    <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextSecondary}"
+                               FontSize="12" TextWrapping="Wrap" Margin="18,6,0,0"/>
+                    <TextBlock Text="{Binding Comparison}" Style="{StaticResource Caption}"
+                               TextWrapping="Wrap" Margin="18,4,0,0"
+                               Visibility="{Binding Comparison, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -51,6 +84,11 @@
                             <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding OoklaResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Success}"/></StackPanel></Border>
                             <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding OoklaResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/></StackPanel></Border>
                         </Grid>
+                        <!-- What the numbers above mean. Placed right under them, because the verdict is
+                             the answer and the Mbps are the working. -->
+                        <ContentControl Content="{Binding OoklaVerdict}"
+                                        ContentTemplate="{StaticResource SpeedVerdictTemplate}"
+                                        Visibility="{Binding OoklaVerdict, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding OoklaResult.Server}" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}"/>
                         <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding OoklaStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
@@ -83,6 +121,10 @@
                             <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding HttpResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Success}"/></StackPanel></Border>
                             <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding HttpResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/></StackPanel></Border>
                         </Grid>
+                        <!-- Same template as the Ookla card — see UserControl.Resources. -->
+                        <ContentControl Content="{Binding HttpVerdict}"
+                                        ContentTemplate="{StaticResource SpeedVerdictTemplate}"
+                                        Visibility="{Binding HttpVerdict, Converter={StaticResource FlexVis}}"/>
                         <ProgressBar AutomationProperties.Name="Progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding HttpStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
                         <!-- Shares the single EstimatedTime property with the Ookla card above; only one

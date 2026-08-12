@@ -351,12 +351,93 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The gold elevation banner means one thing and only one thing: you are running as administrator,
+    /// so MORE is available. Every tab that shows it must say so.
+    /// </summary>
+    /// <remarks>
+    /// <para>The project's UI contract reserves the golden/amber treatment for elevation-unlocks-more,
+    /// with purple for primary actions and neutral for everything else. 30 views render this banner, and
+    /// they are hand-written copies of each other, so the convention is held together by nothing but
+    /// whoever wrote the last one.</para>
+    /// <para>It had already broken once. The Uninstaller tab — the one place where elevation DISABLES a
+    /// feature, because each app's own uninstaller wants to raise its own UAC prompt — used the identical
+    /// gold treatment to say "Uninstall is disabled in administrator sessions. Reopen SysManager normally
+    /// to continue." So the colour that had taught the user "press this, get more" on 29 other tabs was,
+    /// on that one, the colour of a dead end, attached to an instruction the app offers no control for
+    /// (there is no de-elevation path — <c>AdminHelper.RelaunchAsAdmin</c> goes one way only). That tab
+    /// now uses the neutral treatment; this test is why it cannot quietly go back.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryGoldElevationBanner_PromisesMoreAccess()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var offenders = new List<string>();
+        var banners = 0;
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            foreach (var message in GoldElevatedBannerMessages(File.ReadAllText(file)))
+            {
+                banners++;
+                if (!message.StartsWith("Running as administrator", StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(file)}: \"{message}\"");
+            }
+        }
+
+        // Guards the guard: if the parse stops finding banners, every assertion below passes vacuously.
+        Assert.True(banners >= 25,
+            $"Only {banners} gold elevation banners parsed — the check is not reading the markup it thinks it is.");
+
+        Assert.True(offenders.Count == 0,
+            "These tabs use the gold elevation banner — which everywhere else in the app means \"you are " +
+            "elevated, so you can now do more\" — to say something else. Rewrite the message to start " +
+            "\"Running as administrator — …\", or, if elevation genuinely does not unlock more on that tab, " +
+            "use the neutral Surface2/Border1 treatment instead, so the colour does not contradict the " +
+            "words:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Messages inside a Border that is (a) shown WHEN elevated and (b) painted with the gold
+    /// WarningBgSubtle. Parsed rather than grepped: the not-elevated banner sits in the same
+    /// <c>Grid.Row</c> in every one of these views, so a file-wide text search would read the wrong one.
+    /// </summary>
+    private static List<string> GoldElevatedBannerMessages(string xamlText)
+    {
+        var found = new List<string>();
+        System.Xml.Linq.XDocument doc;
+        try { doc = System.Xml.Linq.XDocument.Parse(xamlText); }
+        catch (System.Xml.XmlException) { return found; }
+
+        foreach (var border in doc.Descendants().Where(e => e.Name.LocalName == "Border"))
+        {
+            var visibility = (string?)border.Attribute("Visibility") ?? "";
+            if (!visibility.Contains("IsElevated", StringComparison.Ordinal)) continue;
+            // Inverse == shown when NOT elevated, which is the other banner in the same slot.
+            if (visibility.Contains("Inverse", StringComparison.Ordinal)) continue;
+            if (!((string?)border.Attribute("Background") ?? "").Contains("WarningBgSubtle", StringComparison.Ordinal)) continue;
+
+            foreach (var block in border.Descendants().Where(e => e.Name.LocalName == "TextBlock"))
+            {
+                var text = (string?)block.Attribute("Text") ?? "";
+                // Skip the icon glyph (one private-use codepoint) and bound values.
+                if (text.Length < 20 || text.StartsWith('{')) continue;
+                found.Add(WhitespaceRun().Replace(text, " ").Trim());
+            }
+        }
+        return found;
+    }
+
+    /// <summary>
     /// A method DECLARATION rather than a call — `private void Foo()`, `private async Task FooAsync(`,
     /// `internal Task Foo(`. Used to drop declaration lines before searching for call sites, so a
     /// method is never counted as its own caller.
     /// </summary>
     [GeneratedRegex(@"^\s*(private|internal|public|protected)\b.*\b\w+\s*\(", RegexOptions.Compiled)]
     private static partial Regex DeclarationLine();
+
+    /// <summary>Collapses the line breaks XAML allows inside an attribute value.</summary>
+    [GeneratedRegex(@"\s+", RegexOptions.Compiled)]
+    private static partial Regex WhitespaceRun();
 
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()

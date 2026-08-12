@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.11] - 2026-08-12
+
+The Uninstaller tab no longer looks broken when you open it after granting administrator access
+somewhere else — it now explains, in the neutral colour it should always have used, why uninstalling
+waits for a normal window.
+
+### Fixed
+- **The Uninstaller told administrators to "reopen SysManager normally" with no way to do it, in the colour that everywhere else means "you can now do more".** Uninstalling is deliberately turned off while SysManager runs as administrator, so each app can raise its own permission prompt rather than inheriting ours. But this tab announced that in the same gold banner the other 30 tabs use to say "Running as administrator — you can now …", and the message was "Uninstall is disabled in administrator sessions. Reopen SysManager normally to continue." So after pressing the gold "Run as administrator" button on Quick Cleanup, you arrived here to a reassuring gold bar, a greyed-out Uninstall button, no explanation of why, and an instruction the app offers no button for. The banner is now the same neutral grey as the one directly above it, and says what is happening and why: uninstalling is off while running as administrator so each app can show you its own permission prompt, then close and reopen normally to uninstall. The restriction itself is unchanged — it is a safety property, not a bug.
+
+---
+
 ## [1.61.10] - 2026-08-11
 
 The Services tab can now actually filter by the things it always claimed to — including the gaming

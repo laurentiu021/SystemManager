@@ -41,19 +41,29 @@
             </DockPanel>
         </Border>
 
-        <!-- Elevation banner: elevated -->
-        <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
-                CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
+        <!-- Elevation banner: elevated.
+             Deliberately NOT the gold WarningBgSubtle treatment the other 30 tabs use here. Everywhere
+             else in the app, gold in this slot means "you are elevated, so you can now do more" — this
+             is the one tab where elevation does the opposite, and dressing a restriction in the colour
+             of a reward is what made the tab read as broken rather than deliberately gated. It shares
+             the neutral Surface2/Border1 geometry of the not-elevated banner directly above instead, so
+             the slot does not change appearance when the user elevates on another tab and arrives here. -->
+        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <Grid>
-                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
-                        Margin="-12,-8,0,-8"/>
-                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center" Foreground="{DynamicResource WarningText}"/>
-                    <TextBlock Text="Uninstall is disabled in administrator sessions. Reopen SysManager normally to continue."
-                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Grid>
+            <!-- DockPanel, not the sibling banners' horizontal StackPanel: this message is the longest in
+                 the app, and a StackPanel hands its children infinite width along its orientation, so
+                 TextWrapping there is inert and the tail is simply clipped. Docking the glyph left leaves
+                 the message as LastChildFill, which gives it a real width to wrap inside — it needs about
+                 two lines at the 960px minimum window. -->
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Top"
+                           Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock Text="Uninstalling is turned off while SysManager runs as administrator, so each app can show you its own permission prompt. Close SysManager and open it normally to uninstall."
+                           Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"
+                           TextWrapping="Wrap"/>
+            </DockPanel>
         </Border>
 
         <!-- Toolbar -->

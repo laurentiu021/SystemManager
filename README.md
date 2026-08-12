@@ -380,8 +380,11 @@ a confirmation before it runs:
 ### Startup Manager
 - Lists every program that runs at Windows boot (Registry Run / RunOnce keys)
 - Toggle on/off without deleting the original entry (same mechanism as Task Manager)
-- Sort by name, publisher, or status via clickable column headers
-- Shows name, publisher, command, and enabled/disabled status
+- Sort by name, publisher, safety, or status via clickable column headers
+- Plain-language description for recognised programs (from the built-in database) instead
+  of a raw command line, plus a Safety chip — Windows / Known app / Not recognised — so you
+  can tell what an entry is before deciding whether to turn it off
+- Shows name, publisher, and enabled/disabled status; the full command path is on hover
 - Open file location in Explorer
 
 ### Windows Features

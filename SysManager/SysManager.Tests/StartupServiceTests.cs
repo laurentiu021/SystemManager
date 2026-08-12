@@ -176,4 +176,82 @@ public class StartupServiceTests
 
         Assert.Equal(StartupSource.StartupFolder, entry.Source);
     }
+
+    // ── ExecutableNameFromCommand (pure — the exe-name parser feeding the description lookup) ──
+
+    [Theory]
+    // Quoted path with arguments — the common Run-key shape.
+    [InlineData("\"C:\\Program Files\\OneDrive\\OneDrive.exe\" /background", "OneDrive")]
+    // Unquoted path with a switch.
+    [InlineData(@"C:\Windows\system32\SecurityHealthSystray.exe /run", "SecurityHealthSystray")]
+    // Bare path, no arguments.
+    [InlineData(@"C:\Program Files\Spotify\Spotify.exe", "Spotify")]
+    // A resolved shortcut target with spaces in the folder but no arguments.
+    [InlineData(@"C:\Program Files (x86)\Steam\steam.exe", "steam")]
+    // Quoted path, no arguments.
+    [InlineData("\"C:\\Program Files\\NVIDIA Corporation\\NvContainer\\nvcontainer.exe\"", "nvcontainer")]
+    // Already just a name.
+    [InlineData("Discord.exe", "Discord")]
+    public void ExecutableNameFromCommand_ExtractsTheBareExeName(string command, string expected)
+        => Assert.Equal(expected, StartupService.ExecutableNameFromCommand(command));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ExecutableNameFromCommand_BlankCommand_ReturnsEmpty(string command)
+        => Assert.Equal("", StartupService.ExecutableNameFromCommand(command));
+
+    [Fact]
+    public void ExecutableNameFromCommand_IllegalPathChars_ReturnsEmptyRatherThanThrow()
+    {
+        // A rundll32 entry-point spec or similar can carry characters that are not a valid path. The
+        // parser must degrade to "no match" (empty), never throw into the scan.
+        var result = StartupService.ExecutableNameFromCommand("rundll32.exe shell32.dll,Control_RunDLL \"x\"|<>");
+        // Whatever it returns, it must not have thrown; rundll32 is the leading token here.
+        Assert.Equal("rundll32", result);
+    }
+
+    // ── EnrichWithDescriptions (pure over the finished list — the actual feature) ──
+
+    [Fact]
+    public void EnrichWithDescriptions_KnownProgram_GetsDescriptionAndSafety()
+    {
+        // OneDrive is in the shipped database; a real Run-key command shape drives the lookup.
+        var entry = new StartupEntry { Name = "OneDrive", Command = "\"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe\" /background" };
+
+        StartupService.EnrichWithDescriptions([entry]);
+
+        Assert.NotEqual("", entry.Description);
+        // The safety is a ProcessSafety name, so it binds to the ProcessSafety* chip converters.
+        Assert.Contains(entry.Safety, new[] { "System", "Trusted", "Unknown" });
+    }
+
+    [Fact]
+    public void EnrichWithDescriptions_UnknownProgram_LeavesBothEmpty()
+    {
+        // The stated risk: never assert a safety on a guess. An executable the database does not know
+        // must come back with both fields empty, so the view shows no chip and falls back to publisher.
+        var entry = new StartupEntry
+        {
+            Name = "TotallyMadeUpVendorWidget",
+            Command = @"C:\Vendor\TotallyMadeUpVendorWidget9000.exe",
+            Publisher = "Made Up Vendor Inc.",
+        };
+
+        StartupService.EnrichWithDescriptions([entry]);
+
+        Assert.Equal("", entry.Description);
+        Assert.Equal("", entry.Safety);
+    }
+
+    [Fact]
+    public void EnrichWithDescriptions_BlankCommand_DoesNotThrowOrPopulate()
+    {
+        var entry = new StartupEntry { Name = "Weird", Command = "" };
+
+        StartupService.EnrichWithDescriptions([entry]);
+
+        Assert.Equal("", entry.Description);
+        Assert.Equal("", entry.Safety);
+    }
 }

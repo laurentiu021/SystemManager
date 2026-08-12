@@ -75,7 +75,80 @@ public sealed class StartupService
         // Check StartupApproved to determine enabled/disabled state
         ApplyApprovedState(results);
 
+        // Attach the plain-language description + provenance the app already ships in
+        // ProcessDescriptions.json. Done once, over the finished list, rather than at each of the three
+        // construction sites, so every source (registry, startup folder, scheduled task) is enriched the
+        // same way and there is one place to test.
+        EnrichWithDescriptions(results);
+
         return results;
+    }
+
+    /// <summary>
+    /// Fills <see cref="StartupEntry.Description"/> and <see cref="StartupEntry.Safety"/> from the
+    /// built-in process database, keyed on the executable's base name. An entry the database does not
+    /// know is left with both empty — the view falls back to the publisher, and NO safety chip renders,
+    /// so the tab never asserts "safe" on a guess (the report's stated risk).
+    /// </summary>
+    internal static void EnrichWithDescriptions(IReadOnlyList<StartupEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            var exe = ExecutableNameFromCommand(entry.Command);
+            if (exe.Length == 0) continue;
+
+            var info = ProcessDescriptionService.Instance.Lookup(exe);
+            if (info is null) continue;
+
+            entry.Description = info.Description;
+            entry.Safety = info.Safety.ToString();
+        }
+    }
+
+    /// <summary>
+    /// The bare executable name (no path, no ".exe", no arguments) from a startup command line, or an
+    /// empty string when none can be read. Handles the three shapes the scanners produce: a quoted path
+    /// with arguments (<c>"C:\Program Files\App\app.exe" --flag</c>), an unquoted path with arguments
+    /// (<c>C:\Windows\system32\app.exe /run</c>), and a bare name already resolved from a shortcut.
+    /// </summary>
+    /// <remarks>
+    /// Pure and static so the parsing — which is the fiddly part — is unit-testable without touching the
+    /// registry. Kept conservative: it returns the token the database is keyed on, and
+    /// <see cref="ProcessDescriptionService.Lookup"/> handles the case-insensitive match and the ".exe"
+    /// strip, so a miss here costs only the enrichment, never a wrong description.
+    /// </remarks>
+    internal static string ExecutableNameFromCommand(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return "";
+
+        var text = command.Trim();
+        string path;
+
+        if (text.StartsWith('"'))
+        {
+            // Quoted executable: everything up to the closing quote is the path, args follow.
+            var end = text.IndexOf('"', 1);
+            path = end > 1 ? text[1..end] : text.Trim('"');
+        }
+        else
+        {
+            // Unquoted: the path is the run up to the first space. A space inside an unquoted path is
+            // ambiguous and rare for autostart entries; taking the first token matches how Windows itself
+            // resolves an unquoted command, and a wrong split just means no database hit.
+            var space = text.IndexOf(' ');
+            path = space > 0 ? text[..space] : text;
+        }
+
+        try
+        {
+            return System.IO.Path.GetFileNameWithoutExtension(path.Trim());
+        }
+        catch (ArgumentException)
+        {
+            // Illegal path characters (e.g. a rundll32 entry point spec) — not something the database
+            // keys on anyway.
+            return "";
+        }
     }
 
     private static void ReadStartupFolder(string folderPath, string locationLabel, bool isCommon, List<StartupEntry> results)

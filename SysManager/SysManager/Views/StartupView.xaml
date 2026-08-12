@@ -112,9 +112,27 @@
                                            RenderOptions.BitmapScalingMode="HighQuality"/>
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                                        <TextBlock Text="{Binding Command}" FontSize="11"
-                                                   Foreground="{DynamicResource TextMuted}"
-                                                   TextTrimming="CharacterEllipsis" MaxWidth="500"/>
+                                        <!-- Prefer the plain-language description from the built-in
+                                             database; it says what the program IS, which is what the
+                                             persona needs to judge whether to turn it off. Fall back to
+                                             the raw command line only when the program is unrecognised —
+                                             a path still helps a power user place an unknown entry, and
+                                             is better than a blank second line. The full path is on the
+                                             tooltip either way. -->
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="500"
+                                                   ToolTip="{Binding Command}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{Binding Description}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Description}" Value="">
+                                                            <Setter Property="Text" Value="{Binding Command}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                 </StackPanel>
                             </DataTemplate>
@@ -134,6 +152,33 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
+
+                    <!-- Safety/provenance from the built-in database. Chip structure matches the Process
+                         Manager tab's Safety column (ProcessManagerView.xaml) and uses the same
+                         ProcessSafety* converters, so "is this Windows, or something I installed?" is
+                         answered the same way across the Startup/Process/Services trio. The whole chip
+                         collapses when Safety is empty — an entry the database does not recognise gets no
+                         chip rather than a colour it has not earned. -->
+                    <DataGridTemplateColumn Header="Safety" Width="120" MinWidth="100" SortMemberPath="Safety">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="8" Padding="6,3"
+                                        Background="{Binding Safety, Converter={StaticResource ProcSafetyBg}}"
+                                        BorderBrush="{Binding Safety, Converter={StaticResource ProcSafetyBg}}"
+                                        BorderThickness="1" HorizontalAlignment="Left"
+                                        ToolTip="{Binding Safety, Converter={StaticResource ProcSafetyTip}}"
+                                        Visibility="{Binding Safety, Converter={StaticResource FlexVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                 Fill="{Binding Safety, Converter={StaticResource ProcSafetyBrush}}"/>
+                                        <TextBlock Text="{Binding Safety, Converter={StaticResource ProcSafetyText}}"
+                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Foreground="{Binding Safety, Converter={StaticResource ProcSafetyBrush}}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <DataGridTemplateColumn Header="Status" Width="100" MinWidth="90" SortMemberPath="StatusText">
                         <DataGridTemplateColumn.CellTemplate>

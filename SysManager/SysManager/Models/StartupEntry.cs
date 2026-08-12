@@ -23,6 +23,22 @@ public sealed partial class StartupEntry : ObservableObject
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private ImageSource? _icon;
 
+    /// <summary>
+    /// Plain-language description of the program from the built-in database
+    /// (<see cref="Services.ProcessDescriptionService"/>), or empty when the program is not recognised.
+    /// The tab used to show only the raw command line, which tells the target persona nothing about
+    /// whether an entry is safe to turn off.
+    /// </summary>
+    [ObservableProperty] private string _description = "";
+
+    /// <summary>
+    /// Provenance from the built-in database as a <see cref="Services.ProcessSafety"/> name
+    /// ("System" / "Trusted" / "Unknown"), or empty when the program is not recognised. A string, not
+    /// the enum, so it binds to the same ProcessSafety* chip converters the Process Manager tab uses —
+    /// and so an unrecognised entry renders NOTHING rather than defaulting to a colour it has not earned.
+    /// </summary>
+    [ObservableProperty] private string _safety = "";
+
     /// <summary>Registry key path (for registry-based entries).</summary>
     public string RegistryKey { get; init; } = "";
 

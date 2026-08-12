@@ -156,4 +156,62 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
         Assert.Equal(0, vm.SampleCount);
         Assert.Contains("No history yet", vm.StatusMessage);
     }
+
+    // ── Dispose during an in-flight reload ──────────────────────────────────
+    // ReloadAsync awaits twice (the reload gate, then the history load) and then calls ReplaceWith on
+    // five buffers LiveCharts observes — while Dispose releases every chart series, axis paint, the
+    // SkiaSharp typeface AND the gate itself. Closing the window mid-reload therefore had three ways to
+    // fail: a wait on a disposed semaphore, a Release on a disposed semaphore out of a finally block,
+    // and a repaint through disposed native handles. Reachable from all three entry points (the tab's
+    // own init, a range switch, the Refresh button). Same class as the crash fixed in
+    // BandwidthMonitorViewModel (v1.63.1).
+
+    [Fact]
+    public async Task DisposeDuringAnInFlightReload_DoesNotThrow()
+    {
+        var now = DateTime.Now;
+        using var service = SeededService(
+            new ResourceSample(now.AddMinutes(-20), 10, 20, 30, 40, 50),
+            new ResourceSample(now.AddMinutes(-10), 15, 25, 35, 45, 55));
+        var vm = new ResourceHistoryViewModel(service);
+        await vm.InitializationComplete;
+
+        // Start a reload and dispose while it is still in flight. Not awaited first, deliberately: the
+        // point is for teardown to land between the awaits.
+        var reload = vm.ReloadCommand.ExecuteAsync(null);
+        vm.Dispose();
+
+        // Must complete without throwing — an ObjectDisposedException out of the finally, or a repaint
+        // through a disposed paint, is exactly what the guards prevent.
+        await reload;
+    }
+
+    [Fact]
+    public async Task ReloadAfterDispose_IsANoOpRatherThanAThrow()
+    {
+        // The range ComboBox and the Refresh command can both fire during teardown, so a reload STARTED
+        // after Dispose must bail rather than enter the disposed gate.
+        var now = DateTime.Now;
+        using var service = SeededService(new ResourceSample(now.AddMinutes(-5), 10, 20, 30, 40, 50));
+        var vm = new ResourceHistoryViewModel(service);
+        await vm.InitializationComplete;
+
+        vm.Dispose();
+
+        await vm.ReloadCommand.ExecuteAsync(null);   // must not throw
+        Assert.False(vm.IsBusy);                     // and must not leave the progress bar stuck on
+    }
+
+    [Fact]
+    public async Task DoubleDispose_IsHarmless()
+    {
+        // MainWindowViewModel disposes tabs on shutdown, and a tab can also be disposed by its own
+        // teardown path — the second call must not throw on the already-disposed gate or paints.
+        using var service = SeededService();
+        var vm = new ResourceHistoryViewModel(service);
+        await vm.InitializationComplete;
+
+        vm.Dispose();
+        vm.Dispose();
+    }
 }

@@ -82,6 +82,16 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     // access", which is how CI caught the identical race on the bandwidth chart.
     private readonly SemaphoreSlim _reloadGate = new(1, 1);
 
+    // Set by Dispose so the async reload can tell that the tab was torn down while it was awaiting.
+    // ReloadAsync awaits twice (the gate, then the history load) and afterwards calls ReplaceWith on
+    // buffers LiveCharts observes — while Dispose releases every chart series, axis paint, SkiaSharp
+    // typeface AND this gate. Without this flag the continuation repaints through disposed native
+    // handles, or the gate wait itself throws ObjectDisposedException. Same guard as
+    // BandwidthMonitorViewModel's post-await check; that view model uses its poll CTS for this, and
+    // this one has no CTS, so the state is explicit. Only ever written on the UI thread (Dispose),
+    // only ever read on the UI thread (after ConfigureAwait(true)), so no interlocking is needed.
+    private bool _disposed;
+
     public ResourceHistoryViewModel(ResourceHistoryService service)
     {
         _service = service;
@@ -119,14 +129,36 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     [RelayCommand]
     private async Task ReloadAsync()
     {
+        // Nothing to reload into once the tab is gone — and the gate below is disposed by Dispose,
+        // so entering it after teardown throws ObjectDisposedException instead of doing work.
+        if (_disposed) return;
+
         // A gate rather than a lock: this is an async path so it must not block the UI thread, and
         // dropping nothing is important here — unlike a range switch, each caller may be asking for
         // a different range, so every request runs, just strictly one at a time.
-        await _reloadGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            await _reloadGate.WaitAsync().ConfigureAwait(true);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposed between the check above and the wait: the window closed mid-reload. Nothing to
+            // release, because the wait never succeeded.
+            return;
+        }
+
         IsBusy = true;
         try
         {
             _loaded = await _service.LoadAsync(SelectedRange.Range);
+
+            // Re-check AFTER the load. Dispose releases every chart series, axis paint and SkiaSharp
+            // typeface, so the ReplaceWith calls below would repaint through disposed native handles on
+            // a torn-down view model. Reachable in normal use: this method runs from the tab's own init,
+            // from a range switch on the ComboBox, and from the Refresh button — closing the window
+            // during any of them lands here. Same post-await guard as BandwidthMonitorViewModel's.
+            if (_disposed) return;
+
             var points = ResourceHistoryService.Downsample(_loaded, MaxChartPoints);
 
             _cpuBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.CpuPercent)));
@@ -148,7 +180,14 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
-            _reloadGate.Release();
+            // Release only if the gate is still alive: Dispose can land while the load is in flight, and
+            // releasing a disposed SemaphoreSlim throws — out of a finally block, which would replace a
+            // clean teardown with an unhandled exception.
+            if (!_disposed)
+            {
+                try { _reloadGate.Release(); }
+                catch (ObjectDisposedException) { /* disposed mid-reload; nothing left to release */ }
+            }
         }
     }
 
@@ -257,6 +296,10 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     {
         if (disposing)
         {
+            // FIRST, before anything is released: an in-flight ReloadAsync re-reads this after each of
+            // its awaits and bails, so it cannot touch a series or paint that the lines below dispose.
+            _disposed = true;
+
             ThemeService.Instance.ThemeChanged -= ApplyChartTheme;
             foreach (var s in UsageSeries) DisposeSeries(s);
             foreach (var s in TemperatureSeries) DisposeSeries(s);

@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.61.10] - 2026-08-11
+
+The Services tab can now actually filter by the things it always claimed to — including the gaming
+recommendations, which are the reason the list is more useful than the one in Windows.
+
+### Fixed
+- **Five of the Services tab's nine filters had no button.** Filtering by status (Running / Stopped) and by gaming recommendation (Safe to disable / Keep enabled / Advanced) was fully written and working, but nothing on screen could select it — the only chips were Safe, Caution, Critical and All, so those five could be reached only from a debugger. The README promised both anyway: "filter by status (Running/Stopped) … gaming recommendation". All nine are now chips, grouped under Safety / Status / For gaming so the two different meanings do not get confused: safety answers "will turning this off break Windows", the gaming recommendation answers "is it worth turning off for games". Each chip shows how many services it matches, so you can tell before pressing it, and the row reflows on a narrow window instead of clipping.
+- **The "N services (M running)" line could disagree with the list under it.** Those two numbers were recalculated only by a full refresh, while everything else on the tab recalculated on every search keystroke and every filter press. So after typing in the search box, the header still described the previous scan. Every count on the tab is now worked out in one place, at the same moment.
+
+---
+
 ## [1.61.9] - 2026-08-11
 
 The Bandwidth Monitor no longer makes the window stutter while it is open.

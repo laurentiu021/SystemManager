@@ -35,6 +35,14 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [ObservableProperty] private int _cautionCount;
     [ObservableProperty] private int _criticalCount;
 
+    // Counts for the filters that had no chip. Each chip shows its own count for the same reason the
+    // safety chips do: "Safe to disable (12)" tells the user whether the filter is worth pressing before
+    // they press it, and a count of 0 explains an empty list without them having to wonder.
+    [ObservableProperty] private int _stoppedCount;
+    [ObservableProperty] private int _safeToDisableCount;
+    [ObservableProperty] private int _keepEnabledCount;
+    [ObservableProperty] private int _advancedCount;
+
     /// <summary>
     /// How many rows the user has marked. Drives the visibility of the "Clear marks" button — with no
     /// marks there is nothing to clear, and a permanently visible dead button is the kind of control
@@ -42,11 +50,20 @@ public sealed partial class ServicesViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty] private int _highlightedCount;
 
-    // "Safe to disable" / "Advanced" filter on the GAMING RECOMMENDATION, which is a different
-    // dataset from the Safe/Caution/Critical SAFETY level above it: safety says "will this break
-    // Windows", the recommendation says "is this worth turning off for games, and why". Both were
-    // computed; only the safety level was filterable, so README's "filter by recommendation level"
-    // claim was untrue.
+    /// <summary>
+    /// Every value <see cref="ApplyFilter"/> understands, in the order the chips appear.
+    /// </summary>
+    /// <remarks>
+    /// <para>"Safe to disable" / "Keep enabled" / "Advanced" filter on the GAMING RECOMMENDATION, which
+    /// is a different dataset from the Safe/Caution/Critical SAFETY level: safety answers "will this
+    /// break Windows", the recommendation answers "is this worth turning off for games, and why".</para>
+    /// <para>This array previously existed with nothing bound to it, and its comment claimed the
+    /// README's "filter by recommendation level" promise had been made true — while five of the nine
+    /// values (Running, Stopped, and all three recommendations) had no control at all, so they could
+    /// only be reached from a debugger. The chips now cover all nine. The array is still not bound to a
+    /// ComboBox: it is the single list the filter tests enumerate, so a value added here without a chip
+    /// fails <c>EveryFilterOption_HasAChipInTheView</c> rather than going unnoticed again.</para>
+    /// </remarks>
     public string[] FilterOptions { get; } =
         { "All", "Running", "Stopped", "Safe", "Caution", "Critical",
           "Safe to disable", "Keep enabled", "Advanced" };
@@ -122,11 +139,13 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
     private void ApplyFilterCore()
     {
-        TotalCount = _allServices.Count;
-        RunningCount = _allServices.Count(s => s.Status == "Running");
         // A refresh replaces every ServiceEntry, so the marks are gone with them — recount rather than
         // leaving a stale non-zero count that would keep offering to clear marks that no longer exist.
         UpdateHighlightCount();
+        // ApplyFilter owns every count, TotalCount and RunningCount included, so the status line below
+        // reads what it just computed. Those two used to be assigned here instead, which split one job
+        // across two methods: every other path into ApplyFilter — a search keystroke, a filter chip —
+        // refreshed the other seven counts and left these two showing a previous scan's numbers.
         ApplyFilter();
         StatusMessage = $"Loaded {TotalCount} services ({RunningCount} running).";
         ToastService.Instance.Show("Services refreshed", $"{TotalCount} services ({RunningCount} running)");
@@ -306,19 +325,43 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
         Services.ReplaceWith(filtered.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase));
 
+        // One pass for every count on the tab. Counted over _allServices rather than the filtered result,
+        // so each chip shows how many it WOULD match — a count that shrank to reflect the active filter
+        // would make the other chips look empty and unpressable.
+        int running = 0, stopped = 0;
         int safe = 0, caution = 0, critical = 0;
+        int safeToDisable = 0, keepEnabled = 0, advanced = 0;
         foreach (var s in _allServices)
         {
+            // Running and Stopped are both counted explicitly rather than one being derived as
+            // Total - the other: Windows also reports StartPending / StopPending / Paused, so the two are
+            // not complements and subtracting would over-count whenever a service is mid-transition.
+            if (s.Status == "Running") running++;
+            else if (s.Status == "Stopped") stopped++;
+
             switch (s.SafetyLevel)
             {
                 case SafetyLevel.Safe: safe++; break;
                 case SafetyLevel.Caution: caution++; break;
                 case SafetyLevel.Critical: critical++; break;
             }
+
+            switch (s.Recommendation)
+            {
+                case "safe-to-disable": safeToDisable++; break;
+                case "keep-enabled": keepEnabled++; break;
+                case "advanced": advanced++; break;
+            }
         }
+        TotalCount = _allServices.Count;
+        RunningCount = running;
+        StoppedCount = stopped;
         SafeCount = safe;
         CautionCount = caution;
         CriticalCount = critical;
+        SafeToDisableCount = safeToDisable;
+        KeepEnabledCount = keepEnabled;
+        AdvancedCount = advanced;
     }
 
     /// <summary>

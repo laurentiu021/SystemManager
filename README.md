@@ -787,7 +787,8 @@ offers, "rate us" prompts:
   or "keep enabled" — hover a row's description to read why, in plain language
   instead of Microsoft's own wording
 - Filter by status (Running/Stopped), safety level (Safe/Caution/Critical),
-  gaming recommendation, or free-text search
+  gaming recommendation (Safe to disable / Keep enabled / Advanced), or free-text
+  search — each chip shows how many services it matches, so you know before pressing it
 - Mark any row with the flag button to keep it findable while you keep filtering or
   searching. "Clear marks" removes them all, including any a filter is hiding
 - Start, stop, disable, or enable services with confirmation dialogs

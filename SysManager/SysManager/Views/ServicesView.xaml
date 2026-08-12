@@ -86,29 +86,75 @@
                         </TextBlock>
                     </StackPanel>
                 </DockPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                    <TextBlock Text="Filter:" Foreground="{DynamicResource TextMuted}" FontSize="11"
-                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <!-- Filter chips. All nine share one GroupName because SelectedFilter holds a single
+                     value, so they are mutually exclusive by construction.
+                     Five of these are new: ApplyFilter has always implemented Running, Stopped and the
+                     three gaming recommendations, but no control ever selected them, so they could only
+                     be reached from a debugger — while the README promised filtering "by status
+                     (Running/Stopped)" and "gaming recommendation". A WrapPanel rather than the previous
+                     StackPanel so nine chips reflow instead of clipping on a narrow window. -->
+                <WrapPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="Safety:" Foreground="{DynamicResource TextMuted}" FontSize="11"
+                               VerticalAlignment="Center" Margin="0,0,8,4"/>
                     <RadioButton Content="{Binding SafeCount, StringFormat='Safe ({0})'}"
-                                 GroupName="SafetyFilter" Margin="0,0,6,0"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Safe}"
                                  Style="{StaticResource FilterChip}"
                                  AutomationProperties.Name="Filter safe services"/>
                     <RadioButton Content="{Binding CautionCount, StringFormat='Caution ({0})'}"
-                                 GroupName="SafetyFilter" Margin="0,0,6,0"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Caution}"
                                  Style="{StaticResource FilterChipCaution}"
                                  AutomationProperties.Name="Filter caution services"/>
                     <RadioButton Content="{Binding CriticalCount, StringFormat='Critical ({0})'}"
-                                 GroupName="SafetyFilter" Margin="0,0,6,0"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Critical}"
                                  Style="{StaticResource FilterChipCritical}"
                                  AutomationProperties.Name="Filter critical services"/>
-                    <RadioButton Content="All" GroupName="SafetyFilter" Margin="0,0,6,0"
+
+                    <TextBlock Text="Status:" Foreground="{DynamicResource TextMuted}" FontSize="11"
+                               VerticalAlignment="Center" Margin="10,0,8,4"/>
+                    <RadioButton Content="{Binding RunningCount, StringFormat='Running ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Running}"
+                                 Style="{StaticResource FilterChip}"
+                                 AutomationProperties.Name="Filter running services"/>
+                    <RadioButton Content="{Binding StoppedCount, StringFormat='Stopped ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Stopped}"
+                                 Style="{StaticResource FilterChip}"
+                                 AutomationProperties.Name="Filter stopped services"/>
+
+                    <!-- Gaming recommendation: a different dataset from the safety level on the left.
+                         Safety answers "will this break Windows"; the recommendation answers "is this
+                         worth turning off for games". It is the tab's headline capability and was the
+                         least reachable part of it. -->
+                    <TextBlock Text="For gaming:" Foreground="{DynamicResource TextMuted}" FontSize="11"
+                               VerticalAlignment="Center" Margin="10,0,8,4"/>
+                    <RadioButton Content="{Binding SafeToDisableCount, StringFormat='Safe to disable ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter='Safe to disable'}"
+                                 Style="{StaticResource FilterChip}"
+                                 ToolTip="Services SysManager considers safe to turn off for gaming"
+                                 AutomationProperties.Name="Filter services safe to disable for gaming"/>
+                    <RadioButton Content="{Binding KeepEnabledCount, StringFormat='Keep enabled ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter='Keep enabled'}"
+                                 Style="{StaticResource FilterChip}"
+                                 ToolTip="Services to leave alone — turning these off causes problems"
+                                 AutomationProperties.Name="Filter services to keep enabled"/>
+                    <RadioButton Content="{Binding AdvancedCount, StringFormat='Advanced ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Advanced}"
+                                 Style="{StaticResource FilterChip}"
+                                 ToolTip="Only worth changing if you know what the service does"
+                                 AutomationProperties.Name="Filter advanced services"/>
+
+                    <RadioButton Content="All" GroupName="SafetyFilter" Margin="10,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=All}"
                                  Style="{StaticResource FilterChip}"
                                  AutomationProperties.Name="Show all services"/>
-                </StackPanel>
+                </WrapPanel>
             </StackPanel>
         </Border>
 

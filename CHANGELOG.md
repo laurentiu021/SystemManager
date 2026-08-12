@@ -10,6 +10,15 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.8] - 2026-08-12
+
+"Ask a question" now takes you to the questions area instead of the release-announcements wall.
+
+### Fixed
+- **Every "ask a question" link dropped you into a page of release notes.** The Ask a question button on the About tab, the link in the README, the one in SUPPORT.md, and the "Ask a question / general discussion" entry you see when you click New issue on GitHub all opened the top of Discussions. SysManager posts an announcement there for every release, and there have been hundreds — so the page you arrived at was a wall of changelogs, with the actual Q&A area a separate category you had to spot for yourself. All four links now open Q&A directly, so you land on the box where you type your question. The GitHub one mattered most: SysManager deliberately has no blank-issue option, so that chooser is what everyone sees first.
+
+---
+
 ## [1.64.7] - 2026-08-12
 
 Internal hardening in the "go back to the previous version" check. Nothing you do with SysManager changes.

@@ -381,6 +381,24 @@ public class AboutViewModelTests
         Assert.DoesNotContain('(', query);
         Assert.DoesNotContain(')', query);
     }
+
+    // ── QuestionsUrl (the "Ask a question" button) ──
+    // The button used to open the Discussions root, which every release fills with an auto-posted
+    // announcement — so a user looking for the question box landed in a wall of changelogs.
+
+    [Fact]
+    public void QuestionsUrl_DeepLinksTheQAndACategory_NotTheDiscussionsRoot()
+    {
+        var url = AboutViewModel.QuestionsUrl;
+
+        Assert.Equal(
+            $"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/discussions/categories/q-a",
+            url);
+        // The regression, stated as its own assertion: the root is not an acceptable answer.
+        Assert.NotEqual(
+            $"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/discussions",
+            url);
+    }
 }
 
 /// <summary>

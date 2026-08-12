@@ -1275,8 +1275,8 @@ Found something broken? Missing a feature you'd love to have?
 - 💡 **Features** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=feature_request.yml)
   using the feature request template.
 - 💬 **Questions and how-to's** — use
-  [Discussions](https://github.com/laurentiu021/SystemManager/discussions) instead
-  of issues for anything open-ended.
+  [Discussions › Q&A](https://github.com/laurentiu021/SystemManager/discussions/categories/q-a)
+  instead of issues for anything open-ended.
 - 🔒 **Security vulnerabilities** — please report privately via the
   [Security tab](https://github.com/laurentiu021/SystemManager/security/advisories/new).
   See [SECURITY.md](SECURITY.md) for the full policy.

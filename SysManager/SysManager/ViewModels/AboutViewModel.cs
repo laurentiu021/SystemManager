@@ -390,7 +390,21 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     /// <summary>Opens Discussions for questions, mirroring SUPPORT.md's bug-vs-question split.</summary>
     [RelayCommand]
-    private void OpenDiscussions() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/discussions");
+    private void OpenDiscussions() => OpenUrl(QuestionsUrl);
+
+    /// <summary>
+    /// The Q&amp;A category, not the Discussions root. Every release auto-posts an announcement, so the
+    /// root is a wall of changelogs — a user who pressed "Ask a question" landed there and had to work
+    /// out that Q&amp;A was a separate category further down the page. Deep-linking opens the right
+    /// category directly.
+    /// </summary>
+    /// <remarks>
+    /// <c>q-a</c> is GitHub's slug for the "Q&amp;A" category. The four support routes (this button,
+    /// SUPPORT.md, README.md and the issue-template chooser) must all point at the same place, so the
+    /// URL lives in one testable member rather than being interpolated at each call site.
+    /// </remarks>
+    internal static string QuestionsUrl =>
+        $"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/discussions/categories/q-a";
 
     /// <summary>
     /// The GitHub issue-form URL with the <c>version</c> and <c>elevation</c> fields pre-filled through

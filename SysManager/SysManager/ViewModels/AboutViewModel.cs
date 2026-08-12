@@ -809,19 +809,15 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        if (!DialogService.Instance.Confirm(
-                $"Go back to the version you had before the last update?\n\n" +
-                "SysManager will close and reopen on the older version. Anything the newer version " +
-                "fixed will come back, and your settings are not affected.",
-                "Go back to the previous version"))
-        {
-            return;
-        }
-
         // SEC: verify the retained build against the checksum recorded when it was written, and hold the
-        // verified handle across Process.Start. The retained copy sits in a user-writable folder and can
-        // have been replaced at any point since the update was applied; rollback previously ran on
-        // File.Exists alone, while the install path directly above closes this same window this same way.
+        // verified handle from here until after the launch. The retained copy sits in a user-writable
+        // folder and can have been replaced at any point since the update was applied; rollback
+        // previously ran on File.Exists alone, while the install path directly above closes this same
+        // window this same way.
+        //
+        // Before the confirmation, deliberately: never ask the user to approve something that is then
+        // refused. It also means the deny-write handle is already held while the dialog is open, so the
+        // file cannot be swapped during the seconds the prompt sits on screen.
         if (!UpdateApplier.TryOpenVerifiedPreviousBuild(_updatesDir, out var verifiedStream, out var why))
         {
             RollBackStatus = $"Cannot go back safely — {why}.";
@@ -831,6 +827,15 @@ public sealed partial class AboutViewModel : ViewModelBase
 
         try
         {
+            if (!DialogService.Instance.Confirm(
+                    $"Go back to the version you had before the last update?\n\n" +
+                    "SysManager will close and reopen on the older version. Anything the newer version " +
+                    "fixed will come back, and your settings are not affected.",
+                    "Go back to the previous version"))
+            {
+                return;
+            }
+
             var args = UpdateApplier.BuildArguments(currentExe, Environment.ProcessId);
             RollBackStatus = "Going back — SysManager will restart…";
 

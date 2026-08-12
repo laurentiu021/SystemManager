@@ -523,6 +523,19 @@ public sealed class AboutViewModelRollbackTests : IDisposable
 
     private string PreviousBuild => Path.Combine(_dir, UpdateApplier.PreviousBuildFileName);
 
+    /// <summary>
+    /// Writes a retained build the way the applier does — the binary AND its checksum. A rollback is
+    /// only offered when both exist, because SysManager will not start a saved build it cannot verify,
+    /// so writing the binary alone sets up the legacy/tampered state rather than the healthy one.
+    /// </summary>
+    private void RetainBuild(string content = "OLD-BUILD")
+    {
+        File.WriteAllText(PreviousBuild, content);
+        File.WriteAllText(
+            UpdateApplier.PreviousBuildHashPath(_dir),
+            UpdateApplier.ComputeFileHash(PreviousBuild));
+    }
+
     [Fact]
     public void CanRollBack_IsFalse_WhenNoPreviousBuildWasRetained()
     {
@@ -538,11 +551,25 @@ public sealed class AboutViewModelRollbackTests : IDisposable
     [Fact]
     public void CanRollBack_IsTrue_WhenAPreviousBuildExists()
     {
-        File.WriteAllText(PreviousBuild, "OLD-BUILD");
+        RetainBuild();
 
         using var vm = NewVm();
 
         Assert.True(vm.CanRollBack);
+    }
+
+    [Fact]
+    public void CanRollBack_IsFalse_WhenTheRetainedBuildHasNoChecksum()
+    {
+        // A build retained by a version that predates the checksum, or one an attacker dropped in.
+        // SysManager will not start a saved build it cannot verify, so the offer must not appear at all
+        // — being offered a button that then refuses is worse than not seeing it.
+        File.WriteAllText(PreviousBuild, "OLD-BUILD");   // binary only, deliberately no checksum
+        Assert.False(File.Exists(UpdateApplier.PreviousBuildHashPath(_dir)));
+
+        using var vm = NewVm();
+
+        Assert.False(vm.CanRollBack);
     }
 
     [Fact]
@@ -558,7 +585,7 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         // The file can disappear between the button appearing and being pressed (manual cleanup, disk
         // tools, another instance). That must produce an explanation and a corrected UI rather than a
         // silent no-op or a crash.
-        File.WriteAllText(PreviousBuild, "OLD-BUILD");
+        RetainBuild();
         using var vm = NewVm();
         Assert.True(vm.CanRollBack);
 
@@ -567,6 +594,23 @@ public sealed class AboutViewModelRollbackTests : IDisposable
 
         Assert.False(vm.CanRollBack);
         Assert.Contains("no longer available", vm.RollBackStatus);
+    }
+
+    [Fact]
+    public async Task RollBack_WhenTheRetainedBuildWasSwapped_RefusesAndExplains()
+    {
+        // The binary is still there and its checksum is still there, but the bytes no longer match —
+        // exactly what a same-user attacker replacing the saved copy looks like. Starting it would run
+        // their payload with SysManager's token, so this must refuse and say so rather than launch.
+        RetainBuild();
+        using var vm = NewVm();
+        Assert.True(vm.CanRollBack);
+
+        File.WriteAllText(PreviousBuild, "ATTACKER-PAYLOAD");
+        await vm.RollBackCommand.ExecuteAsync(null);
+
+        Assert.Contains("Cannot go back safely", vm.RollBackStatus);
+        Assert.Contains("changed", vm.RollBackStatus);
     }
 
     [Fact]

@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.3] - 2026-08-12
+
+The Standby List Cleaner used to keep checking your memory every two seconds for as long as SysManager
+stayed open, even after you left the tab. It now stops when you are not looking at it.
+
+### Fixed
+- **The Standby List Cleaner kept working in the background after you left it.** Opening that tab once started a check every two seconds — and it never stopped: not when you switched to another tab, not when you minimised the window, and not when you closed SysManager to the notification area. On a laptop that is wasted battery for a tab nobody is looking at, and if you had turned on automatic purging, that could run unattended from a hidden tab. The check now runs while the tab is open, and stops when it is not. **Automatic purging still works exactly as before** — if you have turned it on, SysManager keeps watching your free memory in the background, because that is the whole point of the setting; the check only stops when there is nothing it could act on. Every other tab that watches something live already worked this way; this one had been left out, and a new automatic check now makes sure a future tab cannot be missed the same way.
+
+---
+
 ## [1.64.2] - 2026-08-12
 
 Two ways the built-in updater could be tricked into damaging your PC are now closed off. Nothing about

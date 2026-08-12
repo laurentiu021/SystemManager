@@ -25,6 +25,46 @@ public class StandbyMemoryTests
         Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(-1, 1024));
     }
 
+    // ── When the 2-second poll may run ──────────────────────────────────────────────────────────────
+    // The poll used to start in the constructor and never stop, so opening this tab ONCE left a
+    // dispatcher tick firing every 2 seconds for the rest of the session — including while minimised or
+    // closed to the tray, with an unsupervised privileged purge reachable from it. Visibility alone is
+    // the wrong gate though: auto-purge is set-and-forget, so gating purely on IsActive would silently
+    // stop watching free memory the moment the user navigated away.
+
+    [Fact]
+    public void ShouldPoll_WhileTheTabIsVisible()
+        => Assert.True(StandbyMemoryViewModel.ShouldPoll(isActive: true, autoPurgeEnabled: false, isElevated: false));
+
+    [Fact]
+    public void ShouldNotPoll_WhenHiddenAndAutoPurgeIsOff()
+        => Assert.False(StandbyMemoryViewModel.ShouldPoll(isActive: false, autoPurgeEnabled: false, isElevated: true));
+
+    [Fact]
+    public void ShouldPoll_WhenHiddenButAutoPurgeIsArmed()
+    {
+        // The whole point of auto-purge: the user arms it, navigates away, and it keeps watching free
+        // memory. Gating this on visibility would turn the feature off without telling anyone — a worse
+        // bug than the one being fixed.
+        Assert.True(StandbyMemoryViewModel.ShouldPoll(isActive: false, autoPurgeEnabled: true, isElevated: true));
+    }
+
+    [Fact]
+    public void ShouldNotPoll_WhenAutoPurgeIsArmedButPurgingIsImpossible()
+    {
+        // Armed without administrator: a purge can never happen, so a hidden tick could only re-read
+        // memory into a tab nobody is looking at — the exact waste this gate removes.
+        Assert.False(StandbyMemoryViewModel.ShouldPoll(isActive: false, autoPurgeEnabled: true, isElevated: false));
+    }
+
+    [Fact]
+    public void ShouldPoll_WhenVisible_EvenWithoutElevation()
+    {
+        // The tab shows live memory figures to every user, so visibility is sufficient on its own — the
+        // elevation condition must not leak into the visible case.
+        Assert.True(StandbyMemoryViewModel.ShouldPoll(isActive: true, autoPurgeEnabled: true, isElevated: false));
+    }
+
     [Fact]
     public void MemoryStatus_FormatsAndComputesMb()
     {

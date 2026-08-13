@@ -19,7 +19,10 @@ public class FriendlyEventEntryExtendedTests
         {
             if (ev.PropertyName != null) raised.Add(ev.PropertyName);
         };
-        e.Timestamp = DateTime.Now;
+        // A fixed date, not DateTime.Now: the generated setter skips PropertyChanged when the new
+        // value equals the current one, so reading the wall clock made this assertion depend on
+        // machine time rather than on a value the test controls.
+        e.Timestamp = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         e.LogName = "System";
         e.ProviderName = "x";
         e.EventId = 42;

@@ -14,7 +14,13 @@ namespace SysManager.Helpers;
 /// </summary>
 public sealed class BulkObservableCollection<T> : ObservableCollection<T>
 {
-    private bool _suppressNotifications;
+    // Immutable and identical on every call. ReplaceWith is the standard bulk-refresh path for
+    // poll-driven lists, so it runs on the UI thread on every refresh tick; the BCL caches exactly
+    // these three instances internally for the same reason.
+    private static readonly PropertyChangedEventArgs CountChanged = new("Count");
+    private static readonly PropertyChangedEventArgs IndexerChanged = new("Item[]");
+    private static readonly NotifyCollectionChangedEventArgs CollectionReset =
+        new(NotifyCollectionChangedAction.Reset);
 
     /// <summary>
     /// Replaces all items with a single Reset notification instead of
@@ -39,32 +45,22 @@ public sealed class BulkObservableCollection<T> : ObservableCollection<T>
         // collection, which Items.Clear() below would empty before a single item was carried over.
         var snapshot = items.ToList();
 
-        _suppressNotifications = true;
-        try
-        {
-            Items.Clear();
-            for (int i = 0; i < snapshot.Count; i++)
-                Items.Add(snapshot[i]);
-        }
-        finally
-        {
-            _suppressNotifications = false;
-        }
+        // Refuse to rewrite the collection from inside a change handler. Items.Clear()/Items.Add()
+        // below bypass the base class's own CheckReentrancy calls, so without this a handler that
+        // re-enters ReplaceWith would silently rewrite the collection mid-dispatch and desync an
+        // ItemsControl from its source; failing fast is the documented ObservableCollection contract.
+        CheckReentrancy();
 
-        OnPropertyChanged(new PropertyChangedEventArgs("Count"));
-        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
-        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
-    }
+        // Mutating Items (the backing list) directly rather than via Clear()/Add() is the whole point:
+        // those route through ClearItems/InsertItem and would raise N+1 notifications. Items does not,
+        // which is why the three explicit raises below are needed — and why no suppression flag is:
+        // nothing here can raise an event that would need suppressing.
+        Items.Clear();
+        for (int i = 0; i < snapshot.Count; i++)
+            Items.Add(snapshot[i]);
 
-    protected override void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
-    {
-        if (!_suppressNotifications)
-            base.OnCollectionChanged(e);
-    }
-
-    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
-    {
-        if (!_suppressNotifications)
-            base.OnPropertyChanged(e);
+        OnPropertyChanged(CountChanged);
+        OnPropertyChanged(IndexerChanged);
+        OnCollectionChanged(CollectionReset);
     }
 }

@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.16] - 2026-08-13
+
+File sizes now use the same decimal point as network speeds, everywhere in the app, whatever
+language your Windows is set to.
+
+### Fixed
+- **Sizes and speeds disagreed about the decimal separator outside English.** File sizes were formatted using your Windows language settings while network speeds always used a dot, so on a Romanian, German, French or most other European system the same screen showed "1,5 GB" next to "12.4 Mbps". All 32 places that show a size now use a dot, matching the speeds. On an English system nothing changes.
+
+### Changed
+- **Internal: removed notification-suppression code that never did anything.** The shared list used by every refreshing table carried a flag meant to silence change notifications during a bulk refresh. It could never have fired — the refresh writes to the underlying list, which raises no notifications in the first place — so it read as protection while providing none. The list now also refuses, instead of quietly rewriting itself, if something tries to replace its contents from inside a change handler. No visible change; the refresh behaviour is identical.
+
+---
+
 ## [1.64.15] - 2026-08-13
 
 The File Shredder now tells you when a file you picked could not be added to the list, instead of

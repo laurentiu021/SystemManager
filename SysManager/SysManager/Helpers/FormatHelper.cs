@@ -1,3 +1,7 @@
+// SysManager · FormatHelper
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
 using System.Globalization;
 
 namespace SysManager.Helpers;
@@ -10,16 +14,23 @@ public static class FormatHelper
 {
     /// <summary>
     /// Formats a byte count into a human-readable string (B, KB, MB, GB, TB).
+    /// <para>Invariant culture, deliberately. A bare interpolated <c>:F1</c> formats with the
+    /// user's locale, so on a comma-decimal locale (ro-RO, de-DE) a size printed "1,5 GB" while
+    /// <see cref="FormatRate"/> — already invariant — printed "12.4 Mbps" on the same screen.
+    /// One decimal separator across the whole app.</para>
     /// </summary>
     public static string FormatSize(long bytes) => bytes switch
     {
         <= 0 => "0 B",
-        < 1L << 10 => $"{bytes} B",
-        < 1L << 20 => $"{bytes / (double)(1L << 10):F1} KB",
-        < 1L << 30 => $"{bytes / (double)(1L << 20):F1} MB",
-        < 1L << 40 => $"{bytes / (double)(1L << 30):F1} GB",
-        _ => $"{bytes / (double)(1L << 40):F1} TB"
+        < 1L << 10 => bytes.ToString(CultureInfo.InvariantCulture) + " B",
+        < 1L << 20 => OneDecimal(bytes, 1L << 10) + " KB",
+        < 1L << 30 => OneDecimal(bytes, 1L << 20) + " MB",
+        < 1L << 40 => OneDecimal(bytes, 1L << 30) + " GB",
+        _ => OneDecimal(bytes, 1L << 40) + " TB"
     };
+
+    private static string OneDecimal(long bytes, long divisor) =>
+        (bytes / (double)divisor).ToString("F1", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Formats a byte-per-second rate as a human-readable "12.4 Mbps"-style string. Network speeds

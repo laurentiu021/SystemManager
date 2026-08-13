@@ -28,13 +28,16 @@ public sealed class NumberFormatAgreementTests
     [MemberData(nameof(CommaCultures))]
     public void BootRecord_SecondsUseTheSameSeparatorAsTheHelpers(string culture)
     {
-        var record = new BootRecord(new DateTime(2026, 8, 4, 13, 45, 30, DateTimeKind.Utc), 30_500, 12_250, 18_250);
+        // Millisecond values chosen so the tenth is unambiguous. 12_250 would render "12.2", not
+        // "12.3": F1 rounds to even on an exact .x5 tie, and this test is about the SEPARATOR, so a
+        // rounding boundary in the input would only obscure what it is pinning.
+        var record = new BootRecord(new DateTime(2026, 8, 4, 13, 45, 30, DateTimeKind.Utc), 30_500, 12_300, 18_700);
 
         WithCulture(culture, () =>
         {
             Assert.Equal("30.5 s", record.BootSecondsDisplay);
             Assert.Equal("12.3 s", record.MainPathDisplay);
-            Assert.Equal("18.3 s", record.PostBootDisplay);
+            Assert.Equal("18.7 s", record.PostBootDisplay);
         });
     }
 

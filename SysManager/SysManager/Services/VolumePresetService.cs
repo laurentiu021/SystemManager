@@ -6,6 +6,7 @@ using System.IO;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -74,7 +75,7 @@ public sealed class VolumePresetService
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(_path, Serialize(presets));
+            AtomicFile.WriteAllText(_path, Serialize(presets));
         }
         catch (IOException ex) { Log.Debug("Volume presets save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Volume presets save denied: {Error}", ex.Message); }

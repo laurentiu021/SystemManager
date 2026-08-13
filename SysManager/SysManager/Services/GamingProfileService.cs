@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -469,7 +470,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             var json = JsonSerializer.Serialize(
                 store with { SchemaVersion = CurrentSchemaVersion },
                 JsonDefaults.Indented);
-            File.WriteAllText(_storePath, json);
+            AtomicFile.WriteAllText(_storePath, json);
         }
         catch (IOException ex) { Log.Warning(ex, "Failed to save gaming profile store"); }
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to save gaming profile store"); }

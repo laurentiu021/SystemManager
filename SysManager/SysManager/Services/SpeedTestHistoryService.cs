@@ -5,6 +5,7 @@
 using System.IO;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -149,7 +150,7 @@ public sealed class SpeedTestHistoryService : IDisposable
             Directory.CreateDirectory(dir);
 
             var json = JsonSerializer.Serialize(entries, JsonOpts);
-            await File.WriteAllTextAsync(_historyPath, json, ct).ConfigureAwait(false);
+            await AtomicFile.WriteAllTextAsync(_historyPath, json, ct).ConfigureAwait(false);
         }
         catch (IOException ex)
         {
@@ -201,7 +202,7 @@ public sealed class SpeedTestHistoryService : IDisposable
             }).ToList();
 
             var json = JsonSerializer.Serialize(entries, JsonOpts);
-            await File.WriteAllTextAsync(_historyPath, json, ct).ConfigureAwait(false);
+            await AtomicFile.WriteAllTextAsync(_historyPath, json, ct).ConfigureAwait(false);
         }
         catch (IOException ex)
         {

@@ -1169,6 +1169,77 @@ public partial class ArchitectureTests
             "Could not locate the repository root from " + AppContext.BaseDirectory);
     }
 
+    /// <summary>
+    /// A service that persists user data must write it atomically, via <c>AtomicFile</c>.
+    /// <para><c>File.WriteAllText</c> and friends truncate the destination and then write into it, so
+    /// an interrupted save leaves a torn file. That is not merely a corrupt-file risk here: several
+    /// loaders catch <c>JsonException</c> and substitute an empty list at Debug level, so a torn save
+    /// silently erases the user's activity history, speed-test history or presets rather than
+    /// reporting anything. 17 call sites across 15 services did this.</para>
+    /// <para>Exempt, by name and for a stated reason: a write whose target is itself a temp/backup
+    /// path (already the atomic pattern), <c>HostsFileService</c> (the original hand-rolled
+    /// implementation this helper generalises), <c>ProfileService.ExportToFileAsync</c> (writes a new
+    /// file the user picked — there is no existing data to lose), and the two <c>.sha256</c> sidecars
+    /// in the update path (derived values, regenerated on demand, not user data).</para>
+    /// </summary>
+    [Fact]
+    public void EveryServiceThatPersistsUserData_WritesItAtomically()
+    {
+        var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in Directory.GetFiles(servicesDir, "*.cs"))
+        {
+            var name = Path.GetFileName(file);
+            if (name is "HostsFileService.cs") continue;
+
+            var source = File.ReadAllText(file);
+            foreach (var match in RawFileWrite().Matches(source).Cast<Match>())
+            {
+                scanned++;
+                var target = match.Groups["target"].Value.Trim();
+
+                // Writing to a temp/backup path IS the atomic pattern; the swap follows.
+                if (TempOrBackupTarget().IsMatch(target)) continue;
+                // Derived sidecars hold no user data. Matched on the variable name as well as the
+                // literal, because UpdateService writes through `hashFile = target + ".sha256"`.
+                if (HashSidecarTarget().IsMatch(target)) continue;
+                if (name == "ProfileService.cs" && target == "path"
+                    && source.Contains("ExportToFileAsync", StringComparison.Ordinal)
+                    && match.Index > source.IndexOf("ExportToFileAsync", StringComparison.Ordinal)
+                    && match.Index < source.IndexOf("ImportFromFileAsync", StringComparison.Ordinal))
+                    continue;
+
+                var line = source[..match.Index].Count(c => c == '\n') + 1;
+                offenders.Add($"{name}:{line} writes {target} in place");
+            }
+        }
+
+        // Vacuity floor: if the regex stopped matching, this would pass while inspecting nothing.
+        Assert.True(scanned >= 5,
+            $"Only {scanned} raw File.Write* calls were seen across Services — the detection is "
+            + "broken, not the code. Fix this guard rather than trusting it.");
+
+        Assert.True(offenders.Count == 0,
+            "These services write user data in place, so an interrupted save leaves a torn file — and "
+            + "the loaders treat an unparseable file as no data, silently discarding it. Use "
+            + "AtomicFile.WriteAllText/WriteAllBytes (or the Async overloads) instead:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    // (?&lt;!Atomic) is load-bearing: "AtomicFile.WriteAllText" ENDS IN "File.WriteAllText", so without
+    // the lookbehind this regex matches the fix as well as the defect and the guard fails on green.
+    [GeneratedRegex(@"(?<!Atomic)\bFile\.Write(?:AllText|AllBytes|AllLines)(?:Async)?\s*\(\s*(?<target>[^,)]+)",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex RawFileWrite();
+
+    [GeneratedRegex(@"tmp|temp|\.bak|backup", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex TempOrBackupTarget();
+
+    [GeneratedRegex(@"\.sha256|hashFile", RegexOptions.CultureInvariant)]
+    private static partial Regex HashSidecarTarget();
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

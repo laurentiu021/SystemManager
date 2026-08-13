@@ -7,6 +7,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -377,7 +378,7 @@ public sealed class ResourceHistoryService : IDisposable
         try
         {
             Directory.CreateDirectory(_dataDir);
-            File.WriteAllText(_configPath, JsonSerializer.Serialize(new RetentionConfig(days)));
+            AtomicFile.WriteAllText(_configPath, JsonSerializer.Serialize(new RetentionConfig(days)));
         }
         catch (IOException ex) { Log.Debug("Resource history config save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Resource history config save denied: {Error}", ex.Message); }

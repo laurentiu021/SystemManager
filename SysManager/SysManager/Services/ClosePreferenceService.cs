@@ -5,6 +5,7 @@
 using System.IO;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -140,7 +141,7 @@ public sealed class ClosePreferenceService
                 if (File.Exists(_path)) File.Delete(_path);
                 return;
             }
-            File.WriteAllText(_path, Serialize(behavior));
+            AtomicFile.WriteAllText(_path, Serialize(behavior));
         }
         catch (IOException ex) { Log.Debug("Close preference save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Close preference save denied: {Error}", ex.Message); }

@@ -8,6 +8,7 @@ using System.Security;
 using System.Text.Json;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -119,7 +120,7 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_schedulePath)!);
             string json = JsonSerializer.Serialize(schedule, JsonDefaults.Indented);
-            File.WriteAllText(_schedulePath, json);
+            AtomicFile.WriteAllText(_schedulePath, json);
         }
         catch (IOException ex) { Log.Warning("Dark-mode schedule save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Warning("Dark-mode schedule save denied: {Error}", ex.Message); }

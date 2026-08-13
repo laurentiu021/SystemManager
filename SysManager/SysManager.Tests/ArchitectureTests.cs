@@ -1202,8 +1202,9 @@ public partial class ArchitectureTests
 
                 // Writing to a temp/backup path IS the atomic pattern; the swap follows.
                 if (TempOrBackupTarget().IsMatch(target)) continue;
-                // Derived sidecars and a user-chosen export destination hold no existing user data.
-                if (target.Contains(".sha256", StringComparison.Ordinal)) continue;
+                // Derived sidecars hold no user data. Matched on the variable name as well as the
+                // literal, because UpdateService writes through `hashFile = target + ".sha256"`.
+                if (HashSidecarTarget().IsMatch(target)) continue;
                 if (name == "ProfileService.cs" && target == "path"
                     && source.Contains("ExportToFileAsync", StringComparison.Ordinal)
                     && match.Index > source.IndexOf("ExportToFileAsync", StringComparison.Ordinal)
@@ -1227,12 +1228,17 @@ public partial class ArchitectureTests
             + string.Join("\n  ", offenders));
     }
 
-    [GeneratedRegex(@"File\.Write(?:AllText|AllBytes|AllLines)(?:Async)?\s*\(\s*(?<target>[^,)]+)",
+    // (?&lt;!Atomic) is load-bearing: "AtomicFile.WriteAllText" ENDS IN "File.WriteAllText", so without
+    // the lookbehind this regex matches the fix as well as the defect and the guard fails on green.
+    [GeneratedRegex(@"(?<!Atomic)\bFile\.Write(?:AllText|AllBytes|AllLines)(?:Async)?\s*\(\s*(?<target>[^,)]+)",
                     RegexOptions.CultureInvariant)]
     private static partial Regex RawFileWrite();
 
     [GeneratedRegex(@"tmp|temp|\.bak|backup", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TempOrBackupTarget();
+
+    [GeneratedRegex(@"\.sha256|hashFile", RegexOptions.CultureInvariant)]
+    private static partial Regex HashSidecarTarget();
 
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()

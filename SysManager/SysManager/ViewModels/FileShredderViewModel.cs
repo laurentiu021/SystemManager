@@ -44,6 +44,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
         if (dialog.ShowDialog() != true) return;
 
+        var skipped = new List<string>();
+
         foreach (var filePath in dialog.FileNames)
         {
             if (Items.Any(i => i.Path.Equals(filePath, StringComparison.OrdinalIgnoreCase)))
@@ -63,6 +65,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             catch (IOException ex)
             {
                 Log.Warning(ex, "Could not read file info: {Path}", filePath);
+                skipped.Add(Path.GetFileName(filePath));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -70,9 +73,26 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 // whole drop. UnauthorizedAccessException is a sibling of IOException, not a
                 // subclass, so the catch above never covered it.
                 Log.Warning(ex, "Access denied reading file info: {Path}", filePath);
+                skipped.Add(Path.GetFileName(filePath));
             }
         }
+
+        StatusMessage = DescribeSkipped(skipped);
     }
+
+    /// <summary>
+    /// Builds the message shown when items the user picked could not be queued. Returning an empty
+    /// string clears any previous warning, so a successful second attempt does not leave a stale one
+    /// on screen.
+    /// <para>Named separately so the wording is assertable without a file dialog.</para>
+    /// </summary>
+    internal static string DescribeSkipped(IReadOnlyList<string> skipped) => skipped.Count switch
+    {
+        0 => string.Empty,
+        1 => $"Could not add \"{skipped[0]}\" — it could not be read, so it is NOT in the list below.",
+        _ => $"Could not add {skipped.Count} of the items you picked ({string.Join(", ", skipped)}) — "
+             + "they could not be read, so they are NOT in the list below."
+    };
 
     [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void AddFolder()
@@ -101,14 +121,19 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 SizeBytes = size,
                 IsFolder = true
             });
+            StatusMessage = string.Empty;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Access denied while reading folder: {Path}", folderPath);
+            StatusMessage = DescribeSkipped([Path.GetFileName(folderPath.TrimEnd(
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))]);
         }
         catch (IOException ex)
         {
             Log.Warning(ex, "Could not read folder info: {Path}", folderPath);
+            StatusMessage = DescribeSkipped([Path.GetFileName(folderPath.TrimEnd(
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))]);
         }
     }
 

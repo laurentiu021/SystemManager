@@ -183,4 +183,84 @@ public class FileShredderViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ---------- items the user picked but that could not be queued ----------
+    // The queue is the user's record of what is about to be destroyed. A file that cannot be read
+    // was logged to a file the user never opens and then omitted, so picking ten files and seeing
+    // eight looked like the app had simply finished. The message has to name what is missing, and
+    // it has to say the item is NOT queued — otherwise "couldn't read it" reads as a warning about
+    // something that will still be shredded.
+
+    [Fact]
+    public void SkippedMessage_WhenNothingWasSkipped_IsEmptySoNoStaleWarningRemains()
+    {
+        Assert.Equal(string.Empty, FileShredderViewModel.DescribeSkipped([]));
+    }
+
+    [Fact]
+    public void SkippedMessage_ForOneItem_NamesItAndSaysItIsNotQueued()
+    {
+        var message = FileShredderViewModel.DescribeSkipped(["locked.dat"]);
+
+        Assert.Contains("locked.dat", message, StringComparison.Ordinal);
+        Assert.Contains("NOT", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SkippedMessage_ForSeveralItems_ReportsTheCountAndEveryName()
+    {
+        var message = FileShredderViewModel.DescribeSkipped(["a.dat", "b.dat", "c.dat"]);
+
+        Assert.Contains("3", message, StringComparison.Ordinal);
+        Assert.Contains("a.dat", message, StringComparison.Ordinal);
+        Assert.Contains("b.dat", message, StringComparison.Ordinal);
+        Assert.Contains("c.dat", message, StringComparison.Ordinal);
+        Assert.Contains("NOT", message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The message is only useful if it reaches the screen, and the defect was precisely that a
+    /// failure never did. Both add paths must therefore assign StatusMessage on the failure branch —
+    /// asserted against the source because the failure needs an unreadable file picked through a
+    /// file dialog, which a unit test cannot drive.
+    /// </summary>
+    [Fact]
+    public void BothAddPaths_ReportSkippedItemsOnScreen_NotOnlyToTheLog()
+    {
+        var source = File.ReadAllText(ViewModelSourcePath());
+
+        var offenders = new List<string>();
+        foreach (var command in new[] { "private void AddFiles()", "private void AddFolder()" })
+        {
+            var start = source.IndexOf(command, StringComparison.Ordinal);
+            Assert.True(start >= 0, $"{command} not found — update this guard.");
+            var body = source[start..source.IndexOf("\n    }", start, StringComparison.Ordinal)];
+
+            // Every catch that logs a skipped item must also surface it.
+            var logs = body.Split("Log.Warning", StringSplitOptions.None).Length - 1;
+            var surfaced = body.Split("StatusMessage", StringSplitOptions.None).Length - 1;
+            if (logs == 0)
+                offenders.Add($"{command}: no failure logging found — guard is inspecting nothing");
+            else if (surfaced == 0)
+                offenders.Add($"{command}: {logs} logged failure(s), none reported on screen");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "an item the user picked can vanish from the shred queue with nothing said on screen:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    private static string ViewModelSourcePath()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(
+                directory.FullName, "SysManager", "ViewModels", "FileShredderViewModel.cs");
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        throw new FileNotFoundException("Could not locate FileShredderViewModel.cs from the test output.");
+    }
 }

@@ -117,14 +117,19 @@
 
         <!-- Footer -->
         <Border Grid.Row="3" Margin="28,8,28,16" Padding="8">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Style="{StaticResource Subtle}">
+            <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives its children infinite
+                 width, so TextWrapping never engages and a long message — such as one naming
+                 several files that could not be queued — is clipped off the right edge. -->
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Style="{StaticResource Subtle}"
+                           VerticalAlignment="Center">
                     <Run Text="{Binding Items.Count, Mode=OneWay}"/>
                     <Run Text=" item(s) queued"/>
                 </TextBlock>
                 <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
-                           Margin="16,0,0,0" Opacity="0.8"/>
-            </StackPanel>
+                           Margin="16,0,0,0" Opacity="0.8" TextWrapping="Wrap"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
         </Border>
     </Grid>
 </UserControl>

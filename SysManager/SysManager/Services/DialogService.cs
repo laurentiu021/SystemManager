@@ -24,7 +24,14 @@ public sealed class DialogService : IDialogService
     public bool Confirm(string message, string title)
     {
         if (Application.Current == null) return false;
-        var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+        // MessageBoxResult.No is the DEFAULT, i.e. the focused button. Without it WPF focuses Yes, so a
+        // stray Enter — or a second Enter after the keypress that opened the dialog — approves whatever
+        // is being confirmed. Every destructive operation in the app funnels through here (file
+        // shredding, ending a process, debloat, uninstall), so the safe default belongs in this one
+        // place rather than at each of the call sites. A user who means Yes still only presses one key.
+        var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question,
+                                     MessageBoxResult.No);
         return result == MessageBoxResult.Yes;
     }
 
@@ -38,8 +45,12 @@ public sealed class DialogService : IDialogService
         // Yes = keep running in the notification area, No = exit, Cancel = stay open.
         // The caller's message states which option is which, so the mapping is explicit
         // on screen. Cancel is also what Esc and the dialog's own close button produce,
-        // which is the right default for an accidental click.
-        var result = MessageBox.Show(message, title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        // which is the right default for an accidental click — and passing it as the
+        // defaultResult is what actually makes that true of the Enter key too. Without it
+        // WPF focuses Yes, so Enter would silently choose "hide to the notification area"
+        // when the user meant to dismiss the question.
+        var result = MessageBox.Show(message, title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question,
+                                     MessageBoxResult.Cancel);
         return result switch
         {
             MessageBoxResult.Yes => CloseChoice.MinimizeToTray,

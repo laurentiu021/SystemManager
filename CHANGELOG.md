@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.15] - 2026-08-13
+
+The File Shredder now tells you when a file you picked could not be added to the list, instead of
+quietly leaving it out.
+
+### Fixed
+- **A file you picked could disappear from the shred list with nothing said.** If a file or folder could not be read — locked by another program, on a disconnected drive, or protected by permissions — it was written to a log file you never see and then left out of the list. Pick ten files, see eight, and nothing on screen explained the other two: it looked like the app had simply finished. The footer now names what could not be added and says plainly that it is **not** in the list, so you can retry or remove it rather than assuming it is queued for destruction.
+- **A long message in the File Shredder footer was cut off instead of wrapping.** The footer laid its text out on a single unbounded line, so anything longer than the window ran off the right edge invisibly. It now wraps, which is what makes the message above readable when it names several files.
+
+---
+
 ## [1.64.14] - 2026-08-13
 
 The "Run as administrator" button now tells screen readers and voice control exactly what it says on

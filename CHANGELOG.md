@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.3] - 2026-08-13
+
+The app does a little less work before its window appears. Four of the Network tabs were being built at launch even if you never opened them, and one of them read a file from disk every single time.
+
+### Fixed
+- **Ping, Traceroute, Speed Test and Network Repair were prepared at every launch.** Every other tab waits until you open it — that change was made precisely so starting the app does not run forty tabs' worth of setup first. These four had been left out, and Speed Test's setup reads your saved speed-test history from disk, so that read happened on every start whether or not you ever visited the tab. They now load on first open like the rest.
+- **Each of those four tabs was being created twice.** The app builds its parts through a shared registry, but these four were also constructed by hand next to it — so two copies of each existed and the registered ones were never used. There is now one of each.
+
 ## [1.65.2] - 2026-08-13
 
 Sizes and counts now use the same decimal point everywhere in the app. If your Windows is set to a language that writes numbers with a comma — Romanian, German, French, Finnish and most of Europe — the same screen could show "1.5 GB" in one place and "1,5 GB" right next to it.

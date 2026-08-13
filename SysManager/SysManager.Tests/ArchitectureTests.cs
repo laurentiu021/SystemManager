@@ -1065,6 +1065,84 @@ public partial class ArchitectureTests
     private static partial Regex NavRegistration();
 
     /// <summary>
+    /// Only the tabs with a stated reason may be built at startup.
+    /// <para>Every tab view model used to be constructed in <c>MainWindowViewModel</c>'s constructor, so
+    /// launching the app ran ~40 constructors — several of which start a scan or a timer — before the
+    /// first frame. The lazy <c>Tab&lt;TVm&gt;</c> factory fixed that by resolving each view model on
+    /// first open, and three tabs were documented as legitimate exceptions: Dashboard (the initially
+    /// selected tab), DarkMode (owns the always-on theme schedule) and About (its update check feeds the
+    /// shell banner). DarkMode and About are resolved directly in the constructor, not through the nav
+    /// table, so only Dashboard appears here.</para>
+    /// <para>The four network tabs nevertheless stayed on the eager path, and the justification comment
+    /// was widened to say "network tabs" instead of the tabs being made lazy — so
+    /// <c>SpeedTestViewModel</c>'s constructor read its history file from disk at every launch whether or
+    /// not anyone opened Speed Test. Worse, each was built with <c>new</c> while the container already
+    /// registered it as a singleton, so the app carried two instances of each and the DI registrations
+    /// were dead.</para>
+    /// <para>A comment cannot hold that line, so this asserts it. Adding a new eager tab fails here,
+    /// which is the intended prompt to either justify it in the list below or use <c>Tab&lt;TVm&gt;</c>.</para>
+    /// </summary>
+    [Fact]
+    public void OnlyTheJustifiedTabs_AreBuiltAtStartup()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+
+        // Scoped to the runtime nav table. BuildDesignerGraph below it constructs everything eagerly by
+        // design (there is no container in the designer/test path), so including it would flag the
+        // wrong thing.
+        // The end marker is the DECLARATION, not the bare method name: BuildDesignerGraph() also appears
+        // as a CALL in the constructor, ABOVE the nav table, so matching the bare name yields end < start
+        // and an empty slice — a guard that passes while reading nothing. The asserts below make that
+        // failure loud instead of silent.
+        var start = source.IndexOf("private NavGroup[] BuildNavGroups()", StringComparison.Ordinal);
+        var end = source.IndexOf("private Dictionary<Type, object> BuildDesignerGraph()",
+                                 StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start,
+            $"Could not locate the nav table in MainWindowViewModel (start={start}, end={end}) — "
+            + "fix this guard, do not trust its result.");
+        var navTable = source[start..end];
+        Assert.Contains("Tab<", navTable, StringComparison.Ordinal);
+
+        // The three exceptions the shell's own constructor documents, and the reason each earns it.
+        // Anything else appearing here is the regression this test exists to catch.
+        string[] justified =
+        [
+            "Dashboard",            // the initially selected tab — built immediately regardless
+            "Dark Mode Scheduler",  // owns the always-on theme schedule poll; nothing else runs it
+            "About",                // its constructor's update check feeds the shell's update banner
+        ];
+
+        var eager = EagerNavRegistration().Matches(navTable)
+            .Select(m => m.Groups["label"].Value)
+            .Where(label => !justified.Contains(label, StringComparer.Ordinal))
+            .ToList();
+
+        // Vacuity floor: if the regex or the slice stopped matching, this would pass while reading
+        // nothing at all.
+        var lazyCount = LazyNavRegistration().Matches(navTable).Count;
+        Assert.True(lazyCount >= 30,
+            $"Only {lazyCount} lazy tab registrations were seen — the guard is not reading the nav "
+            + "table. Fix this test rather than trusting its pass.");
+
+        Assert.True(eager.Count == 0,
+            "These tabs are constructed at startup with no stated reason, so their constructors run on "
+            + "every launch even when the user never opens them — the startup-herd regression the lazy "
+            + $"Tab<TVm> factory exists to prevent:\n  {string.Join("\n  ", eager)}\n"
+            + "Use Tab<TVm>(…) so the view model comes from the container on first open. If a tab "
+            + "genuinely must exist at startup, add it to the justified list in this test WITH its reason.");
+    }
+
+    // An eager registration in the nav table. `inDevelopment: true` placeholders are excluded by the
+    // negative lookahead: those carry a stub, so they cost nothing at startup.
+    [GeneratedRegex(@"EagerItem\(\s*""[\w-]+""\s*,\s*""(?<label>[^""]+)""(?![^)]*inDevelopment)",
+                    RegexOptions.Compiled)]
+    private static partial Regex EagerNavRegistration();
+
+    [GeneratedRegex(@"Tab<\w+>\(\s*""[\w-]+""\s*,\s*""[^""]+""", RegexOptions.Compiled)]
+    private static partial Regex LazyNavRegistration();
+
+    /// <summary>
     /// The options of one dropdown in an issue-form template, read line-wise. A full YAML parse is
     /// avoided deliberately: these files contain unquoted colons inside descriptions, which several
     /// parsers reject, and a guard that cannot read the file is worse than no guard.

@@ -37,7 +37,7 @@
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
-                        AutomationProperties.Name="Restart as administrator"/>
+                        AutomationProperties.Name="Run as administrator"/>
                 <TextBlock Text="Purging the standby list requires administrator privileges."
                            Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
             </DockPanel>

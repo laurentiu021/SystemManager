@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.18] - 2026-08-13
+
+The Performance tab now names your power plan correctly, including on non-English Windows and when
+you have renamed a plan yourself.
+
+### Fixed
+- **The Performance tab could claim the wrong power plan was active.** It decided which plan you were on by looking at the plan’s NAME before its identity. Two consequences: if you had copied a plan and given it a name containing "Ultimate" — say "Ultimate Battery Saver", copied from Balanced — the tab announced "Active plan: Ultimate Performance" even though a normal balanced plan was running; and because Windows translates plan names, the genuine Ultimate Performance plan was never recognised on a Romanian, German, Spanish or French system, where it showed as "Performanță maximă" instead. The plan is now identified by the ID Windows assigns it, which is the same in every language and does not change when you rename a plan. The name is still used as a last resort, which is what correctly catches a copy of the Ultimate plan.
+- **The same wrong check also decided which plan appeared selected** in the three plan options, so the selection could disagree with the plan actually in use.
+
+---
+
 ## [1.64.17] - 2026-08-13
 
 If the PC loses power or crashes while SysManager is saving, your settings and history survive

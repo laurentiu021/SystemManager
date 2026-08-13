@@ -25,7 +25,6 @@ public class SettingsWatchdogViewModelTests
         var svc = Substitute.For<ISettingsWatchdogService>();
         svc.Catalog.Returns([]);
         svc.LoadBaseline().Returns(new BaselineSnapshot(new DateTime(2026, 1, 1), []));
-        svc.HasBaseline.Returns(true);
         svc.DetectDrift().Returns(drifts);
         return svc;
     }
@@ -75,7 +74,6 @@ public class SettingsWatchdogViewModelTests
         var svc = Substitute.For<ISettingsWatchdogService>();
         svc.Catalog.Returns([]);
         svc.LoadBaseline().Returns((BaselineSnapshot?)null);
-        svc.HasBaseline.Returns(false);
         svc.DetectDrift().Returns([]);
         var vm = new SettingsWatchdogViewModel(svc);
 
@@ -166,7 +164,6 @@ public class SettingsWatchdogViewModelTests
         var svc = Substitute.For<ISettingsWatchdogService>();
         svc.Catalog.Returns([Setting("telemetry"), Setting("widgets"), Setting("web-search")]);
         svc.LoadBaseline().Returns(new BaselineSnapshot(new DateTime(2026, 1, 1), []));
-        svc.HasBaseline.Returns(true);
         svc.DetectDrift().Returns(drifts);
         svc.ReadCurrent().Returns(current);
         return svc;

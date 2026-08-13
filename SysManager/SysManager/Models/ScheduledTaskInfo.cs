@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+
 namespace SysManager.Models;
 
 /// <summary>Safety classification for a scheduled task — drives UI color and confirmation.</summary>
@@ -42,6 +44,6 @@ public sealed record ScheduledTaskInfo(
     };
 
     public string FullPath => $"{Path}{Name}";
-    public string LastRunDisplay => LastRun is { } t ? t.ToString("yyyy-MM-dd HH:mm") : "—";
-    public string NextRunDisplay => NextRun is { } t ? t.ToString("yyyy-MM-dd HH:mm") : "—";
+    public string LastRunDisplay => LastRun is { } t ? t.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
+    public string NextRunDisplay => NextRun is { } t ? t.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
 }

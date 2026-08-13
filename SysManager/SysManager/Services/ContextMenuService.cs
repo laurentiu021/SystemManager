@@ -4,6 +4,7 @@
 
 using System.Collections.Frozen;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Security;
 using System.Text.RegularExpressions;
@@ -298,7 +299,7 @@ public sealed partial class ContextMenuService
                 "SysManager", "Backups", "ContextMenu");
             Directory.CreateDirectory(backupDir);
 
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
             var safeName = string.Join("_", registryPath.Split(Path.GetInvalidFileNameChars()));
             var backupFile = Path.Combine(backupDir, $"{safeName}_{timestamp}.reg");
 

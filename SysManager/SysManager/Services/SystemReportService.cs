@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.Management;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -181,7 +182,7 @@ public sealed class SystemReportService
 
         sb.AppendLine("═══════════════════════════════════════════");
         sb.AppendLine("  SysManager System Report");
-        sb.AppendLine($"  Generated: {d.GeneratedAt:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"  Generated: {d.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}");
         sb.AppendLine("═══════════════════════════════════════════");
         sb.AppendLine();
 
@@ -312,7 +313,7 @@ public sealed class SystemReportService
         sb.AppendLine("</style></head><body><div class=\"wrap\">");
 
         sb.AppendLine($"<h1>SysManager System Report</h1>");
-        sb.AppendLine($"<div class=\"sub\">Generated {H(d.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"))} · SysManager v{H(d.AppVersion)}</div>");
+        sb.AppendLine($"<div class=\"sub\">Generated {H(d.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))} · SysManager v{H(d.AppVersion)}</div>");
 
         // OS
         OpenSection(sb, "Operating System");

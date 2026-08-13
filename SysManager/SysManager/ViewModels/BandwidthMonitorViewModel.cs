@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
@@ -575,8 +576,8 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     {
         if (ticks <= 0 || ticks >= DateTime.MaxValue.Ticks) return "";
         var at = new DateTime((long)ticks);
-        if (range <= TimeSpan.Zero) return at.ToString("HH:mm:ss");
-        return range > TimeSpan.FromHours(24) ? at.ToString("MM-dd HH:mm") : at.ToString("HH:mm");
+        if (range <= TimeSpan.Zero) return at.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        return range > TimeSpan.FromHours(24) ? at.ToString("MM-dd HH:mm", CultureInfo.InvariantCulture) : at.ToString("HH:mm", CultureInfo.InvariantCulture);
     }
 
     private void RefreshTimeAxisLabeler()

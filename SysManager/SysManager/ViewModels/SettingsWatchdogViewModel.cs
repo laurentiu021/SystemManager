@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -62,7 +63,7 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     {
         var baseline = _service.LoadBaseline();
         HasBaseline = baseline is not null;
-        BaselineTaken = baseline is not null ? $"Baseline saved {baseline.TakenAt:yyyy-MM-dd HH:mm}" : "";
+        BaselineTaken = baseline is not null ? $"Baseline saved {baseline.TakenAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}" : "";
 
         var drifts = _service.DetectDrift();
         Drifts.ReplaceWith(drifts.Select(d => new DriftRow(d)));

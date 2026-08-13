@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -19,5 +21,5 @@ public sealed record PrivacyAccessEntry(
     /// <summary>Human-readable last-used timestamp, or "In use now" / "—".</summary>
     public string LastUsedDisplay =>
         InUse ? "In use now"
-              : LastUsed is { } t ? t.ToString("yyyy-MM-dd HH:mm") : "—";
+              : LastUsed is { } t ? t.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
 }

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -54,7 +55,7 @@ public sealed partial class ConsoleViewModel : ObservableObject
         lock (_gate) snapshot = Lines.ToArray();
         try
         {
-            var text = string.Join(Environment.NewLine, snapshot.Select(l => $"[{l.Timestamp:HH:mm:ss}] {l.Kind}: {l.Text}"));
+            var text = string.Join(Environment.NewLine, snapshot.Select(l => $"[{l.Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}] {l.Kind}: {l.Text}"));
             Clipboard.SetText(text);
         }
         catch (System.Runtime.InteropServices.ExternalException) { /* clipboard locked or unavailable */ }

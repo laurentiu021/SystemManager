@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -20,7 +22,7 @@ public sealed record BootRecord(
 
     public string MainPathDisplay => $"{MainPathBootTimeMs / 1000.0:F1} s";
     public string PostBootDisplay => $"{PostBootTimeMs / 1000.0:F1} s";
-    public string WhenDisplay => BootTime.ToString("yyyy-MM-dd HH:mm");
+    public string WhenDisplay => BootTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 }
 
 /// <summary>
@@ -35,5 +37,5 @@ public sealed record BootDegradation(
     long DurationMs)
 {
     public string DurationDisplay => DurationMs >= 1000 ? $"{DurationMs / 1000.0:F1} s" : $"{DurationMs} ms";
-    public string WhenDisplay => When.ToString("yyyy-MM-dd HH:mm");
+    public string WhenDisplay => When.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 }

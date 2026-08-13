@@ -5,6 +5,7 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -564,7 +565,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     internal static Axis BuildTimeAxis() => new()
     {
-        Labeler = v => new DateTime((long)v).ToString("HH:mm:ss"),
+        Labeler = v => new DateTime((long)v).ToString("HH:mm:ss", CultureInfo.InvariantCulture),
         TextSize = 12,
         // One tick per second minimum. Without it, an empty pre-run series makes LiveCharts
         // synthesise many sub-second ticks that the HH:mm:ss labeler collapses to a row of

@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.1] - 2026-08-13
+
+Dates and times now look the same on every PC. If your Windows is set to a language whose calendar is not the Western one — Thai or Arabic, for example — the app was printing the wrong year, and in a few places the wrong month, in lists, exported reports, and even in the names of the files it saved.
+
+### Fixed
+- **Dates were wrong, not just differently formatted, on some regional settings.** Where the app shows a date in a fixed layout — the Boot Analyzer, Privacy Monitor, Restore Points, Disk Analyzer, the bandwidth and resource charts, the crash notice, exported reports — it was letting Windows' regional setting pick the calendar. On a Thai setting, 4 August 2026 was shown as 2569-08-04; on an Arabic (Saudi) setting, as 1448-02-21, with the month changed too. On a Finnish setting the time lost its colon (13.45), which also broke sorting a column of timestamps. Every one of these now prints the same on every machine.
+- **Saved files could be named with the wrong date.** Exported reports, log CSVs, resource-history CSVs, saved settings profiles, and the automatic registry backup taken before a context-menu change all put a timestamp in the filename. On the regional settings above, that timestamp was a different year, so the files sorted wrongly and did not match the date inside them.
+- **The Dashboard could report no critical events on a PC that had them.** Its seven-day event-log scan builds a date filter that Windows parses literally. Under a non-Western calendar that filter asked for a year that has not happened, so the query came back empty and the Dashboard said nothing was wrong.
+- **"Updates paused until …" could state a date that was not the pause date.** The Windows Update panel formatted that promise the same way.
+
 ## [1.65.0] - 2026-08-13
 
 System Health now shows which slot each memory module is in, and whether your RAM is actually

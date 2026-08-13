@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -86,7 +87,7 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
     private async Task CreateAsync()
     {
         var description = string.IsNullOrWhiteSpace(NewDescription)
-            ? $"SysManager — {DateTime.Now:yyyy-MM-dd HH:mm}"
+            ? $"SysManager — {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}"
             : NewDescription.Trim();
 
         // Disclose the side effect BEFORE doing it. Creating a checkpoint runs

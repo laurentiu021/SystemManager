@@ -4,6 +4,7 @@
 
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -101,7 +102,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             // BIOS read hits blocking WMI/registry — keep it off the UI thread.
             Bios = await Task.Run(_biosService.Read);
             Summary = $"OS {snap.Os.Caption}  —  CPU {snap.Cpu.Name} ({snap.Cpu.Cores}c/{snap.Cpu.LogicalProcessors}t)  —  RAM {snap.Memory.UsedGB:0.0}/{snap.Memory.TotalGB:0.0} GB  —  Disks {snap.Disks.Count}";
-            StatusMessage = $"Scan at {snap.CapturedAt:HH:mm:ss}";
+            StatusMessage = $"Scan at {snap.CapturedAt.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}";
             ToastService.Instance.Show("System Health scan complete", $"{snap.Disks.Count} disks, {snap.Memory.Modules.Count} RAM modules");
             Log.Information("System health scan completed");
             await RefreshDrivesAsync();

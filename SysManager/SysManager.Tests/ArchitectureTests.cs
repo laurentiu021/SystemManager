@@ -1240,6 +1240,99 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\.sha256|hashFile", RegexOptions.CultureInvariant)]
     private static partial Regex HashSidecarTarget();
 
+    /// <summary>
+    /// Every date formatted with a fixed SHAPE must name the culture that shape belongs to.
+    /// <para>A custom pattern with no <c>IFormatProvider</c> formats through
+    /// <c>CultureInfo.CurrentCulture</c>, which Windows sets from the user's regional settings — so
+    /// the same code prints a different string, and on some installs a DIFFERENT DATE, per machine.
+    /// Measured for 2026-08-04 13:45:30 with this app's own patterns:</para>
+    /// <list type="bullet">
+    /// <item><c>yyyy-MM-dd</c> → <c>2026-08-04</c> on en-US, <c>2569-08-04</c> on th-TH (Buddhist
+    /// calendar), <c>1448-02-21</c> on ar-SA (Umm al-Qura) — the year AND the month change</item>
+    /// <item><c>HH:mm</c> → <c>13:45</c> on en-US, <c>13.45</c> on fi-FI — the ':' is the culture's
+    /// time separator, so an ISO-looking string is neither ISO nor lexicographically sortable, which
+    /// is the only reason to choose that pattern over <c>ToString("g")</c></item>
+    /// <item><c>yyyyMMdd_HHmmss</c> → <c>25690804_134530</c> on th-TH — and this one lands in a
+    /// registry-backup FILENAME, so the file is stamped with a date that is not the date</item>
+    /// </list>
+    /// <para>Both shapes carry the defect and both are checked: <c>x.ToString("pattern")</c> and the
+    /// interpolation hole <c>$"{x:pattern}"</c>. An interpolation hole cannot take a provider, so the
+    /// fix there is to format inside the hole.</para>
+    /// <para>Standard format specifiers (<c>"g"</c>, <c>"f"</c>, <c>"D"</c>) are deliberately NOT
+    /// flagged: localizing those IS correct, and they have no fixed shape to preserve.</para>
+    /// </summary>
+    [Fact]
+    public void EveryFixedShapeDateFormat_NamesItsCulture()
+    {
+        var appDir = FindAppProjectDir();
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                              StringComparison.Ordinal)) continue;
+
+            var source = File.ReadAllText(file);
+            var name = Path.GetFileName(file);
+
+            foreach (var match in CultureBlindDateFormat().Matches(source).Cast<Match>())
+            {
+                var pattern = match.Groups["pattern"].Value;
+
+                // A Serilog output template is not C# interpolation — Serilog parses it and the
+                // formatter is constructed with an explicit culture, so the hole never reaches
+                // string.Format. Recognised by Serilog's own token syntax, which C# has no notion of.
+                if (SerilogTemplateToken().IsMatch(source[match.Index..Math.Min(source.Length, match.Index + match.Length + 40)])) continue;
+
+                scanned++;
+                var line = source[..match.Index].Count(c => c == '\n') + 1;
+                offenders.Add($"{name}:{line} formats \"{pattern}\" through CurrentCulture");
+            }
+        }
+
+        // Vacuity floor: the codebase keeps ~35 culture-explicit date formats. If the pattern class
+        // stopped being recognised this test would pass while inspecting nothing, so prove the
+        // detector still sees the compliant calls before trusting a clean result.
+        var compliant = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .Sum(f => CultureExplicitDateFormat().Matches(File.ReadAllText(f)).Count);
+        Assert.True(compliant >= 25,
+            $"Only {compliant} culture-explicit date formats were found — the detection is broken, "
+            + "not the code. Fix this guard rather than trusting it.");
+
+        Assert.True(offenders.Count == 0,
+            "These dates are formatted with a fixed shape but no culture, so CurrentCulture decides the "
+            + "output: on a Thai or Saudi regional setting the year and month change, and on Finnish the "
+            + "time separator does. Pass CultureInfo.InvariantCulture (and for an interpolation hole, "
+            + "format inside the hole — a hole takes no provider):\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({scanned} culture-blind, {compliant} culture-explicit)");
+    }
+
+    // A fixed-shape date pattern is one naming a calendar/clock field: yyyy, MM, dd, HH, mm, ss.
+    // Alternative 1 — .ToString("pattern") with no second argument.
+    // Alternative 2 — an interpolation hole $"{value:pattern}", which cannot take a provider at all.
+    // Numeric specifiers (F1, N0, X8) are out of scope here: the decimal-separator class is a
+    // separate concern, and hex formatting consults no culture data.
+    // Both alternatives reuse the name "pattern" — .NET merges same-named groups, so whichever
+    // alternative matched reports through Groups["pattern"] and the caller needs no branch.
+    [GeneratedRegex(@"\.ToString\(""(?<pattern>[^""]*(?:yyyy|HH|mm:ss|MM-dd|dd MMM)[^""]*)""\s*\)"
+                    + @"|\{[^{}""]{1,60}:(?<pattern>[^{}]*(?:yyyy|HH:mm|mm:ss)[^{}]*)\}",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex CultureBlindDateFormat();
+
+    [GeneratedRegex(@"\.ToString\(""[^""]*(?:yyyy|HH|mm:ss|MM-dd|dd MMM)[^""]*""\s*,\s*(?:System\.Globalization\.)?CultureInfo\.",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex CultureExplicitDateFormat();
+
+    // Serilog's {Level:u3} / {Message:lj} tokens have no C# equivalent, so their presence right after
+    // the match identifies an output template rather than an interpolated string.
+    [GeneratedRegex(@"\{(?:Level:u3|Message:lj|NewLine|Exception)\}", RegexOptions.CultureInvariant)]
+    private static partial Regex SerilogTemplateToken();
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

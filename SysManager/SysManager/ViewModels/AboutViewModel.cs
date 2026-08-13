@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -257,7 +258,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             LatestVersionLabel = $"v{latest.Version.ToString(3)}";
             LatestPublishedLabel = latest.PublishedAt == DateTimeOffset.MinValue
                 ? string.Empty
-                : latest.PublishedAt.LocalDateTime.ToString("dd MMM yyyy");
+                : latest.PublishedAt.LocalDateTime.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
             LatestNotes = latest.Body;
 
             if (UpdateService.IsNewer(latest.Version, UpdateService.CurrentVersion))
@@ -296,7 +297,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             {
                 Version = $"v{r.Version.ToString(3)}",
                 Title = r.Name,
-                PublishedAt = r.PublishedAt == DateTimeOffset.MinValue ? "" : r.PublishedAt.LocalDateTime.ToString("dd MMM yyyy"),
+                PublishedAt = r.PublishedAt == DateTimeOffset.MinValue ? "" : r.PublishedAt.LocalDateTime.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
                 Body = r.Body,
                 Url = r.HtmlUrl,
                 IsCurrent = r.Version == UpdateService.CurrentVersion
@@ -627,7 +628,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         // location. The dialog is shown before any work starts so cancelling costs nothing.
         var dlg = new SaveFileDialog
         {
-            FileName = $"SysManager-Report-{DateTime.Now:yyyy-MM-dd-HHmmss}.txt",
+            FileName = $"SysManager-Report-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.txt",
             Filter = "Text file (*.txt)|*.txt|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() != true) return;
@@ -914,11 +915,11 @@ public sealed partial class AboutViewModel : ViewModelBase
             var dir = AppContext.BaseDirectory;
             var exe = Path.Join(dir, "SysManager.exe");
             if (File.Exists(exe))
-                return File.GetLastWriteTime(exe).ToString("dd MMM yyyy");
+                return File.GetLastWriteTime(exe).ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
             // Fallback: try the DLL
             var dll = Path.Join(dir, "SysManager.dll");
             if (File.Exists(dll))
-                return File.GetLastWriteTime(dll).ToString("dd MMM yyyy");
+                return File.GetLastWriteTime(dll).ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
         }
         catch (IOException ex) { Log.Debug(ex, "About: could not read build date from disk"); }
         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "About: access denied reading build date"); }

@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -17,7 +19,7 @@ public sealed record FileLocker(
     /// <summary>Friendly label, e.g. "explorer.exe (12345)".</summary>
     public string Display => $"{ProcessName} ({ProcessId})";
 
-    public string StartTimeDisplay => StartTime is { } t ? t.ToString("yyyy-MM-dd HH:mm:ss") : "—";
+    public string StartTimeDisplay => StartTime is { } t ? t.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : "—";
 
     /// <summary>
     /// True for processes the Restart Manager flags as critical/system — terminating

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -212,7 +213,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     {
         var dlg = new SaveFileDialog
         {
-            FileName = $"SysManager-Resources-{DateTime.Now:yyyy-MM-dd-HHmmss}.csv",
+            FileName = $"SysManager-Resources-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
             Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() != true) return;
@@ -251,7 +252,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
 
     private static Axis BuildTimeAxis() => new()
     {
-        Labeler = v => v > 0 && v < DateTime.MaxValue.Ticks ? new DateTime((long)v).ToString("MM-dd HH:mm") : "",
+        Labeler = v => v > 0 && v < DateTime.MaxValue.Ticks ? new DateTime((long)v).ToString("MM-dd HH:mm", CultureInfo.InvariantCulture) : "",
         TextSize = 12,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },

@@ -5,6 +5,7 @@
 using System.Buffers;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -273,7 +274,7 @@ public sealed partial class LogsViewModel : ViewModelBase
         if (SelectedEntry is null) return;
         var e = SelectedEntry;
         var text = new StringBuilder()
-            .AppendLine($"[{e.Timestamp:yyyy-MM-dd HH:mm:ss}] {e.SeverityLabel} — {e.ProviderName} (Event {e.EventId})")
+            .AppendLine($"[{e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}] {e.SeverityLabel} — {e.ProviderName} (Event {e.EventId})")
             .AppendLine($"Log: {e.LogName}")
             .AppendLine()
             .AppendLine("Explanation:").AppendLine(e.Explanation)
@@ -292,7 +293,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     {
         var dlg = new SaveFileDialog
         {
-            FileName = $"sysmanager-{SelectedLog}-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+            FileName = $"sysmanager-{SelectedLog}-{DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.csv",
             Filter = "CSV (*.csv)|*.csv|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() != true) return;
@@ -303,7 +304,7 @@ public sealed partial class LogsViewModel : ViewModelBase
             sw.WriteLine("Timestamp,Severity,Log,Provider,EventId,Message,Explanation,Recommendation");
             foreach (var e in Entries)
             {
-                sw.Write(Csv(e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"))); sw.Write(',');
+                sw.Write(Csv(e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))); sw.Write(',');
                 sw.Write(Csv(e.SeverityLabel)); sw.Write(',');
                 sw.Write(Csv(e.LogName)); sw.Write(',');
                 sw.Write(Csv(e.ProviderName)); sw.Write(',');

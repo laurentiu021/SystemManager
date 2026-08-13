@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -87,7 +88,7 @@ public sealed partial class SystemReportViewModel : ViewModelBase
     {
         var dlg = new SaveFileDialog
         {
-            FileName = $"SysManager-Report-{DateTime.Now:yyyy-MM-dd-HHmmss}.{extension}",
+            FileName = $"SysManager-Report-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.{extension}",
             Filter = filter + "|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() != true) return;

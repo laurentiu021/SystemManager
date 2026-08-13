@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.Helpers;
 
@@ -72,7 +73,7 @@ public sealed partial class FriendlyEventEntry : ObservableObject
     /// <summary>
     /// Full timestamp for tooltip display.
     /// </summary>
-    public string FullTimestamp => Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
+    public string FullTimestamp => Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
     private static string FormatRelative(DateTime ts)
     {
@@ -83,7 +84,7 @@ public sealed partial class FriendlyEventEntry : ObservableObject
         if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
         if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
         if (span.TotalDays < 30) return $"{(int)(span.TotalDays / 7)}w ago";
-        return ts.ToString("yyyy-MM-dd");
+        return ts.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 }
 

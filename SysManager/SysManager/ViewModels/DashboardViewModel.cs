@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -531,7 +532,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             var since = DateTime.Now.AddDays(-7);
             var query = new System.Diagnostics.Eventing.Reader.EventLogQuery(
                 "System", System.Diagnostics.Eventing.Reader.PathType.LogName,
-                $"*[System[Level=1 and TimeCreated[@SystemTime>='{since:yyyy-MM-ddTHH:mm:ss}']]]");
+                $"*[System[Level=1 and TimeCreated[@SystemTime>='{since.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)}']]]");
 
             int criticalCount = 0;
             using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(query);
@@ -829,7 +830,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             await LoadHealthScoreAsync();
             await LoadTemperaturesAsync();
             LoadActivity();
-            StatusMessage = $"Last scan: {DateTime.Now:HH:mm:ss}";
+            StatusMessage = $"Last scan: {DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}";
             ToastService.Instance.Show("Dashboard refreshed", "All systems scanned");
         }
         finally { IsBusy = false; }

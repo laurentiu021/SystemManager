@@ -71,8 +71,25 @@ public class AppBlockerViewModelTests
     {
         var app = new BlockedApp();
         Assert.Equal("", app.ExecutableName);
-        Assert.Equal("", app.FullPath);
         Assert.False(app.IsSelected);
+    }
+
+    [Fact]
+    public void BlockedApp_CarriesNoFieldItCannotFill()
+    {
+        // FullPath and BlockedAt were declared and could never hold a truthful value: an IFEO key records
+        // the executable NAME and nothing else, so there is no path to report and no creation time to
+        // read. BlockedAt was worse than empty — it was assigned DateTime.Now when the list was READ, so
+        // it reported when the tab was opened, not when anything was blocked. The default-values test
+        // above previously asserted FullPath's default, which made a permanently-empty field look
+        // exercised.
+        var names = typeof(BlockedApp).GetProperties().Select(p => p.Name).ToList();
+
+        Assert.DoesNotContain("FullPath", names);
+        Assert.DoesNotContain("BlockedAt", names);
+
+        // Vacuity floor: the reflection must actually be seeing the model.
+        Assert.Contains("ExecutableName", names);
     }
 
     [Fact]

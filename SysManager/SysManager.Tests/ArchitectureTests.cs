@@ -1104,8 +1104,14 @@ public partial class ArchitectureTests
         var navTable = source[start..end];
         Assert.Contains("Tab<", navTable, StringComparison.Ordinal);
 
-        // Dashboard is the initially selected tab, so it is built immediately regardless.
-        string[] justified = ["Dashboard"];
+        // The three exceptions the shell's own constructor documents, and the reason each earns it.
+        // Anything else appearing here is the regression this test exists to catch.
+        string[] justified =
+        [
+            "Dashboard",            // the initially selected tab — built immediately regardless
+            "Dark Mode Scheduler",  // owns the always-on theme schedule poll; nothing else runs it
+            "About",                // its constructor's update check feeds the shell's update banner
+        ];
 
         var eager = EagerNavRegistration().Matches(navTable)
             .Select(m => m.Groups["label"].Value)

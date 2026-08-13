@@ -124,4 +124,50 @@ public class BulkObservableCollectionTests
         Assert.Throws<InvalidOperationException>(() => collection.ReplaceWith(Failing()));
         Assert.Equal([1, 2, 3], collection);
     }
+
+    // ── Rewriting the collection from inside a change handler ──
+    // ReplaceWith mutates Items (the backing list) directly. That is deliberate — it is how one Reset
+    // replaces N+1 events — but it also skips the CheckReentrancy call every ObservableCollection
+    // mutator makes first. Without an explicit check, a handler that re-enters ReplaceWith rewrites the
+    // collection in the middle of event dispatch and a bound ItemsControl's container generator can
+    // desync from its source. Failing fast is the documented contract.
+
+    [Fact]
+    public void ReplaceWith_ReenteredFromAChangeHandler_ThrowsInsteadOfRewritingMidDispatch()
+    {
+        var collection = new BulkObservableCollection<int>();
+        collection.ReplaceWith([1, 2, 3]);
+
+        Exception? reentrant = null;
+
+        // Two subscribers, because ObservableCollection only treats reentrancy as an error when more
+        // than one handler is attached — which is the real situation: WPF's ListCollectionView is
+        // subscribed alongside application code.
+        collection.CollectionChanged += (_, _) =>
+            reentrant ??= Record.Exception(() => collection.ReplaceWith([7, 8, 9]));
+        collection.CollectionChanged += (_, _) => { };
+
+        collection.ReplaceWith([4, 5, 6]);
+
+        Assert.IsType<InvalidOperationException>(reentrant);
+        Assert.Equal([4, 5, 6], collection); // the reentrant rewrite did not take effect
+    }
+
+    [Fact]
+    public void ReplaceWith_WithOneSubscriber_StillRefreshesNormally()
+    {
+        // Guard against over-correcting: the ordinary single-subscriber refresh must keep working.
+        var collection = new BulkObservableCollection<int>();
+        var resets = 0;
+        collection.CollectionChanged += (_, e) =>
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset) resets++;
+        };
+
+        collection.ReplaceWith([1, 2, 3]);
+        collection.ReplaceWith([4, 5]);
+
+        Assert.Equal([4, 5], collection);
+        Assert.Equal(2, resets);
+    }
 }

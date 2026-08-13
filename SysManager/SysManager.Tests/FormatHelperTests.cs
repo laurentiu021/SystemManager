@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using SysManager.Helpers;
 using Xunit;
 
@@ -64,5 +65,67 @@ public class FormatHelperTests
     public void FormatSize_ExactBoundary_1GB()
     {
         Assert.Equal("1.0 GB", FormatHelper.FormatSize(1L << 30));
+    }
+
+    // ---------- one decimal separator, whatever the machine's locale ----------
+    // FormatSize used a bare interpolated ":F1", which formats with CurrentCulture, while FormatRate
+    // was already explicitly invariant. On a comma-decimal locale — ro-RO, de-DE, fr-FR, most of
+    // Europe — the same screen showed "1,5 GB" next to "12.4 Mbps". Every assertion above expects a
+    // dot, so they were quietly asserting "this test host happens to be en-US".
+
+    [Theory]
+    [InlineData("ro-RO")]
+    [InlineData("de-DE")]
+    [InlineData("fr-FR")]
+    [InlineData("en-US")]
+    [InlineData("")] // invariant
+    public void FormatSize_UsesADot_OnEveryLocale(string culture)
+    {
+        WithCulture(culture, () =>
+        {
+            Assert.Equal("1.5 GB", FormatHelper.FormatSize(1610612736));
+            Assert.Equal("1.0 KB", FormatHelper.FormatSize(1L << 10));
+            Assert.Equal("512 B", FormatHelper.FormatSize(512));
+        });
+    }
+
+    [Theory]
+    [InlineData("ro-RO")]
+    [InlineData("de-DE")]
+    [InlineData("en-US")]
+    public void SizeAndRate_AgreeOnTheSeparator_OnEveryLocale(string culture)
+    {
+        WithCulture(culture, () =>
+        {
+            // The defect was the MISMATCH, so assert the two helpers agree rather than testing them
+            // apart: a size and a rate sitting on one screen must not use different separators.
+            var size = FormatHelper.FormatSize(1610612736);   // "1.5 GB"
+            var rate = FormatHelper.FormatRate(1_550_000);    // "12.4 Mbps"
+
+            Assert.Contains('.', size);
+            Assert.Contains('.', rate);
+            Assert.DoesNotContain(',', size);
+            Assert.DoesNotContain(',', rate);
+        });
+    }
+
+    /// <summary>
+    /// Runs <paramref name="assert"/> with the thread's culture switched, restoring it in a finally so
+    /// one test cannot leak a locale into the rest of the run. Deterministic: no ambient state is read.
+    /// </summary>
+    private static void WithCulture(string culture, Action assert)
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = culture.Length == 0
+                ? CultureInfo.InvariantCulture
+                : new CultureInfo(culture);
+            assert();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 }

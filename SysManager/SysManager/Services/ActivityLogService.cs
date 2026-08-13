@@ -5,6 +5,7 @@
 using System.IO;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -107,7 +108,7 @@ public sealed class ActivityLogService
             // WriteIndented = false is the default, so no options object is needed — allocating
             // one per save would only defeat System.Text.Json's per-options metadata cache.
             var json = JsonSerializer.Serialize(snapshot);
-            File.WriteAllText(_filePath, json);
+            AtomicFile.WriteAllText(_filePath, json);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -152,7 +153,7 @@ public sealed partial class PerformanceService : IDisposable
             var json = JsonSerializer.SerializeToUtf8Bytes(snapshot, SnapshotJsonOptions);
             if (json.Length > MaxSnapshotBytes)
                 throw new InvalidDataException("The performance snapshot exceeds the supported size.");
-            File.WriteAllBytes(_snapshotPath, json);
+            AtomicFile.WriteAllBytes(_snapshotPath, json);
             Log.Information("Performance snapshot saved to {Path}", _snapshotPath);
             return true;
         }

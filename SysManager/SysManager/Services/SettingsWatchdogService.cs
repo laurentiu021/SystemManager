@@ -7,6 +7,7 @@ using System.Security;
 using System.Text.Json;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -204,7 +205,7 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_baselinePath)!);
-            File.WriteAllText(_baselinePath, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented));
+            AtomicFile.WriteAllText(_baselinePath, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented));
         }
         catch (IOException ex) { Log.Debug("Settings baseline save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Settings baseline save denied: {Error}", ex.Message); }

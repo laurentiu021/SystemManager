@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Serilog;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -361,7 +362,7 @@ public sealed class ThemeService
                 CurrentTheme.Accent.ToString(), CurrentTheme.Background.ToString(),
                 CurrentTheme.Surface.ToString(), CurrentTheme.TextPrimary.ToString());
             var json = JsonSerializer.Serialize(data, JsonDefaults.Indented);
-            File.WriteAllText(SettingsPath, json);
+            AtomicFile.WriteAllText(SettingsPath, json);
         }
         catch (Exception ex) { Log.Debug("Theme save failed: {Error}", ex.Message); }
     }

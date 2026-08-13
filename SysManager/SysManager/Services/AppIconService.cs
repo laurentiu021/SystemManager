@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 using Serilog;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -97,7 +98,7 @@ public sealed class AppIconService
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new IconFetchPreference(enabled)));
+            AtomicFile.WriteAllText(_settingsPath, JsonSerializer.Serialize(new IconFetchPreference(enabled)));
         }
         catch (IOException ex) { Log.Debug(ex, "Icon-fetch preference write failed"); }
         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Icon-fetch preference write denied"); }
@@ -141,7 +142,7 @@ public sealed class AppIconService
             if (bytes.Length == 0) return null;
 
             Directory.CreateDirectory(_cacheDir);
-            await File.WriteAllBytesAsync(cachePath, bytes, ct).ConfigureAwait(false);
+            await AtomicFile.WriteAllBytesAsync(cachePath, bytes, ct).ConfigureAwait(false);
             return LoadFromFile(cachePath);
         }
         catch (HttpRequestException ex)

@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -155,7 +156,7 @@ public sealed class ProfileService
             var path = Path.Combine(dir, known.FileName);
             try
             {
-                File.WriteAllText(path, section.Json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                AtomicFile.WriteAllText(path, section.Json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 applied++;
             }
             catch (IOException ex) { Log.Warning("Profile: could not write {File}: {Error}", known.FileName, ex.Message); }

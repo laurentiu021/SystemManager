@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.17] - 2026-08-13
+
+If the PC loses power or crashes while SysManager is saving, your settings and history survive
+instead of coming back empty.
+
+### Fixed
+- **A crash or power cut while saving could silently wipe your history and presets.** Seventeen places wrote your data by emptying the file first and then filling it back in. Interrupt that — a power cut, a crash, a full disk — and the file on disk is neither the old version nor the new one. Worse, the app treated a file it could not read as "no data", quietly starting from scratch: you would open the app and find your activity history, speed-test history, volume presets, gaming profiles or saved settings simply gone, with nothing explaining why. Saves now write to a second file and swap it in as one step, so an interrupted save leaves the previous version completely intact. Affects the Activity log, Speed Test history, Volume presets, Gaming profiles, theme and appearance settings, the close-behaviour preference, the standby and update preferences, the Settings Watchdog baseline, the service-startup ledger, the performance snapshot used to undo tweaks, restored configuration backups, and the app-icon cache.
+
+---
+
 ## [1.64.16] - 2026-08-13
 
 File sizes now use the same decimal point as network speeds, everywhere in the app, whatever

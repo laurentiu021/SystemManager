@@ -5,6 +5,7 @@
 using System.IO;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -85,7 +86,7 @@ public sealed class UpdateCheckPreferenceService
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(_path, Serialize(preference));
+            AtomicFile.WriteAllText(_path, Serialize(preference));
         }
         catch (IOException ex) { Log.Debug("Update-check preference save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Update-check preference save denied: {Error}", ex.Message); }

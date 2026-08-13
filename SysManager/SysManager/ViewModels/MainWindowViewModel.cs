@@ -161,8 +161,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         return EagerItem(id, label, viewType, vm, inDevelopment);
     }
 
-    // An eagerly-provided VM (Dashboard, DarkMode, network tabs, placeholders). The instance is
-    // set as the NavItem's Content, so NavItem.Dispose disposes it on teardown like any other tab.
+    // An eagerly-provided VM (Dashboard and the designer/test graph). The instance is set as the
+    // NavItem's Content, so NavItem.Dispose disposes it on teardown like any other tab.
     private static NavItem EagerItem(string id, string label, Type viewType, object content, bool inDevelopment = false)
         => new()
         {
@@ -223,10 +223,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<DuplicateFileViewModel>("nav-duplicates",   "Duplicate Finder", typeof(Views.DuplicateFileView))),
 
         Group("grp-network", "Network",
-            EagerItem("nav-ping",           "Ping",           typeof(Views.PingView),          new PingViewModel(Eager<NetworkSharedState>())),
-            EagerItem("nav-traceroute",     "Traceroute",     typeof(Views.TracerouteView),    new TracerouteViewModel(Eager<NetworkSharedState>())),
-            EagerItem("nav-speed-test",     "Speed Test",     typeof(Views.SpeedTestView),     new SpeedTestViewModel(Eager<NetworkSharedState>(), new SpeedTestHistoryService())),
-            EagerItem("nav-network-repair", "Network Repair", typeof(Views.NetworkRepairView), new NetworkRepairViewModel(Eager<NetworkSharedState>())),
+            Tab<PingViewModel>("nav-ping",                   "Ping",           typeof(Views.PingView)),
+            Tab<TracerouteViewModel>("nav-traceroute",       "Traceroute",     typeof(Views.TracerouteView)),
+            Tab<SpeedTestViewModel>("nav-speed-test",        "Speed Test",     typeof(Views.SpeedTestView)),
+            Tab<NetworkRepairViewModel>("nav-network-repair", "Network Repair", typeof(Views.NetworkRepairView)),
             Tab<DnsHostsViewModel>("nav-dns-hosts", "DNS & Hosts", typeof(Views.DnsHostsView))),
 
         Group("grp-apps", "Apps",
@@ -397,6 +397,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var traceMonitor = new TracerouteMonitorService();
         var speedTest = new SpeedTestService();
         var netRepair = new NetworkRepairService(runner);
+        // One shared instance, as in the container: the four network view models coordinate through
+        // it (one tab's Start must disable the other's), so a second copy would silently split them.
+        var networkShared = new NetworkSharedState(pinger, tracer, traceMonitor, speedTest, netRepair);
         var restorePoints = new RestorePointService(runner);
         var gamingCpu = new CpuAffinityService();
 
@@ -415,7 +418,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(runner)),
             [typeof(PerformanceViewModel)] = new PerformanceViewModel(new PerformanceService(runner, restorePoints)),
             [typeof(StartupViewModel)] = new StartupViewModel(new StartupService()),
-            [typeof(NetworkSharedState)] = new NetworkSharedState(pinger, tracer, traceMonitor, speedTest, netRepair),
+            [typeof(NetworkSharedState)] = networkShared,
+            [typeof(PingViewModel)] = new PingViewModel(networkShared),
+            [typeof(TracerouteViewModel)] = new TracerouteViewModel(networkShared),
+            [typeof(SpeedTestViewModel)] = new SpeedTestViewModel(networkShared, new SpeedTestHistoryService()),
+            [typeof(NetworkRepairViewModel)] = new NetworkRepairViewModel(networkShared),
             [typeof(DriversViewModel)] = new DriversViewModel(runner),
             [typeof(LogsViewModel)] = new LogsViewModel(new EventLogService()),
             [typeof(AboutViewModel)] = new AboutViewModel(),

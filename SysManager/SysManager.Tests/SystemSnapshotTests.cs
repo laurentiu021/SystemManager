@@ -30,17 +30,55 @@ public class SystemSnapshotTests
     }
 
     [Fact]
-    public void MemoryInfo_WithModules_Aggregates()
+    public void MemoryInfo_CarriesTheModulesItWasGiven()
     {
+        // Renamed from MemoryInfo_WithModules_Aggregates, which asserted TotalGB == 32 and
+        // UsedGB == 14 — the literals handed to the constructor a line earlier. It aggregated
+        // nothing, so it would have passed with every aggregation in the app deleted. What is worth
+        // pinning is that the module list survives the record, which is all this type promises.
         var mods = new List<MemoryModule>
         {
-            new("DIMM0", "Corsair", 16, 6000, "CMH32"),
-            new("DIMM2", "Corsair", 16, 6000, "CMH32"),
+            new("DIMM0", "Corsair", 16, 6000, 6000, "CMH32"),
+            new("DIMM2", "Corsair", 16, 6000, 6000, "CMH32"),
         };
+
         var mem = new MemoryInfo(32, 18, 14, 43.75, mods);
-        Assert.Equal(2, mem.Modules.Count);
-        Assert.Equal(32, mem.TotalGB);
-        Assert.Equal(14, mem.UsedGB);
+
+        Assert.Equal(["DIMM0", "DIMM2"], mem.Modules.Select(m => m.Slot));
+    }
+
+    // ---------- running below the rated speed ----------
+    // WMI reports both a rated Speed and a ConfiguredClockSpeed. The gap between them is what tells
+    // someone their RAM is not running at the speed they paid for — usually XMP/EXPO left off in the
+    // BIOS. The value was being collected and then dropped, on a record nothing on screen reached.
+
+    [Fact]
+    public void MemoryModule_RunningBelowItsRating_IsFlagged()
+    {
+        var m = new MemoryModule("DIMM0", "Corsair", 16, 6000, 4800, "CMH32");
+
+        Assert.True(m.IsUnderclocked);
+    }
+
+    [Fact]
+    public void MemoryModule_RunningAtItsRating_IsNotFlagged()
+    {
+        var m = new MemoryModule("DIMM0", "Corsair", 16, 6000, 6000, "CMH32");
+
+        Assert.False(m.IsUnderclocked);
+    }
+
+    [Theory]
+    [InlineData(0u, 0u)]        // neither figure reported
+    [InlineData(6000u, 0u)]     // Windows did not report the configured speed
+    [InlineData(0u, 4800u)]     // no rating to compare against
+    public void MemoryModule_WithAnUnknownSpeed_IsNotFlagged(uint rated, uint configured)
+    {
+        // A missing figure must not read as "underclocked" — that would warn every user whose
+        // firmware does not report one of the two values.
+        var m = new MemoryModule("DIMM0", "Corsair", 16, rated, configured, "CMH32");
+
+        Assert.False(m.IsUnderclocked);
     }
 
     [Fact]

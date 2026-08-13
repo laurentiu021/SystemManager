@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.0] - 2026-08-13
+
+System Health now shows which slot each memory module is in, and whether your RAM is actually
+running at the speed it is rated for.
+
+### Added
+- **A "Running at (MHz)" column for your memory modules.** Windows reports both the speed a module is rated for and the speed it is really running at. If the second is lower — which usually means XMP/EXPO is switched off in the BIOS, so RAM you paid extra for is running slow — the figure is highlighted and hovering it explains why. When the two match, nothing draws attention to itself. The exported system report mentions the running speed only when it differs from the rating.
+
+### Fixed
+- **The "Slot" column was not showing the slot.** It showed the memory bank instead, which Windows often reports as just "BANK 0" or leaves blank. It now shows the slot name printed on the motherboard — "DIMM0", "ChannelA-DIMM1" — which is what you need if you are opening the case to find a specific module. The app was already reading the better name; it just went to a copy of the memory-module record that nothing on screen could reach.
+
+---
+
 ## [1.64.18] - 2026-08-13
 
 The Performance tab now names your power plan correctly, including on non-English Windows and when

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -160,7 +161,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
             ScanSummary = EntryCount == 0
                 ? "No subfolders found."
-                : $"{EntryCount} folders · {FormatSize(TotalSize)} total · {TotalFiles:N0} files";
+                : string.Create(CultureInfo.InvariantCulture, $"{EntryCount} folders · {FormatSize(TotalSize)} total · {TotalFiles:N0} files");
             HasScanned = true;
             StatusMessage = "Analysis complete.";
             ToastService.Instance.Show("Disk Analysis complete", $"{EntryCount} folders, {FormatSize(TotalSize)} total");

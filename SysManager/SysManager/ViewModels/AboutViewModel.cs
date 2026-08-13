@@ -488,7 +488,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                         var mhz = mo["MaxClockSpeed"];
                         sb.Append("CPU: ").Append(name);
                         if (cores is not null) sb.Append($" ({cores}c/{threads}t)");
-                        if (mhz is uint speed) sb.Append($" @ {speed / 1000.0:F1} GHz");
+                        if (mhz is uint speed) sb.Append(string.Create(CultureInfo.InvariantCulture, $" @ {speed / 1000.0:F1} GHz"));
                         sb.AppendLine();
                         break;
                     }
@@ -507,7 +507,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                         var totalKb = mo["TotalVisibleMemorySize"] as ulong? ?? 0;
                         var freeKb = mo["FreePhysicalMemory"] as ulong? ?? 0;
                         if (totalKb > 0)
-                            sb.AppendLine($"RAM: {totalKb / 1024.0 / 1024.0:F1} GB total, {freeKb / 1024.0 / 1024.0:F1} GB free");
+                            sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"RAM: {totalKb / 1024.0 / 1024.0:F1} GB total, {freeKb / 1024.0 / 1024.0:F1} GB free"));
                         break;
                     }
             }
@@ -530,7 +530,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                         ulong? adapterRam = mo["AdapterRAM"] is { } ram ? Convert.ToUInt64(ram) : null;
                         var vramGB = SysManager.Helpers.GpuVramHelper.ResolveVramGB(pnpId, adapterRam);
                         sb.Append("GPU: ").Append(name);
-                        if (vramGB is > 0) sb.Append($" ({vramGB:F1} GB VRAM)");
+                        if (vramGB is > 0) sb.Append(string.Create(CultureInfo.InvariantCulture, $" ({vramGB:F1} GB VRAM)"));
                         if (!string.IsNullOrEmpty(driver)) sb.Append($" driver {driver}");
                         sb.AppendLine();
                     }

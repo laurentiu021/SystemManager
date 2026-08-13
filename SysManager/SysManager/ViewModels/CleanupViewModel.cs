@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -160,7 +161,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
                     catch (IOException) { /* skip inaccessible directory */ }
                     catch (UnauthorizedAccessException) { /* skip protected directory */ }
                 }
-                var tLabel = tempBytes > 0 ? $"{tempBytes / 1024.0 / 1024.0:F1} MB can be freed" : "Empty";
+                var tLabel = tempBytes > 0 ? string.Create(CultureInfo.InvariantCulture, $"{tempBytes / 1024.0 / 1024.0:F1} MB can be freed") : "Empty";
 
                 // Measure recycle bin (rough estimate via shell folder)
                 string bLabel;
@@ -181,7 +182,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
                             catch (UnauthorizedAccessException) { /* skip protected file */ }
                         }
                     }
-                    bLabel = binBytes > 0 ? $"{binBytes / 1024.0 / 1024.0:F1} MB in Recycle Bin" : "Empty";
+                    bLabel = binBytes > 0 ? string.Create(CultureInfo.InvariantCulture, $"{binBytes / 1024.0 / 1024.0:F1} MB in Recycle Bin") : "Empty";
                 }
                 catch (IOException) { bLabel = "Unable to scan"; }
                 catch (UnauthorizedAccessException) { bLabel = "Unable to scan"; }

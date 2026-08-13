@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -228,7 +229,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             if (completed > 0)
             {
                 ActivityLogService.Instance.Log("File Shredder",
-                    $"Securely erased {completed:N0} item{(completed == 1 ? "" : "s")} ({(int)SelectedMethod}-pass overwrite)");
+                    string.Create(CultureInfo.InvariantCulture,
+                        $"Securely erased {completed:N0} item{(completed == 1 ? "" : "s")} ({(int)SelectedMethod}-pass overwrite)"));
             }
         }
         catch (OperationCanceledException)

@@ -251,7 +251,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 {
                     GpuPercent = usage;
                     GpuName = name;
-                    GpuVram = $"{memUsed:F1} / {memTotal:F1} GB VRAM";
+                    GpuVram = string.Create(CultureInfo.InvariantCulture, $"{memUsed:F1} / {memTotal:F1} GB VRAM");
                 });
                 return;
             }
@@ -658,7 +658,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             QuickActionProgress = 100;
             var freedMB = freed / 1024.0 / 1024.0;
             QuickActionDetail = freedMB >= 1024
-                ? $"Freed {freedMB / 1024:F1} GB"
+                ? string.Create(CultureInfo.InvariantCulture, $"Freed {freedMB / 1024:F1} GB")
                 : $"Freed {freedMB:F0} MB";
             ActivityLogService.Instance.Log("Quick Cleanup", QuickActionDetail);
         });

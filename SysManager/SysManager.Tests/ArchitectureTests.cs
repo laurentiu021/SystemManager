@@ -1333,6 +1333,91 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\{(?:Level:u3|Message:lj|NewLine|Exception)\}", RegexOptions.CultureInvariant)]
     private static partial Regex SerilogTemplateToken();
 
+    /// <summary>
+    /// Every number formatted with a decimal or grouped specifier must name its culture, so it agrees
+    /// with <c>FormatHelper</c>.
+    /// <para>v1.64.16 made <c>FormatHelper</c> invariant. It did not touch the interpolation holes,
+    /// which still went through <c>CurrentCulture</c> — so the fix left a MIXED screen rather than a
+    /// consistent one. Measured on ro-RO for the same 1.5 GB value:</para>
+    /// <code>
+    ///   FormatHelper.FormatSize(...)  ->  "1.5 GB"     (invariant, since v1.64.16)
+    ///   $"{gb:F1} GB"                 ->  "1,5 GB"     (CurrentCulture)
+    /// </code>
+    /// <para>Two different decimal marks, side by side, in the same sentence — which is the exact
+    /// inconsistency v1.64.16 set out to remove. The same applies to <c>N0</c> grouping: 1610 renders
+    /// as "1,610" invariant, "1.610" on ro-RO/de-DE, and "1 610" on fr-FR/fi-FI.</para>
+    /// <para>Only culture-SENSITIVE specifiers are checked. <c>F0</c> is deliberately excluded: a whole
+    /// number with no grouping renders identically on every culture, so requiring a wrapper there would
+    /// be churn with no behaviour change. Hex (<c>X8</c>) consults no culture data either.</para>
+    /// <para>The fix is <c>string.Create(CultureInfo.InvariantCulture, $"…")</c>, which wraps the WHOLE
+    /// string. That matters: a per-hole fix on a line with three holes can leave two of them behind,
+    /// which is precisely how the first pass of the date migration missed eight sites.</para>
+    /// </summary>
+    [Fact]
+    public void EveryCultureSensitiveNumberFormat_NamesItsCulture()
+    {
+        var appDir = FindAppProjectDir();
+        var offenders = new List<string>();
+        var wrapped = 0;
+
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                              StringComparison.Ordinal)) continue;
+
+            var source = File.ReadAllText(file);
+            var name = Path.GetFileName(file);
+
+            foreach (var match in InterpolatedString().Matches(source).Cast<Match>())
+            {
+                if (!CultureSensitiveNumberHole().IsMatch(match.Value)) continue;
+
+                var before = source[Math.Max(0, match.Index - 120)..match.Index];
+
+                // A Serilog message template is not an interpolated string: Serilog parses it and
+                // LogService builds the formatter with InvariantCulture, so the hole never reaches
+                // string.Format. Rewriting one would also break structured logging.
+                if (SerilogCall().IsMatch(before)) continue;
+
+                if (InvariantWrapper().IsMatch(before)) { wrapped++; continue; }
+
+                var line = source[..match.Index].Count(c => c == '\n') + 1;
+                offenders.Add($"{name}:{line} {match.Value[..Math.Min(70, match.Value.Length)]}");
+            }
+        }
+
+        // Vacuity floor: if the interpolated-string pattern stopped matching, this would pass while
+        // inspecting nothing at all.
+        Assert.True(wrapped >= 30,
+            $"Only {wrapped} invariant-wrapped numeric strings were found — the detection is broken, "
+            + "not the code. Fix this guard rather than trusting it.");
+
+        Assert.True(offenders.Count == 0,
+            "These numbers are formatted through CurrentCulture while FormatHelper is invariant, so on "
+            + "a comma locale the same screen shows both \"1.5 GB\" and \"1,5 GB\". Wrap the whole string "
+            + "in string.Create(CultureInfo.InvariantCulture, $\"…\"):\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({wrapped} already wrapped)");
+    }
+
+    // An interpolated string literal. The nested-quote alternative is load-bearing: C# allows
+    // $"…{(b ? "y" : "n")}…", and a pattern without it silently skips those strings — one such site
+    // (ShortcutCleanerViewModel) was missed by exactly that omission.
+    [GeneratedRegex(@"\$""(?:[^""\\\n]|\\.|""(?=[^""\n]*""))*""", RegexOptions.CultureInvariant)]
+    private static partial Regex InterpolatedString();
+
+    // A decimal mark (F1+, N1+, P, 0.0) or a group separator (N0, #,#). F0 is absent on purpose.
+    [GeneratedRegex(@"\{[^{}]{1,120}?:(?:F[1-9]|N[1-9]|N0|P\d+|0\.0+|#,#)", RegexOptions.CultureInvariant)]
+    private static partial Regex CultureSensitiveNumberHole();
+
+    [GeneratedRegex(@"(?:string\.Create\(\s*(?:System\.Globalization\.)?CultureInfo\.InvariantCulture\s*,\s*"
+                    + @"|FormattableString\.Invariant\(\s*)$", RegexOptions.CultureInvariant)]
+    private static partial Regex InvariantWrapper();
+
+    [GeneratedRegex(@"\bLog(?:ger)?\s*\.\s*(?:Verbose|Debug|Information|Warning|Error|Fatal)\s*\([^)]*$",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex SerilogCall();
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

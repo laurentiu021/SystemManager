@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -161,7 +162,8 @@ public sealed class CliRunner
                 ? new CliResult(CliResult.Ok, Json(new { freedBytes = bytes, freedMB = Math.Round(mb, 1), filesDeleted = files, errors }))
                 : new CliResult(CliResult.Ok, request.Silent
                     ? $"{mb:F0} MB freed"
-                    : $"Cleanup complete: freed {mb:F1} MB across {files} file(s){(errors > 0 ? $", {errors} skipped" : "")}.");
+                    : string.Create(CultureInfo.InvariantCulture,
+                        $"Cleanup complete: freed {mb:F1} MB across {files} file(s){(errors > 0 ? $", {errors} skipped" : "")}."));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -199,12 +199,12 @@ public sealed class SystemReportService
         sb.Append($"  {d.Cpu.Name}");
         if (d.Cpu.Cores > 0) sb.Append($" ({d.Cpu.Cores} cores / {d.Cpu.LogicalProcessors} threads)");
         sb.AppendLine();
-        if (d.Cpu.MaxClockMHz > 0) sb.AppendLine($"  Base: {d.Cpu.MaxClockMHz / 1000.0:F1} GHz");
+        if (d.Cpu.MaxClockMHz > 0) sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"  Base: {d.Cpu.MaxClockMHz / 1000.0:F1} GHz"));
         sb.AppendLine();
 
         AppendSection(sb, "Memory");
-        sb.AppendLine($"  {d.Memory.TotalGB:F1} GB total");
-        sb.AppendLine($"  Used: {d.Memory.UsedGB:F1} / {d.Memory.TotalGB:F1} GB ({d.Memory.UsedPercent:F0}%)");
+        sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"  {d.Memory.TotalGB:F1} GB total"));
+        sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"  Used: {d.Memory.UsedGB:F1} / {d.Memory.TotalGB:F1} GB ({d.Memory.UsedPercent:F0}%)"));
         if (d.Memory.Modules.Count > 0)
         {
             sb.AppendLine("  Slots:");
@@ -226,7 +226,7 @@ public sealed class SystemReportService
             foreach (var g in d.Gpus)
             {
                 sb.Append($"  {g.Name}");
-                if (g.VramGB.HasValue) sb.Append($" — VRAM: {g.VramGB:F1} GB");
+                if (g.VramGB.HasValue) sb.Append(string.Create(CultureInfo.InvariantCulture, $" — VRAM: {g.VramGB:F1} GB"));
                 if (!string.IsNullOrWhiteSpace(g.DriverVersion)) sb.Append($" — Driver: {g.DriverVersion}");
                 sb.AppendLine();
             }
@@ -328,13 +328,13 @@ public sealed class SystemReportService
         OpenSection(sb, "CPU");
         Row(sb, "Processor", d.Cpu.Name);
         if (d.Cpu.Cores > 0) Row(sb, "Cores / Threads", $"{d.Cpu.Cores} / {d.Cpu.LogicalProcessors}");
-        if (d.Cpu.MaxClockMHz > 0) Row(sb, "Base clock", $"{d.Cpu.MaxClockMHz / 1000.0:F1} GHz");
+        if (d.Cpu.MaxClockMHz > 0) Row(sb, "Base clock", string.Create(CultureInfo.InvariantCulture, $"{d.Cpu.MaxClockMHz / 1000.0:F1} GHz"));
         CloseSection(sb);
 
         // Memory
         OpenSection(sb, "Memory");
-        Row(sb, "Total", $"{d.Memory.TotalGB:F1} GB");
-        Row(sb, "In use", $"{d.Memory.UsedGB:F1} / {d.Memory.TotalGB:F1} GB ({d.Memory.UsedPercent:F0}%)");
+        Row(sb, "Total", string.Create(CultureInfo.InvariantCulture, $"{d.Memory.TotalGB:F1} GB"));
+        Row(sb, "In use", string.Create(CultureInfo.InvariantCulture, $"{d.Memory.UsedGB:F1} / {d.Memory.TotalGB:F1} GB ({d.Memory.UsedPercent:F0}%)"));
         foreach (var mod in d.Memory.Modules)
         {
             var v = $"{mod.CapacityGB:F0} GB";
@@ -351,7 +351,7 @@ public sealed class SystemReportService
             foreach (var g in d.Gpus)
             {
                 var v = g.Name;
-                if (g.VramGB.HasValue) v += $" · {g.VramGB:F1} GB VRAM";
+                if (g.VramGB.HasValue) v += string.Create(CultureInfo.InvariantCulture, $" · {g.VramGB:F1} GB VRAM");
                 if (!string.IsNullOrWhiteSpace(g.DriverVersion)) v += $" · driver {g.DriverVersion}";
                 Row(sb, "Adapter", v);
             }

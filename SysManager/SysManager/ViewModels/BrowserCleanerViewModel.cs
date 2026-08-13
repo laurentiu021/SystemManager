@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -125,7 +126,8 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
             // Counts only. Naming the categories would record which browser/profile data the user
             // chose to erase, and activity.json is plain text under %LocalAppData%.
             ActivityLogService.Instance.Log("Browser Cleaner",
-                $"Removed {deleted:N0} file{(deleted == 1 ? "" : "s")} from {selected.Count} categor{(selected.Count == 1 ? "y" : "ies")}");
+                string.Create(CultureInfo.InvariantCulture,
+                    $"Removed {deleted:N0} file{(deleted == 1 ? "" : "s")} from {selected.Count} categor{(selected.Count == 1 ? "y" : "ies")}"));
             Log.Information("BrowserCleaner: cleaned {Count} categories, {Deleted} files", selected.Count, deleted);
             await ScanAsync().ConfigureAwait(true);
         }

@@ -18,10 +18,10 @@ public sealed record BootRecord(
     long PostBootTimeMs)
 {
     /// <summary>Total boot time as whole seconds, one decimal.</summary>
-    public string BootSecondsDisplay => $"{BootTimeMs / 1000.0:F1} s";
+    public string BootSecondsDisplay => string.Create(CultureInfo.InvariantCulture, $"{BootTimeMs / 1000.0:F1} s");
 
-    public string MainPathDisplay => $"{MainPathBootTimeMs / 1000.0:F1} s";
-    public string PostBootDisplay => $"{PostBootTimeMs / 1000.0:F1} s";
+    public string MainPathDisplay => string.Create(CultureInfo.InvariantCulture, $"{MainPathBootTimeMs / 1000.0:F1} s");
+    public string PostBootDisplay => string.Create(CultureInfo.InvariantCulture, $"{PostBootTimeMs / 1000.0:F1} s");
     public string WhenDisplay => BootTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 }
 
@@ -36,6 +36,6 @@ public sealed record BootDegradation(
     string Name,
     long DurationMs)
 {
-    public string DurationDisplay => DurationMs >= 1000 ? $"{DurationMs / 1000.0:F1} s" : $"{DurationMs} ms";
+    public string DurationDisplay => DurationMs >= 1000 ? string.Create(CultureInfo.InvariantCulture, $"{DurationMs / 1000.0:F1} s") : $"{DurationMs} ms";
     public string WhenDisplay => When.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 }

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -183,7 +184,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     /// </summary>
     internal static string BuildScanStatus(DuplicateFileService.ScanProgress p)
     {
-        var counts = $"{p.Phase} — {p.FilesDiscovered:N0} found, {p.FilesHashed:N0} hashed";
+        var counts = string.Create(CultureInfo.InvariantCulture, $"{p.Phase} — {p.FilesDiscovered:N0} found, {p.FilesHashed:N0} hashed");
 
         // Path.GetFileName returns "" for a directory path ending in a separator, and the discovery phase
         // reports folders as well as files; fall back to the raw value rather than showing nothing.

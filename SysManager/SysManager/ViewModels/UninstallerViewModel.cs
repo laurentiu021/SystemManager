@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -298,7 +299,8 @@ public sealed partial class UninstallerViewModel : ViewModelBase
             if (removed > 0)
             {
                 ActivityLogService.Instance.Log("Uninstaller",
-                    $"Uninstalled {removed:N0} app{(removed == 1 ? "" : "s")}" +
+                    string.Create(CultureInfo.InvariantCulture,
+                        $"Uninstalled {removed:N0} app{(removed == 1 ? "" : "s")}") +
                     (failed > 0 ? $" ({failed} failed)" : string.Empty) +
                     (cancellationRequested ? " — cancelled partway" : string.Empty));
             }

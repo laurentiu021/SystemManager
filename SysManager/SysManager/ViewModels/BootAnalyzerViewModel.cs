@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -90,9 +91,9 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
         var pct = (latest - avg) / avg * 100.0;
         return pct switch
         {
-            > 15 => $"Last boot was {pct:F0}% slower than your recent average ({avg / 1000.0:F1} s).",
-            < -15 => $"Last boot was {-pct:F0}% faster than your recent average ({avg / 1000.0:F1} s).",
-            _ => $"Boot time is steady — recent average {avg / 1000.0:F1} s."
+            > 15 => string.Create(CultureInfo.InvariantCulture, $"Last boot was {pct:F0}% slower than your recent average ({avg / 1000.0:F1} s)."),
+            < -15 => string.Create(CultureInfo.InvariantCulture, $"Last boot was {-pct:F0}% faster than your recent average ({avg / 1000.0:F1} s)."),
+            _ => string.Create(CultureInfo.InvariantCulture, $"Boot time is steady — recent average {avg / 1000.0:F1} s.")
         };
     }
 

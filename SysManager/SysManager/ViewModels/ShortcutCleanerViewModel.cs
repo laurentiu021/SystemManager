@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -139,7 +140,8 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         // Records whether the shortcuts are recoverable, which is the part that matters if the user
         // later wonders where one went. Counts only, no shortcut names.
         ActivityLogService.Instance.Log("Shortcut Cleaner",
-            $"{(MoveToRecycleBin ? "Moved" : "Permanently deleted")} {deleted:N0} broken shortcut{(deleted == 1 ? "" : "s")}" +
+            string.Create(CultureInfo.InvariantCulture,
+                $"{(MoveToRecycleBin ? "Moved" : "Permanently deleted")} {deleted:N0} broken shortcut{(deleted == 1 ? "" : "s")}") +
             (MoveToRecycleBin ? " to the Recycle Bin" : ""));
         Log.Information("Deleted {Count} broken shortcuts (recycle bin: {RecycleBin})", deleted, MoveToRecycleBin);
     }

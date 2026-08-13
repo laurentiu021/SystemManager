@@ -33,7 +33,7 @@ public sealed partial class CleanupCategory : ObservableObject
     public bool IsRecycleBin { get; init; }
 
     public string SizeDisplay => FormatHelper.FormatSize(TotalSizeBytes);
-    public string CountDisplay => SkippedCount > 0 ? $"{FileCount:N0} files · {SkippedCount:N0} skipped" : $"{FileCount:N0} files";
+    public string CountDisplay => SkippedCount > 0 ? string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} files · {SkippedCount:N0} skipped") : string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} files");
 }
 
 public sealed record CleanupResult
@@ -42,7 +42,7 @@ public sealed record CleanupResult
     public int FilesDeleted { get; init; }
     public IReadOnlyList<string> Errors { get; init; } = [];
     public string Summary =>
-        $"Freed {FormatHelper.FormatSize(BytesFreed)} across {FilesDeleted:N0} files" +
+        string.Create(CultureInfo.InvariantCulture, $"Freed {FormatHelper.FormatSize(BytesFreed)} across {FilesDeleted:N0} files") +
         (Errors.Count > 0 ? $" · {Errors.Count} skipped" : string.Empty);
 }
 

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.Helpers;
 
@@ -139,6 +140,6 @@ public sealed partial class DiskHealthReport : ObservableObject
         null => "—",
         < 24 => $"{PowerOnHours}h",
         < 8760 => $"{PowerOnHours / 24}d {PowerOnHours % 24}h",
-        _ => $"{PowerOnHours.Value / 8760.0:F1}y"
+        _ => string.Create(CultureInfo.InvariantCulture, $"{PowerOnHours.Value / 8760.0:F1}y")
     };
 }

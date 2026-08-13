@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -68,7 +69,7 @@ public static class HealthAnalyzer
         {
             diag.Verdict = HealthVerdict.Good;
             diag.Headline = "Connection is healthy";
-            diag.Detail = $"Avg {diag.AveragePingMs:F0} ms · {diag.WorstLossPercent:F1}% worst loss · {diag.WorstJitterMs:F0} ms jitter.";
+            diag.Detail = string.Create(CultureInfo.InvariantCulture, $"Avg {diag.AveragePingMs:F0} ms · {diag.WorstLossPercent:F1}% worst loss · {diag.WorstJitterMs:F0} ms jitter.");
             diag.ColorHex = StatusColors.Good;
             return diag;
         }

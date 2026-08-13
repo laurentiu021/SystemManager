@@ -10,6 +10,14 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.2] - 2026-08-13
+
+Sizes and counts now use the same decimal point everywhere in the app. If your Windows is set to a language that writes numbers with a comma — Romanian, German, French, Finnish and most of Europe — the same screen could show "1.5 GB" in one place and "1,5 GB" right next to it.
+
+### Fixed
+- **Two different decimal marks on one screen.** A previous release made the shared size and speed formatter always use a point, but the numbers written directly into sentences still followed the Windows regional setting. On a comma locale that produced a visible mismatch — a size from one code path and a boot time from another, side by side, punctuated differently. Boot times, disk sizes, memory figures, download speeds, VRAM, drive temperatures, the tray tooltip and the exported system report all now match.
+- **Thousands were grouped differently depending on the language.** A file count of 1610 was shown as "1,610", "1.610" or "1 610" depending on the regional setting, and the space variant is a non-breaking space that does not survive a copy-paste. Counts in Deep Cleanup, Disk Analyzer, Duplicate Finder, Browser Cleaner, the Shortcut Cleaner, the Uninstaller and the File Shredder are now consistent, including in the activity log they write.
+
 ## [1.65.1] - 2026-08-13
 
 Dates and times now look the same on every PC. If your Windows is set to a language whose calendar is not the Western one — Thai or Arabic, for example — the app was printing the wrong year, and in a few places the wrong month, in lists, exported reports, and even in the names of the files it saved.

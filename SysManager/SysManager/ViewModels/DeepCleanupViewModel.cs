@@ -4,6 +4,7 @@
 
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -239,7 +240,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         var totalBytes = selected.Sum(c => c.TotalSizeBytes);
         var fileCount = selected.Sum(c => c.FileCount);
         if (!DialogService.Instance.Confirm(
-                $"Permanently delete {fileCount:N0} files (~{FormatHelper.FormatSize(totalBytes)}) " +
+                string.Create(CultureInfo.InvariantCulture, $"Permanently delete {fileCount:N0} files (~{FormatHelper.FormatSize(totalBytes)}) ") +
                 $"across {selected.Count} categor{(selected.Count == 1 ? "y" : "ies")}?\n\n" +
                 (selected.Any(c => c.IsRecycleBin)
                     ? "This includes emptying the Recycle Bin on every drive, so whatever is in it now " +

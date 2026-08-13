@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.Windows;
 using System.Windows.Threading;
 using H.NotifyIcon;
@@ -207,7 +208,7 @@ public sealed class TrayIconService : IDisposable
 
             var tooltip = $"SysManager\n" +
                           $"CPU: {snapshot.Cpu.LoadPercent:0}% | " +
-                          $"RAM: {snapshot.Memory.UsedGB:0.0}/{snapshot.Memory.TotalGB:0.0} GB ({snapshot.Memory.UsedPercent:0}%)\n" +
+                          string.Create(CultureInfo.InvariantCulture, $"RAM: {snapshot.Memory.UsedGB:0.0}/{snapshot.Memory.TotalGB:0.0} GB ({snapshot.Memory.UsedPercent:0}%)\n") +
                           $"Uptime: {snapshot.Os.Uptime.Days}d {snapshot.Os.Uptime.Hours}h";
 
             // TaskbarIcon tooltip max 127 chars

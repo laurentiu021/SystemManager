@@ -633,9 +633,9 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             var bytes = el.GetInt64();
             return bytes switch
             {
-                >= 1L << 30 => $"{bytes / (double)(1L << 30):F1} GB",
-                >= 1L << 20 => $"{bytes / (double)(1L << 20):F1} MB",
-                >= 1L << 10 => $"{bytes / (double)(1L << 10):F1} KB",
+                >= 1L << 30 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 30):F1} GB"),
+                >= 1L << 20 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 20):F1} MB"),
+                >= 1L << 10 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 10):F1} KB"),
                 _ => $"{bytes} B"
             };
         }

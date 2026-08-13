@@ -39,16 +39,20 @@ public class UpdateServiceParseVersionBulkTests
         var suffixes = new[] { "-alpha", "-beta", "-rc1", "-rc.2", "-preview.3", "+build", "+meta.1" };
         foreach (var s in suffixes)
         {
-            yield return new object[] { $"v0.5.0{s}" };
-            yield return new object[] { $"1.2.3{s}" };
+            yield return new object[] { $"v0.5.0{s}", new Version(0, 5, 0) };
+            yield return new object[] { $"1.2.3{s}", new Version(1, 2, 3) };
         }
     }
 
     [Theory]
     [MemberData(nameof(SuffixTags))]
-    public void ParseVersion_StripsAllSuffixes(string tag)
+    public void ParseVersion_StripsAllSuffixes(string tag, Version expected)
     {
-        Assert.NotNull(UpdateService.ParseVersion(tag));
+        // Asserting only NotNull let any regression that mangles the strip but still leaves
+        // something parseable pass: "v0.5.0-rc.2" collapsing to "0.5.02" becomes Version 0.5.2 and
+        // would have gone unnoticed — on the comparison that decides whether the user is offered an
+        // update.
+        Assert.Equal(expected, UpdateService.ParseVersion(tag));
     }
 
     public static IEnumerable<object[]> Garbage()
@@ -58,14 +62,22 @@ public class UpdateServiceParseVersionBulkTests
         foreach (var j in junk) yield return new object[] { j };
     }
 
+    /// <summary>
+    /// Every one of these must be REJECTED, not merely survived.
+    /// <para>This test used to discard the result with <c>_ = v;</c> under a comment claiming some
+    /// inputs "may legitimately parse", so despite its name it asserted nothing about rejection —
+    /// a regression returning a Version for "abc" or "1,2,3" passed all 18 cases. The comment was
+    /// also wrong: every input here returns null, "1.2.3.4.5.6" included (its four-plus components
+    /// survive the suffix cut, and Version.TryParse rejects six).</para>
+    /// <para>It matters because ParseVersion decides whether the user is told an update exists. A
+    /// garbage tag that parsed to some arbitrary version could offer a downgrade, or hide a real
+    /// update behind a bogus higher number.</para>
+    /// </summary>
     [Theory]
     [MemberData(nameof(Garbage))]
     public void ParseVersion_RejectsAllGarbage(string tag)
     {
-        var v = UpdateService.ParseVersion(tag);
-        // Some of these (like "1.2.3.4.5.6") may legitimately parse — we only
-        // require that the call does not throw.
-        _ = v;
+        Assert.Null(UpdateService.ParseVersion(tag));
     }
 
     public static IEnumerable<object[]> NewerPairs()

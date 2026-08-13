@@ -253,14 +253,6 @@ public class DeepCleanupViewModelTests
     }
 
     [Fact]
-    public void ScanLocation_RecordHoldsValues()
-    {
-        var loc = new ScanLocation("Downloads", @"C:\Users\X\Downloads");
-        Assert.Equal("Downloads", loc.Label);
-        Assert.Equal(@"C:\Users\X\Downloads", loc.Path);
-    }
-
-    [Fact]
     public void ScanLocation_Records_EquateByValue()
     {
         var a = new ScanLocation("A", "p");

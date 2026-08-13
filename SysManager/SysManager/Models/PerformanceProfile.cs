@@ -41,17 +41,28 @@ public sealed partial class PerformanceProfile : ObservableObject
     [ObservableProperty] private int _processorMinPercent;
 
     /// <summary>Friendly summary of the active profile.</summary>
-    public string ProfileSummary
+    /// <remarks>
+    /// GUID first, name last. The plan's display name is user-editable and localized, so matching on
+    /// it decided two things wrongly: a custom plan called e.g. "Ultimate Battery Saver" — copied from
+    /// Balanced, and carrying Balanced's GUID — was reported as "Ultimate Performance", and on
+    /// non-English Windows the real Ultimate plan ("Ultimative Leistung", "Rendimiento máximo") was
+    /// never recognised at all. The name check now only catches a DUPLICATE of the Ultimate scheme,
+    /// which gets a fresh random GUID but keeps the name, and it runs after every GUID has been ruled
+    /// out.
+    /// </remarks>
+    public string ProfileSummary => PlanLabel() ?? ActivePlanName;
+
+    private string? PlanLabel()
     {
-        get
-        {
-            if (ActivePlanName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
-                return "Ultimate Performance";
-            if (ActivePlanGuid.Contains("8c5e7fda", StringComparison.OrdinalIgnoreCase))
-                return "High Performance";
-            if (ActivePlanGuid.Contains("381b4222", StringComparison.OrdinalIgnoreCase))
-                return "Balanced";
-            return ActivePlanName;
-        }
+        if (MatchesPlan(PowerPlans.UltimatePerformance)) return "Ultimate Performance";
+        if (MatchesPlan(PowerPlans.HighPerformance)) return "High Performance";
+        if (MatchesPlan(PowerPlans.Balanced)) return "Balanced";
+        // Only reached when the GUID is none of the stock three: a duplicated Ultimate scheme.
+        return ActivePlanName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase)
+            ? "Ultimate Performance"
+            : null;
     }
+
+    private bool MatchesPlan(string planGuid) =>
+        ActivePlanGuid.Contains(planGuid, StringComparison.OrdinalIgnoreCase);
 }

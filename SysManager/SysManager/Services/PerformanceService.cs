@@ -37,9 +37,11 @@ public sealed partial class PerformanceService : IDisposable
     private bool _disposed;
 
     // ── Well-known power plan GUIDs ──
-    internal const string BalancedGuid = "381b4222-f694-41f0-9685-ff5bb260df2e";
-    internal const string HighPerfGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
-    internal const string UltimatePerfScheme = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+    // Defined once in Models/PowerPlans so the model can identify a plan too; re-exported here
+    // under the names this service and its tests already use.
+    internal const string BalancedGuid = PowerPlans.Balanced;
+    internal const string HighPerfGuid = PowerPlans.HighPerformance;
+    internal const string UltimatePerfScheme = PowerPlans.UltimatePerformance;
 
     internal const int MaxSnapshotBytes = 64 * 1024;
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new()

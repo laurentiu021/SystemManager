@@ -749,14 +749,25 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     //  HELPERS
     // ═══════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// Which of the three plan options is shown as selected. GUID first: the plan's display name is
+    /// user-editable and localized, so a custom plan named "Ultimate Battery Saver" (a copy of
+    /// Balanced) selected Ultimate, and the real Ultimate plan on non-English Windows fell through to
+    /// Balanced. The name check now only catches a duplicated Ultimate scheme — which keeps the name
+    /// but gets a fresh GUID — and only once every stock GUID has been ruled out.
+    /// </summary>
     private string GetCurrentPlanKey()
     {
-        if (Profile.ActivePlanName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
-            return "ultimate";
-        if (Profile.ActivePlanGuid.Contains("8c5e7fda", StringComparison.OrdinalIgnoreCase))
-            return "high";
-        return "balanced";
+        if (MatchesPlan(PowerPlans.UltimatePerformance)) return "ultimate";
+        if (MatchesPlan(PowerPlans.HighPerformance)) return "high";
+        if (MatchesPlan(PowerPlans.Balanced)) return "balanced";
+        return Profile.ActivePlanName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase)
+            ? "ultimate"
+            : "balanced";
     }
+
+    private bool MatchesPlan(string planGuid) =>
+        Profile.ActivePlanGuid.Contains(planGuid, StringComparison.OrdinalIgnoreCase);
 
     private void SyncTogglesFromProfile()
     {

@@ -55,6 +55,67 @@ public class PerformanceProfileTests
         Assert.Equal("My Custom Plan", p.ProfileSummary);
     }
 
+    // ---------- the plan is identified by GUID, not by its editable name ----------
+    // The name check used to run FIRST, so any plan whose name merely contained "ultimate" was
+    // reported as Ultimate Performance no matter which scheme was actually active — and the stock
+    // Ultimate GUID was never checked at all, so on non-English Windows the real Ultimate plan fell
+    // through to its localized name. Both are wrong on the one line the tab uses to tell the user
+    // which plan is on.
+
+    [Fact]
+    public void ProfileSummary_APlanMerelyNamedUltimate_IsNotReportedAsUltimate()
+    {
+        // Duplicating Balanced and naming it "Ultimate Battery Saver" keeps Balanced's GUID.
+        var p = new PerformanceProfile
+        {
+            ActivePlanGuid = "381b4222-f694-41f0-9685-ff5bb260df2e",
+            ActivePlanName = "Ultimate Battery Saver",
+        };
+
+        Assert.Equal("Balanced", p.ProfileSummary);
+    }
+
+    [Fact]
+    public void ProfileSummary_TheRealUltimatePlan_IsRecognisedByItsGuid()
+    {
+        var p = new PerformanceProfile
+        {
+            ActivePlanGuid = "e9a42b02-d5df-448d-aa00-03f14749eb61",
+            ActivePlanName = "Ultimate Performance",
+        };
+
+        Assert.Equal("Ultimate Performance", p.ProfileSummary);
+    }
+
+    [Theory]
+    [InlineData("Ultimative Leistung")]     // de-DE
+    [InlineData("Rendimiento máximo")]      // es-ES
+    [InlineData("Performances ultimes")]    // fr-FR
+    public void ProfileSummary_TheRealUltimatePlan_IsRecognisedOnNonEnglishWindows(string localizedName)
+    {
+        var p = new PerformanceProfile
+        {
+            ActivePlanGuid = "e9a42b02-d5df-448d-aa00-03f14749eb61",
+            ActivePlanName = localizedName,
+        };
+
+        Assert.Equal("Ultimate Performance", p.ProfileSummary);
+    }
+
+    [Fact]
+    public void ProfileSummary_ADuplicatedUltimateScheme_IsStillRecognisedByName()
+    {
+        // A duplicated scheme gets a fresh random GUID but keeps its name, so the name check still
+        // earns its place — as a LAST resort, once every stock GUID has been ruled out.
+        var p = new PerformanceProfile
+        {
+            ActivePlanGuid = "7a91b6c4-1111-2222-3333-444455556666",
+            ActivePlanName = "Ultimate Performance - Copy",
+        };
+
+        Assert.Equal("Ultimate Performance", p.ProfileSummary);
+    }
+
     [Fact]
     public void PropertyChange_Notifies()
     {

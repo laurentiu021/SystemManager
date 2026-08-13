@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.14] - 2026-08-13
+
+The "Run as administrator" button now tells screen readers and voice control exactly what it says on
+screen, on all 30 pages that offer it.
+
+### Fixed
+- **The "Run as administrator" button announced a different name than the one printed on it.** Thirty pages offer that button, and only fifteen of them announced it as "Run as administrator". Five said "Restart SysManager as administrator", four said "Relaunch as administrator", one said "Restart as administrator", and five said nothing at all. Anyone using a screen reader heard a verb that was not on the screen, and anyone using Windows Speech Recognition or Voice Access could say the words they could read and have nothing happen — on the one button that unlocks everything else. All thirty now say "Run as administrator", and a test fails the build if a new page drifts again.
+
+---
+
 ## [1.64.13] - 2026-08-13
 
 Pressing Enter on a confirmation prompt no longer approves it. Every "are you sure?" now starts on

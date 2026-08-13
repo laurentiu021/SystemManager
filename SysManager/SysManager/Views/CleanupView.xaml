@@ -25,7 +25,8 @@
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"/>
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>

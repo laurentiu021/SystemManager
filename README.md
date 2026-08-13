@@ -444,10 +444,13 @@ a confirmation before it runs:
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, and status
 - Real-time filter by name, description, category, or PID
-- Sort by memory, CPU usage, name, or PID via clickable column headers
+- Sort by memory, CPU usage, name, category, or PID via clickable column headers
 - **Built-in description database** — 108 common Windows processes and popular
   applications with plain-language descriptions and categories (System, Browser,
-  Development, Communication, Media, Gaming, etc.)
+  Development, Communication, Media, Gaming, etc.). The description sits under each
+  process name and the category has its own sortable column, so a process you don't
+  recognise explains itself without a web search — including the Windows system
+  processes whose own description Windows withholds unless SysManager is elevated
 - **Safety column** — every process is labelled **Windows**, **Known app** or
   **Not recognised**, with a hover explanation of what that means for ending it.
   Sortable, so everything unrecognised can be grouped together at a glance

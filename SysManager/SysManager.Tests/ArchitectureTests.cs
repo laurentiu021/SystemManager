@@ -865,6 +865,47 @@ public partial class ArchitectureTests
     private static partial Regex CategoryLink();
 
     /// <summary>
+    /// A field a search box matches against must be visible somewhere in that tab's view. Otherwise the
+    /// user is invited to filter by text the app never shows them — and it hides a whole unreachable
+    /// field: the Process Manager loaded a plain-English description and a category from its 108-entry
+    /// database, matched both in the search, and rendered neither, showing the raw exe FileDescription
+    /// instead. The searchable-but-invisible field is the quiet signature of that defect class.
+    /// </summary>
+    [Fact]
+    public void EverySearchableField_IsVisibleInItsView()
+    {
+        var appDir = FindAppProjectDir();
+        var source = File.ReadAllText(Path.Combine(appDir, "ViewModels", "ProcessManagerViewModel.cs"));
+        var xaml = File.ReadAllText(Path.Combine(appDir, "Views", "ProcessManagerView.xaml"));
+
+        // The filter enumerates its fields in one span; read them from there rather than restating them,
+        // so adding a fourth searchable field is covered automatically.
+        var span = SearchableFieldSpan().Match(source);
+        Assert.True(span.Success,
+            "could not find the Process Manager's searchable-field list — if the filter was rewritten, "
+            + "update this guard rather than deleting it");
+
+        var fields = span.Groups[1].Value
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(f => f.Replace("p.", "", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(fields.Count >= 3, $"expected the filter's field list, parsed {fields.Count}");
+
+        var invisible = fields
+            .Where(f => !xaml.Contains($"Binding {f}", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(invisible.Count == 0,
+            "the Process Manager search matches these fields but its view renders none of them, so a "
+            + "user can filter by text they were never shown:\n  " + string.Join("\n  ", invisible));
+    }
+
+    /// <summary>The Process Manager's searchable-field span, capturing the field list.</summary>
+    [GeneratedRegex(@"ReadOnlySpan<string\?>\s+fields\s*=\s*\[([^\]]+)\]", RegexOptions.Compiled)]
+    private static partial Regex SearchableFieldSpan();
+
+    /// <summary>
     /// Every issue template that asks which tab is affected must offer the real tabs. Two of the three
     /// templates were still offering an 18-entry list from when the app had roughly that many tabs, with
     /// names that no longer matched the sidebar ("Cleanup" for "Quick Cleanup") and one entry — "Network"

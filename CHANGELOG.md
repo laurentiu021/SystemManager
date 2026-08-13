@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.13] - 2026-08-13
+
+Pressing Enter on a confirmation prompt no longer approves it. Every "are you sure?" now starts on
+the safe answer, so an accidental keypress cancels instead of going ahead.
+
+### Fixed
+- **A stray Enter could approve a confirmation you hadn't read.** Every prompt that asks you to confirm something — shredding files, ending a process, removing built-in apps, uninstalling, applying a preset — opened with **Yes** already selected. So pressing Enter, or pressing it a second time after the key that opened the prompt, went straight ahead with the action. All 76 of those prompts now open with **No** selected: Enter cancels, and choosing Yes still takes a single click or keypress. The same applies to the prompt you get when closing the window, which now starts on Cancel — its behaviour finally matches what it already promised, since Esc and the window's X have always meant "leave things alone".
+
+---
+
 ## [1.64.12] - 2026-08-13
 
 Internal tidy-up: removed three pieces of information the app tracked but could never truthfully

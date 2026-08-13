@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -15,5 +17,5 @@ public sealed record DriverEntry
     public DateTime? DriverDate { get; init; }
 
     /// <summary>Formatted date for display (yyyy-MM-dd or empty).</summary>
-    public string DriverDateDisplay => DriverDate?.ToString("yyyy-MM-dd") ?? "";
+    public string DriverDateDisplay => DriverDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
 }

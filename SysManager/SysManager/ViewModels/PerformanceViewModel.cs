@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.Security;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -565,7 +566,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         try
         {
             var ok = await _service.CreateRestorePointAsync(
-                $"SysManager — {DateTime.Now:yyyy-MM-dd HH:mm}");
+                $"SysManager — {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}");
             StatusMessage = ok
                 ? "✓ Restore point created successfully."
                 : "✗ Failed to create restore point. Check Event Viewer for details.";

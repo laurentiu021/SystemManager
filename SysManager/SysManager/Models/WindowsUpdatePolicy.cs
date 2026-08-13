@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -18,7 +20,7 @@ public sealed record WindowsUpdatePolicy(
     /// <summary>Plain-English summary of the active policy for the status line.</summary>
     public string Summary =>
         PauseActive && PauseUntil is { } until
-            ? $"Updates paused until {until:yyyy-MM-dd}."
+            ? $"Updates paused until {until.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}."
             : DeferFeatureUpdates
                 ? $"Feature updates deferred {FeatureDeferDays} day(s); security updates still install."
                 : "Default — Windows manages update timing.";

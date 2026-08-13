@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -63,7 +64,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
 
         var dlg = new SaveFileDialog
         {
-            FileName = $"SysManager-Profile-{DateTime.Now:yyyy-MM-dd}.json",
+            FileName = $"SysManager-Profile-{DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.json",
             Filter = "SysManager profile (*.json)|*.json|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() != true) return;
@@ -115,7 +116,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
             var preview = string.Join("\n", profile.Sections.Select(s => $"  • {s.DisplayName}"));
             if (!DialogService.Instance.Confirm(
                     $"Import {profile.Sections.Count} section{(profile.Sections.Count == 1 ? "" : "s")} from this profile?\n\n{preview}\n\n" +
-                    $"Exported {profile.ExportedAt:yyyy-MM-dd} by SysManager v{profile.AppVersion}.\n\n" +
+                    $"Exported {profile.ExportedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} by SysManager v{profile.AppVersion}.\n\n" +
                     "This overwrites the matching SysManager settings on this PC. Restart SysManager afterwards for all changes to take effect.",
                     "Import profile"))
             {

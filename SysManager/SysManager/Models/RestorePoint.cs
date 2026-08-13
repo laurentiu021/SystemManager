@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -16,7 +18,7 @@ public sealed record RestorePoint(
     string EventType)
 {
     /// <summary>Human-readable creation timestamp for the grid.</summary>
-    public string CreatedDisplay => CreationTime.ToString("yyyy-MM-dd HH:mm");
+    public string CreatedDisplay => CreationTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Friendly restore-point type label. Windows reports a small set of well-known

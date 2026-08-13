@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
@@ -23,5 +24,5 @@ public sealed partial class UpdateEntry : ObservableObject
     public string UpdateId { get; init; } = "";
 
     /// <summary>Formatted date for display (yyyy-MM-dd or empty).</summary>
-    public string DateDisplay => Date?.ToString("yyyy-MM-dd") ?? "";
+    public string DateDisplay => Date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
 }

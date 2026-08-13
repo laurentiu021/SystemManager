@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.Helpers;
 
@@ -53,5 +54,5 @@ public sealed record LargeFileEntry
     public required long SizeBytes { get; init; }
     public required DateTime LastModified { get; init; }
     public string SizeDisplay => FormatHelper.FormatSize(SizeBytes);
-    public string LastModifiedDisplay => LastModified.ToString("dd MMM yyyy");
+    public string LastModifiedDisplay => LastModified.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
 }

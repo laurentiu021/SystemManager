@@ -98,7 +98,7 @@ public sealed class WindowsUpdatePolicyService
             key.SetValue("PauseFeatureUpdatesEndTime", iso, RegistryValueKind.String);
             key.SetValue("PauseQualityUpdatesStartTime", now.ToString("o", CultureInfo.InvariantCulture), RegistryValueKind.String);
             key.SetValue("PauseQualityUpdatesEndTime", iso, RegistryValueKind.String);
-        }, $"pause updates until {until:yyyy-MM-dd}");
+        }, $"pause updates until {until.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}");
     }
 
     /// <summary>

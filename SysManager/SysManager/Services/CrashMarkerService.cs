@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using Serilog;
@@ -109,6 +110,6 @@ public sealed class CrashMarkerService
     /// target persona cannot act on either, and the log folder is already surfaced by the Logs tab.
     /// </summary>
     public static string DescribeForUser(CrashMarker marker) =>
-        $"SysManager closed unexpectedly on {marker.WhenUtc.ToLocalTime():d MMMM, HH:mm}. " +
+        $"SysManager closed unexpectedly on {marker.WhenUtc.ToLocalTime().ToString("d MMMM, HH:mm", CultureInfo.InvariantCulture)}. " +
         "Details were saved to its log, which you can open from the System Logs tab if you want to report it.";
 }

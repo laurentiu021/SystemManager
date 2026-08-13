@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.11] - 2026-08-13
+
+A duplicate scan now shows which file it is reading, so a long scan no longer looks like it might
+have frozen.
+
+### Fixed
+- **The Duplicate Finder never showed which file it was working on.** During a scan the status line counted files found and hashed, but never named the file being read — even though the scan reported it on every single update and SysManager stored it. On a big folder that made a slow scan indistinguishable from a stuck one: the numbers would crawl while one enormous file, or one file on a slow network drive, was being hashed, and there was no way to tell which. The file name now appears at the end of the status line, and hovering over it shows the full folder path.
+
+---
+
 ## [1.64.10] - 2026-08-13
 
 Process Manager now tells you in plain English what each process is, using the description database

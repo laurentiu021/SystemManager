@@ -128,7 +128,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             var progress = new Progress<DuplicateFileService.ScanProgress>(p =>
             {
                 CurrentFile = p.CurrentFile;
-                StatusMessage = $"{p.Phase} — {p.FilesDiscovered:N0} found, {p.FilesHashed:N0} hashed";
+                StatusMessage = BuildScanStatus(p);
             });
 
             var results = await _service.ScanAsync(SelectedFolder, minBytes, progress, ct);
@@ -171,6 +171,26 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             IsProgressIndeterminate = false;
             CurrentFile = "";
         }
+    }
+
+    /// <summary>
+    /// The scan's status line: phase, running counts, and the file currently being read.
+    /// <para>The file name was reported by the service and assigned to <see cref="CurrentFile"/> on every
+    /// progress tick, but nothing displayed it — so a scan of a large folder showed only rising numbers,
+    /// with no sign of which file it was on or whether it had stalled on one. Only the name is shown; the
+    /// full path goes in the row's tooltip, because a deep path would otherwise dominate the line.</para>
+    /// <para>Pure and static so the formatting is testable without running a scan.</para>
+    /// </summary>
+    internal static string BuildScanStatus(DuplicateFileService.ScanProgress p)
+    {
+        var counts = $"{p.Phase} — {p.FilesDiscovered:N0} found, {p.FilesHashed:N0} hashed";
+
+        // Path.GetFileName returns "" for a directory path ending in a separator, and the discovery phase
+        // reports folders as well as files; fall back to the raw value rather than showing nothing.
+        if (string.IsNullOrWhiteSpace(p.CurrentFile)) return counts;
+        var name = Path.GetFileName(p.CurrentFile.TrimEnd(Path.DirectorySeparatorChar,
+                                                          Path.AltDirectorySeparatorChar));
+        return string.IsNullOrEmpty(name) ? counts : $"{counts} · {name}";
     }
 
     [RelayCommand]

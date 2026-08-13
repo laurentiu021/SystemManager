@@ -209,9 +209,11 @@ public sealed class SystemReportService
             sb.AppendLine("  Slots:");
             foreach (var mod in d.Memory.Modules)
             {
-                sb.Append($"    {mod.BankLabel}: {mod.CapacityGB:F0} GB");
+                sb.Append($"    {mod.Slot}: {mod.CapacityGB:F0} GB");
                 if (!string.IsNullOrWhiteSpace(mod.Manufacturer)) sb.Append($" {mod.Manufacturer}");
                 if (mod.SpeedMHz > 0) sb.Append($" {mod.SpeedMHz} MHz");
+                // Only worth printing when it disagrees with the rating — that is the actionable case.
+                if (mod.IsUnderclocked) sb.Append($" (running at {mod.ConfiguredSpeedMHz} MHz)");
                 sb.AppendLine();
             }
         }
@@ -337,7 +339,8 @@ public sealed class SystemReportService
             var v = $"{mod.CapacityGB:F0} GB";
             if (!string.IsNullOrWhiteSpace(mod.Manufacturer)) v += $" · {mod.Manufacturer}";
             if (mod.SpeedMHz > 0) v += $" · {mod.SpeedMHz} MHz";
-            Row(sb, mod.BankLabel, v);
+            if (mod.IsUnderclocked) v += $" · running at {mod.ConfiguredSpeedMHz} MHz";
+            Row(sb, mod.Slot, v);
         }
         CloseSection(sb);
 

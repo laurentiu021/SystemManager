@@ -25,7 +25,7 @@ public class SystemReportServiceTests
             AppVersion: "1.20.68",
             Os: new OsInfo("Windows 11 Pro", "10.0.22631", "22631", TimeSpan.FromHours(50), "64-bit"),
             Cpu: new CpuInfo("Intel Core i7-12700K", 12, 20, 5000, 18.0),
-            Memory: new MemoryInfo(32, 16, 16, 50, [new MemoryModule("DIMM0", "Corsair", 16, 3200, "PN1")]),
+            Memory: new MemoryInfo(32, 16, 16, 50, [new MemoryModule("DIMM0", "Corsair", 16, 3200, 2400, "PN1")]),
             Gpus: gpus ?? [new GpuReportInfo("NVIDIA RTX 4070", 12.0, "551.86")],
             Motherboard: motherboard ?? "ASUS ROG STRIX Z690",
             Disks: disks ?? [new DiskReportInfo("Samsung 980 PRO", "SSD", "NVMe", 1000, "Healthy", "Healthy — 38 °C", 38.0, 5, "1.4y")],

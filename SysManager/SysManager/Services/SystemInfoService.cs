@@ -204,7 +204,9 @@ public sealed class SystemInfoService
         List<MemoryModule> modules = [];
         try
         {
-            using var s = new ManagementObjectSearcher("SELECT BankLabel,Manufacturer,Capacity,Speed,PartNumber FROM Win32_PhysicalMemory");
+            using var s = new ManagementObjectSearcher(
+                "SELECT BankLabel,DeviceLocator,Manufacturer,Capacity,Speed,ConfiguredClockSpeed,PartNumber "
+                + "FROM Win32_PhysicalMemory");
             using var modCollection = s.Get();
             foreach (ManagementObject mo in modCollection)
             {
@@ -212,10 +214,14 @@ public sealed class SystemInfoService
                 {
                     double capBytes = Convert.ToDouble(mo["Capacity"] ?? 0);
                     modules.Add(new MemoryModule(
-                        mo["BankLabel"]?.ToString() ?? "",
+                        // DeviceLocator is the slot silk-screened on the board ("DIMM0",
+                        // "ChannelA-DIMM1"); BankLabel is often just "BANK 0" or empty, so it is
+                        // only the fallback. The grid column has always been headed "Slot".
+                        mo["DeviceLocator"]?.ToString() ?? mo["BankLabel"]?.ToString() ?? "",
                         mo["Manufacturer"]?.ToString()?.Trim() ?? "",
                         capBytes / 1024d / 1024d / 1024d,
                         Convert.ToUInt32(mo["Speed"] ?? 0u),
+                        Convert.ToUInt32(mo["ConfiguredClockSpeed"] ?? 0u),
                         mo["PartNumber"]?.ToString()?.Trim() ?? ""));
                 }
             }

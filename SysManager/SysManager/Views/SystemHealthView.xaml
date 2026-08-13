@@ -74,10 +74,29 @@
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Slot" Binding="{Binding BankLabel}" Width="*" MinWidth="80"/>
+                                <DataGridTextColumn Header="Slot" Binding="{Binding Slot}" Width="*" MinWidth="80"/>
                                 <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="*" MinWidth="80"/>
                                 <DataGridTextColumn Header="Capacity (GB)" Binding="{Binding CapacityGB, StringFormat={}{0:F1}}" Width="110" MinWidth="80"/>
-                                <DataGridTextColumn Header="Speed (MHz)" Binding="{Binding SpeedMHz}" Width="110" MinWidth="80"/>
+                                <DataGridTextColumn Header="Rated (MHz)" Binding="{Binding SpeedMHz}" Width="105" MinWidth="80"/>
+                                <!-- Running vs rated is what tells someone their RAM is below its rated
+                                     speed (usually XMP/EXPO off in the BIOS). Highlighted only when it
+                                     is genuinely lower, so the normal case stays quiet. -->
+                                <DataGridTextColumn Header="Running at (MHz)" Binding="{Binding ConfiguredSpeedMHz}"
+                                                    Width="130" MinWidth="90">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="ToolTip" Value="The speed this module is actually running at."/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUnderclocked}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    <Setter Property="ToolTip"
+                                                            Value="This module is running slower than it is rated for — usually because XMP/EXPO is turned off in the BIOS."/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
                                 <DataGridTextColumn Header="Part #" Binding="{Binding PartNumber}" Width="1.5*" MinWidth="100"/>
                             </DataGrid.Columns>
                         </DataGrid>

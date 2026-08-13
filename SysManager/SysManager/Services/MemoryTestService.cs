@@ -106,43 +106,4 @@ public sealed class MemoryTestService
         catch (System.ComponentModel.Win32Exception) { return false; }
     }
 
-    /// <summary>Read installed memory modules — fast WMI query.</summary>
-    public async Task<IReadOnlyList<MemoryModuleHealth>> GetModulesAsync()
-    {
-        return await Task.Run<IReadOnlyList<MemoryModuleHealth>>(() =>
-        {
-            List<MemoryModuleHealth> list = [];
-            try
-            {
-                using var s = new ManagementObjectSearcher(
-                    "SELECT BankLabel, DeviceLocator, Manufacturer, Capacity, Speed, ConfiguredClockSpeed, PartNumber FROM Win32_PhysicalMemory");
-                using var moc = s.Get();
-                foreach (ManagementObject mo in moc)
-                {
-                    using (mo)
-                    {
-                        try
-                        {
-                            double cap = FixedDriveService.ToDoubleSafe(mo["Capacity"]) / 1024d / 1024d / 1024d;
-                            list.Add(new MemoryModuleHealth
-                            {
-                                Slot = mo["DeviceLocator"]?.ToString() ?? mo["BankLabel"]?.ToString() ?? "",
-                                Manufacturer = (mo["Manufacturer"]?.ToString() ?? "").Trim(),
-                                CapacityGB = Math.Round(cap, 0),
-                                SpeedMHz = FixedDriveService.ToUInt32Safe(mo["Speed"]),
-                                ConfiguredSpeedMHz = FixedDriveService.ToUInt32Safe(mo["ConfiguredClockSpeed"]),
-                                PartNumber = (mo["PartNumber"]?.ToString() ?? "").Trim()
-                            });
-                        }
-                        catch (InvalidCastException) { /* malformed WMI value — skip this module, continue scanning */ }
-                        catch (FormatException) { /* malformed WMI value — skip this module */ }
-                        catch (OverflowException) { /* WMI value out of range — skip this module */ }
-                    }
-                }
-            }
-            catch (ManagementException) { /* WMI class not available */ }
-            catch (UnauthorizedAccessException) { /* WMI access denied */ }
-            return list;
-        }).ConfigureAwait(false);
-    }
 }

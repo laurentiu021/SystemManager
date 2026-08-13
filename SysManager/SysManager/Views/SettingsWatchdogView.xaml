@@ -77,7 +77,7 @@
                      along its orientation, so this banner's TextWrapping was inert and clipped on a
                      narrow window (#1807). The stripe Border above is untouched. -->
                 <DockPanel Margin="6,0,0,0">
-                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Top" DockPanel.Dock="Left"/>
+                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Top" DockPanel.Dock="Left"/>
                     <TextBlock Text="Running as administrator — machine-wide watched settings can be restored, not just per-user ones."
                                Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
                 </DockPanel>

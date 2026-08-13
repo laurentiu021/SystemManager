@@ -442,6 +442,34 @@ public class ConverterTests
     }
 
     [Fact]
+    public void ProcessManagerView_ShowsTheDatabaseDescription_NotTheRawFileDescription()
+    {
+        // Same defect class as the Safety column above, one field over: the database's plain-English
+        // description was loaded into ProcessEntry.PlainDescription, used to widen the search filter, and
+        // bound by no XAML — the Name column showed the raw exe FileDescription instead. That is jargon
+        // at best, and blank for most Windows system processes, because MainModule throws access-denied
+        // when unelevated — precisely the processes the database covers best.
+        var xaml = File.ReadAllText(ViewPath("ProcessManagerView.xaml"));
+
+        Assert.Contains("Binding PlainDescription", xaml);
+
+        // The raw value stays as the fallback, so a process the database does not know still shows
+        // whatever Windows reported rather than an empty line.
+        Assert.Contains("Value=\"{Binding Description}\"", xaml);
+    }
+
+    [Fact]
+    public void ProcessManagerView_ShowsTheDatabaseCategory()
+    {
+        // The search box already matched against Category, so a user could filter by a word the app
+        // never showed them. README advertises the categories alongside the descriptions.
+        var xaml = File.ReadAllText(ViewPath("ProcessManagerView.xaml"));
+
+        Assert.Contains("Header=\"Category\"", xaml);
+        Assert.Contains("SortMemberPath=\"Category\"", xaml);
+    }
+
+    [Fact]
     public void App_RegistersTheProcessSafetyConverters()
     {
         // A binding to an unregistered StaticResource key is a runtime XAML failure, and the view test

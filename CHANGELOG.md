@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.10] - 2026-08-13
+
+Process Manager now tells you in plain English what each process is, using the description database
+it already shipped with but never showed you.
+
+### Fixed
+- **The Process Manager knew what each process was and didn't tell you.** SysManager ships a database of 108 common Windows processes and popular applications, each with a plain-English one-liner ("Windows service host — runs background services grouped by function") and a category. It was being looked up for every process, and the search box even matched against it — you could type "browser" and get results — but the list never displayed any of it. What you saw under each process name was the technical description the program file carries, which is the same wording Task Manager already gives you. Worse, Windows refuses to hand over that technical description for its own system processes unless SysManager is running as administrator, so for exactly the processes people are most unsure about — `svchost`, `csrss`, `lsass` — the line was simply blank, while the plain-English explanation sat unused. The description now appears under each process name, falling back to the technical one for anything the database doesn't know, and the category has its own sortable column. A new automatic check makes sure a field the search can match can never again be invisible.
+
+---
+
 ## [1.64.9] - 2026-08-12
 
 Closing the Performance Mode tab in the middle of applying a tweak can no longer throw away the

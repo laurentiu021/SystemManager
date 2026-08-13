@@ -120,9 +120,30 @@
                                            RenderOptions.BitmapScalingMode="HighQuality"/>
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                                        <TextBlock Text="{Binding Description}" FontSize="11"
+
+                                        <!-- The 108-entry database (Data/ProcessDescriptions.json) supplies a
+                                             plain-English line for each known process, and this column bound the raw
+                                             exe FileDescription instead — so the tab answered "what is this?" with the
+                                             same jargon Task Manager gives, or with nothing at all: MainModule throws
+                                             access-denied for most Windows system processes when not elevated, which
+                                             is exactly what the database covers best. PlainDescription already falls
+                                             back to the raw text, so the trigger below only fires when neither exists.
+                                             Same shape as StartupView's Description/Command fallback. -->
+                                        <TextBlock FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
-                                                   TextTrimming="CharacterEllipsis" MaxWidth="400"/>
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="400"
+                                                   ToolTip="{Binding PlainDescription}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{Binding PlainDescription}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding PlainDescription}" Value="">
+                                                            <Setter Property="Text" Value="{Binding Description}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                 </StackPanel>
                             </DataTemplate>
@@ -223,6 +244,21 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
+
+                    <!-- The same database supplies a category (System, Browser, Gaming, …) that the search box
+                         already matched against but nothing displayed, so a user could filter by a word they
+                         were never shown. Plain text rather than a chip: Safety is the column that carries the
+                         judgement, and two chips side by side would compete for the same attention. -->
+                    <DataGridTextColumn Header="Category" Binding="{Binding Category}"
+                                        Width="110" MinWidth="90" SortMemberPath="Category">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
                     <DataGridTemplateColumn Header="Actions" Width="120" MinWidth="120" CanUserSort="False" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>

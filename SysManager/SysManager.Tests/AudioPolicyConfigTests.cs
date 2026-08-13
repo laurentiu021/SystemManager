@@ -24,10 +24,14 @@ public class AudioPolicyConfigTests
         var plain = "{0.0.0.00000000}.{a1b2c3d4-0000-0000-0000-000000000000}";
         var wrapped = AudioPolicyConfigFactory.ToPolicyEndpointId(plain);
 
-        Assert.StartsWith(@"\\?\SWD#MMDEVAPI#", wrapped);
-        Assert.Contains(plain, wrapped);
-        // The render interface GUID suffix is what the interface keys the endpoint on.
-        Assert.EndsWith("{e6327cad-dcec-4949-ae8a-991e976a79d2}", wrapped);
+        // The WHOLE string, not three fragments. StartsWith + Contains + EndsWith all stay true if the
+        // interior "#" between the endpoint id and the render interface GUID is dropped or duplicated —
+        // exactly the subtle mistake the implementation's doc comment claims is "pinned by a test". The
+        // pass-through test below cannot cover it either: its input already carries the SWD prefix, so
+        // it returns at the guard and never reaches the string construction.
+        Assert.Equal(
+            @"\\?\SWD#MMDEVAPI#" + plain + "#{e6327cad-dcec-4949-ae8a-991e976a79d2}",
+            wrapped);
     }
 
     [Fact]

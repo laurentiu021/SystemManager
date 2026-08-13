@@ -10,6 +10,13 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.4] - 2026-08-13
+
+The shield next to "Running as administrator" is now a proper icon instead of a colourful emoji, so it matches the rest of the app on all 27 pages that show it.
+
+### Fixed
+- **The admin shield was drawn as an emoji.** On every page that can run something as administrator, the banner you see once elevated used an emoji character with no icon font — so Windows substituted its own multi-colour emoji. The banner directly above it, before you elevate, already used the app's icon font, which meant the same banner drew its icon two different ways depending on state. All 27 pages now use the same shield icon.
+
 ## [1.65.3] - 2026-08-13
 
 The app does a little less work before its window appears. Four of the Network tabs were being built at launch even if you never opened them, and one of them read a file from disk every single time.

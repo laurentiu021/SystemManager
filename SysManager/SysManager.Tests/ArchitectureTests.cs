@@ -1496,6 +1496,75 @@ public partial class ArchitectureTests
                     RegexOptions.CultureInvariant)]
     private static partial Regex SerilogCall();
 
+    /// <summary>
+    /// Every icon glyph names an icon font, so none of them renders as a colour emoji.
+    /// <para>A character reference above U+FFFF is outside Segoe Fluent Icons, so a <c>TextBlock</c>
+    /// carrying one with no <c>FontFamily</c> falls back to Segoe UI Emoji and Windows draws a
+    /// multi-colour emoji. The elevated admin banner did exactly that in 27 views:
+    /// <c>&amp;#x1F6E1;</c> (SHIELD) with no font — while the NOT-elevated banner a few lines above it,
+    /// in 25 of those same views, used <c>&amp;#xE83D;</c> with an explicit Fluent family. The two states
+    /// of one banner drew their icon from two different type systems, and the emoji one contradicts the
+    /// product rule that icons are real, never cartoonish.</para>
+    /// <para>Checked as a character range rather than a list of known emoji, so a NEW emoji is caught
+    /// too. A glyph that legitimately wants a colour emoji can still have one — it just has to say so
+    /// by naming a font.</para>
+    /// </summary>
+    [Fact]
+    public void EveryIconGlyph_NamesAnIconFont()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        var files = Directory.GetFiles(viewsDir, "*.xaml")
+            .Append(Path.Combine(FindAppProjectDir(), "MainWindow.xaml"))
+            .Where(File.Exists);
+
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            var name = Path.GetFileName(file);
+
+            foreach (var match in AstralCharacterReference().Matches(source).Cast<Match>())
+            {
+                scanned++;
+
+                // The element this glyph sits on: from the opening '<' before it to the next '>'.
+                var open = source.LastIndexOf('<', match.Index);
+                var close = source.IndexOf('>', match.Index);
+                if (open < 0 || close < 0) continue;
+                var element = source[open..close];
+
+                if (element.Contains("FontFamily", StringComparison.Ordinal)) continue;
+
+                var line = source[..match.Index].Count(c => c == '\n') + 1;
+                offenders.Add($"{name}:{line} {match.Value} has no FontFamily");
+            }
+        }
+
+        // Vacuity floor: the views carry hundreds of Fluent glyphs, so if the scan read nothing the
+        // character-reference pattern is broken rather than the code being clean.
+        var glyphs = files.Sum(f => FluentGlyphReference().Matches(File.ReadAllText(f)).Count);
+        Assert.True(glyphs >= 100,
+            $"Only {glyphs} icon glyphs were seen across the views — the guard is not reading them. "
+            + "Fix this test rather than trusting its pass.");
+
+        Assert.True(offenders.Count == 0,
+            "These glyphs are above U+FFFF and name no font, so Windows falls back to Segoe UI Emoji "
+            + "and draws a colour emoji instead of an icon. Use the Segoe Fluent Icons equivalent with "
+            + "FontFamily=\"Segoe Fluent Icons,Segoe MDL2 Assets\" (the shield is &#xE83D;):\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({scanned} astral references seen, {glyphs} icon glyphs scanned)");
+    }
+
+    // A character reference above U+FFFF — i.e. &#x1F???; and up, which is where the emoji planes are.
+    // Five hex digits or more cannot be a BMP icon-font glyph.
+    [GeneratedRegex(@"&#x[0-9A-Fa-f]{5,};", RegexOptions.CultureInvariant)]
+    private static partial Regex AstralCharacterReference();
+
+    [GeneratedRegex(@"&#x[0-9A-Fa-f]{4};", RegexOptions.CultureInvariant)]
+    private static partial Regex FluentGlyphReference();
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

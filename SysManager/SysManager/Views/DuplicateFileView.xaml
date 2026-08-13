@@ -183,7 +183,24 @@
             <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+            <!-- The status text now carries the file being read, so it can be long; trim it rather than
+                 letting a deep path stretch the row. The full path is on hover — the scan reported it on
+                 every tick and nothing ever showed it. -->
+            <TextBlock Text="{Binding StatusMessage}"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding CurrentFile}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                        <!-- No tooltip outside a scan: an empty one renders as a stray blank box. -->
+                        <Setter Property="ToolTipService.IsEnabled" Value="False"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                <Setter Property="ToolTipService.IsEnabled" Value="True"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
         </DockPanel>
     </Grid>
 </UserControl>

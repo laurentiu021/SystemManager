@@ -267,6 +267,66 @@ public class DuplicateFileViewModelTests
         Assert.Contains("LastModified", xaml);               // so "oldest" is checkable by eye
     }
 
+    // ── Scan progress ──
+    // The service reported the file it was reading on every tick and the view model stored it, but no XAML
+    // bound it: a scan of a large folder showed rising counts with no sign of which file it was on, or
+    // whether it had stalled on one.
+
+    [Fact]
+    public void ScanStatus_NamesTheFileBeingRead()
+    {
+        var status = DuplicateFileViewModel.BuildScanStatus(new Services.DuplicateFileService.ScanProgress(
+            FilesDiscovered: 1_234, FilesHashed: 567, BytesProcessed: 0,
+            CurrentFile: @"C:\Users\someone\Pictures\holiday-2019\DSC_0042.jpg",
+            Phase: "Hashing"));
+
+        Assert.Contains("Hashing", status);
+        Assert.Contains("1,234 found", status);
+        Assert.Contains("567 hashed", status);
+        Assert.Contains("DSC_0042.jpg", status);
+
+        // Only the name: a deep path would dominate a single-line status row. The full path is the tooltip.
+        Assert.DoesNotContain("Pictures", status);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ScanStatus_OmitsTheFileWhenThereIsNone(string current)
+    {
+        // The discovery phase reports ticks before it has a file in hand; the line must not end in a
+        // dangling separator.
+        var status = DuplicateFileViewModel.BuildScanStatus(new Services.DuplicateFileService.ScanProgress(
+            FilesDiscovered: 10, FilesHashed: 0, BytesProcessed: 0, CurrentFile: current, Phase: "Scanning"));
+
+        Assert.Equal("Scanning — 10 found, 0 hashed", status);
+    }
+
+    [Fact]
+    public void ScanStatus_HandlesAFolderPathWithATrailingSeparator()
+    {
+        // Path.GetFileName returns "" for a path ending in a separator, which would have shown nothing at
+        // all after the separator. Discovery reports folders too.
+        var status = DuplicateFileViewModel.BuildScanStatus(new Services.DuplicateFileService.ScanProgress(
+            FilesDiscovered: 5, FilesHashed: 0, BytesProcessed: 0,
+            CurrentFile: @"C:\Users\someone\Downloads\", Phase: "Scanning"));
+
+        Assert.Contains("Downloads", status);
+        Assert.DoesNotContain("· ·", status);
+    }
+
+    [Fact]
+    public void DuplicateFileView_ShowsTheScanStatusWithTheFullPathOnHover()
+    {
+        // The pure formatter above would pass on the unfixed code, because the view model always built a
+        // status string — what was missing was the file name in it, and the path anywhere at all. Only the
+        // shipped markup can show the tooltip is wired.
+        var xaml = File.ReadAllText(ViewPath("DuplicateFileView.xaml"));
+
+        Assert.Contains("ToolTip=\"{Binding CurrentFile}\"", xaml);
+        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml);
+    }
+
     // Walks up from the test binaries to the app project — .xaml is not copied to the output.
     private static string ViewPath(string fileName)
     {

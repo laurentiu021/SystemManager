@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.64.12] - 2026-08-13
+
+Internal tidy-up: removed three pieces of information the app tracked but could never truthfully
+report. Nothing you see or do changes.
+
+### Fixed
+- **Removed a "blocked on" date that recorded when you opened the tab.** The App Blocker kept a timestamp for each blocked app, and it was set at the moment the list was read rather than when the block was applied — so it would have shown "just now" for a block made last month. Windows records no date for these blocks, so there is nothing to read; rather than display a number that looks meaningful and isn't, the field is gone. It was never shown on screen, so nothing is missing from the tab.
+- **Removed two fields that could only ever have been blank.** The App Blocker tracked a full file path for each blocked app, but blocks work by program name — Windows never records where the file was, which is also why a block keeps working if you move the file. The Process Manager tracked a process owner that nothing ever filled in. Both had a passing test asserting they were empty, which is how they survived. Neither reached the screen.
+
+---
+
 ## [1.64.11] - 2026-08-13
 
 A duplicate scan now shows which file it is reading, so a long scan no longer looks like it might

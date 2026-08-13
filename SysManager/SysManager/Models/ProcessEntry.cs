@@ -21,7 +21,11 @@ public sealed partial class ProcessEntry : ObservableObject
     [NotifyPropertyChangedFor(nameof(MemoryDisplay))]
     private long _memoryBytes;
     [ObservableProperty] private string _status = "";
-    [ObservableProperty] private string _userName = "";
+    // No UserName: one was declared here and nothing ever assigned it, so it could only ever have shown
+    // an empty owner. Reading a process's owner needs OpenProcessToken per process, which Windows denies
+    // for other users' and most system processes unless elevated — so the choices were to implement it
+    // properly or not to imply it exists. Dropped; the Safety column already answers the question this
+    // tab is for ("is this Windows, or something I installed?").
     [ObservableProperty] private DateTime _startTime;
     [ObservableProperty] private int _threadCount;
     [ObservableProperty] private string _filePath = "";

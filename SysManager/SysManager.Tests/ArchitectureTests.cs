@@ -906,6 +906,77 @@ public partial class ArchitectureTests
     private static partial Regex SearchableFieldSpan();
 
     /// <summary>
+    /// Every model property must be reachable: written by something, or shown by something. A property
+    /// that is neither is a promise the app cannot keep — <c>BlockedApp.FullPath</c> was permanently empty
+    /// because an IFEO key records only the executable name, and <c>ProcessEntry.UserName</c> was never
+    /// assigned at all. Both had a passing unit test asserting their default value, which is what let them
+    /// look exercised while displaying nothing.
+    /// <para>Setter-only is fine (a value the app consumes in C#), and display-only is fine (a computed
+    /// property). Neither, with no XAML binding either, is dead.</para>
+    /// </summary>
+    [Fact]
+    public void EveryModelProperty_IsEitherWrittenOrShown()
+    {
+        var appDir = FindAppProjectDir();
+        var modelsDir = Path.Combine(appDir, "Models");
+
+        var xaml = string.Join('\n', Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Select(File.ReadAllText));
+
+        var sources = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToDictionary(f => f, File.ReadAllText);
+
+        var dead = new List<string>();
+        var checkedProperties = 0;
+
+        foreach (var (path, source) in sources.Where(kv => kv.Key.StartsWith(modelsDir, StringComparison.Ordinal)))
+        {
+            var typeName = TypeDeclaration().Match(source).Groups[1].Value;
+            if (typeName.Length == 0) continue;
+
+            foreach (var m in ObservablePropertyField().Matches(source).Cast<Match>())
+            {
+                var field = m.Groups[1].Value;
+                var property = char.ToUpperInvariant(field[0]) + field[1..];
+                checkedProperties++;
+
+                if (xaml.Contains(property, StringComparison.Ordinal)) continue;
+                if (Regex.IsMatch(source, $@"\b{Regex.Escape(property)}\b")) continue;
+
+                // Require the declaring type's name in the same file, so a same-named property on another
+                // model (FriendlyEventEntry also has a UserName) cannot make this one look alive.
+                var referenced = sources.Any(kv => kv.Key != path
+                    && kv.Value.Contains(typeName, StringComparison.Ordinal)
+                    && Regex.IsMatch(kv.Value, $@"\b{Regex.Escape(property)}\b"));
+                if (referenced) continue;
+
+                dead.Add($"{typeName}.{property} ({Path.GetFileName(path)})");
+            }
+        }
+
+        Assert.True(checkedProperties >= 40,
+            $"only {checkedProperties} model properties were inspected — the detection is probably no "
+            + "longer matching the [ObservableProperty] declarations.");
+
+        Assert.True(dead.Count == 0,
+            "these model properties are never written and never shown, so they can only ever present an "
+            + "empty value to the user. Populate them or remove them:\n  " + string.Join("\n  ", dead));
+    }
+
+    /// <summary>A class or record declaration, capturing the type name.</summary>
+    [GeneratedRegex(@"(?:class|record)\s+(\w+)", RegexOptions.Compiled)]
+    private static partial Regex TypeDeclaration();
+
+    /// <summary>An <c>[ObservableProperty]</c> backing field, capturing the field name without its underscore.</summary>
+    [GeneratedRegex(@"\[ObservableProperty\][^\n]*\n?\s*(?:private|internal)\s+[\w\?<>,\[\]\. ]+?\s+_(\w+)\s*[;=]",
+        RegexOptions.Compiled)]
+    private static partial Regex ObservablePropertyField();
+
+    /// <summary>
     /// Every issue template that asks which tab is affected must offer the real tabs. Two of the three
     /// templates were still offering an 18-entry list from when the app had roughly that many tabs, with
     /// names that no longer matched the sidebar ("Cleanup" for "Quick Cleanup") and one entry — "Network"

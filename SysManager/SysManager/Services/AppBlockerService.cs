@@ -315,11 +315,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
                     var debugger = appKey.GetValue("Debugger") as string;
                     if (debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
                     {
-                        blocked.Add(new BlockedApp
-                        {
-                            ExecutableName = subKeyName,
-                            BlockedAt = DateTime.Now
-                        });
+                        blocked.Add(new BlockedApp { ExecutableName = subKeyName });
                     }
                 }
                 catch (IOException) { /* skip */ }

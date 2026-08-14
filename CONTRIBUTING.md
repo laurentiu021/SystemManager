@@ -66,6 +66,14 @@ dotnet run --project SysManager/SysManager/SysManager.csproj
 dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
 ```
 
+**Check the formatting** — CI runs this on all four projects and fails the PR on any
+difference. A clean build does not catch it, so run it before you push:
+
+```powershell
+dotnet format SysManager/SysManager/SysManager.csproj --verify-no-changes
+# drop --verify-no-changes to let it fix the file in place
+```
+
 ## Project layout
 
 ```
@@ -116,6 +124,28 @@ guide. That said, a few explicit rules:
 - Dark-gradient theme stays consistent; no hard-coded colours — use the
   existing brushes.
 - Accessibility: every interactive control has a label or `AutomationProperties.Name`.
+
+### Author headers
+
+Every source file opens with a three-line attribution block. All 688 of them
+carry it, and a test fails the build if a new file doesn't — so copy the shape
+exactly. In `.cs` files (the `— summary` after the class name is optional):
+
+```csharp
+// SysManager · UpdateService — GitHub releases client
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+```
+
+In `.xaml` files, one comment line above the root element:
+
+```xml
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+```
+
+Keep `Author:` as `laurentiu021` even in a PR you wrote — it names the project's
+maintainer, not the commit author, which Git already records. Your contribution
+is credited in the release notes and in `git log`.
 
 ## Running tests
 
@@ -175,7 +205,15 @@ fixed stuff
 ```
 
 Prefixes aren't required, but if you want a convention: `fix:`, `feat:`,
-`docs:`, `test:`, `refactor:`, `ci:` are all understood.
+`docs:`, `test:`, `refactor:`, `ci:`, `chore:` are all understood.
+
+One of them is more than a convention: the **PR title** decides whether merging
+publishes a release. `feat:` bumps the minor, `fix:` the patch, `feat!:`/`fix!:`
+the major; every other prefix merges without releasing. That is why a releasing
+PR must also bump the version and add a CHANGELOG entry, and a non-releasing one
+must do neither — the PR template splits the checklist along exactly that line.
+Don't worry about getting it right on a first contribution; say what your change
+does and the prefix can be adjusted before the squash merge.
 
 ## Pull request process
 

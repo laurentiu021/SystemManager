@@ -26,15 +26,15 @@ Report the issue anyway; being on a build newer than this table never means you 
 issues are visible to everyone and may put users at risk before a fix is
 available.
 
-Instead, use one of these private channels:
+Use **GitHub private vulnerability reporting**: go to the
+[Security tab](https://github.com/laurentiu021/SystemManager/security/advisories/new)
+and open a draft advisory. Only the maintainer sees it, you keep a thread to
+discuss the fix, and you are credited automatically when it is published.
 
-1. **GitHub private vulnerability reporting** (preferred) —
-   go to the [Security tab](https://github.com/laurentiu021/SystemManager/security)
-   of this repo and click **"Report a vulnerability"**. Only the maintainer
-   sees the report.
-2. **Email** the maintainer at the address on the
-   [GitHub profile](https://github.com/laurentiu021). Use a subject line
-   starting with `[SysManager security]`.
+A free GitHub account is required, because an advisory is the only channel this
+project has that is genuinely private — there is no published email, and asking
+you to send vulnerability details to an unencrypted inbox would be worse advice
+than asking you to sign up.
 
 Please include:
 

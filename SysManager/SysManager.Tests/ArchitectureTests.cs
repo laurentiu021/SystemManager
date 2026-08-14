@@ -906,6 +906,254 @@ public partial class ArchitectureTests
     private static partial Regex SearchableFieldSpan();
 
     /// <summary>
+    /// Every commit prefix the release workflow treats as releasing must be offered by the PR template,
+    /// and every prefix the template offers must be one the project actually recognises.
+    /// <para>The template's "Type of change" list omitted <c>test:</c> and <c>refactor:</c> — 41 and 15
+    /// such commits exist on main, and CONTRIBUTING names both — so a contributor filling it in honestly
+    /// had no box to tick. That matters more than tidiness because the prefix is what decides whether the
+    /// merge publishes a release, and the rest of the checklist branches on that: a releasing PR must bump
+    /// the version and add a CHANGELOG entry, a non-releasing one must do neither or CI's version gate
+    /// fails it. The list and the workflow are one contract written in two places.</para>
+    /// </summary>
+    [Fact]
+    public void ThePullRequestTemplate_OffersEveryCommitPrefixTheWorkflowUnderstands()
+    {
+        var root = FindRepoRoot();
+        var lines = File.ReadAllLines(Path.Combine(root, ".github", "PULL_REQUEST_TEMPLATE.md"));
+        var autoRelease = File.ReadAllText(Path.Combine(root, ".github", "workflows", "auto-release.yml"));
+
+        // The prefixes auto-release maps to a bump, read from the workflow rather than restated here.
+        var releasing = ReleasingPrefixAlternation().Matches(autoRelease)
+            .SelectMany(m => m.Groups[1].Value.Split('|'))
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(["feat", "fix"], releasing.Order(StringComparer.Ordinal));
+
+        var offered = lines
+            .Select(l => TemplatePrefix().Match(l))
+            .Where(m => m.Success)
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.True(offered.Count >= 6,
+            $"only {offered.Count} prefixes were parsed out of the PR template — fix this guard rather "
+            + "than trusting its pass.");
+
+        // The non-releasing prefixes CONTRIBUTING tells contributors to use. Whatever the template
+        // offers must come from one of these two sets; anything else is a box mapping to no behaviour.
+        string[] silent = ["docs", "test", "refactor", "ci", "chore"];
+        var known = releasing.Concat(silent).ToHashSet(StringComparer.Ordinal);
+
+        var missing = known.Where(p => !offered.Contains(p)).Order(StringComparer.Ordinal).ToList();
+        Assert.True(missing.Count == 0,
+            "these commit prefixes are used on main and documented in CONTRIBUTING, but the PR template "
+            + $"offers no box for them, so a contributor cannot declare one: {string.Join(", ", missing)}");
+
+        var unknown = offered.Where(p => !known.Contains(p)).Order(StringComparer.Ordinal).ToList();
+        Assert.True(unknown.Count == 0,
+            "the PR template offers these prefixes, but neither auto-release nor CONTRIBUTING knows "
+            + $"them: {string.Join(", ", unknown)}");
+
+        // A releasing box must SAY it releases, because the checklist below it branches on exactly that.
+        foreach (var prefix in releasing.Order(StringComparer.Ordinal))
+        {
+            var silentBoxes = lines
+                .Where(l => TemplatePrefix().IsMatch(l)
+                            && TemplatePrefix().Match(l).Groups[1].Value == prefix
+                            && !l.Contains("releases", StringComparison.Ordinal))
+                .ToList();
+            Assert.True(silentBoxes.Count == 0,
+                $"a `{prefix}:` box publishes a release when merged, but does not say so:\n  "
+                + string.Join("\n  ", silentBoxes));
+        }
+    }
+
+    /// <summary>
+    /// The PR checklist must ask for the things CI hard-fails on, and must not ask a non-releasing PR
+    /// for the things that make CI fail.
+    /// <para>It asked for "CHANGELOG updated" unconditionally. Following that on a <c>docs:</c> or
+    /// <c>test:</c> PR turns the build red — the version gate requires the newest CHANGELOG heading to
+    /// equal the csproj version, and a non-releasing PR leaves that version alone. Meanwhile the two
+    /// checks that break most PRs, <c>dotnet format</c> and the version bump, were not mentioned at all:
+    /// a checklist that omits the real gates and demands a red one is worse than none, because it is
+    /// followed in good faith.</para>
+    /// </summary>
+    [Fact]
+    public void ThePullRequestChecklist_AsksForWhatCiEnforces()
+    {
+        var root = FindRepoRoot();
+        var lines = File.ReadAllLines(Path.Combine(root, ".github", "PULL_REQUEST_TEMPLATE.md"));
+        var ci = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
+
+        // Anchor on the CI steps themselves, so a renamed gate fails here rather than silently
+        // invalidating the expectations below.
+        foreach (var step in new[]
+                 {
+                     "name: Check formatting",
+                     "name: Check version consistency",
+                     "name: Check the version is the one the merge will tag",
+                     "name: Check the newest CHANGELOG entry has a plain-English lead"
+                 })
+        {
+            Assert.Contains(step, ci, StringComparison.Ordinal);
+        }
+
+        var items = lines
+            .Select((text, index) => (Text: text.Trim(), Line: index + 1))
+            .Where(item => item.Text.StartsWith("- [ ] ", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(items.Count >= 12,
+            $"only {items.Count} checklist items were parsed — fix this guard rather than trusting it.");
+
+        // Where the checklist splits into the release-only section. Everything from that heading down is
+        // explicitly scoped to fix:/feat:, which is what makes asking for a CHANGELOG correct there.
+        var releaseSection = Array.FindIndex(
+            lines,
+            l => l.StartsWith("### ", StringComparison.Ordinal)
+                 && l.Contains("fix:", StringComparison.Ordinal)
+                 && l.Contains("feat:", StringComparison.Ordinal)) + 1;
+        Assert.True(releaseSection > 0,
+            "the template has no release-only checklist section — a CHANGELOG or version-bump item "
+            + "outside one applies to every PR, including the ones CI fails for doing it.");
+
+        foreach (var (needle, what) in new[]
+                 {
+                     ("CHANGELOG", "the CHANGELOG entry"),
+                     ("Version", "the version bump")
+                 })
+        {
+            var stray = items
+                .Where(item => item.Line < releaseSection
+                               && item.Text.Contains(needle, StringComparison.Ordinal))
+                .Select(item => $"line {item.Line}: {item.Text}")
+                .ToList();
+            Assert.True(stray.Count == 0,
+                $"{what} is asked of every PR, but on a docs:/test:/refactor:/ci:/chore: PR doing it "
+                + "fails CI's version gate. Move it under the release-only heading:\n  "
+                + string.Join("\n  ", stray));
+
+            Assert.Contains(items, item => item.Line > releaseSection
+                                           && item.Text.Contains(needle, StringComparison.Ordinal));
+        }
+
+        // The format gate fails more PRs than any other check and a clean build does not catch it, so
+        // the checklist has to name it — and CONTRIBUTING has to show the command.
+        Assert.Contains(items, item => item.Text.Contains("dotnet format", StringComparison.Ordinal));
+        Assert.Contains(
+            "dotnet format",
+            File.ReadAllText(Path.Combine(root, "CONTRIBUTING.md")),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every private-reporting route must point at a channel that exists. SECURITY.md and
+    /// CODE_OF_CONDUCT.md both told reporters to email "the address on the GitHub profile" — that profile
+    /// publishes no email, so the one page a security reporter reads named a dead end. A vulnerability
+    /// that cannot be reported privately tends to be reported publicly, or not at all.
+    /// </summary>
+    [Fact]
+    public void EveryPrivateReportingRoute_NamesAChannelThatExists()
+    {
+        var root = FindRepoRoot();
+        string[] surfaces = ["SECURITY.md", "CODE_OF_CONDUCT.md", "SUPPORT.md"];
+
+        var offenders = new List<string>();
+        var advisoryLinks = 0;
+
+        foreach (var relative in surfaces)
+        {
+            var path = Path.Combine(root, relative);
+            Assert.True(File.Exists(path), $"{relative} not found — the guard would pass vacuously");
+
+            var lines = File.ReadAllLines(path);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                advisoryLinks += AdvisoryLink().Matches(lines[i]).Count;
+
+                // "the email listed on their GitHub profile", "contact the maintainer by email" and
+                // friends: any instruction to email that names no actual address routes nowhere.
+                foreach (var hit in EmailTheMaintainer().Matches(lines[i]).Cast<Match>())
+                    offenders.Add($"{relative}:{i + 1}  {hit.Value.Trim()}");
+            }
+        }
+
+        // Vacuity floor: the advisory route must be present on the pages that replaced the email one.
+        Assert.True(advisoryLinks >= 3,
+            $"expected the private-advisory link on the reporting pages, found {advisoryLinks} — the "
+            + "guard has gone vacuous");
+
+        Assert.True(offenders.Count == 0,
+            "these lines tell a reporter to email the maintainer, but no address is published anywhere "
+            + "(the GitHub profile has none), so the route is a dead end. Point at a private security "
+            + $"advisory instead:\n  {string.Join("\n  ", offenders)}");
+    }
+
+    /// <summary>
+    /// Every source file carries the three-line attribution header the PR template asks for.
+    /// <para>All 688 of them did already — but only because it was remembered every time, on a checklist
+    /// item whose exact shape was written down nowhere public: a contributor reading "Author headers on
+    /// all new/modified files" had to infer the format from a neighbouring file. CONTRIBUTING now shows
+    /// it, and this asserts it, so the instruction and the reality cannot drift apart.</para>
+    /// </summary>
+    [Fact]
+    public void EverySourceFile_CarriesTheAuthorHeader()
+    {
+        const string attribution = "Author: laurentiu021 · https://github.com/laurentiu021/SystemManager";
+        var solution = Path.Combine(FindRepoRoot(), "SysManager");
+
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var path in Directory
+                     .EnumerateFiles(solution, "*.*", SearchOption.AllDirectories)
+                     .Where(p => p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                                 || p.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
+                     .Where(p => !Path.GetRelativePath(solution, p)
+                         .Split(Path.DirectorySeparatorChar)
+                         .Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                                         || segment.Equals("bin", StringComparison.OrdinalIgnoreCase))))
+        {
+            scanned++;
+
+            // The header is the first thing in the file, so only the opening lines are read: a stray
+            // match further down (a URL in a comment, say) must not satisfy the contract.
+            var opening = string.Join('\n', File.ReadLines(path).Take(5));
+            if (!opening.Contains("SysManager ·", StringComparison.Ordinal)
+                || !opening.Contains(attribution, StringComparison.Ordinal)
+                || !opening.Contains("License: MIT", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetRelativePath(solution, path));
+            }
+        }
+
+        // Vacuity floor: the four projects hold ~690 files, so a scan that saw a handful means the
+        // enumeration broke rather than the codebase being clean.
+        Assert.True(scanned >= 600,
+            $"only {scanned} source files were scanned — fix this guard rather than trusting its pass.");
+
+        Assert.True(offenders.Count == 0,
+            "these files are missing the attribution header the PR template requires. Copy the block "
+            + "from the top of a neighbouring file; CONTRIBUTING.md shows the exact shape for .cs and "
+            + $".xaml:\n  {string.Join("\n  ", offenders)}");
+    }
+
+    /// <summary>The <c>feat|fix</c> alternation auto-release matches to decide a bump.</summary>
+    [GeneratedRegex(@"\^\((feat\|fix)\)", RegexOptions.Compiled)]
+    private static partial Regex ReleasingPrefixAlternation();
+
+    /// <summary>A commit prefix offered by a PR-template checkbox, e.g. <c>(`feat:`)</c>.</summary>
+    [GeneratedRegex(@"^- \[ \].*\(`([a-z]+):`\)", RegexOptions.Compiled)]
+    private static partial Regex TemplatePrefix();
+
+    /// <summary>A link that opens a private security advisory.</summary>
+    [GeneratedRegex(@"/security/advisories/new", RegexOptions.Compiled)]
+    private static partial Regex AdvisoryLink();
+
+    /// <summary>An instruction to email the maintainer that names no address.</summary>
+    [GeneratedRegex(
+        @"email(?:ing)?\s+(?:the\s+)?maintainer|(?:e-?mail|address)\s+(?:listed\s+)?on\s+(?:their|the)\s+GitHub\s+profile",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex EmailTheMaintainer();
+
+    /// <summary>
     /// Every model property must be reachable: written by something, or shown by something. A property
     /// that is neither is a promise the app cannot keep — <c>BlockedApp.FullPath</c> was permanently empty
     /// because an IFEO key records only the executable name, and <c>ProcessEntry.UserName</c> was never
@@ -1181,14 +1429,19 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// The README's table of contents must resolve. It is 1300+ lines long, so the contents list is the
-    /// only practical way to navigate it — and a heading rename silently breaks an anchor, which renders
-    /// as a link that quietly does nothing rather than as an error.
+    /// Every in-page link in the docs must resolve. README is 1300+ lines long, so the contents list is
+    /// the only practical way to navigate it — and a heading rename silently breaks an anchor, which
+    /// renders as a link that quietly does nothing rather than as an error.
+    /// <para>Originally scoped to README's contents block, which is why it never saw
+    /// <c>[top of this README](#sysmanager)</c> further down the file: the h1 is "SysManager for
+    /// Windows", so that anchor slugs to <c>#sysmanager-for-windows</c> and the link had been inert since
+    /// it was written. Every in-page link on every doc page is now checked, in both directions.</para>
     /// </summary>
     [Fact]
     public void TheReadmeTableOfContents_HasNoDeadAnchors()
     {
-        var lines = File.ReadAllLines(Path.Combine(FindRepoRoot(), "README.md"));
+        var root = FindRepoRoot();
+        var lines = File.ReadAllLines(Path.Combine(root, "README.md"));
 
         // GitHub's anchor rule: lower-case, drop everything but word characters, spaces and hyphens,
         // then replace runs of whitespace with a single hyphen.
@@ -1212,9 +1465,38 @@ public partial class ArchitectureTests
                 dead.Add($"README.md:{i + 1}  #{m.Groups[1].Value}");
         }
 
+        // The whole doc set, not just README's contents block: a prose cross-reference breaks exactly the
+        // same way and is the one nobody re-reads.
+        var pages = 0;
+        foreach (var path in Directory.EnumerateFiles(root, "*.md", SearchOption.TopDirectoryOnly))
+        {
+            pages++;
+            var page = File.ReadAllLines(path);
+            var pageAnchors = page
+                .Select(l => HeadingLine().Match(l))
+                .Where(m => m.Success)
+                .Select(m => Slug(m.Groups[1].Value))
+                .ToHashSet(StringComparer.Ordinal);
+            // The h1 is an anchor too, and prose links back to the top of the page through it.
+            foreach (var l in page.Where(l => l.StartsWith("# ", StringComparison.Ordinal)))
+                pageAnchors.Add(Slug(l[2..]));
+
+            for (var i = 0; i < page.Length; i++)
+            {
+                foreach (var hit in InPageLink().Matches(page[i]).Cast<Match>())
+                {
+                    var anchor = hit.Groups[1].Value;
+                    if (!pageAnchors.Contains(anchor))
+                        dead.Add($"{Path.GetFileName(path)}:{i + 1}  #{anchor}");
+                }
+            }
+        }
+
+        Assert.True(pages >= 6, $"expected the top-level doc pages, found {pages}");
         Assert.True(entries >= 10, $"expected the full contents list, found {entries} entries");
         Assert.True(dead.Count == 0,
-            "these table-of-contents links point at headings that do not exist:\n  " + string.Join("\n  ", dead));
+            "these in-page links point at headings that do not exist, so they render as text that "
+            + $"quietly does nothing when clicked:\n  {string.Join("\n  ", dead)}");
     }
 
     private static string Slug(string heading) =>

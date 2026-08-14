@@ -29,7 +29,7 @@
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
                 <Button Content="Select common bloat" Command="{Binding SelectCommonBloatCommand}"
-                        AutomationProperties.Name="Select commonly removed apps"
+                        AutomationProperties.Name="Select common bloat — select commonly removed apps"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
                         ToolTip="Pre-select the curated set of commonly-removed apps."/>
                 <Button Content="Deselect All" Command="{Binding ClearSelectionCommand}"

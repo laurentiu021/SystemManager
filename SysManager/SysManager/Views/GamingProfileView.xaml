@@ -104,10 +104,10 @@
                                   AutomationProperties.Name="Switch to the Ultimate Performance power plan"/>
                         <CheckBox Content="Reduce visual effects (animations, fades, shadows)" IsChecked="{Binding DisableVisualEffects}"
                                   Margin="0,4" FontWeight="SemiBold"
-                                  AutomationProperties.Name="Reduce visual effects"/>
+                                  AutomationProperties.Name="Reduce visual effects (animations, fades, shadows) — reduce visual effects"/>
                         <CheckBox Content="Finest timer resolution (~0.5 ms)" IsChecked="{Binding FinestTimerResolution}"
                                   Margin="0,4" FontWeight="SemiBold"
-                                  AutomationProperties.Name="Request the finest timer resolution"/>
+                                  AutomationProperties.Name="Finest timer resolution (~0.5 ms) — request the finest timer resolution"/>
                         <CheckBox Content="Silence notifications while gaming" IsChecked="{Binding SilenceNotifications}"
                                   Margin="0,4" FontWeight="SemiBold"
                                   AutomationProperties.Name="Silence notifications while gaming"/>
@@ -115,10 +115,10 @@
                         <!-- Admin-gated system optimizations -->
                         <CheckBox Content="Free standby memory (needs administrator)" IsChecked="{Binding PurgeStandbyMemory}"
                                   Margin="0,4" FontWeight="SemiBold" IsEnabled="{Binding IsElevated}"
-                                  AutomationProperties.Name="Free standby memory (requires administrator)"/>
+                                  AutomationProperties.Name="Free standby memory (needs administrator) — free standby memory (requires administrator)"/>
                         <CheckBox Content="Pause Windows Search indexing (needs administrator)" IsChecked="{Binding PauseSearchIndexing}"
                                   Margin="0,4" FontWeight="SemiBold" IsEnabled="{Binding IsElevated}"
-                                  AutomationProperties.Name="Pause Windows Search indexing (requires administrator)"/>
+                                  AutomationProperties.Name="Pause Windows Search indexing (needs administrator) — pause Windows Search indexing (requires administrator)"/>
 
                         <!-- Per-game optimizations (only meaningful with a game selected) -->
                         <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
@@ -128,7 +128,7 @@
                                 <TextBlock Text="Applied to the selected game" Style="{StaticResource Caption}" Margin="0,0,0,6"/>
                                 <CheckBox Content="High CPU priority for the game" IsChecked="{Binding HighGameCpuPriority}"
                                           Margin="0,4" FontWeight="SemiBold"
-                                          AutomationProperties.Name="Set the game to high CPU priority"/>
+                                          AutomationProperties.Name="High CPU priority for the game — set the game to high CPU priority"/>
                                 <CheckBox Content="Pin the game to performance cores" IsChecked="{Binding PinGameToPerformanceCores}"
                                           Margin="0,4" FontWeight="SemiBold"
                                           AutomationProperties.Name="Pin the game to performance cores"/>

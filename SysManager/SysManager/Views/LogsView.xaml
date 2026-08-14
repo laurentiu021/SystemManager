@@ -40,7 +40,7 @@
                      button sits next to "Open Event Viewer", so "Open log folder" read as the
                      Windows logs while it opens SysManager's own %LOCALAPPDATA% log directory.
                      The tooltip gives the full path so there is no ambiguity before clicking. -->
-                <Button Content="SysManager's own logs" AutomationProperties.AutomationId="btn-logs-open-folder" AutomationProperties.Name="Open SysManager's own log folder" Command="{Binding OpenLogFolderCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"
+                <Button Content="SysManager's own logs" AutomationProperties.AutomationId="btn-logs-open-folder" AutomationProperties.Name="SysManager's own logs — open SysManager's own log folder" Command="{Binding OpenLogFolderCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"
                         ToolTip="{Binding LogFolder, Mode=OneWay, StringFormat='Opens SysManager''s own diagnostic logs: {0}'}"/>
                 <Button Content="Export CSV" AutomationProperties.AutomationId="btn-logs-export-csv" AutomationProperties.Name="Export logs to CSV" Command="{Binding ExportCsvCommand}" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"/>
             </StackPanel>
@@ -149,19 +149,19 @@
                     <TextBlock Text="Time" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" Margin="8,0,18,0">
                         <RadioButton Content="1h" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="Time range: last hour"
+                                     AutomationProperties.Name="1h — time range: last hour"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last hour'}"
                                      Style="{StaticResource FilterChip}"/>
                         <RadioButton Content="24h" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="Time range: last 24 hours"
+                                     AutomationProperties.Name="24h — time range: last 24 hours"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 24 hours'}"
                                      Style="{StaticResource FilterChip}"/>
                         <RadioButton Content="7d" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="Time range: last 7 days"
+                                     AutomationProperties.Name="7d — time range: last 7 days"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 7 days'}"
                                      Style="{StaticResource FilterChip}"/>
                         <RadioButton Content="30d" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="Time range: last 30 days"
+                                     AutomationProperties.Name="30d — time range: last 30 days"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 30 days'}"
                                      Style="{StaticResource FilterChip}"/>
                         <RadioButton Content="All" GroupName="TimeRange"

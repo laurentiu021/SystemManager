@@ -95,7 +95,7 @@
             <StackPanel>
                 <CheckBox Content="Automatically purge when available RAM is low"
                           IsChecked="{Binding AutoPurgeEnabled}" IsEnabled="{Binding IsElevated}"
-                          FontWeight="SemiBold" AutomationProperties.Name="Enable automatic standby purge"/>
+                          FontWeight="SemiBold" AutomationProperties.Name="Automatically purge when available RAM is low — enable automatic standby purge"/>
                 <Grid Margin="0,12,0,0" IsEnabled="{Binding AutoPurgeEnabled}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>

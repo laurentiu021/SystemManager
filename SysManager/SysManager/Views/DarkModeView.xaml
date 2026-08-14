@@ -42,7 +42,7 @@
                             AutomationProperties.Name="Switch to light theme"/>
                     <CheckBox Content="Also switch taskbar &amp; Start" IsChecked="{Binding ApplyToSystem}"
                               VerticalAlignment="Center"
-                              AutomationProperties.Name="Also switch the system theme"/>
+                              AutomationProperties.Name="Also switch taskbar &amp; Start — also switch the system theme"/>
                 </WrapPanel>
             </StackPanel>
         </Border>
@@ -51,7 +51,7 @@
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12">
             <StackPanel>
                 <CheckBox Content="Automatically switch on a schedule" IsChecked="{Binding ScheduleEnabled}"
-                          FontWeight="SemiBold" AutomationProperties.Name="Enable the dark-mode schedule"/>
+                          FontWeight="SemiBold" AutomationProperties.Name="Automatically switch on a schedule — enable the dark-mode schedule"/>
                 <Grid Margin="0,12,0,0" IsEnabled="{Binding ScheduleEnabled}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>

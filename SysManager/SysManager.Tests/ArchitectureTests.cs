@@ -1576,10 +1576,48 @@ public partial class ArchitectureTests
             }
         }
 
+        // Cross-PAGE anchors — [text](SECURITY.md#security-model) — break the same silent way, and were
+        // invisible to the sweep above: InPageLink only matches "](#anchor)", never "](other.md#anchor)".
+        // Six such links already existed when this was added, all resolving by luck rather than by check.
+        var crossPage = 0;
+        var headingsByPage = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in Directory.EnumerateFiles(root, "*.md", SearchOption.TopDirectoryOnly))
+        {
+            var page = File.ReadAllLines(path);
+            var set = page
+                .Select(l => HeadingLine().Match(l))
+                .Where(m => m.Success)
+                .Select(m => Slug(m.Groups[1].Value))
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var l in page.Where(l => l.StartsWith("# ", StringComparison.Ordinal)))
+                set.Add(Slug(l[2..]));
+            headingsByPage[Path.GetFileName(path)] = set;
+        }
+
+        foreach (var path in Directory.EnumerateFiles(root, "*.md", SearchOption.TopDirectoryOnly))
+        {
+            var page = File.ReadAllLines(path);
+            for (var i = 0; i < page.Length; i++)
+            {
+                foreach (var hit in CrossPageLink().Matches(page[i]).Cast<Match>())
+                {
+                    crossPage++;
+                    var (target, anchor) = (hit.Groups["file"].Value, hit.Groups["anchor"].Value);
+                    if (!headingsByPage.TryGetValue(target, out var targetHeadings))
+                        dead.Add($"{Path.GetFileName(path)}:{i + 1}  {target}#{anchor}  (no such page)");
+                    else if (!targetHeadings.Contains(anchor))
+                        dead.Add($"{Path.GetFileName(path)}:{i + 1}  {target}#{anchor}");
+                }
+            }
+        }
+
         Assert.True(pages >= 6, $"expected the top-level doc pages, found {pages}");
         Assert.True(entries >= 10, $"expected the full contents list, found {entries} entries");
+        Assert.True(crossPage >= 4,
+            $"expected the doc set's cross-page anchor links, found {crossPage} — either they were "
+            + "removed or the pattern no longer matches them, and this half of the guard is vacuous");
         Assert.True(dead.Count == 0,
-            "these in-page links point at headings that do not exist, so they render as text that "
+            "these links point at headings that do not exist, so they render as text that "
             + $"quietly does nothing when clicked:\n  {string.Join("\n  ", dead)}");
     }
 
@@ -1593,6 +1631,14 @@ public partial class ArchitectureTests
     /// <summary>An in-page markdown link, capturing the anchor.</summary>
     [GeneratedRegex(@"\]\(#([^)]+)\)", RegexOptions.Compiled)]
     private static partial Regex InPageLink();
+
+    /// <summary>
+    /// A link into ANOTHER top-level doc page's heading, capturing the file and the anchor —
+    /// <c>](SECURITY.md#security-model)</c>. Relative paths with a directory are excluded: this guard
+    /// only knows the headings of the top-level pages it enumerated.
+    /// </summary>
+    [GeneratedRegex(@"\]\((?<file>[A-Za-z0-9_.-]+\.md)#(?<anchor>[^)]+)\)", RegexOptions.Compiled)]
+    private static partial Regex CrossPageLink();
 
     /// <summary>Characters GitHub strips when building an anchor.</summary>
     [GeneratedRegex(@"[^\w\s-]", RegexOptions.Compiled)]

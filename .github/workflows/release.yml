@@ -238,13 +238,26 @@ jobs:
           $exitCode = if ($app.HasExited) { $app.ExitCode } else { $null }
 
           if ($alive) {
-              Write-Host "Process $($app.Id) is alive after 25s; closing it."
-              # Ask first, so the normal shutdown path runs and any teardown fault surfaces.
-              $app.CloseMainWindow() | Out-Null
-              if (-not $app.WaitForExit(15000)) {
-                  Write-Host "::warning::The window did not close within 15s; killing the process."
-                  $app.Kill()
-                  $app.WaitForExit(10000) | Out-Null
+              # Killed outright, NOT closed via CloseMainWindow(). The first version asked politely,
+              # on the theory that the normal shutdown path would surface a teardown fault. On a CI
+              # runner that theory is wrong, and provably so: a runner is always a FIRST launch, so
+              # close-preference.json does not exist, ClosePreferenceService.Load() returns Ask, and
+              # MainWindow.OnClosing shows a modal MessageBox asking whether to keep running in the
+              # notification area. Nobody answers it, so WM_CLOSE never completes and the step warned
+              # "the window did not close within 15s" on the very first release that ran it (v1.65.6).
+              #
+              # That prompt is correct behaviour — it is the fix for #1639/#1827 — so the check was
+              # wrong, not the app. A warning that fires on every single release is worse than no
+              # warning: it trains everyone to ignore the one that eventually matters.
+              #
+              # This step has exactly one job: prove the published binary starts and survives. A clean
+              # shutdown is a different property, it needs a real desktop and a pre-seeded preference,
+              # and it belongs to the FlaUI suite rather than to the release gate.
+              Write-Host "Process $($app.Id) is alive after 25s; stopping it."
+              $app.Kill()
+              if (-not $app.WaitForExit(10000)) {
+                  throw "The process did not exit within 10 seconds of being killed, which means the " +
+                        "runner cannot reclaim it. Investigate before trusting this release."
               }
           }
 

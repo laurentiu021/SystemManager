@@ -120,8 +120,17 @@ public sealed class SpeedTestHistoryService : IDisposable
     /// <summary>
     /// Saves a new result, appending to existing history. Trims to
     /// <see cref="MaxPerEngine"/> per engine type.
+    /// <para>Returns <c>true</c> when the result reached disk and <c>false</c> when the write failed. It
+    /// used to return a bare <c>Task</c> and swallow <see cref="IOException"/> into a log warning, so a
+    /// transient filesystem failure discarded the user's result while every caller — and the UI — carried
+    /// on as though it had been stored. That is silent data loss of the only record the Speed Test tab
+    /// keeps, and it is not theoretical: it surfaced as a one-off unit-test failure during a release, where
+    /// the loaded history came back with its window shifted by exactly one entry — the signature of a
+    /// single dropped write — on a run whose predecessor had passed.</para>
+    /// <para>The exception is still not rethrown: losing one reading must not take the tab down. But the
+    /// outcome is now reported, so a caller can tell the user instead of pretending.</para>
     /// </summary>
-    public async Task SaveAsync(SpeedTestResult result, CancellationToken ct = default)
+    public async Task<bool> SaveAsync(SpeedTestResult result, CancellationToken ct = default)
     {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -151,14 +160,17 @@ public sealed class SpeedTestHistoryService : IDisposable
 
             var json = JsonSerializer.Serialize(entries, JsonOpts);
             await AtomicFile.WriteAllTextAsync(_historyPath, json, ct).ConfigureAwait(false);
+            return true;
         }
         catch (IOException ex)
         {
             Log.Warning(ex, "Failed to save speed test result");
+            return false;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Access denied saving speed test history");
+            return false;
         }
         finally
         {

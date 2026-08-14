@@ -159,23 +159,35 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         Assert.Null(ex);
     }
 
+    /// <summary>
+    /// MaxPerEngine is 20; save 25 with increasing timestamps and assert the oldest 5 are dropped rather
+    /// than the newest. Deterministic timestamps, no wall clock.
+    /// <para>Asserts the WHOLE surviving window rather than spot-checking membership. The spot-check
+    /// version failed once during a release with <c>DoesNotContain: filter matched</c> and a dumped
+    /// collection — which took reading the raw dump to interpret. The window had slid down by exactly one
+    /// entry (ending s5, s4 instead of s6, s5), meaning one save had been lost; the old
+    /// <see cref="SpeedTestHistoryService.SaveAsync"/> swallowed the write failure and reported nothing,
+    /// so the count assertion still passed and only the incidental <c>DoesNotContain("s4")</c> caught it.
+    /// Every save is now checked for success as it happens, and the surviving set is compared exactly, so
+    /// a dropped write names itself.</para>
+    /// </summary>
     [Fact]
     public async Task SaveAsync_TrimsToMaxPerEngine_KeepingTheNewest()
     {
-        // MaxPerEngine is 20; save 25 with increasing timestamps and assert the oldest 5 are dropped
-        // rather than the newest. Deterministic timestamps, no wall clock.
         using var svc = NewService();
         var start = new DateTime(2026, 1, 1, 0, 0, 0);
         for (int i = 0; i < 25; i++)
-            await svc.SaveAsync(Result("HTTP", down: i, server: $"s{i}", at: start.AddMinutes(i)));
+        {
+            var saved = await svc.SaveAsync(Result("HTTP", down: i, server: $"s{i}", at: start.AddMinutes(i)));
+            Assert.True(saved, $"save {i} (s{i}) failed to reach disk — every later assertion would be "
+                             + "measuring a history with a hole in it.");
+        }
 
         var loaded = await svc.LoadAsync();
 
-        Assert.Equal(SpeedTestHistoryService.MaxPerEngine, loaded.Count);
-        Assert.Equal("s24", loaded[0].Server);                       // newest first
-        Assert.DoesNotContain(loaded, r => r.Server == "s0");        // oldest trimmed
-        Assert.DoesNotContain(loaded, r => r.Server == "s4");
-        Assert.Contains(loaded, r => r.Server == "s5");              // 25 - 20 = first kept
+        // Newest first, exactly s24 down to s5: 25 saved, 20 kept.
+        var expected = Enumerable.Range(5, 20).Reverse().Select(i => $"s{i}").ToArray();
+        Assert.Equal(expected, loaded.Select(r => r.Server).ToArray());
     }
 
     [Fact]

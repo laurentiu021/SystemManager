@@ -1847,6 +1847,73 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"&#x[0-9A-Fa-f]{4};", RegexOptions.CultureInvariant)]
     private static partial Regex FluentGlyphReference();
 
+    /// <summary>
+    /// The release workflow must RUN the exe it is about to publish, and must do so while a failure
+    /// can still stop the release.
+    /// <para>Nothing in the pipeline ever started the artifact. The unit tests exercise the code, but
+    /// they load assemblies into a test host — they do not launch the single-file, self-contained,
+    /// compressed exe a user downloads, and those are different failure surfaces: a native library that
+    /// does not extract from the bundle, a startup path that throws before the first frame, a resource
+    /// that resolves in a normal build but not a packed one. All of them pass every test and then fail
+    /// on launch, which is exactly what shipped once.</para>
+    /// <para>Position is the whole point, so it is asserted rather than trusted to review. A smoke check
+    /// placed after "Create GitHub Release" still runs and still goes red — but the release, the winget
+    /// submission and the announcement are already out, so it reports a fact instead of preventing one.
+    /// It must sit after the artifact exists (the publish) and before anything is published.</para>
+    /// </summary>
+    [Fact]
+    public void TheReleaseWorkflow_LaunchesTheExeBeforeItPublishesAnything()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+
+        int StepLine(string name)
+        {
+            var at = Array.FindIndex(lines, l => l.Trim() == $"- name: {name}");
+            Assert.True(at >= 0,
+                $"release.yml has no step named \"{name}\". If it was renamed, update this guard in the "
+                + "same PR — do not delete it.");
+            return at;
+        }
+
+        var publish = StepLine("Publish single-file exe");
+        var rename = StepLine("Rename exe with version");
+        var smoke = StepLine("Smoke-check the published exe");
+        var release = StepLine("Create GitHub Release");
+        var winget = StepLine("Sync the winget-pkgs fork with upstream");
+        var announce = StepLine("Post announcement to Discussions");
+
+        Assert.True(smoke > rename,
+            $"the smoke check (line {smoke + 1}) runs before the exe is named (line {rename + 1}), so "
+            + "there is no artifact for it to launch.");
+        Assert.True(publish < smoke, "the exe must be published to disk before it can be launched.");
+
+        foreach (var (step, at) in new[]
+                 {
+                     ("Create GitHub Release", release),
+                     ("Sync the winget-pkgs fork with upstream", winget),
+                     ("Post announcement to Discussions", announce)
+                 })
+        {
+            Assert.True(smoke < at,
+                $"the smoke check (line {smoke + 1}) runs AFTER \"{step}\" (line {at + 1}). A launch "
+                + "failure would then be reported rather than prevented — the release, the package "
+                + "submission and the announcement would already be public.");
+        }
+
+        // The step body has to actually start the process and judge the outcome. Without these it
+        // could be reduced to an echo and still satisfy the ordering above.
+        var body = string.Join('\n', lines[smoke..release]);
+        foreach (var required in new[] { "Start-Process", "HasExited", "last-crash.json", "throw" })
+        {
+            Assert.Contains(required, body, StringComparison.Ordinal);
+        }
+
+        // A check that never fails the job is decoration. continue-on-error on this step would make
+        // the launch advisory, which is the one thing it must not be.
+        Assert.DoesNotContain("continue-on-error", body, StringComparison.Ordinal);
+    }
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

@@ -10,7 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.65.8] - 2026-08-14
+## [1.65.9] - 2026-08-14
+
+Startup Manager was missing a whole class of programs that start with Windows — anything installed by
+a 32-bit installer, which on a typical PC means a VPN client, a printer helper or an older updater.
+Those now appear alongside everything else, and can be turned off from here like the rest. Task
+Scheduler also shows what each task is for and when it will run next, instead of only when it last ran.
+
+### Fixed
+- **Startup Manager did not list programs installed by 32-bit installers.** 64-bit Windows keeps the
+  startup list of a 32-bit program in a separate place, and the app only ever read the main one. So an
+  application that genuinely runs at every boot simply was not in the list — and since the point of the
+  tab is to tell you what starts with Windows, its answer was incomplete without saying so. Windows'
+  own Task Manager shows these, so anyone comparing the two would have seen the gap. They are now
+  listed, and disabling one writes to the place Windows actually reads for that kind of entry, so
+  "Disabled" means disabled rather than looking disabled while the program keeps starting.
+
+### Added
+- **Task Scheduler now shows what a task is for, and when it runs next.** The tab was already asking
+  Windows for each task's description, who created it, and its next scheduled run — on every single
+  scan — and then displaying none of it. "Next run" is now a column beside "Last run", there is a
+  "What it does" column with Windows' own description, and hovering it shows which publisher created
+  the task, which is also what decides whether it is labelled System, Telemetry or Third-party. No
+  extra work is done to collect any of this; it was being fetched and thrown away.
+
 
 If you use one of the six light colour themes, the lines on the Ping, Bandwidth Monitor and Resource
 History graphs were washed out to the point of being invisible — a pale mint or pale yellow line on a

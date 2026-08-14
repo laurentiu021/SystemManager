@@ -132,6 +132,26 @@
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90"/>
                     <DataGridTextColumn Header="Last run" Binding="{Binding LastRunDisplay}" Width="140"/>
+                    <!-- Next run answers the question this tab exists for — "when is this going to
+                         happen?" — and it was already being fetched: the per-task query that fills
+                         Last run selects NextRunTime in the same call, ScheduledTaskInfo carries it,
+                         and NextRunDisplay was formatting it for a column that did not exist. -->
+                    <DataGridTextColumn Header="Next run" Binding="{Binding NextRunDisplay}" Width="140"/>
+                    <!-- What the task is for, in Windows' own words, with the publisher on hover.
+                         Both came back with every scan (TaskSchedulerService selects Author and
+                         Description) and neither was displayed anywhere. Author matters because it is
+                         what the category chip is derived from, so a user who wonders why something is
+                         labelled "System" can now see the answer. Same trimming + hover shape as the
+                         Description column in ServicesView. -->
+                    <DataGridTextColumn Header="What it does" Binding="{Binding Description}"
+                                        Width="*" MinWidth="120" SortMemberPath="Description">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                <Setter Property="ToolTip" Value="{Binding AuthorDisplay}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                 </DataGrid.Columns>
             </DataGrid>
 

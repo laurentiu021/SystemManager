@@ -113,6 +113,7 @@ public class StartupToggleTests
     [Theory]
     [InlineData(StartupSource.RegistryCurrentUser)]
     [InlineData(StartupSource.RegistryLocalMachine)]
+    [InlineData(StartupSource.RegistryLocalMachine32)]
     public async Task SetEnabledAsync_RunOnce_ReturnsFalseWithHonestMessage_AndDoesNotDisable(StartupSource source)
     {
         // Regression (P2 #35): Windows has no StartupApproved\RunOnce and never consults

@@ -1640,6 +1640,13 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\]\((?<file>[A-Za-z0-9_.-]+\.md)#(?<anchor>[^)]+)\)", RegexOptions.Compiled)]
     private static partial Regex CrossPageLink();
 
+    /// <summary>
+    /// An XML/XAML comment block. Stripped before asserting that a view BINDS something: a comment that
+    /// merely names a property would otherwise satisfy a substring check on the raw file.
+    /// </summary>
+    [GeneratedRegex(@"<!--.*?-->", RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex XmlComment();
+
     /// <summary>Characters GitHub strips when building an anchor.</summary>
     [GeneratedRegex(@"[^\w\s-]", RegexOptions.Compiled)]
     private static partial Regex NonAnchorCharacter();
@@ -2186,6 +2193,114 @@ public partial class ArchitectureTests
         Assert.True(setAt > logAt,
             $"{flag} is set at {setAt} but the log is at {logAt} — it must be set after the loop, so a "
             + "read that throws partway through can still log the rest on its next attempt.");
+    }
+
+    /// <summary>
+    /// Every machine-wide Run key the scan enumerates must have its enable/disable state read from, and
+    /// written to, the matching <c>StartupApproved</c> subkey.
+    /// <para>Windows keeps the disabled-state of a <c>Wow6432Node\...\Run</c> item under
+    /// <c>StartupApproved\Run32</c>, not <c>StartupApproved\Run</c>. Mapping a 32-bit entry to the 64-bit
+    /// approved key puts the disable blob where Windows never looks: the item keeps running at every boot
+    /// while the tab reports "Disabled". That exact failure already shipped once for the all-users startup
+    /// folder, which is why <c>CommonStartupFolder</c> exists as its own source — this pins the same
+    /// contract for the 32-bit registry view so the pattern cannot be reintroduced by adding a key to the
+    /// array and reusing the nearest source value.</para>
+    /// <para>Asserted at source level because <c>SetEnabledAsync</c> writes to the live registry, so the
+    /// mapping cannot be exercised from a unit test without touching the user's real machine.</para>
+    /// </summary>
+    [Fact]
+    public void EveryMachineRunKey_ReadsAndWritesItsOwnStartupApprovedKey()
+    {
+        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "StartupService.cs"));
+
+        // The 32-bit Run key must actually be enumerated. Without this the rest of the guard would pass
+        // on a scan that never produces a 32-bit entry at all — which is precisely the pre-fix state.
+        Assert.Contains(@"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run", source, StringComparison.Ordinal);
+        Assert.Contains("StartupSource.RegistryLocalMachine32", source, StringComparison.Ordinal);
+
+        // Read path: ApplyApprovedState must map the 32-bit source to the Run32 dictionary, and must NOT
+        // fall back between the two views — "hklmApproved ?? hklm32Approved" reads the wrong key whenever
+        // both exist.
+        var readAt = source.IndexOf("private static void ApplyApprovedState", StringComparison.Ordinal);
+        Assert.True(readAt > 0, "ApplyApprovedState was not found — fix this guard, do not delete it.");
+        var writeAt = source.IndexOf("public static async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
+        Assert.True(writeAt > readAt,
+            "SetEnabledAsync is expected after ApplyApprovedState; the slices below assume that order.");
+
+        var readBody = source[readAt..writeAt];
+        Assert.Contains("StartupSource.RegistryLocalMachine32 => hklm32Approved", readBody, StringComparison.Ordinal);
+        Assert.Contains("StartupSource.RegistryLocalMachine => hklmApproved,", readBody, StringComparison.Ordinal);
+        // Match the ARM of the switch, not the bare phrase: the comment above the 32-bit arm explains the
+        // old fallback by naming it, and a guard that forbids its own explanation goes red on the fixed
+        // tree (that mistake was made once already, in the release-workflow guard).
+        Assert.DoesNotContain(
+            "StartupSource.RegistryLocalMachine => hklmApproved ?? hklm32Approved",
+            readBody, StringComparison.Ordinal);
+
+        // Write path: the same source must target ApprovedRun32HKLM.
+        var writeBody = source[writeAt..];
+        Assert.Contains(
+            "StartupSource.RegistryLocalMachine32 => (Registry.LocalMachine, ApprovedRun32HKLM)",
+            writeBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "StartupSource.RegistryLocalMachine => (Registry.LocalMachine, ApprovedRunHKLM)",
+            writeBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Everything the scheduled-task query pays to fetch must reach the screen.
+    /// <para>The Task Scheduler tab queried <c>Author</c>, <c>Description</c> and <c>NextRunTime</c> from
+    /// Windows on every scan, carried all three through <c>ScheduledTaskInfo</c>, and even defined a
+    /// formatted <c>NextRunDisplay</c> — while the view bound Name, Path, Type, State and Last run only.
+    /// A user asking the one question this tab exists for, "when will this run next?", could not see the
+    /// answer the app already had. This is SysManager's most persistent defect class: state that is
+    /// implemented, unit-tested, and bound by nothing, which neither the compiler nor a view-model test
+    /// can see — only an assertion against the shipped XAML.</para>
+    /// </summary>
+    [Fact]
+    public void EveryScheduledTaskFieldTheQueryFetches_IsBoundInTheView()
+    {
+        var service = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "TaskSchedulerService.cs"));
+        var view = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Views", "TaskSchedulerView.xaml"));
+
+        // XAML comments are stripped before matching. A comment in the view that merely NAMES a property
+        // would otherwise satisfy the check — the first draft of this guard stayed green with the "Next
+        // run" column deleted, because the comment above it mentioned NextRunDisplay. Only a real binding
+        // counts.
+        var bindings = XmlComment().Replace(view, string.Empty);
+
+        // Only assert on fields the service genuinely asks Windows for — otherwise this guard drifts into
+        // demanding UI for data that is not collected.
+        (string Fetched, string Bound)[] contract =
+        [
+            ("Author", "{Binding AuthorDisplay}"),
+            ("Description", "{Binding Description}"),
+            ("NextRunTime", "{Binding NextRunDisplay}"),
+            ("LastRunTime", "{Binding LastRunDisplay}"),
+        ];
+
+        var notFetched = new List<string>();
+        var notBound = new List<string>();
+        foreach (var (fetched, bound) in contract)
+        {
+            if (!service.Contains(fetched, StringComparison.Ordinal))
+                notFetched.Add(fetched);
+            else if (!bindings.Contains(bound, StringComparison.Ordinal))
+                notBound.Add($"{fetched} -> expected a real '{bound}' in TaskSchedulerView.xaml");
+        }
+
+        // Vacuity floor: if the service stopped selecting these, the loop above would silently check
+        // nothing at all and report success.
+        Assert.True(notFetched.Count == 0,
+            "the scheduled-task query no longer fetches these, so this guard is measuring nothing — "
+            + $"fix the guard rather than trusting its pass:\n  {string.Join("\n  ", notFetched)}");
+
+        Assert.True(notBound.Count == 0,
+            "the Task Scheduler query pays to fetch these fields on every scan and the view displays "
+            + "none of them, so the work is thrown away and the user cannot see data the app already "
+            + $"holds:\n  {string.Join("\n  ", notBound)}");
     }
 
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>

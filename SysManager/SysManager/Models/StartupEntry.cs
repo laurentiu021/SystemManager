@@ -53,6 +53,17 @@ public enum StartupSource
 {
     RegistryCurrentUser,
     RegistryLocalMachine,
+    /// <summary>
+    /// Machine-wide Run key of a 32-bit application on 64-bit Windows
+    /// (<c>SOFTWARE\Wow6432Node\...\CurrentVersion\Run</c>) — approved-state in
+    /// <c>StartupApproved\Run32</c>, NOT <c>StartupApproved\Run</c>.
+    /// <para>A distinct source rather than a flag on <see cref="RegistryLocalMachine"/> because the
+    /// enable/disable state lives in a different key: writing the disable blob to
+    /// <c>StartupApproved\Run</c> for one of these items would put it where Windows never looks, so the
+    /// item would still run at boot while the UI reported "Disabled" — the same failure the Common
+    /// startup folder had before <see cref="CommonStartupFolder"/> was split out.</para>
+    /// </summary>
+    RegistryLocalMachine32,
     /// <summary>Per-user shell Startup folder (%AppData%\...\Startup) — approved-state in HKCU.</summary>
     StartupFolder,
     /// <summary>All-users (Common) shell Startup folder (%ProgramData%\...\Startup) — approved-state in HKLM.</summary>

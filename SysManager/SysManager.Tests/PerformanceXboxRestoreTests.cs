@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Text.Json;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -40,23 +41,42 @@ public class PerformanceXboxRestoreTests
     [InlineData(false, false)]
     public void Snapshot_PreservesBothXboxFlagsIndependently(bool bar, bool dvr)
     {
-        var snap = SnapshotWith(bar, dvr);
+        // Through the JSON the snapshot is actually PERSISTED as, not straight back out of the record.
+        // Reading positional-record properties back asserts the compiler's auto-property storage, so it
+        // cannot fail at runtime — the previous version of this test would have stayed green if the two
+        // flags were collapsed into one, which is precisely the regression the class doc claims to pin.
+        // The snapshot survives an app restart via SaveSnapshot/LoadSnapshot, so the serialized shape is
+        // the real contract: a field dropped or merged there loses the user's state for good.
+        var restored = RoundTrip(SnapshotWith(bar, dvr));
 
-        // The two flags must round-trip separately — never be merged into one value.
-        Assert.Equal(bar, snap.XboxGameBarEnabled);
-        Assert.Equal(dvr, snap.XboxGameDvrEnabled);
+        Assert.Equal(bar, restored.XboxGameBarEnabled);
+        Assert.Equal(dvr, restored.XboxGameDvrEnabled);
     }
 
     [Fact]
-    public void Snapshot_MismatchedXboxFlags_StayDistinct()
+    public void Snapshot_MismatchedXboxFlags_SurviveSeparately()
     {
-        var snap = SnapshotWith(bar: true, dvr: false);
+        // The bug scenario end to end: Game Bar ON, per-game DVR OFF. A collapsing restore
+        // (bar && dvr) treats this as a single "false" and forces both keys OFF, silently losing the
+        // Game Bar = ON state. Asserting after a real serialize/deserialize means a merged or missing
+        // field fails here instead of passing on record storage.
+        var restored = RoundTrip(SnapshotWith(bar: true, dvr: false));
 
-        // A collapsing restore (bar && dvr) would treat this as a single "false" and
-        // force both keys OFF, silently losing the Game Bar = ON state. Assert the
-        // snapshot keeps them distinct so restore can write each key from its own flag.
-        Assert.NotEqual(snap.XboxGameBarEnabled, snap.XboxGameDvrEnabled);
-        Assert.True(snap.XboxGameBarEnabled);
-        Assert.False(snap.XboxGameDvrEnabled);
+        Assert.True(restored.XboxGameBarEnabled);
+        Assert.False(restored.XboxGameDvrEnabled);
+    }
+
+    /// <summary>
+    /// Serializes and deserializes the snapshot the way <c>SaveSnapshot</c>/<c>LoadSnapshot</c> do.
+    /// <para>Both properties carry <c>[property: JsonRequired]</c>, so a field removed from the record
+    /// makes the deserialize throw rather than silently yielding <c>false</c> — the assertions above
+    /// therefore fail loudly rather than passing on a default.</para>
+    /// </summary>
+    private static PerformanceService.OriginalSnapshot RoundTrip(
+        PerformanceService.OriginalSnapshot snapshot)
+    {
+        var json = JsonSerializer.Serialize(snapshot);
+        return JsonSerializer.Deserialize<PerformanceService.OriginalSnapshot>(json)
+               ?? throw new InvalidOperationException("The snapshot did not survive the round-trip.");
     }
 }

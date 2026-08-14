@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.Helpers;
 using SysManager.ViewModels;
 
@@ -112,7 +113,28 @@ public class WingetFailureTests
     public void AllThreeWingetTabsUseTheSameMissingWingetSentence()
     {
         // The literal used to live on AppUpdatesViewModel and be referenced cross-VM, which is exactly
-        // how Bulk Installer ended up not using it at all.
+        // how Bulk Installer ended up not using it at all. The name promises all three tabs, so all
+        // three are read: asserting only the AppUpdates alias left the other two tabs free to
+        // reintroduce their own wording — the very drift this test is named for.
+        var vmDir = FindViewModelsDirectory();
+        var offenders = new List<string>();
+
+        foreach (var vm in new[] { "AppUpdatesViewModel.cs", "UninstallerViewModel.cs", "BulkInstallerViewModel.cs" })
+        {
+            var source = File.ReadAllText(Path.Combine(vmDir, vm));
+
+            // Each tab must reach the shared constant — directly, or through the AppUpdates alias that
+            // forwards to it. A tab spelling the sentence itself would satisfy neither.
+            if (!source.Contains("WingetFailure.WingetUnavailable", StringComparison.Ordinal)
+                && !source.Contains("WingetUnavailableMessage", StringComparison.Ordinal))
+                offenders.Add($"{vm} does not use the shared missing-winget sentence");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Every winget tab must show the SAME sentence when winget is missing, so the user reads one "
+            + "explanation rather than three:\n  " + string.Join("\n  ", offenders));
+
+        // And the alias really does forward to the shared constant rather than holding a second copy.
         Assert.Equal(WingetFailure.WingetUnavailable, AppUpdatesViewModel.WingetUnavailableMessage);
     }
 
@@ -131,5 +153,20 @@ public class WingetFailureTests
         // The point of the shared string: the tab needs a prerequisite, nothing broke.
         Assert.DoesNotContain("error", WingetFailure.WingetUnavailable, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("failed", WingetFailure.WingetUnavailable, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The app project's ViewModels directory — .cs sources are not copied to the test output.</summary>
+    private static string FindViewModelsDirectory()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "SysManager", "ViewModels");
+            if (Directory.Exists(candidate)) return candidate;
+        }
+
+        throw new DirectoryNotFoundException(
+            "Could not locate the SysManager ViewModels directory from " + AppContext.BaseDirectory);
     }
 }

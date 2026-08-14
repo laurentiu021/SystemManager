@@ -23,10 +23,16 @@ public class SystemSnapshotTests
     public void CpuInfo_StoresFields()
     {
         var cpu = new CpuInfo("AMD Ryzen 7 7800X3D", 8, 16, 4800, 27.5);
+
+        // Exact, not InRange(0, 100): a record that dropped LoadPercent returns default(double) = 0,
+        // which is inside that range — so the old assertion passed on the very failure it named. The
+        // name was not asserted at all, leaving two of the five fields this test claims to cover
+        // unverified.
+        Assert.Equal("AMD Ryzen 7 7800X3D", cpu.Name);
         Assert.Equal(8u, cpu.Cores);
         Assert.Equal(16u, cpu.LogicalProcessors);
         Assert.Equal(4800u, cpu.MaxClockMHz);
-        Assert.InRange(cpu.LoadPercent, 0, 100);
+        Assert.Equal(27.5, cpu.LoadPercent);
     }
 
     [Fact]

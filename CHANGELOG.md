@@ -10,7 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.65.7] - 2026-08-14
+## [1.65.8] - 2026-08-14
+
+If you use one of the six light colour themes, the lines on the Ping, Bandwidth Monitor and Resource
+History graphs were washed out to the point of being invisible — a pale mint or pale yellow line on a
+white card. The graphs read the same way on light themes as they always have on dark ones now.
+
+### Fixed
+- **Graph lines were nearly invisible on the light themes.** The colours the three charts draw with
+  were picked for the dark themes, where a bright mint or sky blue stands out against a near-black
+  card. On the six light themes the same colours sit on a near-white card, and several of them all
+  but disappeared: the Ping graph's mint line measured a contrast of 1.03:1 against its own card,
+  where 1.00 means "the same colour as the background". Across the three charts, 80 of the 180
+  colour-and-theme combinations were below the 3:1 that an accessibility guideline asks of any line
+  a reader has to follow (WCAG 2.2, Non-text Contrast). Each line is now darkened just enough to
+  clear that bar when the theme it is drawn on needs it. Only the brightness changes, never the hue,
+  so blue is still CPU and purple is still memory; the dark themes already passed and come through
+  untouched, byte for byte.
 
 The diagnostic log no longer fills up with the same repeated line. If you ever need to send a log to
 report a problem, what is in it is now actually about your problem — before, roughly two lines every

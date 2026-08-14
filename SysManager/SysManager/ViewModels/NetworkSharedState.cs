@@ -52,6 +52,15 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     internal readonly Dictionary<string, IReadOnlyList<TracerouteHop>> LatestRoutes = new();
     private readonly Dictionary<string, PropertyChangedEventHandler> _targetHandlers = new();
 
+    /// <summary>
+    /// Per host, the series paints carrying that target's identity colour, keyed by the DESIGNED
+    /// colour so <see cref="Helpers.ChartTheme.Apply"/> re-derives a readable stroke for the active
+    /// preset. Keyed by host so <see cref="RemoveTargetInternal"/> can drop them alongside the
+    /// <c>DisposeSeries</c> call — a flat list would keep handing disposed SKPaint handles to the next
+    /// theme change.
+    /// </summary>
+    private readonly Dictionary<string, List<KeyValuePair<SKColor, SolidColorPaint>>> _seriesStrokes = new();
+
     public ObservableCollection<PingTarget> Targets { get; } = new();
     public BulkObservableCollection<TracerouteHop> TracerouteHops { get; } = new();
 
@@ -172,16 +181,38 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
         var skColor = SKColor.Parse(color.TrimStart('#')).WithAlpha(230);
 
+        // Every paint carrying this target's identity colour, registered against the DESIGNED hue so
+        // ChartTheme.Apply can re-derive a readable version for the active preset. The palette is tuned
+        // for the dark presets; on a light card #80FFDB measured 1.03:1 — indistinguishable from not
+        // drawing the line at all. Registered here rather than in the constructor because targets are
+        // added at runtime, one series per target, so a fixed list could never cover them.
+        //
+        // Keyed BY HOST because RemoveTargetInternal disposes these paints: a flat list would keep
+        // handing disposed SKPaint handles to the next theme change.
+        var latencyStroke = new SolidColorPaint(skColor, 2);
+        var latencyGeometryStroke = new SolidColorPaint(skColor, 1);
+        var latencyGeometryFill = new SolidColorPaint(skColor);
+        var traceStroke = new SolidColorPaint(skColor, 2);
+        var traceGeometryStroke = new SolidColorPaint(skColor, 2);
+        _seriesStrokes[host] =
+        [
+            new(skColor, latencyStroke),
+            new(skColor, latencyGeometryStroke),
+            new(skColor, latencyGeometryFill),
+            new(skColor, traceStroke),
+            new(skColor, traceGeometryStroke),
+        ];
+
         LatencySeries.Add(new LineSeries<DateTimePoint>
         {
             Name = $"{name} ({host})",
             Values = buffer,
             Fill = null,
             GeometrySize = 4,
-            GeometryStroke = new SolidColorPaint(skColor, 1),
-            GeometryFill = new SolidColorPaint(skColor),
+            GeometryStroke = latencyGeometryStroke,
+            GeometryFill = latencyGeometryFill,
             LineSmoothness = 0,
-            Stroke = new SolidColorPaint(skColor, 2),
+            Stroke = latencyStroke,
             AnimationsSpeed = TimeSpan.Zero
         });
 
@@ -194,8 +225,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             Fill = null,
             GeometrySize = 6,
             LineSmoothness = 0,
-            Stroke = new SolidColorPaint(skColor, 2),
-            GeometryStroke = new SolidColorPaint(skColor, 2),
+            Stroke = traceStroke,
+            GeometryStroke = traceGeometryStroke,
             // Marker centre = the theme surface (a "hollow-on-surface" dot ringed by the series colour).
             // Was a hardcoded near-black, which stayed black on the light presets and read as black dots
             // with a faint colour rim on the white legend. Re-themed in ChartTheme.Apply on theme change.
@@ -266,6 +297,11 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             DisposeSeries(TraceSeries[tIdx]);
             TraceSeries.RemoveAt(tIdx);
         }
+
+        // Drop the paint registrations in the same breath as DisposeSeries above: keeping them would
+        // hand disposed SKPaint handles to the next ThemeChanged, and would leak an entry per
+        // add/remove cycle.
+        _seriesStrokes.Remove(target.Host);
 
         Buffers.TryRemove(target.Host, out _);
         TraceBuffers.TryRemove(target.Host, out _);
@@ -559,7 +595,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     private void ApplyChartTheme() => Helpers.ChartTheme.Apply(
         LegendTextPaint, TooltipTextPaint, TooltipBackgroundPaint,
         [.. LatencyXAxes, .. LatencyYAxes, .. TraceXAxes, .. TraceYAxes],
-        TraceSeries);
+        TraceSeries,
+        // Flattened per call rather than kept flat, so a removed target's disposed paints are gone.
+        [.. _seriesStrokes.Values.SelectMany(p => p)]);
 
     // ── Axis factories ──
 

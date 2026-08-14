@@ -46,4 +46,13 @@ public sealed record ScheduledTaskInfo(
     public string FullPath => $"{Path}{Name}";
     public string LastRunDisplay => LastRun is { } t ? t.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
     public string NextRunDisplay => NextRun is { } t ? t.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
+
+    /// <summary>
+    /// Who registered the task, phrased for a tooltip. Many tasks report no author at all, and a
+    /// tooltip bound straight to <see cref="Author"/> would then render as an empty box on hover —
+    /// worse than none, because it looks like something failed to load.
+    /// </summary>
+    public string AuthorDisplay => string.IsNullOrWhiteSpace(Author)
+        ? "No publisher recorded for this task."
+        : $"Created by: {Author}";
 }

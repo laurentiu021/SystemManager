@@ -341,7 +341,9 @@ a confirmation before it runs:
 - Read-only; reading the log requires administrator (elevation banner shown)
 
 ### Task Scheduler
-- **Browse every Windows scheduled task** with its state, type, and last/next run
+- **Browse every Windows scheduled task** with its state, type, last and next run, and what the task
+  is for in Windows' own words — hovering that shows which publisher created it, which is what decides
+  the type label
 - **Color-coded by type** — Third-party, well-known **Telemetry** (Compatibility
   Appraiser, CEIP, Feedback, Error Reporting), and **System** — so it's obvious
   what's safe to touch
@@ -416,8 +418,12 @@ a confirmation before it runs:
   is disabled by design so a mis-click can never hurt anything.
 
 ### Startup Manager
-- Lists every program that runs at Windows boot (Registry Run / RunOnce keys)
-- Toggle on/off without deleting the original entry (same mechanism as Task Manager)
+- Lists every program that runs at Windows boot: the Run and RunOnce registry keys for both your
+  account and the whole machine, **including the separate location 64-bit Windows uses for programs
+  installed by a 32-bit installer**, plus both Startup folders and logon-triggered scheduled tasks
+- Toggle on/off without deleting the original entry (same mechanism as Task Manager) — the disable
+  flag is written to the location Windows actually reads for that kind of entry, so a disabled item
+  really stays down
 - Sort by name, publisher, safety, or status via clickable column headers
 - Plain-language description for recognised programs (from the built-in database) instead
   of a raw command line, plus a Safety chip — Windows / Known app / Not recognised — so you

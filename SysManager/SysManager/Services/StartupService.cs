@@ -27,11 +27,22 @@ public sealed class StartupService
         (@"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce", StartupSource.RegistryCurrentUser),
     };
 
-    // Machine-wide Run keys (read-only unless elevated)
+    // Machine-wide Run keys (read-only unless elevated).
+    //
+    // The Wow6432Node pair is where 64-bit Windows puts the Run keys of 32-bit installers, and a great
+    // many still are 32-bit — a VPN client, a printer tray, an older updater. Those entries were
+    // invisible here: the scan only ever read the 64-bit view, so an item that genuinely runs at every
+    // boot did not appear in a tab whose whole purpose is to list what runs at boot. Task Manager's
+    // Startup tab shows them, which makes the omission visible to anyone who compares the two.
+    //
+    // Their approved-state lives under StartupApproved\Run32, so they carry their own source value
+    // rather than reusing RegistryLocalMachine — see StartupSource.RegistryLocalMachine32.
     private static readonly (string Key, StartupSource Source)[] MachineRunKeys =
     {
         (@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", StartupSource.RegistryLocalMachine),
         (@"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce", StartupSource.RegistryLocalMachine),
+        (@"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run", StartupSource.RegistryLocalMachine32),
+        (@"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\RunOnce", StartupSource.RegistryLocalMachine32),
     };
 
     // Approved key where Windows stores disabled startup items
@@ -398,7 +409,12 @@ public sealed class StartupService
             Dictionary<string, byte[]>? approved = entry.Source switch
             {
                 StartupSource.RegistryCurrentUser => hkcuApproved,
-                StartupSource.RegistryLocalMachine => hklmApproved ?? hklm32Approved,
+                StartupSource.RegistryLocalMachine => hklmApproved,
+                // 32-bit machine-wide items keep their state in StartupApproved\Run32. This used to be
+                // an "hklmApproved ?? hklm32Approved" fallback on the 64-bit source, which reads the
+                // wrong key whenever both exist — and since nothing enumerated the 32-bit Run key, the
+                // Run32 dictionary had no entries to match anyway.
+                StartupSource.RegistryLocalMachine32 => hklm32Approved,
                 StartupSource.StartupFolder => folderApproved,
                 StartupSource.CommonStartupFolder => commonFolderApproved,
                 _ => null
@@ -461,6 +477,10 @@ public sealed class StartupService
             {
                 StartupSource.RegistryCurrentUser => (Registry.CurrentUser, ApprovedRunHKCU),
                 StartupSource.RegistryLocalMachine => (Registry.LocalMachine, ApprovedRunHKLM),
+                // Windows consults StartupApproved\Run32 for Wow6432Node Run items. Writing the disable
+                // blob to StartupApproved\Run instead would land where Windows never looks: the item
+                // would keep running at boot while this tab reported "Disabled".
+                StartupSource.RegistryLocalMachine32 => (Registry.LocalMachine, ApprovedRun32HKLM),
                 StartupSource.StartupFolder => (Registry.CurrentUser, ApprovedStartupFolder),
                 // Common (all-users) folder items live under HKLM — writing to HKCU (as before)
                 // put the disable blob where Windows never looks, so the item still ran while the

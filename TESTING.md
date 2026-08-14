@@ -115,6 +115,22 @@ collection definitions (all defined in `TestCollections.cs`, each with
   progress assertions need no `Task.Delay`.
 - `StaHelper` — runs a delegate on an STA thread for WPF-dependent types.
 
+### Dependency-graph validation
+
+`ServiceRegistrationGraphTests` builds the real container from `ServiceRegistration.ConfigureServices`
+with `ValidateOnBuild` and `ValidateScopes` enabled, so a registration that cannot be satisfied fails
+CI instead of the tab that resolves it. `ValidateOnBuild` walks constructor call sites without invoking
+any constructor, which is what makes it safe for services that touch WMI, the registry or the
+filesystem — the whole graph validates in milliseconds.
+
+The flag is deliberately a test rather than a production setting: `ConfigureServices` is static and
+unconditional, so the graph the test builds is the graph the app builds, and enabling validation in
+`App.OnStartup` would turn a broken tab into a refusal to start. Two negative tests assert the
+validation is actually armed — one adds a type whose dependency is unregistered, one makes a singleton
+capture a scoped service — because a passing graph test proves nothing if validation is silently off.
+The single factory-lambda registration (`IGamingProfileService`) is opaque to validation; every other
+registration is covered.
+
 ### Conventions
 
 - Pure logic tests (parsers, analyzers, converters) need no mocking.

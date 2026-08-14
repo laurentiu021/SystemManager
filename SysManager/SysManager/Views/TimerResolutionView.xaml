@@ -85,7 +85,7 @@
         <WrapPanel Grid.Row="4" Orientation="Horizontal" VerticalAlignment="Top">
             <Button Content="Enable 0.5 ms timer" Command="{Binding EnableCommand}"
                     Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
-                    AutomationProperties.Name="Enable high-resolution timer"/>
+                    AutomationProperties.Name="Enable 0.5 ms timer — enable high-resolution timer"/>
             <Button Content="Restore default" Command="{Binding DisableCommand}"
                     Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                     AutomationProperties.Name="Restore default timer resolution"/>

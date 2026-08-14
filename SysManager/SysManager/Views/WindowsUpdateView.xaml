@@ -100,7 +100,7 @@
                 <Button DockPanel.Dock="Right" Content="Check now"
                         Command="{Binding CheckModuleCommand}"
                         AutomationProperties.AutomationId="btn-windows-update-check-module"
-                        AutomationProperties.Name="Check whether PSWindowsUpdate is installed"
+                        AutomationProperties.Name="Check now — check whether PSWindowsUpdate is installed"
                         ToolTip="Confirm now whether the PSWindowsUpdate module is available"
                         Style="{StaticResource GhostButton}" Padding="12,4" Margin="16,0,0,0"
                         VerticalAlignment="Center"/>
@@ -150,7 +150,7 @@
                                      AutomationProperties.Name="Days to defer feature updates" Margin="0,0,6,0"/>
                             <TextBlock Text="days" VerticalAlignment="Center" Margin="0,0,12,0"/>
                             <Button Content="Apply deferral" Command="{Binding DeferFeatureUpdatesCommand}"
-                                    AutomationProperties.Name="Defer feature updates"
+                                    AutomationProperties.Name="Apply deferral — defer feature updates"
                                     Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                         </WrapPanel>
 

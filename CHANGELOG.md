@@ -10,6 +10,13 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.5] - 2026-08-14
+
+Buttons and checkboxes are now read out with the words actually printed on them. If you use Windows Speech Recognition or a screen reader, 36 controls used to be announced with different wording than what you could see — so saying the label out loud did not press the button.
+
+### Fixed
+- **36 controls said one thing and were announced as another.** A button reading "Clean TEMP" was announced as "Clean temporary files", "Ask a question" as "Open GitHub Discussions", "Enable 0.5 ms timer" as "Enable high-resolution timer". Voice control matches what is written on screen, so none of those could be activated by saying the visible label, and a screen reader described them differently than a sighted person would. Each name now begins with the words on the control and keeps the longer explanation after it, so both work.
+
 ## [1.65.4] - 2026-08-13
 
 The shield next to "Running as administrator" is now a proper icon instead of a colourful emoji, so it matches the rest of the app on all 27 pages that show it.

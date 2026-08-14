@@ -85,7 +85,7 @@
                                     ToolTip="Open the bug-report form on GitHub, with your version and elevation state already filled in."/>
                             <Button Content="Ask a question" Command="{Binding OpenDiscussionsCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
-                                    AutomationProperties.Name="Open GitHub Discussions"
+                                    AutomationProperties.Name="Ask a question — open GitHub Discussions"
                                     ToolTip="Open GitHub Discussions for questions and ideas — for anything that is not a bug."/>
                             <Button Content="View license" Command="{Binding OpenLicenseCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
@@ -95,7 +95,7 @@
                                  spacing as the license button beside it. -->
                             <Button Content="What's new" Command="{Binding OpenChangelogCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
-                                    AutomationProperties.Name="Open the changelog on GitHub"
+                                    AutomationProperties.Name="What's new — open the changelog on GitHub"
                                     ToolTip="See what changed in this and previous versions"/>
                         </StackPanel>
 

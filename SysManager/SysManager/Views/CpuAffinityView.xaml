@@ -71,7 +71,7 @@
                         <Button Content="P-cores" Command="{Binding SelectPerformanceCoresCommand}"
                                 Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Padding="12,5"
                                 Visibility="{Binding IsHybrid, Converter={StaticResource FlexVis}}"
-                                AutomationProperties.Name="Select performance cores"/>
+                                AutomationProperties.Name="P-cores — select performance cores"/>
                         <Button Content="All cores" Command="{Binding SelectAllCoresCommand}"
                                 Style="{StaticResource SecondaryButton}" Padding="12,5"
                                 AutomationProperties.Name="Select all cores"/>

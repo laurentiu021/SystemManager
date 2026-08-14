@@ -154,7 +154,7 @@
                         <DockPanel Margin="0,0,0,6"
                                    Visibility="{Binding TuneUpResult.BrokenShortcutsFound, Converter={StaticResource FlexVis}}">
                             <Button DockPanel.Dock="Right" Content="Clean up" Command="{Binding OpenTabCommand}" CommandParameter="nav-shortcut-cleaner"
-                                    AutomationProperties.Name="Open Shortcut Cleaner"
+                                    AutomationProperties.Name="Clean up — open Shortcut Cleaner"
                                     Style="{StaticResource SecondaryButton}" Padding="10,4" Margin="12,0,0,0"/>
                             <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}">
                                 <Run Text="{Binding TuneUpResult.BrokenShortcutsFound, Mode=OneWay}" FontWeight="SemiBold"/>
@@ -173,7 +173,7 @@
                         <DockPanel Margin="0,0,0,6"
                                    Visibility="{Binding TuneUpResult.RamWarning, Converter={StaticResource FlexVis}}">
                             <Button DockPanel.Dock="Right" Content="See what's running" Command="{Binding OpenTabCommand}" CommandParameter="nav-processes"
-                                    AutomationProperties.Name="Open Process Manager"
+                                    AutomationProperties.Name="See what's running — open Process Manager"
                                     Style="{StaticResource SecondaryButton}" Padding="10,4" Margin="12,0,0,0"/>
                             <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}">
                                 <Run Text="Memory is"/>

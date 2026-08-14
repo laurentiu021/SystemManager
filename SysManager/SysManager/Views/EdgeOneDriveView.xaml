@@ -77,7 +77,7 @@
                                     ToolTip="Uninstall OneDrive for your account (reversible via Restore)."/>
                             <Button Content="Restore OneDrive" Command="{Binding RestoreOneDriveCommand}"
                                     Style="{StaticResource SecondaryButton}"
-                                    AutomationProperties.Name="Reinstall OneDrive"
+                                    AutomationProperties.Name="Restore OneDrive — reinstall OneDrive"
                                     ToolTip="Reinstall OneDrive and re-add its File Explorer sidebar entry."/>
                         </WrapPanel>
                     </StackPanel>
@@ -112,7 +112,7 @@
                                    Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,8,0,0"/>
                         <Button Content="Choose default browser…" Command="{Binding OpenDefaultAppsSettingsCommand}"
                                 Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,14,0,0"
-                                AutomationProperties.Name="Open Windows default-apps settings"/>
+                                AutomationProperties.Name="Choose default browser… — open Windows default-apps settings"/>
                     </StackPanel>
                 </Border>
 

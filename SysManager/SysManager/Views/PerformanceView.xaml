@@ -95,7 +95,7 @@
                         <StackPanel>
                             <RadioButton x:Name="RbBalanced"
                                          Content="Balanced (default — recommended for laptops)"
-                                         AutomationProperties.Name="Balanced power plan"
+                                         AutomationProperties.Name="Balanced (default — recommended for laptops) — balanced power plan"
                                          GroupName="PowerPlan" Margin="0,0,0,8"
                                          IsChecked="{Binding SelectedPlan, Converter={StaticResource IsEqual}, ConverterParameter=balanced}"/>
                             <RadioButton x:Name="RbHigh"
@@ -105,7 +105,7 @@
                                          IsChecked="{Binding SelectedPlan, Converter={StaticResource IsEqual}, ConverterParameter=high}"/>
                             <RadioButton x:Name="RbUltimate"
                                          Content="Ultimate Performance (max clocks, no throttling)"
-                                         AutomationProperties.Name="Ultimate Performance power plan"
+                                         AutomationProperties.Name="Ultimate Performance (max clocks, no throttling) — ultimate Performance power plan"
                                          GroupName="PowerPlan" Margin="0,0,0,12"
                                          IsChecked="{Binding SelectedPlan, Converter={StaticResource IsEqual}, ConverterParameter=ultimate}"/>
                             <Button Content="Apply Power Plan" Command="{Binding ApplyPowerPlanCommand}"

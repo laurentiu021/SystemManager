@@ -166,7 +166,7 @@
                         <TextBlock Text="Reorder with the arrows, remove entries, or strip duplicates. Missing folders are highlighted."
                                    Style="{StaticResource Subtle}" Margin="0,2,0,8" TextWrapping="Wrap"/>
                         <Button Content="Remove duplicates" Command="{Binding RemoveDuplicateDirectoriesCommand}"
-                                AutomationProperties.Name="Remove duplicate PATH directories"
+                                AutomationProperties.Name="Remove duplicates — remove duplicate PATH directories"
                                 Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
                     </StackPanel>
 

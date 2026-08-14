@@ -131,7 +131,7 @@
                                     Style="{StaticResource PrimaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                             <Button Content="Run MemTest (reboot)" Command="{Binding ScheduleMemoryTestCommand}"
                                     AutomationProperties.AutomationId="btn-system-health-memtest"
-                                    AutomationProperties.Name="Schedule a memory test on next reboot"
+                                    AutomationProperties.Name="Run MemTest (reboot) — schedule a memory test on next reboot"
                                     Style="{StaticResource SecondaryButton}" Padding="14,8"/>
                         </StackPanel>
                     </Grid>
@@ -160,7 +160,7 @@
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="Find BIOS update" Command="{Binding OpenBiosSupportCommand}"
-                                    AutomationProperties.Name="Open manufacturer support page for BIOS updates"
+                                    AutomationProperties.Name="Find BIOS update — open manufacturer support page for BIOS updates"
                                     Style="{StaticResource PrimaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                             <Button Content="Copy info" Command="{Binding CopyBiosInfoCommand}"
                                     AutomationProperties.Name="Copy BIOS and motherboard info"
@@ -292,10 +292,10 @@
                             <TextBlock Text="File-system scan (chkdsk)" Style="{StaticResource SectionTitle}"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                                 <Button Content="Refresh drives" Command="{Binding RefreshDrivesCommand}"
-                                        AutomationProperties.Name="Refresh drive list"
+                                        AutomationProperties.Name="Refresh drives — refresh drive list"
                                         Style="{StaticResource GhostButton}"/>
                                 <Button Content="Scan selected" Command="{Binding RunChkdskOnSelectedCommand}"
-                                        AutomationProperties.Name="Run chkdsk on selected drive"
+                                        AutomationProperties.Name="Scan selected — run chkdsk on selected drive"
                                         Style="{StaticResource PrimaryButton}" Margin="6,0,0,0"
                                         IsEnabled="{Binding IsChkdskRunning, Converter={StaticResource BoolInvert}}"/>
                                 <Button Content="Cancel" Command="{Binding CancelScanCommand}"

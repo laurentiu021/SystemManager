@@ -74,7 +74,7 @@
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
                     <Button Grid.Column="1" Content="Run" Command="{Binding ResetWindowsUpdateCommand}"
-                            AutomationProperties.Name="Reset Windows Update"
+                            AutomationProperties.Name="Run — reset Windows Update"
                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" MinWidth="80"/>
                 </Grid>
 
@@ -89,7 +89,7 @@
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
                     <Button Grid.Column="1" Content="Run" Command="{Binding ReinstallWinGetCommand}"
-                            AutomationProperties.Name="Reinstall WinGet"
+                            AutomationProperties.Name="Run — reinstall WinGet"
                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" MinWidth="80"/>
                 </Grid>
 

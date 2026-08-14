@@ -887,11 +887,15 @@ offers, "rate us" prompts:
   download is blocked, a "Manual download" button opens GitHub in the
   browser.
 - SHA256 hash verification before install — the downloaded build is checked
-  against the published `.sha256`, so a corrupted or tampered download is
-  blocked. The build is also inspected for an Authenticode signature: if one is
-  present it must belong to the expected publisher and its certificate chain must
-  validate, so a build signed by someone else is refused. SysManager currently
-  ships unsigned, so today the SHA256 match is what guarantees integrity.
+  against the published `.sha256`, so a damaged or truncated download is blocked.
+  Both files come from the same release, so this catches a corrupted download rather
+  than a substituted release asset — see [Verifying the download](#verifying-the-download)
+  for the stronger check, the build attestation, which you run yourself.
+- The build is also inspected for an Authenticode signature, and the check fails
+  closed if a signature is present but cannot be read. SysManager ships unsigned
+  today and no publisher is pinned yet, so a signature is not currently an integrity
+  gate; the publisher-and-certificate-chain check is written and switches on with a
+  one-line change the day a signing certificate exists.
 - One-click "Install" replaces the running executable in-place and
   restarts automatically (no manual file copying needed).
 - **"Go back to the previous version"** — the build being replaced is kept, so an
@@ -1195,11 +1199,13 @@ unmodified build. The attestation is the stronger of the two, and it will remain
 after signing arrives: it records *which commit and workflow* produced a given binary,
 which a signature alone does not.
 
-The update path is already prepared for signing. When a downloaded build carries a
-signature, the app checks that it belongs to the expected publisher and that its
-certificate chain validates, and refuses the update otherwise — so the check cannot
-quietly become a formality on the day signing is switched on. See
-[SECURITY.md](SECURITY.md#security-model) for the detail.
+The update path is already written for signing, but not yet armed. The publisher it
+compares against is a single constant that is deliberately **empty** until a certificate
+exists, so today a signed build is accepted on the strength of the SHA-256 check alone; a
+signature that is present but unreadable is still refused. On the day signing is switched
+on, filling in that one constant turns on the publisher match and the certificate-chain
+validation together — the point of writing them now is that the check cannot quietly become
+a formality later. See [SECURITY.md](SECURITY.md#security-model) for the detail.
 
 ### Code signing policy
 

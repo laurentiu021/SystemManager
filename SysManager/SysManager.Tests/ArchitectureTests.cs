@@ -1135,6 +1135,90 @@ public partial class ArchitectureTests
             + $".xaml:\n  {string.Join("\n  ", offenders)}");
     }
 
+    /// <summary>
+    /// No public document may claim the update path enforces a publisher while
+    /// <c>UpdateService.ExpectedSignerSubject</c> is still empty.
+    /// <para>The README said, in the present tense, that a signed update "must belong to the expected
+    /// publisher and its certificate chain must validate, so a build signed by someone else is
+    /// refused". The pin is empty until a certificate exists, so <c>VerifyAuthenticode</c> returns true
+    /// for ANY signed binary and neither the subject comparison nor the chain build is reached — the
+    /// document described the code that will run one day, not the code that ships. A reader deciding
+    /// whether to trust an auto-update was being told a check protects them that does not run yet.</para>
+    /// <para>The claim is not wrong forever, which is exactly why a human reviewer misses it: it becomes
+    /// TRUE the day the constant is filled in. So this guard is conditional rather than a blocklist —
+    /// while the pin is empty the assertive phrasings are forbidden, and once it is set they are
+    /// required, which also catches the opposite drift of shipping signing while the docs still say
+    /// "unsigned". SECURITY.md's wording was already honest ("empty until a code-signing certificate
+    /// exists") and passes unchanged; that asymmetry is what proved the README was the drift.</para>
+    /// </summary>
+    [Fact]
+    public void NoPublicDocument_ClaimsAPublisherPinThatIsNotArmed()
+    {
+        var root = FindRepoRoot();
+        var pinIsArmed = SysManager.Services.UpdateService.ExpectedSignerSubject.Length > 0;
+
+        string[] surfaces = ["README.md", "SECURITY.md"];
+        var offenders = new List<string>();
+        var honestDisclosures = 0;
+
+        foreach (var relative in surfaces)
+        {
+            var path = Path.Combine(root, relative);
+            Assert.True(File.Exists(path), $"{relative} not found — the guard would pass vacuously");
+
+            var lines = File.ReadAllLines(path);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                // Counts the phrasing that discloses the pin is not armed yet, in either document.
+                if (UnarmedPinDisclosure().IsMatch(lines[i])) honestDisclosures++;
+
+                if (!pinIsArmed && AssertsPublisherIsEnforced().IsMatch(lines[i]))
+                    offenders.Add($"{relative}:{i + 1}  {lines[i].Trim()}");
+            }
+        }
+
+        if (pinIsArmed)
+        {
+            // Signing went live: the docs must now SAY so. Flip side of the same contract.
+            Assert.True(honestDisclosures == 0,
+                "ExpectedSignerSubject is now set, so the publisher check really does run — but a public "
+                + "document still says no publisher is pinned. Update the docs to match the code.");
+            return;
+        }
+
+        // Vacuity floor: both documents must disclose the not-yet-armed state, or this guard is
+        // measuring a corpus that no longer discusses the pin at all.
+        Assert.True(honestDisclosures >= 2,
+            "expected the docs to disclose that the publisher pin is not armed yet; found "
+            + $"{honestDisclosures} such statements. Either the wording changed shape or the guard has "
+            + "gone vacuous — fix the guard rather than trusting its pass.");
+
+        Assert.True(offenders.Count == 0,
+            "these lines claim the update path enforces a publisher or refuses a foreign signature, but "
+            + "UpdateService.ExpectedSignerSubject is empty, so VerifyAuthenticode accepts any signed "
+            + "binary and the pin and chain checks are unreachable. State that the check is written but "
+            + $"not yet armed:\n  {string.Join("\n  ", offenders)}");
+    }
+
+    /// <summary>
+    /// Prose asserting the publisher check is enforced today: "must belong to the expected publisher",
+    /// "signed by someone else is refused", "checks that it belongs to the expected publisher".
+    /// Deliberately matches the ASSERTION, not the words "expected publisher" alone, so a sentence that
+    /// explains the pin is empty does not trip it.
+    /// </summary>
+    [GeneratedRegex(@"(?:must (?:belong to|match) the (?:expected|pinned) publisher"
+        + @"|checks that it belongs to the expected publisher"
+        + @"|signed by (?:someone|anyone) else (?:is|will be) refused)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex AssertsPublisherIsEnforced();
+
+    /// <summary>Prose disclosing that the pin is not armed yet — the honest counterpart.</summary>
+    [GeneratedRegex(@"(?:no publisher is pinned yet"
+        + @"|empty until a (?:code-signing )?certificate exists"
+        + @"|not yet armed)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex UnarmedPinDisclosure();
+
     /// <summary>The <c>feat|fix</c> alternation auto-release matches to decide a bump.</summary>
     [GeneratedRegex(@"\^\((feat\|fix)\)", RegexOptions.Compiled)]
     private static partial Regex ReleasingPrefixAlternation();

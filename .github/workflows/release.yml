@@ -195,6 +195,90 @@ jobs:
         with:
           subject-path: publish/SysManager-v${{ steps.version.outputs.version }}.exe
 
+      # Nothing above this point has ever RUN the artifact being published. The unit tests
+      # exercise the code, but they load assemblies into a test host — they do not start the
+      # single-file, self-contained, compressed exe that users actually download. Those are
+      # different failure surfaces: a missing native library extracted from the bundle, a
+      # startup path that throws before the first frame, or a resource that resolves in a
+      # normal build but not from a packed one, all pass every test and then fail on launch.
+      # That shipped once already, which is why the standing rule is that a release is not
+      # trusted until the published binary has been seen alive.
+      #
+      # windows-latest provides a desktop session (the ui-tests job in ci.yml relies on the
+      # same thing), so the exe can be started here — the one place in the pipeline where the
+      # real artifact exists and nothing has been published yet. A failure aborts the run
+      # before the release, the winget submission and the announcement, instead of after.
+      #
+      # Deliberately a smoke check, not a UI test: start it, hold it, confirm the process is
+      # still alive and that it left no crash marker, then close it. No assertions about what
+      # is on screen — ci.yml's FlaUI job owns that, and duplicating it here would make the
+      # release depend on UI timing.
+      - name: Smoke-check the published exe
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $exe = Resolve-Path "publish/SysManager-v$env:VERSION.exe"
+          $marker = Join-Path $env:LOCALAPPDATA 'SysManager\last-crash.json'
+          $logs = Join-Path $env:LOCALAPPDATA 'SysManager\logs'
+
+          # A marker from an earlier run on this image would be read as this run's crash.
+          # The runner is ephemeral, so this is belt-and-braces, but a false PASS and a false
+          # FAIL are both worse than one Remove-Item.
+          Remove-Item $marker -ErrorAction SilentlyContinue
+
+          Write-Host "Launching $exe"
+          $app = Start-Process -FilePath $exe -PassThru
+
+          # Long enough for the shell to build, the eager view models to construct and the
+          # first frame to render. A crash on this path is immediate, not gradual.
+          Start-Sleep -Seconds 25
+
+          $alive = -not $app.HasExited
+          $exitCode = if ($app.HasExited) { $app.ExitCode } else { $null }
+
+          if ($alive) {
+              Write-Host "Process $($app.Id) is alive after 25s; closing it."
+              # Ask first, so the normal shutdown path runs and any teardown fault surfaces.
+              $app.CloseMainWindow() | Out-Null
+              if (-not $app.WaitForExit(15000)) {
+                  Write-Host "::warning::The window did not close within 15s; killing the process."
+                  $app.Kill()
+                  $app.WaitForExit(10000) | Out-Null
+              }
+          }
+
+          # The log is written even when the app dies before showing a window, so it is the
+          # only diagnostic available for the failing case. Emitted before the throw.
+          if (Test-Path $logs) {
+              $log = Get-ChildItem $logs -Filter '*.log' |
+                     Sort-Object LastWriteTime -Descending |
+                     Select-Object -First 1
+              if ($log) {
+                  Write-Host "--- tail of $($log.Name) ---"
+                  Get-Content $log.FullName -Tail 40 | ForEach-Object { Write-Host $_ }
+                  Write-Host "--- end of log ---"
+              }
+          }
+
+          if (-not $alive) {
+              throw "The published exe exited on its own within 25 seconds (exit code " +
+                    "$exitCode). It builds and passes the unit tests but does not run, so this " +
+                    "release must not be published. The log tail above is from the failed launch."
+          }
+
+          # An unhandled exception on a background thread kills the process, but one on the UI
+          # thread is handled and logged while the window stays up — so "still alive" alone is
+          # not proof of a clean start. App.xaml.cs writes this marker on the fatal path.
+          if (Test-Path $marker) {
+              Write-Host "--- last-crash.json ---"
+              Get-Content $marker -Raw | Write-Host
+              throw "The published exe recorded a crash marker during startup. It survived the " +
+                    "25-second window but faulted, so this release must not be published."
+          }
+
+          Write-Host "The published exe started, stayed alive for 25s and recorded no crash."
+
       - name: Extract release notes from CHANGELOG
         id: notes
         shell: pwsh

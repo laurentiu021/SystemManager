@@ -110,8 +110,12 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             // result next to an Ookla one — the two engines measure differently.
             HttpVerdict = SpeedVerdictAnalyzer.Analyze(HttpResult, HttpHistory.FirstOrDefault());
 
-            // Persist result to history.
-            await _history.SaveAsync(HttpResult);
+            // Persist result to history. The in-memory list is still updated when the write fails, so the
+            // reading stays on screen for this session — but the status says so, because a result the user
+            // believes was recorded and then cannot find next launch is worse than one they were warned
+            // about. SaveAsync does not throw; it reports.
+            if (!await _history.SaveAsync(HttpResult))
+                HttpStatus = "HTTP done — result could not be saved to history";
             HttpHistory.Insert(0, HttpResult);
             if (HttpHistory.Count > SpeedTestHistoryService.MaxPerEngine)
                 HttpHistory.RemoveAt(HttpHistory.Count - 1);
@@ -154,8 +158,9 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             // Before the insert, for the same reason as the HTTP path above.
             OoklaVerdict = SpeedVerdictAnalyzer.Analyze(OoklaResult, OoklaHistory.FirstOrDefault());
 
-            // Persist result to history.
-            await _history.SaveAsync(OoklaResult);
+            // Persist result to history, reporting a failed write — same contract as the HTTP path above.
+            if (!await _history.SaveAsync(OoklaResult))
+                OoklaStatus = "Ookla done — result could not be saved to history";
             OoklaHistory.Insert(0, OoklaResult);
             if (OoklaHistory.Count > SpeedTestHistoryService.MaxPerEngine)
                 OoklaHistory.RemoveAt(OoklaHistory.Count - 1);

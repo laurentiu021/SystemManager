@@ -10,7 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.65.9] - 2026-08-14
+## [1.65.10] - 2026-08-14
+
+Two things that were quietly telling you the wrong thing. A speed test result could fail to save without
+saying so, and the "time remaining" on long jobs could climb upward while the bar stood completely still.
+
+Note on versions: 1.65.9 was tagged but never published — its release build stopped on the very save bug
+fixed below. Everything 1.65.9 contained is in this release.
+
+### Fixed
+- **A speed test result could vanish without telling you.** Saving a result to history writes a file, and
+  if that write failed — a moment of disk contention, a permissions problem — the app noted it in the
+  diagnostic log and then carried on exactly as if it had worked. The reading stayed on screen, so
+  nothing looked wrong until you came back later and found a gap in your history. Now a failed save says
+  so on the Speed Test tab, and the reading still stays visible for the session so you do not lose the
+  number you just waited for.
+- **"Time remaining" grew while progress stood still.** The estimate was worked out from the average
+  speed since the start, and recalculated only when a job reported new progress. Long steps report the
+  same percentage repeatedly, and each of those reports made the estimate *bigger*: measured on a job
+  stuck at 12%, it climbed from about one minute to about thirty-seven while nothing moved. Between
+  reports it froze instead, so a stalled job showed a confident "10 seconds left" for minutes. And a slow
+  first step could show "about 1 hour 39 minutes" for something that finished in ninety seconds.
+  The estimate now follows how fast progress is *currently* moving, counts down on its own while a job is
+  quiet, and says "calculating…" rather than guessing from the first few percent.
+
 
 Startup Manager was missing a whole class of programs that start with Windows — anything installed by
 a 32-bit installer, which on a typical PC means a VPN client, a printer helper or an older updater.

@@ -104,17 +104,20 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         TemperatureXAxes = [BuildTimeAxis()];
         TemperatureYAxes = [BuildTempAxis()];
 
-        // Paint chart labels/legend/tooltip from the active theme and keep them in sync,
-        // so axis text stays readable on the light presets (a hardcoded near-white was
-        // invisible on a white background). Unsubscribed in Dispose(bool).
-        ApplyChartTheme();
-        ThemeService.Instance.ThemeChanged += ApplyChartTheme;
-
+        // Series are built BEFORE the first ApplyChartTheme(), because the theme pass now repaints the
+        // line strokes too: the designed tints measure as little as 1.57:1 against a light preset's
+        // card, so they have to be readable from the first frame, not from the first theme switch.
         UsageSeries.Add(BuildLine("CPU", "#60A5FA", _cpuBuffer));
         UsageSeries.Add(BuildLine("RAM", "#A78BFA", _ramBuffer));
         UsageSeries.Add(BuildLine("GPU", "#34D399", _gpuBuffer));
         TemperatureSeries.Add(BuildLine("CPU °C", "#F59E0B", _cpuTempBuffer));
         TemperatureSeries.Add(BuildLine("GPU °C", "#EF4444", _gpuTempBuffer));
+
+        // Paint chart labels/legend/tooltip/lines from the active theme and keep them in sync,
+        // so axis text stays readable on the light presets (a hardcoded near-white was
+        // invisible on a white background). Unsubscribed in Dispose(bool).
+        ApplyChartTheme();
+        ThemeService.Instance.ThemeChanged += ApplyChartTheme;
 
         InitializeAsync(() => ReloadAsync());
     }
@@ -235,9 +238,19 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
 
     // ── Chart factories (mirror NetworkSharedState's idiom) ────────────────
 
-    private static LineSeries<DateTimePoint> BuildLine(string name, string hex, BulkObservableCollection<DateTimePoint> values)
+    /// <summary>
+    /// Line-stroke paints keyed by the DESIGNED colour, so <see cref="ChartTheme.Apply"/> can re-derive
+    /// a readable stroke for the active preset on every theme change. Keyed by base colour rather than
+    /// holding the current one, which keeps the derivation idempotent: switching light -> dark -> light
+    /// always recomputes from the original tint instead of darkening an already-darkened line.
+    /// </summary>
+    private readonly List<KeyValuePair<SKColor, SolidColorPaint>> _seriesStrokes = [];
+
+    private LineSeries<DateTimePoint> BuildLine(string name, string hex, BulkObservableCollection<DateTimePoint> values)
     {
         var color = SKColor.Parse(hex.TrimStart('#')).WithAlpha(230);
+        var stroke = new SolidColorPaint(color, 2);
+        _seriesStrokes.Add(new(color, stroke));
         return new LineSeries<DateTimePoint>
         {
             Name = name,
@@ -245,7 +258,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
             Fill = null,
             GeometrySize = 0,
             LineSmoothness = 0.3,
-            Stroke = new SolidColorPaint(color, 2),
+            Stroke = stroke,
             AnimationsSpeed = TimeSpan.Zero
         };
     }
@@ -291,7 +304,8 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     /// </summary>
     private void ApplyChartTheme() => ChartTheme.Apply(
         LegendTextPaint, TooltipTextPaint, TooltipBackgroundPaint,
-        [.. UsageXAxes, .. UsageYAxes, .. TemperatureXAxes, .. TemperatureYAxes]);
+        [.. UsageXAxes, .. UsageYAxes, .. TemperatureXAxes, .. TemperatureYAxes],
+        seriesBaseColors: _seriesStrokes);
 
     protected override void Dispose(bool disposing)
     {

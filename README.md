@@ -153,6 +153,14 @@ A palette button in the top-right corner opens an appearance popup with:
 - Background shade slider for fine-tuning lightness/darkness
 - Settings persist between sessions
 
+Graph lines follow the theme rather than fighting it. The Ping, Bandwidth Monitor and Resource
+History charts each draw with a fixed set of colours — blue is CPU, purple is memory — and those
+colours were chosen against a dark card. Switching to a light theme darkens each line by exactly as
+much as it needs to stay at 3:1 against the card it is drawn on, so the line remains followable
+without a second palette to maintain and without changing which colour means what. Brightness moves,
+hue does not; on the six dark presets, where the original colours already clear the bar, nothing
+changes at all.
+
 ### Keyboard navigation
 The app is operable without a mouse, and the control you are on is always visible. `Tab` moves
 forward, `Shift+Tab` back, `Space` presses a button or ticks a checkbox, and the arrow keys move

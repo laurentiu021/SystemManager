@@ -178,12 +178,14 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
 
         ThroughputXAxes = [BuildTimeAxis()];
         ThroughputYAxes = [BuildRateAxis()];
-        ApplyChartTheme();
-        ThemeService.Instance.ThemeChanged += ApplyChartTheme;
         // Download filled, upload as a line — one glance shows the split. Rates are stored in
         // bytes/sec and the Y axis labels them as bits/sec (Mbps), matching the stat tiles.
+        // Built BEFORE the first ApplyChartTheme(), which now also repaints the strokes so they are
+        // readable from the first frame rather than from the first theme switch.
         ThroughputSeries.Add(BuildArea("Download", "#60A5FA", _downBuffer));
         ThroughputSeries.Add(BuildLine("Upload", "#A78BFA", _upBuffer));
+        ApplyChartTheme();
+        ThemeService.Instance.ThemeChanged += ApplyChartTheme;
 
         StatusMessage = "Starting network monitor…";
         InitializeAsync(InitAsync);
@@ -537,9 +539,18 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         while (buffer.Count > LiveChartPoints) buffer.RemoveAt(0);
     }
 
-    private static LineSeries<DateTimePoint> BuildLine(string name, string hex, BulkObservableCollection<DateTimePoint> values)
+    /// <summary>
+    /// Line-stroke paints keyed by their DESIGNED colour, so <see cref="ChartTheme.Apply"/> re-derives
+    /// a readable stroke for the active preset on every theme change. Keyed by the base colour to keep
+    /// the derivation idempotent across light -> dark -> light switches.
+    /// </summary>
+    private readonly List<KeyValuePair<SKColor, SolidColorPaint>> _seriesStrokes = [];
+
+    private LineSeries<DateTimePoint> BuildLine(string name, string hex, BulkObservableCollection<DateTimePoint> values)
     {
         var color = SKColor.Parse(hex.TrimStart('#')).WithAlpha(230);
+        var stroke = new SolidColorPaint(color, 2);
+        _seriesStrokes.Add(new(color, stroke));
         return new LineSeries<DateTimePoint>
         {
             Name = name,
@@ -547,14 +558,19 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
             Fill = null,
             GeometrySize = 0,
             LineSmoothness = 0.3,
-            Stroke = new SolidColorPaint(color, 2),
+            Stroke = stroke,
             AnimationsSpeed = TimeSpan.Zero
         };
     }
 
-    private static LineSeries<DateTimePoint> BuildArea(string name, string hex, BulkObservableCollection<DateTimePoint> values)
+    private LineSeries<DateTimePoint> BuildArea(string name, string hex, BulkObservableCollection<DateTimePoint> values)
     {
         var color = SKColor.Parse(hex.TrimStart('#')).WithAlpha(230);
+        var stroke = new SolidColorPaint(color, 2);
+        _seriesStrokes.Add(new(color, stroke));
+        // The FILL keeps the designed hue at alpha 40. It is a background wash, not the mark that
+        // carries the reading, and darkening a translucent fill over a light card only muddies it —
+        // the stroke above is what has to clear 3:1.
         return new LineSeries<DateTimePoint>
         {
             Name = name,
@@ -562,7 +578,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
             Fill = new SolidColorPaint(color.WithAlpha(40)),
             GeometrySize = 0,
             LineSmoothness = 0.3,
-            Stroke = new SolidColorPaint(color, 2),
+            Stroke = stroke,
             AnimationsSpeed = TimeSpan.Zero
         };
     }
@@ -610,7 +626,8 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
 
     private void ApplyChartTheme() => ChartTheme.Apply(
         LegendTextPaint, TooltipTextPaint, TooltipBackgroundPaint,
-        [.. ThroughputXAxes, .. ThroughputYAxes]);
+        [.. ThroughputXAxes, .. ThroughputYAxes],
+        seriesBaseColors: _seriesStrokes);
 
     partial void OnIsActiveChanged(bool value)
     {

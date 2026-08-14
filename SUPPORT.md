@@ -43,4 +43,13 @@ A few quick things that make bug reports land faster:
 - [ARCHITECTURE.md](ARCHITECTURE.md) — how the app is organised internally
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release
 
+Two things people hit before the app even starts, both answered in the README rather than
+needing an issue:
+
+- **"Windows protected your PC"** on first launch —
+  [what that box means and why](README.md#first-launch-windows-will-warn-you).
+- **Your antivirus flagged or quarantined the download** —
+  [why an unsigned single-file build gets scored that way, and how to check the file for
+  yourself](README.md#if-your-antivirus-flags-the-download).
+
 Thanks for using SysManager!

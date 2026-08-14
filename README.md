@@ -1182,6 +1182,51 @@ first-launch prompt does not appear.
 > **and** whose hash you verified. The same dialog protects you from genuinely malicious
 > files, so it is worth reading rather than reflexively dismissing.
 
+### If your antivirus flags the download
+
+Windows Defender or another antivirus may flag or quarantine the `.exe` — sometimes days
+after it ran fine, because these tools also score a file on how widely it has been seen
+before. This is the second-most-likely thing to happen after the SmartScreen box above, so
+it is worth explaining rather than leaving you to guess.
+
+**Why it happens.** Two reasons, and neither is about what the code does:
+
+- **The shape of the file.** SysManager ships as one large executable that carries
+  everything it needs inside it, compressed, and unpacks itself into a temporary folder when
+  you launch it. That is a legitimate way to ship a portable app with no installer — and it
+  is also what some malware does to hide, so a scanner that judges structure rather than
+  behaviour treats it as suspicious. Add an unknown publisher and no signature, and a
+  heuristic engine has every reason to be cautious.
+- **What the app genuinely does.** It deletes files, changes registry settings and stops
+  processes. That *is* the job of a maintenance tool, and it is also a fair description of
+  something you would not want running unasked.
+
+**How to check, instead of guessing.** Take the SHA-256 from the
+[release page](https://github.com/laurentiu021/SystemManager/releases/latest) and open
+
+```
+https://www.virustotal.com/gui/file/<paste-the-sha256-here>
+```
+
+VirusTotal addresses files by hash, so if that exact build has been scanned this shows the
+report — including which engines flagged it and which did not. If nobody has submitted that
+build yet the page will say so, and you can upload it there yourself.
+
+Then read the [Verifying the download](#verifying-the-download) section above and run the
+build attestation. That is the check that actually settles the question: it proves the file
+you hold is the output of a public workflow, built from a public commit in this repository.
+
+> **Be honest about what a scan proves.** A couple of hits out of ~70 engines on an unsigned,
+> compressed, self-extracting build is the ordinary pattern for this kind of file — it is not
+> by itself evidence of a problem. Equally, a completely clean sheet is not proof that a file
+> is safe; plenty of malware is clean on the day it is released. The attestation is stronger
+> than either, because it ties the binary to source you can read.
+
+**If it has already been quarantined**, restore it or add an exclusion **only after** the
+SHA-256 matches and `gh attestation verify` succeeds. If either check fails, delete the file
+and download it again from the releases page — do not add an exclusion for a file you have
+not verified.
+
 ### Code signing
 
 Releases are currently **unsigned**, which is why the warning above appears. The intention is

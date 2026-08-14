@@ -1912,6 +1912,20 @@ public partial class ArchitectureTests
         // A check that never fails the job is decoration. continue-on-error on this step would make
         // the launch advisory, which is the one thing it must not be.
         Assert.DoesNotContain("continue-on-error", body, StringComparison.Ordinal);
+
+        // It must also NOT close the window politely. A CI runner is always a FIRST launch, so
+        // close-preference.json does not exist, ClosePreferenceService.Load() returns Ask, and
+        // MainWindow.OnClosing raises a modal MessageBox asking whether to keep running in the
+        // notification area. Nothing answers it, so the polite close times out — the step warned
+        // "the window did not close within 15s" on the very first release that ran it (v1.65.6).
+        // The prompt is correct behaviour (it is the fix for #1639/#1827); the polite close was the
+        // wrong check, and a warning that fires on every release is how a gate gets ignored.
+        //
+        // Matched as a CALL — `.CloseMainWindow(` — not as the bare word, because the step's own
+        // comment has to be able to name the thing it deliberately does not do. Asserting on the word
+        // made this fail against the fixed tree, which is a guard that forbids its own explanation.
+        Assert.DoesNotContain(".CloseMainWindow(", body, StringComparison.Ordinal);
+        Assert.Contains(".Kill()", body, StringComparison.Ordinal);
     }
 
     /// <summary>

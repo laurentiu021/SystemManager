@@ -1914,6 +1914,88 @@ public partial class ArchitectureTests
         Assert.DoesNotContain("continue-on-error", body, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// No style may suppress the keyboard focus indicator without providing a replacement.
+    /// <para><c>FocusVisualStyle="{x:Null}"</c> removes the only cue a keyboard user has, and four
+    /// styles did exactly that with nothing in its place: ButtonBase, ToggleSwitch, DataGridCell and
+    /// ConsoleView's log rows. ButtonBase's template substituted an Accent-coloured border, which
+    /// cannot work for the styles derived from it — PrimaryButton's fill IS the accent (1.00:1,
+    /// invisible on all 12 presets) and DangerButton's is red (1.02–1.75:1), both far below WCAG
+    /// 1.4.11's 3:1 for a non-text indicator. Seven templated interactive styles never had a ring at
+    /// all.</para>
+    /// <para>The fix is one shared <c>FocusRing</c> adorner, so this asserts the SHAPE of the fix
+    /// rather than the count: nulling the focus visual is allowed nowhere, and every style that
+    /// replaces the default template of a focusable control must name the shared ring. That way the
+    /// next templated control is caught at build time instead of by a keyboard user.</para>
+    /// </summary>
+    [Fact]
+    public void NoStyle_SuppressesTheKeyboardFocusIndicator()
+    {
+        var appDir = FindAppProjectDir();
+        var files = Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !Path.GetRelativePath(appDir, f)
+                .Split(Path.DirectorySeparatorChar)
+                .Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                                || segment.Equals("bin", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        Assert.True(files.Length >= 60, $"only {files.Length} XAML files were found — fix this guard.");
+
+        var nulled = new List<string>();
+        var ringUses = 0;
+
+        foreach (var path in files)
+        {
+            var lines = File.ReadAllLines(path);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (NulledFocusVisual().IsMatch(lines[i]))
+                    nulled.Add($"{Path.GetFileName(path)}:{i + 1}");
+                if (lines[i].Contains("FocusVisualStyle", StringComparison.Ordinal)
+                    && lines[i].Contains("FocusRing", StringComparison.Ordinal))
+                {
+                    ringUses++;
+                }
+            }
+        }
+
+        Assert.True(nulled.Count == 0,
+            "these styles remove the keyboard focus indicator and put nothing back, so a keyboard user "
+            + "cannot see what is focused (WCAG 2.4.7). Point FocusVisualStyle at the shared FocusRing "
+            + $"instead of {{x:Null}}:\n  {string.Join("\n  ", nulled)}");
+
+        // Vacuity floor: the ring must actually be referenced. Deleting every reference would satisfy
+        // the assert above while leaving the app with no focus cue at all.
+        Assert.True(ringUses >= 6,
+            $"only {ringUses} styles reference the shared FocusRing — a control whose template replaces "
+            + "the default one loses the focus adorner, so it has to name the ring explicitly.");
+
+        // And the ring itself must be two strokes of opposite tone. A single-colour ring is what failed
+        // on the accent and red fills; reducing it back to one would restore the defect while keeping
+        // every assertion above green.
+        var app = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
+        var start = app.IndexOf("<Style x:Key=\"FocusRing\">", StringComparison.Ordinal);
+        Assert.True(start >= 0, "App.xaml no longer defines FocusRing — update this guard, don't drop it.");
+        var end = app.IndexOf("</Style>", start, StringComparison.Ordinal);
+        Assert.True(end > start, "the FocusRing style is not terminated; the slice below would be empty.");
+
+        var ring = app[start..end];
+        Assert.Equal(2, StrokeAttribute().Matches(ring).Count);
+        Assert.Contains("Stroke=\"#111111\"", ring, StringComparison.Ordinal);
+        Assert.Contains("Stroke=\"#FFFFFF\"", ring, StringComparison.Ordinal);
+        // Accent must NOT be the ring colour: that is the whole defect, and it is also the hover and
+        // selection colour, so a well-meaning "use the theme brush" edit would reintroduce 1.00:1.
+        Assert.DoesNotContain("Accent", ring, StringComparison.Ordinal);
+    }
+
+    /// <summary>A style that suppresses the focus indicator outright.</summary>
+    [GeneratedRegex(@"FocusVisualStyle""\s*Value=""\{x:Null\}""", RegexOptions.Compiled)]
+    private static partial Regex NulledFocusVisual();
+
+    /// <summary>A literal Stroke colour on the focus ring's rectangles.</summary>
+    [GeneratedRegex(@"Stroke=""#[0-9A-Fa-f]{6}""", RegexOptions.Compiled)]
+    private static partial Regex StrokeAttribute();
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

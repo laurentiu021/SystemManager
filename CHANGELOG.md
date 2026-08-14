@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.7] - 2026-08-14
+
+The diagnostic log no longer fills up with the same repeated line. If you ever need to send a log to
+report a problem, what is in it is now actually about your problem — before, roughly two lines every
+second were the app re-listing the same temperature sensors, which pushed everything else out.
+
+### Fixed
+- **The log recorded the same sensor list every two seconds, forever.** Each time the Dashboard
+  refreshed temperatures — every two seconds while the app is open — it wrote one line per piece of
+  hardware describing how many temperature sensors that hardware has. That list never changes while
+  the app is running, so on a typical machine it was four identical lines a second time, and again,
+  and again. The log keeps a bounded amount of history, so this steadily evicted the entries that
+  would actually explain a fault: when a release check dumped the last 40 lines, all 40 were this one
+  message. The sensor list is now recorded once per run, where it is genuinely useful, and the
+  repetition is gone.
+
 ## [1.65.6] - 2026-08-14
 
 If you use the keyboard instead of the mouse, you can now see where you are. Pressing Tab moves a

@@ -41,6 +41,20 @@ public sealed class TemperatureService : IDisposable
     private List<string>? _cachedStorageFriendlyNames; // DiskHealthService friendly names, guarded by _enrichGate
     private readonly SemaphoreSlim _enrichGate = new(1, 1);
 
+    // The sensor TOPOLOGY — which hardware exists and how many temperature sensors each exposes — is
+    // static hardware identity, exactly like the disk names above, so it is logged once per session
+    // instead of once per hardware item per poll. It was 4 lines every 2 seconds (the Dashboard's
+    // temperature poll, DashboardViewModel.cs:379), i.e. ~2 lines/second for as long as the app runs.
+    //
+    // That matters because the rotating log is the ONLY diagnostic a user can send, and it is the only
+    // evidence available when the app dies before showing a window. The release smoke-check dumps the
+    // last 40 lines on failure; on v1.65.6 all 40 were this one message, so a real fault would have
+    // been pushed out of the window by noise. Bounded at 10 MB x 14 files (LogService), so the spam
+    // also evicts genuine history.
+    //
+    // Guarded by _sensorLock, which is already held wherever this is read or written.
+    private bool _loggedSensorTopology;
+
     public TemperatureService(DiskHealthService diskHealth, bool skipHardwareInit = false)
     {
         _diskHealth = diskHealth;
@@ -105,9 +119,15 @@ public sealed class TemperatureService : IDisposable
                     foreach (var subHardware in hardware.SubHardware)
                         subHardware.Update();
 
-                    Log.Debug("LHM: {Type} '{Name}' — {SensorCount} temp sensors",
-                        hardware.HardwareType, hardware.Name,
-                        hardware.Sensors.Count(s => s.SensorType == SensorType.Temperature));
+                    // Topology once per session, not once per hardware item per 2s poll — see
+                    // _loggedSensorTopology. The diagnostic value is "what sensors does this machine
+                    // expose", which is answered by the first read and unchanged by the 30th.
+                    if (!_loggedSensorTopology)
+                    {
+                        Log.Debug("LHM: {Type} '{Name}' — {SensorCount} temp sensors",
+                            hardware.HardwareType, hardware.Name,
+                            hardware.Sensors.Count(s => s.SensorType == SensorType.Temperature));
+                    }
 
                     var component = hardware.HardwareType switch
                     {
@@ -209,6 +229,10 @@ public sealed class TemperatureService : IDisposable
                         }
                     }
                 }
+
+                // Set only after the loop completed, so a read that threw partway through can log the
+                // remaining hardware on its next attempt rather than losing it for the session.
+                _loggedSensorTopology = true;
             }
             catch (Exception ex)
             {

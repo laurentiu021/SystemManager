@@ -2010,6 +2010,54 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"Stroke=""#[0-9A-Fa-f]{6}""", RegexOptions.Compiled)]
     private static partial Regex StrokeAttribute();
 
+    /// <summary>
+    /// No log statement sits unguarded inside a hardware-enumeration loop that a poll re-enters.
+    /// <para><c>TemperatureService.ReadViaLibreHardwareMonitor</c> logged one line per hardware item
+    /// per call, and the Dashboard polls it every 2 seconds
+    /// (<c>DashboardViewModel.StartTemperaturePolling</c>, <c>Task.Delay(2000)</c>) — so a machine with
+    /// four LHM devices produced four Debug lines every two seconds for as long as the app ran. The
+    /// v1.65.6 release smoke-check dumps the last 40 log lines when a launch fails; all 40 were that
+    /// one message, which means a real fault would have been pushed out of the window by noise. The log
+    /// is also the only diagnostic a user can send, and it is bounded (10 MB × 14 files), so the spam
+    /// evicts genuine history.</para>
+    /// <para>Sensor topology is static hardware identity — the same class already memoizes disk names
+    /// and NvAPI init for exactly that reason — so it is logged once per session behind a flag. This
+    /// asserts the flag exists, guards the log, and is only set after the loop completes, because
+    /// setting it before would lose the remaining hardware if a read threw partway through.</para>
+    /// <para>Cannot be a behavioural test: the LHM path needs administrator rights and real sensors,
+    /// so <c>ReadAllAsync</c> returns early under <c>skipHardwareInit</c> in every test. The shape of
+    /// the fix is assertable from source; the behaviour is not.</para>
+    /// </summary>
+    [Fact]
+    public void TheSensorTopologyLog_RunsOncePerSession_NotOncePerPoll()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "TemperatureService.cs"));
+
+        const string flag = "_loggedSensorTopology";
+        Assert.Contains($"private bool {flag};", source, StringComparison.Ordinal);
+
+        // The poll loop is the thing that makes an unguarded log expensive, so pin that it is still a
+        // loop: if the enumeration were ever restructured, this guard should be revisited, not passed.
+        var loopAt = source.IndexOf("foreach (var hardware in _computer.Hardware)", StringComparison.Ordinal);
+        Assert.True(loopAt > 0, "the LHM hardware loop was not found — fix this guard, do not delete it.");
+
+        var logAt = source.IndexOf("LHM: {Type}", StringComparison.Ordinal);
+        Assert.True(logAt > loopAt, "the topology log is no longer inside the hardware loop.");
+
+        // The log must sit behind the flag. Checked as the text between the loop head and the log call,
+        // so a guard placed anywhere else in the file cannot satisfy this.
+        var beforeLog = source[loopAt..logAt];
+        Assert.Contains($"if (!{flag})", beforeLog, StringComparison.Ordinal);
+
+        // And the flag must be set AFTER the loop body, not before or inside it: setting it on the
+        // first hardware item would drop every later device from the one session that logs them.
+        var setAt = source.IndexOf($"{flag} = true;", StringComparison.Ordinal);
+        Assert.True(setAt > logAt,
+            $"{flag} is set at {setAt} but the log is at {logAt} — it must be set after the loop, so a "
+            + "read that throws partway through can still log the rest on its next attempt.");
+    }
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

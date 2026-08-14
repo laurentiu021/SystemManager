@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.6] - 2026-08-14
+
+If you use the keyboard instead of the mouse, you can now see where you are. Pressing Tab moves a
+visible outline from control to control; before this, the outline was drawn in the app's purple on
+top of purple buttons, so it was completely invisible on the most important buttons — and checkboxes,
+filter chips and table cells had no outline at all.
+
+### Fixed
+- **The keyboard outline was invisible on every colour theme.** The outline was drawn in the theme's
+  own accent colour, which is also what fills the main action buttons — purple on purple, measured at
+  1.00:1 contrast, i.e. nothing to see. The Delete buttons were the same story in red. It also fell
+  below the readable minimum on the Sky Breeze, Warm Sand and Mint Fresh themes even for ordinary
+  grey buttons. The outline is now two thin lines of opposite shade, a light one and a dark one, so
+  one of them always stands out whatever it is drawn on — measured across all 12 themes, the worst
+  case is now 4.5 times the required contrast instead of none.
+- **Checkboxes, filter chips, mode buttons and table cells had no outline at all.** Space still
+  ticked a checkbox and the arrow keys still moved through a table, so a keyboard user could change a
+  setting or select a row without ever seeing which one they were on — worst on the pages that are a
+  full column of checkboxes (Privacy, Debloater, Tweaks). All of them now show the same outline as
+  every other control.
+
 ## [1.65.5] - 2026-08-14
 
 Buttons and checkboxes are now read out with the words actually printed on them. If you use Windows Speech Recognition or a screen reader, 36 controls used to be announced with different wording than what you could see — so saying the label out loud did not press the button.

@@ -36,7 +36,10 @@
                         <Setter Property="Padding" Value="8,1"/>
                         <Setter Property="Background" Value="Transparent"/>
                         <Setter Property="BorderThickness" Value="0"/>
-                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                        <!-- Was {x:Null} with a transparent background and no border, so arrow-keying
+                             through the output moved a selection nothing rendered. The shared ring is
+                             the only cue that a log line is current. -->
+                        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                     </Style>
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>

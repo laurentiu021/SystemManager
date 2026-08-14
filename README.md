@@ -153,6 +153,18 @@ A palette button in the top-right corner opens an appearance popup with:
 - Background shade slider for fine-tuning lightness/darkness
 - Settings persist between sessions
 
+### Keyboard navigation
+The app is operable without a mouse, and the control you are on is always visible. `Tab` moves
+forward, `Shift+Tab` back, `Space` presses a button or ticks a checkbox, and the arrow keys move
+within a table or a row of filter chips.
+
+The focus outline is deliberately two thin lines of opposite shade — one light, one dark — rather
+than a single accent-coloured ring. A single colour cannot be visible everywhere: it has to show up
+on a purple primary button, a red delete button, a grey secondary button and a plain card, and any
+one colour disappears against at least one of those. With two, one line always contrasts whatever is
+underneath. Measured across all 12 themes, the outline stays at 4.5:1 or better against every surface
+it is drawn on — above the 3:1 WCAG asks of a non-text indicator.
+
 ### Context Menu Manager
 Manage Windows Explorer right-click entries — toggle them on or off without
 deleting anything (uses the standard `LegacyDisable` registry mechanism):

@@ -151,6 +151,59 @@
             <CornerRadius x:Key="RadiusPill">999</CornerRadius>
 
             <!-- ============================================================ -->
+            <!-- Keyboard focus ring — ONE definition for every control        -->
+            <!-- ============================================================ -->
+            <!-- The keyboard focus cue was an Accent-coloured BORDER set inside each control's own
+                 template. That cannot work on every control, because the ring is then drawn ON the
+                 control's fill: PrimaryButton's fill IS the accent (1.00:1 — literally invisible) and
+                 DangerButton's is red (1.02–1.75:1). Measured across all 12 presets, both failed on
+                 EVERY one; ButtonBase/Secondary also failed on Sky Breeze, Warm Sand and Mint Fresh
+                 (2.24–2.53:1) and Ghost on two, against WCAG 1.4.11's 3:1 bar for a non-text indicator.
+
+                 A single colour cannot solve it: the ring has to land on the accent, on red, on a
+                 raised grey and on a card surface. So the ring is TWO strokes of opposite tone — a
+                 white inner and a near-black outer, 18.9:1 apart from each other. Whatever fill the
+                 control sits on, at least one stroke contrasts it; the worst case over 12 presets ×
+                 6 fills is 4.47:1 (Midnight Indigo / Clean Indigo accent), and no fill scores under
+                 3:1 on both. Both strokes are always drawn, so nothing has to detect the fill at
+                 runtime — the guarantee is arithmetic, not conditional.
+
+                 Drawn as a FocusVisualStyle adorner rather than a per-template border, which is the
+                 point: an adorner renders in the adorner layer ABOVE the control, so it needs no
+                 template change, no reserved BorderThickness, and it cannot be swallowed by a style
+                 that overrides BorderBrush. Four styles set FocusVisualStyle="{x:Null}" with nothing
+                 in its place (ButtonBase, ToggleSwitch, DataGridCell, ConsoleView's rows) and seven
+                 templated styles never had a ring at all; all of them now inherit this one.
+
+                 Accent is deliberately NOT used here. It stays the hover and selection colour, so
+                 the purple identity is unchanged — this is only the keyboard cue. -->
+            <Style x:Key="FocusRing">
+                <Setter Property="Control.Template">
+                    <Setter.Value>
+                        <ControlTemplate>
+                            <!-- SnapsToDevicePixels keeps a 1px stroke from blurring across two
+                                 device pixels at fractional DPI, where it reads as a grey haze
+                                 rather than a ring. -->
+                            <Grid SnapsToDevicePixels="True">
+                                <!-- Outer, near-black: contrasts a light fill and a light page.
+                                     Margin -3 puts it just outside the control's own bounds. -->
+                                <Rectangle Margin="-3"
+                                           RadiusX="6" RadiusY="6"
+                                           Stroke="#111111" StrokeThickness="2"
+                                           IsHitTestVisible="False"/>
+                                <!-- Inner, white: contrasts a dark fill, and separates the ring from
+                                     the control edge so it never reads as part of the border. -->
+                                <Rectangle Margin="-1"
+                                           RadiusX="5" RadiusY="5"
+                                           Stroke="#FFFFFF" StrokeThickness="1.5"
+                                           IsHitTestVisible="False"/>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ============================================================ -->
             <!-- Sidebar Expander — smooth slide animation                      -->
             <!-- ============================================================ -->
             <Style x:Key="SidebarExpander" TargetType="Expander">
@@ -245,6 +298,9 @@
             <!-- Theme popup styles                                             -->
             <!-- ============================================================ -->
             <Style x:Key="ModePill" TargetType="RadioButton">
+                <!-- A templated RadioButton loses the default dotted adorner, so the mode pills were
+                     keyboard-operable (arrow keys move the selection) with no cue at all. -->
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
@@ -332,7 +388,10 @@
                 <Setter Property="Padding" Value="14,8"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="SnapsToDevicePixels" Value="True"/>
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <!-- Was {x:Null}: the default dotted adorner was suppressed and the accent border in
+                     the template below stood in for it, which is invisible once a derived style makes
+                     the fill accent-coloured (PrimaryButton) or red (DangerButton). -->
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
@@ -427,7 +486,10 @@
                 <Setter Property="Width" Value="40"/>
                 <Setter Property="Height" Value="22"/>
                 <Setter Property="Cursor" Value="Hand"/>
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <!-- The template's own accent ring stays as the resting affordance; this adds the
+                     two-tone adorner, which is what survives the ON state where the track fill IS
+                     the accent (1.00:1 against that border). -->
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                 <Setter Property="SnapsToDevicePixels" Value="True"/>
                 <Setter Property="Template">
                     <Setter.Value>
@@ -480,6 +542,9 @@
             <!-- Filter Chips — safety level radio buttons                    -->
             <!-- ============================================================ -->
             <Style x:Key="FilterChip" TargetType="RadioButton">
+                <!-- FilterChipCaution and FilterChipCritical derive from this style, so all three
+                     filter chips inherit the ring from here. -->
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
@@ -969,6 +1034,11 @@
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="Padding" Value="8,0,0,0"/>
+                <!-- The custom template below replaces the default one, which took the default focus
+                     adorner with it. Space toggles the box, so a keyboard user could change a setting
+                     without ever seeing which one they were on — worst on the pages that are a column
+                     of checkboxes (Privacy, Debloater, Tweaks). -->
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="CheckBox">
@@ -1117,7 +1187,11 @@
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="BorderThickness" Value="0"/>
                 <Setter Property="Padding" Value="10,6"/>
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <!-- Was {x:Null} with no replacement, and the template below drops the focus adorner
+                     too, so arrow-key navigation through a grid moved an invisible cursor: the row
+                     highlight does not move per cell, and IsSelected renders a transparent
+                     background. This is the only cue that the current cell exists. -->
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="DataGridCell">

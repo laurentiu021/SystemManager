@@ -43,6 +43,16 @@ controls. Their inner visuals consume selection through the shared `SidebarNavRo
 `SidebarNavText`, and `SidebarActiveMark` styles, while `SelectionStatus` exposes
 the same state to UI Automation. Group headers are keyboard-focusable toggles;
 collapsed content is disabled so visually hidden leaves cannot receive focus.
+
+Keyboard focus is drawn by ONE shared resource, `FocusRing` in `App.xaml`, applied through
+`FocusVisualStyle` on every style whose template replaces the default one — a custom template
+otherwise takes the framework's focus adorner with it. It is a two-`Rectangle` adorner (white inner
+stroke, near-black outer) rather than a themed border, because the ring must stay visible on
+`PrimaryButton`'s accent fill, `DangerButton`'s red, a raised grey and a card surface; any single
+colour, accent included, falls to 1.00:1 against at least one of those.
+`ArchitectureTests.NoStyle_SuppressesTheKeyboardFocusIndicator` forbids
+`FocusVisualStyle="{x:Null}"` anywhere and asserts the ring keeps both strokes.
+
 Every tab is backed by a real view and view-model. A shared WIP placeholder view
 existed while tabs were still being built; the last tab graduated off it, so it was
 removed rather than left as unreachable code. A tab that is implemented but not yet

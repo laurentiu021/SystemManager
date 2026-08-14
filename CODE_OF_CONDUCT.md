@@ -59,9 +59,10 @@ appointed representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement by opening a
-private security advisory on GitHub or contacting the maintainer through
-the email listed on their GitHub profile.
+reported privately to the maintainer by opening a
+[draft security advisory](https://github.com/laurentiu021/SystemManager/security/advisories/new).
+It is the project's only private channel, so it is used for conduct reports
+as well — only the maintainer can read it, and the report is never published.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

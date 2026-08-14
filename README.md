@@ -918,7 +918,7 @@ offers, "rate us" prompts:
 
 ### In motion
 
-> The feature tour GIF is at the [top of this README](#sysmanager). Here's a
+> The feature tour GIF is at the [top of this README](#sysmanager-for-windows). Here's a
 > second one focused on cleanup & maintenance tools:
 
 <p>

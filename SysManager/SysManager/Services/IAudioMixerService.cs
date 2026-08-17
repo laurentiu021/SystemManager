@@ -38,9 +38,21 @@ public interface IAudioMixerService
 
     /// <summary>
     /// Read a session's current peak sample amplitude (0.0–1.0) for the VU meter, or 0
-    /// if the session is gone or the value can't be read. Cheap enough to poll.
+    /// if the session is gone or the value can't be read.
+    /// <para>Each call marshals a cross-apartment COM call per audio control in the group, so prefer
+    /// <see cref="GetPeaks"/> when reading more than one session at a time.</para>
     /// </summary>
     float GetPeak(string sessionId);
+
+    /// <summary>
+    /// Read the peak amplitude for many sessions in one pass, returning a value for every id asked for
+    /// (0 for one that is gone or unreadable).
+    /// <para>Exists because the VU meters refresh 20 times a second: calling <see cref="GetPeak"/> per
+    /// row took the service lock once per row per tick, and each acquisition contends with the 1 Hz
+    /// reconcile that holds the same lock while enumerating every session. One call takes the lock once
+    /// and does all the COM work inside it, so a tab showing ten apps costs one hop instead of ten.</para>
+    /// </summary>
+    IReadOnlyDictionary<string, float> GetPeaks(IEnumerable<string> sessionIds);
 
     /// <summary>
     /// Enumerate the active render (output) devices via the documented Core Audio device API.

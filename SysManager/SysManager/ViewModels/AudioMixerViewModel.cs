@@ -14,10 +14,11 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// Volume Control tab — a per-application volume mixer over the default render endpoint.
 /// Lists each app that is playing audio with a volume slider, mute toggle, and a live peak
-/// meter. Two loops drive it, both skipping their work while the tab is hidden and both
-/// sampling off the UI thread: membership + volume/mute reconcile on a ~1&#160;s cadence
-/// (mirroring <see cref="ProcessManagerViewModel"/>), and the peak meters refresh every
-/// 50&#160;ms via a single batched service call. Rows are reconciled IN PLACE by session id
+/// meter. Two loops drive it, both idle while the tab is hidden and both sampling off the UI
+/// thread: membership + volume/mute reconcile on a ~1&#160;s cadence (mirroring
+/// <see cref="ProcessManagerViewModel"/>), and the peak meters refresh every 50&#160;ms via a
+/// single batched service call — that one PARKS while hidden rather than ticking and skipping,
+/// because at 50&#160;ms even a skip-check costs 20 Dispatcher items a second. Rows are reconciled IN PLACE by session id
 /// so dragging a slider survives a refresh (a wholesale replace would raise a Reset and
 /// drop the drag).
 ///
@@ -31,6 +32,12 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     private readonly IAudioMixerService _service;
     private readonly VolumePresetService _presets;
     private CancellationTokenSource? _reconcileCts;
+
+    // Completed while the tab is visible, replaced with a fresh incomplete source when it is hidden.
+    // PeakLoopAsync awaits this BEFORE its delay, so a hidden tab costs nothing at all rather than
+    // waking 20 times a second to decide it has nothing to do. Only touched on the UI thread
+    // (OnIsActiveChanged and the loop's own continuations), so it needs no synchronisation.
+    private TaskCompletionSource _activated = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public BulkObservableCollection<AudioSessionRowViewModel> Sessions { get; } = new();
 
@@ -100,6 +107,11 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     /// cadence.</para>
     /// <para>Now one <c>GetPeaks</c> call per tick does all the COM work on a worker thread and only the
     /// resulting numbers come back here. Shares the reconcile loop's token, so Dispose stops both.</para>
+    /// <para>While the tab is hidden the loop parks on <c>_activated</c> instead of ticking and skipping:
+    /// at 50&#160;ms a skip-check would still queue 20 continuations a second onto the Dispatcher for the
+    /// entire life of the app once the tab had been opened once — the timer this replaced was genuinely
+    /// STOPPED when the tab was hidden, and parity with that matters more here than anywhere else in the
+    /// app because of the cadence.</para>
     /// </summary>
     private async Task PeakLoopAsync(CancellationToken ct)
     {
@@ -107,6 +119,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         {
             try
             {
+                await _activated.Task.WaitAsync(ct).ConfigureAwait(true);
                 await Task.Delay(TimeSpan.FromMilliseconds(PeakIntervalMs), ct).ConfigureAwait(true);
                 if (!IsActive) continue;
                 await UpdatePeaksAsync(ct).ConfigureAwait(true);
@@ -321,11 +334,18 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
     partial void OnIsActiveChanged(bool value)
     {
-        // The loop itself skips its work while the tab is hidden (R4: no poll work when not
-        // visible); all that is left here is to darken the meters on the way out so a hidden
-        // tab isn't left showing whatever level it happened to stop on.
-        if (!value)
-            foreach (var row in Sessions) row.PeakLevel = 0f;
+        // Release / re-arm the peak loop's gate (R4: no poll work at all when not visible — the loop
+        // parks rather than ticking), and darken the meters on the way out so a hidden tab isn't left
+        // showing whatever level it happened to stop on.
+        if (value)
+        {
+            _activated.TrySetResult();
+            return;
+        }
+
+        if (_activated.Task.IsCompleted)
+            _activated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        foreach (var row in Sessions) row.PeakLevel = 0f;
     }
 
     protected override void Dispose(bool disposing)

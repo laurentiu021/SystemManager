@@ -255,6 +255,35 @@ public class AudioMixerViewModelTests
         service.DidNotReceive().GetPeak(Arg.Any<string>());
     }
 
+    /// <summary>
+    /// A hidden tab must PARK the peak loop, not tick-and-skip.
+    /// <para>The <c>DispatcherTimer</c> this replaced was genuinely stopped on deactivate. A loop that
+    /// only checks <c>IsActive</c> after its delay still wakes 20 times a second and, because the
+    /// continuation resumes on the captured context, queues 20 work items a second onto the Dispatcher
+    /// for the whole life of the app once the tab has been opened once — measurable overhead on every
+    /// other tab, from a tab nobody is looking at. The gate is what restores timer parity, so it is
+    /// asserted directly: hidden means the loop is waiting on an incomplete task.</para>
+    /// </summary>
+    [Fact]
+    public void HiddenTab_ParksThePeakLoop_RatherThanTickingAndSkipping()
+    {
+        var vm = NewVm(ServiceWith(Session("s1")));
+
+        var gate = typeof(AudioMixerViewModel)
+            .GetField("_activated", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        vm.IsActive = true;
+        Assert.True(((TaskCompletionSource)gate.GetValue(vm)!).Task.IsCompleted);
+
+        vm.IsActive = false;
+        Assert.False(((TaskCompletionSource)gate.GetValue(vm)!).Task.IsCompleted);
+
+        // Re-showing the tab must release it again — a one-shot gate would leave the meters dead
+        // after the first time the user navigated away.
+        vm.IsActive = true;
+        Assert.True(((TaskCompletionSource)gate.GetValue(vm)!).Task.IsCompleted);
+    }
+
     [Fact]
     public async Task Deactivating_ClearsPeaks_SoHiddenMeterDoesNotFreezeLit()
     {

@@ -23,8 +23,9 @@ you dragged them.
   second competing with the drawing itself, and once a second one of them had to queue behind the tab's own
   refresh of the app list. The result was bars that jittered instead of moving smoothly, and sliders that
   lagged behind the mouse. The levels are now read for every app in a single request, and that request runs
-  on a background thread — the window only receives the finished numbers. Present since the tab shipped in
-  1.52.37; the same defect was fixed for the Bandwidth Monitor in 1.61.9, at a twentieth of this cadence.
+  on a background thread — the window only receives the finished numbers, and the tab goes completely idle
+  the moment you switch away from it. Present since the tab shipped in 1.52.37; the same defect was fixed
+  for the Bandwidth Monitor in 1.61.9, at a twentieth of this cadence.
 
 ## [1.65.10] - 2026-08-14
 

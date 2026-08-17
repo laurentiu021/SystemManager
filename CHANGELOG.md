@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.11] - 2026-08-17
+
+The Volume Control tab is smoother. The moving bars beside each app were being measured in a way that made
+the whole window do extra work twenty times a second, which is exactly why the sliders felt sticky while
+you dragged them.
+
+### Fixed
+- **Volume Control's level bars made the window stutter.** The bars beside each app refresh twenty times a
+  second, and each refresh asked Windows for one app's level at a time — a separate request per app, all of
+  them on the same thread that draws the window. With ten apps playing that was over two hundred requests a
+  second competing with the drawing itself, and once a second one of them had to queue behind the tab's own
+  refresh of the app list. The result was bars that jittered instead of moving smoothly, and sliders that
+  lagged behind the mouse. The levels are now read for every app in a single request, and that request runs
+  on a background thread — the window only receives the finished numbers. Present since the tab shipped in
+  1.52.37; the same defect was fixed for the Bandwidth Monitor in 1.61.9, at a twentieth of this cadence.
+
 ## [1.65.10] - 2026-08-14
 
 Two things that were quietly telling you the wrong thing. A speed test result could fail to save without

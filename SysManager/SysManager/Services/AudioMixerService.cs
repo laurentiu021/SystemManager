@@ -277,34 +277,63 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     {
         lock (_gate)
         {
-            if (_disposed || !_groups.TryGetValue(sessionId, out var controls)) return 0f;
+            return PeakLocked(sessionId);
+        }
+    }
 
-            float peak = 0f;
-            foreach (var control in controls)
+    /// <inheritdoc/>
+    public IReadOnlyDictionary<string, float> GetPeaks(IEnumerable<string> sessionIds)
+    {
+        ArgumentNullException.ThrowIfNull(sessionIds);
+
+        // Materialise BEFORE taking the lock: the caller's sequence is usually a LINQ projection over a
+        // bound collection, and enumerating it inside the lock would run caller code — including UI-thread
+        // collection reads — while holding the gate the 1 Hz reconcile also wants.
+        var ids = sessionIds as IReadOnlyList<string> ?? [.. sessionIds];
+        var peaks = new Dictionary<string, float>(ids.Count, StringComparer.Ordinal);
+
+        lock (_gate)
+        {
+            foreach (var id in ids)
+                peaks[id] = PeakLocked(id);
+        }
+
+        return peaks;
+    }
+
+    /// <summary>
+    /// The COM read itself. Caller holds <c>_gate</c>; every id gets a value, 0 when the session is gone
+    /// or unreadable.
+    /// </summary>
+    private float PeakLocked(string sessionId)
+    {
+        if (_disposed || !_groups.TryGetValue(sessionId, out var controls)) return 0f;
+
+        float peak = 0f;
+        foreach (var control in controls)
+        {
+            if (control is not IAudioMeterInformation meter) continue;
+            try
             {
-                if (control is not IAudioMeterInformation meter) continue;
-                try
+                if (meter.GetPeakValue(out float value) == 0 && value > peak) peak = value;
+            }
+            catch (COMException ex)
+            {
+                // Log once per session-handle generation, not per call. This is driven by the Volume
+                // Control tab's 50 ms peak-meter loop, so one bad audio session wrote ~20 identical
+                // Debug lines a second for as long as the tab stayed open — the log's single biggest
+                // flood path. The message is identical every tick, so repeating it adds nothing;
+                // ReleaseGroups resets the flag, meaning a genuinely new failure after a device change
+                // is still reported. Mirrors the existing one-shot probe pattern
+                // (_routingProbed / _routingSupported).
+                if (!_peakFailureLogged)
                 {
-                    if (meter.GetPeakValue(out float value) == 0 && value > peak) peak = value;
-                }
-                catch (COMException ex)
-                {
-                    // Log once per session-handle generation, not per call. GetPeak is driven by the
-                    // Volume Control tab's 50 ms peak-meter timer, so one bad audio session wrote
-                    // ~20 identical Debug lines a second for as long as the tab stayed open — the
-                    // log's single biggest flood path. The message is identical every tick, so
-                    // repeating it adds nothing; ReleaseGroups resets the flag, meaning a genuinely
-                    // new failure after a device change is still reported. Mirrors the existing
-                    // one-shot probe pattern (_routingProbed / _routingSupported).
-                    if (!_peakFailureLogged)
-                    {
-                        _peakFailureLogged = true;
-                        Log.Debug("GetPeak failed: {Error}", ex.Message);
-                    }
+                    _peakFailureLogged = true;
+                    Log.Debug("GetPeak failed: {Error}", ex.Message);
                 }
             }
-            return peak;
         }
+        return peak;
     }
 
     // Reset by ReleaseGroups, so it is per session-handle generation rather than per process.

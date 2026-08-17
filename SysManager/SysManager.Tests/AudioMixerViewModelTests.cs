@@ -20,10 +20,11 @@ namespace SysManager.Tests;
 /// reconcile (surviving rows keep their instance, adds/removes without a collection Reset
 /// — pinning the "ReplaceWith drops the dragged slider" trap), volume/mute propagation to
 /// the service with an echo-suppression guard on external updates, the mid-drag guard, the
-/// identity refresh, the peak-meter update path, the empty-state flag, and deterministic
-/// disposal. The <c>IsActive</c> gate is verified only for the peak-meter half (the timer
-/// start/stop + peak zeroing); the reconcile loop's 1&#160;s pause-when-hidden branch is
-/// timer-driven and is not unit-tested (it would need a time seam). The COM enumeration and
+/// identity refresh, the peak-meter update path (batched into ONE service call, off the UI
+/// thread, and guarded against a Dispose landing mid-sample), the empty-state flag, and
+/// deterministic disposal. The <c>IsActive</c> gate is verified only for the peak-meter half
+/// (the zeroing on the way out); both loops' pause-when-hidden branches are delay-driven and
+/// are not unit-tested (they would need a time seam). The COM enumeration and
 /// grouping itself lives in <see cref="AudioMixerService"/>
 /// (not unit-tested here — it needs a real endpoint), so these tests treat the service's
 /// filtering (expired dropped, system-sounds flagged) as a contract at the seam.
@@ -60,6 +61,27 @@ public class AudioMixerViewModelTests
         var service = Substitute.For<IAudioMixerService>();
         service.GetSessions().Returns(sessions.ToList());
         return service;
+    }
+
+    /// <summary>
+    /// Stubs BOTH peak reads from one level table. Answers whatever ids the caller passes rather than a
+    /// fixed list, so a test does not silently stop covering a row it added — and returns 0 for an unknown
+    /// id, matching the service contract that every requested id gets a value.
+    /// <para>The single-id <c>GetPeak</c> is stubbed deliberately, even though production no longer calls
+    /// it: it makes the per-row shape return CORRECT levels. Otherwise a refactor back to a per-row loop
+    /// would read an unstubbed method, get 0 everywhere, and fail the value assertions — so the call-count
+    /// test would look redundant when it is the only thing that actually pins the batching.</para>
+    /// </summary>
+    private static void Peaks(IAudioMixerService service, params (string SessionId, float Peak)[] peaks)
+    {
+        var byId = peaks.ToDictionary(p => p.SessionId, p => p.Peak, StringComparer.Ordinal);
+        service.GetPeaks(Arg.Any<IEnumerable<string>>()).Returns(call =>
+            ((IEnumerable<string>)call[0]).ToDictionary(
+                id => id,
+                id => byId.TryGetValue(id, out var v) ? v : 0f,
+                StringComparer.Ordinal));
+        service.GetPeak(Arg.Any<string>()).Returns(call =>
+            byId.TryGetValue((string)call[0], out var v) ? v : 0f);
     }
 
     // The constructor kicks off an async reconcile off the UI thread; await init so
@@ -200,30 +222,50 @@ public class AudioMixerViewModelTests
     // ── Peak meter update path ─────────────────────────────────────────────
 
     [Fact]
-    public void UpdatePeaks_WritesEachRowPeak_FromService()
+    public async Task UpdatePeaks_WritesEachRowPeak_FromService()
     {
         var service = ServiceWith(Session("s1"), Session("s2"));
-        service.GetPeak("s1").Returns(0.6f);
-        service.GetPeak("s2").Returns(0.2f);
+        Peaks(service, ("s1", 0.6f), ("s2", 0.2f));
         var vm = NewVm(service);
 
-        vm.UpdatePeaks();
+        await vm.UpdatePeaksAsync(CancellationToken.None);
 
         Assert.Equal(0.6f, vm.Sessions.Single(r => r.SessionId == "s1").PeakLevel);
         Assert.Equal(0.2f, vm.Sessions.Single(r => r.SessionId == "s2").PeakLevel);
     }
 
+    /// <summary>
+    /// Every visible row must be read in ONE service call, not one call per row.
+    /// <para>The meters refresh 20 times a second. Per-row calls each took the service lock and
+    /// marshalled a cross-apartment COM call, so ten apps playing meant ~200 COM transitions a second on
+    /// the UI thread — and one tick in twenty blocked there behind the 1 Hz reconcile, which holds the
+    /// same lock while enumerating every session. Counting the calls is what pins that: a refactor back
+    /// to a per-row loop would still produce correct peaks and pass every other test in this file.</para>
+    /// </summary>
     [Fact]
-    public void Deactivating_ClearsPeaks_SoHiddenMeterDoesNotFreezeLit()
+    public async Task UpdatePeaks_ReadsEveryRowInOneServiceCall()
+    {
+        var service = ServiceWith(Session("s1"), Session("s2"), Session("s3"));
+        Peaks(service, ("s1", 0.1f), ("s2", 0.2f), ("s3", 0.3f));
+        var vm = NewVm(service);
+
+        await vm.UpdatePeaksAsync(CancellationToken.None);
+
+        service.Received(1).GetPeaks(Arg.Any<IEnumerable<string>>());
+        service.DidNotReceive().GetPeak(Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Deactivating_ClearsPeaks_SoHiddenMeterDoesNotFreezeLit()
     {
         var service = ServiceWith(Session("s1"));
-        service.GetPeak("s1").Returns(0.9f);
+        Peaks(service, ("s1", 0.9f));
         var vm = NewVm(service);
         vm.IsActive = true;
-        vm.UpdatePeaks();
+        await vm.UpdatePeaksAsync(CancellationToken.None);
         Assert.Equal(0.9f, vm.Sessions.Single().PeakLevel);
 
-        // Leaving the tab stops the meter and zeroes the bars (no stale lit level).
+        // Leaving the tab zeroes the bars (no stale lit level); the loop itself skips while hidden.
         vm.IsActive = false;
 
         Assert.Equal(0f, vm.Sessions.Single().PeakLevel);
@@ -346,13 +388,13 @@ public class AudioMixerViewModelTests
     }
 
     [Fact]
-    public void Dispose_IsIdempotent_AndZeroesTheMeter()
+    public async Task Dispose_IsIdempotent_AndZeroesTheMeter()
     {
         var service = ServiceWith(Session("s1"));
-        service.GetPeak("s1").Returns(0.7f);
+        Peaks(service, ("s1", 0.7f));
         var vm = NewVm(service);
         vm.IsActive = true;
-        vm.UpdatePeaks(); // light the meter so zeroing is observable
+        await vm.UpdatePeaksAsync(CancellationToken.None); // light the meter so zeroing is observable
         Assert.Equal(0.7f, vm.Sessions.Single().PeakLevel);
 
         vm.Dispose();
@@ -363,6 +405,69 @@ public class AudioMixerViewModelTests
 
         // Behavioral post-condition: Dispose stopped the meter and zeroed the lit bar (it must
         // not leave a stale level frozen on screen).
+        Assert.Equal(0f, vm.Sessions.Single().PeakLevel);
+    }
+
+    /// <summary>
+    /// A peak sample that was already in flight when Dispose ran must not write its result back.
+    /// <para>The sample now genuinely yields (the COM work runs on a worker thread), so Dispose — which
+    /// cancels the shared token and zeroes every meter — can land while one is outstanding. The token
+    /// only prevents a sample from STARTING; the continuation still resumes on the UI thread. Without the
+    /// post-await guard it re-lights meters Dispose had just cleared, on a torn-down view model. Same
+    /// defect the Bandwidth Monitor and Resource History fixes pinned (v1.63.1, v1.64.1).</para>
+    /// </summary>
+    [Fact]
+    public async Task UpdatePeaks_WhenDisposedMidSample_DoesNotWriteBackOntoTheTornDownRows()
+    {
+        var service = ServiceWith(Session("s1"));
+        var vm = NewVm(service);
+        vm.IsActive = true;
+
+        // Hold the sample open, dispose while it is outstanding, then let it complete.
+        //
+        // Both waits below are BOUNDED, and the bound is load-bearing for the test suite rather than for
+        // this test: on the correct shape neither timeout is ever reached (the stub is entered on the
+        // worker thread within microseconds and released explicitly), so no assertion here depends on
+        // wall-clock timing. They exist because a WRONG shape would otherwise deadlock the whole run
+        // instead of failing one test — code that samples via a different call never enters the stub, so
+        // `sampleReached` is never set; and code that samples on the CALLING thread parks the test itself
+        // inside the stub, before `inFlight` is even assigned. An unbounded wait in either place turns a
+        // red test into a hung suite, which reports as nothing at all.
+        var sampleReached = new TaskCompletionSource();
+        var releaseSample = new TaskCompletionSource();
+        service.GetPeaks(Arg.Any<IEnumerable<string>>()).Returns(call =>
+        {
+            sampleReached.TrySetResult();
+            releaseSample.Task.Wait(TimeSpan.FromSeconds(10));
+            return ((IEnumerable<string>)call[0]).ToDictionary(id => id, _ => 0.8f, StringComparer.Ordinal);
+        });
+        // Hold the single-id read open the same way, so this test is about the post-await GUARD and
+        // nothing else: a shape that samples per row still reaches the dispose window and still gets a
+        // non-zero level to (wrongly) write back. Without this the test would go red on any refactor
+        // that stops calling GetPeaks — duplicating what the call-count test already pins, for the wrong
+        // reason.
+        service.GetPeak(Arg.Any<string>()).Returns(_ =>
+        {
+            sampleReached.TrySetResult();
+            releaseSample.Task.Wait(TimeSpan.FromSeconds(10));
+            return 0.8f;
+        });
+
+        try
+        {
+            var inFlight = vm.UpdatePeaksAsync(CancellationToken.None);
+            await sampleReached.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            vm.Dispose();
+            releaseSample.SetResult();
+            await inFlight;
+        }
+        finally
+        {
+            // Never leave the stub's thread parked on releaseSample if the wait above timed out.
+            releaseSample.TrySetResult();
+        }
+
         Assert.Equal(0f, vm.Sessions.Single().PeakLevel);
     }
 

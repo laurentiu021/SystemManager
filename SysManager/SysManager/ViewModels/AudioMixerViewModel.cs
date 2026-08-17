@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -15,11 +14,12 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// Volume Control tab — a per-application volume mixer over the default render endpoint.
 /// Lists each app that is playing audio with a volume slider, mute toggle, and a live peak
-/// meter. Membership + volume/mute are reconciled on a ~1&#160;s loop (paused when the tab
-/// isn't visible, mirroring <see cref="ProcessManagerViewModel"/>); the peak meters are
-/// driven by one shared <see cref="DispatcherTimer"/> that runs only while the tab is
-/// active. Rows are reconciled IN PLACE by session id so dragging a slider survives a
-/// refresh (a wholesale replace would raise a Reset and drop the drag).
+/// meter. Two loops drive it, both skipping their work while the tab is hidden and both
+/// sampling off the UI thread: membership + volume/mute reconcile on a ~1&#160;s cadence
+/// (mirroring <see cref="ProcessManagerViewModel"/>), and the peak meters refresh every
+/// 50&#160;ms via a single batched service call. Rows are reconciled IN PLACE by session id
+/// so dragging a slider survives a refresh (a wholesale replace would raise a Reset and
+/// drop the drag).
 ///
 /// <para>Preview scope: default render device only; per-app output-device routing and
 /// volume presets are intentionally not part of this preview (see the view's banner).</para>
@@ -30,7 +30,6 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
     private readonly IAudioMixerService _service;
     private readonly VolumePresetService _presets;
-    private readonly DispatcherTimer _peakTimer;
     private CancellationTokenSource? _reconcileCts;
 
     public BulkObservableCollection<AudioSessionRowViewModel> Sessions { get; } = new();
@@ -57,8 +56,6 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     {
         _service = service;
         _presets = presets;
-        _peakTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(PeakIntervalMs) };
-        _peakTimer.Tick += (_, _) => UpdatePeaks();
         StatusMessage = "Reading audio sessions…";
         InitializeAsync(InitAsync);
     }
@@ -89,6 +86,36 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
         if (_reconcileCts is null || ct.IsCancellationRequested) return; // disposed during init
         _ = ReconcileLoopAsync(ct);
+        _ = PeakLoopAsync(ct);
+    }
+
+    /// <summary>
+    /// Drives the VU meters at <see cref="PeakIntervalMs"/>, sampling OFF the UI thread.
+    /// <para>This was a <c>DispatcherTimer</c> whose Tick called the service synchronously, once per
+    /// visible row. Each of those calls took the service lock and marshalled a cross-apartment COM call
+    /// per audio control, so with ten apps playing it was ~200 COM transitions a second on the thread
+    /// that draws the window — and roughly once a second a tick blocked there behind the 1 Hz reconcile,
+    /// which holds the same lock while enumerating every session. The symptom was choppy meters and
+    /// sliders that felt laggy. Same defect as the Bandwidth Monitor fix in 1.61.9, at 20x the
+    /// cadence.</para>
+    /// <para>Now one <c>GetPeaks</c> call per tick does all the COM work on a worker thread and only the
+    /// resulting numbers come back here. Shares the reconcile loop's token, so Dispose stops both.</para>
+    /// </summary>
+    private async Task PeakLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(PeakIntervalMs), ct).ConfigureAwait(true);
+                if (!IsActive) continue;
+                await UpdatePeaksAsync(ct).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException) { break; /* expected on shutdown */ }
+            // A transient COM/device fault must not kill the meters for the rest of the session —
+            // log and keep polling, mirroring ReconcileLoopAsync.
+            catch (Exception ex) { Log.Debug("Audio mixer peak error: {Error}", ex.Message); }
+        }
     }
 
     private async Task ReconcileLoopAsync(CancellationToken ct)
@@ -175,11 +202,25 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Refresh every row's peak meter from the service (fast, cheap, in place).</summary>
-    internal void UpdatePeaks()
+    /// <summary>
+    /// One peak-meter pass: read every visible row's level in a SINGLE service call made on a worker
+    /// thread, then write the numbers back here. One call for all rows (not one per row) is what keeps
+    /// the service lock taken once per tick instead of once per app.
+    /// </summary>
+    internal async Task UpdatePeaksAsync(CancellationToken ct)
     {
+        var ids = Sessions.Select(r => r.SessionId).ToArray();
+        if (ids.Length == 0) return;
+
+        var peaks = await Task.Run(() => _service.GetPeaks(ids), ct).ConfigureAwait(true);
+
+        // Dispose can land while the sample is in flight; the rows have already been zeroed by then,
+        // so writing these levels back would re-light meters on a torn-down tab.
+        if (_reconcileCts is null || ct.IsCancellationRequested) return;
+
         foreach (var row in Sessions)
-            row.PeakLevel = _service.GetPeak(row.SessionId);
+            if (peaks.TryGetValue(row.SessionId, out var peak))
+                row.PeakLevel = peak;
     }
 
     /// <summary>Re-enumerate output devices (off the UI thread) into the shared picker list.</summary>
@@ -280,25 +321,23 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
     partial void OnIsActiveChanged(bool value)
     {
-        // The peak meter is expensive to poll and pointless when the tab is hidden — run
-        // the timer only while the tab is active (R4: no poll work when not visible).
-        if (value) _peakTimer.Start();
-        else
-        {
-            _peakTimer.Stop();
+        // The loop itself skips its work while the tab is hidden (R4: no poll work when not
+        // visible); all that is left here is to darken the meters on the way out so a hidden
+        // tab isn't left showing whatever level it happened to stop on.
+        if (!value)
             foreach (var row in Sessions) row.PeakLevel = 0f;
-        }
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
-            _peakTimer.Stop();
-            foreach (var row in Sessions) row.PeakLevel = 0f; // don't leave stale lit meters
+            // Cancel FIRST: a sample already in flight must be told to stop before the meters are
+            // zeroed, or its post-await write-back would re-light them.
             _reconcileCts?.Cancel();
             _reconcileCts?.Dispose();
             _reconcileCts = null; // idempotent: a second Dispose() must not re-Cancel a disposed CTS
+            foreach (var row in Sessions) row.PeakLevel = 0f; // don't leave stale lit meters
         }
         base.Dispose(disposing);
     }

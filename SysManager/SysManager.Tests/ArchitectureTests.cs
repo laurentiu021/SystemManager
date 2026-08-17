@@ -2304,6 +2304,73 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No bandwidth source may wrap its own sample in <c>Task.Run</c>. The offload belongs to the
+    /// consumer, once, so every source is covered by construction.
+    /// </summary>
+    /// <remarks>
+    /// <para>#1816: the 1.61.9 fix put the offload inside <c>ConnectionBandwidthSource</c> and left
+    /// <c>EtwBandwidthSource</c> returning <c>Task.FromResult</c>, so precise mode still did a per-tick
+    /// allocation and a two-key sort of every PID the session had ever seen on the render thread — in the
+    /// mode the CHANGELOG stated was never affected. Each source was internally consistent, so nothing
+    /// short of comparing them could see it, and <c>IBandwidthMonitorService</c> documents no
+    /// thread-affinity contract, which is precisely why an unwritten one drifted.</para>
+    /// <para>The rule is "sources stay synchronous" rather than "sources must offload" because the second
+    /// version is what failed: it is satisfiable one implementor at a time. With the offload at the single
+    /// consumer, a source re-adding its own is both a redundant hop and a sign someone believed the old
+    /// contract — worth failing over either way.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryBandwidthSource_LeavesTheOffloadToItsConsumer()
+    {
+        var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
+        var sources = Directory.GetFiles(servicesDir, "*BandwidthSource.cs");
+
+        // Vacuity floor: two implementors exist (connection + ETW). If the glob stops matching them, the
+        // loop below inspects nothing and the guard reports success.
+        Assert.True(sources.Length >= 2,
+            $"only {sources.Length} bandwidth sources found in {servicesDir} — the guard is measuring "
+            + "nothing, fix it rather than trusting its pass");
+
+        var offenders = new List<string>();
+        foreach (var file in sources)
+        {
+            var body = SampleAsyncBody(File.ReadAllText(file));
+            Assert.False(body.Length == 0,
+                $"{Path.GetFileName(file)}: could not locate a SampleAsync body — the guard would pass "
+                + "vacuously on this file");
+
+            if (body.Contains("Task.Run", StringComparison.Ordinal))
+                offenders.Add(Path.GetFileName(file));
+        }
+
+        Assert.True(offenders.Count == 0,
+            "these bandwidth sources offload their own sample, but BandwidthMonitorViewModel.PollOnceAsync "
+            + "already wraps every source in Task.Run — a second hop per tick, and a sign the per-source "
+            + "contract that let #1816 hide is creeping back. Keep SampleAsync synchronous and let the "
+            + $"consumer own the offload:\n  {string.Join("\n  ", offenders)}");
+    }
+
+    /// <summary>
+    /// The text of <c>SampleAsync</c> up to the next member declaration — enough to see whether the method
+    /// itself offloads, without matching a <c>Task.Run</c> elsewhere in the file (a source legitimately
+    /// uses one to run its ETW processing loop).
+    /// </summary>
+    private static string SampleAsyncBody(string source)
+    {
+        var start = source.IndexOf("SampleAsync(CancellationToken", StringComparison.Ordinal);
+        if (start < 0) return "";
+
+        // Stop at the next member so the slice is the method, not the rest of the class. Every following
+        // member in these files opens with a doc comment or an access modifier at four-space indentation.
+        var rest = source[start..];
+        var end = NextMemberDeclaration().Match(rest, 1);
+        return end.Success ? rest[..end.Index] : rest;
+    }
+
+    [GeneratedRegex(@"\r?\n    (?:///|private |public |internal |protected )", RegexOptions.Compiled)]
+    private static partial Regex NextMemberDeclaration();
+
+    /// <summary>
     /// Every sentence a UI test waits for must be copy the app actually ships. A UI test that quotes
     /// wording nothing renders can never pass — it is a permanently red assertion masquerading as
     /// coverage.

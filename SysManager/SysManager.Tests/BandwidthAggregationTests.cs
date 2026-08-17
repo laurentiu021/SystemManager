@@ -114,82 +114,49 @@ public class BandwidthAggregationTests
     // continuously while the tab was open, and nothing in the ViewModel looked wrong, because the
     // signature claimed to be async.
 
+    // The OFFLOAD moved to BandwidthMonitorViewModel.PollOnceAsync (#1816). This source used to wrap
+    // itself in Task.Run, which fixed it and left the ETW sibling running inline — an asymmetry the
+    // interface did not document and no test enforced. So "the work leaves the caller's context" is now
+    // asserted at the ViewModel, in BandwidthMonitorViewModelTests; the two tests that used to make that
+    // claim here would go red against a deliberately synchronous source. What stays testable HERE is that
+    // the source enumerates, projects, and honours its token — plus, in ArchitectureTests, that no source
+    // re-adds a private Task.Run and hides the contract again.
+
     private sealed class ContextRecordingSource : ConnectionBandwidthSource
     {
         public bool Ran { get; private set; }
-        public SynchronizationContext? ContextDuringWork { get; private set; }
 
         protected override IReadOnlyList<ConnectionRow> EnumerateConnections()
         {
             Ran = true;
-            ContextDuringWork = SynchronizationContext.Current;
-            return [new(100, "chrome.exe", 443, true)];
-        }
-    }
-
-    /// <summary>A stand-in for the UI's dispatcher context — only its identity matters here.</summary>
-    private sealed class MarkerContext : SynchronizationContext;
-
-    [Fact]
-    public async Task SampleAsync_DoesNotRunTheWorkOnTheCallersContext()
-    {
-        // Asserted through the SynchronizationContext rather than the thread id. A thread-id comparison
-        // looks like the obvious test and is quietly flaky: xUnit runs the test on a pool thread, that
-        // thread returns to the pool the moment this method awaits, and Task.Run may then legitimately
-        // pick the very same thread — which is exactly how it failed in CI, not because the offload was
-        // missing. The context is deterministic instead: Task.Run always schedules onto the pool, where
-        // Current is null, while a synchronous implementation runs inline and would observe the marker
-        // installed below — standing in for the real dispatcher context on the UI thread.
-        var previous = SynchronizationContext.Current;
-        var marker = new MarkerContext();
-        SynchronizationContext.SetSynchronizationContext(marker);
-        try
-        {
-            var src = new ContextRecordingSource();
-            src.Start();
-
-            await src.SampleAsync();
-
-            Assert.True(src.Ran);   // the work ran at all
-            Assert.NotSame(marker, src.ContextDuringWork);
-            Assert.Null(src.ContextDuringWork);
-        }
-        finally { SynchronizationContext.SetSynchronizationContext(previous); }
-    }
-
-    /// <summary>
-    /// Blocks inside the enumeration until released, then reports one row.
-    /// </summary>
-    /// <remarks>
-    /// The wait is BOUNDED rather than indefinite on purpose. Against a synchronous implementation the
-    /// caller would block inside SampleAsync on a gate only it can release — a deadlock, which in CI
-    /// means the whole job hangs to its ceiling instead of reporting a failure. A short timeout turns
-    /// that into a clean, fast assertion failure.
-    /// </remarks>
-    private sealed class GatedSource(SemaphoreSlim gate) : ConnectionBandwidthSource
-    {
-        protected override IReadOnlyList<ConnectionRow> EnumerateConnections()
-        {
-            gate.Wait(TimeSpan.FromSeconds(5));
             return [new(100, "chrome.exe", 443, true)];
         }
     }
 
     [Fact]
-    public async Task SampleAsync_ReturnsBeforeTheWorkCompletes()
+    public async Task SampleAsync_RunsTheEnumeration_AndProjectsIt()
     {
-        // The stronger statement: the returned Task must be genuinely incomplete while the work is still
-        // running. A synchronous implementation completes the whole sample before returning, so
-        // IsCompleted would already be true here.
-        var gate = new SemaphoreSlim(0);
-        var src = new GatedSource(gate);
+        var src = new ContextRecordingSource();
         src.Start();
 
-        var pending = src.SampleAsync();
+        var snap = await src.SampleAsync();
 
-        Assert.False(pending.IsCompleted);   // still working, on some other thread
-        gate.Release();
-        var snap = await pending;
+        Assert.True(src.Ran);
         Assert.Single(snap.Processes);
+        Assert.Equal(100, snap.Processes[0].ProcessId);
+    }
+
+    [Fact]
+    public async Task SampleAsync_HonoursCancellation_BeforeDoingTheWork()
+    {
+        // The source is synchronous now, so the token is no longer observed by a Task.Run wrapper — it
+        // has to be checked explicitly, or a cancelled poll would still pay for a full enumeration.
+        var src = new ContextRecordingSource();
+        src.Start();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => src.SampleAsync(cts.Token));
+        Assert.False(src.Ran);
     }
 }

@@ -50,26 +50,28 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     }
 
     /// <summary>
-    /// Takes one snapshot, entirely on a worker thread.
+    /// Takes one snapshot. Synchronous by design — the caller owns the offload.
     /// </summary>
     /// <remarks>
-    /// <para>The offload is the point. This method was <c>Task</c>-returning but fully synchronous — it
-    /// did all the work inline and handed back <c>Task.FromResult</c> — and the ViewModel awaits it with
-    /// <c>ConfigureAwait(true)</c>, so every tick of the 1 Hz poll ran on the UI thread: enumerating all
-    /// network interfaces and reading per-interface IP statistics, two native TCP/UDP table queries, and a
-    /// <c>Process.GetProcessById</c> for each PID not yet in the name cache. None of that is bounded by a
-    /// small constant — a machine with many adapters or a browser holding dozens of sockets pays for all
-    /// of it — so the window stuttered continuously for as long as the tab was open. A signature that says
-    /// "async" while blocking the caller is the worst version of this: nothing in the ViewModel looks
-    /// wrong.</para>
+    /// <para>Getting this off the UI thread is the point, and it now happens ONCE, in
+    /// <c>BandwidthMonitorViewModel.PollOnceAsync</c>. The work here is not bounded by a small constant:
+    /// enumerating all network interfaces and reading per-interface IP statistics, two native TCP/UDP
+    /// table queries, and a <c>Process.GetProcessById</c> for each PID not yet in the name cache. A
+    /// machine with many adapters or a browser holding dozens of sockets pays for all of it, so running
+    /// it inline made the window stutter continuously for as long as the tab was open (1.61.9).</para>
+    /// <para>This method used to wrap itself in <c>Task.Run</c>. That fixed this source and left its
+    /// ETW sibling — which returned <c>Task.FromResult</c> — running inline, an asymmetry no test
+    /// enforced and the interface did not document. The offload moved to the consumer so both modes are
+    /// covered by construction; wrapping again here would just add a second hop.</para>
     /// <para>Everything the poll touches is confined to this call and its own fields, which only this
-    /// timer-driven path writes, so moving it wholesale is safe. The returned snapshot is immutable; the
-    /// ViewModel marshals back to the UI thread when it assigns properties, exactly as before.</para>
+    /// timer-driven path writes, so running it on a worker thread is safe. The returned snapshot is
+    /// immutable; the ViewModel marshals back to the UI thread when it assigns properties.</para>
     /// </remarks>
     public Task<BandwidthSnapshot> SampleAsync(CancellationToken ct = default)
     {
         if (!_primed) Start();
-        return Task.Run(() => SampleCore(), ct);
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(SampleCore());
     }
 
     /// <summary>

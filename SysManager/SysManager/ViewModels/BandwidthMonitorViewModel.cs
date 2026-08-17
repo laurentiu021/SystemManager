@@ -253,8 +253,19 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
 
     private async Task PollOnceAsync(CancellationToken ct)
     {
-        if (_source is null) return;
-        var snap = await _source.SampleAsync(ct).ConfigureAwait(true);
+        var source = _source;
+        if (source is null) return;
+
+        // Offload HERE rather than trusting each source to do it. ConnectionBandwidthSource wrapped its
+        // own work in Task.Run; EtwBandwidthSource returned Task.FromResult and so ran inline — under the
+        // ConfigureAwait(true) below that put a per-tick allocation and a two-key sort of every PID seen
+        // since the session started straight onto the render thread, reproducing in precise mode exactly
+        // the 1 Hz stutter the connection-mode fix removed in 1.61.9. IBandwidthMonitorService documents
+        // no thread-affinity contract, so "one implementor offloads, the other doesn't" was an invariant
+        // nothing enforced. One offload at the consumer covers every source, present and future;
+        // ArchitectureTests.EveryBandwidthSource_LeavesTheOffloadToItsConsumer keeps the sources honest
+        // about not double-wrapping.
+        var snap = await Task.Run(() => source.SampleAsync(ct), ct).ConfigureAwait(true);
 
         // Re-check AFTER the await, not just before it. SampleAsync now genuinely yields (its work runs
         // on a worker thread), so Dispose() — which cancels _pollCts and disposes _source plus every

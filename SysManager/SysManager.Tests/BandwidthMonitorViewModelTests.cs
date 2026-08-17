@@ -604,6 +604,71 @@ public class BandwidthMonitorViewModelTests : IDisposable
         public void Dispose() => _release.Set();   // Dispose must not deadlock a waiting sample
     }
 
+    // ── The poll offloads, whatever the source does ─────────────────────────
+
+    /// <summary>
+    /// A source that does its work INLINE and hands back a completed Task — the real
+    /// <c>EtwBandwidthSource</c> shape before #1816.
+    /// </summary>
+    private sealed class InlineSource : IBandwidthMonitorService
+    {
+        public SynchronizationContext? ContextDuringWork { get; private set; }
+        public bool Ran { get; private set; }
+        public BandwidthMode Mode => BandwidthMode.PreciseEtw;
+        public bool IsAvailable => true;
+        public bool Start() => true;
+
+        public Task<BandwidthSnapshot> SampleAsync(CancellationToken ct = default)
+        {
+            Ran = true;
+            ContextDuringWork = SynchronizationContext.Current;
+            return Task.FromResult(new BandwidthSnapshot(BandwidthMode.PreciseEtw, 1, 2, []));
+        }
+
+        public void Dispose() { }
+    }
+
+    /// <summary>A stand-in for the UI's dispatcher context — only its identity matters here.</summary>
+    private sealed class MarkerContext : SynchronizationContext;
+
+    /// <summary>
+    /// The poll must get the sample off the caller's context even when the SOURCE is fully synchronous.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is the #1816 defect in one assertion. The 1.61.9 fix put the offload inside
+    /// <c>ConnectionBandwidthSource</c>; <c>EtwBandwidthSource</c> returned <c>Task.FromResult</c> and so
+    /// ran inline under the poll's <c>ConfigureAwait(true)</c> — a per-tick allocation plus a two-key sort
+    /// of every PID the session had ever seen, on the render thread, in the mode the CHANGELOG said was
+    /// never affected. Testing the source could not catch it: each source was individually consistent
+    /// with itself. Only the CONSUMER can be asked "do you offload whatever you are given".</para>
+    /// <para>Asserted through the SynchronizationContext rather than the thread id: xUnit runs the test on
+    /// a pool thread, that thread returns to the pool at the first await, and Task.Run may legitimately
+    /// pick the same one — a thread-id comparison failed in CI for that reason, not because an offload was
+    /// missing. Task.Run always schedules onto the pool, where Current is null, while inline work would
+    /// observe the marker installed below.</para>
+    /// </remarks>
+    [Fact]
+    public async Task PollOnce_OffloadsTheSample_EvenWhenTheSourceIsSynchronous()
+    {
+        var previous = SynchronizationContext.Current;
+        var marker = new MarkerContext();
+        SynchronizationContext.SetSynchronizationContext(marker);
+        try
+        {
+            var inline = new InlineSource();
+            var vm = NewVm(connFactory: () => inline);
+
+            var poll = typeof(BandwidthMonitorViewModel)
+                .GetMethod("PollOnceAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            await (Task)poll.Invoke(vm, [CancellationToken.None])!;
+
+            Assert.True(inline.Ran);                            // the sample happened at all
+            Assert.NotSame(marker, inline.ContextDuringWork);   // …but not on the caller's context
+            Assert.Null(inline.ContextDuringWork);              // it ran on the thread pool
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(previous); }
+    }
+
     [Fact]
     public async Task DisposeDuringAnInFlightPoll_DoesNotTouchTheTornDownViewModel()
     {

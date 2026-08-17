@@ -2215,8 +2215,16 @@ public partial class ArchitectureTests
 
         // The 32-bit Run key must actually be enumerated. Without this the rest of the guard would pass
         // on a scan that never produces a 32-bit entry at all — which is precisely the pre-fix state.
-        Assert.Contains(@"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run", source, StringComparison.Ordinal);
-        Assert.Contains("StartupSource.RegistryLocalMachine32", source, StringComparison.Ordinal);
+        //
+        // Matched as the whole TUPLE, not the path alone. The bare path is a PREFIX of the RunOnce path on
+        // the very next line, so Contains(@"…\CurrentVersion\Run") stayed satisfied by the RunOnce row even
+        // with the Run row deleted — and RunOnce is explicitly undisableable (SetEnabledAsync refuses it),
+        // so this guard would have passed while the only disableable 32-bit key was gone. Found by an
+        // adversarial audit of the guard itself; reasoning about the two 32-bit and 64-bit paths missed it,
+        // because the collision is with the neighbouring RunOnce row rather than the other bitness.
+        Assert.Contains(
+            @"(@""SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"", StartupSource.RegistryLocalMachine32)",
+            source, StringComparison.Ordinal);
 
         // Read path: ApplyApprovedState must map the 32-bit source to the Run32 dictionary, and must NOT
         // fall back between the two views — "hklmApproved ?? hklm32Approved" reads the wrong key whenever
@@ -2245,6 +2253,18 @@ public partial class ArchitectureTests
         Assert.Contains(
             "StartupSource.RegistryLocalMachine => (Registry.LocalMachine, ApprovedRunHKLM)",
             writeBody, StringComparison.Ordinal);
+
+        // The approved key must be CREATED if absent, not merely opened. Windows creates each
+        // StartupApproved subkey lazily, on the first disable through that list, so on a machine where
+        // nothing has ever been disabled the key does not exist — OpenSubKey(writable: true) returns null
+        // and disabling failed with "StartupApproved key not found" on exactly the machines most likely to
+        // need it. Verified against the live registry while fixing it: OpenSubKey on a missing key returns
+        // null, CreateSubKey returns a handle and creates it.
+        //
+        // Matched inside the write body and by CALL SHAPE, so the explanatory comment above the call — which
+        // necessarily names OpenSubKey to explain what was wrong — cannot satisfy or break this assertion.
+        Assert.Contains("root.CreateSubKey(approvedPath)", writeBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("root.OpenSubKey(approvedPath", writeBody, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2273,12 +2293,19 @@ public partial class ArchitectureTests
 
         // Only assert on fields the service genuinely asks Windows for — otherwise this guard drifts into
         // demanding UI for data that is not collected.
+        //
+        // Each Fetched string is matched against the SELECTION it appears in, not the bare field name. The
+        // bare name was vacuous for "Author": every file in this project carries the mandatory
+        // "// Author: laurentiu021 …" header, so service.Contains("Author") was satisfied by line 2 and
+        // could not fail however the query changed. Found by an adversarial audit of this guard. A
+        // selection fragment cannot be supplied by a comment, and stripping comments is not enough here —
+        // the field genuinely appears in prose too.
         (string Fetched, string Bound)[] contract =
         [
-            ("Author", "{Binding AuthorDisplay}"),
-            ("Description", "{Binding Description}"),
-            ("NextRunTime", "{Binding NextRunDisplay}"),
-            ("LastRunTime", "{Binding LastRunDisplay}"),
+            ("@{ n='State'; e={ [string]$_.State } }, Author, Description", "{Binding AuthorDisplay}"),
+            ("Author, Description", "{Binding Description}"),
+            ("Select-Object LastRunTime, NextRunTime", "{Binding NextRunDisplay}"),
+            ("Select-Object LastRunTime, NextRunTime", "{Binding LastRunDisplay}"),
         ];
 
         var notFetched = new List<string>();

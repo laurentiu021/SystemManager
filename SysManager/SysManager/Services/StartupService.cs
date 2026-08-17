@@ -490,10 +490,23 @@ public sealed class StartupService
                 _ => (Registry.CurrentUser, ApprovedRunHKCU)
             };
 
-            using var key = root.OpenSubKey(approvedPath, writable: true);
+            // CreateSubKey, not OpenSubKey(writable: true): Windows creates each StartupApproved subkey
+            // LAZILY, the first time something is disabled through that particular list. On a machine where
+            // nothing has ever been disabled — a fresh install, or a user who has never opened Task
+            // Manager's Startup tab — the key is absent, OpenSubKey returns null, and this returned false
+            // with "StartupApproved key not found". So disabling was impossible on exactly the machines
+            // most likely to need it, for EVERY source rather than only the 32-bit list added in 1.65.10.
+            // CreateSubKey opens an existing key unchanged and creates a missing one, so the write lands
+            // where Windows actually reads either way. Eleven other services here already use CreateSubKey
+            // for this reason; this method was the outlier.
+            //
+            // The null branch is KEPT and remains reachable: CreateSubKey returns null when the hive itself
+            // cannot be written, and the HKLM sources need elevation. That is a different failure with a
+            // different remedy, so it now says so instead of blaming a missing key.
+            using var key = root.CreateSubKey(approvedPath);
             if (key is null)
             {
-                entry.StatusText = "Error — StartupApproved key not found";
+                entry.StatusText = "Error — no permission to write the StartupApproved key";
                 return false;
             }
 

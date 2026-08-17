@@ -2357,14 +2357,30 @@ public partial class ArchitectureTests
             if (Path.GetFileName(file) == "AppFixture.cs") continue; // the helper layer, not an assertion
 
             var lines = File.ReadAllLines(file);
+
+            // Which locals actually reach a text-wait call? Only those carry app copy. Collected first,
+            // because the assignment appears BEFORE the call that consumes it.
+            var waitedLocals = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var line in lines.Where(IsCode))
+                foreach (var use in TextWaitOnLocal().Matches(line).Cast<Match>())
+                    waitedLocals.Add(use.Groups["name"].Value);
+
             for (var i = 0; i < lines.Length; i++)
             {
-                var trimmed = lines[i].TrimStart();
-                // A comment's prose is not an assertion — see the "guard must not match its own prose"
-                // trap that made two earlier guards report the wrong colour.
-                if (trimmed.StartsWith("//", StringComparison.Ordinal)
-                    || trimmed.StartsWith('*')) continue;
-                foreach (var literal in AssertedTextLiterals(lines[i]).Where(IsUserFacingSentence))
+                if (!IsCode(lines[i])) continue;
+
+                // Read a whole STATEMENT, not a line: `var expected = cond ? "a" : "b";` puts each
+                // branch on its own line, so the assignment line carries no literal at all.
+                var statement = lines[i];
+                var span = 1;
+                while (!statement.TrimEnd().EndsWith(';') && i + span < lines.Length && span <= 6)
+                {
+                    if (IsCode(lines[i + span])) statement += " " + lines[i + span].Trim();
+                    span++;
+                }
+
+                foreach (var literal in AssertedTextLiterals(statement, waitedLocals)
+                             .Where(IsUserFacingSentence))
                 {
                     assertionsChecked++;
                     var needle = Collapse(literal);
@@ -2394,27 +2410,42 @@ public partial class ArchitectureTests
     /// <summary>Whitespace-collapsed and trimmed, so XAML attribute wrapping cannot hide a match.</summary>
     private static string Collapse(string text) => WhitespaceRun().Replace(text, " ").Trim();
 
+    /// <summary>Code, not a comment — a comment's prose is never an assertion.</summary>
+    /// <remarks>
+    /// Its own explanatory text is the classic trap: two earlier guards in this file reported the wrong
+    /// colour because they matched the comment describing them rather than the construct.
+    /// </remarks>
+    private static bool IsCode(string line)
+    {
+        var trimmed = line.TrimStart();
+        return !trimmed.StartsWith("//", StringComparison.Ordinal) && !trimmed.StartsWith('*');
+    }
+
     /// <summary>
-    /// The literals on this line that the app is expected to RENDER: the arguments of a text-waiting
-    /// helper, plus the right-hand side of a local that holds expected copy.
+    /// The literals on this line that the app is expected to RENDER: arguments passed straight to a
+    /// text-waiting helper, plus the branches of a local that is later handed to one.
     /// </summary>
     /// <remarks>
-    /// Two precisions matter. First, matching the argument rather than the whole line is what keeps an
-    /// assertion-failure message out of scope even when it shares a line with the call — as in
-    /// <c>Assert.True(_fx.HasText("Dashboard"), "Dashboard did not recover…")</c>, where only the first
-    /// literal is app copy. Second, the <c>expected…</c> local is included because the original defect
-    /// built its text in a ternary and passed the VARIABLE, so a regex anchored on the call site alone
-    /// reported zero findings on a tree that genuinely had one.
+    /// <para>Matching the ARGUMENT rather than the whole line keeps an assertion-failure message out of
+    /// scope even when it shares a line with the call, as in
+    /// <c>Assert.True(_fx.HasText("Dashboard"), "Dashboard did not recover…")</c> — only the first
+    /// literal is app copy.</para>
+    /// <para>The local matters because the original defect built its text in a ternary and passed the
+    /// VARIABLE, so a call-site-only regex reported zero findings on a tree that genuinely had one. But
+    /// the local must be one that REACHES a text-wait call: an earlier version of this guard keyed on the
+    /// `? "…" : "…"` shape alone and immediately flagged a ternary building an assertion-failure MESSAGE
+    /// — same syntax, opposite meaning. Resolving the name is the difference between checking what the
+    /// app must render and checking prose addressed to whoever reads the failure.</para>
     /// </remarks>
-    private static IEnumerable<string> AssertedTextLiterals(string line)
+    private static IEnumerable<string> AssertedTextLiterals(string line, HashSet<string> waitedLocals)
     {
         foreach (var call in TextWaitCall().Matches(line).Cast<Match>())
             yield return call.Groups["text"].Value;
 
-        // `var expectedX = cond ? "a" : "b";` puts each branch on its OWN line, so the assignment line
-        // carries no literal at all — the branch lines are what must be read. Matching the `? "` / `: "`
-        // shape catches them without matching prose anywhere else.
-        if (!ExpectedCopyLocal().IsMatch(line) && !TernaryBranchLiteral().IsMatch(line)) yield break;
+        // `var expected = cond ? "a" : "b";` spreads the branches over following lines, so track the
+        // assignment and keep reading while the statement continues.
+        var assignment = CopyLocalAssignment().Match(line);
+        if (!assignment.Success || !waitedLocals.Contains(assignment.Groups["name"].Value)) yield break;
 
         foreach (var literal in QuotedLiteral().Matches(line).Cast<Match>())
             yield return literal.Groups["text"].Value;
@@ -2437,12 +2468,14 @@ public partial class ArchitectureTests
                     RegexOptions.Compiled)]
     private static partial Regex TextWaitCall();
 
-    [GeneratedRegex(@"\bvar\s+expected\w*\s*=", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
-    private static partial Regex ExpectedCopyLocal();
+    /// <summary>A local being assigned — its name is checked against the ones that reach a text wait.</summary>
+    [GeneratedRegex(@"\bvar\s+(?<name>\w+)\s*=", RegexOptions.Compiled)]
+    private static partial Regex CopyLocalAssignment();
 
-    /// <summary>A ternary branch that yields copy: <c>? "…"</c> or <c>: "…"</c> at the line's start.</summary>
-    [GeneratedRegex(@"^\s*[?:]\s*""", RegexOptions.Compiled)]
-    private static partial Regex TernaryBranchLiteral();
+    /// <summary>A local (not a literal) handed to a text-waiting helper — that is what makes it copy.</summary>
+    [GeneratedRegex(@"(?:HasText|HasTextInCurrentTab|WaitForText|WaitForTextInCurrentTab)\(\s*(?<name>[A-Za-z_]\w*)\s*[,)]",
+                    RegexOptions.Compiled)]
+    private static partial Regex TextWaitOnLocal();
 
     // WhitespaceRun() is declared once, near the XAML attribute readers that first needed it — the same
     // collapse rule serves both, so it is not redeclared here.

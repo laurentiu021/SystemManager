@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.12] - 2026-08-17
+
+The Bandwidth Monitor's precise mode — the one that needs administrator — was doing its measuring on the
+same thread that draws the window, and the amount of work grew the longer you left the tab open. Both are
+fixed, so it now behaves like the ordinary mode already did.
+
+### Fixed
+- **Precise bandwidth mode stuttered, and got worse the longer it ran.** The 1.61.9 release fixed this
+  stutter for the ordinary mode and stated that precise mode was never affected. That was wrong: precise
+  mode did all of its per-second work on the thread that draws the window. Worse, that work kept growing —
+  it re-sorted every program that had used the network since you opened the tab, so an installer that ran
+  once in the morning was still being sorted at five o'clock. Programs that have sent nothing for ten
+  minutes are now dropped from that list, and the measuring happens on a background thread for both modes,
+  so the cost no longer depends on how long the tab has been open.
+
 ## [1.65.11] - 2026-08-17
 
 The Volume Control tab is smoother. The moving bars beside each app were being measured in a way that made

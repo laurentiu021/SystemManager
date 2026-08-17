@@ -137,7 +137,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
 - `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
 - `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions.
-- `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`), reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. Read-only.
+- `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`) and wrapping every sample in one `Task.Run` so no source runs its work on the render thread, reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. Read-only.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
@@ -484,7 +484,12 @@ Key services:
   throughput and reads the extended TCP/UDP tables via iphlpapi P/Invoke (`GetExtendedTcpTable`/
   `GetExtendedUdpTable`) to attribute active connections to PIDs; `EtwBandwidthSource` (admin) opens
   a kernel ETW session (TraceEvent) for true per-process byte rates and falls back cleanly if the
-  session can't start. `BandwidthHistoryService` persists total-throughput samples as NDJSON in
+  session can't start; it drops PIDs idle for ten minutes so the per-tick sort tracks what is
+  currently active rather than everything the session has ever seen. Both sources are deliberately
+  SYNCHRONOUS — `BandwidthMonitorViewModel.PollOnceAsync` owns the single off-UI-thread hop, so a new
+  source cannot forget it (the per-source arrangement is what let precise mode keep sampling on the
+  render thread through 1.61.9-1.65.11; `ArchitectureTests.EveryBandwidthSource_LeavesTheOffloadToIts
+  Consumer` now pins it). `BandwidthHistoryService` persists total-throughput samples as NDJSON in
   `%LocalAppData%\SysManager\bandwidth-history.ndjson` (serialize/parse/prune/downsample are pure,
   unit-tested; the directory is injectable so tests never touch the user's own history), and the VM
   reads it back through a range picker — Live plus last hour/24 hours/7 days, capped at the service's

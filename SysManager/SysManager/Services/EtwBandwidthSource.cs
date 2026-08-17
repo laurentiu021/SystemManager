@@ -46,6 +46,19 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
     // fire on the session's processing thread while SampleAsync reads on the UI/poll thread.
     private readonly ConcurrentDictionary<int, PidCounters> _counters = new();
 
+    /// <summary>
+    /// How long a PID may sit with no new bytes before it is dropped from <see cref="_counters"/>.
+    /// <para>Without this the dictionary only ever grew — it was cleared in <see cref="Dispose"/> and
+    /// nowhere else — so every PID that ever resolved a DNS name stayed in the per-tick sort for the
+    /// tab's lifetime: installers, updaters, every browser child process. An all-day elevated session
+    /// accumulated thousands, and each second re-allocated and re-sorted all of them. Ten minutes keeps
+    /// a genuinely idle-but-running app (a mail client polling on a long interval) visible with its
+    /// session totals, while a process that has been gone for a workday does not cost anything. Windows
+    /// recycles PIDs, so a stale entry is not merely useless — a new process inheriting the number would
+    /// inherit its totals.</para>
+    /// </summary>
+    private static readonly TimeSpan IdleEviction = TimeSpan.FromMinutes(10);
+
     private sealed class PidCounters
     {
         public long DownBytes;
@@ -53,6 +66,9 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
         public long PrevDownBytes;
         public long PrevUpBytes;
         public string Name = "";
+
+        /// <summary>Tick count when bytes last arrived — the eviction clock. Written by ETW callbacks.</summary>
+        public long LastActivityTicks;
     }
 
     public bool Start()
@@ -119,13 +135,21 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
         }
     }
 
-    private void Add(int pid, int down, int up, string name)
+    /// <summary>
+    /// Accumulate one event's bytes against a PID. <c>internal</c> rather than private so the eviction
+    /// contract can be tested without a kernel ETW session (which needs administrator): the tests drive
+    /// this and <see cref="SampleAsync"/> directly with a fake clock. Same seam idea as
+    /// <c>EtaCalculator</c>'s injected <see cref="TimeProvider"/>.
+    /// </summary>
+    internal void Add(int pid, int down, int up, string name)
     {
         if (pid <= 0) return;
         var c = _counters.GetOrAdd(pid, _ => new PidCounters());
         if (down > 0) System.Threading.Interlocked.Add(ref c.DownBytes, down);
         if (up > 0) System.Threading.Interlocked.Add(ref c.UpBytes, up);
         if (c.Name.Length == 0 && !string.IsNullOrEmpty(name)) c.Name = name;
+        // Stamped on every event, so eviction measures real inactivity rather than age.
+        System.Threading.Volatile.Write(ref c.LastActivityTicks, NowTicks());
     }
 
     public Task<BandwidthSnapshot> SampleAsync(CancellationToken ct = default)
@@ -169,10 +193,46 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
             .ThenByDescending(r => r.TotalDownBytes + r.TotalUpBytes)
             .ToList();
 
+        EvictIdlePids(nowTicks);
+
         return Task.FromResult(new BandwidthSnapshot(BandwidthMode.PreciseEtw, totalDown, totalUp, ordered));
     }
 
-    private static long NowTicks() => Environment.TickCount64 * TimeSpan.TicksPerMillisecond;
+    /// <summary>
+    /// Drops PIDs that have transferred nothing for <see cref="IdleEviction"/>, bounding the per-tick
+    /// cost by what is CURRENTLY active rather than by everything the session has ever seen.
+    /// </summary>
+    /// <remarks>
+    /// Runs after the snapshot is built, so a PID evicted on this tick still appears one last time — the
+    /// list does not lose a row the user was looking at mid-glance. <c>TryRemove</c> on a
+    /// <see cref="ConcurrentDictionary{TKey,TValue}"/> races safely against the ETW callback thread: if
+    /// bytes arrive for an evicted PID the very next event re-adds it via <c>GetOrAdd</c>, and the only
+    /// cost is that its session totals restart — acceptable for a process that has been silent for ten
+    /// minutes, and unavoidable anyway, since Windows recycles PIDs.
+    /// </remarks>
+    private void EvictIdlePids(long nowTicks)
+    {
+        long cutoff = nowTicks - IdleEviction.Ticks;
+        foreach (var (pid, c) in _counters)
+        {
+            // A PID that has never had an event stamped (added, then nothing) is measured from 0, which
+            // is always older than the cutoff — so read the stamp and skip the unset case explicitly.
+            long last = System.Threading.Volatile.Read(ref c.LastActivityTicks);
+            if (last != 0 && last < cutoff) _counters.TryRemove(pid, out _);
+        }
+    }
+
+    /// <summary>
+    /// The eviction/rate clock. Injectable so the eviction contract is testable without waiting ten real
+    /// minutes — the tests pass a <see cref="FakeTimeProvider"/>-style stub and advance it. Production
+    /// passes nothing and gets <see cref="TimeProvider.System"/>.
+    /// </summary>
+    private readonly TimeProvider _time;
+
+    /// <param name="timeProvider">Test seam; defaults to the system clock.</param>
+    public EtwBandwidthSource(TimeProvider? timeProvider = null) => _time = timeProvider ?? TimeProvider.System;
+
+    private long NowTicks() => _time.GetUtcNow().UtcTicks;
 
     private void SafeStop()
     {

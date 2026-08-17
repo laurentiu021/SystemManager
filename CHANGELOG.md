@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.14] - 2026-08-17
+
+Turning off a startup program could fail on a PC where nothing had ever been turned off before — which is
+most PCs. That is fixed, along with two internal checks that were quietly passing when they should have
+been failing.
+
+### Fixed
+- **"Disable" failed with a confusing error on a clean machine.** Windows keeps the on/off state of startup
+  programs in a list it only creates the first time something is disabled — through this app, Task Manager,
+  or Settings. On a PC where that had never happened the list does not exist, and SysManager reported
+  "StartupApproved key not found" and refused, rather than creating the list the way Windows itself does.
+  So the feature failed on exactly the machines most likely to need it, for every kind of startup entry and
+  not only the 32-bit ones added in 1.65.10. The list is now created when it is missing. If the write is
+  genuinely refused — the all-users entries need administrator — the message now says that instead of
+  blaming a missing key.
+
 ## [1.65.13] - 2026-08-17
 
 Three things an audit of the last few releases turned up. Clearing your speed-test history could say it

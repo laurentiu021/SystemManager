@@ -215,24 +215,50 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
         long cutoff = nowTicks - IdleEviction.Ticks;
         foreach (var (pid, c) in _counters)
         {
-            // A PID that has never had an event stamped (added, then nothing) is measured from 0, which
-            // is always older than the cutoff — so read the stamp and skip the unset case explicitly.
-            long last = System.Threading.Volatile.Read(ref c.LastActivityTicks);
-            if (last != 0 && last < cutoff) _counters.TryRemove(pid, out _);
+            // Entries are only ever created by Add, which stamps before it returns, so every one has a
+            // stamp. This deliberately does NOT treat 0 as "unstamped": zero is a legitimate reading —
+            // a monotonic clock starts there, both in a test that has not advanced it and on a real
+            // machine in the first tick after the source starts — and skipping it made a PID stamped at
+            // 0 immortal. Not hypothetical: it turned two eviction tests red the moment the clock became
+            // monotonic, which is exactly what a sentinel value inside the real value range does.
+            if (System.Threading.Volatile.Read(ref c.LastActivityTicks) < cutoff)
+                _counters.TryRemove(pid, out _);
         }
     }
 
     /// <summary>
     /// The eviction/rate clock. Injectable so the eviction contract is testable without waiting ten real
-    /// minutes — the tests pass a <see cref="FakeTimeProvider"/>-style stub and advance it. Production
-    /// passes nothing and gets <see cref="TimeProvider.System"/>.
+    /// minutes — a test passes a stub and advances it. Production passes nothing and gets
+    /// <see cref="TimeProvider.System"/>.
     /// </summary>
     private readonly TimeProvider _time;
 
     /// <param name="timeProvider">Test seam; defaults to the system clock.</param>
     public EtwBandwidthSource(TimeProvider? timeProvider = null) => _time = timeProvider ?? TimeProvider.System;
 
-    private long NowTicks() => _time.GetUtcNow().UtcTicks;
+    /// <summary>
+    /// A MONOTONIC tick count, in <see cref="TimeSpan"/> ticks. Both callers subtract two readings, so this
+    /// clock must only ever move forward.
+    /// </summary>
+    /// <remarks>
+    /// <para>This was <c>Environment.TickCount64</c>, which is monotonic. Adding the injectable seam
+    /// briefly made it <c>GetUtcNow().UtcTicks</c> — the WALL clock — and that breaks both callers, because
+    /// a wall clock steps backwards on an NTP correction or when the user sets the time.</para>
+    /// <para>In <c>SampleAsync</c> the byte delta is divided by the elapsed seconds. A backwards step makes
+    /// that difference negative, <c>Math.Max(0.001, …)</c> clamps it to a millisecond, and every rate on
+    /// that tick is multiplied by roughly a thousand — an absurd spike in the one place this tab exists to
+    /// report accurately. <c>BandwidthFormat.RatePerSecond</c> guards a non-positive elapsed and a negative
+    /// delta, but not a tiny elapsed, so nothing downstream catches it.</para>
+    /// <para>In <c>EvictIdlePids</c> each PID's stamp is compared against <c>now</c> minus ten minutes. A
+    /// forward step larger than the window makes every stamp look stale at once, dropping the whole table
+    /// and every session total with it.</para>
+    /// <para><see cref="TimeProvider.GetTimestamp"/> is the monotonic reading, and
+    /// <see cref="TimeProvider.GetElapsedTime(long, long)"/> converts a pair using the provider's own
+    /// <c>TimestampFrequency</c> — so this stays in TimeSpan ticks whatever the platform's raw frequency is,
+    /// and a stub only has to override those two members, which is what the existing fake in
+    /// <c>EtaCalculatorTests</c> already does.</para>
+    /// </remarks>
+    private long NowTicks() => _time.GetElapsedTime(0, _time.GetTimestamp()).Ticks;
 
     private void SafeStop()
     {

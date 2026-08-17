@@ -183,6 +183,12 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     /// Confirms, then drops one engine's saved results. ClearAsync rewrites the history file
     /// immediately, so the past measurements cannot be recovered afterwards.
     /// </summary>
+    /// <remarks>
+    /// The grid is emptied only if the disk write actually succeeded. Emptying it regardless is a worse
+    /// version of the save bug fixed in 1.65.10: the user has just confirmed a dialog saying the data is
+    /// gone for good, so a silent failure showed an empty list over a file that still held every reading —
+    /// and they came back on the next launch, with nothing to say which state was real.
+    /// </remarks>
     private async Task ClearHistoryAsync(string engine, BulkObservableCollection<SpeedTestResult> history)
     {
         int count = history.Count;
@@ -192,7 +198,19 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
                 $"Clear {engine} History — Confirm"))
             return;
 
-        await _history.ClearAsync(engine);
+        if (!await _history.ClearAsync(engine))
+        {
+            // Reported under the engine's OWN card. The two engines have separate status lines in separate
+            // cards (SpeedTestView.xaml binds OoklaStatus and HttpStatus independently), so writing to the
+            // wrong one would put an Ookla failure under the HTTP heading.
+            var message = $"{engine} history could not be cleared — the saved file could not be written.";
+            if (string.Equals(engine, "Ookla", StringComparison.OrdinalIgnoreCase)) OoklaStatus = message;
+            else HttpStatus = message;
+
+            // Leave the rows on screen: they still exist on disk, so showing them is the honest state.
+            return;
+        }
+
         history.Clear();
     }
 

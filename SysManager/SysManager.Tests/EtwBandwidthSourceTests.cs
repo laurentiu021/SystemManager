@@ -21,15 +21,24 @@ namespace SysManager.Tests;
 public class EtwBandwidthSourceTests
 {
     /// <summary>
-    /// A clock that only moves when a test says so. Hand-written to match
-    /// <c>EtaCalculatorTests.TestTimeProvider</c>; this one overrides <c>GetUtcNow</c> because the source's
-    /// eviction stamp is wall-clock, not a performance timestamp.
+    /// A clock that only moves when a test says so, overriding the same two members as
+    /// <c>EtaCalculatorTests.TestTimeProvider</c>.
     /// </summary>
+    /// <remarks>
+    /// <c>GetTimestamp</c>, not <c>GetUtcNow</c>: the source needs a MONOTONIC clock, because it subtracts
+    /// two readings both to compute rates and to age out PIDs, and a wall clock steps backwards on an NTP
+    /// correction. This mattered in practice — the source shipped one release reading
+    /// <c>GetUtcNow().UtcTicks</c>, and a stub overriding the wall clock could not have caught it, because
+    /// a stub only ever moves forward, which is exactly the property the real wall clock lacks.
+    /// </remarks>
     private sealed class TestClock : TimeProvider
     {
-        private DateTimeOffset _now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
-        public override DateTimeOffset GetUtcNow() => _now;
-        public void Advance(TimeSpan by) => _now = _now.Add(by);
+        private long _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
     }
 
     private static async Task<IReadOnlyList<int>> PidsAsync(EtwBandwidthSource src)

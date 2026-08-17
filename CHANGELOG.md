@@ -10,6 +10,39 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.13] - 2026-08-17
+
+Three things an audit of the last few releases turned up. Clearing your speed-test history could say it
+worked when it had not, the precise bandwidth readings could show a nonsense spike if your PC corrected
+its clock, and the Task Scheduler's two "run time" columns looked broken because they only fill in when
+you click a row. The version history in this file was also missing three releases' notes.
+
+### Fixed
+- **"Clear history" could report success after failing.** Deleting your saved speed-test results rewrites
+  a file, and if that write failed the app logged it quietly and emptied the list on screen anyway — after
+  a dialog that told you the data was gone for good. It came back on the next launch, with nothing to say
+  which was real. This is the same fault fixed for *saving* a result in 1.65.10; clearing was missed at the
+  time, and it is the worse half, because you have just confirmed the data should be destroyed. The rows now
+  stay on screen with an explanation when the file cannot be written.
+- **Precise bandwidth could show an absurd spike after a clock correction.** The per-app readings are
+  worked out by dividing bytes by elapsed time, and elapsed time was measured with the wall clock. When
+  Windows corrects the clock backwards — a routine time sync — that measurement went negative, got clamped
+  to a single millisecond, and every rate on that reading was multiplied by roughly a thousand. A large
+  forward correction had the opposite effect: every program was treated as idle and dropped from the list,
+  losing its session totals. Both are gone: the timing now uses a clock that cannot run backwards.
+- **Task Scheduler's "Last run" and "Next run" showed a dash on every row.** Both times come from a
+  separate lookup that only runs for the row you select, so the columns sat empty until clicked and read as
+  missing data. They now say "(on select)" in the heading, which is what actually happens — fetching them
+  for every task up front would mean one lookup per scheduled task, hundreds on a normal PC. The publisher
+  tooltip on "What it does" is also reachable now on tasks that have no description, which is exactly where
+  it was the only information available.
+- **Three releases had no entry in this file.** The notes for 1.65.7, 1.65.8 and 1.65.9 were all welded
+  under the 1.65.10 heading, so this file jumped from 1.65.10 straight to 1.65.6 while carrying five
+  separate sets of fixes under one version. Since the release workflow copies each entry into the download
+  page and the announcement, three releases published nothing describing themselves. Each now has its own
+  entry, 1.56.7 (tagged but never published) is recorded too, and a check now fails the build if a version
+  between two documented ones is ever missing again.
+
 ## [1.65.12] - 2026-08-17
 
 The Bandwidth Monitor's precise mode — the one that needs administrator — was doing its measuring on the
@@ -39,7 +72,7 @@ you dragged them.
   refresh of the app list. The result was bars that jittered instead of moving smoothly, and sliders that
   lagged behind the mouse. The levels are now read for every app in a single request, and that request runs
   on a background thread — the window only receives the finished numbers, and the tab goes completely idle
-  the moment you switch away from it. Present since the tab shipped in 1.52.37; the same defect was fixed
+  the moment you switch away from it. Present since the tab shipped in 1.52.38; the same defect was fixed
   for the Bandwidth Monitor in 1.61.9, at a twentieth of this cadence.
 
 ## [1.65.10] - 2026-08-14
@@ -47,8 +80,9 @@ you dragged them.
 Two things that were quietly telling you the wrong thing. A speed test result could fail to save without
 saying so, and the "time remaining" on long jobs could climb upward while the bar stood completely still.
 
-Note on versions: 1.65.9 was tagged but never published — its release build stopped on the very save bug
-fixed below. Everything 1.65.9 contained is in this release.
+Note on versions: the 1.65.9 tag exists but no download was ever published for it — its release build
+stopped on the very save bug fixed below. Its own entry is kept for the record; everything that entry
+describes reached users here.
 
 ### Fixed
 - **A speed test result could vanish without telling you.** Saving a result to history writes a file, and
@@ -65,7 +99,7 @@ fixed below. Everything 1.65.9 contained is in this release.
   first step could show "about 1 hour 39 minutes" for something that finished in ninety seconds.
   The estimate now follows how fast progress is *currently* moving, counts down on its own while a job is
   quiet, and says "calculating…" rather than guessing from the first few percent.
-
+## [1.65.9] - 2026-08-14
 
 Startup Manager was missing a whole class of programs that start with Windows — anything installed by
 a 32-bit installer, which on a typical PC means a VPN client, a printer helper or an older updater.
@@ -90,6 +124,8 @@ Scheduler also shows what each task is for and when it will run next, instead of
   extra work is done to collect any of this; it was being fetched and thrown away.
 
 
+## [1.65.8] - 2026-08-14
+
 If you use one of the six light colour themes, the lines on the Ping, Bandwidth Monitor and Resource
 History graphs were washed out to the point of being invisible — a pale mint or pale yellow line on a
 white card. The graphs read the same way on light themes as they always have on dark ones now.
@@ -105,6 +141,8 @@ white card. The graphs read the same way on light themes as they always have on 
   clear that bar when the theme it is drawn on needs it. Only the brightness changes, never the hue,
   so blue is still CPU and purple is still memory; the dark themes already passed and come through
   untouched, byte for byte.
+
+## [1.65.7] - 2026-08-14
 
 The diagnostic log no longer fills up with the same repeated line. If you ever need to send a log to
 report a problem, what is in it is now actually about your problem — before, roughly two lines every
@@ -806,6 +844,12 @@ moved, and the work below ships here instead.
 - **Made old recovery points clear and testable.** New snapshots record their UTC capture time and show it in local time in the `Restore All` confirmation, while snapshots created by older releases remain loadable with an explicit unknown-time label. Snapshot storage now has an injected test directory, and regression coverage recreates an app restart with a second service instance, verifies the real command reaches confirmation, and keeps legacy JSON compatible without touching the user's profile.
 - **Hardened the persisted recovery boundary and failure semantics.** Snapshot files are size-bounded, require a complete non-duplicated schema, and reject malformed GUIDs, spoofable plan names, out-of-range processor values, and unsafe GPU subkeys before enabling restore. Power-plan, processor, and GPU restore failures now remain failures instead of reporting success and deleting the only recovery point; failed snapshot saves prevent any setting change, and failed cleanup keeps `Restore All` available for a retry.
 - **Made the Performance Mode lock-guard test deterministic.** The guard test seeded the recovery snapshot while initialization was still loading the persisted one, and that load's deferred assignment overwrote the seeded value. On a fast machine the load finished first and the test passed; on a slower one it did not, so `Restore All` reported "nothing to restore" and never reached the guard under test. The test now waits for initialization before seeding. Test-only change, no effect on shipped behavior.
+
+## [1.56.7] - 2026-08-04
+
+Tagged but never published: the release run failed at the unit-test gate, so no download, notes or
+announcement exist for this version. The tag is kept rather than moved, and the work it carried
+shipped in 1.56.8 below. Recorded here so the version history has no unexplained gap.
 
 ## [1.56.6] - 2026-08-04
 

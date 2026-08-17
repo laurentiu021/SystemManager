@@ -2304,6 +2304,97 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The CHANGELOG's version headers must form an unbroken descending run — no version may be missing
+    /// between the newest and oldest entry, and none may appear twice.
+    /// </summary>
+    /// <remarks>
+    /// <para>Found by an audit, after three releases' notes were discovered welded into a single
+    /// <c>## [1.65.10]</c> heading: 1.65.7, 1.65.8 and 1.65.9 had no heading at all, so the file jumped
+    /// straight from 1.65.10 to 1.65.6 while carrying five <c>### Fixed</c> sections under one version.
+    /// Anyone reading the file to find out what a release changed found nothing for three of them, and the
+    /// release workflow copies each entry verbatim into the GitHub release body and the announcement — so
+    /// the omission reached two public surfaces.</para>
+    /// <para>Nothing caught it, because the existing gate only checks that the NEWEST entry opens with a
+    /// plain-English lead. A missing middle entry is invisible to that check and to the compiler, and it is
+    /// easy to cause: the mistake was appending a new entry's body without its heading while resolving a
+    /// merge. A gap is mechanically detectable, so it should never need a human to notice again.</para>
+    /// <para>Deliberately checks CONTIGUITY within the file rather than comparing against git tags: the
+    /// test project has no git access, and a tag that was cut but never published (1.65.9) still deserves
+    /// an entry, so the file's own sequence is the stronger contract.</para>
+    /// <para>Scoped to 1.x on purpose, and this is a real limit rather than a convenient one. Pre-1.0
+    /// development predates the release discipline: the 0.28 line alone has 35 tags against 31 entries, and
+    /// there are 171 pre-1.0 entries in total. Those gaps are from a period when versions were cut by hand
+    /// several times an hour; retro-writing user-facing notes for them now would be invention, not
+    /// documentation. The contract this guard enforces — every released version explains itself — applies
+    /// to the versions users actually download, and the boundary is stated here so nobody later reads the
+    /// pass as "the whole file is contiguous".</para>
+    /// </remarks>
+    [Fact]
+    public void TheChangelogVersionHeaders_FormAnUnbrokenDescendingRun()
+    {
+        var path = Path.Combine(FindRepoRoot(), "CHANGELOG.md");
+        Assert.True(File.Exists(path), $"CHANGELOG.md not found at {path} — the guard would pass vacuously");
+
+        var versions = new List<(int Major, int Minor, int Patch, string Raw, int Line)>();
+        var lines = File.ReadAllLines(path);
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var m = ChangelogVersionHeading().Match(lines[i]);
+            if (!m.Success) continue;
+
+            var major = int.Parse(m.Groups["ma"].Value);
+            if (major < 1) continue;   // pre-1.0 predates the release discipline — see the remarks
+
+            versions.Add((major, int.Parse(m.Groups["mi"].Value),
+                          int.Parse(m.Groups["pa"].Value), m.Groups["v"].Value, i + 1));
+        }
+
+        // Vacuity floor over the 1.x range this guard governs — the file carries well over a hundred such
+        // entries, so a floor of 50 catches the heading pattern breaking without encoding today's count.
+        Assert.True(versions.Count >= 50,
+            $"only {versions.Count} 1.x CHANGELOG version headings parsed — the guard is measuring nothing, "
+            + "fix it rather than trusting its pass");
+
+        var duplicates = versions.GroupBy(v => v.Raw).Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key} appears {g.Count()} times (lines {string.Join(", ", g.Select(v => v.Line))})")
+            .ToList();
+        Assert.True(duplicates.Count == 0,
+            $"a version has more than one CHANGELOG entry:\n  {string.Join("\n  ", duplicates)}");
+
+        // Only PATCH gaps inside one minor line are checked. A minor or major bump legitimately restarts
+        // the patch counter, and this project has never skipped a minor, so a rule spanning those would
+        // encode history rather than a contract.
+        var gaps = new List<string>();
+        for (var i = 0; i < versions.Count - 1; i++)
+        {
+            var newer = versions[i];
+            var older = versions[i + 1];
+            if (newer.Major != older.Major || newer.Minor != older.Minor) continue;
+
+            if (newer.Patch <= older.Patch)
+            {
+                gaps.Add($"{newer.Raw} (line {newer.Line}) is not newer than {older.Raw} "
+                         + $"(line {older.Line}) — entries must descend");
+                continue;
+            }
+
+            for (var missing = older.Patch + 1; missing < newer.Patch; missing++)
+                gaps.Add($"{newer.Major}.{newer.Minor}.{missing} has no entry — the file jumps from "
+                         + $"{newer.Raw} (line {newer.Line}) to {older.Raw} (line {older.Line})");
+        }
+
+        Assert.True(gaps.Count == 0,
+            "the CHANGELOG is missing an entry for a version between two it does document. Every released "
+            + "version needs its own heading and lead paragraph — the release workflow copies each entry "
+            + "into the GitHub release body and the announcement, so a gap is published, not just local. If "
+            + "a version was tagged but never shipped, it still gets an entry saying so:\n  "
+            + string.Join("\n  ", gaps));
+    }
+
+    [GeneratedRegex(@"^## \[(?<v>(?<ma>\d+)\.(?<mi>\d+)\.(?<pa>\d+))\]", RegexOptions.Compiled)]
+    private static partial Regex ChangelogVersionHeading();
+
+    /// <summary>
     /// No bandwidth source may wrap its own sample in <c>Task.Run</c>. The offload belongs to the
     /// consumer, once, so every source is covered by construction.
     /// </summary>

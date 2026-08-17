@@ -131,12 +131,16 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90"/>
-                    <DataGridTextColumn Header="Last run" Binding="{Binding LastRunDisplay}" Width="140"/>
-                    <!-- Next run answers the question this tab exists for — "when is this going to
-                         happen?" — and it was already being fetched: the per-task query that fills
-                         Last run selects NextRunTime in the same call, ScheduledTaskInfo carries it,
-                         and NextRunDisplay was formatting it for a column that did not exist. -->
-                    <DataGridTextColumn Header="Next run" Binding="{Binding NextRunDisplay}" Width="140"/>
+                    <!-- Both run times come from LoadRunInfoAsync, a SEPARATE per-task PowerShell query
+                         that runs when a row is SELECTED — the bulk scan does not fetch them. So both
+                         columns legitimately read "—" until the user clicks the row, and the header says
+                         so rather than looking like missing data. Fetching them for every row up front
+                         would mean one PowerShell round-trip per scheduled task, which is hundreds on a
+                         normal machine; the tab lists first and fills the detail on demand by design.
+                         (The comment here previously claimed Next run "was already being fetched". It was
+                         not: the field existed and the query for it ran per selection only.) -->
+                    <DataGridTextColumn Header="Last run (on select)" Binding="{Binding LastRunDisplay}" Width="140"/>
+                    <DataGridTextColumn Header="Next run (on select)" Binding="{Binding NextRunDisplay}" Width="140"/>
                     <!-- What the task is for, in Windows' own words, with the publisher on hover.
                          Both came back with every scan (TaskSchedulerService selects Author and
                          Description) and neither was displayed anywhere. Author matters because it is
@@ -149,6 +153,12 @@
                             <Style TargetType="TextBlock">
                                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                 <Setter Property="ToolTip" Value="{Binding AuthorDisplay}"/>
+                                <!-- Many tasks ship no Description, and an empty TextBlock has no
+                                     hit-test surface — so the publisher tooltip was unreachable on
+                                     exactly the rows where it is the only information available.
+                                     A transparent background gives the cell something to hover. -->
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="HorizontalAlignment" Value="Stretch"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>

@@ -179,9 +179,19 @@ public sealed class SpeedTestHistoryService : IDisposable
     }
 
     /// <summary>
-    /// Clears history for a specific engine, or all history if engine is null.
+    /// Clears history for a specific engine, or all history if engine is null. Returns true only when the
+    /// disk now matches what the caller asked for.
     /// </summary>
-    public async Task ClearAsync(string? engine = null, CancellationToken ct = default)
+    /// <remarks>
+    /// Returns <c>bool</c> for the same reason <see cref="SaveAsync"/> does, and this was the half the
+    /// original fix missed. Both methods swallowed their write failure and logged it, so the tab carried on
+    /// as if it had worked; that shipped as a lost speed-test result in 1.65.9. Clearing is worse than
+    /// saving, because the user has just confirmed a dialog saying the data will be gone for good: on a
+    /// failure the grid emptied, the file did not, and the readings reappeared on the next launch — the
+    /// opposite of what was promised, with no way to tell which state is real. The caller now surfaces the
+    /// failure instead of guessing.
+    /// </remarks>
+    public async Task<bool> ClearAsync(string? engine = null, CancellationToken ct = default)
     {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -190,7 +200,7 @@ public sealed class SpeedTestHistoryService : IDisposable
             {
                 if (File.Exists(_historyPath))
                     File.Delete(_historyPath);
-                return;
+                return true;
             }
 
             var all = await LoadCoreAsync(ct).ConfigureAwait(false);
@@ -200,7 +210,7 @@ public sealed class SpeedTestHistoryService : IDisposable
             {
                 if (File.Exists(_historyPath))
                     File.Delete(_historyPath);
-                return;
+                return true;
             }
 
             var entries = filtered.Select(r => new SpeedTestHistoryEntry
@@ -215,14 +225,17 @@ public sealed class SpeedTestHistoryService : IDisposable
 
             var json = JsonSerializer.Serialize(entries, JsonOpts);
             await AtomicFile.WriteAllTextAsync(_historyPath, json, ct).ConfigureAwait(false);
+            return true;
         }
         catch (IOException ex)
         {
             Log.Warning(ex, "Failed to clear speed test history");
+            return false;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Access denied clearing speed test history");
+            return false;
         }
         finally
         {

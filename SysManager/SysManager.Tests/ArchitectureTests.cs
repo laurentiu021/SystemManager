@@ -2303,6 +2303,183 @@ public partial class ArchitectureTests
             + $"holds:\n  {string.Join("\n  ", notBound)}");
     }
 
+    /// <summary>
+    /// Every sentence a UI test waits for must be copy the app actually ships. A UI test that quotes
+    /// wording nothing renders can never pass — it is a permanently red assertion masquerading as
+    /// coverage.
+    /// </summary>
+    /// <remarks>
+    /// <para>Found by a sweep after <c>UninstallerUiTests</c> failed 1/135 on every CI run of one day,
+    /// including branches that touch no app code. PR #1808 rewrote the Uninstaller's elevated banner and
+    /// left the test asserting the previous sentence, which then existed nowhere in the app. Two things
+    /// hid it: the branch only runs when the test session is elevated (as on the CI runner, not on a
+    /// developer's box), and the <c>ui-tests</c> job is <c>continue-on-error</c>, so <c>gh pr checks</c>
+    /// printed "pass" while the log said <c>Failed: 2</c>.</para>
+    /// <para>This guard lives in the BLOCKING unit suite on purpose. The defect it pins is one the
+    /// non-blocking UI job cannot report loudly enough to stop a merge, and it needs no desktop session
+    /// to detect — it is pure text comparison over the two source trees.</para>
+    /// <para>Scope is chosen by what can actually rot. A one-word wait like <c>"CPU"</c> or a fragment
+    /// like <c>"drivers found"</c> survives rewording and is not checked; a multi-word PHRASE is what a
+    /// copy edit breaks, so the bar is two spaces (three words) rather than a character count — the
+    /// original defect's threshold experiment showed a 20-character floor excludes nearly every real
+    /// call site, because the durable waits are deliberately short. Literals carrying markup, path, or
+    /// format-hole characters are ids, xpaths and templates, not copy. Matching is whitespace-normalised
+    /// and case-insensitive because XAML wraps attribute values across lines.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryUiTextAssertion_QuotesCopyTheAppActuallyShips()
+    {
+        var uiTestsDir = Path.Combine(FindRepoRoot(), "SysManager", "SysManager.UITests");
+        Assert.True(Directory.Exists(uiTestsDir),
+            $"UI test project not found at {uiTestsDir} — the guard would pass vacuously");
+
+        // Everything the app can render: XAML markup plus C# status/message strings.
+        var appDir = FindAppProjectDir();
+        var rendered = Directory
+            .EnumerateFiles(appDir, "*.*", SearchOption.AllDirectories)
+            .Where(f => (f.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)
+                         || f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                       StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                       StringComparison.Ordinal))
+            .Select(f => Collapse(File.ReadAllText(f)))
+            .ToArray();
+
+        Assert.True(rendered.Length >= 100,
+            $"only {rendered.Length} app source files read — the guard is not seeing the app it thinks it is");
+
+        var offenders = new List<string>();
+        var assertionsChecked = 0;
+
+        foreach (var file in Directory.GetFiles(uiTestsDir, "*.cs"))
+        {
+            if (Path.GetFileName(file) == "AppFixture.cs") continue; // the helper layer, not an assertion
+
+            var lines = File.ReadAllLines(file);
+
+            // Which locals actually reach a text-wait call? Only those carry app copy. Collected first,
+            // because the assignment appears BEFORE the call that consumes it.
+            var waitedLocals = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var line in lines.Where(IsCode))
+                foreach (var use in TextWaitOnLocal().Matches(line).Cast<Match>())
+                    waitedLocals.Add(use.Groups["name"].Value);
+
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (!IsCode(lines[i])) continue;
+
+                // Read a whole STATEMENT, not a line: `var expected = cond ? "a" : "b";` puts each
+                // branch on its own line, so the assignment line carries no literal at all.
+                var statement = lines[i];
+                var span = 1;
+                while (!statement.TrimEnd().EndsWith(';') && i + span < lines.Length && span <= 6)
+                {
+                    if (IsCode(lines[i + span])) statement += " " + lines[i + span].Trim();
+                    span++;
+                }
+
+                foreach (var literal in AssertedTextLiterals(statement, waitedLocals)
+                             .Where(IsUserFacingSentence))
+                {
+                    assertionsChecked++;
+                    var needle = Collapse(literal);
+                    if (!rendered.Any(body => body.Contains(needle, StringComparison.OrdinalIgnoreCase)))
+                        offenders.Add($"{Path.GetFileName(file)}:{i + 1}  \"{literal}\"");
+                }
+            }
+        }
+
+        // Vacuity floor: if the shape detection breaks, the loop above checks nothing and reports
+        // success — the exact failure mode that let a permanently-red UI assertion survive weeks of
+        // green-looking runs. The floor is the ENUMERATED population at the time of writing (8 phrase
+        // literals across the UI tests, including both Uninstaller branches), not a number picked to make
+        // the assertion pass: it was set after listing them, and it caught the first two attempts at this
+        // guard, whose narrower shape detection saw only 3 and then 8-minus-the-ternary.
+        Assert.True(assertionsChecked >= 7,
+            $"only {assertionsChecked} UI text assertions parsed — the guard is measuring nothing, fix it "
+            + "rather than trusting its pass");
+
+        Assert.True(offenders.Count == 0,
+            "these UI tests wait for wording the app does not ship anywhere, so they can never pass — "
+            + "the copy was almost certainly reworded without updating the assertion. Quote a stable "
+            + "FRAGMENT of the current text instead of a whole sentence:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>Whitespace-collapsed and trimmed, so XAML attribute wrapping cannot hide a match.</summary>
+    private static string Collapse(string text) => WhitespaceRun().Replace(text, " ").Trim();
+
+    /// <summary>Code, not a comment — a comment's prose is never an assertion.</summary>
+    /// <remarks>
+    /// Its own explanatory text is the classic trap: two earlier guards in this file reported the wrong
+    /// colour because they matched the comment describing them rather than the construct.
+    /// </remarks>
+    private static bool IsCode(string line)
+    {
+        var trimmed = line.TrimStart();
+        return !trimmed.StartsWith("//", StringComparison.Ordinal) && !trimmed.StartsWith('*');
+    }
+
+    /// <summary>
+    /// The literals on this line that the app is expected to RENDER: arguments passed straight to a
+    /// text-waiting helper, plus the branches of a local that is later handed to one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Matching the ARGUMENT rather than the whole line keeps an assertion-failure message out of
+    /// scope even when it shares a line with the call, as in
+    /// <c>Assert.True(_fx.HasText("Dashboard"), "Dashboard did not recover…")</c> — only the first
+    /// literal is app copy.</para>
+    /// <para>The local matters because the original defect built its text in a ternary and passed the
+    /// VARIABLE, so a call-site-only regex reported zero findings on a tree that genuinely had one. But
+    /// the local must be one that REACHES a text-wait call: an earlier version of this guard keyed on the
+    /// `? "…" : "…"` shape alone and immediately flagged a ternary building an assertion-failure MESSAGE
+    /// — same syntax, opposite meaning. Resolving the name is the difference between checking what the
+    /// app must render and checking prose addressed to whoever reads the failure.</para>
+    /// </remarks>
+    private static IEnumerable<string> AssertedTextLiterals(string line, HashSet<string> waitedLocals)
+    {
+        foreach (var call in TextWaitCall().Matches(line).Cast<Match>())
+            yield return call.Groups["text"].Value;
+
+        // `var expected = cond ? "a" : "b";` spreads the branches over following lines, so track the
+        // assignment and keep reading while the statement continues.
+        var assignment = CopyLocalAssignment().Match(line);
+        if (!assignment.Success || !waitedLocals.Contains(assignment.Groups["name"].Value)) yield break;
+
+        foreach (var literal in QuotedLiteral().Matches(line).Cast<Match>())
+            yield return literal.Groups["text"].Value;
+    }
+
+    /// <summary>
+    /// A literal worth checking is a multi-word PHRASE — three words or more. That is the shape a copy
+    /// edit breaks. Short waits ("CPU", "drivers found") are deliberately durable fragments and stay out
+    /// of scope, as do literals carrying markup, path, or format-hole characters (ids, xpaths, templates).
+    /// </summary>
+    private static bool IsUserFacingSentence(string text) =>
+        text.Count(c => c == ' ') >= 2
+        && text.IndexOfAny(['\\', '/', '{', '}', '<', '>']) < 0;
+
+    [GeneratedRegex("\"(?<text>[^\"]*)\"", RegexOptions.Compiled)]
+    private static partial Regex QuotedLiteral();
+
+    /// <summary>A literal passed directly to one of the fixture's text-waiting helpers.</summary>
+    [GeneratedRegex(@"(?:HasText|HasTextInCurrentTab|WaitForText|WaitForTextInCurrentTab)\(\s*""(?<text>[^""]*)""",
+                    RegexOptions.Compiled)]
+    private static partial Regex TextWaitCall();
+
+    /// <summary>A local being assigned — its name is checked against the ones that reach a text wait.</summary>
+    [GeneratedRegex(@"\bvar\s+(?<name>\w+)\s*=", RegexOptions.Compiled)]
+    private static partial Regex CopyLocalAssignment();
+
+    /// <summary>A local (not a literal) handed to a text-waiting helper — that is what makes it copy.</summary>
+    [GeneratedRegex(@"(?:HasText|HasTextInCurrentTab|WaitForText|WaitForTextInCurrentTab)\(\s*(?<name>[A-Za-z_]\w*)\s*[,)]",
+                    RegexOptions.Compiled)]
+    private static partial Regex TextWaitOnLocal();
+
+    // WhitespaceRun() is declared once, near the XAML attribute readers that first needed it — the same
+    // collapse rule serves both, so it is not redeclared here.
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

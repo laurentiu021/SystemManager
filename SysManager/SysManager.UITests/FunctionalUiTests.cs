@@ -100,6 +100,19 @@ public class FunctionalUiTests
         Assert.NotNull(resolved);
     }
 
+    /// <summary>
+    /// The driver scan reaches a terminal state: a "&lt;N&gt; drivers found" summary, or one of the
+    /// fallbacks the view model sets when the enumeration cannot be parsed or is refused.
+    /// </summary>
+    /// <remarks>
+    /// The 25 s bound this used to carry was too tight for what the scan actually does: it spawns
+    /// <c>pwsh</c> and queries <c>Win32_PnPSignedDriver</c>, one of WMI's slowest classes, on a shared CI
+    /// runner with a cold PowerShell start. It failed twice on 2026-08-17 at 25 s and 27 s — at the wall,
+    /// not on a wrong result — and passed on the runs in between. Two changes make it honest rather than
+    /// lucky: the budget matches the real cost, and a timeout now reports whether the scan was STILL
+    /// RUNNING (slow environment, not a defect) or had gone quiet (a real hang), so the next person is not
+    /// left guessing from <c>Assert.NotNull() Failure: Value is null</c>.
+    /// </remarks>
     [Fact]
     public void Drivers_List_ProducesCountOrDone()
     {
@@ -108,14 +121,23 @@ public class FunctionalUiTests
         Assert.NotNull(list);
         list!.Invoke();
 
-        // The scan ends with a "<N> drivers found" summary (or a parse-error
-        // fallback). Either terminal message proves the action completed.
+        // Either terminal message proves the command ran to completion rather than dying silently.
+        // Deliberately NOT also accepting a bare "Done": WaitForText searches the whole window, so that
+        // would match the status line of any other tab and pass without the scan having finished.
         var done = FlaUI.Core.Tools.Retry.WhileNull(
             () => _fx.WaitForText("drivers found", 1)
                   ?? _fx.WaitForText("Parse error", 1),
-            TimeSpan.FromSeconds(25)).Result;
+            TimeSpan.FromSeconds(90)).Result;
 
-        Assert.NotNull(done);
+        // Distinguish "slower than the budget" from "never finished" — the progress text is only on
+        // screen while the scan is in flight.
+        var stillScanning = _fx.HasText("Scanning installed drivers", 1);
+        Assert.True(done is not null,
+            stillScanning
+                ? "The driver scan was still running after 90 s (Win32_PnPSignedDriver via pwsh on a "
+                  + "loaded runner). The app is not broken; the budget is too small for this environment."
+                : "The driver scan produced no terminal state and is no longer reporting progress — "
+                  + "it finished without setting a summary, or failed silently.");
     }
 
     [Fact]

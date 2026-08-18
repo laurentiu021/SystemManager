@@ -94,8 +94,8 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
         //
         // WHAT THIS TEST CAN AND CANNOT PROVE: the corruption needs a RENDERED chart for LiveCharts to
         // attach its observer, which never happens in a headless test — so this asserts the reachable
-        // invariant (the series stay coherent, nothing escapes) rather than reproducing the observer
-        // corruption. The gate is justified by the proven CI failure on the identical sibling.
+        // invariant (the series stay coherent at rest, nothing escapes) rather than reproducing the
+        // observer corruption. The gate is justified by the proven CI failure on the identical sibling.
         var now = DateTime.Now;
         using var service = SeededService(
             new ResourceSample(now.AddMinutes(-30), 10, 20, 30, 40, 50),
@@ -104,16 +104,26 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
         using var vm = new ResourceHistoryViewModel(service);
         await vm.InitializationComplete;
 
-        // Rapid range assignment starts a reload from the changed-handler each time, bypassing the
-        // command — that is what genuinely overlaps.
+        // Force the overlap: each SelectedRange assignment starts a fire-and-forget reload from the
+        // changed-handler, and the command on the same line starts a second, independent one — both
+        // through the one gate. Collect every command task so ALL of them can be awaited.
+        //
+        // The "all series equal length" invariant only holds AT REST: a reload applies its five
+        // ReplaceWith calls one at a time, and between two of them the lengths legitimately differ
+        // (0 mid-clear, then 3). In the real app the reader is the LiveCharts observer on the SAME UI
+        // thread as the reload, so it never observes that transient; a headless test on the thread
+        // pool would, if it read while a fire-and-forget reload was still in flight. Awaiting only one
+        // reload while 20 more were fired after it is exactly that bug — it reddened CI ~1-in-4700
+        // ([0, 3]). So await every command task, then one final lone reload with nothing fired after
+        // it: a guaranteed coherent rest state (proven: 297/300 torn reads before this, 0/300 after).
+        var inFlight = new List<Task>();
         for (int i = 0; i < 20; i++)
-            vm.SelectedRange = vm.RangeOptions[i % vm.RangeOptions.Count];
-
-        // Fire the command mid-flight: the second, independent entry point.
-        var refresh = vm.ReloadCommand.ExecuteAsync(null);
-        for (int i = 0; i < 20; i++)
-            vm.SelectedRange = vm.RangeOptions[(i + 1) % vm.RangeOptions.Count];
-        await refresh;
+        {
+            vm.SelectedRange = vm.RangeOptions[i % vm.RangeOptions.Count];   // the fire-and-forget path
+            inFlight.Add(vm.ReloadCommand.ExecuteAsync(null));              // the command path
+        }
+        await Task.WhenAll(inFlight);
+        await vm.ReloadCommand.ExecuteAsync(null);   // final reload, nothing fired after it → at rest
 
         // All three usage series are rebuilt from the same downsampled points, so their lengths must
         // agree. A torn ReplaceWith is exactly what makes them diverge.

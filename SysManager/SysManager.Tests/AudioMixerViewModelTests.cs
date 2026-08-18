@@ -325,14 +325,44 @@ public class AudioMixerViewModelTests
     public async Task UpdatePeaks_ReadsEveryRowInOneServiceCall()
     {
         var service = ServiceWith(Session("s1"), Session("s2"), Session("s3"));
-        Peaks(service, ("s1", 0.1f), ("s2", 0.2f), ("s3", 0.3f));
+
+        // Recorded by the stubs themselves into thread-safe collections, and asserted on THOSE rather than
+        // through NSubstitute's Received(). Two reasons, both learned the hard way:
+        //
+        // 1. Activating the tab releases the peak loop, which samples every 50 ms — so an exact
+        //    Received(1) is not an observable property, and a second sample landing first failed a
+        //    release. What the name actually claims is "one call carried every row", not "one call total".
+        // 2. An NSubstitute substitute is NOT thread-safe. With the loop recording calls concurrently, a
+        //    Received(...) assertion enumerates a collection that is being mutated and reports "received
+        //    no matching calls" even when a matching call was made. That is exactly what happened: this
+        //    test passed 8/8 alone and failed inside the full class, where the slower run gives the loop
+        //    time to tick during the assertion.
+        var batchSizes = new System.Collections.Concurrent.ConcurrentBag<int>();
+        var perRowReads = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var levels = new Dictionary<string, float>(StringComparer.Ordinal)
+        { ["s1"] = 0.1f, ["s2"] = 0.2f, ["s3"] = 0.3f };
+        service.GetPeaks(Arg.Any<IEnumerable<string>>()).Returns(call =>
+        {
+            var ids = ((IEnumerable<string>)call[0]).ToArray();
+            batchSizes.Add(ids.Length);
+            return ids.ToDictionary(id => id, id => levels.GetValueOrDefault(id), StringComparer.Ordinal);
+        });
+        service.GetPeak(Arg.Any<string>()).Returns(call =>
+        {
+            perRowReads.Add((string)call[0]);
+            return levels.GetValueOrDefault((string)call[0]);
+        });
+
         using var vm = NewVm(service);
         vm.IsActive = true;
 
         await vm.UpdatePeaksAsync(CancellationToken.None);
 
-        service.Received(1).GetPeaks(Arg.Any<IEnumerable<string>>());
-        service.DidNotReceive().GetPeak(Arg.Any<string>());
+        // Every batch that happened covered all three rows, and no row was ever read on its own. A per-row
+        // refactor fails both halves: its batches would be size 1, and GetPeak would be called.
+        Assert.NotEmpty(batchSizes);
+        Assert.All(batchSizes, size => Assert.Equal(3, size));
+        Assert.Empty(perRowReads);
     }
 
     /// <summary>

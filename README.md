@@ -220,7 +220,9 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Per-app output routing** — send one app to your headset and another to your speakers.
   Where Windows exposes the routing interface, each app gets an output-device picker in the
   row; on builds where it doesn't, the row shows a "Choose output device…" button that opens
-  Windows' per-app sound settings so you're never left without a path
+  Windows' per-app sound settings so you're never left without a path. Plug a headset in while
+  the tab is open and it appears on its own — the device list is re-read every ten seconds, and
+  each app keeps the destination you picked for it
 - **Volume presets** — save the current per-app volumes and mutes as a named preset (e.g.
   "Gaming", "Focus") and re-apply it in one click; presets are keyed by app so they work
   across restarts, and are stored locally in `%LocalAppData%\SysManager`

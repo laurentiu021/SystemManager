@@ -41,8 +41,22 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
     public BulkObservableCollection<AudioSessionRowViewModel> Sessions { get; } = new();
 
-    /// <summary>Output devices offered in each row's routing picker (refreshed with the session list).</summary>
+    /// <summary>
+    /// Output devices offered in each row's routing picker. Every row is handed THIS collection, not a copy,
+    /// so a refresh reaches pickers that already exist — rows used to receive <c>OutputDevices.ToList()</c>,
+    /// which froze each picker at the moment its row was created.
+    /// </summary>
     public BulkObservableCollection<AudioDevice> OutputDevices { get; } = new();
+
+    /// <summary>
+    /// Reconcile passes between device re-enumerations. Reconcile runs at 1 Hz and enumerating endpoints is
+    /// COM-heavy, so devices are re-read every tenth pass (~10 s) rather than every one. Devices change when
+    /// somebody plugs something in, which is a human-timescale event; sessions change when an app starts
+    /// playing, which is not — hence the two cadences.
+    /// </summary>
+    private const int ReconcilePassesPerDeviceRefresh = 10;
+
+    private int _passesSinceDeviceRefresh;
 
     /// <summary>Saved volume presets the user can apply or delete.</summary>
     public BulkObservableCollection<VolumePreset> Presets { get; } = new();
@@ -158,6 +172,16 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     {
         var snapshot = await Task.Run(_service.GetSessions).ConfigureAwait(true);
         MergeInto(snapshot);
+
+        // Re-read the device list on a slower cadence than the sessions. Before this it was read ONCE, in
+        // InitAsync, so a headset plugged in after the tab opened never appeared in any picker for the rest
+        // of the session — and the tab's view model lives as long as the app does.
+        if (++_passesSinceDeviceRefresh >= ReconcilePassesPerDeviceRefresh)
+        {
+            _passesSinceDeviceRefresh = 0;
+            await RefreshDevicesAsync().ConfigureAwait(true);
+        }
+
         HasSessions = Sessions.Count > 0;
         StatusMessage = Sessions.Count > 0
             ? $"{Sessions.Count} app{(Sessions.Count == 1 ? "" : "s")} playing audio."
@@ -184,7 +208,10 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
             else
             {
                 var newRow = new AudioSessionRowViewModel(
-                    _service, info, OutputDevices.ToList(), RoutingSupported,
+                    // The LIVE collection, not a snapshot: a device plugged in after this row was created
+                    // must appear in its picker. BulkObservableCollection raises collection-changed, so the
+                    // bound ComboBox updates itself.
+                    _service, info, OutputDevices, RoutingSupported,
                     reportFailure: message => StatusMessage = message);
                 if (RoutingSupported && !info.IsSystemSounds)
                     newRow.SetOutputDeviceFromService(_service.GetSessionOutputDevice(info.SessionId));
@@ -244,13 +271,29 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
                 row.PeakLevel = peak;
     }
 
-    /// <summary>Re-enumerate output devices (off the UI thread) into the shared picker list.</summary>
+    /// <summary>
+    /// Re-enumerate output devices (off the UI thread) into the shared picker list, preserving each row's
+    /// current choice across the replacement.
+    /// <para>Preserving it is not optional. <c>ReplaceWith</c> clears and refills, so a bound
+    /// <c>SelectedItem</c> survives only while the new list contains an EQUAL element — and
+    /// <c>AudioDevice</c> is a record, so equality also covers <c>IsDefault</c>. Change the Windows default
+    /// output and every row's selection would silently fall to null, i.e. the picker forgets where the user
+    /// sent that app. Re-resolving by endpoint id is what keeps it.</para>
+    /// </summary>
     private async Task RefreshDevicesAsync()
     {
         // Defensive: a substituted/edge-case service could return null; treat it as "no devices"
         // rather than letting ReplaceWith's null-guard throw into the fire-and-forget init.
         var devices = await Task.Run(_service.GetRenderDevices).ConfigureAwait(true);
+
+        var chosen = Sessions.ToDictionary(r => r.SessionId, r => r.SelectedOutputDevice?.Id ?? string.Empty,
+                                           StringComparer.Ordinal);
         OutputDevices.ReplaceWith(devices ?? []);
+        // Gated on the row's own routing capability, matching the construction-time gate in MergeInto: the
+        // system-sounds pseudo-session shows no picker, so it must not be handed a destination it cannot use.
+        foreach (var row in Sessions)
+            if (row.RoutingSupported && chosen.TryGetValue(row.SessionId, out var id))
+                row.SetOutputDeviceFromService(id);
     }
 
     /// <summary>

@@ -92,17 +92,18 @@ public partial class ArchitectureTests
         //   · SettingsWatchdogService and WindowsThemeService — both constructed concretely by tests,
         //     both now behind the shared `string? configDir = null` seam.
         //
-        // The two that remain are the two hard ones, and they are hard for different reasons:
-        //   · ThemeService is heavily static (20 static members) and is reached from XAML resource
-        //     resolution, so a constructor seam is a wider refactor than a path change.
+        // The ONE that remains is the hard one:
         //   · LogService is a `static partial class` by design — Serilog's sink is configured once per
-        //     process — so it has no instance to hang a seam on. It is also the only one no test
-        //     constructs, so its risk is the lowest of the set.
-        // Both need a design decision rather than a mechanical edit; neither is touched here.
+        //     process — so it has no instance to hang the shared `string? configDir = null` seam on. It
+        //     is also the only offender no test constructs, so its risk is the lowest of the set; it
+        //     needs a design decision (dropping the static-sink model) rather than a mechanical edit.
+        //
+        // ThemeService came off in #1741's follow-up: its path moved to an instance field set from the
+        // same seam, and its one WPF touch-point (Apply) now no-ops without an Application, so the
+        // persistence path is exercised headlessly by ThemeServiceTests instead of being left untested.
         string[] known =
         [
             "LogService.<LogDir>k__BackingField",
-            "ThemeService.SettingsPath",
         ];
 
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

@@ -17,9 +17,7 @@ public sealed class ThemeService
     private static ThemeService? _instance;
     public static ThemeService Instance => _instance ??= new ThemeService();
 
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "SysManager", "theme.json");
+    private readonly string _settingsPath;
 
     public event Action? ThemeChanged;
 
@@ -50,7 +48,22 @@ public sealed class ThemeService
     private static readonly Dictionary<string, string> LightToDark =
         DarkToLight.ToDictionary(kv => kv.Value, kv => kv.Key);
 
-    private ThemeService() { }
+    /// <summary>
+    /// Production goes through <see cref="Instance"/>, which passes null and lands on the real
+    /// <c>%AppData%\SysManager\theme.json</c> (ROAMING, where this file has always lived — changing it
+    /// would strand a user's saved theme). The <paramref name="configDir"/> seam exists so a test can
+    /// point the service at a temp directory instead of the developer's real theme; without it, every
+    /// test that constructed the service and saved would overwrite that file, the same class of data
+    /// loss that hit SpeedTestHistoryService (#1734, #1741). Internal because nothing outside the
+    /// assembly should build a second theme service — the app has exactly one, via <see cref="Instance"/>.
+    /// </summary>
+    internal ThemeService(string? configDir = null)
+    {
+        _settingsPath = Path.Combine(
+            configDir ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager"),
+            "theme.json");
+    }
 
     public void Initialize()
     {
@@ -155,6 +168,12 @@ public sealed class ThemeService
 
     public void Apply(ThemePreset theme)
     {
+        // No running app means no resource dictionary to repaint — a no-op, not a crash. This is the one
+        // WPF touch-point in the service; guarding it lets Load/Initialize (and thus the persistence
+        // seam) run in a headless unit test, and is harmless in production where Application.Current is
+        // always set. Without it, every public entry point NPEs the moment it is reached off the UI app.
+        if (Application.Current is null) return;
+
         var res = Application.Current.Resources;
         SetBrush(res, "Surface0", theme.Background);
         SetBrush(res, "Surface1", theme.Surface);
@@ -356,13 +375,13 @@ public sealed class ThemeService
     {
         try
         {
-            var dir = Path.GetDirectoryName(SettingsPath)!;
+            var dir = Path.GetDirectoryName(_settingsPath)!;
             Directory.CreateDirectory(dir);
             var data = new ThemeSettings(CurrentPresetId, CurrentMode, ShadePosition,
                 CurrentTheme.Accent.ToString(), CurrentTheme.Background.ToString(),
                 CurrentTheme.Surface.ToString(), CurrentTheme.TextPrimary.ToString());
             var json = JsonSerializer.Serialize(data, JsonDefaults.Indented);
-            AtomicFile.WriteAllText(SettingsPath, json);
+            AtomicFile.WriteAllText(_settingsPath, json);
         }
         catch (Exception ex) { Log.Debug("Theme save failed: {Error}", ex.Message); }
     }
@@ -371,8 +390,8 @@ public sealed class ThemeService
     {
         try
         {
-            if (!File.Exists(SettingsPath)) return;
-            var json = File.ReadAllText(SettingsPath);
+            if (!File.Exists(_settingsPath)) return;
+            var json = File.ReadAllText(_settingsPath);
             var data = JsonSerializer.Deserialize<ThemeSettings>(json);
             if (data is null) return;
 

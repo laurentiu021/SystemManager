@@ -43,12 +43,50 @@ public class ProcessManagerViewModelTests
         Assert.Equal("", vm.FilterText);
     }
 
+    /// <summary>
+    /// Typing in the search box must actually narrow the bound list.
+    /// <para>Replaces an assertion that set <c>FilterText</c> and then read <c>FilterText</c> back — a
+    /// round-trip through a generated <c>[ObservableProperty]</c> setter, which can only fail if the
+    /// source generator itself breaks. What the user depends on is the CONSEQUENCE:
+    /// <c>OnFilterTextChanged</c> calls <c>ApplyFilter</c>, which rebuilds <c>FilteredProcesses</c> —
+    /// the collection the DataGrid binds to. A filter wired to nothing is a defect this project has
+    /// shipped before (batch 30, five unreachable Services filters), and the old assertion could not
+    /// have caught it.</para>
+    /// </summary>
     [Fact]
-    public void FilterText_CanBeChanged()
+    public void FilterText_NarrowsTheBoundList()
     {
         var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
+        vm.Processes.Clear();
+        vm.Processes.Add(new ProcessEntry { Pid = 1, Name = "chrome", MemoryBytes = 300 });
+        vm.Processes.Add(new ProcessEntry { Pid = 2, Name = "notepad", MemoryBytes = 200 });
+
         vm.FilterText = "chrome";
-        Assert.Equal("chrome", vm.FilterText);
+
+        Assert.Equal(["chrome"], vm.FilteredProcesses.Select(p => p.Name).ToArray());
+
+        // …and clearing it restores the full list, so the filter is not one-way.
+        vm.FilterText = "";
+        Assert.Equal(2, vm.FilteredProcesses.Count);
+    }
+
+    /// <summary>
+    /// The filter matches a PID and the description fields too, not only the name: three separate
+    /// <c>Matches…</c> helpers feed it and only the name path was ever exercised.
+    /// </summary>
+    [Fact]
+    public void FilterText_AlsoMatchesPidAndDescription()
+    {
+        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
+        vm.Processes.Clear();
+        vm.Processes.Add(new ProcessEntry { Pid = 4321, Name = "svchost", PlainDescription = "Windows service host" });
+        vm.Processes.Add(new ProcessEntry { Pid = 9, Name = "notepad" });
+
+        vm.FilterText = "4321";
+        Assert.Equal(["svchost"], vm.FilteredProcesses.Select(p => p.Name).ToArray());
+
+        vm.FilterText = "service host";
+        Assert.Equal(["svchost"], vm.FilteredProcesses.Select(p => p.Name).ToArray());
     }
 
     [Fact]

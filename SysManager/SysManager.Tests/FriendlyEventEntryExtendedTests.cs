@@ -67,13 +67,32 @@ public class FriendlyEventEntryExtendedTests
         Assert.Equal(StatusColors.Neutral, e.SeverityColor);
     }
 
+    /// <summary>
+    /// The extreme timestamps a real event log can hand us must not produce nonsense in the two strings
+    /// the user actually sees.
+    /// <para>Replaces an assertion that stored <c>DateTime.MinValue</c>/<c>MaxValue</c> and read them back
+    /// — a round-trip through a generated setter, proving only that a <c>DateTime</c> field holds a
+    /// <c>DateTime</c>. The reachable question is what <c>RelativeTime</c> and <c>FullTimestamp</c> DO with
+    /// those values, since both are computed from <c>Timestamp</c> and <c>RelativeTime</c> subtracts it
+    /// from <c>DateTime.Now</c>.</para>
+    /// <para>This pins the behaviour rather than changing it: MinValue is special-cased to an em dash, and
+    /// a FUTURE stamp (a clock correction, or a log copied from a machine running ahead) yields "just now",
+    /// because the negative span falls into the first branch. Imprecise but harmless — and far better than
+    /// printing "in -3d". Asserted so a future reordering of those branches cannot silently start showing
+    /// the user a negative duration.</para>
+    /// </summary>
     [Fact]
-    public void TimestampsVastlyDifferent_StillStorable()
+    public void ExtremeTimestamps_ProduceSaneDisplayStrings()
     {
-        var e = new FriendlyEventEntry { Timestamp = DateTime.MinValue };
-        Assert.Equal(DateTime.MinValue, e.Timestamp);
-        e.Timestamp = DateTime.MaxValue;
-        Assert.Equal(DateTime.MaxValue, e.Timestamp);
+        var min = new FriendlyEventEntry { Timestamp = DateTime.MinValue };
+        Assert.Equal("—", min.RelativeTime);
+        Assert.Equal("0001-01-01 00:00:00", min.FullTimestamp);
+
+        var future = new FriendlyEventEntry { Timestamp = DateTime.MaxValue };
+        Assert.Equal("just now", future.RelativeTime);
+        Assert.Equal("9999-12-31 23:59:59", future.FullTimestamp);
+        // The point of the assertion: no negative duration ever reaches the user.
+        Assert.DoesNotContain("-", future.RelativeTime);
     }
 
     [Fact]

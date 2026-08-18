@@ -90,15 +90,7 @@ public class PingTargetTests
         Assert.Equal(role, t.Role);
     }
 
-    [Fact]
-    public void Stats_CanBeUpdated()
-    {
-        var t = new PingTarget();
-        t.AverageMs = 25.3;
-        t.JitterMs = 2.1;
-        t.LossPercent = 5.0;
-        Assert.Equal(25.3, t.AverageMs);
-        Assert.Equal(2.1, t.JitterMs);
-        Assert.Equal(5.0, t.LossPercent);
-    }
+    // Stats_CanBeUpdated was removed: three doubles assigned and read back on a model with no
+    // computed members over them. PingTarget's meaningful behaviour is in the ping service, which
+    // has its own tests.
 }

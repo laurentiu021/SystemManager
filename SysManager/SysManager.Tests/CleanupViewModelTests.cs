@@ -330,16 +330,9 @@ public class CleanupViewModelTests
         Assert.Equal("hello", vm.StatusMessage);
     }
 
-    [Fact]
-    public void Progress_AcceptsFullRange()
-    {
-        var vm = NewVm();
-        foreach (var p in new[] { 0, 1, 50, 99, 100 })
-        {
-            vm.Progress = p;
-            Assert.Equal(p, vm.Progress);
-        }
-    }
+    // Progress_AcceptsFullRange was removed: it looped five values through a bare
+    // [ObservableProperty] and read each back. The name implied a 0-100 contract that nothing
+    // enforces (ViewModelBase._progress is unclamped; the ProgressBar clamps visually).
 
     [Fact]
     public void IsProgressIndeterminate_TogglesCleanly()
@@ -386,22 +379,9 @@ public class CleanupViewModelTests
         Assert.NotEqual("Scanning…", vm.RecycleBinLabel);
     }
 
-    [Fact]
-    public void TempSizeLabel_CanBeSetDirectly()
-    {
-        var vm = NewVm();
-        vm.TempSizeLabel = "42.0 MB can be freed";
-        Assert.Equal("42.0 MB can be freed", vm.TempSizeLabel);
-    }
-
-    [Fact]
-    public void RecycleBinLabel_CanBeSetDirectly()
-    {
-        var vm = NewVm();
-        vm.RecycleBinLabel = "Empty";
-        Assert.Equal("Empty", vm.RecycleBinLabel);
-    }
-
+    // A "…_CanBeSetDirectly" round-trip was removed here: it set a bare [ObservableProperty]
+    // and read it straight back, so only the source generator could fail it. The labels' real
+    // behaviour is covered by …_DefaultIsScanning and PreScan_EventuallyPopulatesLabels above.
     // ---------- progress feedback (regression) ----------
     // CleanupView.xaml binds a progress bar to IsBusy and the sidebar spinner reads the same flag,
     // but this VM never assigned it — so nothing appeared while SFC or DISM ran, which is minutes of

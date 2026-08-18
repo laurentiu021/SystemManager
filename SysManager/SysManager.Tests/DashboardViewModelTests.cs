@@ -89,47 +89,27 @@ public class DashboardViewModelTests
     }
 
     // ---------- property setters ----------
-
-    [Fact]
-    public void OsLine_Setter_Works()
-    {
-        var vm = NewVm();
-        vm.OsLine = "Windows 11 Pro";
-        Assert.Equal("Windows 11 Pro", vm.OsLine);
-    }
-
-    [Fact]
-    public void UptimeLine_Setter_Works()
-    {
-        var vm = NewVm();
-        vm.UptimeLine = "Uptime 3d 5h";
-        Assert.Equal("Uptime 3d 5h", vm.UptimeLine);
-    }
-
-    [Fact]
-    public void CpuPercent_Setter_Works()
-    {
-        var vm = NewVm();
-        vm.CpuPercent = 42.5;
-        Assert.Equal(42.5, vm.CpuPercent);
-    }
-
-    [Fact]
-    public void RamPercent_Setter_Works()
-    {
-        var vm = NewVm();
-        vm.RamPercent = 67.3;
-        Assert.Equal(67.3, vm.RamPercent);
-    }
+    // The four "…_Setter_Works" round-trips that lived here were removed: each set a bare
+    // [ObservableProperty] and read it straight back, which can only fail if the CommunityToolkit
+    // source generator breaks. What a binding depends on — the change notification — is covered by
+    // Setter_FiresPropertyChanged below, which the two percentages were added to.
 
     // ---------- PropertyChanged ----------
 
+    /// <summary>
+    /// Every bound property must raise <c>PropertyChanged</c>: the dashboard is written by a background
+    /// poll loop, so the UI only updates on the notification. The parameter is <c>object</c> so the two
+    /// percentages can join the string rows — they arrived here when their standalone round-trip tests
+    /// were removed, because notification is the half that a binding actually depends on.
+    /// </summary>
     [Theory]
     [InlineData(nameof(DashboardViewModel.OsLine), "test")]
     [InlineData(nameof(DashboardViewModel.UptimeLine), "test")]
     [InlineData(nameof(DashboardViewModel.CpuName), "test")]
     [InlineData(nameof(DashboardViewModel.GpuName), "test")]
-    public void Setter_FiresPropertyChanged(string propName, string value)
+    [InlineData(nameof(DashboardViewModel.CpuPercent), 42.5)]
+    [InlineData(nameof(DashboardViewModel.RamPercent), 67.3)]
+    public void Setter_FiresPropertyChanged(string propName, object value)
     {
         var vm = NewVm();
         var fired = false;

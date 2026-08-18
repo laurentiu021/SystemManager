@@ -123,13 +123,8 @@ public class PerformanceViewModelTests
 
     // ── Property changes ──
 
-    [Fact]
-    public void SelectedPlan_CanBeChanged()
-    {
-        var vm = NewVm();
-        vm.SelectedPlan = "ultimate";
-        Assert.Equal("ultimate", vm.SelectedPlan);
-    }
+    // SelectedPlan_CanBeChanged was removed as a pure setter round-trip: the default is pinned by
+    // Constructor_SelectedPlan_DefaultBalanced and the notification by SelectedPlan_NotifiesPropertyChanged.
 
     [Fact]
     public void WantVisualEffectsReduced_CanBeToggled()

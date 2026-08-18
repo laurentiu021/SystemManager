@@ -56,12 +56,46 @@ public class UninstallerViewModelTests
         Assert.False(string.IsNullOrEmpty(vm.Summary));
     }
 
+    /// <summary>
+    /// Typing in the search box must narrow the bound list AND correct the count and summary the user
+    /// reads above it. Replaces a <c>FilterText</c> round-trip that only exercised the generated setter;
+    /// <c>ApplyFilter</c> rebuilds <c>FilteredApps</c>, recomputes <c>AppCount</c> and rewrites
+    /// <c>Summary</c>, and none of those three was asserted anywhere.
+    /// </summary>
     [Fact]
-    public void FilterText_CanBeChanged()
+    public void FilterText_NarrowsTheListAndCorrectsTheCountAndSummary()
     {
         var vm = NewVm();
+        vm.AllApps.Clear();
+        vm.AllApps.Add(new InstalledApp { Name = "Google Chrome", Id = "Google.Chrome" });
+        vm.AllApps.Add(new InstalledApp { Name = "Notepad++", Id = "Notepad.Plus" });
+
         vm.FilterText = "chrome";
-        Assert.Equal("chrome", vm.FilterText);
+
+        Assert.Equal(["Google Chrome"], vm.FilteredApps.Select(a => a.Name).ToArray());
+        Assert.Equal(1, vm.AppCount);
+        Assert.Contains("of 2 total", vm.Summary);
+
+        // Clearing it restores everything, and the summary drops the "(of N total)" qualifier because
+        // nothing is filtered out any more.
+        vm.FilterText = "";
+        Assert.Equal(2, vm.FilteredApps.Count);
+        Assert.Equal(2, vm.AppCount);
+        Assert.DoesNotContain("of 2 total", vm.Summary);
+    }
+
+    /// <summary>The filter matches the package Id too, not just the display name.</summary>
+    [Fact]
+    public void FilterText_AlsoMatchesThePackageId()
+    {
+        var vm = NewVm();
+        vm.AllApps.Clear();
+        vm.AllApps.Add(new InstalledApp { Name = "Google Chrome", Id = "Google.Chrome" });
+        vm.AllApps.Add(new InstalledApp { Name = "Notepad++", Id = "Notepad.Plus" });
+
+        vm.FilterText = "Notepad.Plus";
+
+        Assert.Equal(["Notepad++"], vm.FilteredApps.Select(a => a.Name).ToArray());
     }
 
     [Fact]

@@ -32,16 +32,9 @@ public class AppPackageTests
         Assert.Contains(nameof(AppPackage.IsSelected), raised);
     }
 
-    [Fact]
-    public void Status_Transitions_ArePossible()
-    {
-        var p = new AppPackage();
-        foreach (var s in new[] { "Pending", "Upgrading...", "Done", "Failed (exit 1)" })
-        {
-            p.Status = s;
-            Assert.Equal(s, p.Status);
-        }
-    }
+    // Status_Transitions_ArePossible was removed: assigning four strings to a string property and
+    // reading each back cannot fail. "Transitions are possible" was never in question — what would
+    // be worth pinning is who WRITES those values, which belongs to the winget service's tests.
 
     [Fact]
     public void ScenarioLikeRealData_IsStored()

@@ -106,13 +106,10 @@ public class DuplicateFileViewModelTests
         Assert.NotNull(vm.BrowseFolderCommand);
     }
 
-    [Fact]
-    public void MinSizeKb_CanBeChanged()
-    {
-        var vm = NewVm();
-        vm.MinSizeKb = 500;
-        Assert.Equal(500, vm.MinSizeKb);
-    }
+    // MinSizeKb_CanBeChanged was removed as a setter round-trip. The property's real consequence is
+    // `var minBytes = MinSizeKb * 1024` in ScanAsync, and asserting THAT needs a guard the code does
+    // not have yet (a large typed value overflows long and inverts the filter) — tracked separately
+    // so this test-only change stays behaviour-neutral.
 
     [Fact]
     public void SelectedFolder_CanBeChanged()

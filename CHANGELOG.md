@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.17] - 2026-08-18
+
+A safety fix for how SysManager saves its own small settings and history files. Under a specific bit of
+bad timing, a setting you changed could quietly fail to save — no error, it just would not stick. Most
+people would never have hit it, but "most" is not "none", and a save that loses your data without saying
+so is exactly the kind of thing this app must never do.
+
+### Fixed
+- **A setting or history entry could silently fail to save if two saves of the same file overlapped.**
+  SysManager writes these files safely — to a temporary file first, then swaps it into place, so a crash
+  mid-write can never leave a half-written file. But every save of a given file used the same fixed name
+  for that temporary file, and cleaned it up afterwards. If two saves of the same file ran at once — for
+  example the About screen recording its update-check time in the background while you toggled the
+  "check for updates" box — one could delete the other's temporary file mid-swap, and both saves were
+  lost with nothing written and nothing reported. Each save now uses a temporary name only it knows, so
+  overlapping saves can no longer interfere; the last one simply wins. Applied to the shared save helper
+  and to the two Hosts-file writers, which had the same pattern.
+
 ## [1.65.16] - 2026-08-18
 
 Volume Control now tells you when a change did not take. Before, if Windows refused a volume, mute or

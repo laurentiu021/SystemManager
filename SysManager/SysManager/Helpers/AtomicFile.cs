@@ -30,6 +30,9 @@ namespace SysManager.Helpers;
 /// </summary>
 internal static class AtomicFile
 {
+    /// <summary>Distinguishes the temp files of overlapping writes; see <see cref="PrepareTempPath"/>.</summary>
+    private static int _tempSequence;
+
     /// <summary>
     /// Writes <paramref name="contents"/> to <paramref name="path"/> atomically, creating the
     /// directory if needed. The destination is either fully replaced or left exactly as it was.
@@ -122,6 +125,24 @@ internal static class AtomicFile
         }
     }
 
+    /// <summary>
+    /// A scratch path in <paramref name="path"/>'s own directory that no other writer can name, ending
+    /// in <paramref name="tag"/>. Public to the assembly so every service that swaps a temp into place
+    /// derives the name here rather than composing its own.
+    /// <para>Uniqueness is load-bearing, not tidiness. A fixed <c>"&lt;path&gt;.tmp"</c> is shared by
+    /// every writer to the same destination, and cleanup runs in a <c>finally</c> — so a second writer
+    /// that fails to open the temp (the first still holds it) deletes it on the way out, and if the
+    /// first has closed but not yet swapped, its swap then finds nothing. BOTH writes are lost and the
+    /// destination never appears, silently, because callers log a failed save at Debug. With a name
+    /// only one call knows, cleanup can only ever delete its own file and the last writer to swap
+    /// simply wins.</para>
+    /// <para>Deliberately NOT paired with a sweep of stale sibling temps: deleting a temp this call did
+    /// not create is precisely the bug above. A leftover survives only a hard kill inside the window
+    /// between writing the temp and swapping it, and costs a few hundred bytes.</para>
+    /// </summary>
+    public static string UniqueTempPath(string path, string tag = "tmp") =>
+        $"{path}.{Environment.ProcessId}-{Interlocked.Increment(ref _tempSequence)}.{tag}";
+
     private static string PrepareTempPath(string path)
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
@@ -130,7 +151,7 @@ internal static class AtomicFile
 
         // Same directory as the destination: a cross-volume move is a copy+delete, which is not
         // atomic and would reintroduce exactly the torn window this helper exists to close.
-        return path + ".tmp";
+        return UniqueTempPath(path);
     }
 
     private static void Swap(string temp, string path)

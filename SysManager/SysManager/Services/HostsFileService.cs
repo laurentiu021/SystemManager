@@ -5,6 +5,7 @@
 using System.IO;
 using System.Net;
 using System.Text.RegularExpressions;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -205,7 +206,8 @@ public sealed partial class HostsFileService
         // Write atomically: a crash midway through File.WriteAllLines would otherwise
         // leave the hosts file truncated or empty. Write to a temp file in the same
         // directory, then swap it into place in one operation.
-        var tempPath = HostsPath + ".sysmanager.tmp";
+        // Unique per call — see the note in RestoreBackup and AtomicFile.UniqueTempPath.
+        var tempPath = AtomicFile.UniqueTempPath(HostsPath, "sysmanager.tmp");
         try
         {
             File.WriteAllLines(tempPath, lines);
@@ -246,7 +248,10 @@ public sealed partial class HostsFileService
         // existing target's security descriptor onto the replacement. A plain
         // File.Copy(overwrite:true) would relink a new inode that inherits only the
         // directory's default ACL, silently weakening the file.
-        var tempPath = HostsPath + ".sysmanager.restore.tmp";
+        // Unique per call: the cleanup below runs in a finally, so a fixed name would let two
+        // overlapping writers delete each other's staged file and lose both. AtomicFile owns the
+        // naming so the rule is stated once (see AtomicFile.UniqueTempPath).
+        var tempPath = AtomicFile.UniqueTempPath(HostsPath, "sysmanager.restore.tmp");
         try
         {
             File.Copy(BackupPath, tempPath, overwrite: true);

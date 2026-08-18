@@ -2920,6 +2920,64 @@ public partial class ArchitectureTests
                     RegexOptions.Compiled)]
     private static partial Regex EtaBackingField();
 
+    /// <summary>
+    /// Every write on <c>IAudioMixerService</c> that reports whether it was applied must have that answer
+    /// CONSULTED at each call site. All three returned <c>bool</c>, documented "Returns true if the change
+    /// was applied", and all three results were discarded — so a refused write left the slider sitting at
+    /// the new value while the app kept playing at the old one, silently.
+    /// <para>Phrased over the INTERFACE, not over the call sites: the population is discovered from
+    /// <c>IAudioMixerService</c>'s bool-returning members, so adding a fourth write and ignoring it fails
+    /// here. The satisfiable-one-at-a-time form ("this call site must check") would not have caught the
+    /// original defect either, because no call site checked.</para>
+    /// <para>Consulted means the result reaches a condition or a variable — <c>if (!x.Set…)</c>,
+    /// <c>var ok = x.Set…</c>, <c>return x.Set…</c>. A bare statement call is the defect.</para>
+    /// </summary>
+    [Fact]
+    public void EveryAudioWriteThatReportsSuccess_HasThatAnswerConsulted()
+    {
+        var appDir = FindAppProjectDir();
+
+        var contract = File.ReadAllText(Path.Combine(appDir, "Services", "IAudioMixerService.cs"));
+        var writes = BoolReturningMember().Matches(contract).Select(m => m.Groups["name"].Value).ToList();
+
+        // Vacuity floor from an enumerated population: SetVolume, SetMute, SetSessionOutputDevice.
+        Assert.True(writes.Count >= 3,
+            $"only {writes.Count} bool-returning writes found on IAudioMixerService — the member regex has "
+          + "stopped matching, so this guard is measuring nothing.");
+
+        var offenders = new List<string>();
+        foreach (var file in Directory.GetFiles(Path.Combine(appDir, "ViewModels"), "*.cs"))
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var code = lines[i].Trim();
+                if (code.StartsWith("//", StringComparison.Ordinal)) continue;   // never match our own prose
+
+                foreach (var write in writes)
+                {
+                    if (!code.Contains($".{write}(", StringComparison.Ordinal)) continue;
+
+                    // A bare statement call: the line IS the invocation and nothing receives the answer.
+                    var bare = code.StartsWith("_service.", StringComparison.Ordinal)
+                            && code.EndsWith(");", StringComparison.Ordinal)
+                            && !code.Contains('=', StringComparison.Ordinal);
+                    if (bare)
+                        offenders.Add($"{Path.GetFileName(file)}:{i + 1} — {write} result discarded");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These audio writes report whether they were applied and the answer is thrown away, so a "
+          + "refused change leaves the control showing a value the system never took, with nothing said "
+          + "to the user:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A bool-returning member on an interface — a write that reports its own outcome.</summary>
+    [GeneratedRegex(@"^\s+bool\s+(?<name>\w+)\s*\(", RegexOptions.Compiled | RegexOptions.Multiline)]
+    private static partial Regex BoolReturningMember();
+
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {

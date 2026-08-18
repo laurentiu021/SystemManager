@@ -201,6 +201,80 @@ public class AudioMixerViewModelTests
         service.Received(1).SetMute("s1", true);
     }
 
+    /// <summary>
+    /// A refused write must be reported, not swallowed. All three service writes return whether they were
+    /// applied and all three results used to be discarded, so the slider sat at 20% while the app kept
+    /// playing at 80% with nothing on screen to say so.
+    /// <para>Reachable, not theoretical: <c>EnumerateGroupsLocked</c> releases the COM group cache before
+    /// repopulating it, and a failure part way through leaves <c>_groups</c> empty — so every write for up
+    /// to a second afterwards hits the dictionary-miss branch and returns false. The service's own tests
+    /// (<c>Service_SetVolume_UnknownSession_IsRejected</c>) already prove that branch returns false; this
+    /// pins what the USER is told when it does.</para>
+    /// </summary>
+    [Fact]
+    public void RowVolumeChange_WhenTheServiceRefusesIt_SaysSoInTheStatus()
+    {
+        var service = ServiceWith(Session("s1", volume: 0.5f, name: "Chrome"));
+        service.SetVolume(Arg.Any<string>(), Arg.Any<float>()).Returns(false);
+        using var vm = NewVm(service);
+        var row = vm.Sessions.Single();
+
+        row.Volume = 0.25f;
+
+        Assert.Contains("Could not change the volume", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("Chrome", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RowMuteToggle_WhenTheServiceRefusesIt_SaysSoInTheStatus()
+    {
+        var service = ServiceWith(Session("s1", muted: false, name: "Spotify"));
+        service.SetMute(Arg.Any<string>(), Arg.Any<bool>()).Returns(false);
+        using var vm = NewVm(service);
+        var row = vm.Sessions.Single();
+
+        row.ToggleMuteCommand.Execute(null);
+
+        Assert.Contains("Could not mute Spotify", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The successful path must stay silent — a status line that fires on every slider move would bury the
+    /// one that matters. This is the negative half of the pair above: without it, reporting
+    /// unconditionally would pass both tests.
+    /// </summary>
+    [Fact]
+    public void RowVolumeChange_WhenItSucceeds_LeavesTheStatusAlone()
+    {
+        var service = ServiceWith(Session("s1", volume: 0.5f));
+        service.SetVolume(Arg.Any<string>(), Arg.Any<float>()).Returns(true);
+        using var vm = NewVm(service);
+        var before = vm.StatusMessage;
+
+        vm.Sessions.Single().Volume = 0.25f;
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    /// <summary>
+    /// A refresh-driven write must not report either: <c>ApplyUpdate</c> sets Volume/IsMuted from the
+    /// service's own snapshot behind the echo guard, so it never calls the service at all — and a status
+    /// line appearing once a second from a reconcile pass nobody triggered would be pure noise.
+    /// </summary>
+    [Fact]
+    public void ExternalUpdate_DoesNotReportAFailure_EvenWhenWritesWouldBeRefused()
+    {
+        var service = ServiceWith(Session("s1", volume: 0.5f));
+        service.SetVolume(Arg.Any<string>(), Arg.Any<float>()).Returns(false);
+        service.SetMute(Arg.Any<string>(), Arg.Any<bool>()).Returns(false);
+        using var vm = NewVm(service);
+        var before = vm.StatusMessage;
+
+        vm.Sessions.Single().ApplyUpdate(Session("s1", volume: 0.8f, muted: true));
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
     [Fact]
     public void MergeInto_ExternalUpdate_DoesNotEchoBackToService()
     {

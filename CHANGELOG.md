@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.16] - 2026-08-18
+
+Volume Control now tells you when a change did not take. Before, if Windows refused a volume, mute or
+output-device change, the slider still moved to where you put it while the app kept playing at the old
+setting, with nothing on screen to explain it.
+
+### Fixed
+- **A volume, mute or "play on" change could silently do nothing.** All three of those controls ask
+  Windows to apply the change and get back a yes or no, and the app was ignoring the answer. When the
+  answer was no — which happens for a second or so after an app stops playing, while the list of audio
+  sessions is being rebuilt — the slider or switch stayed where you left it and the sound did not change.
+  Dragging Chrome to 20% could leave it playing at 80% with the label reading 20%. All three now say so
+  in the status line under the list, naming the app, and the app keeps the control where you put it
+  rather than yanking it back under your cursor. A change that succeeds stays silent, and the once-a-second
+  background refresh never reports anything, so the message only ever appears for something you did.
+
 ## [1.65.15] - 2026-08-17
 
 The "time remaining" estimate now tells the truth when an operation stalls or when Windows reports its

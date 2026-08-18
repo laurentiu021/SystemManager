@@ -23,6 +23,12 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
 {
     private readonly IAudioMixerService _service;
 
+    /// <summary>
+    /// Where a refused write is reported, so the user is told instead of watching a control move while
+    /// nothing happens. Null only in tests that do not assert on the message.
+    /// </summary>
+    private readonly Action<string>? _reportFailure;
+
     // Set while applying values that came FROM the service, so the property-changed
     // callbacks don't turn an external/refresh update into a redundant write back.
     private bool _suppressPropagation;
@@ -89,10 +95,18 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     /// <summary>Volume as a friendly percentage, e.g. "65%".</summary>
     public string VolumeDisplay => $"{Volume * 100:F0}%";
 
+    /// <param name="reportFailure">
+    /// Called with a finished, user-facing sentence when a write to the audio service is refused. Passed in
+    /// rather than raised as an event on purpose: a row is created and dropped on every reconcile pass, so
+    /// an event would need unsubscribing and that is the lifecycle bug this codebase keeps paying for. A
+    /// delegate held by a row the parent owns needs no teardown.
+    /// </param>
     public AudioSessionRowViewModel(IAudioMixerService service, AudioSessionInfo info,
-        IReadOnlyList<AudioDevice>? outputDevices = null, bool routingSupported = false)
+        IReadOnlyList<AudioDevice>? outputDevices = null, bool routingSupported = false,
+        Action<string>? reportFailure = null)
     {
         _service = service;
+        _reportFailure = reportFailure;
         SessionId = info.SessionId;
         ProcessId = info.ProcessId;
         IsSystemSounds = info.IsSystemSounds;
@@ -147,16 +161,26 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// The user moved the slider. Every one of these three writes returns whether it was applied, and all
+    /// three used to discard it — so a refused write left the control sitting at the new value while the
+    /// app kept playing at the old one, with nothing on screen to say so. That is reachable, not
+    /// theoretical: a reconcile pass releases and re-enumerates the COM session cache, and a failure part
+    /// way through leaves it empty, so every write for up to a second afterwards is refused.
+    /// </summary>
     partial void OnVolumeChanged(float value)
     {
         if (_suppressPropagation) return;
-        _service.SetVolume(SessionId, value);
+        if (!_service.SetVolume(SessionId, value))
+            _reportFailure?.Invoke($"Could not change the volume for {DisplayName} — it may have just stopped playing.");
     }
 
     partial void OnIsMutedChanged(bool value)
     {
         if (_suppressPropagation) return;
-        _service.SetMute(SessionId, value);
+        if (!_service.SetMute(SessionId, value))
+            _reportFailure?.Invoke(
+                $"Could not {(value ? "mute" : "unmute")} {DisplayName} — it may have just stopped playing.");
     }
 
     /// <summary>Flip the mute state; the change propagates via <see cref="OnIsMutedChanged"/>.</summary>
@@ -165,13 +189,17 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
 
     /// <summary>
     /// User picked an output device for this app → route it via the service. Skipped when the
-    /// change came from a refresh (guard) or when in-app routing isn't supported. A failed write
-    /// (the service returned false) is left to the parent VM's status; the picker keeps the choice.
+    /// change came from a refresh (guard) or when in-app routing isn't supported. The picker keeps the
+    /// choice on failure — reverting it would fight the user's own click — but the status now SAYS the
+    /// routing did not take, which the old comment promised ("left to the parent VM's status") without
+    /// anything ever reporting it.
     /// </summary>
     partial void OnSelectedOutputDeviceChanged(AudioDevice? value)
     {
         if (_suppressPropagation || !RoutingSupported || value is null) return;
-        _service.SetSessionOutputDevice(SessionId, value.IsDefault ? string.Empty : value.Id);
+        if (!_service.SetSessionOutputDevice(SessionId, value.IsDefault ? string.Empty : value.Id))
+            _reportFailure?.Invoke(
+                $"Could not move {DisplayName} to {value.FriendlyName} — Windows refused the change.");
     }
 
     /// <summary>

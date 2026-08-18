@@ -229,7 +229,13 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
         // Dispose can land while the sample is in flight; the rows have already been zeroed by then,
         // so writing these levels back would re-light meters on a torn-down tab.
-        if (_reconcileCts is null || ct.IsCancellationRequested) return;
+        //
+        // !IsActive belongs in the SAME guard for the same reason, and was the half that was missing: the
+        // Task.Run genuinely yields, so hiding the tab or minimising the window mid-sample zeroes every
+        // row in OnIsActiveChanged and the continuation then writes the old levels straight back. The loop
+        // parks on its next iteration, so those stale bars survive for as long as the tab stays hidden —
+        // on re-show the user sees a lit meter from minutes ago until the next sample lands.
+        if (_reconcileCts is null || ct.IsCancellationRequested || !IsActive) return;
 
         foreach (var row in Sessions)
             if (peaks.TryGetValue(row.SessionId, out var peak))

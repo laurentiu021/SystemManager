@@ -248,4 +248,190 @@ public class EtaCalculatorTests
         Assert.Equal("calculating…", eta.RemainingText);
         Assert.Equal("done", eta.Update(100));
     }
+
+    /// <summary>
+    /// Progress does not arrive on a timer. <c>sfc</c> and DISM emit their redraws through
+    /// <c>Process.OutputDataReceived</c>, which flushes buffered lines back-to-back, so two different
+    /// percents can be microseconds apart. Dividing an advance by a microsecond yields thousands of
+    /// percent per second, and one such sample used to pin the display at "a few seconds" for the rest of
+    /// the run: it takes ~29 further forward samples for a 0.3-weighted average to work 6000 %/s back down,
+    /// more than SFC emits in the remainder of a scan.
+    /// </summary>
+    [Fact]
+    public void Update_WhenTwoPercentsArriveMicrosecondsApart_DoesNotBelieveTheImpliedRate()
+    {
+        var time = new TestTimeProvider();
+        var eta = new EtaCalculator(time);
+        eta.Reset();
+
+        // Establish an honest 0.1 %/s: 10% in 100 s => 90% left => ~900 s.
+        time.Advance(TimeSpan.FromSeconds(100));
+        eta.Update(10);
+        var honest = eta.Remaining!.Value;
+        Assert.True(honest > TimeSpan.FromMinutes(10), $"the baseline estimate is already wrong: {honest}.");
+
+        // Now the flush: 11% and 12% land 50 microseconds apart. Naively that is 20,000 %/s.
+        time.Advance(TimeSpan.FromMilliseconds(0.05));
+        eta.Update(11);
+        time.Advance(TimeSpan.FromMilliseconds(0.05));
+        eta.Update(12);
+
+        Assert.NotEqual("a few seconds", eta.RemainingText);
+        Assert.True(eta.Remaining!.Value > TimeSpan.FromMinutes(5),
+            $"a 50 µs sample collapsed the estimate to {eta.Remaining} — the burst is being taken as a rate.");
+    }
+
+    /// <summary>
+    /// The advance under the sample floor must be CARRIED, not discarded: an operation reporting faster
+    /// than the floor must still be measured, just over a coalesced window. Discarding it instead would
+    /// lose progress permanently and hold the ETA at the opening rate forever.
+    /// </summary>
+    [Fact]
+    public void Update_BelowTheSampleFloor_CarriesTheAdvanceIntoTheNextSample()
+    {
+        var time = new TestTimeProvider();
+        var eta = new EtaCalculator(time);
+        eta.Reset();
+
+        // Ten reports at 100 ms each: every one is under the 250 ms floor on its own, but together they
+        // span 1 s and 10% of progress — an honest 10 %/s, so 90% left is ~9 s.
+        for (var p = 1; p <= 10; p++)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(100));
+            eta.Update(p);
+        }
+
+        var remaining = eta.Remaining;
+        Assert.NotNull(remaining);
+        Assert.InRange(remaining!.Value, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15));
+    }
+
+    /// <summary>
+    /// A sample spanning a long stall IS the better measurement and must dominate. Under the old fixed
+    /// 0.3 weight the resuming rate was outvoted 7:3 by a pace that no longer existed, so a 10-minute
+    /// stall followed by 1% of progress reported "~2 min" when the observed pace implied hours.
+    /// </summary>
+    [Fact]
+    public void Update_AfterALongStall_TrustsTheResumingRateOverThePreStallPace()
+    {
+        var time = new TestTimeProvider();
+        var eta = new EtaCalculator(time);
+        eta.Reset();
+
+        // 1 %/s established over ten seconds.
+        for (var p = 1; p <= 10; p++)
+        {
+            time.Advance(TimeSpan.FromSeconds(1));
+            eta.Update(p);
+        }
+
+        // Ten minutes of silence, then one more percent. Observed pace: 1% per 600 s => 89% => ~14.8 h.
+        time.Advance(TimeSpan.FromMinutes(10));
+        eta.Update(11);
+
+        Assert.True(eta.Remaining!.Value > TimeSpan.FromHours(1),
+            $"after a 10-minute stall the estimate is {eta.Remaining} — the pre-stall rate still dominates.");
+    }
+
+    /// <summary>
+    /// Past its projected finish the text must stop claiming the operation is nearly done. Remaining
+    /// clamps at zero, so an operation that overshoots and then hangs is otherwise indistinguishable from
+    /// one about to complete — it showed "a few seconds" for as long as the hang lasted.
+    /// </summary>
+    [Fact]
+    public void RemainingText_WellPastTheProjectedFinish_SaysItIsTakingLongerRatherThanAlmostDone()
+    {
+        var time = new TestTimeProvider();
+        var eta = new EtaCalculator(time);
+        eta.Reset();
+
+        // 1 %/s at 10% => projected finish at t = 100 s.
+        time.Advance(TimeSpan.FromSeconds(10));
+        eta.Update(10);
+
+        // Just past the projection, still inside the grace: "a few seconds" is fair, it may be finishing.
+        time.Advance(TimeSpan.FromSeconds(95));
+        Assert.Equal(TimeSpan.Zero, eta.Remaining);
+        Assert.Equal("a few seconds", eta.RemainingText);
+
+        // Well past it: the projection has expired and the text must say so.
+        time.Advance(TimeSpan.FromMinutes(25));
+        Assert.Equal("taking longer than expected", eta.RemainingText);
+
+        // And completion still wins over overdue.
+        Assert.Equal("done", eta.Update(100));
+    }
+
+    /// <summary>
+    /// Reset must clear the RATE, not merely the projection. <c>Remaining</c> is null after any reset
+    /// because <c>_projectedFinish</c> is nulled, so a test that only asserts null cannot tell whether the
+    /// samples were cleared — a second run would silently inherit the first run's pace.
+    /// </summary>
+    [Fact]
+    public void Reset_ClearsTheRate_SoASecondRunDoesNotInheritTheFirstRunsPace()
+    {
+        var time = new TestTimeProvider();
+        var eta = new EtaCalculator(time);
+
+        // Run 1: a fast 10 %/s.
+        eta.Reset();
+        time.Advance(TimeSpan.FromSeconds(5));
+        eta.Update(50);
+
+        // Run 2: 5% in 1 s => 5 %/s => 95% left => exactly 19 s. Any inherited rate makes it smaller.
+        eta.Reset();
+        time.Advance(TimeSpan.FromSeconds(1));
+        eta.Update(5);
+
+        Assert.Equal(TimeSpan.FromSeconds(19), eta.Remaining);
+    }
+
+    /// <summary>
+    /// A clock that advances on every reading, so concurrent callers see a monotonically increasing time
+    /// without any test-controlled stepping. Needed because the threading test below cannot advance a
+    /// frozen clock from inside the parallel body, and the real clock moves too little across a
+    /// <c>Parallel.For</c> for any sample to clear the minimum interval.
+    /// </summary>
+    private sealed class TickingClock : TimeProvider
+    {
+        private long _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        // Half a second per reading: comfortably over MinSampleInterval, so samples are accepted.
+        // Fully qualified from the global namespace — inside a TimeProvider subclass, `System.Threading`
+        // binds to the inherited `TimeProvider.System` member first.
+        public override long GetTimestamp() =>
+            global::System.Threading.Interlocked.Add(ref _ticks, TimeSpan.TicksPerSecond / 2);
+    }
+
+    /// <summary>
+    /// The class is fed from <c>PowerShellRunner.LineReceived</c>, which is raised on the
+    /// <c>OutputDataReceived</c> AND <c>ErrorDataReceived</c> threadpool threads with nothing marshalling
+    /// in between — two threads into one handler. <c>_projectedFinish</c> is a <c>TimeSpan?</c> (a 16-byte
+    /// struct on x64), so an unsynchronised read can pair a live <c>HasValue</c> with a stale tick count
+    /// and print an arbitrary duration.
+    /// <para>Threading tests cannot prove the ABSENCE of a race, so this is a smoke check with teeth: it
+    /// asserts every observed estimate is a sane duration, and that concurrent callers still produce
+    /// estimates at all rather than deadlocking or leaving the state permanently unusable.</para>
+    /// </summary>
+    [Fact]
+    public void Update_FromManyThreadsAtOnce_NeverProducesANegativeOrAbsurdEstimate()
+    {
+        var eta = new EtaCalculator(new TickingClock());
+        eta.Reset();
+
+        var observed = new System.Collections.Concurrent.ConcurrentBag<TimeSpan>();
+        Parallel.For(0, 400, i =>
+        {
+            // Percent must only ever go forward — a backwards report is a no-op by design, so a shuffled
+            // sequence would exercise the early return instead of the arithmetic under contention.
+            eta.Update(Math.Min(99, (i / 4) + 5));
+            if (eta.Remaining is { } left) observed.Add(left);
+            _ = eta.RemainingText;
+        });
+
+        Assert.NotEmpty(observed);
+        Assert.All(observed, t => Assert.InRange(t, TimeSpan.Zero, TimeSpan.FromDays(365)));
+    }
 }

@@ -697,9 +697,17 @@ public partial class ArchitectureTests
                     continue;   // not disposed here — nothing to require
 
                 checkedFields++;
-                if (!body.Contains($"{field}?.Cancel()", StringComparison.Ordinal)
-                    && !body.Contains($"{field}.Cancel()", StringComparison.Ordinal))
-                    offenders.Add($"{Path.GetFileName(file)} · {field}");
+
+                // ORDER, not co-presence — the name says "IsCancelledFirst" and the failure message says
+                // "before the Dispose()". Co-presence accepted `_cts.Dispose(); _cts.Cancel();`, where the
+                // Cancel throws ObjectDisposedException and in-flight work (shredder overwrites, cleanup
+                // deletes) survives teardown: the exact defect, with both tokens present.
+                var cancelAt = FirstIndexOfAny(body, $"{field}?.Cancel()", $"{field}.Cancel()");
+                var disposeAt = FirstIndexOfAny(body, $"{field}?.Dispose()", $"{field}.Dispose()");
+                if (cancelAt < 0)
+                    offenders.Add($"{Path.GetFileName(file)} · {field} — never cancelled");
+                else if (cancelAt > disposeAt)
+                    offenders.Add($"{Path.GetFileName(file)} · {field} — cancelled AFTER being disposed");
             }
         }
 
@@ -710,9 +718,24 @@ public partial class ArchitectureTests
             "the detection is probably no longer matching the field declarations.");
 
         Assert.True(offenders.Count == 0,
-            "These cancellation sources are disposed without being cancelled, so work already in "
+            "These cancellation sources are disposed without being cancelled first, so work already in "
             + "flight keeps running after teardown — Dispose() does not cancel. Add a Cancel() before "
             + "the Dispose():\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Index of whichever needle appears first, or -1 when neither does. Used to compare the POSITION of
+    /// two calls rather than merely their presence.
+    /// </summary>
+    private static int FirstIndexOfAny(string haystack, params string[] needles)
+    {
+        var best = -1;
+        foreach (var needle in needles)
+        {
+            var at = haystack.IndexOf(needle, StringComparison.Ordinal);
+            if (at >= 0 && (best < 0 || at < best)) best = at;
+        }
+        return best;
     }
 
     /// <summary>A field declared as a cancellation source, e.g. <c>private CancellationTokenSource? _cts;</c>.</summary>
@@ -2040,11 +2063,40 @@ public partial class ArchitectureTests
 
         // The step body has to actually start the process and judge the outcome. Without these it
         // could be reduced to an echo and still satisfy the ordering above.
-        var body = string.Join('\n', lines[smoke..release]);
-        foreach (var required in new[] { "Start-Process", "HasExited", "last-crash.json", "throw" })
+        //
+        // Sliced to the END OF THIS STEP, not to "Create GitHub Release": two unrelated steps sit in
+        // between ("Extract release notes from CHANGELOG" and "Append verification instructions"), and
+        // between them they contain five `throw`s. Against the wider slice, replacing this step's own
+        // `throw` with a Write-Warning — turning the launch gate into exactly the "decoration" the
+        // paragraph below forbids — still left the assertion green.
+        var stepEnd = Array.FindIndex(lines, smoke + 1, l => l.TrimStart().StartsWith("- name:", StringComparison.Ordinal));
+        Assert.True(stepEnd > smoke && stepEnd <= release,
+            $"the smoke-check step has no following step before \"Create GitHub Release\" (found {stepEnd}). "
+          + "The slice must end at this step's own boundary: widening it to the next few steps lets THEIR "
+          + "five throws stand in for this gate's, which is how a neutered launch check stayed green.");
+        var body = string.Join('\n', lines[smoke..stepEnd]);
+        Assert.True(body.Length > 500,
+            $"the smoke-check step body is only {body.Length} characters — the slice has collapsed, so "
+          + "the token checks below would pass by measuring nothing.");
+        foreach (var foreign in new[] { "Extract release notes from CHANGELOG", "Create GitHub Release" })
+        {
+            Assert.DoesNotContain(foreign, body, StringComparison.Ordinal);
+        }
+        foreach (var required in new[] { "Start-Process", "HasExited", "last-crash.json" })
         {
             Assert.Contains(required, body, StringComparison.Ordinal);
         }
+
+        // `throw` is counted on non-comment lines only, and more than one is required: the step raises on
+        // three distinct verdicts (the exe self-exited, it left a crash marker, it would not die when
+        // killed). A bare Contains was satisfied by the word "throw" in this step's own explanatory
+        // comment, and by whichever verdict was left intact when another was turned into a Write-Warning.
+        var throwingLines = body.Split('\n')
+            .Count(l => !l.TrimStart().StartsWith('#') && l.Contains("throw ", StringComparison.Ordinal));
+        Assert.True(throwingLines >= 3,
+            $"the smoke check raises on only {throwingLines} verdict(s). It must fail the job when the exe "
+          + "self-exits, when it leaves a crash marker, AND when it will not terminate — a verdict "
+          + "downgraded to a warning makes the launch advisory, which is the one thing it must not be.");
 
         // A check that never fails the job is decoration. continue-on-error on this step would make
         // the launch advisory, which is the one thing it must not be.
@@ -2664,6 +2716,209 @@ public partial class ArchitectureTests
 
     // WhitespaceRun() is declared once, near the XAML attribute readers that first needed it — the same
     // collapse rule serves both, so it is not redeclared here.
+
+    /// <summary>
+    /// Every ETA text property must either be cleared when its operation ends, or live inside a section
+    /// the view hides when the operation is not running. Otherwise the last value stays on screen: Speed
+    /// Test left the literal word "done" under BOTH its cards — they share one property — until the next
+    /// run, and after a cancel it stranded whatever the last tick produced, typically "a few seconds".
+    /// <para>Two accepted shapes, because both are already in use and both are correct: clear it in
+    /// <c>finally</c> (AppUpdates, BulkInstaller, Uninstaller, Cleanup, and now SpeedTest), or gate the
+    /// containing panel on an <c>Is…ing</c> flag (DeepCleanup). What is NOT accepted is neither.</para>
+    /// <para>Matched on the CLEARING STATEMENT, not on the words of this comment: a guard that keys on
+    /// prose passes because of its own explanation. The population is enumerated from the view models that
+    /// actually own an ETA property, so adding a seventh consumer without clearing it fails here.</para>
+    /// </summary>
+    [Fact]
+    public void EveryEtaTextProperty_IsClearedWhenItsOperationEnds()
+    {
+        var appDir = FindAppProjectDir();
+        var vmDir = Path.Combine(appDir, "ViewModels");
+        var viewsDir = Path.Combine(appDir, "Views");
+
+        var offenders = new List<string>();
+        var checkedProperties = 0;
+
+        foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs"))
+        {
+            var source = File.ReadAllText(file);
+            var vmName = Path.GetFileNameWithoutExtension(file);
+
+            foreach (var property in EtaTextProperties(source))
+            {
+                checkedProperties++;
+
+                // Shape 1: EVERY try/finally that feeds this property also clears it, so a run ending any
+                // way at all — success, error, cancel — leaves nothing behind.
+                //
+                // Counted per block, not "somewhere in the file": an `Any` over the whole source let one
+                // operation drop its clear while a sibling supplied the match. Speed Test has two, Ookla
+                // and HTTP, sharing one property — exactly the shape in which a half-fix reads as done.
+                var feedingBlocks = TryFinallyBlocksFeeding(source, property);
+                if (feedingBlocks.Count > 0 && feedingBlocks.All(b => ClearsProperty(b, property)))
+                    continue;
+
+                // Shape 2: the ETA element sits inside a container the view hides while the operation is
+                // not running, so a stale value can never be seen.
+                //
+                // Scoped to the ETA element's OWN ancestor chain, not to "this file mentions an Is…ing
+                // binding somewhere". The looser form waved SpeedTestView through on the strength of the
+                // Visibility bindings on its ProgressBar and Cancel button, which have nothing to do with
+                // the ETA TextBlock — leaving this guard green against the exact defect it was written for.
+                var viewPath = Path.Combine(viewsDir, vmName.Replace("ViewModel", "View") + ".xaml");
+                if (File.Exists(viewPath) && EtaElementSitsInAFlagGatedContainer(viewPath, property))
+                    continue;
+
+                offenders.Add($"{vmName}.{property}");
+            }
+        }
+
+        // Vacuity floor from an enumerated population: AppUpdates, BulkInstaller, Cleanup (×2),
+        // DeepCleanup (×2), SpeedTest, Uninstaller — eight ETA properties across six view models. A
+        // regex that silently stopped matching would otherwise make this pass by checking nothing.
+        Assert.True(checkedProperties >= 8,
+            $"only {checkedProperties} ETA properties were found — EtaBackingField() has stopped "
+          + "matching, so this guard is measuring nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these ETA texts are neither cleared in a finally nor hidden with their section, so the last "
+          + "value stays on screen after the operation ends: " + string.Join(", ", offenders));
+    }
+
+    /// <summary>
+    /// Names of the ETA text properties a view model owns. Matches the <c>[ObservableProperty]</c> backing
+    /// field, whose generated property is what the view binds.
+    /// </summary>
+    private static IEnumerable<string> EtaTextProperties(string source)
+    {
+        foreach (Match m in EtaBackingField().Matches(source))
+        {
+            var field = m.Groups["name"].Value;   // _upgradeEtaText
+            yield return char.ToUpperInvariant(field[1]) + field[2..];
+        }
+    }
+
+    /// <summary>
+    /// True when the element displaying <paramref name="property"/> has an ANCESTOR whose
+    /// <c>Visibility</c> binds to an <c>Is…ing</c> flag — so the whole section disappears when the
+    /// operation is not running and a stale value is unreachable.
+    /// <para>Walks the real XAML tree rather than searching the file, and deliberately ignores a
+    /// <c>Visibility</c> on the ETA element itself: binding an element's visibility to the very string it
+    /// displays is not a gate, it is what kept the stale text on screen.</para>
+    /// </summary>
+    private static bool EtaElementSitsInAFlagGatedContainer(string viewPath, string property)
+    {
+        var root = System.Xml.Linq.XDocument.Load(viewPath).Root;
+        if (root is null) return false;
+
+        var binding = $"{{Binding {property}}}";
+        foreach (var element in root.Descendants())
+        {
+            if ((string?)element.Attribute("Text") != binding) continue;
+
+            for (var ancestor = element.Parent; ancestor is not null; ancestor = ancestor.Parent)
+            {
+                var visibility = (string?)ancestor.Attribute("Visibility");
+                if (visibility is not null && Regex.IsMatch(visibility, @"^\{Binding\s+Is\w+ing\b"))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The <c>finally</c> body of every method that ASSIGNS <paramref name="property"/> — i.e. every
+    /// operation that can leave a value on screen. A method that assigns it but has no <c>finally</c>
+    /// yields an empty string, which fails <see cref="ClearsProperty"/> and is reported.
+    /// </summary>
+    private static List<string> TryFinallyBlocksFeeding(string source, string property)
+    {
+        var bodies = new List<string>();
+        foreach (var method in MethodBodies(source))
+        {
+            // An assignment FROM the ETA calculator is what makes this method a feeder; the clear itself
+            // (`= string.Empty`) must not count, or a method that only resets it would look like one.
+            if (!Regex.IsMatch(method, Regex.Escape(property) + @"\s*=\s*(?!string\.Empty|"""")"))
+                continue;
+
+            var finallyBodies = FinallyBodies(method).ToList();
+            bodies.Add(finallyBodies.Count > 0 ? string.Join('\n', finallyBodies) : string.Empty);
+        }
+        return bodies;
+    }
+
+    /// <summary>True when the block assigns the property an empty string.</summary>
+    private static bool ClearsProperty(string block, string property) =>
+        block.Contains($"{property} = string.Empty", StringComparison.Ordinal)
+        || block.Contains($"{property} = \"\"", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Each method body in a source file, brace-balanced from its opening <c>{</c>. Coarse by design: it
+    /// only has to separate one operation's try/finally from another's.
+    /// </summary>
+    private static IEnumerable<string> MethodBodies(string source)
+    {
+        foreach (Match m in MethodSignature().Matches(source))
+        {
+            var open = source.IndexOf('{', m.Index + m.Length - 1);
+            if (open < 0) continue;
+
+            var depth = 0;
+            for (var i = open; i < source.Length; i++)
+            {
+                if (source[i] == '{') depth++;
+                else if (source[i] == '}' && --depth == 0)
+                {
+                    yield return source[(open + 1)..i];
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>A method declaration line — the anchor from which a body is brace-matched.</summary>
+    [GeneratedRegex(@"^\s{4}(?:\[[^\]]+\]\s*)?(?:private|internal|public|protected)[^;=\r\n]*\([^;)]*\)\s*$",
+                    RegexOptions.Compiled | RegexOptions.Multiline)]
+    private static partial Regex MethodSignature();
+
+    /// <summary>
+    /// The body of each <c>finally</c> block in a source file. Brace-balanced rather than regex-matched,
+    /// because a finally body contains braces of its own.
+    /// </summary>
+    private static IEnumerable<string> FinallyBodies(string source)
+    {
+        var at = 0;
+        while (true)
+        {
+            var keyword = source.IndexOf("finally", at, StringComparison.Ordinal);
+            if (keyword < 0) break;
+            at = keyword + "finally".Length;
+
+            var open = source.IndexOf('{', keyword);
+            if (open < 0) break;
+
+            var depth = 0;
+            for (var i = open; i < source.Length; i++)
+            {
+                if (source[i] == '{') depth++;
+                else if (source[i] == '}' && --depth == 0)
+                {
+                    yield return source[(open + 1)..i];
+                    at = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// An <c>[ObservableProperty]</c> field holding ETA text — the thing that must not go stale. Both
+    /// spellings in use are matched: seven fields are named <c>…EtaText</c>, and Speed Test's is
+    /// <c>_estimatedTime</c>. Keying on "eta" alone missed exactly the one that carried the defect.
+    /// </summary>
+    [GeneratedRegex(@"\[ObservableProperty\]\s*private\s+string\s+(?<name>_\w*(?:[Ee]ta|[Ee]stimated)\w*)\s*=",
+                    RegexOptions.Compiled)]
+    private static partial Regex EtaBackingField();
 
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()

@@ -144,7 +144,13 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
     internal void Add(int pid, int down, int up, string name)
     {
         if (pid <= 0) return;
-        var c = _counters.GetOrAdd(pid, _ => new PidCounters());
+
+        // Stamp inside the factory, not after GetOrAdd returns. GetOrAdd PUBLISHES the entry the instant it
+        // is created, so stamping afterwards leaves a window where _counters holds an entry whose
+        // LastActivityTicks is still 0 — and against a monotonic clock 0 is far below the cutoff, so a poll
+        // landing in that window evicts a PID that is actively transferring. Its next event re-adds it with
+        // a zeroed counter, which the user sees as the session total for a busy app resetting to a few KB.
+        var c = _counters.GetOrAdd(pid, _ => new PidCounters { LastActivityTicks = NowTicks() });
         if (down > 0) System.Threading.Interlocked.Add(ref c.DownBytes, down);
         if (up > 0) System.Threading.Interlocked.Add(ref c.UpBytes, up);
         if (c.Name.Length == 0 && !string.IsNullOrEmpty(name)) c.Name = name;
@@ -215,8 +221,10 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
         long cutoff = nowTicks - IdleEviction.Ticks;
         foreach (var (pid, c) in _counters)
         {
-            // Entries are only ever created by Add, which stamps before it returns, so every one has a
-            // stamp. This deliberately does NOT treat 0 as "unstamped": zero is a legitimate reading —
+            // Entries are only ever created by Add, which stamps them in the GetOrAdd factory, so an entry
+            // is never visible here unstamped. (Stamping after GetOrAdd returned was not enough: the entry
+            // is published on creation, so a poll could see a 0 and evict a PID mid-transfer.)
+            // This deliberately does NOT treat 0 as "unstamped": zero is a legitimate reading —
             // a monotonic clock starts there, both in a test that has not advanced it and on a real
             // machine in the first tick after the source starts — and skipping it made a PID stamped at
             // 0 immortal. Not hypothetical: it turned two eviction tests red the moment the clock became

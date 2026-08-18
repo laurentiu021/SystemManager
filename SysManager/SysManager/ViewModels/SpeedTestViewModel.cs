@@ -125,7 +125,11 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         { HttpStatus = "Error: " + ex.Message; }
         catch (InvalidOperationException ex)
         { HttpStatus = "Error: " + ex.Message; }
-        finally { IsSpeedTesting = false; IsHttpTesting = false; }
+        // EstimatedTime must be cleared here, not just on the next run. Its TextBlock's Visibility binds
+        // to the string itself, so a leftover value stays on screen indefinitely — and because both cards
+        // share this one property, a finished HTTP run left the word "done" sitting under the Ookla card
+        // too. Matches AppUpdates/BulkInstaller/Uninstaller, which all clear their ETA text in `finally`.
+        finally { IsSpeedTesting = false; IsHttpTesting = false; EstimatedTime = string.Empty; }
     }
 
     [RelayCommand]
@@ -170,7 +174,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         { OoklaStatus = "Error: " + ex.Message; }
         catch (InvalidOperationException ex)
         { OoklaStatus = "Error: " + ex.Message; }
-        finally { IsSpeedTesting = false; IsOoklaTesting = false; }
+        finally { IsSpeedTesting = false; IsOoklaTesting = false; EstimatedTime = string.Empty; }
     }
 
     [RelayCommand]

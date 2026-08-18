@@ -22,18 +22,54 @@ namespace SysManager.Helpers;
 /// step displayed "~1.6 h" moments before the real answer turned out to be 90 s.
 /// </para>
 /// <para>
-/// Thread safety: this class is NOT thread-safe. All calls must be made from the same thread (typically
-/// the UI thread via Progress&lt;T&gt; callbacks).
+/// Thread safety: every public member is serialized on an internal lock, so callers may report progress
+/// from whatever thread it reaches them on. That is not a convenience — <c>CleanupViewModel</c> feeds this
+/// from <c>PowerShellRunner.LineReceived</c>, raised on the <c>OutputDataReceived</c> and
+/// <c>ErrorDataReceived</c> threadpool threads with nothing marshalling in between, and the previous
+/// "callers must be single-threaded" contract was simply not being met.
 /// </para>
 /// </summary>
 public sealed class EtaCalculator
 {
     /// <summary>
-    /// Weight given to the newest rate sample. 0.3 stays responsive to a genuine slowdown within a few
-    /// samples while ignoring the jitter of one slow step — the usual low-pass constant for transfer
-    /// dialogs. Higher jumps around; lower reacts too late to be useful.
+    /// Time constant of the rate smoother, in seconds. The weight given to a sample is
+    /// <c>1 - e^(-Δt / τ)</c>, so it grows with the interval the sample actually covers instead of being
+    /// the same for every report.
+    /// <para>2.8 s is chosen so nothing changes at the cadence callers really report at: at Δt = 1 s the
+    /// weight is <c>1 - e^(-1/2.8) = 0.30</c>, exactly the fixed 0.3 this replaced. It stays responsive to
+    /// a genuine slowdown within a few samples while ignoring the jitter of one slow step.</para>
+    /// <para>The fixed weight was wrong in both directions. A sample spanning a 10-minute stall got the
+    /// same 0.3 as a sample spanning one second, so the resuming rate — the only honest measurement
+    /// available — was outvoted 7:3 by a pace that no longer existed: 1%/s established, 600 s stall, then
+    /// 1% more read as "~2 min" when the observed pace implied hours. And a sub-millisecond interval made
+    /// <c>advance / Δt</c> explode, which the fixed weight passed straight through. Time-weighting bounds
+    /// that: the contribution is <c>(Δt/τ)·(advance/Δt) = advance/τ</c>, independent of how small Δt
+    /// is.</para>
     /// </summary>
-    private const double RateSmoothing = 0.3;
+    private const double RateTimeConstantSeconds = 2.8;
+
+    /// <summary>
+    /// Shortest interval accepted as a rate sample. Below it the advance is CARRIED — neither the percent
+    /// nor the sample timestamp moves — so it is measured over the real interval on the next report rather
+    /// than over a microsecond one. Carrying rather than discarding is what makes a floor safe at any
+    /// speed: a fast operation reporting every 100 ms simply coalesces into ~250 ms windows, and the ratio
+    /// the rate is computed from is unchanged.
+    /// <para>Needed because progress does not arrive on a timer. <c>sfc</c> and DISM emit their redraws
+    /// through <c>Process.OutputDataReceived</c>, which flushes buffered lines back-to-back, so two
+    /// different percents can be microseconds apart. Rejecting only a ZERO interval was not enough:
+    /// 1% in 50 µs is 20,000 %/s.</para>
+    /// </summary>
+    private static readonly TimeSpan MinSampleInterval = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Fraction of the projected duration an operation may overrun before the text stops claiming it is
+    /// nearly done. Proportional, with <see cref="MinOverdueGrace"/> as a floor, because 30 s past a
+    /// "few seconds" estimate is a broken promise while 30 s past a two-hour estimate is noise.
+    /// </summary>
+    private const double OverdueFraction = 0.1;
+
+    /// <summary>Lower bound on the overdue grace, so a short projection is not called stale immediately.</summary>
+    private static readonly TimeSpan MinOverdueGrace = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// No estimate is shown below this mark. Early samples are dominated by start-up cost — opening
@@ -43,6 +79,16 @@ public sealed class EtaCalculator
     private const int MinPercentForEstimate = 3;
 
     private readonly TimeProvider _time;
+
+    /// <summary>
+    /// Serializes every read and write of the fields below. Cheap (uncontended in the common case) and it
+    /// removes a real hazard rather than a theoretical one: <c>CleanupViewModel</c> calls
+    /// <see cref="Update"/> straight from <c>PowerShellRunner.LineReceived</c>, which is raised on
+    /// <c>Process.OutputDataReceived</c> AND <c>ErrorDataReceived</c> — two threadpool threads into one
+    /// handler, with nothing marshalling to the UI thread. <c>_projectedFinish</c> is a
+    /// <c>TimeSpan?</c>, so a torn read there yields an arbitrary duration on screen.
+    /// </summary>
+    private readonly object _gate = new();
 
     private long _startTimestamp;
     private long _lastSampleTimestamp;
@@ -71,6 +117,12 @@ public sealed class EtaCalculator
     /// </summary>
     public TimeSpan? Remaining
     {
+        get { lock (_gate) return RemainingLocked; }
+    }
+
+    /// <summary>Body of <see cref="Remaining"/>. Caller holds <see cref="_gate"/>.</summary>
+    private TimeSpan? RemainingLocked
+    {
         get
         {
             if (_completed) return TimeSpan.Zero;
@@ -80,14 +132,44 @@ public sealed class EtaCalculator
         }
     }
 
-    /// <summary>Human-readable ETA string (e.g. "~2 min 15 s", "calculating…", "done").</summary>
+    /// <summary>
+    /// True once the operation has run measurably past its projected finish — the projection has expired
+    /// and the calculator no longer has a usable estimate.
+    /// <para>Separated from "almost done" deliberately. <see cref="Remaining"/> clamps at zero, so a run
+    /// that overshoots its projection and then hangs is indistinguishable from one about to finish: an
+    /// operation projected to end at 100 s that stalls at 40% reported "a few seconds" for the following
+    /// 25 minutes. Beyond the grace, <see cref="RemainingText"/> says so instead of promising.</para>
+    /// </summary>
+    private bool IsOverdue
+    {
+        get
+        {
+            if (_completed || _projectedFinish is not { } finish) return false;
+            var overrun = Elapsed - finish;
+            if (overrun <= TimeSpan.Zero) return false;
+            var grace = finish * OverdueFraction;
+            return overrun > (grace > MinOverdueGrace ? grace : MinOverdueGrace);
+        }
+    }
+
+    /// <summary>
+    /// Human-readable ETA string (e.g. "~2 min 15 s", "calculating…", "taking longer than expected",
+    /// "done").
+    /// </summary>
     public string RemainingText
+    {
+        get { lock (_gate) return RemainingTextLocked; }
+    }
+
+    /// <summary>Body of <see cref="RemainingText"/>. Caller holds <see cref="_gate"/>.</summary>
+    private string RemainingTextLocked
     {
         get
         {
             if (_completed) return "done";
             if (!_started) return string.Empty;
-            return Remaining is { } left ? FormatTimeSpan(left) : "calculating…";
+            if (IsOverdue) return "taking longer than expected";
+            return RemainingLocked is { } left ? FormatTimeSpan(left) : "calculating…";
         }
     }
 
@@ -96,13 +178,16 @@ public sealed class EtaCalculator
     /// <summary>Resets the calculator. Call at the start of each operation.</summary>
     public void Reset()
     {
-        _startTimestamp = _time.GetTimestamp();
-        _lastSampleTimestamp = _startTimestamp;
-        _started = true;
-        _completed = false;
-        _lastPercent = 0;
-        _rate = 0;
-        _projectedFinish = null;
+        lock (_gate)
+        {
+            _startTimestamp = _time.GetTimestamp();
+            _lastSampleTimestamp = _startTimestamp;
+            _started = true;
+            _completed = false;
+            _lastPercent = 0;
+            _rate = 0;
+            _projectedFinish = null;
+        }
     }
 
     /// <summary>
@@ -110,6 +195,12 @@ public sealed class EtaCalculator
     /// string for convenience.
     /// </summary>
     public string Update(int percent)
+    {
+        lock (_gate) return UpdateLocked(percent);
+    }
+
+    /// <summary>Body of <see cref="Update"/>. Caller holds <see cref="_gate"/>.</summary>
+    private string UpdateLocked(int percent)
     {
         var clamped = Math.Clamp(percent, 0, 100);
 
@@ -125,7 +216,7 @@ public sealed class EtaCalculator
             _lastPercent = 100;
             _completed = true;
             _projectedFinish = null;
-            return RemainingText;
+            return RemainingTextLocked;
         }
 
         _completed = false;
@@ -138,25 +229,35 @@ public sealed class EtaCalculator
         // exactly the time that just passed, so the displayed value would never move (the first draft of
         // this fix did that, and the stall test caught it). Returning early leaves the existing
         // projection in place, and because Remaining is derived at read time, it counts down on its own.
-        if (advanced <= 0 || sinceLastSample <= TimeSpan.Zero)
+        if (advanced <= 0)
         {
             _lastPercent = clamped;
-            return RemainingText;
+            return RemainingTextLocked;
         }
 
+        // Too soon to measure a rate from. Leave BOTH _lastPercent and _lastSampleTimestamp alone so the
+        // advance is carried into the next report and divided by the real interval — dividing it by a
+        // microsecond is what produced 20,000 %/s. Discarding the advance instead would lose progress
+        // permanently for a caller that reports faster than the floor.
+        if (sinceLastSample < MinSampleInterval) return RemainingTextLocked;
+
         var sample = advanced / sinceLastSample.TotalSeconds;
-        _rate = _rate <= 0 ? sample : (RateSmoothing * sample) + ((1 - RateSmoothing) * _rate);
+
+        // Weight by the interval the sample covers, not per call: a sample spanning a long gap IS the
+        // better measurement and must dominate, and a short one must not overturn an established rate.
+        var weight = 1 - Math.Exp(-sinceLastSample.TotalSeconds / RateTimeConstantSeconds);
+        _rate = _rate <= 0 ? sample : (weight * sample) + ((1 - weight) * _rate);
         _lastSampleTimestamp = _time.GetTimestamp();
         _lastPercent = clamped;
 
         if (clamped < MinPercentForEstimate || _rate <= 0)
         {
             _projectedFinish = null;
-            return RemainingText;
+            return RemainingTextLocked;
         }
 
         _projectedFinish = Elapsed + TimeSpan.FromSeconds((100 - clamped) / _rate);
-        return RemainingText;
+        return RemainingTextLocked;
     }
 
     /// <summary>Formats a TimeSpan into a human-friendly short string.</summary>

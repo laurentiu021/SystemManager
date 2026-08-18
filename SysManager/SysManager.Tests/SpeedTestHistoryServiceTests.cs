@@ -103,7 +103,8 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         await svc.SaveAsync(Result("Ookla", 200, 20, 6, "ookla-server"));
         Assert.Equal(2, (await svc.LoadAsync()).Count);
 
-        await svc.ClearAsync("HTTP");
+        Assert.True(await svc.ClearAsync("HTTP"),
+            "ClearAsync reported failure — the view model turns that into \"history could not be cleared\" and leaves the rows on screen.");
 
         var remaining = await svc.LoadAsync();
         var only = Assert.Single(remaining);
@@ -117,7 +118,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         using var svc = NewService();
         await svc.SaveAsync(Result("HTTP", server: "http-server"));
 
-        await svc.ClearAsync("http");   // lower case — the service compares OrdinalIgnoreCase
+        Assert.True(await svc.ClearAsync("http"), "ClearAsync reported failure.");   // lower case — the service compares OrdinalIgnoreCase
 
         Assert.Empty(await svc.LoadAsync());
     }
@@ -129,7 +130,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         await svc.SaveAsync(Result("HTTP"));
         Assert.True(File.Exists(HistoryFile));
 
-        await svc.ClearAsync("HTTP");
+        Assert.True(await svc.ClearAsync("HTTP"), "ClearAsync reported failure.");
 
         Assert.False(File.Exists(HistoryFile));   // no empty-array file left behind
         Assert.Empty(await svc.LoadAsync());
@@ -142,7 +143,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         await svc.SaveAsync(Result("HTTP"));
         await svc.SaveAsync(Result("Ookla"));
 
-        await svc.ClearAsync(null);
+        Assert.True(await svc.ClearAsync(null), "ClearAsync reported failure.");
 
         Assert.False(File.Exists(HistoryFile));
         Assert.Empty(await svc.LoadAsync());
@@ -154,9 +155,14 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         using var svc = NewService();
         Assert.False(File.Exists(HistoryFile));
 
-        var ex = await Record.ExceptionAsync(() => svc.ClearAsync("HTTP"));
+        var cleared = false;
+        var ex = await Record.ExceptionAsync(async () => cleared = await svc.ClearAsync("HTTP"));
 
         Assert.Null(ex);
+        // Nothing to delete is SUCCESS. Returning false here would surface "history could not be
+        // cleared" for a no-op, which is the failure mode the bool was added to prevent.
+        Assert.True(cleared, "clearing an absent file reported failure, so the user would be told the "
+                           + "clear failed when there was simply nothing to clear.");
     }
 
     /// <summary>
@@ -197,14 +203,23 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         using var svc = NewService();
         var start = new DateTime(2026, 1, 1, 0, 0, 0);
         for (int i = 0; i < 22; i++)
-            await svc.SaveAsync(Result("HTTP", server: $"h{i}", at: start.AddMinutes(i)));
-        await svc.SaveAsync(Result("Ookla", server: "ookla-kept", at: start.AddMinutes(100)));
+        {
+            // Checked per save, like the sibling above. Without this the test is blind to a dropped
+            // write: 21 saves also trim to 20, so both counts still match and only the bool differs.
+            var saved = await svc.SaveAsync(Result("HTTP", server: $"h{i}", at: start.AddMinutes(i)));
+            Assert.True(saved, $"HTTP save {i} (h{i}) failed to reach disk.");
+        }
+        Assert.True(await svc.SaveAsync(Result("Ookla", server: "ookla-kept", at: start.AddMinutes(100))),
+            "the Ookla save failed to reach disk.");
 
         var loaded = await svc.LoadAsync();
 
+        // The exact surviving HTTP set, newest first: h21 down to h2. Counts alone do not discriminate —
+        // any 20 of the 22 would satisfy them, including a window that trimmed from the wrong end.
+        var expectedHttp = Enumerable.Range(2, 20).Reverse().Select(i => $"h{i}").ToArray();
+        Assert.Equal(expectedHttp, loaded.Where(r => r.Engine == "HTTP").Select(r => r.Server).ToArray());
+        Assert.Equal(["ookla-kept"], loaded.Where(r => r.Engine == "Ookla").Select(r => r.Server).ToArray());
         Assert.Equal(SpeedTestHistoryService.MaxPerEngine + 1, loaded.Count);
-        Assert.Contains(loaded, r => r.Server == "ookla-kept");
-        Assert.Equal(SpeedTestHistoryService.MaxPerEngine, loaded.Count(r => r.Engine == "HTTP"));
     }
 
     [Fact]

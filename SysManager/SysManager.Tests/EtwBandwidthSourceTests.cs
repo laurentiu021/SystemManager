@@ -141,6 +141,67 @@ public class EtwBandwidthSourceTests
         Assert.Empty(await PidsAsync(src));
     }
 
+    /// <summary>
+    /// A clock that is already past the eviction window when the test starts — like the real one, which is
+    /// QPC-since-boot — and which can run a callback at a chosen reading. The offset matters: the plain
+    /// <see cref="TestClock"/> starts at 0, so <c>cutoff = 0 - 10 min</c> is negative and NOTHING is
+    /// evictable, which is exactly why no existing test can reach the window below.
+    /// </summary>
+    private sealed class InterleavingClock(TimeSpan uptime) : TimeProvider
+    {
+        private long _ticks = uptime.Ticks;
+        private int _reads;
+
+        /// <summary>1-based index of the <c>GetTimestamp</c> call that fires <see cref="OnRead"/>.</summary>
+        public int FireOnRead { get; set; }
+
+        public Action? OnRead { get; set; }
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp()
+        {
+            var now = _ticks;
+            if (++_reads == FireOnRead)
+            {
+                var callback = OnRead;
+                OnRead = null;      // one-shot: the callback reads the clock itself
+                callback?.Invoke();
+            }
+            return now;
+        }
+    }
+
+    /// <summary>
+    /// A brand-new PID must never be evictable before it is stamped. <c>GetOrAdd</c> PUBLISHES the entry
+    /// the instant its factory returns, so stamping afterwards leaves a window in which <c>_counters</c>
+    /// holds an entry reading <c>LastActivityTicks == 0</c> — and against a monotonic clock 0 is far below
+    /// the cutoff, so a poll landing there evicts a PID that is actively transferring. Its next event
+    /// re-adds it with a zeroed counter, which the user sees as a busy app's session total resetting.
+    /// <para>Deterministic rather than threaded: the clock fires a sample at the exact reading <c>Add</c>
+    /// takes for its stamp. Stamping inside the factory means the entry is not published yet, so that
+    /// sample has nothing to evict. Stamping after publication means it is, so the sample drops it and the
+    /// bytes are lost. Uptime is set past the window because a machine up for 20 minutes is the ordinary
+    /// case — and it is the case the zero-based <see cref="TestClock"/> cannot express, which is why the
+    /// existing eviction tests cannot see this.</para>
+    /// </summary>
+    [Fact]
+    public async Task Add_StampsBeforeTheEntryIsVisible_SoAFirstEventIsNeverEvictedAsIdle()
+    {
+        var clock = new InterleavingClock(TimeSpan.FromMinutes(20));
+        using var src = new EtwBandwidthSource(clock);
+
+        // Reading 1 is Add's stamp for this brand-new PID. Sample from inside it.
+        clock.FireOnRead = 1;
+        clock.OnRead = () => src.SampleAsync().GetAwaiter().GetResult();
+
+        src.Add(4242, down: 7_000, up: 0, "chrome.exe");
+
+        var row = Assert.Single((await src.SampleAsync()).Processes);
+        Assert.Equal(4242, row.ProcessId);
+        Assert.Equal(7_000, row.TotalDownBytes);
+    }
+
     [Fact]
     public void Start_WithoutAdministrator_RefusesCleanly()
     {

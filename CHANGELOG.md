@@ -10,6 +10,36 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.15] - 2026-08-17
+
+The "time remaining" estimate now tells the truth when an operation stalls or when Windows reports its
+progress in a burst — before, it could sit on "a few seconds" for the rest of a long repair. Speed Test also
+stops leaving "done" printed under both of its cards after a finished test.
+
+### Fixed
+- **"Time remaining" got stuck on "a few seconds" for the rest of a scan.** `sfc` and DISM do not report
+  progress on a timer — Windows flushes several lines at once, so two different percentages can arrive
+  microseconds apart. The estimate divided the progress by that gap, concluded the repair was running
+  thousands of times faster than it was, and needed roughly thirty more updates to recover — more than a
+  scan produces. A System File Checker run with a quarter of an hour left announced "a few seconds" and
+  never corrected itself. Progress reported faster than four times a second is now measured over a
+  slightly longer window instead of being taken at face value, and nothing is thrown away in the process.
+- **An operation that stopped for ten minutes was still described as nearly finished.** When progress
+  resumed after a long pause, the new — and only honest — measurement was outweighed by the pace from
+  before the pause, so a job with hours left reported about two minutes. Each measurement now counts for
+  as much time as it actually covers, which makes the one spanning the pause the one that decides.
+- **Past its own estimate, the app kept promising "a few seconds".** The countdown stopped at zero and
+  stayed there, so an operation that overran and then hung looked identical to one about to finish: an
+  estimate of a minute and forty seconds read "a few seconds" for the following twenty-five minutes. Well
+  past its estimate the app now says "taking longer than expected", which is what it actually knows.
+- **Speed Test left "done" under both cards after a test finished.** The estimate line was only cleared
+  when the next test started, and both the Ookla and HTTP cards share it — so a finished HTTP test labelled
+  the Ookla card too, and a cancelled one stranded "a few seconds" there until the next run.
+- **Precise bandwidth mode could reset an app's session total to a few kilobytes.** A program's counter
+  became visible a fraction before it was stamped with the time, and a reading taken in that window treated
+  it as ten minutes idle and dropped it. The counter restarted from zero on the app's next packet, so the
+  running total for something downloading continuously could fall back to almost nothing.
+
 ## [1.65.14] - 2026-08-17
 
 Turning off a startup program could fail on a PC where nothing had ever been turned off before — which is

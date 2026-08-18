@@ -226,7 +226,12 @@ public class AudioMixerViewModelTests
     {
         var service = ServiceWith(Session("s1"), Session("s2"));
         Peaks(service, ("s1", 0.6f), ("s2", 0.2f));
-        var vm = NewVm(service);
+        using var vm = NewVm(service);
+        // Active, because that is the only state in which the meters are read: MainWindowViewModel calls
+        // SetActive(content, IsWindowVisible) the moment a tab's VM is materialised, so a peak sample never
+        // lands on an inactive tab in production. Sampling with IsActive false is a state the app does not
+        // have, and asserting levels there asks the post-await guard to write onto rows it just zeroed.
+        vm.IsActive = true;
 
         await vm.UpdatePeaksAsync(CancellationToken.None);
 
@@ -247,7 +252,8 @@ public class AudioMixerViewModelTests
     {
         var service = ServiceWith(Session("s1"), Session("s2"), Session("s3"));
         Peaks(service, ("s1", 0.1f), ("s2", 0.2f), ("s3", 0.3f));
-        var vm = NewVm(service);
+        using var vm = NewVm(service);
+        vm.IsActive = true;
 
         await vm.UpdatePeaksAsync(CancellationToken.None);
 
@@ -267,7 +273,11 @@ public class AudioMixerViewModelTests
     [Fact]
     public void HiddenTab_ParksThePeakLoop_RatherThanTickingAndSkipping()
     {
-        var vm = NewVm(ServiceWith(Session("s1")));
+        // Disposed, and left INACTIVE, deliberately. Ending on IsActive = true without disposing left this
+        // VM's peak loop waking ~20 times a second against the stub for the remainder of the test process
+        // — the exact cost this test is named after, reintroduced by the test itself. It also kept the
+        // process alive past the end of the run, locking its own output assemblies against the next build.
+        using var vm = NewVm(ServiceWith(Session("s1")));
 
         var gate = typeof(AudioMixerViewModel)
             .GetField("_activated", BindingFlags.NonPublic | BindingFlags.Instance)!;
@@ -282,6 +292,8 @@ public class AudioMixerViewModelTests
         // after the first time the user navigated away.
         vm.IsActive = true;
         Assert.True(((TaskCompletionSource)gate.GetValue(vm)!).Task.IsCompleted);
+
+        vm.IsActive = false;
     }
 
     [Fact]
@@ -289,13 +301,64 @@ public class AudioMixerViewModelTests
     {
         var service = ServiceWith(Session("s1"));
         Peaks(service, ("s1", 0.9f));
-        var vm = NewVm(service);
+        using var vm = NewVm(service);
         vm.IsActive = true;
         await vm.UpdatePeaksAsync(CancellationToken.None);
         Assert.Equal(0.9f, vm.Sessions.Single().PeakLevel);
 
         // Leaving the tab zeroes the bars (no stale lit level); the loop itself skips while hidden.
         vm.IsActive = false;
+
+        Assert.Equal(0f, vm.Sessions.Single().PeakLevel);
+    }
+
+    /// <summary>
+    /// The sibling of <see cref="UpdatePeaks_WhenDisposedMidSample_DoesNotWriteBackOntoTheTornDownRows"/>,
+    /// and the half of that guard that was missing. Hiding the tab — or minimising the window, which
+    /// routes to the same <c>SetActive(false)</c> — zeroes every row; the sample already in flight then
+    /// resumed and wrote the old levels straight back. The loop parks on its next iteration, so those
+    /// stale bars survive for as long as the tab stays hidden: on re-show the user sees a lit meter from
+    /// minutes ago until a fresh sample lands.
+    /// <para>Both waits are BOUNDED for the same reason as the dispose test: on the correct shape neither
+    /// timeout is reached, but a wrong shape would hang the whole suite instead of failing one test.</para>
+    /// </summary>
+    [Fact]
+    public async Task UpdatePeaks_WhenTheTabIsHiddenMidSample_DoesNotRelightTheZeroedRows()
+    {
+        var service = ServiceWith(Session("s1"));
+        using var vm = NewVm(service);
+        vm.IsActive = true;
+
+        var sampleReached = new TaskCompletionSource();
+        var releaseSample = new TaskCompletionSource();
+        service.GetPeaks(Arg.Any<IEnumerable<string>>()).Returns(call =>
+        {
+            sampleReached.TrySetResult();
+            releaseSample.Task.Wait(TimeSpan.FromSeconds(10));
+            return ((IEnumerable<string>)call[0]).ToDictionary(id => id, _ => 0.8f, StringComparer.Ordinal);
+        });
+        // Held open the same way, so this test is about the post-await guard and not about which call
+        // shape reads the levels — see the dispose test for why that distinction matters.
+        service.GetPeak(Arg.Any<string>()).Returns(_ =>
+        {
+            sampleReached.TrySetResult();
+            releaseSample.Task.Wait(TimeSpan.FromSeconds(10));
+            return 0.8f;
+        });
+
+        try
+        {
+            var inFlight = vm.UpdatePeaksAsync(CancellationToken.None);
+            await sampleReached.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            vm.IsActive = false;             // zeroes the rows while the sample is outstanding
+            releaseSample.SetResult();
+            await inFlight;
+        }
+        finally
+        {
+            releaseSample.TrySetResult();
+        }
 
         Assert.Equal(0f, vm.Sessions.Single().PeakLevel);
     }

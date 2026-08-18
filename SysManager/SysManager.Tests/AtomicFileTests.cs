@@ -79,40 +79,75 @@ public class AtomicFileTests : IDisposable
     }
 
     /// <summary>
-    /// THE POINT OF THE HELPER. When the write itself fails, the previous file must survive
-    /// byte-for-byte — that is the difference from <c>File.WriteAllText</c>, which would already have
-    /// truncated it. Driven by making the temp path un-writable (a directory cannot be overwritten by
-    /// a file), which fails the write at the same moment a full disk or a crash would.
+    /// THE POINT OF THE HELPER. When the save fails, the previous file must survive byte-for-byte —
+    /// that is the difference from <c>File.WriteAllText</c>, which would already have truncated it.
+    /// <para>Driven by holding the destination open with <c>FileShare.None</c>, which is what an
+    /// antivirus scanner or a backup agent does to a file it is reading: the temp is written and the
+    /// swap is then refused. Deliberately NOT driven by occupying the temp path any more — the temp
+    /// name is private to each call (see the ownership test below), so a test that named it would be
+    /// asserting an implementation detail it is no longer entitled to know.</para>
     /// </summary>
     [Fact]
-    public void WriteAllText_WhenTheWriteFails_TheOriginalFileIsUntouched()
+    public void WriteAllText_WhenTheSaveFails_TheOriginalFileIsUntouched()
     {
         var path = Path_("precious.json");
         const string original = "{\"history\":[\"the user's data\"]}";
         File.WriteAllText(path, original);
 
-        // Occupy the temp path with a directory so writing the temp file must fail.
-        Directory.CreateDirectory(path + ".tmp");
-
-        Assert.ThrowsAny<Exception>(() => AtomicFile.WriteAllText(path, "replacement"));
+        using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.ThrowsAny<Exception>(() => AtomicFile.WriteAllText(path, "replacement"));
 
         // The whole promise: not truncated, not empty, not partially written.
         Assert.Equal(original, File.ReadAllText(path));
+        // …and the failed attempt left nothing beside it.
+        Assert.Equal(["precious.json"], Directory.GetFiles(_dir).Select(Path.GetFileName));
     }
 
     [Fact]
-    public async Task WriteAllTextAsync_WhenTheWriteFails_TheOriginalFileIsUntouched()
+    public async Task WriteAllTextAsync_WhenTheSaveFails_TheOriginalFileIsUntouched()
     {
         var path = Path_("precious-async.json");
         const string original = "{\"speedTests\":[1,2,3]}";
         File.WriteAllText(path, original);
 
-        Directory.CreateDirectory(path + ".tmp");
-
-        await Assert.ThrowsAnyAsync<Exception>(
-            () => AtomicFile.WriteAllTextAsync(path, "replacement"));
+        using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            await Assert.ThrowsAnyAsync<Exception>(
+                () => AtomicFile.WriteAllTextAsync(path, "replacement"));
 
         Assert.Equal(original, File.ReadAllText(path));
+        Assert.Equal(["precious-async.json"], Directory.GetFiles(_dir).Select(Path.GetFileName));
+    }
+
+    /// <summary>
+    /// A save must never touch a temporary file it did not create.
+    /// <para>Every write used to claim the same name, <c>&lt;path&gt;.tmp</c>, and <c>CleanUp</c> runs in
+    /// a <c>finally</c> — so two writers to one destination shared one temp file and could destroy each
+    /// other's work. The reachable sequence: the second writer fails to open the temp because the first
+    /// still holds it, the first closes but has not yet swapped, and the second's <c>CleanUp</c> then
+    /// deletes the first's finished temp. The first's swap finds nothing, BOTH writes are lost, and the
+    /// destination never appears — silently, because callers log a failed save at Debug.</para>
+    /// <para>Not hypothetical: <c>AboutViewModel</c>'s startup update-check records its timestamp on a
+    /// background thread while the user's checkbox writes the same file from the UI thread. It surfaced
+    /// as a one-in-thousands CI failure of
+    /// <c>AboutViewModelTests.ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile</c>.</para>
+    /// <para>Stated single-threadedly on purpose. Racing two real writers would be probabilistic, and a
+    /// flaky test is a broken test; the pre-existing file below stands in for the other writer's temp
+    /// and pins the invariant that makes the race impossible.</para>
+    /// </summary>
+    [Fact]
+    public void WriteAllText_DoesNotTouchATemporaryFileItDoesNotOwn()
+    {
+        var path = Path_("shared.json");
+        var foreignTemp = path + ".tmp";                       // the name every write used to claim
+        const string foreignContents = "another writer's finished temp, not yet swapped";
+        File.WriteAllText(foreignTemp, foreignContents);
+
+        AtomicFile.WriteAllText(path, "{\"mine\":true}");
+
+        Assert.Equal("{\"mine\":true}", File.ReadAllText(path));
+        Assert.True(File.Exists(foreignTemp),
+            "the save claimed a temp file it did not create — a concurrent writer's save is destroyed");
+        Assert.Equal(foreignContents, File.ReadAllText(foreignTemp));
     }
 
     [Fact]

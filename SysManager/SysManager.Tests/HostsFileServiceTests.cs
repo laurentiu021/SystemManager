@@ -173,7 +173,9 @@ public class HostsFileServiceTests
 
             Assert.Equal(original, File.ReadAllText(hosts));
             Assert.Equal(stamp, File.GetCreationTimeUtc(hosts));
-            Assert.False(File.Exists(hosts + ".sysmanager.restore.tmp"), "restore temp file left behind");
+            // Any sibling, not one fixed name: the staging path is unique per call now, so naming it
+            // here would make this assertion unfalsifiable (AtomicFile.UniqueTempPath explains why).
+            Assert.Empty(Directory.GetFiles(dir, "*.tmp"));
         }
         finally
         {
@@ -339,8 +341,10 @@ public class HostsFileServiceTests
     [Fact]
     public void SaveHosts_LeavesNoTempFileBehind()
     {
-        // Regression (atomic write): SaveHosts writes to a temp file then moves it
-        // into place. After a successful save no ".sysmanager.tmp" must remain.
+        // Regression (atomic write): SaveHosts stages the new content in a temp file then moves it
+        // into place. After a successful save no staging file must remain — asserted over any sibling
+        // rather than one fixed name, because the staging path is unique per call now (a name-specific
+        // assertion would be unfalsifiable; AtomicFile.UniqueTempPath explains the uniqueness).
         var (svc, hosts, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
         try
         {
@@ -348,9 +352,74 @@ public class HostsFileServiceTests
             {
                 new() { IpAddress = "127.0.0.1", Hostname = "localhost", IsEnabled = true }
             });
-            Assert.False(File.Exists(hosts + ".sysmanager.tmp"), "temp file was left behind after save");
+            Assert.Empty(Directory.GetFiles(dir, "*.tmp"));
             Assert.True(File.Exists(hosts));
             Assert.Contains("localhost", File.ReadAllText(hosts));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// Saving must not touch a staging file it did not create.
+    /// <para>Both hosts writers used a fixed staging name and delete it in a <c>finally</c>, so two
+    /// overlapping writes shared one file and could destroy each other: the second fails to open the
+    /// staging file while the first holds it, the first closes but has not yet swapped, and the second's
+    /// cleanup deletes the finished staging file out from under it. Both writes are then lost — for the
+    /// hosts file that means the user's blocked sites silently do not take effect.</para>
+    /// <para>Single-threaded on purpose: racing two writers would be probabilistic, and a flaky test is
+    /// a broken test. The pre-existing file stands in for the other writer's staging file.</para>
+    /// </summary>
+    [Fact]
+    public void SaveHosts_DoesNotTouchAStagingFileItDoesNotOwn()
+    {
+        var (svc, hosts, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        var foreign = hosts + ".sysmanager.tmp";              // the name every save used to claim
+        const string foreignContents = "another writer's staged hosts file, not yet swapped";
+        try
+        {
+            File.WriteAllText(foreign, foreignContents);
+
+            svc.SaveHosts(new List<HostsEntry>
+            {
+                new() { IpAddress = "9.9.9.9", Hostname = "blocked", IsEnabled = true }
+            });
+
+            Assert.Contains("blocked", File.ReadAllText(hosts));
+            Assert.True(File.Exists(foreign),
+                "the save claimed a staging file it did not create — a concurrent write is destroyed");
+            Assert.Equal(foreignContents, File.ReadAllText(foreign));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>Restoring the backup owns its staging file too — same reasoning as the save above.</summary>
+    [Fact]
+    public void RestoreBackup_DoesNotTouchAStagingFileItDoesNotOwn()
+    {
+        var (svc, hosts, dir) = NewServiceWithTempHosts("# pristine\n127.0.0.1 localhost\n");
+        var foreign = hosts + ".sysmanager.restore.tmp";      // the name every restore used to claim
+        const string foreignContents = "another writer's staged restore, not yet swapped";
+        try
+        {
+            // The first save is what creates the backup that RestoreBackup needs.
+            svc.SaveHosts(new List<HostsEntry>
+            {
+                new() { IpAddress = "9.9.9.9", Hostname = "managed", IsEnabled = true }
+            });
+            File.WriteAllText(foreign, foreignContents);
+
+            Assert.True(svc.RestoreBackup());
+
+            Assert.Contains("pristine", File.ReadAllText(hosts));
+            Assert.True(File.Exists(foreign),
+                "the restore claimed a staging file it did not create — a concurrent write is destroyed");
+            Assert.Equal(foreignContents, File.ReadAllText(foreign));
         }
         finally
         {

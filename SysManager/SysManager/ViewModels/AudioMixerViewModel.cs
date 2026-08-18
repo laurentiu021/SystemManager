@@ -183,7 +183,9 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
                 row.ApplyUpdate(info);
             else
             {
-                var newRow = new AudioSessionRowViewModel(_service, info, OutputDevices.ToList(), RoutingSupported);
+                var newRow = new AudioSessionRowViewModel(
+                    _service, info, OutputDevices.ToList(), RoutingSupported,
+                    reportFailure: message => StatusMessage = message);
                 if (RoutingSupported && !info.IsSystemSounds)
                     newRow.SetOutputDeviceFromService(_service.GetSessionOutputDevice(info.SessionId));
                 Sessions.Add(newRow);

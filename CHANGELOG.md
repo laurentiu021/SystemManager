@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.19] - 2026-08-18
+
+A fix for the Duplicate Files finder: a stray minus sign or an enormous number typed into the
+"minimum size" box could quietly turn the filter inside out and make it scan every file instead of
+only the large ones.
+
+### Fixed
+- **The "minimum size (KB)" box in Duplicate Files could invert its own filter.** The scan keeps a
+  file when its size is at least the number you type. That number is multiplied by 1024 to get bytes,
+  and the box accepted anything — so a leading minus, or a value large enough to overflow when
+  multiplied, produced a NEGATIVE threshold. Every file is larger than a negative size, so "only files
+  above X" silently became "scan and hash every file in the folder" — the opposite of what you asked,
+  and much slower. The typed value is now bounded before it is used, so the filter can only ever mean
+  what it says.
+
 ## [1.65.18] - 2026-08-18
 
 Volume Control now notices audio devices you plug in while it is open. Before, the "play on" list was read

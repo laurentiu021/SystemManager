@@ -33,6 +33,14 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     public ObservableCollection<string> PresetFolders { get; } = new();
 
     [ObservableProperty] private string _selectedFolder = "";
+
+    /// <summary>
+    /// Minimum file size to consider, in KB, typed straight into a TextBox by the user.
+    /// <para>Deliberately NOT clamped in the setter: the box uses
+    /// <c>UpdateSourceTrigger=PropertyChanged</c>, so rewriting the value on every keystroke would
+    /// fight the caret (typing "-" then a digit would snap the field out from under them). The bound
+    /// is applied where the value is USED — see <see cref="MinBytesFor"/>.</para>
+    /// </summary>
     [ObservableProperty] private long _minSizeKb = 1;
     [ObservableProperty] private long _totalWasted;
     [ObservableProperty] private int _groupCount;
@@ -125,7 +133,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
 
         try
         {
-            var minBytes = MinSizeKb * 1024;
+            var minBytes = MinBytesFor(MinSizeKb);
             var progress = new Progress<DuplicateFileService.ScanProgress>(p =>
             {
                 CurrentFile = p.CurrentFile;
@@ -173,6 +181,23 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             CurrentFile = "";
         }
     }
+
+    /// <summary>The largest <see cref="MinSizeKb"/> that still scales into a <c>long</c> byte count.</summary>
+    internal const long MaxMinSizeKb = long.MaxValue / 1024;
+
+    /// <summary>
+    /// Converts the user's KB figure into the byte threshold the scan compares against, bounded so a
+    /// typed value can never INVERT the filter.
+    /// <para>The scan skips a file with <c>if (fi.Length &lt; minSizeBytes) continue;</c>. A negative
+    /// threshold makes that comparison false for EVERY file, so "only files above X" silently becomes
+    /// "every file in the folder" — the opposite of the request, and a slow one, because every file then
+    /// gets hashed. Two typed values reach it: a stray leading minus, and any figure above
+    /// <see cref="MaxMinSizeKb"/>, which overflows <c>long</c> when multiplied by 1024 and lands
+    /// negative. The TextBox binds a <c>long</c> and imposes no bounds of its own, so both are
+    /// reachable.</para>
+    /// <para>Pure and static so the bound is testable without touching a filesystem.</para>
+    /// </summary>
+    internal static long MinBytesFor(long minSizeKb) => Math.Clamp(minSizeKb, 0, MaxMinSizeKb) * 1024;
 
     /// <summary>
     /// The scan's status line: phase, running counts, and the file currently being read.

@@ -106,10 +106,52 @@ public class DuplicateFileViewModelTests
         Assert.NotNull(vm.BrowseFolderCommand);
     }
 
-    // MinSizeKb_CanBeChanged was removed as a setter round-trip. The property's real consequence is
-    // `var minBytes = MinSizeKb * 1024` in ScanAsync, and asserting THAT needs a guard the code does
-    // not have yet (a large typed value overflows long and inverts the filter) — tracked separately
-    // so this test-only change stays behaviour-neutral.
+    // ---------- the minimum-size threshold the user types ----------
+
+    /// <summary>An ordinary value scales to bytes untouched — the bound must not disturb normal use.</summary>
+    [Theory]
+    [InlineData(1L, 1024L)]
+    [InlineData(500L, 512_000L)]
+    [InlineData(1024L, 1_048_576L)]
+    public void MinBytesFor_ScalesAnOrdinaryValue(long kb, long expectedBytes)
+        => Assert.Equal(expectedBytes, DuplicateFileViewModel.MinBytesFor(kb));
+
+    /// <summary>
+    /// A negative figure must not invert the filter. The scan skips a file with
+    /// <c>fi.Length &lt; minSizeBytes</c>, so a negative threshold skips nothing: "only files above X"
+    /// silently becomes "scan and hash EVERY file in the folder". One stray leading minus in an unbounded
+    /// TextBox is all it takes — exactly the input that has to be bounded at the boundary rather than
+    /// trusted.
+    /// </summary>
+    [Theory]
+    [InlineData(-1L)]
+    [InlineData(-5_000L)]
+    [InlineData(long.MinValue)]
+    public void MinBytesFor_NeverReturnsANegativeThreshold(long kb)
+        => Assert.Equal(0L, DuplicateFileViewModel.MinBytesFor(kb));
+
+    /// <summary>
+    /// A very large figure must not overflow into a negative threshold — the same inversion by a
+    /// different route, since anything above <c>long.MaxValue / 1024</c> wraps when scaled. Pinned at the
+    /// exact boundary and one past it, because an off-by-one in the bound is precisely what would let the
+    /// wrap back in.
+    /// </summary>
+    [Fact]
+    public void MinBytesFor_ClampsInsteadOfOverflowing()
+    {
+        // The boundary itself still scales exactly, with no wrap.
+        Assert.Equal(DuplicateFileViewModel.MaxMinSizeKb * 1024,
+                     DuplicateFileViewModel.MinBytesFor(DuplicateFileViewModel.MaxMinSizeKb));
+
+        // One past it, and the most extreme value the TextBox can produce, both land on the boundary…
+        Assert.Equal(DuplicateFileViewModel.MaxMinSizeKb * 1024,
+                     DuplicateFileViewModel.MinBytesFor(DuplicateFileViewModel.MaxMinSizeKb + 1));
+        Assert.Equal(DuplicateFileViewModel.MaxMinSizeKb * 1024,
+                     DuplicateFileViewModel.MinBytesFor(long.MaxValue));
+
+        // …and every result stays positive, which is the property that actually protects the scan.
+        Assert.True(DuplicateFileViewModel.MinBytesFor(long.MaxValue) > 0);
+    }
 
     [Fact]
     public void SelectedFolder_CanBeChanged()

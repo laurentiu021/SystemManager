@@ -95,6 +95,15 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     /// <summary>Volume as a friendly percentage, e.g. "65%".</summary>
     public string VolumeDisplay => $"{Volume * 100:F0}%";
 
+    /// <summary>
+    /// Builds one row of the mixer from a session snapshot. Volume, mute, name and peak are seeded through
+    /// their backing fields so the change handlers do not fire and write the value straight back to the
+    /// service — the same echo suppression <see cref="ApplyUpdate"/> relies on for later refreshes.
+    /// </summary>
+    /// <param name="outputDevices">
+    /// The parent's live device list, shared rather than copied: a device plugged in after this row was
+    /// created must appear in its picker.
+    /// </param>
     /// <param name="reportFailure">
     /// Called with a finished, user-facing sentence when a write to the audio service is refused. Passed in
     /// rather than raised as an event on purpose: a row is created and dropped on every reconcile pass, so

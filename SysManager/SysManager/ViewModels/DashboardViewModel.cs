@@ -91,6 +91,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // ── IsActive (pause polling when tab not visible) ────────────────────
     [ObservableProperty] private bool _isActive;
 
+    /// <summary>
+    /// Wires the dashboard's services and starts <c>InitAsync</c> fire-and-forget: it reports any previous
+    /// crash, loads static info, drives, activity and the health score, then starts the vitals, temperature
+    /// and alert loops. Elevation is read once here because it cannot change without relaunching the app.
+    /// </summary>
     /// <param name="crashMarkers">
     /// Required, not optional. It used to default to <c>new CrashMarkerService()</c>, which resolved
     /// the real profile — and because <see cref="CrashMarkerService.TakePending"/> CONSUMES the marker

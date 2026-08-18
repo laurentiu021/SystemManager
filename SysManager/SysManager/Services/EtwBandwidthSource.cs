@@ -241,6 +241,11 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
     /// </summary>
     private readonly TimeProvider _time;
 
+    /// <summary>
+    /// Creates the source without opening an ETW session — that happens in <see cref="Start"/>. Constructing
+    /// this is therefore free and needs no elevation, which is what lets the view model hold one and only
+    /// pay for the trace if the user turns per-process mode on while running elevated.
+    /// </summary>
     /// <param name="timeProvider">Test seam; defaults to the system clock.</param>
     public EtwBandwidthSource(TimeProvider? timeProvider = null) => _time = timeProvider ?? TimeProvider.System;
 

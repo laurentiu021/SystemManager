@@ -102,6 +102,10 @@ public sealed class EtaCalculator
     /// <summary>Elapsed-since-start at which progress is projected to reach 100%. Null when unknown.</summary>
     private TimeSpan? _projectedFinish;
 
+    /// <summary>
+    /// Creates a calculator holding no samples: <see cref="Remaining"/> stays null and the rate stays zero
+    /// until the first <c>Update</c> reports a real advance.
+    /// </summary>
     /// <param name="timeProvider">
     /// Time source, defaulting to <see cref="TimeProvider.System"/>. A test passes a fake and advances it,
     /// so the ETA maths is verified deterministically. This class held a private <c>Stopwatch</c> before,

@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.18] - 2026-08-18
+
+Volume Control now notices audio devices you plug in while it is open. Before, the "play on" list was read
+once when you first opened the tab and never again, so a headset connected afterwards simply never showed up.
+
+### Fixed
+- **A headset or speaker plugged in after opening Volume Control never appeared.** The list of output
+  devices was read a single time, when the tab first loaded, and each app's "play on" dropdown got its own
+  private copy of that list — so even a refresh would not have reached a dropdown that already existed. The
+  tab stays loaded for as long as the app runs, which meant the only way to see a new device was to restart
+  SysManager. The list is now re-read every ten seconds and every dropdown shares it, so a device appears on
+  its own. Ten seconds rather than every second because asking Windows for the device list is expensive, and
+  plugging something in is not something you do several times a second.
+- **Changing your default output device could make each app's dropdown forget where you sent it.** Refreshing
+  the list replaces its contents, and Windows reports the default flag as part of each device — so switching
+  the default made every entry count as different, and the dropdown lost the app you had routed. Each
+  selection is now re-matched by device identity after a refresh.
+
 ## [1.65.17] - 2026-08-18
 
 A safety fix for how SysManager saves its own small settings and history files. Under a specific bit of

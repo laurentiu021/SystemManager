@@ -174,6 +174,120 @@ public class AudioMixerViewModelTests
         Assert.Equal(0.7f, vm.Sessions.Single().Volume);
     }
 
+    // ── Output-device list freshness ────────────────────────────────────────
+
+    private static AudioDevice Speakers => new("{spk}", "Speakers", IsDefault: true);
+    private static AudioDevice Headset => new("{hdst}", "USB Headset", IsDefault: false);
+
+    /// <summary>
+    /// A device plugged in after the tab was opened must appear in the picker of a row that ALREADY exists.
+    /// <para>Two separate reasons it did not. <c>RefreshDevicesAsync</c> was called only from
+    /// <c>InitAsync</c>, so the view model's list was read once and never again — and a tab's view model
+    /// lives as long as the app does. And each row received <c>OutputDevices.ToList()</c>, an immutable
+    /// snapshot, so even refreshing the view model's list would not have reached an existing picker.</para>
+    /// <para>Deliberately does NOT activate the tab: <c>ReconcileAsync</c> does not need it, and leaving the
+    /// loops parked keeps the pass count exactly what this test drives.</para>
+    /// </summary>
+    [Fact]
+    public async Task DeviceAddedAfterTheTabOpened_ReachesAnAlreadyExistingRowsPicker()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.IsRoutingSupported.Returns(true);
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers });
+        using var vm = NewVm(service);
+        var row = vm.Sessions.Single();
+        Assert.Equal(["Speakers"], row.OutputDevices.Select(d => d.FriendlyName).ToArray());
+
+        // The user plugs in a headset. Drive enough reconcile passes to cross the device-refresh cadence.
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers, Headset });
+        for (var i = 0; i < 10; i++) await vm.ReconcileAsync();
+
+        Assert.Contains("USB Headset", row.OutputDevices.Select(d => d.FriendlyName));
+    }
+
+    /// <summary>
+    /// After a refresh, the row's selection must still be an element OF the current list — not a stale
+    /// instance left over from the previous one.
+    /// <para>That is the assertion that can actually fail, and finding it took a wrong turn worth recording.
+    /// <c>ReplaceWith</c> clears and refills, and a bound <c>SelectedItem</c> survives only while an EQUAL
+    /// element comes back; <c>AudioDevice</c> is a record, so its equality covers <c>IsDefault</c>. Move the
+    /// Windows default and every element is unequal, so the real <c>ComboBox</c> drops the selection and the
+    /// picker forgets where the user sent that app. But a unit test has no ComboBox: nothing clears the VM's
+    /// property, so asserting the id alone passes with or without the fix. What DOES discriminate is
+    /// membership — without the re-resolve the selected instance is absent from the new list, which is
+    /// precisely the condition that makes the real control drop it.</para>
+    /// </summary>
+    [Fact]
+    public async Task RefreshingDevices_KeepsEachRowsChoice_EvenWhenTheDefaultMoves()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.IsRoutingSupported.Returns(true);
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers, Headset });
+        service.GetSessionOutputDevice("s1").Returns("{hdst}");
+        using var vm = NewVm(service);
+        var row = vm.Sessions.Single();
+        Assert.Equal("{hdst}", row.SelectedOutputDevice?.Id);
+
+        // Windows' default moves to the headset, so every AudioDevice record comes back UNEQUAL.
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice>
+        {
+            new("{spk}", "Speakers", IsDefault: false),
+            new("{hdst}", "USB Headset", IsDefault: true),
+        });
+        for (var i = 0; i < 10; i++) await vm.ReconcileAsync();
+
+        Assert.Equal("{hdst}", row.SelectedOutputDevice?.Id);
+        Assert.Contains(row.SelectedOutputDevice, row.OutputDevices);
+    }
+
+    /// <summary>
+    /// Devices must NOT be re-enumerated on every reconcile pass. Enumerating endpoints is COM-heavy and
+    /// reconcile runs at 1 Hz; trading a stale list for that every second would be a worse bug than the one
+    /// being fixed. Counted inside the stub rather than with <c>Received(n)</c> — an NSubstitute substitute
+    /// is not thread-safe, and a call count is only meaningful here because the loops are parked.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_DoesNotReEnumerateDevicesOnEveryPass()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.IsRoutingSupported.Returns(true);
+        var enumerations = 0;
+        service.GetRenderDevices().Returns(_ =>
+        {
+            System.Threading.Interlocked.Increment(ref enumerations);
+            return new List<AudioDevice> { Speakers };
+        });
+
+        using var vm = NewVm(service);
+        Assert.Equal(1, enumerations);                // init reads the list exactly once
+
+        for (var i = 0; i < 3; i++) await vm.ReconcileAsync();
+
+        Assert.Equal(1, enumerations);                // three passes later, still no re-read
+    }
+
+    /// <summary>
+    /// A device refresh must not hand the system-sounds pseudo-session a routing destination. Windows cannot
+    /// reroute it, so its picker is collapsed (<c>RoutingSupported</c> is false for that row) and the
+    /// construction path in <c>MergeInto</c> already gates on exactly that. The refresh path re-resolves
+    /// selections and has to keep the same gate, or the row starts claiming a destination nothing can act on.
+    /// </summary>
+    [Fact]
+    public async Task RefreshingDevices_LeavesTheSystemSoundsRowWithoutADestination()
+    {
+        var service = ServiceWith(Session("sys", systemSounds: true));
+        service.IsRoutingSupported.Returns(true);
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers, Headset });
+        using var vm = NewVm(service);
+        var row = vm.Sessions.Single();
+        Assert.False(row.RoutingSupported);
+        Assert.Null(row.SelectedOutputDevice);
+
+        for (var i = 0; i < 10; i++) await vm.ReconcileAsync();
+
+        Assert.Null(row.SelectedOutputDevice);
+    }
+
     // ── Volume / mute propagation + echo suppression ───────────────────────
 
     [Fact]

@@ -133,6 +133,43 @@ jobs:
           Rename-Item $src -NewName $newName
           Write-Host "Renamed to publish/$newName"
 
+      - name: Verify the embedded version stamp
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # publish.ps1 injects Version, FileVersion and AssemblyVersion from the tag, and until now
+          # nothing ever looked at what actually landed in the binary — ci.yml only checks that the
+          # three csproj values agree with EACH OTHER, which says nothing about the artifact. A
+          # broken injection would ship a binary that misreports itself in About, in the bug-report
+          # URL, in the profile export, in the system report, and worst of all in the update check:
+          # AboutViewModel compares UpdateService.CurrentVersion against the newest release, so a
+          # stale stamp offers every user the same update forever, or hides a real one.
+          #
+          # Placed before the SBOM and the attestation on purpose. Attesting is a public, signed
+          # claim about a specific binary; making that claim about a mis-stamped one and retracting
+          # it afterwards is far worse than never making it.
+          $exe = Resolve-Path "publish/SysManager-v$env:VERSION.exe"
+          $info = (Get-Item $exe).VersionInfo
+
+          # publish.ps1 appends a fourth component to FileVersion (-p:FileVersion=$Version.0).
+          if ($info.FileVersion -ne "$env:VERSION.0") {
+              throw "FileVersion drift: the binary reports '$($info.FileVersion)' but the tag " +
+                    "requires '$env:VERSION.0'. The version injection in publish.ps1 did not take, " +
+                    "so this artifact would misreport itself to every user. Not publishing it."
+          }
+
+          # ProductVersion is the informational version. ContinuousIntegrationBuild + SourceLink
+          # suffix it with '+<commit sha>', so compare only the part before the '+' — and keep the
+          # whole value in the log, because it is where the artifact records the commit it came from.
+          $product = ($info.ProductVersion -split '\+')[0]
+          if ($product -ne $env:VERSION) {
+              throw "ProductVersion drift: the binary reports '$($info.ProductVersion)' but the " +
+                    "tag requires '$env:VERSION'. Not publishing it."
+          }
+
+          Write-Host "Version resource matches the tag: FileVersion $($info.FileVersion), ProductVersion $($info.ProductVersion)."
+
       - name: Compute SHA256
         id: hash
         shell: pwsh
@@ -289,6 +326,35 @@ jobs:
               throw "The published exe recorded a crash marker during startup. It survived the " +
                     "25-second window but faulted, so this release must not be published."
           }
+
+          # The version the RUNNING app reports, which is a different property from the version
+          # resource checked before the SBOM. About, the update check, the bug-report URL, the
+          # profile export and the system report all read UpdateService.CurrentVersion — the managed
+          # assembly version, which is absent from the Win32 resource and cannot be read out of a
+          # single-file bundle (AssemblyName.GetAssemblyName throws on the apphost). This launch is
+          # the only place it is observable, so it is asserted here rather than by starting the app a
+          # second time just to ask.
+          if (-not $log) {
+              throw "No log file was produced, so the version the running app reports could not be " +
+                    "verified. LogService.Init writes the startup line before any window appears, " +
+                    "so its absence is itself a failure."
+          }
+
+          $expected = "SysManager $env:VERSION started"
+          $startup = Get-Content $log.FullName |
+                     Where-Object { $_ -match '\[INF\] SysManager .* started' } |
+                     Select-Object -First 1
+          if (-not $startup) {
+              throw "The log has no 'SysManager <version> started' line, so nothing here verified " +
+                    "the version. Either LogService.StartupMessage changed shape — update this gate " +
+                    "in the same PR, do not delete it — or the app never got as far as logging it."
+          }
+          if ($startup -notlike "*$expected*") {
+              throw "Runtime version drift: the app logged '$($startup.Trim())' but the tag requires " +
+                    "'$expected'. The assembly version injection did not take, so About and the " +
+                    "update check would misreport this build. Not publishing it."
+          }
+          Write-Host "The running app reports version $env:VERSION."
 
           Write-Host "The published exe started, stayed alive for 25s and recorded no crash."
 

@@ -240,6 +240,90 @@ public class AudioMixerViewModelTests
         Assert.Contains(row.SelectedOutputDevice, row.OutputDevices);
     }
 
+    // ── The default entry means "follow the system default", in both directions ──────────
+    // The picker holds real endpoints only — there is no "System default" item — so the entry flagged
+    // IsDefault carries that meaning instead, and an empty endpoint id is the pivot. Reading, an empty
+    // id selects that entry; writing, selecting that entry sends an empty id, which is what
+    // SetPersistedDefaultAudioEndpoint treats as CLEAR THE OVERRIDE.
+    //
+    // Nothing pinned either direction. `value.IsDefault ? string.Empty : value.Id` reads like a needless
+    // special case, and simplifying it to `value.Id` compiles, keeps every existing test green, and
+    // silently removes the only way a user can stop routing an app — the override would stay in Windows
+    // forever, re-pinned to whichever device is default at the time of the pick. Same
+    // invisible-capability-loss class as a command bound by no XAML.
+    //
+    // Calls are captured inside the stub rather than asserted with Received(n), for the reason the
+    // neighbouring test gives: an NSubstitute substitute is not thread-safe.
+
+    private static IAudioMixerService RoutableService(
+        List<(string Session, string Device)> writes, string? route = null)
+    {
+        var service = ServiceWith(Session("s1"));
+        service.IsRoutingSupported.Returns(true);
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers, Headset });
+        if (route is not null) service.GetSessionOutputDevice("s1").Returns(route);
+        service.SetSessionOutputDevice(Arg.Any<string>(), Arg.Any<string>()).Returns(call =>
+        {
+            writes.Add(((string)call[0], (string)call[1]));
+            return true;
+        });
+        return service;
+    }
+
+    /// <summary>
+    /// Routing an app to a device and then putting it back on the default must CLEAR the override, not pin
+    /// the app to whichever device happens to be default right now.
+    /// <para>Goes headset-then-default rather than selecting the default directly: the row is built with the
+    /// default already selected (the service's route-read is a stub returning empty), so assigning it again
+    /// is not a property change, the write path would never run, and the test would pass while asserting
+    /// nothing.</para>
+    /// </summary>
+    [Fact]
+    public void PuttingAnAppBackOnTheDefaultDevice_ClearsTheOverride()
+    {
+        var writes = new List<(string Session, string Device)>();
+        using var vm = NewVm(RoutableService(writes));
+        var row = vm.Sessions.Single();
+
+        row.SelectedOutputDevice = row.OutputDevices.Single(d => d.Id == "{hdst}");
+        row.SelectedOutputDevice = row.OutputDevices.Single(d => d.IsDefault);
+
+        Assert.Equal([("s1", "{hdst}"), ("s1", "")], writes);
+    }
+
+    /// <summary>
+    /// A real device keeps its own endpoint id on the way to the service — the clear-the-override branch
+    /// must not swallow an ordinary pick.
+    /// </summary>
+    [Fact]
+    public void RoutingAnAppToANonDefaultDevice_SendsThatDevicesEndpointId()
+    {
+        var writes = new List<(string Session, string Device)>();
+        using var vm = NewVm(RoutableService(writes));
+
+        vm.Sessions.Single().SelectedOutputDevice = Headset;
+
+        Assert.Equal([("s1", "{hdst}")], writes);
+    }
+
+    /// <summary>
+    /// The read mirror: a route the service cannot resolve selects the default entry, and doing so must NOT
+    /// write back. A refresh that echoed its own snapshot would re-assert a route on every pass, and on the
+    /// failure branch would report a routing error the user never caused.
+    /// </summary>
+    [Theory]
+    [InlineData("", "the route-read stub returns empty, so nothing is known about this app's route")]
+    [InlineData("{unplugged}", "the persisted route names a device that is no longer present")]
+    public void ARouteTheServiceCannotResolve_SelectsTheDefaultEntry_AndWritesNothing(string route, string why)
+    {
+        var writes = new List<(string Session, string Device)>();
+        using var vm = NewVm(RoutableService(writes, route));
+
+        var row = vm.Sessions.Single();
+        Assert.True(row.SelectedOutputDevice?.IsDefault, why);
+        Assert.Empty(writes);
+    }
+
     /// <summary>
     /// Devices must NOT be re-enumerated on every reconcile pass. Enumerating endpoints is COM-heavy and
     /// reconcile runs at 1 Hz; trading a stale list for that every second would be a worse bug than the one

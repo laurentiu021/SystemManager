@@ -27,6 +27,15 @@ public static partial class LogService
     /// <summary>How many rolled files to keep. Combines with <see cref="MaxLogFileBytes"/>.</summary>
     internal const int RetainedFileCount = 14;
 
+    /// <summary>
+    /// First line of every log file. Held as a constant because two other things depend on its exact
+    /// shape: a bug report arrives as an attached log (SUPPORT.md), so the file has to name the build
+    /// it came from, and the release workflow greps this line to prove the published binary reports
+    /// the tag it was built from — the managed assembly version is not in the Win32 version resource
+    /// and cannot be read out of a single-file bundle without running it.
+    /// </summary>
+    internal const string StartupMessage = "SysManager {Version} started";
+
     public static string LogDir { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager", "logs");
 
@@ -72,7 +81,9 @@ public static partial class LogService
                 retainedFileCountLimit: RetainedFileCount))
             .CreateLogger();
         Log.Logger = Logger;
-        Logger.Information("SysManager started");
+        // The same source the About tab and the updater read, so a log, a crash marker and a release
+        // can all be matched to one another rather than guessed at.
+        Logger.Information(StartupMessage, UpdateService.CurrentVersion.ToString(3));
     }
 
     /// <summary>

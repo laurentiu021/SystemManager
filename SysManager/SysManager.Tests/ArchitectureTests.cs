@@ -2119,6 +2119,131 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The release workflow must prove the artifact reports the tag it was built from — statically,
+    /// and again at runtime.
+    /// <para>publish.ps1 injects Version, FileVersion and AssemblyVersion from the tag and nothing
+    /// downstream ever read them back. ci.yml checks that the three csproj values agree with each
+    /// OTHER, which says nothing about the binary. A silently broken injection ships a build that
+    /// misreports itself in About, in the bug-report URL, in the profile export and in the system
+    /// report — and in the update check, where AboutViewModel compares UpdateService.CurrentVersion
+    /// against the newest release, so a stale stamp offers every user the same update forever or
+    /// hides a real one.</para>
+    /// <para>Two assertions, because two different values are at risk. The Win32 version resource
+    /// (FileVersion/ProductVersion) is readable without running anything, so it is checked before the
+    /// SBOM and the attestation: attesting a mis-stamped binary is a signed public claim that cannot
+    /// be taken back. The managed assembly version — the one every user-visible version actually
+    /// reads — is NOT in that resource, and AssemblyName.GetAssemblyName throws on a single-file
+    /// apphost, so the only place it is observable is the startup line in the log of the launch the
+    /// smoke check already performs.</para>
+    /// <para>The expected log shape is DERIVED from <see cref="LogService.StartupMessage"/> rather
+    /// than written out again here, so the workflow's pattern and the app's message cannot drift into
+    /// a gate that greps for a line the app no longer writes.</para>
+    /// </summary>
+    [Fact]
+    public void TheReleaseWorkflow_ProvesThePublishedBinaryReportsTheTag()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+
+        int StepLine(string name)
+        {
+            var at = Array.FindIndex(lines, l => l.Trim() == $"- name: {name}");
+            Assert.True(at >= 0,
+                $"release.yml has no step named \"{name}\". If it was renamed, update this guard in the "
+                + "same PR — do not delete it.");
+            return at;
+        }
+
+        // Sliced to the step's OWN boundary and required to be substantial: a collapsed slice would
+        // make every token check below pass by measuring nothing.
+        string CodeOf(string step, int at)
+        {
+            var end = Array.FindIndex(lines, at + 1,
+                l => l.TrimStart().StartsWith("- name:", StringComparison.Ordinal));
+            Assert.True(end > at,
+                $"\"{step}\" is the last step in the file, so its slice is unbounded and this guard "
+                + "would measure the rest of the workflow instead of the step.");
+            // Comment lines are dropped before any assertion. This step's own explanation names
+            // FileVersion, ProductVersion and the assembly version, so a Contains against the raw
+            // slice would be satisfied by the prose describing the check rather than the check.
+            var code = string.Join('\n', lines[at..end]
+                .Where(l => !l.TrimStart().StartsWith('#')));
+            Assert.True(code.Length > 300,
+                $"the code in \"{step}\" is only {code.Length} characters once comments are removed — "
+                + "the check has been reduced to its own description.");
+            return code;
+        }
+
+        var rename = StepLine("Rename exe with version");
+        var stamp = StepLine("Verify the embedded version stamp");
+        var sbom = StepLine("Generate CycloneDX SBOM");
+        var attest = StepLine("Attest build provenance");
+        var smoke = StepLine("Smoke-check the published exe");
+        var release = StepLine("Create GitHub Release");
+
+        Assert.True(stamp > rename,
+            $"the stamp check (line {stamp + 1}) runs before the exe is named (line {rename + 1}), so "
+            + "the file it resolves does not exist yet.");
+        foreach (var (step, at) in new[] { ("Generate CycloneDX SBOM", sbom),
+                                           ("Attest build provenance", attest),
+                                           ("Create GitHub Release", release) })
+        {
+            Assert.True(stamp < at,
+                $"the stamp check (line {stamp + 1}) runs AFTER \"{step}\" (line {at + 1}). The "
+                + "attestation is a signed public claim about a specific binary — it must never be "
+                + "made about one whose version was not verified first.");
+        }
+
+        var stampCode = CodeOf("Verify the embedded version stamp", stamp);
+        foreach (var required in new[] { "VersionInfo", "FileVersion", "ProductVersion" })
+        {
+            Assert.Contains(required, stampCode, StringComparison.Ordinal);
+        }
+
+        // Both halves must be able to FAIL the job. One throw would leave whichever value lost its
+        // verdict silently unverified, which is the state this whole guard exists to end.
+        var stampThrows = stampCode.Split('\n').Count(l => l.Contains("throw ", StringComparison.Ordinal));
+        Assert.True(stampThrows >= 2,
+            $"the stamp check raises on only {stampThrows} verdict(s); it must fail the job for a wrong "
+            + "FileVersion AND for a wrong ProductVersion.");
+        Assert.DoesNotContain("continue-on-error", stampCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("Write-Warning", stampCode, StringComparison.Ordinal);
+
+        // The runtime half lives inside the smoke check because that is where the app is running.
+        var smokeCode = CodeOf("Smoke-check the published exe", smoke);
+        Assert.Contains(
+            LogService.StartupMessage.Replace("{Version}", ".*", StringComparison.Ordinal),
+            smokeCode, StringComparison.Ordinal);
+        Assert.Contains(
+            LogService.StartupMessage.Replace("{Version}", "$env:VERSION", StringComparison.Ordinal),
+            smokeCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("Write-Warning", smokeCode, StringComparison.Ordinal);
+
+        // A missing log or a missing startup line must be a failure, not a silent pass — an absent
+        // line is indistinguishable from a matching one to any check that only compares when it
+        // finds something.
+        var startupChecks = smokeCode.Split('\n')
+            .Count(l => l.Contains("throw ", StringComparison.Ordinal));
+        Assert.True(startupChecks >= 6,
+            $"the smoke check raises on only {startupChecks} verdict(s). Three belong to the launch "
+            + "(self-exit, crash marker, will not die) and three to the version (no log, no startup "
+            + "line, wrong version) — an unverifiable version must fail rather than pass quietly.");
+
+        // Finally, the app side of the contract: the gate can only read a version out of the log
+        // while Init still puts one there.
+        Assert.StartsWith("SysManager ", LogService.StartupMessage, StringComparison.Ordinal);
+        Assert.Contains("{Version}", LogService.StartupMessage, StringComparison.Ordinal);
+
+        var initCall = File.ReadAllLines(
+                Path.Combine(FindRepoRoot(), "SysManager", "SysManager", "Services", "LogService.cs"))
+            .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))
+            .FirstOrDefault(l => l.Contains("Information(StartupMessage", StringComparison.Ordinal));
+        Assert.False(initCall is null,
+            "LogService no longer logs StartupMessage, so the release gate reads a line nobody writes.");
+        Assert.Contains("UpdateService.CurrentVersion", initCall!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// No style may suppress the keyboard focus indicator without providing a replacement.
     /// <para><c>FocusVisualStyle="{x:Null}"</c> removes the only cue a keyboard user has, and four
     /// styles did exactly that with nothing in its place: ButtonBase, ToggleSwitch, DataGridCell and

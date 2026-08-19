@@ -197,6 +197,28 @@ public sealed class LogServiceSinkScrubbingTests : IDisposable
         Assert.All(lines, line => Assert.Matches(@"\[INF\] Line \d+ at ", line));
     }
 
+    // ── The startup line names the build ─────────────────────────────────────
+    // release.yml greps this line to prove the published binary reports the tag it was built from.
+    // It has to be read out of the log because the value at risk is the managed assembly version —
+    // what UpdateService.CurrentVersion returns, and so what About, the update check, the
+    // bug-report URL, the profile export and the system report all show. That version is absent
+    // from the Win32 version resource and AssemblyName.GetAssemblyName cannot read it out of a
+    // single-file bundle (it throws), so a launch is the only place it is observable. That makes
+    // the rendered shape of this one line a contract with CI, not just cosmetics.
+
+    [Fact]
+    public void TheStartupLine_RendersTheVersionUnquoted()
+    {
+        // `{Message:lj}` renders string properties literally, so the line reads
+        // "SysManager 1.65.19 started" and not "SysManager \"1.65.19\" started". The release gate
+        // matches the bare form; a quoted version would break it, and would read as a placeholder
+        // rather than a build in an attached support log.
+        var text = WriteAndRead(log => log.Information(LogService.StartupMessage, "1.65.19"));
+
+        Assert.Contains("SysManager 1.65.19 started", text);
+        Assert.DoesNotContain("\"1.65.19\"", text);
+    }
+
     // ── The log file is bounded ──────────────────────────────────────────────
     // The sink passed no fileSizeLimitBytes and no rollOnFileSizeLimit, so it took Serilog's
     // defaults: 1 GB per file with rolling OFF. The only bound on the folder was the 14-FILE count,

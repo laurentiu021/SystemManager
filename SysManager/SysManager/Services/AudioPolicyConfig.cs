@@ -84,8 +84,18 @@ internal static class AudioPolicyConfigFactory
 
     /// <summary>
     /// Route-read is intentionally not attempted (its out-string marshaling is the most build-variant
-    /// slot); the UI shows "System default" and lets the user pick. Returns null. Kept as the seam so
-    /// a future, verified read path can slot in without changing callers.
+    /// slot). Returns null. Kept as the seam so a future, verified read path can slot in without
+    /// changing callers.
+    /// <para>What the null actually produces, because the previous note here said "the UI shows
+    /// <c>System default</c>" and that is not what happens: <c>AudioMixerService.GetSessionOutputDevice</c>
+    /// turns it into an empty id, and <c>AudioSessionRowViewModel.SetOutputDeviceFromService</c> resolves an
+    /// empty id to the entry flagged <c>IsDefault</c> — so the picker preselects the current default device
+    /// BY NAME. There is no "System default" item; the list holds real endpoints only. An app genuinely
+    /// routed elsewhere is therefore indistinguishable from one following the default (#1585).</para>
+    /// <para>The empty id is the pivot in both directions: selecting the <c>IsDefault</c> entry sends empty
+    /// back through <c>SetPersistedDefaultAudioEndpoint</c>, which CLEARS the override. That makes the
+    /// default entry the only way a user can stop routing an app, which is why the round trip is pinned by
+    /// tests rather than left to this comment.</para>
     /// </summary>
     public static string? GetPersistedDefaultEndpoint(object policyConfig, uint processId)
     {

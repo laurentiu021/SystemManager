@@ -20,7 +20,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="App Installation Alerts" Style="{StaticResource Display}"/>
+            <TextBlock Text="New App Alerts" Style="{StaticResource Display}"/>
             <TextBlock Text="{Binding MonitorStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 

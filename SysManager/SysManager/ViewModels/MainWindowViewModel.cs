@@ -207,7 +207,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<ProcessManagerViewModel>("nav-processes",       "Process Manager",    typeof(Views.ProcessManagerView)),
             Tab<ResourceHistoryViewModel>("nav-resource-history", "Resource History", typeof(Views.ResourceHistoryView), inDevelopment: true),
             Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(Views.PrivacyMonitorView)),
-            Tab<AppAlertsViewModel>("nav-app-alerts",           "App Alerts",         typeof(Views.AppAlertsView)),
+            Tab<AppAlertsViewModel>("nav-app-alerts",           "New App Alerts",     typeof(Views.AppAlertsView)),
             Tab<FileLockViewModel>("nav-file-lock",             "File Lock Detector", typeof(Views.FileLockView)),
             Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true),
             Tab<BandwidthMonitorViewModel>("nav-bandwidth-monitor", "Bandwidth Monitor", typeof(Views.BandwidthMonitorView))),
@@ -261,7 +261,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             EagerItem("nav-about", "About", typeof(Views.AboutView), About)),
 
         Group("grp-advanced", "Advanced",
-            Tab<ProfileViewModel>("nav-profile-export", "Profile Export/Import", typeof(Views.ProfileView)),
+            Tab<ProfileViewModel>("nav-profile-export", "Profile Export / Import", typeof(Views.ProfileView)),
             Tab<CliInterfaceViewModel>("nav-cli-interface", "CLI Interface",     typeof(Views.CliInterfaceView), inDevelopment: true),
             Tab<EnvironmentVariablesViewModel>("nav-env-variables", "Environment Variables", typeof(Views.EnvironmentVariablesView))),
     ];

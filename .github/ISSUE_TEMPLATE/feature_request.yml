@@ -63,7 +63,7 @@ body:
         - Process Manager
         - Resource History
         - Camera/Mic/Location
-        - App Alerts
+        - New App Alerts
         - File Lock Detector
         - Settings Watchdog
         - Bandwidth Monitor
@@ -98,7 +98,7 @@ body:
         - System Report
         - Legacy Panels
         - About
-        - Profile Export/Import
+        - Profile Export / Import
         - CLI Interface
         - Environment Variables
         - Multiple / general UI

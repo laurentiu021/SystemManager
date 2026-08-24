@@ -127,7 +127,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes · Tweaks Hub 🔬 |
 | 🎮 Gaming & Profiles | Gaming Profile 🔬 · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
-| 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · App Alerts · File Lock Detector · Settings Watchdog 🔬 · Bandwidth Monitor |
+| 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · New App Alerts · File Lock Detector · Settings Watchdog 🔬 · Bandwidth Monitor |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance 🔬 |
 | 💾 Storage | Disk Analyzer · Duplicate Finder |
 | 🌐 Network | Ping · Traceroute · Speed Test · Network Repair · DNS & Hosts |
@@ -135,7 +135,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks · Notification Blocker 🔬 |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
-| ⚙️ Advanced | Profile Export/Import · CLI Interface 🔬 · Environment Variables |
+| ⚙️ Advanced | Profile Export / Import · CLI Interface 🔬 · Environment Variables |
 
 > 🔬 = Preview — fully implemented and usable, marked in-app while it settles in.
 
@@ -663,7 +663,7 @@ a confirmation before it runs:
 - Live console output showing winget progress
 - GroupedView with visual category headers
 
-### App Alerts
+### New App Alerts
 - Monitors Program Files, AppData\Programs, and registry uninstall keys for
   new application installations
 - FileSystemWatcher on install directories + 30-second registry poll cycle
@@ -1021,7 +1021,7 @@ offers, "rate us" prompts:
 </details>
 
 <details>
-<summary><strong>📊 Monitor</strong> — Resource History · App Alerts · File Lock · Settings Watchdog · Bandwidth</summary>
+<summary><strong>📊 Monitor</strong> — Resource History · New App Alerts · File Lock · Settings Watchdog · Bandwidth</summary>
 <br>
 <p>
 <a href="docs/screenshots/19-resource-history.png"><img src="docs/screenshots/19-resource-history.png" width="280" alt="Resource History"></a>&nbsp;
@@ -1116,10 +1116,10 @@ previous one showed the tab while it was a placeholder, which no longer reflects
 </details>
 
 <details>
-<summary><strong>⚙️ Advanced</strong> — Profile Export/Import · CLI Interface</summary>
+<summary><strong>⚙️ Advanced</strong> — Profile Export / Import · CLI Interface</summary>
 <br>
 <p>
-<a href="docs/screenshots/56-profile-export.png"><img src="docs/screenshots/56-profile-export.png" width="280" alt="Profile Export/Import"></a>&nbsp;
+<a href="docs/screenshots/56-profile-export.png"><img src="docs/screenshots/56-profile-export.png" width="280" alt="Profile Export / Import"></a>&nbsp;
 <a href="docs/screenshots/57-cli-interface.png"><img src="docs/screenshots/57-cli-interface.png" width="280" alt="CLI Interface"></a>
 </p>
 </details>

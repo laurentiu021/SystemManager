@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.66.4] - 2026-08-24
+
+Two tabs were called one thing in the sidebar and another at the top of the page. Small, but it is the
+kind of thing that makes you wonder whether you clicked the right item.
+
+### Fixed
+- **"App Alerts" and its page are both called "New App Alerts" now.** The sidebar said "App Alerts"
+  while the page was headed "App Installation Alerts". The new name says what the tab is for — it tells
+  you when something new installed itself.
+- **"Profile Export / Import" is spelled the same in both places.** The sidebar wrote it without spaces
+  around the slash, the page with them.
+- Two tabs keep names that differ on purpose: **About** (the sidebar convention, with the usual longer
+  heading) and **Context Menu**, whose rename is still being decided. Both are recorded as deliberate,
+  so a future tab cannot quietly join them — a test now compares every tab's sidebar label against its
+  page heading, and the two names are edited in different files, which is why they drifted unnoticed.
+- The tab names offered in the GitHub issue forms were updated to match, so a bug report can name the
+  tab the way the app does.
+
 ## [1.66.3] - 2026-08-24
 
 Gaming Profile and Performance Mode can no longer trip over each other. They change the same two

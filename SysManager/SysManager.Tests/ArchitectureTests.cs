@@ -2752,6 +2752,111 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every tab must have exactly ONE name: the label in the sidebar and the header on the page must
+    /// read the same.
+    /// <para>Five of 58 pairs disagreed — "App Alerts" under a page headed "App Installation Alerts",
+    /// "Profile Export/Import" under "Profile Export / Import". For the target persona a mismatch is a
+    /// small dose of doubt about having clicked the right thing, and it costs nothing to remove. The point
+    /// of asserting it is that the invariant survives the NEXT tab: a label and a header are edited in two
+    /// different files, so they drift silently, and nothing else in the build compares them.</para>
+    /// <para>Three pairs are deliberate and listed with the reason and the issue that owns them. An
+    /// exception must state the exact header it expects, so a tab in the list is still pinned — it just
+    /// pins a different value — and a tab whose mismatch is silently "fixed" fails until its entry is
+    /// removed.</para>
+    /// <para>Header text is HTML-decoded before comparison. Without that, <c>DNS &amp;amp; Hosts</c> in
+    /// XAML reads as a mismatch against the label <c>DNS &amp; Hosts</c>, which is the same text — a
+    /// first pass at this check reported 8 mismatches, and 3 of them were that artifact.</para>
+    /// </summary>
+    [Fact]
+    public void EveryTabsSidebarLabel_MatchesItsPageHeader()
+    {
+        // nav id -> (the header it is allowed to differ with, why).
+        var tolerated = new Dictionary<string, (string Header, string Why)>(StringComparer.Ordinal)
+        {
+            ["nav-about"] = ("About SysManager",
+                "\"About\" is the universal convention for the sidebar and the expanded header is standard; "
+                + "forcing parity here would be churn for its own sake (#1516 says so explicitly)"),
+            ["nav-context-menu"] = ("Context Menu Manager",
+                "the label is proposed to become \"Right-Click Menu\" in a separate rename issue; aligning "
+                + "it to \"Context Menu Manager\" now would have to be undone by that change"),
+            ["nav-privacy-monitor"] = ("Privacy Monitor",
+                "the Camera/Mic/Location naming is owned by its own issue, which decides both sides at once"),
+        };
+
+        var vm = File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+        var nav = MemberSlice(vm, "private NavGroup[] BuildNavGroups()");
+        Assert.True(nav.Length > 2000,
+            $"the BuildNavGroups slice is {nav.Length} chars — too short to hold 58 tabs, so this guard "
+            + "would compare almost nothing.");
+
+        var entries = NavEntry().Matches(nav).Cast<Match>().ToArray();
+        Assert.True(entries.Length >= 50,
+            $"only {entries.Length} nav entries parsed — the shape of BuildNavGroups changed and this "
+            + "guard is no longer reading the sidebar; fix the pattern rather than trusting the pass.");
+
+        var offenders = new List<string>();
+        var compared = 0;
+
+        foreach (var entry in entries)
+        {
+            var navId = entry.Groups[1].Value;
+            var label = entry.Groups[2].Value;
+            var view = entry.Groups[3].Value;
+
+            var path = Path.Combine(FindAppProjectDir(), "Views", view + ".xaml");
+            Assert.True(File.Exists(path), $"{view}.xaml is referenced by {navId} but does not exist");
+
+            // Comments stripped so a commented-out old header cannot be read as the live one.
+            var xaml = XmlComment().Replace(File.ReadAllText(path), string.Empty);
+            var displayAt = xaml.IndexOf("Style=\"{StaticResource Display}\"", StringComparison.Ordinal);
+            Assert.True(displayAt > 0,
+                $"{view}.xaml has no Display-styled header — every page carries one, so either the view "
+                + "regressed or this guard is looking for the wrong marker.");
+
+            // Bound the search to the element that carries the style, so Text= from a neighbouring
+            // control cannot be mistaken for the header. Attribute order is irrelevant this way.
+            var open = xaml.LastIndexOf('<', displayAt);
+            var close = xaml.IndexOf('>', displayAt);
+            Assert.True(open >= 0 && close > open, $"could not bound the header element in {view}.xaml");
+            var textMatch = TextAttribute().Match(xaml[open..close]);
+            Assert.True(textMatch.Success, $"the Display-styled element in {view}.xaml has no Text=");
+
+            var header = System.Net.WebUtility.HtmlDecode(textMatch.Groups[1].Value);
+            compared++;
+
+            if (tolerated.TryGetValue(navId, out var exception))
+            {
+                if (!string.Equals(header, exception.Header, StringComparison.Ordinal))
+                    offenders.Add($"{navId} is a documented exception expecting the header "
+                        + $"\"{exception.Header}\" but the page now says \"{header}\". Either restore it or "
+                        + $"remove the entry — the reason on file is: {exception.Why}");
+                else if (string.Equals(header, label, StringComparison.Ordinal))
+                    offenders.Add($"{navId} now matches its header (\"{header}\") but is still listed as an "
+                        + "exception. Delete the entry so the list keeps describing the app.");
+                continue;
+            }
+
+            if (!string.Equals(header, label, StringComparison.Ordinal))
+                offenders.Add($"{navId}: the sidebar says \"{label}\" but the page is headed \"{header}\" — "
+                    + "one tab, two names. Align them, or add a documented exception saying why not.");
+        }
+
+        Assert.True(compared >= 50,
+            $"only {compared} label/header pairs were actually compared out of {entries.Length} entries.");
+
+        Assert.True(offenders.Count == 0,
+            "every tab must have one name:\n  - " + string.Join("\n  - ", offenders));
+    }
+
+    // Tab<TVm>("nav-id", "Label", typeof(Views.SomeView)  /  EagerItem("nav-id", "Label", typeof(Views.SomeView)
+    [GeneratedRegex(@"(?:Tab<\w+>|EagerItem)\(\s*""([^""]+)""\s*,\s*""([^""]+)""\s*,\s*typeof\(Views\.(\w+)\)",
+                    RegexOptions.Compiled)]
+    private static partial Regex NavEntry();
+
+    [GeneratedRegex(@"Text=""([^""]*)""", RegexOptions.Compiled)]
+    private static partial Regex TextAttribute();
+
+    /// <summary>
     /// Gaming Profile must take the app-wide system-modification lock, and the two directions must stay
     /// asymmetric: apply REFUSES when the lock is held, revert NEVER does.
     /// <para>Gaming Profile and Performance Mode write the same power plan and the same visual-effects

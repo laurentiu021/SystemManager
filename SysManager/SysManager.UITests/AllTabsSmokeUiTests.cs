@@ -49,7 +49,7 @@ public class AllTabsSmokeUiTests
         new object[] { "nav-processes", "Process Manager" },
         new object[] { "nav-resource-history", "Resource History" },
         new object[] { "nav-privacy-monitor", "Privacy Monitor" },
-        new object[] { "nav-app-alerts", "App Installation Alerts" },
+        new object[] { "nav-app-alerts", "New App Alerts" },
         new object[] { "nav-file-lock", "File Lock Detector" },
         new object[] { "nav-settings-watchdog", "Settings Watchdog" },
         new object[] { "nav-bandwidth-monitor", "Bandwidth Monitor" },

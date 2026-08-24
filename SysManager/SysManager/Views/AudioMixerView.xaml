@@ -100,7 +100,8 @@
                                             <!-- Live peak meter (0..1 mapped onto the slider width). Decorative
                                                  and unnamed — the named Slider already conveys the level to screen
                                                  readers, matching the Dashboard's live meters (no AutomationProperties.Name). -->
-                                            <ProgressBar Height="3" Margin="0,4,0,0" Minimum="0" Maximum="1"
+                                            <ProgressBar AutomationProperties.Name="{Binding DisplayName, StringFormat='Audio level for {0}'}"
+                                                         Height="3" Margin="0,4,0,0" Minimum="0" Maximum="1"
                                                          Value="{Binding PeakLevel, Mode=OneWay}"
                                                          Foreground="{DynamicResource Accent}"
                                                          Background="Transparent" BorderThickness="0"

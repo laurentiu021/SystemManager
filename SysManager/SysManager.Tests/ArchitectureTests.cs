@@ -2457,13 +2457,17 @@ public partial class ArchitectureTests
     /// <para>The rule is uniqueness per view rather than "never call a bar Progress": on the 34 pages
     /// with a single bar the bare word is uninformative but not ambiguous, and renaming those would mean
     /// inventing 34 strings for no behavioural gain. Ambiguity is the defect; vagueness is polish.</para>
-    /// <para>Unnamed bars are ratcheted, not forbidden. Ten remain, and both kinds need a decision this
-    /// codebase has not made yet: five are decorative indeterminate strips (Bulk Installer, MainWindow,
-    /// two on the Dashboard) which arguably belong OUT of the accessibility tree rather than named, and no
-    /// convention for hiding an element exists yet; the other five are live value indicators (the
-    /// Dashboard's CPU, RAM and GPU gauges, its per-row share bar, and Volume Control's per-session peak
-    /// meter) where a per-row name is the right shape. The ratchet lets those counts fall but never rise,
-    /// so the debt is recorded in code rather than in a comment nobody runs.</para>
+    /// <para>Unnamed bars are ratcheted, not forbidden, and the allowance has since been tightened from
+    /// ten to FOUR. The six that carried a <c>Value</c> binding — the Dashboard's CPU, memory and GPU
+    /// gauges, its per-drive space bar, its quick-action bar, and Volume Control's per-session peak meter
+    /// — report a real reading, so they were named (#1939); the two per-row ones name their row, as the
+    /// guard above requires.</para>
+    /// <para>What remains is the four DECORATIVE strips: <c>IsIndeterminate="True"</c> with no
+    /// <c>Value</c> at all (Bulk Installer, MainWindow, two on the Dashboard). A spinner that only means
+    /// "working" arguably belongs OUT of the accessibility tree rather than named, and no convention for
+    /// hiding an element exists anywhere in this app yet — inventing one is a design decision, so it stays
+    /// on #1939. The ratchet lets these counts fall but never rise, so the debt is recorded in code rather
+    /// than in a comment nobody runs.</para>
     /// </summary>
     [Fact]
     public void NoTwoProgressBarsOnAPage_AreAnnouncedTheSame()
@@ -2479,17 +2483,20 @@ public partial class ArchitectureTests
 
         // Views that still hold a bar with no name at all, with the count each is allowed. Fewer is
         // always fine; one more is a regression.
+        // Only the decorative indeterminate strips are left. AudioMixerView is deliberately absent now:
+        // its peak meter was named, so a new unnamed bar there must fail.
         var unnamedAllowance = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            ["DashboardView.xaml"] = 7,
-            ["AudioMixerView.xaml"] = 1,
+            ["DashboardView.xaml"] = 2,
             ["BulkInstallerView.xaml"] = 1,
             ["MainWindow.xaml"] = 1,
         };
 
         var ambiguous = new List<string>();
         var unnamedOverAllowance = new List<string>();
+        var sameOnEveryRow = new List<string>();
         var barsSeen = 0;
+        var repeatingBars = 0;
 
         foreach (var path in files)
         {
@@ -2508,6 +2515,20 @@ public partial class ArchitectureTests
                     .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value;
                 if (string.IsNullOrWhiteSpace(name)) unnamed++;
                 else named.Add(name.Trim());
+
+                // A bar inside a DataTemplate is drawn once per item, so a CONSTANT name says the same
+                // thing on every row and identifies none of them. The row guard above cannot see these:
+                // it is scoped to the Button family inside a DataGrid column, and these sit in an
+                // ItemsControl. A mutation that replaced one of these bound names with a constant went
+                // green, which is how the gap was found.
+                var repeats = bar.Ancestors().Any(a => a.Name.LocalName == "DataTemplate");
+                if (!repeats) continue;
+                repeatingBars++;
+                if (!string.IsNullOrWhiteSpace(name)
+                    && !name.Contains("{Binding", StringComparison.Ordinal))
+                {
+                    sameOnEveryRow.Add($"{file} — repeating bar announced \"{name.Trim()}\" on every row");
+                }
             }
 
             foreach (var group in named.GroupBy(n => n, StringComparer.Ordinal).Where(g => g.Count() > 1))
@@ -2518,10 +2539,13 @@ public partial class ArchitectureTests
                 unnamedOverAllowance.Add($"{file} — {unnamed} unnamed bar(s), {allowed} allowed");
         }
 
-        // Vacuity floor: an absence check over a population the guard discovers itself.
+        // Vacuity floors: absence checks over populations the guard discovers itself.
         Assert.True(barsSeen >= 50,
             $"only {barsSeen} progress bars were found across {files.Length} XAML files — the element "
             + "selector has stopped matching, so this guard is measuring nothing.");
+        Assert.True(repeatingBars >= 4,
+            $"only {repeatingBars} progress bars were found inside a DataTemplate — the ancestor test has "
+            + "stopped matching, so the per-row rule below is measuring nothing.");
 
         Assert.True(ambiguous.Count == 0,
             "these pages show more than one progress bar announced by the same name, so a screen-reader "
@@ -2534,6 +2558,11 @@ public partial class ArchitectureTests
             + "moved into a view that had none. Name it for what it reports, or settle the "
             + $"hide-decorative-elements convention first:\n  "
             + string.Join("\n  ", unnamedOverAllowance));
+
+        Assert.True(sameOnEveryRow.Count == 0,
+            "these progress bars are drawn once per item but announce a constant, so every row reports "
+            + "the same words and none of them says which item it belongs to. Bind a property of the "
+            + $"row:\n  " + string.Join("\n  ", sameOnEveryRow));
     }
 
     /// <summary>A style that suppresses the focus indicator outright.</summary>

@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.66.5] - 2026-08-24
+
+Performance Mode will no longer mistake a running game profile's settings for your own. Start a profile,
+then change something in Performance Mode for the first time, and it used to write down the profile's
+power plan as "how you had it" — so a later Restore All would put you back onto a gaming plan you had
+never chosen.
+
+### Fixed
+- **Performance Mode asks you to stop a game profile before it records your original settings.** While a
+  profile is running, the power plan and visual effects on the machine are the profile's, not yours. The
+  tab now says so and refuses to save them as your baseline, instead of silently keeping borrowed values
+  it would restore you to later. Nothing is changed when it refuses.
+- A baseline saved **before** a profile started is still loaded and used normally, so the protection does
+  not stop the tab working during a game — it only declines to invent a new baseline out of the profile's
+  own settings.
+
 ## [1.66.4] - 2026-08-24
 
 Two tabs were called one thing in the sidebar and another at the top of the page. Small, but it is the

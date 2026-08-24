@@ -46,7 +46,20 @@ public class PerformanceViewModelTests
             Path.GetTempPath(),
             "SysManagerPerformanceTests",
             Guid.NewGuid().ToString("N"));
-        return new(new PerformanceService(ps, new RestorePointService(ps), configDir));
+        return new(new PerformanceService(ps, new RestorePointService(ps), configDir),
+                   NoGamingSession());
+    }
+
+    /// <summary>
+    /// No game profile is running — the normal case for these tests. Performance Mode consults this
+    /// only to decide whether the settings on the machine right now are the user's own before it
+    /// records them as the recovery baseline.
+    /// </summary>
+    private static IGamingProfileService NoGamingSession()
+    {
+        var gaming = Substitute.For<IGamingProfileService>();
+        gaming.IsActive.Returns(false);
+        return gaming;
     }
 
     // ── Commands exist ──

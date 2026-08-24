@@ -852,6 +852,10 @@ offers, "rate us" prompts:
   persists it locally, and reloads it when the tab opens so Restore All remains
   available after an app restart; persisted fields are validated before use and the
   confirmation shows when the baseline was captured
+- **It will not record your settings while a game profile is running** — those are the
+  profile's power plan and visual effects, not yours, and saving them as your baseline
+  would restore you to them later. It asks you to stop the profile first. A baseline
+  saved *before* the profile started is still used normally
 - Confirmation dialog before every change
 - **Restore point creation**: create a Windows System Restore point before
   making changes (requires admin)

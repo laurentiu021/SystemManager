@@ -36,6 +36,18 @@ public sealed class PerformanceSnapshotRestartTests
         return new PerformanceService(runner, new RestorePointService(runner), configDir);
     }
 
+    /// <summary>
+    /// No game profile is running — the normal case for these tests. Performance Mode consults this
+    /// only to decide whether the settings on the machine right now are the user's own before it
+    /// records them as the recovery baseline.
+    /// </summary>
+    private static IGamingProfileService NoGamingSession()
+    {
+        var gaming = Substitute.For<IGamingProfileService>();
+        gaming.IsActive.Returns(false);
+        return gaming;
+    }
+
     private static PerformanceService.OriginalSnapshot ValidSnapshot(
         DateTimeOffset? capturedAtUtc = null) =>
         new(
@@ -80,7 +92,7 @@ public sealed class PerformanceSnapshotRestartTests
             using var service = NewService(dir);
             Assert.Equal(snapshot, service.LoadSnapshot());
 
-            using var vm = new PerformanceViewModel(service);
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
             await vm.InitializationComplete;
 
             Assert.True(vm.HasSnapshot);
@@ -145,7 +157,7 @@ public sealed class PerformanceSnapshotRestartTests
                 });
 
             using var service = NewService(dir, runner);
-            using var vm = new PerformanceViewModel(service);
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
             try
             {
                 await refreshStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -211,7 +223,7 @@ public sealed class PerformanceSnapshotRestartTests
                 """);
 
             using var service = NewService(dir);
-            using var vm = new PerformanceViewModel(service);
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
             await vm.InitializationComplete;
 
             Assert.True(vm.HasSnapshot);
@@ -255,7 +267,7 @@ public sealed class PerformanceSnapshotRestartTests
             using var service = NewService(dir, runner);
             Assert.True(service.SaveSnapshot(ValidSnapshot()));
 
-            using var vm = new PerformanceViewModel(service);
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
             await vm.InitializationComplete;
             Assert.True(vm.HasSnapshot);
 
@@ -414,6 +426,58 @@ public sealed class PerformanceSnapshotRestartTests
 
             Assert.False(service.SaveSnapshot(invalid));
             Assert.False(File.Exists(Path.Combine(dir, "performance-snapshot.json")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A live Gaming Profile session must stop this tab from inventing a recovery baseline out of the
+    /// profile's settings.
+    /// </summary>
+    /// <remarks>
+    /// #1501 stopped the two tabs from snapshotting each other mid-change by taking the
+    /// system-modification lock before CaptureSnapshotAsync. That lock is held per OPERATION, but a
+    /// gaming SESSION outlives it: the profile applies, releases the lock, and its power plan and
+    /// visual-effects values stay live until the game exits. The first mutating command in this tab
+    /// during that window used to capture those borrowed values and PERSIST them as the user's
+    /// original, so a later Restore All would put the machine on a gaming plan it had never been on.
+    /// <para>The refusal is checked, not just the absence of a file: a test that only asserted
+    /// "no snapshot written" would also pass if the command failed for some unrelated reason.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Apply_WhileAGameProfileIsRunning_RefusesInsteadOfRecordingTheProfilesSettings()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            var gaming = Substitute.For<IGamingProfileService>();
+            gaming.IsActive.Returns(true);
+
+            using var vm = new PerformanceViewModel(service, gaming);
+            await vm.InitializationComplete;
+            Assert.False(vm.HasSnapshot, "precondition: nothing is persisted, so a capture would happen");
+
+            var previousDialog = DialogService.Instance;
+            var dialog = Substitute.For<IDialogService>();
+            dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+            DialogService.Instance = dialog;
+            try
+            {
+                // Must DIFFER from the current plan, or the command returns at its "already set to
+                // the selected option" short-circuit and never reaches the snapshot step — which is
+                // what the first version of this test did, passing for the wrong reason.
+                vm.SelectedPlan = "high";
+                await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+            }
+            finally { DialogService.Instance = previousDialog; }
+
+            Assert.Contains("Stop the game profile first", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Null(service.LoadSnapshot());
+            Assert.False(vm.HasSnapshot);
         }
         finally
         {

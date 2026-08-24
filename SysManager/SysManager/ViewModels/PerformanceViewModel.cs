@@ -27,6 +27,10 @@ namespace SysManager.ViewModels;
 public sealed partial class PerformanceViewModel : ViewModelBase
 {
     private readonly PerformanceService _service;
+    // Consulted for ONE question: is a game profile live? While it is, the current power plan and
+    // visual-effects state belong to the profile, not to the user, so they must not be recorded as
+    // the recovery baseline. See EnsureSnapshotAsync.
+    private readonly IGamingProfileService _gaming;
     private PerformanceService.OriginalSnapshot? _snapshot;
     // Serializes the load-modify of _snapshot so two Apply commands running at once
     // can't both observe a null snapshot and race the capture/save.
@@ -57,9 +61,10 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     [ObservableProperty] private bool _needsReboot;
     [ObservableProperty] private bool _hasSnapshot;
 
-    public PerformanceViewModel(PerformanceService service)
+    public PerformanceViewModel(PerformanceService service, IGamingProfileService gaming)
     {
         _service = service;
+        _gaming = gaming;
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
@@ -124,6 +129,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
                 }
                 else
                 {
+                    // Refuse to CAPTURE while a game profile is live. The lock that keeps this tab and
+                    // Gaming Profile from overlapping is held per operation, but a gaming SESSION
+                    // outlives it: the profile applies, releases the lock, and its power plan and
+                    // visual-effects values stay live until the game exits. A snapshot taken in that
+                    // window records the profile's state as the user's own and persists it, so a later
+                    // Restore All would put the machine on a gaming plan it was never on. Loading an
+                    // ALREADY-persisted snapshot above is fine — it predates the session.
+                    if (_gaming.IsActive) throw SnapshotDuringGamingSession();
+
                     var captured = await _service.TakeSnapshotAsync();
                     var saved = await Task.Run(() => _service.SaveSnapshot(captured));
                     if (!saved) throw SnapshotUnavailable();
@@ -142,6 +156,17 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     /// </summary>
     private static InvalidOperationException SnapshotUnavailable() =>
         new("The recovery snapshot could not be saved, so no setting was changed.");
+
+    /// <summary>
+    /// The refusal for "a game profile is running, so the settings on this machine right now are the
+    /// profile's, not yours". Thrown only when there is no persisted snapshot to fall back on, i.e.
+    /// exactly when this tab would otherwise invent a baseline out of borrowed values. Every Apply
+    /// command catches <see cref="InvalidOperationException"/> and shows the message, so the user is
+    /// told what to do rather than just refused.
+    /// </summary>
+    private static InvalidOperationException SnapshotDuringGamingSession() =>
+        new("Stop the game profile first. While it is running, the power plan and visual effects are "
+            + "the profile's, so recording them as your original settings would restore you to them later.");
 
     /// <summary>
     /// Releases the snapshot gate unless disposal has already claimed it. Releasing a disposed

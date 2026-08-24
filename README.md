@@ -775,6 +775,9 @@ offers, "rate us" prompts:
 - **Fully reversible & snapshot-based** — the original state (power plan, visual
   effects, indexing, notifications) is captured before any change and restored exactly;
   SysManager also tries a System Restore point first (best-effort, needs administrator)
+- **Your own changes win** — if you switch notifications back on yourself while a profile is
+  running (from Privacy & Security → Notifications, which is the same switch), the restore leaves
+  your choice alone instead of silencing them again when the game exits
 - **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game the
   system-wide changes are offered for restore on next launch
 - **Honest about admin** — freeing standby memory and pausing indexing need

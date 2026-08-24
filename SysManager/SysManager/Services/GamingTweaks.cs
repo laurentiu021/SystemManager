@@ -175,25 +175,36 @@ internal sealed class SearchIndexingTweak(bool wasRunning) : IGamingTweak
 /// Silence toast notifications via the documented HKCU push-notifications key (reversible, no
 /// admin). This mutes toasts while gaming; it is NOT the Focus Assist / Do-Not-Disturb tile
 /// (no stable public API), which the UI copy states plainly. Restores the original DWORD on
-/// revert (deleting the value if it was absent, to restore the exact prior state).
+/// revert (deleting the value if it was absent, to restore the exact prior state) — but only
+/// while the value is still the 0 this tweak wrote. The key is shared with
+/// <see cref="NotificationBlockerService"/>, which owns the path and value name, so the user can
+/// move the same switch from the Notifications tab while a profile is active; if they have, revert
+/// keeps their choice rather than resurrecting the pre-game state.
 /// </summary>
-internal sealed class NotificationsTweak(int? originalToastEnabled) : IGamingTweak
+internal sealed class NotificationsTweak(int? originalToastEnabled, RegistryKey? baseKey = null) : IGamingTweak
 {
-    // Per-user master toggle for toast notifications (the same value the Settings > Notifications
-    // switch writes). ToastEnabled = 0 suppresses toasts; absent/1 = normal.
-    internal const string PushKeyPath = @"Software\Microsoft\Windows\CurrentVersion\PushNotifications";
-    internal const string ToastValueName = "ToastEnabled";
+    // The key path and value name are NOT redeclared here. They are owned by
+    // NotificationBlockerService, whose Notifications tab writes the same user-wide master toggle,
+    // and referenced from there so the two cannot drift — the situation Helpers/WingetId.cs exists
+    // to prevent, where the same rule lived in three services and could diverge in one of them.
+    // ToastEnabled = 0 suppresses toasts; absent/1 = normal.
+    //
+    // The registry root is injectable (defaulting to HKCU) for the same reason as
+    // NotificationBlockerService and AppBlockerService: it lets the apply/revert round-trip be
+    // tested against a redirected subkey instead of the machine's real notification settings.
+    private RegistryKey Root => baseKey ?? Registry.CurrentUser;
 
     public string Label => "Silence notifications";
     public bool RequiresAdmin => false;
 
     /// <summary>Reads the current ToastEnabled DWORD (null = value absent → notifications on).</summary>
-    internal static int? ReadToastEnabled()
+    internal static int? ReadToastEnabled(RegistryKey? baseKey = null)
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(PushKeyPath, writable: false);
-            return key?.GetValue(ToastValueName) is int i ? i : null;
+            using var key = (baseKey ?? Registry.CurrentUser)
+                .OpenSubKey(NotificationBlockerService.PushKeyPath, writable: false);
+            return key?.GetValue(NotificationBlockerService.ToastValueName) is int i ? i : null;
         }
         catch (System.Security.SecurityException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
@@ -203,19 +214,35 @@ internal sealed class NotificationsTweak(int? originalToastEnabled) : IGamingTwe
     {
         // Toasts already suppressed (ToastEnabled == 0) → no-op; nothing to change or restore.
         if (originalToastEnabled == 0) return Task.FromResult(GamingTweakResult.NoChange);
-        using var key = Registry.CurrentUser.CreateSubKey(PushKeyPath, writable: true);
-        key.SetValue(ToastValueName, 0, RegistryValueKind.DWord);
+        using var key = Root.CreateSubKey(NotificationBlockerService.PushKeyPath, writable: true);
+        key.SetValue(NotificationBlockerService.ToastValueName, 0, RegistryValueKind.DWord);
         Log.Information("Gaming Profile: notifications silenced (ToastEnabled=0)");
         return Task.FromResult(GamingTweakResult.Applied);
     }
 
     public Task RevertAsync(CancellationToken ct)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(PushKeyPath, writable: true);
+        // Undo only the value this tweak actually wrote. A NoChange apply is never tracked for
+        // revert, so reaching here means ToastEnabled was set to 0 by us; if it is no longer 0 the
+        // user has since changed the master toggle themselves — most likely on the Notifications
+        // tab, which writes this very value — and restoring the pre-game snapshot would silently
+        // overturn that newer decision. Leaving it alone is what "reversible" has to mean when the
+        // user has already moved the switch.
+        var current = ReadToastEnabled(baseKey);
+        if (current != 0)
+        {
+            Log.Information(
+                "Gaming Profile: notifications master toggle was changed while the profile was active "
+                + "(now {Current}); leaving the user's setting instead of restoring {Original}",
+                current, originalToastEnabled);
+            return Task.CompletedTask;
+        }
+
+        using var key = Root.CreateSubKey(NotificationBlockerService.PushKeyPath, writable: true);
         if (originalToastEnabled is { } v)
-            key.SetValue(ToastValueName, v, RegistryValueKind.DWord);
+            key.SetValue(NotificationBlockerService.ToastValueName, v, RegistryValueKind.DWord);
         else
-            key.DeleteValue(ToastValueName, throwOnMissingValue: false); // was absent → restore absent
+            key.DeleteValue(NotificationBlockerService.ToastValueName, throwOnMissingValue: false); // was absent → restore absent
         return Task.CompletedTask;
     }
 }

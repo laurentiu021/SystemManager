@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.66.2] - 2026-08-24
+
+Turning notifications back on while a Gaming Profile is running now sticks. Gaming Profile and the
+Notifications page are two switches wired to the same setting, and when the game exited the profile put
+its own version back — silencing notifications you had just deliberately switched on.
+
+### Fixed
+- **Gaming Profile no longer overrules a notification change you made yourself.** When a profile ends it
+  restores the notification setting only if it is still the one the profile applied. If you changed it
+  meanwhile — from Privacy & Security → Notifications, which is the very same switch — your choice is
+  kept and the profile leaves it alone. Everything else about the restore is unchanged, including putting
+  an explicitly-on setting back exactly as it was rather than merely "not off".
+- **The two features now share one definition of that setting.** The registry location was written out
+  twice, word for word, in two different services that both wrote to it, with neither aware of the other
+  — so a correction to one would silently not apply to the other. There is now a single owner, and a test
+  refuses any registry location that is spelled out in more than one place, which is the class of mistake
+  rather than this one instance of it.
+
 ## [1.66.1] - 2026-08-24
 
 Two tabs list the same scheduled tasks, and now each one says so. Startup Manager deliberately leaves out

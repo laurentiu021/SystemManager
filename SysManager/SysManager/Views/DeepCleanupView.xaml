@@ -58,7 +58,7 @@
                                 <TextBlock Grid.Column="0" Text="{Binding ScanStatusLine}" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="1" Text="{Binding ScanProgress, StringFormat={}{0}%}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0"/>
                             </Grid>
-                            <ProgressBar AutomationProperties.Name="Progress" Height="6" Minimum="0" Maximum="100" Value="{Binding ScanProgress}" Margin="0,6,0,0"/>
+                            <ProgressBar AutomationProperties.Name="Scan progress" Height="6" Minimum="0" Maximum="100" Value="{Binding ScanProgress}" Margin="0,6,0,0"/>
                             <!-- The VM already runs an EtaCalculator over ScanProgress; nothing bound the
                                  result, so the estimate for a scan that can take minutes was discarded. -->
                             <TextBlock Text="{Binding ScanEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
@@ -130,7 +130,7 @@
                                 <TextBlock Grid.Column="0" Text="{Binding CleanStatusLine}" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="1" Text="{Binding CleanProgress, StringFormat={}{0}%}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0"/>
                             </Grid>
-                            <ProgressBar AutomationProperties.Name="Progress" Height="6" Minimum="0" Maximum="100" Value="{Binding CleanProgress}" Margin="0,6,0,0"/>
+                            <ProgressBar AutomationProperties.Name="Cleanup progress" Height="6" Minimum="0" Maximum="100" Value="{Binding CleanProgress}" Margin="0,6,0,0"/>
                             <!-- Same for the clean phase, which deletes real files — knowing how long is
                                  left is what stops someone killing the app mid-delete. -->
                             <TextBlock Text="{Binding CleanEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
@@ -180,7 +180,7 @@
 
                         <!-- Large-files scan progress — indeterminate bar + live counters -->
                         <StackPanel Margin="0,0,0,10" Visibility="{Binding IsLargeScanning, Converter={StaticResource FlexVis}}">
-                            <ProgressBar AutomationProperties.Name="Progress" Height="6" IsIndeterminate="True"/>
+                            <ProgressBar AutomationProperties.Name="Large-file scan progress" Height="6" IsIndeterminate="True"/>
                             <Grid Margin="0,6,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>

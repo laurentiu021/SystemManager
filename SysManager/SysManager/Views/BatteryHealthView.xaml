@@ -64,7 +64,7 @@
                                                Margin="12,0,0,0" Style="{StaticResource Subtle}"/>
                                 </StackPanel>
 
-                                <ProgressBar AutomationProperties.Name="Progress"
+                                <ProgressBar AutomationProperties.Name="Battery charge level"
                                              Value="{Binding Battery.ChargePercent}" Maximum="100"
                                              Height="8" Margin="0,8,0,0"/>
                             </StackPanel>
@@ -177,7 +177,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="Refresh progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>

@@ -245,9 +245,13 @@
                     <DataGridTemplateColumn Header="" Width="80" MinWidth="80" CanUserSort="False" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
+                                <!-- Named per row like the toggle above it: "Open" alone is what every
+                                     row announced, so a screen reader user heard the same word on all
+                                     of them with nothing to say which program it opens. -->
                                 <Button Content="Open" ToolTip="Open file location"
                                         Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Binding Name, StringFormat='Open file location for {0}'}"
                                         Style="{StaticResource GhostButton}" Padding="8,4" FontSize="14"/>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

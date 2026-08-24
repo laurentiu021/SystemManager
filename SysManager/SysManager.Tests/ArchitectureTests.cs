@@ -2317,6 +2317,136 @@ public partial class ArchitectureTests
         Assert.DoesNotContain("Accent", ring, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Every control inside a DataGrid row must announce WHICH ROW it belongs to, and the name must be
+    /// somewhere an automation peer can actually read it.
+    /// <para>Two distinct defects, both of which look correct in the markup. App Blocker set
+    /// <c>AutomationProperties.Name="Select application"</c> on the <c>DataGridCheckBoxColumn</c> itself —
+    /// but a column is a definition, not a visual, so it has no automation peer and the generated
+    /// CheckBox in every cell stayed unlabelled. Startup Manager's per-row "Open" button had no name at
+    /// all, so all of its rows announced the single word "Open" with nothing to say which program would
+    /// be opened. A row control that announces the same thing on every row is barely better than one
+    /// that announces nothing: the user can hear it but cannot tell the rows apart.</para>
+    /// <para>Both populations are derived from the XAML tree rather than from a known list, so the next
+    /// column or the next row button is caught without editing this test. Attribute lookup is by local
+    /// name: <c>AutomationProperties.Name</c> is written unprefixed in XAML, so it arrives as a single
+    /// attribute whose name contains a dot.</para>
+    /// </summary>
+    [Fact]
+    public void EveryRowControl_AnnouncesTheRowItIsOn()
+    {
+        var appDir = FindAppProjectDir();
+        var files = Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !Path.GetRelativePath(appDir, f)
+                .Split(Path.DirectorySeparatorChar)
+                .Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                                || segment.Equals("bin", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        Assert.True(files.Length >= 60, $"only {files.Length} XAML files were found — fix this guard.");
+
+        static bool HasName(System.Xml.Linq.XElement e) =>
+            e.Attributes().Any(a => a.Name.LocalName == "AutomationProperties.Name");
+
+        static bool IsInsideAColumn(System.Xml.Linq.XElement e) =>
+            e.Ancestors().Any(a => a.Name.LocalName.EndsWith("Column", StringComparison.Ordinal));
+
+        var namedOnTheColumn = new List<string>();
+        var unnamedRowControls = new List<string>();
+        var sameOnEveryRow = new List<string>();
+        var columnsSeen = 0;
+        var namedRowControls = 0;
+        var rowNameSetters = 0;
+
+        foreach (var path in files)
+        {
+            var root = System.Xml.Linq.XDocument.Load(path).Root;
+            if (root is null) continue;
+            var file = Path.GetFileName(path);
+
+            foreach (var element in root.DescendantsAndSelf())
+            {
+                var name = element.Name.LocalName;
+
+                // A column definition. Its own Name reaches nothing.
+                if (name.EndsWith("Column", StringComparison.Ordinal)
+                    && !name.EndsWith("ColumnDefinition", StringComparison.Ordinal))
+                {
+                    columnsSeen++;
+                    if (HasName(element))
+                        namedOnTheColumn.Add($"{file} — <{name}> carries the name itself");
+                    continue;
+                }
+
+                // The ElementStyle form: a Setter reaching the control the column generates. This is
+                // where a CheckBox column's name belongs, and six columns already do it this way.
+                if (name == "Setter"
+                    && (string?)element.Attribute("Property") == "AutomationProperties.Name"
+                    && IsInsideAColumn(element))
+                {
+                    rowNameSetters++;
+                    var value = (string?)element.Attribute("Value") ?? "";
+                    if (!value.Contains("{Binding", StringComparison.Ordinal))
+                        sameOnEveryRow.Add($"{file} — <Setter> value \"{value}\"");
+                    continue;
+                }
+
+                // A pressable control living in a cell template.
+                if (name is not ("Button" or "ToggleButton" or "RepeatButton")) continue;
+                if (!IsInsideAColumn(element)) continue;
+
+                var declared = element.Attributes()
+                    .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value;
+                if (declared is null)
+                {
+                    var content = (string?)element.Attribute("Content")
+                                  ?? (string?)element.Attribute("ToolTip")
+                                  ?? "(no Content)";
+                    unnamedRowControls.Add($"{file} — <{name}> \"{content}\"");
+                }
+                else
+                {
+                    namedRowControls++;
+                    if (!declared.Contains("{Binding", StringComparison.Ordinal))
+                        sameOnEveryRow.Add($"{file} — <{name}> name \"{declared}\"");
+                }
+            }
+        }
+
+        // Vacuity floors. Both checks are absence-based, so a selector that stopped matching would
+        // report a clean sweep of nothing at all.
+        Assert.True(columnsSeen >= 100,
+            $"only {columnsSeen} DataGrid columns were found across {files.Length} views — the element "
+            + "selector has stopped matching, so the column check below is measuring nothing.");
+        Assert.True(namedRowControls >= 10,
+            $"only {namedRowControls} named row controls were found — either the ancestor test or the "
+            + "attribute lookup has stopped matching, and the sweep proves nothing.");
+        Assert.True(rowNameSetters >= 10,
+            $"only {rowNameSetters} ElementStyle name setters were found — six checkbox columns carry a "
+            + "pair each, so a lower count means the Setter selector has stopped matching.");
+
+        Assert.True(namedOnTheColumn.Count == 0,
+            "AutomationProperties.Name is set on a DataGrid COLUMN, which is a definition rather than a "
+            + "visual: it has no automation peer, so the control generated in each cell is announced "
+            + "unlabelled. Move it into the column's ElementStyle (and EditingElementStyle for an "
+            + "editable column) as a Setter, where the row is the DataContext and the name can name "
+            + "it:\n  " + string.Join("\n  ", namedOnTheColumn));
+
+        Assert.True(unnamedRowControls.Count == 0,
+            "these controls sit in a DataGrid cell template with no accessible name, so every row "
+            + "announces the same word — or nothing — and a screen-reader user cannot tell which row "
+            + "the control belongs to. Bind the name to a property of the row, as the sibling columns "
+            + $"do:\n  " + string.Join("\n  ", unnamedRowControls));
+
+        // A constant name is the same defect one step later: present, readable, and identical on all
+        // forty rows, so it still cannot tell them apart. Every one of the existing names binds a row
+        // property, so this is the established shape rather than a new demand.
+        Assert.True(sameOnEveryRow.Count == 0,
+            "these row names are constants, so every row announces the same words and a screen-reader "
+            + "user still cannot tell which row the control acts on. Bind a property of the row "
+            + $"instead:\n  " + string.Join("\n  ", sameOnEveryRow));
+    }
+
     /// <summary>A style that suppresses the focus indicator outright.</summary>
     [GeneratedRegex(@"FocusVisualStyle""\s*Value=""\{x:Null\}""", RegexOptions.Compiled)]
     private static partial Regex NulledFocusVisual();

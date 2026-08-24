@@ -88,8 +88,23 @@
                   VirtualizingPanel.IsVirtualizing="True"
                   VirtualizingPanel.VirtualizationMode="Recycling">
             <DataGrid.Columns>
-                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False"
-                                        AutomationProperties.Name="Select application" />
+                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False">
+                    <!-- The name has to sit on the generated CheckBox, not on the column: a
+                         DataGridColumn is a definition, not a visual, so a name set there reaches no
+                         automation peer and a screen reader announces an unlabelled checkbox. Named
+                         per row as well, so 40 identical "Select application" checkboxes become the
+                         one the user is actually on. Same shape as AppUpdatesView. -->
+                    <DataGridCheckBoxColumn.ElementStyle>
+                        <Style TargetType="CheckBox">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding ExecutableName, StringFormat='Select {0}'}"/>
+                        </Style>
+                    </DataGridCheckBoxColumn.ElementStyle>
+                    <DataGridCheckBoxColumn.EditingElementStyle>
+                        <Style TargetType="CheckBox">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding ExecutableName, StringFormat='Select {0}'}"/>
+                        </Style>
+                    </DataGridCheckBoxColumn.EditingElementStyle>
+                </DataGridCheckBoxColumn>
                 <DataGridTextColumn Header="Executable" Binding="{Binding ExecutableName}" Width="*" MinWidth="120" IsReadOnly="True" />
             </DataGrid.Columns>
         </DataGrid>

@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.20] - 2026-08-24
+
+Two fixes for anyone using SysManager with a screen reader. In Startup Manager, every row's "Open"
+button announced just the word "Open", so there was no way to hear which program you were about to
+open the folder for. In App Blocker, the tick box on each row announced nothing at all.
+
+### Fixed
+- **Startup Manager's per-row "Open" button now says which program it opens.** The button carries the
+  same label on every row, so a screen reader read out "Open" and nothing else — with dozens of
+  startup entries listed, that is a button you cannot safely press. It now announces "Open file
+  location for <program>", matching the on/off switch in the same row, which already named its entry.
+- **App Blocker's row tick boxes were announced as unlabelled.** The name was set on the column rather
+  than on the tick box itself. A column is a definition rather than something on screen, so the label
+  never reached the tick box that gets created for each row, and a screen reader had nothing to read.
+  Each one now announces "Select <program>". Six other tabs with the same kind of tick-box column were
+  already doing this correctly; App Blocker was the one that had been missed, and a test now fails the
+  build if a row control is unlabelled, or is labelled identically on every row.
+
 ## [1.65.19] - 2026-08-18
 
 A fix for the Duplicate Files finder: a stray minus sign or an enormous number typed into the

@@ -2752,6 +2752,75 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Performance Mode must refuse to CAPTURE a recovery baseline while a game profile is live — and must
+    /// still be allowed to LOAD one that was persisted earlier.
+    /// <para>The lock added for #1501 stops the two tabs from snapshotting each other mid-change, but it is
+    /// held per operation and a gaming session outlives it: the profile applies, releases the lock, and its
+    /// power plan and visual-effects values stay live until the game exits. A capture in that window
+    /// records borrowed values as the user's own and persists them, so a later Restore All puts the machine
+    /// on a gaming plan it was never on.</para>
+    /// <para>Both halves are asserted because each can be broken on its own. Moving the check after
+    /// <c>TakeSnapshotAsync</c> would let the capture happen and merely refuse afterwards; moving it above
+    /// <c>LoadSnapshot</c> would block a legitimate load of a baseline that PREDATES the session, which
+    /// would turn a safety guard into "Performance Mode stops working while a game runs".</para>
+    /// </summary>
+    [Fact]
+    public void PerformanceMode_RefusesToCaptureABaselineDuringAGameSession()
+    {
+        var vm = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "ViewModels", "PerformanceViewModel.cs"));
+
+        // Comment-stripped: the paragraph above the check names both TakeSnapshotAsync and the session,
+        // and a positional assertion that reads prose reports the ordering backwards (batch 106).
+        var slice = WithoutComments(MemberSlice(vm, "private async Task EnsureSnapshotAsync()"));
+        Assert.True(slice.Length > 300,
+            $"the EnsureSnapshotAsync slice is {slice.Length} chars — too short to be the method, so every "
+            + "assertion below would measure nothing.");
+
+        var checkAt = slice.IndexOf("_gaming.IsActive", StringComparison.Ordinal);
+        var loadAt = slice.IndexOf("LoadSnapshot", StringComparison.Ordinal);
+        var captureAt = slice.IndexOf("TakeSnapshotAsync", StringComparison.Ordinal);
+
+        var offenders = new List<string>();
+
+        if (checkAt < 0)
+            offenders.Add("EnsureSnapshotAsync does not consult the gaming session at all, so it can record "
+                + "a profile's power plan as the user's original");
+        Assert.True(loadAt >= 0 && captureAt >= 0,
+            "LoadSnapshot / TakeSnapshotAsync were not both found in EnsureSnapshotAsync — this guard "
+            + "cannot check the ordering it exists for; fix the guard.");
+
+        if (checkAt >= 0 && checkAt > captureAt)
+            offenders.Add("the gaming-session check sits AFTER TakeSnapshotAsync, so the borrowed settings "
+                + "are captured first and only then refused");
+
+        if (checkAt >= 0 && checkAt < loadAt)
+            offenders.Add("the gaming-session check sits BEFORE LoadSnapshot, which blocks loading a "
+                + "baseline persisted before the session began — that is not a safety win, it just stops "
+                + "Performance Mode working while a game runs");
+
+        // The refusal must carry an instruction, not just fail. Every Apply command surfaces
+        // InvalidOperationException.Message verbatim in StatusMessage.
+        if (!vm.Contains("Stop the game profile first", StringComparison.Ordinal))
+            offenders.Add("the refusal no longer tells the user what to do; the message is what reaches "
+                + "StatusMessage, so an empty or generic one leaves them stuck");
+
+        // One gaming service for the whole designer/test graph. Under DI both view-models resolve the
+        // same singleton, but the manual graph can silently hand Performance Mode its own copy — which
+        // would answer "no session" while the real one had a game running, i.e. exactly the state that
+        // must never be snapshotted, with the guard above still passing.
+        var shell = WithoutComments(File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs")));
+        var built = shell.Split("new GamingProfileService(").Length - 1;
+        if (built != 1)
+            offenders.Add($"MainWindowViewModel constructs GamingProfileService {built} times; the designer "
+                + "graph must build exactly one and pass it to both Performance Mode and Gaming Profile");
+
+        Assert.True(offenders.Count == 0,
+            "the Performance Mode baseline contract is broken:\n  - " + string.Join("\n  - ", offenders));
+    }
+
+    /// <summary>
     /// Every tab must have exactly ONE name: the label in the sidebar and the header on the page must
     /// read the same.
     /// <para>Five of 58 pairs disagreed — "App Alerts" under a page headed "App Installation Alerts",

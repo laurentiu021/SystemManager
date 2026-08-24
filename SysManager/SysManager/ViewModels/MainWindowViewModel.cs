@@ -402,6 +402,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var networkShared = new NetworkSharedState(pinger, tracer, traceMonitor, speedTest, netRepair);
         var restorePoints = new RestorePointService(runner);
         var gamingCpu = new CpuAffinityService();
+        // ONE gaming service for the whole graph. Performance Mode asks it whether a profile is live
+        // before it records a recovery baseline, so a second copy would answer "no" while the first
+        // one had a session running — which is exactly the state that must never be snapshotted.
+        // Under DI both resolve the same singleton; this keeps the designer/test path honest.
+        var gamingProfiles = new GamingProfileService(
+            new PerformanceService(runner, restorePoints),
+            new TimerResolutionService(), gamingCpu,
+            new StandbyMemoryService(), restorePoints,
+            Helpers.AdminHelper.IsElevated());
 
         return new Dictionary<Type, object>
         {
@@ -416,7 +425,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(ProcessManagerViewModel)] = new ProcessManagerViewModel(new ProcessManagerService()),
             [typeof(BatteryHealthViewModel)] = new BatteryHealthViewModel(battery),
             [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(runner)),
-            [typeof(PerformanceViewModel)] = new PerformanceViewModel(new PerformanceService(runner, restorePoints)),
+            [typeof(PerformanceViewModel)] = new PerformanceViewModel(new PerformanceService(runner, restorePoints), gamingProfiles),
             [typeof(StartupViewModel)] = new StartupViewModel(new StartupService()),
             [typeof(NetworkSharedState)] = networkShared,
             [typeof(PingViewModel)] = new PingViewModel(networkShared),
@@ -463,13 +472,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(TweaksHubViewModel)] = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), restorePoints)),
             [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService()),
             [typeof(NotificationBlockerViewModel)] = new NotificationBlockerViewModel(new NotificationBlockerService()),
-            [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(
-                new GamingProfileService(
-                    new PerformanceService(runner, restorePoints),
-                    new TimerResolutionService(), gamingCpu,
-                    new StandbyMemoryService(), restorePoints,
-                    Helpers.AdminHelper.IsElevated()),
-                gamingCpu),
+            [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(gamingProfiles, gamingCpu),
         };
     }
 }

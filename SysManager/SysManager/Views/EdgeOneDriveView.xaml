@@ -73,7 +73,7 @@
                         <WrapPanel Orientation="Horizontal" Margin="0,14,0,0">
                             <Button Content="Remove OneDrive…" Command="{Binding RemoveOneDriveCommand}"
                                     Style="{StaticResource DangerButton}" Margin="0,0,8,0"
-                                    AutomationProperties.Name="Remove OneDrive for the current user"
+                                    AutomationProperties.Name="Remove OneDrive… — for the current user"
                                     ToolTip="Uninstall OneDrive for your account (reversible via Restore)."/>
                             <Button Content="Restore OneDrive" Command="{Binding RestoreOneDriveCommand}"
                                     Style="{StaticResource SecondaryButton}"
@@ -94,11 +94,11 @@
                         <WrapPanel Orientation="Horizontal" Margin="0,14,0,0">
                             <Button Content="Disable &amp; de-integrate Edge…" Command="{Binding DisableEdgeCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
-                                    AutomationProperties.Name="Disable and de-integrate Microsoft Edge"
+                                    AutomationProperties.Name="Disable &amp; de-integrate Edge…"
                                     ToolTip="Turn off Edge background mode, startup boost, and auto-update tasks (reversible)."/>
                             <Button Content="Restore Edge" Command="{Binding RestoreEdgeCommand}"
                                     Style="{StaticResource SecondaryButton}"
-                                    AutomationProperties.Name="Restore Microsoft Edge to defaults"
+                                    AutomationProperties.Name="Restore Edge — to its defaults"
                                     ToolTip="Clear the policies and re-enable Edge's automatic-update tasks."/>
                         </WrapPanel>
                     </StackPanel>

@@ -163,7 +163,7 @@
                                     AutomationProperties.Name="Find BIOS update — open manufacturer support page for BIOS updates"
                                     Style="{StaticResource PrimaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                             <Button Content="Copy info" Command="{Binding CopyBiosInfoCommand}"
-                                    AutomationProperties.Name="Copy BIOS and motherboard info"
+                                    AutomationProperties.Name="Copy info — BIOS and motherboard"
                                     Style="{StaticResource GhostButton}" Padding="14,8"/>
                         </StackPanel>
                     </Grid>
@@ -199,7 +199,7 @@
                             <TextBlock Text="Disk health (SMART)" Style="{StaticResource SectionTitle}"/>
                             <Button Content="Run SMART check" Command="{Binding CheckDiskHealthCommand}"
                                     AutomationProperties.AutomationId="btn-system-health-smart"
-                                    AutomationProperties.Name="Run SMART disk health check"
+                                    AutomationProperties.Name="Run SMART check — disk health"
                                     Style="{StaticResource PrimaryButton}"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                         </DockPanel>

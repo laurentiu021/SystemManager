@@ -16,15 +16,15 @@ public partial class UiAutomationContractTests
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["btn-cleanup-clean-temp"] = "Clean TEMP — clean temporary files",
-            ["btn-cleanup-empty-recycle-bin"] = "Empty the Recycle Bin",
+            ["btn-cleanup-empty-recycle-bin"] = "Empty Recycle Bin",
             ["btn-cleanup-sfc"] = "SFC /scannow — run SFC system file check",
             ["btn-cleanup-dism"] = "Run DISM RestoreHealth",
             ["btn-cleanup-cancel"] = "Cancel the running operation",
             ["btn-system-health-scan"] = "Scan system health",
-            ["btn-system-health-smart"] = "Run SMART disk health check",
+            ["btn-system-health-smart"] = "Run SMART check — disk health",
             ["btn-system-health-memtest"] = "Run MemTest (reboot) — schedule a memory test on next reboot",
             ["btn-logs-refresh"] = "Refresh logs",
-            ["btn-logs-export-csv"] = "Export logs to CSV",
+            ["btn-logs-export-csv"] = "Export CSV — the event log",
             ["btn-services-refresh"] = "Refresh services",
             ["btn-services-clear-marks"] = "Clear all marked services",
             ["btn-ping-start"] = "Start ping monitoring",
@@ -35,9 +35,9 @@ public partial class UiAutomationContractTests
             ["btn-uninstaller-uninstall-selected"] = "Uninstall selected applications",
             ["btn-windows-update-install-module"] = "Install PSWindowsUpdate for update history",
             ["btn-windows-update-check-module"] = "Check now — check whether PSWindowsUpdate is installed",
-            ["btn-windows-update-list"] = "List available Windows updates",
+            ["btn-windows-update-list"] = "List updates — available Windows updates",
             ["btn-windows-update-history"] = "Show Windows Update history",
-            ["btn-windows-update-pending-reboot"] = "Check for a pending reboot",
+            ["btn-windows-update-pending-reboot"] = "Pending reboot? — check whether a reboot is pending",
             ["btn-windows-update-install-selected"] = "Install selected Windows updates",
             ["btn-app-updates-scan"] = "Scan for updates",
             ["btn-system-health-memory-errors"] = "Check memory errors",
@@ -207,6 +207,11 @@ public partial class UiAutomationContractTests
     /// how 36 accumulated after that one was closed.</para>
     /// <para>A name may still ADD detail — leading with the visible words and appending context is the
     /// fix applied across all 36 — it just may not REPLACE them.</para>
+    /// <para>A later pass tightened <see cref="SpeaksTheLabel"/> from "the label's words appear in
+    /// order" to "they appear as a contiguous phrase", because the loose reading was weaker than the
+    /// sentence above promises: 41 further names passed it while still being unsayable — "Clear History"
+    /// announced as "Clear alert history", "Empty Recycle Bin" as "Empty the Recycle Bin". All 41 were
+    /// repaired in the same change.</para>
     /// <para>Two exclusions, both deliberate. A glyph-only label ("X", "▲") is a symbol rather than
     /// text, so a descriptive name is the CORRECT treatment and flagging it would be wrong. A name
     /// built from a <c>{Binding}</c> is produced at runtime, so the literal in the XAML is not what
@@ -263,17 +268,37 @@ public partial class UiAutomationContractTests
         => [.. NonWordRun().Replace(text.ToLowerInvariant(), " ")
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries)];
 
-    /// <summary>True when the label's words all appear, IN ORDER, in the accessible name.</summary>
+    /// <summary>
+    /// True when the label's words appear as a CONTIGUOUS run inside the accessible name.
+    /// <para>This used to accept the words merely in order, anywhere in the name — a weaker rule than
+    /// the guard's own summary promises ("leading with the visible words and appending context").
+    /// Forty-one names satisfied the loose reading while still failing WCAG 2.5.3 in the way that
+    /// matters: "Clear History" announced as "Clear alert history", "Export CSV" as "Export logs to
+    /// CSV", "Empty Recycle Bin" as "Empty the Recycle Bin". Every word is present and in order, yet a
+    /// speech-recognition user who says the printed phrase matches nothing, because the matcher looks
+    /// for the phrase and not for a scatter of its words.</para>
+    /// <para>Contiguity is checked over the normalised WORD lists rather than the raw strings on
+    /// purpose: that keeps the existing case- and punctuation-insensitivity, so "Enable / Disable" is
+    /// satisfied by "Enable / Disable — the selected task", and a name stays free to re-case the label
+    /// while continuing the sentence.</para>
+    /// </summary>
     private static bool SpeaksTheLabel(List<string> label, List<string> spoken)
     {
-        var from = 0;
-        foreach (var word in label)
+        if (label.Count == 0 || label.Count > spoken.Count) return false;
+
+        for (var start = 0; start <= spoken.Count - label.Count; start++)
         {
-            var at = spoken.IndexOf(word, from);
-            if (at < 0) return false;
-            from = at + 1;
+            var matches = true;
+            for (var offset = 0; offset < label.Count; offset++)
+            {
+                if (string.Equals(spoken[start + offset], label[offset], StringComparison.Ordinal))
+                    continue;
+                matches = false;
+                break;
+            }
+            if (matches) return true;
         }
-        return true;
+        return false;
     }
 
     [GeneratedRegex("[^a-z0-9]+", RegexOptions.CultureInvariant)]

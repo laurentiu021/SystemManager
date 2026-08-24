@@ -74,7 +74,7 @@
                                Visibility="{Binding NewDescription, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
                 <Button Content="Create restore point" Command="{Binding CreateCommand}"
-                        AutomationProperties.Name="Create a restore point"
+                        AutomationProperties.Name="Create restore point"
                         Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
                         ToolTip="Create a new System Restore point (admin; once per 24h)."/>
                 <Button Content="Refresh" Command="{Binding RefreshCommand}"
@@ -87,7 +87,7 @@
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
 
                 <Button Content="Restore selected…" Command="{Binding RestoreCommand}"
-                        AutomationProperties.Name="Restore the selected restore point"
+                        AutomationProperties.Name="Restore selected… — the selected restore point"
                         Style="{StaticResource DangerButton}"
                         ToolTip="Roll the system back to the selected restore point (restarts Windows)."/>
             </WrapPanel>

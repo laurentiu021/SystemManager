@@ -39,10 +39,10 @@
                         DockPanel.Dock="Right" VerticalAlignment="Center">
                 <Button Content="Save baseline" Command="{Binding SaveBaselineCommand}"
                         Style="{StaticResource PrimaryButton}"
-                        AutomationProperties.Name="Save settings baseline"/>
+                        AutomationProperties.Name="Save baseline — the settings baseline"/>
                 <Button Content="Check now" Command="{Binding RefreshCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
-                        AutomationProperties.Name="Check for setting changes now"/>
+                        AutomationProperties.Name="Check now — for setting changes"/>
                 <Button Content="Restore changed" Command="{Binding RestoreSelectedCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
                         AutomationProperties.Name="Restore changed settings to baseline"/>

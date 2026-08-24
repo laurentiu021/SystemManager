@@ -79,7 +79,7 @@
                         AutomationProperties.Name="Deselect all shortcuts"
                         Style="{StaticResource GhostButton}" Margin="0,0,16,0"/>
                 <CheckBox Content="Move to Recycle Bin" IsChecked="{Binding MoveToRecycleBin}"
-                          AutomationProperties.Name="Move deleted shortcuts to Recycle Bin"
+                          AutomationProperties.Name="Move to Recycle Bin — deleted shortcuts go there"
                           VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
             </WrapPanel>
         </Border>

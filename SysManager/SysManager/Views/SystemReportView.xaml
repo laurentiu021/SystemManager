@@ -38,15 +38,15 @@
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
 
                 <Button Content="Export HTML" Command="{Binding ExportHtmlCommand}"
-                        AutomationProperties.Name="Export report as HTML"
+                        AutomationProperties.Name="Export HTML — the system report"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
                         ToolTip="Save a styled, self-contained HTML report."/>
                 <Button Content="Export JSON" Command="{Binding ExportJsonCommand}"
-                        AutomationProperties.Name="Export report as JSON"
+                        AutomationProperties.Name="Export JSON — the system report"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
                         ToolTip="Save a structured JSON report."/>
                 <Button Content="Export text" Command="{Binding ExportTextCommand}"
-                        AutomationProperties.Name="Export report as text"
+                        AutomationProperties.Name="Export text — the system report"
                         Style="{StaticResource GhostButton}" Margin="0,0,8,0"
                         ToolTip="Save the plain-text report."/>
                 <Button Content="Copy" Command="{Binding CopyCommand}"

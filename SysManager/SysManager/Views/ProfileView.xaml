@@ -51,7 +51,7 @@
                 <WrapPanel>
                     <Button Content="Export profile…" Command="{Binding ExportCommand}"
                             IsEnabled="{Binding HasSections}"
-                            AutomationProperties.Name="Export profile to file"
+                            AutomationProperties.Name="Export profile… — to a file"
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             AutomationProperties.Name="Refresh section list"
@@ -67,7 +67,7 @@
                 <TextBlock Text="Load a profile exported from another PC. You'll see what it contains and confirm before anything is overwritten. Restart SysManager afterwards for all changes to take effect."
                            Style="{StaticResource Subtle}" Margin="0,2,0,10" TextWrapping="Wrap"/>
                 <Button Content="Import profile…" Command="{Binding ImportCommand}"
-                        AutomationProperties.Name="Import profile from file"
+                        AutomationProperties.Name="Import profile… — from a file"
                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
             </StackPanel>
         </Border>

@@ -85,7 +85,7 @@
                             AutomationProperties.Name="Clean TEMP — clean temporary files"/>
                     <Button Content="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-cleanup-empty-recycle-bin"
-                            AutomationProperties.Name="Empty the Recycle Bin"/>
+                            AutomationProperties.Name="Empty Recycle Bin"/>
                     <Button Content="Rescan" Command="{Binding RescanCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                             AutomationProperties.Name="Rescan cleanup sizes"/>
                 </WrapPanel>

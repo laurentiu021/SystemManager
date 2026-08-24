@@ -41,7 +41,7 @@
                             AutomationProperties.Name="Acknowledge all alerts"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
                     <Button Content="Clear History" Command="{Binding ClearHistoryCommand}"
-                            AutomationProperties.Name="Clear alert history"
+                            AutomationProperties.Name="Clear History — app alerts"
                             Style="{StaticResource DangerButton}" Padding="12,8"/>
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"

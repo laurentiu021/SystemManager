@@ -68,5 +68,19 @@ public enum StartupSource
     StartupFolder,
     /// <summary>All-users (Common) shell Startup folder (%ProgramData%\...\Startup) — approved-state in HKLM.</summary>
     CommonStartupFolder,
-    TaskScheduler
+    TaskScheduler,
+    /// <summary>
+    /// The policy Run key in either hive
+    /// (<c>SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run</c>) — <b>no</b> approved-state
+    /// anywhere, so it can be shown but not toggled here.
+    /// <para>Task Manager's Startup tab does not list this key at all, which is why bundleware favours it:
+    /// the user disables everything visible, reboots, and the program still starts. Showing it is the
+    /// point; pretending it can be switched off from here would be the defect.</para>
+    /// <para>A distinct source for the same reason as <see cref="RegistryLocalMachine32"/> and
+    /// <see cref="CommonStartupFolder"/>: Windows never consults <c>StartupApproved</c> for a policy key,
+    /// so a disable blob written there would land where nothing reads it and the item would keep running
+    /// while the UI reported "Disabled". <c>SetEnabledAsync</c> therefore refuses this source outright and
+    /// says why, the same way it already refuses RunOnce.</para>
+    /// </summary>
+    PolicyRun
 }

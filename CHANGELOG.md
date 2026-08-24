@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.66.0] - 2026-08-24
+
+Startup Manager now shows a hiding place it was missing. Windows has a "policy" startup list that Task
+Manager does not display at all, which is exactly why unwanted software likes it — you turn off
+everything you can see, restart, and the program starts anyway.
+
+### Added
+- **Startup Manager reads the policy startup list.** Programs registered under Windows'
+  `Policies\Explorer\Run` key, for your account and for the whole machine, now appear in the list like
+  any other startup item, with the folder they came from shown as usual. Windows gives no way to switch
+  these off from an app, so each one says "Set by a system policy — managed elsewhere" instead of
+  offering a switch that would do nothing: if you try anyway, it tells you plainly rather than reporting
+  success and leaving the program to start again next time. On a PC with no such entries — most PCs —
+  nothing changes.
+
 ## [1.65.23] - 2026-08-24
 
 Six more indicators now say what they are measuring. The Dashboard's CPU, memory and GPU bars, its

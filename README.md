@@ -423,6 +423,10 @@ a confirmation before it runs:
 - Lists every program that runs at Windows boot: the Run and RunOnce registry keys for both your
   account and the whole machine, **including the separate location 64-bit Windows uses for programs
   installed by a 32-bit installer**, plus both Startup folders and logon-triggered scheduled tasks
+- **Also reads the "policy" startup list that Task Manager does not show at all** — a favourite hiding
+  place for bundled software, since you can switch off everything visible, restart, and it still starts.
+  Windows gives an app no way to disable these, so each one is labelled "Set by a system policy —
+  managed elsewhere" instead of being offered a switch that would silently do nothing
 - Toggle on/off without deleting the original entry (same mechanism as Task Manager) — the disable
   flag is written to the location Windows actually reads for that kind of entry, so a disabled item
   really stays down

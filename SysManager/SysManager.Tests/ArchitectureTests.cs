@@ -2694,6 +2694,64 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A startup source with NO <c>StartupApproved</c> state must be refused outright, never allowed to
+    /// fall through to the approved-key switch.
+    /// <para>The guard above pins the sources whose state lives in a DIFFERENT key. This pins the harder
+    /// case: the policy Run key (<c>…\CurrentVersion\Policies\Explorer\Run</c>) has no approved state
+    /// anywhere, because Windows never consults <c>StartupApproved</c> for a policy key. Letting such an
+    /// entry reach the switch writes a disable blob to <c>StartupApproved\Run</c>, which nothing reads —
+    /// the item keeps starting at every boot while the tab reports "Disabled". That failure has already
+    /// shipped twice in this service's history (the all-users folder, then the 32-bit view), and RunOnce is
+    /// refused for precisely this reason.</para>
+    /// <para>Asserted at source level for the same reason as the guard above: <c>SetEnabledAsync</c> writes
+    /// to the live registry, so the refusal cannot be exercised from a unit test without touching the
+    /// user's real machine.</para>
+    /// </summary>
+    [Fact]
+    public void EveryStartupSourceWithNoApprovedKey_IsRefusedInsteadOfFakingSuccess()
+    {
+        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "StartupService.cs"));
+
+        // The key must actually be enumerated, or everything below would hold over a scan that never
+        // produces a policy entry — the pre-fix state, and a guard passing on the defect.
+        Assert.Contains("private const string PolicyRunKey =", source, StringComparison.Ordinal);
+        Assert.Contains(
+            @"@""SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run""",
+            source, StringComparison.Ordinal);
+
+        // Both hives: the key exists under HKCU and HKLM, and bundleware writes whichever it can.
+        foreach (var hive in new[] { "Registry.CurrentUser", "Registry.LocalMachine" })
+        {
+            Assert.Contains(
+                $"ReadRunKey({hive}, PolicyRunKey, StartupSource.PolicyRun, results)",
+                source, StringComparison.Ordinal);
+        }
+
+        var writeAt = source.IndexOf("public static async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
+        Assert.True(writeAt > 0, "SetEnabledAsync was not found — fix this guard, do not delete it.");
+        var writeBody = source[writeAt..];
+
+        // The refusal must come BEFORE the approved-key switch, so slice there and require it in the
+        // earlier half: a refusal placed after the switch would never run.
+        var switchAt = writeBody.IndexOf("var (root, approvedPath) = entry.Source switch", StringComparison.Ordinal);
+        Assert.True(switchAt > 0, "the approved-key switch was not found in SetEnabledAsync.");
+        var beforeSwitch = writeBody[..switchAt];
+
+        Assert.Contains("entry.Source == StartupSource.PolicyRun", beforeSwitch, StringComparison.Ordinal);
+
+        // And it must actually return false, not merely set a message and carry on into the switch.
+        var refusalAt = beforeSwitch.IndexOf("entry.Source == StartupSource.PolicyRun", StringComparison.Ordinal);
+        Assert.Contains("return false;", beforeSwitch[refusalAt..], StringComparison.Ordinal);
+
+        // The read path must not map the policy source to an approved dictionary either. Matched as the
+        // switch-ARM shape so the comments that name the source cannot satisfy it.
+        var readAt = source.IndexOf("private static void ApplyApprovedState", StringComparison.Ordinal);
+        Assert.True(readAt > 0 && readAt < writeAt,
+            "ApplyApprovedState was not found before SetEnabledAsync; the slice below assumes that order.");
+        Assert.DoesNotContain("StartupSource.PolicyRun =>", source[readAt..writeAt], StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Everything the scheduled-task query pays to fetch must reach the screen.
     /// <para>The Task Scheduler tab queried <c>Author</c>, <c>Description</c> and <c>NextRunTime</c> from
     /// Windows on every scan, carried all three through <c>ScheduledTaskInfo</c>, and even defined a

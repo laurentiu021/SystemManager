@@ -2447,6 +2447,95 @@ public partial class ArchitectureTests
             + $"instead:\n  " + string.Join("\n  ", sameOnEveryRow));
     }
 
+    /// <summary>
+    /// No two progress bars on the same page may be announced by the same name.
+    /// <para>Forty-four bars were announced as the bare word "Progress", and on four pages two or three
+    /// appeared at once: Deep Cleanup showed separate scan, cleanup and large-file bars, all three saying
+    /// "Progress". Worse, two were not progress at all — Disk Analyzer's drive-usage bar and Battery
+    /// Health's charge bar are GAUGES, so a screen reader announced "Progress 78" for a battery that is
+    /// 78% charged. Each now says what it reports.</para>
+    /// <para>The rule is uniqueness per view rather than "never call a bar Progress": on the 34 pages
+    /// with a single bar the bare word is uninformative but not ambiguous, and renaming those would mean
+    /// inventing 34 strings for no behavioural gain. Ambiguity is the defect; vagueness is polish.</para>
+    /// <para>Unnamed bars are ratcheted, not forbidden. Ten remain, and both kinds need a decision this
+    /// codebase has not made yet: five are decorative indeterminate strips (Bulk Installer, MainWindow,
+    /// two on the Dashboard) which arguably belong OUT of the accessibility tree rather than named, and no
+    /// convention for hiding an element exists yet; the other five are live value indicators (the
+    /// Dashboard's CPU, RAM and GPU gauges, its per-row share bar, and Volume Control's per-session peak
+    /// meter) where a per-row name is the right shape. The ratchet lets those counts fall but never rise,
+    /// so the debt is recorded in code rather than in a comment nobody runs.</para>
+    /// </summary>
+    [Fact]
+    public void NoTwoProgressBarsOnAPage_AreAnnouncedTheSame()
+    {
+        var appDir = FindAppProjectDir();
+        var files = Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !Path.GetRelativePath(appDir, f)
+                .Split(Path.DirectorySeparatorChar)
+                .Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                                || segment.Equals("bin", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        // Views that still hold a bar with no name at all, with the count each is allowed. Fewer is
+        // always fine; one more is a regression.
+        var unnamedAllowance = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DashboardView.xaml"] = 7,
+            ["AudioMixerView.xaml"] = 1,
+            ["BulkInstallerView.xaml"] = 1,
+            ["MainWindow.xaml"] = 1,
+        };
+
+        var ambiguous = new List<string>();
+        var unnamedOverAllowance = new List<string>();
+        var barsSeen = 0;
+
+        foreach (var path in files)
+        {
+            var root = System.Xml.Linq.XDocument.Load(path).Root;
+            if (root is null) continue;
+            var file = Path.GetFileName(path);
+
+            var named = new List<string>();
+            var unnamed = 0;
+
+            foreach (var bar in root.DescendantsAndSelf()
+                         .Where(e => e.Name.LocalName == "ProgressBar"))
+            {
+                barsSeen++;
+                var name = bar.Attributes()
+                    .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value;
+                if (string.IsNullOrWhiteSpace(name)) unnamed++;
+                else named.Add(name.Trim());
+            }
+
+            foreach (var group in named.GroupBy(n => n, StringComparer.Ordinal).Where(g => g.Count() > 1))
+                ambiguous.Add($"{file} — {group.Count()} bars all announced \"{group.Key}\"");
+
+            var allowed = unnamedAllowance.TryGetValue(file, out var cap) ? cap : 0;
+            if (unnamed > allowed)
+                unnamedOverAllowance.Add($"{file} — {unnamed} unnamed bar(s), {allowed} allowed");
+        }
+
+        // Vacuity floor: an absence check over a population the guard discovers itself.
+        Assert.True(barsSeen >= 50,
+            $"only {barsSeen} progress bars were found across {files.Length} XAML files — the element "
+            + "selector has stopped matching, so this guard is measuring nothing.");
+
+        Assert.True(ambiguous.Count == 0,
+            "these pages show more than one progress bar announced by the same name, so a screen-reader "
+            + "or voice user cannot tell which one is being reported. Name each bar for what it "
+            + $"reports:\n  " + string.Join("\n  ", ambiguous));
+
+        Assert.True(unnamedOverAllowance.Count == 0,
+            "a progress bar with no accessible name is announced with no identity at all. The remaining "
+            + "ones are ratcheted (see this test's summary); this list means a NEW one appeared, or one "
+            + "moved into a view that had none. Name it for what it reports, or settle the "
+            + $"hide-decorative-elements convention first:\n  "
+            + string.Join("\n  ", unnamedOverAllowance));
+    }
+
     /// <summary>A style that suppresses the focus indicator outright.</summary>
     [GeneratedRegex(@"FocusVisualStyle""\s*Value=""\{x:Null\}""", RegexOptions.Compiled)]
     private static partial Regex NulledFocusVisual();

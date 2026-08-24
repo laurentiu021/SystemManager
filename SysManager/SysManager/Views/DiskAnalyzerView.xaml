@@ -67,7 +67,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <ProgressBar AutomationProperties.Name="Progress" Grid.Column="0" Height="8" Minimum="0" Maximum="100"
+                    <ProgressBar AutomationProperties.Name="Drive space used" Grid.Column="0" Height="8" Minimum="0" Maximum="100"
                                  Value="{Binding DriveUsedPercent, Mode=OneWay}"/>
                     <TextBlock Grid.Column="1" Margin="12,0,0,0" FontSize="12"
                                Foreground="{DynamicResource TextMuted}">
@@ -149,7 +149,7 @@
 
                             <!-- Size bar -->
                             <Grid Grid.Column="2" VerticalAlignment="Center" Margin="8,0">
-                                <ProgressBar AutomationProperties.Name="Progress" Height="6" Minimum="0" Maximum="100"
+                                <ProgressBar AutomationProperties.Name="{Binding Name, StringFormat='Share of scanned space: {0}'}" Height="6" Minimum="0" Maximum="100"
                                              Value="{Binding Percentage, Mode=OneWay}"/>
                             </Grid>
 
@@ -180,7 +180,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="Scan progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>

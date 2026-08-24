@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.22] - 2026-08-24
+
+Progress bars now say what they are reporting. On four pages several appeared at once and all of them
+were announced as just "Progress", and two were not progress at all — a screen reader read out
+"Progress 78" for a battery that was 78% charged.
+
+### Fixed
+- **Ten progress bars were announced identically, or described the wrong thing.** Deep Cleanup shows
+  separate bars for the scan, the cleanup and the large-file search, and all three announced
+  "Progress", so there was no way to hear which one was moving. Disk Analyzer's drive-usage bar and
+  Battery Health's charge bar are not progress at all but gauges, and announcing them as progress said
+  something untrue — they now read "Drive space used" and "Battery charge level". Disk Analyzer's
+  per-folder bar names its folder, and Speed Test's two bars name their engine, matching the Cancel
+  buttons beside them. A test now fails the build if two bars on one page are announced the same way.
+
 ## [1.65.21] - 2026-08-24
 
 If you drive Windows by voice, 41 buttons and tick boxes could not be pressed by saying what is

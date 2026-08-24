@@ -945,11 +945,18 @@ offers, "rate us" prompts:
   a bug. Both are in the About tab; a browser tab opens only when you press them.
 
 ### Profile Export / Import
-- Export your SysManager settings — theme/appearance and speed-test history — to
-  a single portable JSON file, and import them on another PC
+- Export your SysManager settings to a single portable JSON file and import them on
+  another PC: **theme and appearance, dark-mode schedule, gaming profiles, volume
+  presets, close-button behaviour, standby-memory preference, update-check preference,
+  and speed-test history**
 - **Selective export** (tick which sections to include) and **selective import**
   (confirm what a profile contains before anything is overwritten)
 - **Version-aware** — refuses profiles created by a newer, incompatible build
+- **What it deliberately leaves out** — anything that describes *this* PC rather than
+  your choices: the undo baselines behind Performance Mode and Environment Variables,
+  the Settings Watchdog's record of this machine's registry, the service-startup ledger,
+  and the local activity log. Carrying those to another PC would restore it to settings
+  it was never on, or report differences that are only "a different computer"
 - Only SysManager's own config is ever touched (never system settings), so an
   import is fully reversible — just import a different profile
 

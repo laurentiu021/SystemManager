@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.67.0] - 2026-08-24
+
+Moving to a new PC now actually brings your setup with you. Profile Export carried your theme, your
+speed-test history and your update-check choice — and silently left behind the dark-mode schedule, the
+gaming profiles, the volume presets and two more preferences you had set. Eight sections travel now
+instead of three.
+
+### Added
+- **Profile Export carries five more of your settings**: the dark-mode schedule, your gaming profiles,
+  your volume presets, the close-button behaviour, and the standby-memory preference. Each is still
+  optional — tick the ones you want, as before.
+- **What it will not carry, on purpose.** Anything that describes *this* PC rather than your choices is
+  deliberately left out: the undo baselines behind Performance Mode and Environment Variables, the
+  Settings Watchdog's record of this machine's registry, the service-startup ledger and the local
+  activity log. Copying those to another computer would restore it to settings it had never been on, or
+  report differences that are only "a different PC". A test now keeps each of them out.
+- **A gaming profile arrives without the other PC's unfinished session.** That file also holds a
+  crash-recovery marker for a game running on the machine that exported it; imported as-is, this PC would
+  offer to undo tweaks it never applied for a game that never ran here. Your actual profiles come across;
+  that marker is dropped. If the section cannot be read at all it is skipped rather than written over a
+  working file.
+- The tab's empty-state message and the README section listed only the old three sections; both now
+  describe what really travels.
+
 ## [1.66.5] - 2026-08-24
 
 Performance Mode will no longer mistake a running game profile's settings for your own. Start a profile,

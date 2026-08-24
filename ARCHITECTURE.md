@@ -223,8 +223,15 @@ Key services:
   `SocketsHttpHandler`, retry, and surfaced error messages.
 - `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the
   old one and restart, before any DI/UI is built (see the Updates flow below).
-- `StartupService` — enumerate and toggle startup programs via registry
-  Run / RunOnce keys. Enriches each entry from `ProcessDescriptionService`
+- `StartupService` — enumerate and toggle startup programs across seven kinds of
+  location, each a distinct `StartupSource` because the enable/disable state lives
+  in a different place per kind: the `Run`/`RunOnce` keys in both hives, the
+  `Wow6432Node` pair (approved-state in `StartupApproved\Run32`), both shell Startup
+  folders (per-user approved under HKCU, Common under HKLM), the
+  `Policies\Explorer\Run` key (no approved-state at all — shown, never toggled), and
+  third-party scheduled tasks read from the `TaskCache` registry (`\Microsoft\` and
+  `\Windows\` excluded; toggled through `schtasks /Change`, so the same task the
+  Task Scheduler tab owns). Enriches each entry from `ProcessDescriptionService`
   (plain-language description + `ProcessSafety`) keyed on the executable's base
   name; unrecognised programs are left blank so the UI never guesses a safety.
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →

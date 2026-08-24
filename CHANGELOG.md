@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.66.1] - 2026-08-24
+
+Two tabs list the same scheduled tasks, and now each one says so. Startup Manager deliberately leaves out
+Windows' own tasks to keep its list short and safe to touch, which is the right call — but it never told
+you, so a task you could not find looked like a task that was not there.
+
+### Fixed
+- **Startup Manager and Task Scheduler now explain how they overlap.** Startup Manager says that it lists
+  scheduled tasks belonging to programs you installed and that Windows' own are left out, and points at
+  Task Scheduler for the complete list. Task Scheduler says the reverse: a third-party task also appears
+  in Startup Manager, it is the same task in both places, and switching it in one tab shows up in the
+  other once that tab refreshes. Neither claims the two lists stay in step live, because they do not.
+- **Corrected a documented claim that was never true.** The README said Startup Manager lists
+  "logon-triggered scheduled tasks". The scan only requires that a task have some trigger — it never reads
+  which kind — so a task that runs daily or when the machine goes idle was always listed too. The README
+  now describes what the scan really does, and a test pins the wording to the code so the claim cannot
+  drift back: it becomes allowed only if the scan is one day taught to read the trigger type.
+
 ## [1.66.0] - 2026-08-24
 
 Startup Manager now shows a hiding place it was missing. Windows has a "policy" startup list that Task

@@ -353,6 +353,10 @@ a confirmation before it runs:
   the task** — System tasks show an extra warning before you disable them
 - Filter by name or path, and optionally hide system tasks to focus on the rest
 - Changes need administrator and are verified by reading the task's state back
+- Overlaps [Startup Manager](#startup-manager) on purpose: that tab lists the third-party tasks among
+  these next to the programs that launch at boot, because that is all the shorter answer to "why is my
+  PC slow to start" needs. It is the same task in both places, so switching it in one tab applies in the
+  other as soon as that tab refreshes — the two lists are not kept in step live
 
 ### Windows Update (Windows Update Agent COM API)
 - Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —
@@ -420,9 +424,14 @@ a confirmation before it runs:
   is disabled by design so a mis-click can never hurt anything.
 
 ### Startup Manager
-- Lists every program that runs at Windows boot: the Run and RunOnce registry keys for both your
+- Lists the programs that run at Windows boot: the Run and RunOnce registry keys for both your
   account and the whole machine, **including the separate location 64-bit Windows uses for programs
-  installed by a 32-bit installer**, plus both Startup folders and logon-triggered scheduled tasks
+  installed by a 32-bit installer**, plus both Startup folders and scheduled tasks belonging to
+  programs you installed
+- **Windows' own scheduled tasks are deliberately left out**, so the list stays short enough to read
+  and nothing here is something you should not touch. [Task Scheduler](#task-scheduler) is the tab that
+  shows every task, Windows' included — a third-party task appears on both, and it is the same task in
+  both places
 - **Also reads the "policy" startup list that Task Manager does not show at all** — a favourite hiding
   place for bundled software, since you can switch off everything visible, restart, and it still starts.
   Windows gives an app no way to disable these, so each one is labelled "Set by a system policy —

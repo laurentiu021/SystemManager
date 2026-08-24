@@ -2752,6 +2752,144 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The Startup Manager copy must describe the list its scan actually produces, and the two tabs that
+    /// read the same scheduled tasks must point at each other.
+    /// <para>README said the tab lists "logon-triggered scheduled tasks". <c>ReadScheduledTasks</c> requires
+    /// only a non-empty <c>Triggers</c> blob and never decodes the trigger TYPE, so a task that runs daily
+    /// or on idle is listed identically — the qualifier was simply untrue, and untrue in the way a reviewer
+    /// waves through, because it describes what the tab sounds like it ought to do. The issue asking for
+    /// this fix repeated the same phrase, so writing the copy from the issue text would have shipped the
+    /// error a second time.</para>
+    /// <para>The other half is scope. The scan drops <c>\Microsoft\</c> and <c>\Windows\</c> tasks on
+    /// purpose — the short list is the right answer to "why is my PC slow to start" — so the tab is
+    /// deliberately incomplete and has to say so, and to name the tab that is complete. Both directions are
+    /// asserted, because a third-party task appears on BOTH tabs and both toggle it through the same
+    /// <c>schtasks /Change</c> call: a user who disables it in one must not read the other list as a
+    /// different object.</para>
+    /// <para>Conditional rather than a blocklist, the same shape as
+    /// <see cref="NoPublicDocument_ClaimsAPublisherPinThatIsNotArmed"/>. The phrase becomes legal the day
+    /// the scan really decodes a logon trigger, and the disclosure becomes WRONG the day the exclusions are
+    /// dropped and the list turns complete. Either edit flips what the copy must say, and this fails until
+    /// the copy follows.</para>
+    /// </summary>
+    [Fact]
+    public void TheStartupTabCopy_DescribesTheTaskScanItActuallyRuns()
+    {
+        var appDir = FindAppProjectDir();
+        var service = File.ReadAllText(Path.Combine(appDir, "Services", "StartupService.cs"));
+
+        // Slice the scan itself, so a mention anywhere else in this 900-line service cannot stand in for it.
+        var scanAt = service.IndexOf("private static void ReadScheduledTasks", StringComparison.Ordinal);
+        Assert.True(scanAt > 0, "ReadScheduledTasks was not found in StartupService.cs — fix this guard "
+            + "rather than trusting its pass.");
+        var rest = service[scanAt..];
+        var nextMember = NextMemberDeclaration().Match(rest, 1);
+        var scan = nextMember.Success ? rest[..nextMember.Index] : rest;
+        Assert.True(scan.Length > 200,
+            $"the ReadScheduledTasks slice is {scan.Length} chars — too short to be the method, so every "
+            + "assertion below would be measuring nothing.");
+
+        // Does the scan decode the trigger TYPE, or merely require that SOME trigger exists? Positive
+        // signals only: indexing the blob, or naming a trigger kind. Counting occurrences of the local
+        // would go red on an unrelated rename.
+        var decodesTriggerType = scan.Contains("triggers[", StringComparison.Ordinal)
+            || scan.Contains("TriggerType", StringComparison.Ordinal)
+            || scan.Contains("LogonTrigger", StringComparison.Ordinal)
+            || scan.Contains("TASK_TRIGGER", StringComparison.Ordinal);
+
+        // Is the list deliberately incomplete? Matched as the real StartsWith arguments, so the comments
+        // that explain the exclusion cannot satisfy it.
+        var exclusions = new[] { @"@""\Microsoft\""", @"@""\Windows\""" }
+            .Count(marker => scan.Contains(marker, StringComparison.Ordinal));
+        Assert.Equal(2, exclusions);
+
+        var views = Path.Combine(appDir, "Views");
+        // Comments stripped: a comment naming the other tab must not count as telling the user about it.
+        // The neighbouring guard's first draft stayed green for exactly that reason.
+        var startupView = Collapse(XmlComment().Replace(
+            File.ReadAllText(Path.Combine(views, "StartupView.xaml")), string.Empty));
+        var taskView = Collapse(XmlComment().Replace(
+            File.ReadAllText(Path.Combine(views, "TaskSchedulerView.xaml")), string.Empty));
+
+        var root = FindRepoRoot();
+        var readme = Collapse(File.ReadAllText(Path.Combine(root, "README.md")));
+
+        // CHANGELOG is deliberately NOT scanned. It is the historical record, so the entry that documents
+        // this very fix has to be free to quote the wording being removed.
+        var offenders = new List<string>();
+
+        if (!decodesTriggerType)
+        {
+            foreach (var (surface, text) in new[]
+                     { ("README.md", readme), ("StartupView.xaml", startupView), ("TaskSchedulerView.xaml", taskView) })
+            {
+                var claim = LogonTriggerClaim().Match(text);
+                if (claim.Success)
+                    offenders.Add($"{surface} claims \"{claim.Value}\" but the scan only checks that a "
+                        + "trigger EXISTS — it never reads which kind");
+            }
+        }
+
+        if (exclusions == 2)
+        {
+            if (!startupView.Contains("Task Scheduler", StringComparison.Ordinal))
+                offenders.Add("StartupView.xaml never names Task Scheduler, so the tab hides Windows' own "
+                    + "tasks without telling the user where the complete list is");
+
+            if (!taskView.Contains("Startup Manager", StringComparison.Ordinal))
+                offenders.Add("TaskSchedulerView.xaml never names Startup Manager, so a user who disabled a "
+                    + "task there cannot tell it is the same task");
+
+            // Scoped to the tab's own README section: a mention under any other heading is not this
+            // tab explaining itself.
+            var sectionAt = readme.IndexOf("### Startup Manager", StringComparison.Ordinal);
+            Assert.True(sectionAt > 0, "README.md has no '### Startup Manager' section — the guard would "
+                + "pass vacuously.");
+            var after = readme[(sectionAt + 1)..];
+            var sectionEnd = after.IndexOf("### ", StringComparison.Ordinal);
+            var section = sectionEnd > 0 ? after[..sectionEnd] : after;
+            Assert.True(section.Length > 200,
+                $"the README Startup Manager section sliced to {section.Length} chars — not the section.");
+
+            if (!section.Contains("Task Scheduler", StringComparison.Ordinal))
+                offenders.Add("the README Startup Manager section does not point at Task Scheduler, though "
+                    + "the scan drops every Windows task");
+        }
+
+        // The ARCHITECTURE count is spelled out in prose, which is exactly what drifts: it was written when
+        // there were four sources and had to be re-derived twice since. Pin it to the enum.
+        var model = File.ReadAllText(Path.Combine(appDir, "Models", "StartupEntry.cs"));
+        var enumAt = model.IndexOf("public enum StartupSource", StringComparison.Ordinal);
+        Assert.True(enumAt > 0, "StartupSource was not found — the count below would be invented.");
+        // Comments come off BEFORE the braces are matched: a doc comment containing a brace would
+        // otherwise truncate the body and undercount the sources without failing anything.
+        var declaration = DocComment().Replace(model[enumAt..], string.Empty);
+        var enumBody = declaration[(declaration.IndexOf('{', StringComparison.Ordinal) + 1)..];
+        enumBody = enumBody[..enumBody.IndexOf('}', StringComparison.Ordinal)];
+        var sources = enumBody
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Count(v => v.Length > 0);
+        Assert.True(sources >= 5, $"only {sources} StartupSource values parsed — the parse is wrong.");
+
+        string[] spelled = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+        var architecture = Collapse(File.ReadAllText(Path.Combine(root, "ARCHITECTURE.md")));
+        var expected = $"{spelled[sources]} kinds of location";
+        if (!architecture.Contains(expected, StringComparison.Ordinal))
+            offenders.Add($"ARCHITECTURE.md does not say \"{expected}\" though StartupSource now has "
+                + $"{sources} values");
+
+        Assert.True(offenders.Count == 0,
+            "the Startup Manager copy no longer matches the scan behind it:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    [GeneratedRegex(@"logon[- ]triggered|triggered at logon", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex LogonTriggerClaim();
+
+    [GeneratedRegex(@"///.*?$", RegexOptions.Compiled | RegexOptions.Multiline)]
+    private static partial Regex DocComment();
+
+    /// <summary>
     /// Everything the scheduled-task query pays to fetch must reach the screen.
     /// <para>The Task Scheduler tab queried <c>Author</c>, <c>Description</c> and <c>NextRunTime</c> from
     /// Windows on every scan, carried all three through <c>ScheduledTaskInfo</c>, and even defined a

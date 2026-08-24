@@ -288,7 +288,7 @@
                         <TextBlock Text="{Binding CpuName}" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                    TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                         <TextBlock Text="{Binding CpuCores}" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
-                        <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding CpuPercent, Mode=OneWay}"
+                        <ProgressBar AutomationProperties.Name="CPU usage" Height="4" Minimum="0" Maximum="100" Value="{Binding CpuPercent, Mode=OneWay}"
                                      Foreground="{DynamicResource Success}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
                     </StackPanel>
                 </Border>
@@ -316,7 +316,7 @@
                             <Run Text=" · "/>
                             <Run Text="{Binding RamType, Mode=OneWay}"/>
                         </TextBlock>
-                        <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding RamPercent, Mode=OneWay}"
+                        <ProgressBar AutomationProperties.Name="Memory usage" Height="4" Minimum="0" Maximum="100" Value="{Binding RamPercent, Mode=OneWay}"
                                      Foreground="{DynamicResource MetricBlue}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
                     </StackPanel>
                 </Border>
@@ -335,7 +335,7 @@
                         <TextBlock Text="{Binding GpuName}" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                    TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                         <TextBlock Text="{Binding GpuVram}" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
-                        <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding GpuPercent, Mode=OneWay}"
+                        <ProgressBar AutomationProperties.Name="GPU usage" Height="4" Minimum="0" Maximum="100" Value="{Binding GpuPercent, Mode=OneWay}"
                                      Foreground="{DynamicResource MetricPurple}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
                     </StackPanel>
                 </Border>
@@ -422,7 +422,8 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{Binding Letter}" FontSize="13" FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
-                                    <ProgressBar Grid.Column="1" Height="8" Minimum="0" Maximum="100"
+                                    <ProgressBar AutomationProperties.Name="{Binding Letter, StringFormat='Space used on drive {0}'}"
+                                                 Grid.Column="1" Height="8" Minimum="0" Maximum="100"
                                                  Value="{Binding Percent, Mode=OneWay}"
                                                  Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"
                                                  Background="{DynamicResource Surface3}"
@@ -501,7 +502,7 @@
                                                DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
                                                Foreground="{DynamicResource MetricBlue}"/>
                                 </DockPanel>
-                                <ProgressBar Height="4" Minimum="0" Maximum="100"
+                                <ProgressBar AutomationProperties.Name="Quick action progress" Height="4" Minimum="0" Maximum="100"
                                              Value="{Binding QuickActionProgress, Mode=OneWay}"
                                              Foreground="{DynamicResource MetricBlue}" Background="{DynamicResource Surface3}" Margin="0,0,0,6"/>
                                 <TextBlock Text="{Binding QuickActionDetail}" FontSize="11"

@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.23] - 2026-08-24
+
+Six more indicators now say what they are measuring. The Dashboard's CPU, memory and GPU bars, its
+per-drive space bars and its quick-action bar carried no label at all, and neither did the level meter
+beside each app in Volume Control — a screen reader announced a number with nothing to attach it to.
+
+### Fixed
+- **Six progress indicators were announced with no name.** The Dashboard's three headline bars now read
+  "CPU usage", "Memory usage" and "GPU usage", matching the CPU / MEMORY / GPU headings printed above
+  them, and its quick-action bar reads "Quick action progress". The two that are drawn once per item
+  name that item: each STORAGE bar says which drive it measures, and Volume Control's meter says which
+  app it is listening to — previously a whole column of bars would have announced the same words. A test
+  now fails the build if an indicator that repeats per item announces a fixed label.
+
 ## [1.65.22] - 2026-08-24
 
 Progress bars now say what they are reporting. On four pages several appeared at once and all of them

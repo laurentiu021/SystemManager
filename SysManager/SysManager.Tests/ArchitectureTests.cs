@@ -2752,6 +2752,158 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Gaming Profile must take the app-wide system-modification lock, and the two directions must stay
+    /// asymmetric: apply REFUSES when the lock is held, revert NEVER does.
+    /// <para>Gaming Profile and Performance Mode write the same power plan and the same visual-effects
+    /// flag, and each keeps its own record of the original — <c>gaming-profiles.json</c> versus
+    /// <c>performance-snapshot.json</c>. The service had its own <c>_gate</c>, which serialises it against
+    /// itself and says nothing about the other tab. The damage is done at SNAPSHOT time: a snapshot taken
+    /// while the other tab's change is live records that change as the baseline, and the later "restore"
+    /// strands the machine off the user's real power plan with both tabs believing they were correct. So
+    /// the acquire has to sit before <c>CaptureSnapshotAsync</c> — around the writes alone would leave the
+    /// hazard open — and position is asserted here, not just presence.</para>
+    /// <para>The opposite rule holds for undoing. <c>RevertAsync</c> runs from the game's
+    /// <c>Process.Exited</c> callback and <c>RecoverPendingAsync</c> from startup after a crash; refusing
+    /// either leaves tweaks live with nothing left to undo them, which is worse than the contention the
+    /// lock prevents. Neither captures a snapshot, so running unlocked cannot poison a baseline. A future
+    /// edit that "tidies" these into the same refuse-on-busy shape as apply would reintroduce exactly that,
+    /// so the null-lock branch is asserted to warn and continue rather than return.</para>
+    /// </summary>
+    [Fact]
+    public void GamingProfileMutations_TakeTheLockAndOnlyApplyRefuses()
+    {
+        var service = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "GamingProfileService.cs"));
+
+        // Comments are stripped from every slice before anything is matched. The first draft of this
+        // guard went false-RED on its own explanatory comment: the paragraph above the acquire names
+        // CaptureSnapshotAsync, so the positional check compared the acquire against a MENTION of the
+        // snapshot rather than the call, and reported the ordering backwards. A source-text guard must
+        // read code, never prose — including its own.
+        var apply = WithoutComments(MemberSlice(service, "public async Task<GamingApplyResult> ApplyAsync"));
+        var revert = WithoutComments(MemberSlice(service, "public async Task RevertAsync"));
+        var recover = WithoutComments(MemberSlice(service, "public async Task RecoverPendingAsync"));
+        foreach (var (name, slice) in new[] { ("ApplyAsync", apply), ("RevertAsync", revert), ("RecoverPendingAsync", recover) })
+            Assert.True(slice.Length > 200,
+                $"the {name} slice is {slice.Length} chars — too short to be the method, so the assertions "
+                + "below would measure nothing.");
+
+        var offenders = new List<string>();
+
+        // ── Apply: the acquire must precede the snapshot, and refusal must be reported ──
+        var acquireAt = apply.IndexOf("OperationCategory.SystemModification", StringComparison.Ordinal);
+        var snapshotAt = apply.IndexOf("CaptureSnapshotAsync", StringComparison.Ordinal);
+        if (acquireAt < 0)
+            offenders.Add("ApplyAsync does not take the SystemModification lock at all");
+        else if (snapshotAt < 0)
+            offenders.Add("CaptureSnapshotAsync was not found in ApplyAsync — this guard cannot check the "
+                + "ordering it exists to check; fix the guard.");
+        else if (acquireAt > snapshotAt)
+            offenders.Add("ApplyAsync takes the lock AFTER CaptureSnapshotAsync, so the snapshot can still "
+                + "record Performance Mode's applied state as the baseline — the whole point of the lock");
+
+        // "BlockedBy:" — the named argument — not bare "BlockedBy", which the log template
+        // "{BlockedBy} already holds..." would satisfy on its own. Comments are stripped above but
+        // string literals are not, and a guard that a log message can satisfy proves nothing about
+        // what the method returns.
+        if (!apply.Contains("BlockedBy:", StringComparison.Ordinal))
+            offenders.Add("ApplyAsync never returns BlockedBy, so a refused start cannot be told apart "
+                + "from one that applied nothing");
+
+        // ── Revert paths: acquire, then warn and CONTINUE on a null lock ──
+        foreach (var (name, slice) in new[] { ("RevertAsync", revert), ("RecoverPendingAsync", recover) })
+        {
+            if (!slice.Contains("OperationCategory.SystemModification", StringComparison.Ordinal))
+            {
+                offenders.Add($"{name} does not take the SystemModification lock, so it does not serialise "
+                    + "with Performance Mode even when the lock is free");
+                continue;
+            }
+
+            var nullCheck = slice.IndexOf("opLock is null", StringComparison.Ordinal);
+            if (nullCheck < 0)
+            {
+                offenders.Add($"{name} never handles a null lock — TryAcquire returning null must be an "
+                    + "explicit, logged decision to continue, not an ignored value");
+                continue;
+            }
+
+            // The whole statement that follows the null check: it must log and fall through.
+            var statementEnd = slice.IndexOf(';', nullCheck);
+            var branch = statementEnd > nullCheck ? slice[nullCheck..statementEnd] : slice[nullCheck..];
+            if (branch.Contains("return", StringComparison.Ordinal))
+                offenders.Add($"{name} returns early when the lock is busy. Undoing must never be refused: "
+                    + "the game has already exited, so the tweaks would stay live with nothing to revert "
+                    + "them. Warn and continue.");
+            if (!branch.Contains("Log.Warning", StringComparison.Ordinal))
+                offenders.Add($"{name} continues without the lock but does not warn — a silent unlocked "
+                    + "system change is exactly what a maintainer needs to see in the log");
+        }
+
+        // ── The README claim must match the code, in both directions ──
+        var readme = Collapse(File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md")));
+        var lockSectionAt = readme.IndexOf("### Operation Lock", StringComparison.Ordinal);
+        Assert.True(lockSectionAt > 0, "README.md has no '### Operation Lock' section — the guard would "
+            + "pass vacuously.");
+        var after = readme[(lockSectionAt + 1)..];
+        var end = after.IndexOf("### ", StringComparison.Ordinal);
+        var lockSection = end > 0 ? after[..end] : after;
+        Assert.True(lockSection.Length > 200,
+            $"the README Operation Lock section sliced to {lockSection.Length} chars — not the section.");
+
+        var takesLock = acquireAt >= 0;
+        var listed = lockSection.Contains("Gaming Profile", StringComparison.Ordinal);
+        if (takesLock && !listed)
+            offenders.Add("Gaming Profile takes the lock but the README Operation Lock section does not "
+                + "list it — the section claims the lock covers every tab that mutates system state");
+        if (!takesLock && listed)
+            offenders.Add("the README lists Gaming Profile under Operation Lock but the service no longer "
+                + "takes it — the claim is now false");
+
+        Assert.True(offenders.Count == 0,
+            "the Gaming Profile lock contract is broken:\n  - " + string.Join("\n  - ", offenders));
+    }
+
+    /// <summary>
+    /// C# source with comments removed, so a source-text assertion cannot be satisfied — or defeated —
+    /// by prose that merely names the construct. Quote-aware on the line scan so a <c>//</c> inside a
+    /// string literal (a URL, say) is left alone.
+    /// </summary>
+    private static string WithoutComments(string source)
+    {
+        var noBlocks = BlockComment().Replace(source, " ");
+        var kept = new List<string>();
+        foreach (var line in noBlocks.Split('\n'))
+        {
+            var inString = false;
+            var cut = -1;
+            for (var i = 0; i < line.Length - 1; i++)
+            {
+                if (line[i] == '"' && (i == 0 || line[i - 1] != '\\')) inString = !inString;
+                else if (!inString && line[i] == '/' && line[i + 1] == '/') { cut = i; break; }
+            }
+            kept.Add(cut >= 0 ? line[..cut] : line);
+        }
+        return string.Join("\n", kept);
+    }
+
+    [GeneratedRegex(@"/\*.*?\*/", RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex BlockComment();
+
+    /// <summary>
+    /// A member's text from its declaration up to the next member at the same indentation — enough to
+    /// assert what one method does without matching an identical call elsewhere in the file.
+    /// </summary>
+    private static string MemberSlice(string source, string declaration)
+    {
+        var start = source.IndexOf(declaration, StringComparison.Ordinal);
+        if (start < 0) return "";
+        var rest = source[start..];
+        var end = NextMemberDeclaration().Match(rest, 1);
+        return end.Success ? rest[..end.Index] : rest;
+    }
+
+    /// <summary>
     /// A registry path must be declared in ONE place. Two verbatim copies of the same key drift, and they
     /// drift silently: nothing tells the compiler that two identical strings were meant to stay identical.
     /// <para>The defect this generalises: <c>PushNotifications\ToastEnabled</c> was declared twice,

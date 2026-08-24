@@ -162,6 +162,29 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     {
         if (IsActive) await RevertAsync(ct).ConfigureAwait(false); // never stack sessions
 
+        // Acquired BEFORE the snapshot, not merely around the writes, because the snapshot IS the
+        // hazard. Gaming Profile and Performance Mode set the same power plan and the same
+        // visual-effects flag, and each keeps its own idea of the original (gaming-profiles.json vs
+        // performance-snapshot.json). If Performance Mode applies Ultimate Performance while this
+        // method sits between CaptureSnapshotAsync and its writes, this session records the OTHER
+        // tab's already-applied value as the baseline and later "restores" the machine to it — the
+        // user is stranded off their real power plan with both tabs believing they were right.
+        // PerformanceService.OriginalSnapshot carries the same warning for the same reason.
+        //
+        // Refusing is safe HERE precisely because nothing has changed yet. RevertAsync deliberately
+        // does not refuse — see the note there.
+        using var opLock = OperationLockService.Instance.TryAcquire(
+            OperationCategory.SystemModification, "Gaming Profile");
+        if (opLock is null)
+        {
+            var blockedBy = OperationLockService.Instance.GetActiveOperationName(
+                OperationCategory.SystemModification) ?? "another system change";
+            Log.Information(
+                "Gaming Profile apply refused: {BlockedBy} already holds the system-modification lock",
+                blockedBy);
+            return new GamingApplyResult([], RestorePointCreated: false, BlockedBy: blockedBy);
+        }
+
         bool restorePointCreated = await EnsureRestorePointAsync(ct).ConfigureAwait(true);
 
         // Capture the machine-wide baseline BEFORE any change.
@@ -203,6 +226,20 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public async Task RevertAsync(CancellationToken ct = default)
     {
+        // Opportunistic, and it NEVER refuses. Revert runs from the game's Process.Exited callback,
+        // so a refusal would leave the machine on Ultimate Performance with visual effects off and
+        // nothing left to undo it — strictly worse than the contention the lock exists to prevent.
+        // Taking it when free still serialises the common case, and running without it cannot corrupt
+        // a baseline the way a concurrent APPLY can, because revert captures no snapshot: it only
+        // writes back values recorded before this session began.
+        using var opLock = OperationLockService.Instance.TryAcquire(
+            OperationCategory.SystemModification, "Gaming Profile revert");
+        if (opLock is null)
+            Log.Warning("Gaming Profile reverting while {Holder} holds the system-modification lock — "
+                + "not deferring, because a game has exited and the machine must come back",
+                OperationLockService.Instance.GetActiveOperationName(
+                    OperationCategory.SystemModification) ?? "another system change");
+
         // Serialize with ApplyAsync and the auto-revert path: manual Stop (UI thread) and
         // OnGameExited (thread-pool) both mutate _appliedSteps + _boundGame on this singleton.
         await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -239,6 +276,18 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public async Task RecoverPendingAsync(CancellationToken ct = default)
     {
+        // Opportunistic and non-refusing, exactly as in RevertAsync: this is a revert of a session
+        // that outlived a crash, so declining it would leave the previous run's tweaks live with the
+        // marker still on disk. It writes back a recorded baseline and captures nothing, so it cannot
+        // poison a snapshot even when it runs unlocked.
+        using var opLock = OperationLockService.Instance.TryAcquire(
+            OperationCategory.SystemModification, "Gaming Profile recovery");
+        if (opLock is null)
+            Log.Warning("Gaming Profile recovering a leftover session while {Holder} holds the "
+                + "system-modification lock — not deferring, the previous run's tweaks are still live",
+                OperationLockService.Instance.GetActiveOperationName(
+                    OperationCategory.SystemModification) ?? "another system change");
+
         // Serialize with ApplyAsync / RevertAsync on _gate. Without this the startup recovery
         // sweep runs unguarded: after the user answers the "restore?" dialog, the UI is live
         // again and a Start click can launch ApplyAsync while this revert + store rewrite is

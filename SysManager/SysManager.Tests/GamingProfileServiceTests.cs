@@ -19,7 +19,12 @@ namespace SysManager.Tests;
 /// The pure helpers (<c>PerformanceCoreMask</c>) and the persisted-store round-trip / schema
 /// guard are also covered here. The composed services themselves are already audited under
 /// their own tests; this file treats them as a contract at the seam.
+/// <para>In the serialized collection because the lock tests below take the process-wide
+/// <c>OperationLockService.Instance</c>; a class holding that static in parallel with another
+/// would make either one pass or fail for a foreign reason
+/// (<see cref="ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection"/>).</para>
 /// </summary>
+[Collection("ProcessWideStatics")]
 public class GamingProfileServiceTests
 {
     /// <summary>A fake step that records apply/revert order into a shared log.</summary>
@@ -533,6 +538,72 @@ public class GamingProfileServiceTests
             // The leftover marker is cleared exactly once, under the gate.
             Assert.False(StoreOnlyService(path).HasPendingRecovery,
                 "the recovered session's ActiveSession marker should be cleared after recovery");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    // ── The app-wide system-modification lock ──────────────────────────────────
+    // _gate above serialises this service against ITSELF. It says nothing about Performance Mode,
+    // which writes the same power plan and the same visual-effects flag through its own commands and
+    // keeps its own "original" snapshot. These two tests pin the asymmetry that makes that safe:
+    // APPLY refuses (nothing has changed yet, and a snapshot taken now would record the other tab's
+    // change as the baseline), REVERT never refuses (a game has exited and the machine must come
+    // back, even if something else holds the lock).
+
+    [Fact]
+    public async Task ApplyAsync_WhileAnotherSystemModificationRuns_IsRefusedAndChangesNothing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-lock-{Guid.NewGuid():N}.json");
+        try
+        {
+            var svc = StoreOnlyService(path);
+
+            using var held = OperationLockService.Instance.TryAcquire(
+                OperationCategory.SystemModification, "Apply power plan");
+            Assert.NotNull(held); // precondition: this test really is holding the lock
+
+            // A profile with the two colliding tweaks enabled, so the test is not passing merely
+            // because there was nothing to do.
+            var result = await svc.ApplyAsync(
+                new GamingProfile { UltimatePerformancePlan = true, DisableVisualEffects = true },
+                game: null);
+
+            Assert.Equal("Apply power plan", result.BlockedBy);
+            Assert.Empty(result.Steps);
+            Assert.False(result.RestorePointCreated);
+            Assert.False(svc.IsActive);
+
+            // The refusal happens BEFORE the snapshot and before the restore-point attempt, so no
+            // session marker can have been written. This is what makes the test safe to run on a real
+            // machine: no powercfg, no registry, no restore point.
+            Assert.False(StoreOnlyService(path).HasPendingRecovery,
+                "a refused apply must leave no crash-recovery marker behind");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task RevertAsync_WhileAnotherSystemModificationRuns_StillRevertsInsteadOfStranding()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-unlock-{Guid.NewGuid():N}.json");
+        try
+        {
+            var svc = StoreOnlyService(path);
+            var log = new List<string>();
+            var tweak = new FakeTweak("power plan", log);
+            svc.SeedAppliedStepForTest(tweak);
+            Assert.True(svc.IsActive, "precondition: a live session to revert");
+
+            using var held = OperationLockService.Instance.TryAcquire(
+                OperationCategory.SystemModification, "Apply visual effects");
+            Assert.NotNull(held);
+
+            await svc.RevertAsync();
+
+            Assert.True(tweak.Reverted,
+                "revert must run even when the lock is held: it is triggered by the game exiting, so "
+                + "deferring it strands the machine on the gaming power plan with nothing left to undo it");
+            Assert.False(svc.IsActive);
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }

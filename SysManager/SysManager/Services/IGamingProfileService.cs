@@ -91,7 +91,19 @@ public sealed record GamingStepOutcome(string Label, GamingStepStatus Status, st
 /// and whether a System Restore point was actually created (so the UI never over-promises a
 /// safety net that didn't materialize — mirrors <see cref="TweakApplyResult"/>).
 /// </summary>
-public sealed record GamingApplyResult(IReadOnlyList<GamingStepOutcome> Steps, bool RestorePointCreated)
+/// <param name="Steps">Per-step outcomes; empty when the batch never ran.</param>
+/// <param name="RestorePointCreated">Whether a restore point was actually created.</param>
+/// <param name="BlockedBy">
+/// Name of the operation that already held the system-modification lock, or <c>null</c> when the
+/// batch ran. Non-null means NOTHING was changed and no snapshot was taken — Gaming Profile and
+/// Performance Mode write the same power plan and visual-effects settings while each keeps its own
+/// idea of the original, so whichever starts second must not capture the other's applied state as a
+/// baseline it will later "restore".
+/// </param>
+public sealed record GamingApplyResult(
+    IReadOnlyList<GamingStepOutcome> Steps,
+    bool RestorePointCreated,
+    string? BlockedBy = null)
 {
     /// <summary>Count of steps that applied successfully.</summary>
     public int AppliedCount => Steps.Count(s => s.Status == GamingStepStatus.Applied);

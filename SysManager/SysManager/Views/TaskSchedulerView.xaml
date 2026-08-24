@@ -25,7 +25,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="Task Scheduler" Style="{StaticResource Display}"/>
-            <TextBlock Text="Browse Windows scheduled tasks and turn them on or off. Tasks are color-coded by type; disabling is always reversible and never deletes a task."
+            <TextBlock Text="Browse Windows scheduled tasks and turn them on or off. Tasks are color-coded by type; disabling is always reversible and never deletes a task. Third-party tasks also appear on System → Startup Manager — the same task in both places, so switching it there is the same switch, and this list shows the new state after a refresh."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 

@@ -21,8 +21,8 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Startup Manager" Style="{StaticResource Display}"/>
-            <TextBlock Text="Programs that run when Windows starts. Disabling is non-destructive — you can re-enable anytime."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="Programs that run when Windows starts. Disabling is non-destructive — you can re-enable anytime. Scheduled tasks from other programs are listed too; Windows' own tasks are left out, so System → Task Scheduler is where you see every task."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner: not elevated -->

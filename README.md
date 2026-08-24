@@ -584,8 +584,15 @@ a confirmation before it runs:
   is blocking and refuses to start the new one
 - Integrated into every tab that mutates disk, network, or system state
   (Cleanup, Deep Cleanup, Disk Analyzer, Duplicate Finder, Speed Test, Traceroute,
-  Network Repair, Shortcut Cleaner, Performance Mode, Environment Variables, and the
-  Dashboard's quick actions)
+  Network Repair, Shortcut Cleaner, Performance Mode, Gaming Profile, Environment
+  Variables, and the Dashboard's quick actions)
+- **Gaming Profile takes the lock before it reads your current settings**, not just
+  around the changes — it and Performance Mode set the same power plan and the same
+  visual-effects switch, so whichever starts second would otherwise write down the
+  other one's change as "how you had it" and restore you to that later
+- Undoing is never refused. If a game exits while another change is running, the
+  optimizations are still reverted — leaving your PC on a gaming power plan because a
+  lock was busy would be worse than the clash the lock exists to avoid
 
 ### Shortcut Cleaner
 - Scans Desktop, Start Menu, Quick Launch, and Recent Items for broken .lnk

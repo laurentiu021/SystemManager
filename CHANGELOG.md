@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.66.3] - 2026-08-24
+
+Gaming Profile and Performance Mode can no longer trip over each other. They change the same two
+settings — the power plan and the visual-effects switch — and each writes down "how you had it" before
+changing anything. Start one while the other is mid-change and the note it takes down is the other one's
+change, so restoring later put your PC somewhere you had never been.
+
+### Fixed
+- **Gaming Profile now waits for Performance Mode, and vice versa.** Starting a game profile while a
+  Performance Mode change is running says plainly which one is busy instead of starting anyway. It takes
+  that check **before** reading your current settings, not just before changing them — reading them at
+  the wrong moment is what recorded the wrong "original" and could leave your PC on a gaming power plan
+  after everything was supposedly restored.
+- **Undoing is never refused.** If a game exits while another change happens to be running, the
+  optimizations are still undone. Leaving your PC tweaked because something else was busy would be worse
+  than the clash being avoided, so the undo goes ahead and says so in the log. The same applies to the
+  leftover-session cleanup that runs after a crash.
+- **The README no longer overstates the protection.** It said the lock covers every tab that changes
+  system state and then omitted Gaming Profile, which was the one tab it did not cover. A test now keeps
+  that list honest in both directions.
+
 ## [1.66.2] - 2026-08-24
 
 Turning notifications back on while a Gaming Profile is running now sticks. Gaming Profile and the

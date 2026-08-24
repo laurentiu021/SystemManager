@@ -168,6 +168,16 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         {
             _service.SaveLastConfig(profile);
             var result = await _service.ApplyAsync(profile, game);
+            if (result.BlockedBy is { } blocker)
+            {
+                // Nothing was applied and no snapshot was taken, so say so and stop — do not log an
+                // activity entry or flip IsSessionActive for a session that never began. Same wording
+                // Performance Mode uses when the lock is held, because these two tabs are the pair
+                // that collide: they write the same power plan and the same visual-effects flag.
+                StatusMessage = $"Cannot start — {blocker} is already running.";
+                return;
+            }
+
             IsSessionActive = _service.IsActive;
             StatusMessage = DescribeResult(result, game);
             ActivityLogService.Instance.Log("Gaming Profile",

@@ -45,6 +45,20 @@ public sealed class StartupService
         (@"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\RunOnce", StartupSource.RegistryLocalMachine32),
     };
 
+    // The policy Run key, read from BOTH hives. This is a real autostart location that Task Manager's
+    // Startup tab does not show at all, which is exactly why bundleware and adware favour it: the user
+    // disables everything visible, reboots, and the program is still there — so the tab that reported
+    // "nothing left to disable" is the one that looks broken.
+    //
+    // Deliberately NOT part of MachineRunKeys, and carrying its own source value. Windows never consults
+    // StartupApproved for a policy key, so there is no enable/disable state to read or write. Reusing
+    // RegistryLocalMachine would let SetEnabledAsync write a disable blob to StartupApproved\Run, where
+    // Windows would never look for it — the item would keep running while this tab reported "Disabled".
+    // That exact failure has shipped twice here (the all-users folder, then the 32-bit view), which is why
+    // every family with a different state location gets its own StartupSource.
+    private const string PolicyRunKey =
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run";
+
     // Approved key where Windows stores disabled startup items
     private const string ApprovedRunHKCU =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
@@ -69,6 +83,11 @@ public sealed class StartupService
         // HKLM Run keys
         foreach (var (keyPath, source) in MachineRunKeys)
             ReadRunKey(Registry.LocalMachine, keyPath, source, results);
+
+        // The policy Run key in both hives. Read last so a program registered in both a normal Run key
+        // and the policy key keeps its disableable entry first in the list.
+        ReadRunKey(Registry.CurrentUser, PolicyRunKey, StartupSource.PolicyRun, results);
+        ReadRunKey(Registry.LocalMachine, PolicyRunKey, StartupSource.PolicyRun, results);
 
         // Shell startup folders (user + common). The common (all-users) folder's enabled/disabled
         // state lives under HKLM, not HKCU — flag it so ApplyApprovedState/SetEnabledAsync target
@@ -376,7 +395,13 @@ public sealed class StartupService
                     ValueName = valueName,
                     IsEnabled = true, // will be refined by ApplyApprovedState
                     Publisher = ExtractPublisher(command),
-                    StatusText = "Enabled"
+                    // A policy item says so up front rather than only when a toggle is attempted: it does
+                    // run, so "Enabled" would be true but would imply a switch that this key does not
+                    // have. ApplyApprovedState leaves this alone — a policy source resolves to no
+                    // approved dictionary, so the StatusText it would overwrite is never reached.
+                    StatusText = source == StartupSource.PolicyRun
+                        ? "Set by a system policy — managed elsewhere"
+                        : "Enabled"
                 });
             }
         }
@@ -470,6 +495,16 @@ public sealed class StartupService
             if (entry.RegistryKey.EndsWith("RunOnce", StringComparison.OrdinalIgnoreCase))
             {
                 entry.StatusText = "Run-once item — runs next boot, then removes itself; cannot be disabled here.";
+                return false;
+            }
+
+            // Policy Run items have no StartupApproved state at all — Windows never consults it for a
+            // policy key. Falling through to the switch below would write the disable blob to
+            // StartupApproved\Run, which nothing reads: the item would keep starting while this tab
+            // reported "Disabled". Same reasoning as RunOnce above; say so instead of faking success.
+            if (entry.Source == StartupSource.PolicyRun)
+            {
+                entry.StatusText = "Set by a system policy — managed elsewhere; cannot be disabled here.";
                 return false;
             }
 

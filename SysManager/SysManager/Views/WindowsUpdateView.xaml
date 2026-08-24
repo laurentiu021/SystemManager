@@ -118,7 +118,7 @@
                 <WrapPanel Orientation="Horizontal">
                     <Button Content="List updates" Command="{Binding ListUpdatesCommand}"
                             AutomationProperties.AutomationId="btn-windows-update-list"
-                            AutomationProperties.Name="List available Windows updates"
+                            AutomationProperties.Name="List updates — available Windows updates"
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
                     <Button Content="History" Command="{Binding ShowHistoryCommand}"
                             AutomationProperties.AutomationId="btn-windows-update-history"
@@ -126,7 +126,7 @@
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Pending reboot?" Command="{Binding CheckPendingRebootCommand}"
                             AutomationProperties.AutomationId="btn-windows-update-pending-reboot"
-                            AutomationProperties.Name="Check for a pending reboot"
+                            AutomationProperties.Name="Pending reboot? — check whether a reboot is pending"
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                     <Button Content="Install selected" Command="{Binding InstallUpdatesCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-windows-update-install-selected"

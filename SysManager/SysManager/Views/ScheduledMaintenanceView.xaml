@@ -101,10 +101,10 @@
                 <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
                     <Button Content="Save schedule" Command="{Binding SaveScheduleCommand}"
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
-                            AutomationProperties.Name="Save maintenance schedule"/>
+                            AutomationProperties.Name="Save schedule — the maintenance schedule"/>
                     <Button Content="Remove schedule" Command="{Binding RemoveScheduleCommand}"
                             Style="{StaticResource DangerButton}" Margin="0,0,8,0"
-                            AutomationProperties.Name="Remove maintenance schedule"/>
+                            AutomationProperties.Name="Remove schedule — the maintenance schedule"/>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             Style="{StaticResource GhostButton}"
                             AutomationProperties.Name="Refresh schedule status"/>

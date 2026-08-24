@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.65.21] - 2026-08-24
+
+If you drive Windows by voice, 41 buttons and tick boxes could not be pressed by saying what is
+printed on them. They now answer to their own labels.
+
+### Fixed
+- **41 controls could not be activated by voice.** Windows Voice Access and similar tools listen for
+  the words a control is announced by and match them against what you say. On these 41 the announced
+  name had been reworded rather than extended — the button printed "Export CSV" but announced "Export
+  logs to CSV", "Clear History" announced "Clear alert history", "Empty Recycle Bin" announced "Empty
+  the Recycle Bin". Saying the printed label matched nothing, and the failure was silent: a screen
+  reader read the announced wording out perfectly well, so nothing looked wrong unless you tried to
+  speak to it. Each name now begins with the words printed on the control and adds any extra detail
+  after them, which is what the other 209 controls already did.
+- **The check meant to prevent this had been accepting them.** It asked only that the label's words
+  appear in order somewhere in the announced name, which "Clear alert history" does. It now asks for
+  them as one unbroken phrase, so a name may still add detail but can no longer reword the label.
+
 ## [1.65.20] - 2026-08-24
 
 Two fixes for anyone using SysManager with a screen reader. In Startup Manager, every row's "Open"

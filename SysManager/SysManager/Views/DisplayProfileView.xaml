@@ -76,7 +76,7 @@
                         AutomationProperties.Name="Keep the new display settings"/>
                 <Button Grid.Column="2" Content="Revert now" Command="{Binding RevertNowCommand}"
                         Style="{StaticResource SecondaryButton}" Padding="14,6"
-                        AutomationProperties.Name="Revert display settings now"/>
+                        AutomationProperties.Name="Revert now — the display settings"/>
             </Grid>
         </Border>
 
@@ -117,7 +117,7 @@
             </DockPanel>
             <Button Grid.Column="1" Content="Apply mode" Command="{Binding ApplyCommand}"
                     Style="{StaticResource PrimaryButton}" Padding="16,8"
-                    AutomationProperties.Name="Apply the selected display mode"/>
+                    AutomationProperties.Name="Apply mode — the selected display mode"/>
         </Grid>
     </Grid>
 </UserControl>

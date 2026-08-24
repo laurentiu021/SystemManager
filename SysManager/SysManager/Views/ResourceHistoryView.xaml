@@ -52,7 +52,7 @@
                         AutomationProperties.Name="Refresh history"/>
                 <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
-                        AutomationProperties.Name="Export history to CSV"/>
+                        AutomationProperties.Name="Export CSV — the resource history"/>
             </StackPanel>
         </DockPanel>
 

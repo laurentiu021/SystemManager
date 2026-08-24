@@ -120,7 +120,7 @@
                     AutomationProperties.Name="Restore original affinity"/>
             <Button Grid.Column="2" Content="Apply affinity" Command="{Binding ApplyCommand}"
                     Style="{StaticResource PrimaryButton}" Padding="16,8"
-                    AutomationProperties.Name="Apply CPU affinity"/>
+                    AutomationProperties.Name="Apply affinity — the selected CPU cores"/>
         </Grid>
     </Grid>
 </UserControl>

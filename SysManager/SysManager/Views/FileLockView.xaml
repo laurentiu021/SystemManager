@@ -75,7 +75,7 @@
                          ToolTip="Enter or paste a full file/folder path"/>
                 <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Padding="14,8"
-                        AutomationProperties.Name="Browse for a file"/>
+                        AutomationProperties.Name="Browse… — for a file"/>
                 <Button Grid.Column="2" Content="Scan" Command="{Binding ScanCommand}"
                         Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Padding="18,8"
                         AutomationProperties.Name="Scan for locking processes"/>
@@ -121,7 +121,7 @@
             </DockPanel>
             <Button Grid.Column="1" Content="End process" Command="{Binding KillSelectedCommand}"
                     Style="{StaticResource DangerButton}" Padding="14,8"
-                    AutomationProperties.Name="End the selected process"/>
+                    AutomationProperties.Name="End process — the selected process"/>
         </Grid>
     </Grid>
 </UserControl>

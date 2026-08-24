@@ -32,7 +32,7 @@
                         AutomationProperties.Name="Refresh access history"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                 <Button Content="Open privacy settings" Command="{Binding OpenPrivacySettingsCommand}"
-                        AutomationProperties.Name="Open Windows privacy settings"
+                        AutomationProperties.Name="Open privacy settings — in Windows"
                         Style="{StaticResource GhostButton}"
                         ToolTip="Open Windows Settings to grant or revoke camera/microphone/location access."/>
             </WrapPanel>

@@ -42,7 +42,7 @@
                      The tooltip gives the full path so there is no ambiguity before clicking. -->
                 <Button Content="SysManager's own logs" AutomationProperties.AutomationId="btn-logs-open-folder" AutomationProperties.Name="SysManager's own logs — open SysManager's own log folder" Command="{Binding OpenLogFolderCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"
                         ToolTip="{Binding LogFolder, Mode=OneWay, StringFormat='Opens SysManager''s own diagnostic logs: {0}'}"/>
-                <Button Content="Export CSV" AutomationProperties.AutomationId="btn-logs-export-csv" AutomationProperties.Name="Export logs to CSV" Command="{Binding ExportCsvCommand}" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"/>
+                <Button Content="Export CSV" AutomationProperties.AutomationId="btn-logs-export-csv" AutomationProperties.Name="Export CSV — the event log" Command="{Binding ExportCsvCommand}" Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"/>
             </StackPanel>
         </DockPanel>
 
@@ -439,8 +439,8 @@
                             </Border>
 
                             <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                                <Button Content="Copy details" AutomationProperties.Name="Copy event details" Command="{Binding CopySelectedCommand}" Style="{StaticResource SecondaryButton}"/>
-                                <Button Content="Search online" AutomationProperties.Name="Search this event online" Command="{Binding SearchOnlineCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                                <Button Content="Copy details" AutomationProperties.Name="Copy details — the selected event" Command="{Binding CopySelectedCommand}" Style="{StaticResource SecondaryButton}"/>
+                                <Button Content="Search online" AutomationProperties.Name="Search online — this event" Command="{Binding SearchOnlineCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
                             </StackPanel>
 
                             <Expander Header="Full system message" Margin="0,16,0,0" Foreground="{DynamicResource TextSecondary}">

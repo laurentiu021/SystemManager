@@ -66,7 +66,7 @@
                             Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right"
                             Padding="14,8" Margin="8,0,0,0"
                             IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"
-                            AutomationProperties.Name="Reset DNS to DHCP (automatic)"/>
+                            AutomationProperties.Name="Reset to DHCP — DNS assigned automatically"/>
                     <Button Content="Apply" Command="{Binding ApplyDnsCommand}"
                             Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right"
                             Padding="18,8" Margin="8,0,0,0"

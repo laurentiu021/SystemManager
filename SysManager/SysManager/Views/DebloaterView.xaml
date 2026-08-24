@@ -44,7 +44,7 @@
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
 
                 <Button Content="Remove selected…" Command="{Binding RemoveSelectedCommand}"
-                        AutomationProperties.Name="Remove selected apps"
+                        AutomationProperties.Name="Remove selected… — the selected apps"
                         Style="{StaticResource DangerButton}" Margin="0,0,16,0"
                         ToolTip="Uninstall the ticked apps for the current user (reversible via the Store)."/>
 

@@ -45,7 +45,7 @@
                          ToolTip="Name the current per-app volumes as a preset."/>
                 <Button Content="Save current as preset" Command="{Binding SavePresetCommand}"
                         Style="{StaticResource PrimaryButton}" Padding="12,6"
-                        AutomationProperties.Name="Save current volumes as a preset"/>
+                        AutomationProperties.Name="Save current as preset — the current app volumes"/>
             </WrapPanel>
         </Border>
 

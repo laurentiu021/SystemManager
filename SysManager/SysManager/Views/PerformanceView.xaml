@@ -227,7 +227,7 @@
                             <TextBlock Text="Create a Windows System Restore point before making changes. Requires admin."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="0,0,0,8"/>
                             <Button Content="Create Restore Point" Command="{Binding CreateRestorePointCommand}"
-                                    AutomationProperties.Name="Create system restore point"
+                                    AutomationProperties.Name="Create Restore Point"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                         </StackPanel>
                     </Border>
@@ -244,7 +244,7 @@
                             <TextBlock Text="⚠ Apps may feel briefly slower on next access as pages are faulted back in."
                                        Foreground="{DynamicResource Warning}" FontSize="11" Margin="0,0,0,8"/>
                             <Button Content="Trim RAM Now" Command="{Binding TrimRamCommand}"
-                                    AutomationProperties.Name="Trim RAM working set now"
+                                    AutomationProperties.Name="Trim RAM Now — the working set"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                         </StackPanel>
                     </Border>

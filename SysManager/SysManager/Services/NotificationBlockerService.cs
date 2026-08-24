@@ -32,7 +32,9 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     internal const string SettingsPath = @"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings";
     internal const string EnabledValueName = "Enabled";
 
-    // The user-wide master toggle (same values NotificationsTweak uses for Gaming Profile).
+    // The user-wide master toggle. This service OWNS these two strings: NotificationsTweak (Gaming
+    // Profile) writes the same value and references them from here rather than declaring its own
+    // copies, which is what let the two drift apart before.
     internal const string PushKeyPath = @"Software\Microsoft\Windows\CurrentVersion\PushNotifications";
     internal const string ToastValueName = "ToastEnabled";
 

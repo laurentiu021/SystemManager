@@ -2752,6 +2752,128 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A registry path must be declared in ONE place. Two verbatim copies of the same key drift, and they
+    /// drift silently: nothing tells the compiler that two identical strings were meant to stay identical.
+    /// <para>The defect this generalises: <c>PushNotifications\ToastEnabled</c> was declared twice,
+    /// byte-identical, in <c>NotificationBlockerService</c> and in the Gaming Profile's
+    /// <c>NotificationsTweak</c> — and BOTH wrote it, so the Notifications tab and Gaming Profile were
+    /// fighting over one switch with neither aware of the other. The repo had already learned this lesson
+    /// and written it down: <c>Helpers/WingetId.cs</c> exists because the winget-ID allowlist had been
+    /// copy-pasted into three services "where three copies could drift apart".</para>
+    /// <para>Nine duplicate pairs predate this guard and are listed with the reason each is tolerated, so
+    /// the rule can be enforced now rather than after a cleanup that may never happen. The allowlist is
+    /// keyed to the EXACT set of files, not to a count and not to the literal alone: adding a THIRD copy of
+    /// an already-tolerated path fails, and so does fixing a pair without deleting its entry — a stale
+    /// exemption is a lie about the codebase that the next reader will trust.</para>
+    /// </summary>
+    [Fact]
+    public void NoRegistryPath_IsDeclaredInTwoPlaces()
+    {
+        // literal (lower-cased) -> the only files allowed to declare it, and why.
+        var tolerated = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            // A Windows-defined device class GUID, not a SysManager convention. Both readers want the
+            // display-adapters class; neither owns it.
+            [@"system\currentcontrolset\control\class\{4d36e968-e325-11ce-bfc1-08002be10318}"] =
+                "Helpers/GpuVramHelper.cs,Services/PerformanceService.cs",
+
+            // The two Uninstall roots. AppAlertService watches them for newly installed apps;
+            // UninstallerService enumerates them to list programs. Same roots, different jobs.
+            [@"software\microsoft\windows\currentversion\uninstall"] =
+                "Services/AppAlertService.cs,Services/UninstallerService.cs",
+            [@"software\wow6432node\microsoft\windows\currentversion\uninstall"] =
+                "Services/AppAlertService.cs,Services/UninstallerService.cs",
+
+            // SettingsWatchdogService re-declares the policy keys PrivacyService writes, so it can notice
+            // when Windows silently reverts them. Watching your own writes needs the same path twice, but
+            // it is still duplication: correct one and not the other and the watchdog quietly stops
+            // watching the toggle it is named after.
+            [@"hklm\software\policies\microsoft\windows\datacollection"] =
+                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+            [@"hklm\software\policies\microsoft\windows\system"] =
+                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+            [@"hkcu\software\microsoft\windows\currentversion\advertisinginfo"] =
+                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+            [@"hkcu\software\microsoft\windows\currentversion\contentdeliverymanager"] =
+                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+            [@"hkcu\software\policies\microsoft\windows\explorer"] =
+                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+            [@"hklm\software\policies\microsoft\dsh"] =
+                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+        };
+
+        var appDir = FindAppProjectDir();
+        var sources = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                       StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.True(sources.Length >= 50,
+            $"only {sources.Length} app source files found under {appDir} — the scan is not seeing the "
+            + "codebase, so every assertion below would pass vacuously.");
+
+        var byLiteral = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        foreach (var file in sources)
+        {
+            var relative = Path.GetRelativePath(appDir, file).Replace(Path.DirectorySeparatorChar, '/');
+            foreach (var match in VerbatimLiteral().Matches(File.ReadAllText(file)).Cast<Match>())
+            {
+                var value = match.Groups[1].Value;
+                // Registry-shaped only: a separator plus a hive or a well-known registry segment. The
+                // length floor drops fragments like @"Software\" that are composed at the call site.
+                if (!value.Contains('\\', StringComparison.Ordinal) || value.Length < 12) continue;
+                if (!RegistryShaped().IsMatch(value)) continue;
+
+                var key = value.ToLowerInvariant();
+                if (!byLiteral.TryGetValue(key, out var files))
+                    byLiteral[key] = files = new SortedSet<string>(StringComparer.Ordinal);
+                files.Add(relative);
+            }
+        }
+
+        Assert.True(byLiteral.Count >= 30,
+            $"only {byLiteral.Count} registry-shaped literals matched — the extraction is broken, so a "
+            + "clean result would mean nothing.");
+
+        var offenders = new List<string>();
+
+        foreach (var (literal, files) in byLiteral.Where(kv => kv.Value.Count > 1))
+        {
+            var actual = string.Join(",", files);
+            if (!tolerated.TryGetValue(literal, out var allowed))
+            {
+                offenders.Add($"NEW duplicate: {literal} — declared in {actual}. Give it one owner and "
+                    + "reference it from there (see Helpers/WingetId.cs).");
+                continue;
+            }
+
+            if (!string.Equals(actual, allowed, StringComparison.Ordinal))
+                offenders.Add($"the tolerated pair {literal} moved: expected {allowed}, found {actual}. A "
+                    + "third copy is never acceptable; edit the entry only if the set genuinely changed.");
+        }
+
+        foreach (var (literal, allowed) in tolerated)
+        {
+            if (byLiteral.TryGetValue(literal, out var files) && files.Count > 1) continue;
+            offenders.Add($"{literal} is listed as a tolerated duplicate but is no longer declared twice "
+                + $"(expected {allowed}). Delete the entry — it now exempts nothing.");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "registry paths must have exactly one declaration site:\n  - " + string.Join("\n  - ", offenders));
+    }
+
+    [GeneratedRegex(@"@""([^""]*)""", RegexOptions.Compiled)]
+    private static partial Regex VerbatimLiteral();
+
+    [GeneratedRegex(@"SOFTWARE|Software|SYSTEM|System|HKEY|HKCU|HKLM|CurrentVersion|Policies|Classes",
+                    RegexOptions.Compiled)]
+    private static partial Regex RegistryShaped();
+
+    /// <summary>
     /// The Startup Manager copy must describe the list its scan actually produces, and the two tabs that
     /// read the same scheduled tasks must point at each other.
     /// <para>README said the tab lists "logon-triggered scheduled tasks". <c>ReadScheduledTasks</c> requires

@@ -217,4 +217,87 @@ public class ProfileServiceTests : IDisposable
             denied.SetAccessControl(acl);
         }
     }
+
+    // ---------- The catalog carries the user's choices, and nothing machine-specific ----------
+
+    /// <summary>
+    /// Every catalog section must actually surface once its file exists. A section whose file name does
+    /// not match what the owning service writes exports NOTHING and fails silently — the profile just
+    /// comes out smaller, which is exactly how six of these went missing for months.
+    /// </summary>
+    [Fact]
+    public void AvailableSections_SurfacesEverySectionTheCatalogClaims()
+    {
+        // One file per section the catalog knows about, named as the owning services name them.
+        string[] files =
+        [
+            "theme.json", "speedtest-history.json", "update-check.json", "darkmode-schedule.json",
+            "gaming-profiles.json", "volume-presets.json", "close-preference.json",
+            "standby-preference.json",
+        ];
+        foreach (var f in files) WriteConfig(f, "{}");
+
+        var keys = _svc.AvailableSections().Select(x => x.Key).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(files.Length, keys.Length);
+        Assert.Equal(
+            new[] { "closebehaviour", "darkmode", "gaming", "speedtest", "standby", "theme", "updatecheck", "volume" },
+            keys);
+    }
+
+    /// <summary>
+    /// Machine-specific state must never be carried to another PC. Each of these files is written by the
+    /// app under the same config folder, so the ONLY thing keeping them out of a profile is their absence
+    /// from the catalog — which is a one-line edit away from being undone by someone adding "everything".
+    /// </summary>
+    [Theory]
+    [InlineData("performance-snapshot.json")]
+    [InlineData("environment-backup.json")]
+    [InlineData("settings-baseline.json")]
+    [InlineData("service-startup-ledger.json")]
+    [InlineData("last-crash.json")]
+    [InlineData("activity.json")]
+    [InlineData("resource-history-config.json")]
+    public void AvailableSections_NeverCarriesMachineSpecificState(string fileName)
+    {
+        WriteConfig(fileName, "{\"machine\":\"specific\"}");
+
+        Assert.Empty(_svc.AvailableSections());
+    }
+
+    /// <summary>
+    /// A gaming profile carries the user's tick-boxes, but ActiveSession is the crash-recovery marker for
+    /// a game running on the machine that exported it. Imported as-is, this PC would offer to restore
+    /// tweaks it never applied for a game that never ran here.
+    /// </summary>
+    [Fact]
+    public void ApplySections_GamingProfiles_KeepsTheProfilesAndDropsTheLiveSession()
+    {
+        var foreign = "{\"SchemaVersion\":1,\"LastConfig\":{\"FinestTimerResolution\":true},"
+            + "\"ActiveSession\":{\"Profile\":{},\"Snapshot\":{}}}";
+
+        var applied = _svc.ApplySections([new ConfigSection("gaming", "Gaming profiles", "gaming-profiles.json", foreign)]);
+
+        Assert.Equal(1, applied);
+        var written = File.ReadAllText(Path.Combine(_dir, "gaming-profiles.json"));
+        Assert.DoesNotContain("ActiveSession", written, StringComparison.Ordinal);
+        Assert.Contains("FinestTimerResolution", written, StringComparison.Ordinal);
+        Assert.Contains("SchemaVersion", written, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An unreadable section is skipped, not written. Overwriting a working local file with content the
+    /// owning service cannot parse would turn a bad import into lost settings.
+    /// </summary>
+    [Fact]
+    public void ApplySections_GamingProfiles_UnparseableContentIsSkippedAndLeavesTheLocalFileAlone()
+    {
+        WriteConfig("gaming-profiles.json", "{\"SchemaVersion\":1,\"LastConfig\":{\"Mine\":true}}");
+
+        var applied = _svc.ApplySections([new ConfigSection("gaming", "Gaming profiles", "gaming-profiles.json", "{ not json ][")]);
+
+        Assert.Equal(0, applied);
+        Assert.Contains("Mine", File.ReadAllText(Path.Combine(_dir, "gaming-profiles.json")),
+            StringComparison.Ordinal);
+    }
 }

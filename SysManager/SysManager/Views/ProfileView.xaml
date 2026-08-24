@@ -44,7 +44,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <TextBlock Text="No exportable settings found yet. Use the app a little (set a theme, run a speed test), then refresh."
+                <TextBlock Text="No exportable settings found yet. Change something you would want on another PC — pick a theme, set a dark-mode schedule, save a volume preset — then refresh."
                            Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,0,0,8"
                            Visibility="{Binding HasSections, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
 

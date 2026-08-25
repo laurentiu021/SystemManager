@@ -2929,6 +2929,96 @@ public partial class ArchitectureTests
     private static partial Regex SnapshotGuardedClaim();
 
     /// <summary>
+    /// No remaining-time text is a hardcoded duration.
+    /// <para>This is a different invariant from
+    /// <see cref="EveryEtaTextProperty_IsClearedWhenItsOperationEnds"/>: that one asks whether the text
+    /// is taken DOWN when the work ends, this one asks whether it was ever TRUE. Both can fail
+    /// independently, and the Dashboard failed only the second — it dutifully cleared a number it had
+    /// invented.</para>
+    /// <para>The defect: <c>DashboardViewModel</c> assigned <c>alert.Eta = "~10s remaining"</c> as a
+    /// literal, fired five times per dashboard load, five seconds into checks whose duration nothing
+    /// measured — so it read the same whether a check took 300&#160;ms or a minute. The app owns a real
+    /// estimator (<c>Helpers/EtaCalculator.cs</c>, an exponential rate smoother) which App Updates and
+    /// Bulk Installer feed with observed progress; the Dashboard's probes have no progress signal to
+    /// feed it, which is why a literal was reached for instead.</para>
+    /// <para>Models are scanned as well as view models, because that site was invisible to the older
+    /// guard on both axes: the property is <c>_eta</c> (not <c>_etaText</c>) and it lives on
+    /// <c>Models/DashboardAlert.cs</c> rather than a <c>*ViewModel.cs</c>.</para>
+    /// </summary>
+    [Fact]
+    public void NoRemainingTimeText_IsAHardcodedDuration()
+    {
+        var appDir = FindAppProjectDir();
+        var files = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                       StringComparison.Ordinal))
+            .ToArray();
+
+        var assignments = 0;
+        var fabricated = new List<string>();
+
+        foreach (var file in files)
+        {
+            // Comments stripped: the paragraphs above quote the exact defect string, and a guard that
+            // reads its own prose reports a violation that is not in the code.
+            var code = WithoutComments(File.ReadAllText(file));
+            var name = Path.GetFileName(file);
+
+            foreach (Match m in EtaAssignment().Matches(code))
+            {
+                var target = m.Groups["target"].Value;
+                // ShowEta and friends are visibility booleans, not the text that makes the claim.
+                if (target.Contains("Show", StringComparison.Ordinal)) continue;
+
+                assignments++;
+
+                // Only a literal can be a fabricated claim. EtaCalculator.Update(...) and
+                // string.Empty are the shapes this rule WANTS, so they are skipped here — the
+                // floor above is what proves they were actually seen.
+                var rhs = m.Groups["rhs"].Value.Trim();
+                if (rhs.StartsWith("$\"", StringComparison.Ordinal)) rhs = rhs[1..];
+                if (rhs.Length < 2 || rhs[0] != '"' || rhs[^1] != '"') continue;
+
+                var literal = rhs[1..^1];
+                if (HardcodedDuration().IsMatch(literal))
+                    fabricated.Add($"{name} — {target} = '{literal}'");
+            }
+        }
+
+        // Floor derived from the real population: 38 ETA assignments across six view models at the time
+        // this was written, all of them EtaCalculator.Update(...) or a clear. Set well below that so
+        // ordinary edits do not trip it, but high enough that a pattern which stops matching cannot
+        // report a clean codebase. The FIRST version of this guard required 4 and found 1, because it
+        // demanded a word boundary before "Eta" and so missed every UpgradeEtaText-shaped name.
+        Assert.True(assignments >= 30,
+            $"only {assignments} ETA assignments matched, so this guard is not finding the real ones and "
+            + "a clean result would mean nothing — the pattern has drifted from the code.");
+
+        Assert.True(fabricated.Count == 0,
+            "remaining-time text must be MEASURED, not asserted. Feed EtaCalculator with observed "
+            + "progress, or say something that promises no duration ('still checking…'). A number the "
+            + "code cannot back up is the same defect as promising a restore point that was never "
+            + "created:\n  - " + string.Join("\n  - ", fabricated));
+    }
+
+    // EVERY assignment to a name ending in Eta / EtaText, whatever the right-hand side, on a view model
+    // or a model. Matching all of them is what lets the floor above prove the guard can see the code;
+    // the literal test happens in C# so EtaCalculator.Update(...) and clears are counted, not flagged.
+    // No \b before "Eta": the names in this codebase are UpgradeEtaText / InstallEtaText, where the
+    // preceding character is a word character, so a boundary there matches nothing that matters.
+    [GeneratedRegex(@"(?<target>[\w.]*Eta(?:Text)?)\s*=\s*(?<rhs>[^;]*);", RegexOptions.Compiled)]
+    private static partial Regex EtaAssignment();
+
+    // A duration claim: a number next to a time unit ("~10s remaining", "2 min left", "about 30
+    // seconds"). An empty string, or wording that names no duration, carries no claim and passes.
+    [GeneratedRegex(@"\d\s*(ms|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hour|hours)\b",
+                    RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex HardcodedDuration();
+
+    /// <summary>
     /// Performance Mode must refuse to CAPTURE a recovery baseline while a game profile is live — and must
     /// still be allowed to LOAD one that was persisted earlier.
     /// <para>The lock added for #1501 stops the two tabs from snapshotting each other mid-change, but it is

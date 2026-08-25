@@ -415,24 +415,48 @@ public sealed partial class DashboardViewModel : ViewModelBase
         _ = RunAlertScanAsync(featuresAlert, ScanWindowsFeaturesAsync);
     }
 
+    /// <summary>
+    /// Says "this is taking a moment" after five seconds, and deliberately does NOT say how much
+    /// longer.
+    /// <para>It used to read "~10s remaining", which was a string literal — nothing measured it, and it
+    /// said the same thing whether the check finished in 300&#160;ms or stalled for a minute. These five
+    /// checks are pass/fail probes with no progress signal, so there is nothing for
+    /// <see cref="Helpers.EtaCalculator"/> to smooth; the tabs that DO report progress (App Updates,
+    /// Bulk Installer) feed it real samples. Inventing a number where none exists is the same mistake as
+    /// promising a restore point that was never created.</para>
+    /// <para>The mutation must run on the UI thread — <paramref name="alert"/> is a bound
+    /// ObservableObject, so raising PropertyChanged off the thread-pool thread can throw or fail to
+    /// update. Marshal onto the dispatcher exactly like the scanner bodies do.</para>
+    /// </summary>
+    private static async Task AcknowledgeSlowScanAsync(DashboardAlert alert, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;   // the scan finished first, so there is nothing to acknowledge
+        }
+
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            // Re-checked on the UI thread: the scan can complete between the delay ending and this
+            // running, and a hint that appears after the result has landed would be nonsense.
+            if (alert.State == AlertLoadingState.Loading)
+            {
+                alert.ShowEta = true;
+                alert.Eta = "still checking…";
+            }
+        });
+    }
+
     private static async Task RunAlertScanAsync(DashboardAlert alert, Func<DashboardAlert, Task> scanner)
     {
-        // Fire-and-forget ETA hint: after 5s of loading, surface a "remaining" note.
-        // The mutation must run on the UI thread — `alert` is a bound ObservableObject,
-        // so raising PropertyChanged off the thread-pool thread can throw or fail to
-        // update. Marshal onto the dispatcher exactly like the scanner bodies do.
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(5000);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                if (alert.State == AlertLoadingState.Loading)
-                {
-                    alert.ShowEta = true;
-                    alert.Eta = "~10s remaining";
-                }
-            });
-        });
+        // After 5s the wait is worth acknowledging — but WITHOUT naming a duration. Cancelled as
+        // soon as the scan ends, so a fast check leaves nothing waiting to wake up.
+        using var hintCts = new CancellationTokenSource();
+        _ = AcknowledgeSlowScanAsync(alert, hintCts.Token);
 
         try
         {
@@ -446,6 +470,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
         finally
         {
+            // Before the flags below: once the scan is done the hint has nothing left to say, and
+            // this is what stops five delays per dashboard load outliving the work they described.
+            hintCts.Cancel();
             alert.State = AlertLoadingState.Complete;
             alert.ShowEta = false;
         }

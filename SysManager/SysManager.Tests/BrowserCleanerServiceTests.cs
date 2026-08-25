@@ -405,4 +405,98 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         var cache = items.Single(i => i.Category == "Cache");
         Assert.True(cache.IsSelected);
     }
+
+    // ---------- Firefox parity: Cookies + Sessions, never credentials or bookmarks (#1590) ----------
+    // Firefox stores cookies/sessions in the ROAMING profile; cache is under Local. History is
+    // intentionally NOT offered because places.sqlite holds bookmarks too.
+
+    [Fact]
+    public async Task Scan_FirefoxCookies_TargetsTheSqliteFiles_NeverTheProfileRoot()
+    {
+        // A roaming profile with cookies + the credential/bookmark files that must never be touched.
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\cookies.sqlite", 4096);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\cookies.sqlite-wal", 512);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\logins.json", 256);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\key4.db", 256);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\places.sqlite", 8192);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\prefs.js", 128);
+
+        var items = await _svc.ScanAsync();
+        var cookies = items.FirstOrDefault(i => i.Browser == "Firefox" && i.Category == "Cookies");
+
+        Assert.NotNull(cookies);
+        // Only the two cookie files that exist are sized (4096 + 512); the -shm is absent.
+        Assert.Equal(4096 + 512, cookies!.SizeBytes);
+        // The credential store, the key database, bookmarks/history and prefs are NEVER in the paths.
+        Assert.All(cookies.Paths, p =>
+        {
+            Assert.DoesNotContain("logins.json", p, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("key4.db", p, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("places.sqlite", p, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("prefs.js", p, StringComparison.OrdinalIgnoreCase);
+        });
+        // Sensitive -> unticked by default (opt-in), like the Chromium cookie rows.
+        Assert.True(cookies.IsSensitive);
+        Assert.False(cookies.IsSelected);
+    }
+
+    [Fact]
+    public async Task Scan_FirefoxSessions_TargetsSessionFilesOnly()
+    {
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\sessionstore.jsonlz4", 2048);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\sessionstore-backups\recovery.jsonlz4", 1024);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\logins.json", 256);
+
+        var items = await _svc.ScanAsync();
+        var sessions = items.FirstOrDefault(i => i.Browser == "Firefox" && i.Category == "Sessions");
+
+        Assert.NotNull(sessions);
+        Assert.Equal(2048 + 1024, sessions!.SizeBytes);
+        Assert.All(sessions.Paths, p => Assert.DoesNotContain("logins.json", p, StringComparison.OrdinalIgnoreCase));
+        Assert.True(sessions.IsSensitive);
+    }
+
+    [Fact]
+    public async Task Scan_Firefox_NeverOffersHistory_BecausePlacesSqliteHoldsBookmarks()
+    {
+        // places.sqlite present, but there must be no History row for Firefox — deleting it would
+        // drop the user's bookmarks along with history.
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\places.sqlite", 8192);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\cookies.sqlite", 1024);
+
+        var items = await _svc.ScanAsync();
+
+        Assert.DoesNotContain(items, i => i.Browser == "Firefox" && i.Category == "History");
+    }
+
+    [Fact]
+    public async Task Clean_FirefoxCookies_RemovesCookiesButLeavesCredentialsAndBookmarks()
+    {
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\cookies.sqlite", 4096);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\logins.json", 256);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\key4.db", 256);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\abc.default-release\places.sqlite", 8192);
+
+        var items = await _svc.ScanAsync();
+        var cookies = items.First(i => i.Browser == "Firefox" && i.Category == "Cookies");
+        await _svc.CleanAsync([cookies]);
+
+        var profile = Path.Combine(_roaming, @"Mozilla\Firefox\Profiles\abc.default-release");
+        Assert.False(File.Exists(Path.Combine(profile, "cookies.sqlite")));   // cleaned
+        Assert.True(File.Exists(Path.Combine(profile, "logins.json")));       // saved logins untouched
+        Assert.True(File.Exists(Path.Combine(profile, "key4.db")));           // key database untouched
+        Assert.True(File.Exists(Path.Combine(profile, "places.sqlite")));     // history + bookmarks untouched
+    }
+
+    [Fact]
+    public async Task Scan_FirefoxMultipleProfiles_EachGetsCookiesAndSessions()
+    {
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\aaa.default-release\cookies.sqlite", 1024);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\bbb.dev-edition\cookies.sqlite", 2048);
+
+        var items = await _svc.ScanAsync();
+        var cookieRows = items.Where(i => i.Browser == "Firefox" && i.Category == "Cookies").ToList();
+
+        Assert.Equal(2, cookieRows.Count);   // one per profile, like the Chromium per-profile expansion
+    }
 }

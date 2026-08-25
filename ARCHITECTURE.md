@@ -332,7 +332,11 @@ Key services:
 - `BrowserCleanerService` — scans + cleans per-browser data (Chromium family +
   Firefox) under injectable LOCALAPPDATA/APPDATA roots. Scan is read-only (sizes);
   Clean deletes only discovered files, skips locked files, and never follows
-  reparse points. Cookies/sessions are flagged sensitive.
+  reparse points. Cookies/sessions are flagged sensitive. Firefox cache lives under
+  Local and its cookies/sessions under Roaming (like Opera's split); each targets
+  specific named files under the profile, never the profile root (logins.json, key4.db,
+  prefs.js, places.sqlite). Firefox History is intentionally NOT offered — places.sqlite
+  holds bookmarks as well as history.
 - `EdgeOneDriveService` — reversibly de-integrates Edge and OneDrive through the
   `IPowerShellRunner` seam plus injectable HKCU/HKLM roots. OneDrive is fully removed
   per-user (`OneDriveSetup.exe /uninstall` + nav-pane unpin, no elevation); Edge is

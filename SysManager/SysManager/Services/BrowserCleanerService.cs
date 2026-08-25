@@ -152,7 +152,54 @@ public sealed class BrowserCleanerService
         // are expanded at scan time (see ExpandFirefoxCachePaths).
         foreach (var cachePath in ExpandFirefoxCachePaths())
             defs.Add(new("Firefox", "Cache", "Cached images and files.", false, [cachePath]));
+        // Cookies and Sessions live under the ROAMING profile. Until now Firefox got a Cache row and
+        // nothing else, so a Firefox user clearing "browsing traces" cleared none of them, while the
+        // tab's header promised parity with the Chromium browsers. History is deliberately NOT offered:
+        // Firefox stores history and BOOKMARKS in the same places.sqlite, so a "clear history" that
+        // silently dropped bookmarks would be worse than the gap it fills. Chromium keeps them separate,
+        // which is why History is safe there and not here.
+        defs.AddRange(ExpandFirefoxDataDefs());
         return defs;
+    }
+
+    /// <summary>
+    /// One Cookies def and one Sessions def per Firefox profile, targeting SPECIFIC named files under
+    /// the roaming profile — never the profile root, which holds <c>logins.json</c>, <c>key4.db</c>,
+    /// <c>prefs.js</c> and <c>places.sqlite</c> (history AND bookmarks). Same safety invariant as
+    /// <see cref="ExpandFirefoxCachePaths"/>, and the same roaming split Opera already uses.
+    /// <para>Sensitive on both, so they are unticked by default and carry the "signs you out" badge, the
+    /// same treatment the Chromium Cookies/Sessions rows get. History is intentionally absent — see
+    /// <see cref="BuildDefs"/>.</para>
+    /// </summary>
+    private IEnumerable<Def> ExpandFirefoxDataDefs()
+    {
+        const string profilesRel = @"Mozilla\Firefox\Profiles";
+        var profilesAbs = Path.Combine(_roamingAppData, profilesRel);
+        if (!Directory.Exists(profilesAbs) || IsReparsePoint(profilesAbs)) yield break;
+
+        string[] profileDirs;
+        try { profileDirs = Directory.GetDirectories(profilesAbs); }
+        catch (IOException) { yield break; }
+        catch (UnauthorizedAccessException) { yield break; }
+
+        foreach (var dir in profileDirs)
+        {
+            var profileRel = Path.Combine(profilesRel, Path.GetFileName(dir));
+
+            // Cookies: the sqlite database and its write-ahead/shared-memory sidecars. Named files
+            // only — the profile root is never a target.
+            yield return new("Firefox", "Cookies",
+                "Cookies — clearing these signs you out of websites.", true,
+                [Path.Combine(profileRel, "cookies.sqlite"),
+                 Path.Combine(profileRel, "cookies.sqlite-wal"),
+                 Path.Combine(profileRel, "cookies.sqlite-shm")], Roaming: true);
+
+            // Sessions: the current session file and the backups folder that restores open tabs.
+            yield return new("Firefox", "Sessions",
+                "Open tabs / session restore data.", true,
+                [Path.Combine(profileRel, "sessionstore.jsonlz4"),
+                 Path.Combine(profileRel, "sessionstore-backups")], Roaming: true);
+        }
     }
 
     /// <summary>

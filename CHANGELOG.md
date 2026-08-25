@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.68.0] - 2026-08-25
+
+The automatic restore point now covers the tab where you would most want it. Turning a privacy switch
+off through Tweaks Hub took a Windows restore point first; making the identical change from another tab,
+or removing OneDrive, took none. Same risk, different answer depending on which page you happened to
+open — and the unpredictable version of a safety net is the worst kind.
+
+### Added
+- **Edge/OneDrive Remover now takes a restore point before its first change**, like Tweaks Hub already
+  did. It is attempted before the change rather than after, because a snapshot taken afterwards records
+  the state you are trying to get back from. The Restore buttons count too — putting Edge back is a
+  system change like any other.
+- **One restore point per session, not one per tab.** Windows allows roughly one a day, so two features
+  each making their own meant the first one used up the allowance and the second reported "no restore
+  point" while a perfectly good one existed. Tweaks Hub and Gaming Profile each had their own private
+  copy of that logic; there is now a single shared one, and a test refuses a second.
+
+### Changed
+- The restore point is still only ever mentioned when one was actually created. System Restore is
+  switched off on many PCs and needs administrator, so a silent "no" is normal — and claiming
+  protection that did not happen would be worse than not offering it.
+
 ## [1.67.0] - 2026-08-24
 
 Moving to a new PC now actually brings your setup with you. Profile Export carried your theme, your

@@ -401,6 +401,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // it (one tab's Start must disable the other's), so a second copy would silently split them.
         var networkShared = new NetworkSharedState(pinger, tracer, traceMonitor, speedTest, netRepair);
         var restorePoints = new RestorePointService(runner);
+        // ONE session restore point for the graph, as in DI: a second instance would let two
+        // tabs each attempt a snapshot, and Windows refuses the second within 24h anyway.
+        var sessionRestorePoint = new SessionRestorePoint(restorePoints.CreateAsync);
         var gamingCpu = new CpuAffinityService();
         // ONE gaming service for the whole graph. Performance Mode asks it whether a profile is live
         // before it records a recovery baseline, so a second copy would answer "no" while the first
@@ -409,7 +412,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var gamingProfiles = new GamingProfileService(
             new PerformanceService(runner, restorePoints),
             new TimerResolutionService(), gamingCpu,
-            new StandbyMemoryService(), restorePoints,
+            new StandbyMemoryService(), sessionRestorePoint,
             Helpers.AdminHelper.IsElevated());
 
         return new Dictionary<Type, object>
@@ -449,7 +452,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(EnvironmentVariablesViewModel)] = new EnvironmentVariablesViewModel(new EnvironmentVariableService()),
             [typeof(RestorePointsViewModel)] = new RestorePointsViewModel(restorePoints),
             [typeof(DebloaterViewModel)] = new DebloaterViewModel(new DebloaterService(new PowerShellRunner())),
-            [typeof(EdgeOneDriveViewModel)] = new EdgeOneDriveViewModel(new EdgeOneDriveService(new PowerShellRunner())),
+            [typeof(EdgeOneDriveViewModel)] = new EdgeOneDriveViewModel(new EdgeOneDriveService(new PowerShellRunner()), sessionRestorePoint),
             [typeof(LegacyPanelsViewModel)] = new LegacyPanelsViewModel(new LegacyPanelService()),
             [typeof(SystemFixesViewModel)] = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner())),
             [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService()),
@@ -469,7 +472,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(new SettingsWatchdogService()),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),
             [typeof(ScheduledMaintenanceViewModel)] = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner())),
-            [typeof(TweaksHubViewModel)] = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), restorePoints)),
+            [typeof(TweaksHubViewModel)] = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), sessionRestorePoint)),
             [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService()),
             [typeof(NotificationBlockerViewModel)] = new NotificationBlockerViewModel(new NotificationBlockerService()),
             [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(gamingProfiles, gamingCpu),

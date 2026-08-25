@@ -23,6 +23,11 @@ namespace SysManager.ViewModels;
 public sealed partial class EdgeOneDriveViewModel : ViewModelBase
 {
     private readonly EdgeOneDriveService _service;
+    // Removing OneDrive or de-integrating Edge is among the scariest things in the app for the
+    // target user, and until now it was one of the tabs with NO snapshot while the identical
+    // registry writes made through Tweaks Hub did get one. Shared so the whole session takes at
+    // most one point.
+    private readonly ISessionRestorePoint _restorePoint;
 
     [ObservableProperty] private bool _isElevated;
 
@@ -52,9 +57,10 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
             ? "Edge is de-integrated (background mode and startup boost are off)."
             : "Edge is active (background mode / startup boost may be on).";
 
-    public EdgeOneDriveViewModel(EdgeOneDriveService service)
+    public EdgeOneDriveViewModel(EdgeOneDriveService service, ISessionRestorePoint restorePoint)
     {
         _service = service;
+        _restorePoint = restorePoint;
         IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Reading Edge and OneDrive status…";
         PropertyChanged += OnVmPropertyChanged;
@@ -199,10 +205,18 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         try
         {
+            // Before the change, never after: a snapshot taken afterwards would record the state
+            // the user is trying to get back FROM. Applies to the Restore commands too — putting
+            // Edge back is a system change like any other.
+            var snapshotTaken = await _restorePoint
+                .EnsureAsync("SysManager Edge/OneDrive", CancellationToken.None).ConfigureAwait(true);
+
             var outcome = await operation(CancellationToken.None).ConfigureAwait(true);
             StatusMessage = outcome switch
             {
-                EdgeOneDriveOutcome.Success => $"{component} {pastTense}.",
+                EdgeOneDriveOutcome.Success => snapshotTaken
+                    ? $"{component} {pastTense}. Restore point created."
+                    : $"{component} {pastTense}.",
                 EdgeOneDriveOutcome.NeedsAdmin => $"{component} was not changed — this needs administrator rights. Use \"Run as administrator\" above.",
                 EdgeOneDriveOutcome.NotApplicable => $"{component} is not installed — nothing to do.",
                 _ => $"{component} could not be {pastTense}.",

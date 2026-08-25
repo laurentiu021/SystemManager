@@ -2752,6 +2752,98 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The automatic "snapshot before the first change of the session" must have exactly ONE
+    /// implementation, and no tab may quietly grow its own.
+    /// <para>It had three. <c>TweaksHubService</c> and <c>GamingProfileService</c> each carried a private
+    /// <c>_restorePointAttemptedThisSession</c> bool with a byte-equivalent method beside it, and the six
+    /// other system-mutating services carried nothing at all — so flipping a privacy toggle through
+    /// Tweaks Hub took a snapshot while the identical registry write from the Privacy tab, or removing
+    /// Edge, took none. An unpredictable guarantee is the worst kind: it is the thing that makes the user
+    /// feel able to press the button.</para>
+    /// <para>Two copies were also worse than one in a way that is easy to miss: Windows rate-limits
+    /// restore points to roughly one per 24 hours, so whichever feature ran first consumed the window and
+    /// the second reported "no restore point" while a perfectly good one existed.</para>
+    /// <para>Naming <c>CreateAsync</c> directly is still legitimate in three places and no more: the two
+    /// wiring sites that hand the delegate to the seam, the manual button in Performance Mode, and the
+    /// Restore Points tab where creating one IS the feature. A fourth caller means an automatic snapshot
+    /// that bypasses the once-per-session rule, which is exactly the drift this guard exists to catch.</para>
+    /// </summary>
+    [Fact]
+    public void TheSessionRestorePoint_IsTheOnlyAutomaticSnapshot()
+    {
+        var appDir = FindAppProjectDir();
+        var sources = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                       StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.True(sources.Length >= 50,
+            $"only {sources.Length} app source files found — the scan is not seeing the codebase, so a "
+            + "clean result would mean nothing.");
+
+        // Files allowed to name CreateAsync on the restore service, and why.
+        var allowed = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ServiceRegistration.cs"] = "hands the delegate to the single seam",
+            ["ViewModels/MainWindowViewModel.cs"] = "the designer/test graph's equivalent wiring",
+            ["Services/PerformanceService.cs"] = "the MANUAL 'create a restore point' button — the user asked",
+            ["ViewModels/RestorePointsViewModel.cs"] = "the Restore Points tab, where creating one is the feature",
+            ["Services/RestorePointService.cs"] = "declares it",
+        };
+
+        var offenders = new List<string>();
+        var implementations = new List<string>();
+        var callers = 0;
+
+        foreach (var file in sources)
+        {
+            var relative = Path.GetRelativePath(appDir, file).Replace(Path.DirectorySeparatorChar, '/');
+            // Comments stripped: the paragraphs explaining this contract name both the field and the
+            // method, and a guard that reads its own prose reports the opposite of the truth.
+            var code = WithoutComments(File.ReadAllText(file));
+
+            if (code.Contains(": ISessionRestorePoint", StringComparison.Ordinal))
+                implementations.Add(relative);
+
+            // The copied pattern: a per-feature "did I already try this session" flag.
+            if (RestorePointAttemptFlag().IsMatch(code) && relative != "Services/SessionRestorePoint.cs")
+                offenders.Add($"{relative} keeps its own once-per-session restore-point flag. Use "
+                    + "ISessionRestorePoint — a second copy means two features each burn the 24-hour "
+                    + "limit and the loser reports no snapshot while one exists.");
+
+            // Any DOTTED reference counts, with or without an argument list: the two wiring sites pass
+            // CreateAsync as a delegate, so requiring "CreateAsync(" missed exactly the callers that
+            // matter most and drove this guard below its own floor.
+            if (!RestorePointCreateCall().IsMatch(code)) continue;
+
+            callers++;
+            if (!allowed.ContainsKey(relative))
+                offenders.Add($"{relative} calls the restore service directly. Automatic snapshots go "
+                    + "through ISessionRestorePoint so the session takes at most one; add it to the "
+                    + "allowlist only if it is a user-initiated point like the Performance Mode button.");
+        }
+
+        Assert.True(callers >= 3,
+            $"only {callers} restore-point call sites matched — the pattern is not finding the real ones, "
+            + "so the allowlist above is not being enforced.");
+
+        Assert.Single(implementations);
+        Assert.Equal("Services/SessionRestorePoint.cs", implementations[0]);
+
+        Assert.True(offenders.Count == 0,
+            "the automatic restore point must have exactly one owner:\n  - " + string.Join("\n  - ", offenders));
+    }
+
+    [GeneratedRegex(@"bool\s+_restorePoint\w*Attempted\w*\s*;", RegexOptions.Compiled)]
+    private static partial Regex RestorePointAttemptFlag();
+
+    [GeneratedRegex(@"\.\s*CreateAsync", RegexOptions.Compiled)]
+    private static partial Regex RestorePointCreateCall();
+
+    /// <summary>
     /// Performance Mode must refuse to CAPTURE a recovery baseline while a game profile is live — and must
     /// still be allowed to LOAD one that was persisted earlier.
     /// <para>The lock added for #1501 stops the two tabs from snapshotting each other mid-change, but it is

@@ -63,6 +63,10 @@ public static class ServiceRegistration
         services.AddSingleton<ContextMenuService>();
         services.AddSingleton<EnvironmentVariableService>();
         services.AddSingleton<RestorePointService>();
+        // Singleton on purpose: "one restore point per session" has to mean the whole app, or two
+        // tabs each take their own and the second burns the 24-hour rate limit on a duplicate.
+        services.AddSingleton<ISessionRestorePoint>(sp =>
+            new SessionRestorePoint(sp.GetRequiredService<RestorePointService>().CreateAsync));
         services.AddSingleton<DebloaterService>();
         services.AddSingleton<EdgeOneDriveService>();
         services.AddSingleton<LegacyPanelService>();
@@ -100,7 +104,7 @@ public static class ServiceRegistration
             sp.GetRequiredService<ITimerResolutionService>(),
             sp.GetRequiredService<ICpuAffinityService>(),
             sp.GetRequiredService<StandbyMemoryService>(),
-            sp.GetRequiredService<RestorePointService>(),
+            sp.GetRequiredService<ISessionRestorePoint>(),
             Helpers.AdminHelper.IsElevated()));
 
         // ── ViewModels (Singleton — one instance per tab) ──────────────

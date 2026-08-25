@@ -104,7 +104,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `DriversViewModel` — driver inventory via Win32_PnPSignedDriver.
 - `LogsViewModel` — friendly Event Log viewer.
 - `AboutViewModel` — version info, auto-update, release history.
-- `WindowsFeaturesViewModel` — list, enable, disable Windows optional features.
+- `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry.
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism.
@@ -319,7 +319,7 @@ Key services:
   a delegate rather than the sealed service, which keeps it substitutable without unsealing
   production code. Returns true only when THIS call created a point, so no caller can claim one that
   Windows refused. Consumed by `TweaksHubService`, `GamingProfileService`, `EdgeOneDriveViewModel`,
-  `DebloaterViewModel`, `PrivacyViewModel` and `DefenderViewModel`.
+  `DebloaterViewModel`, `PrivacyViewModel`, `DefenderViewModel` and `WindowsFeaturesViewModel`.
 - `DebloaterService` — lists (`Get-AppxPackage`) and removes (`Remove-AppxPackage`,
   per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
   denylist of system-critical package families is enforced in code; the parser and

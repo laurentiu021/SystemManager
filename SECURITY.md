@@ -12,8 +12,8 @@ older build, the first step is usually to update.
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 1.70.x   | :white_check_mark: |
-| < 1.70   | :x:                |
+| 1.71.x   | :white_check_mark: |
+| < 1.71   | :x:                |
 
 The supported line is always the newest minor on the
 [releases page](https://github.com/laurentiu021/SystemManager/releases/latest) — if that page shows a

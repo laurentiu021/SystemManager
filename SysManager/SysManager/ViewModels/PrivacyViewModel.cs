@@ -15,10 +15,13 @@ namespace SysManager.ViewModels;
 /// ViewModel for the Privacy Toggles tab. Loads registry-backed toggles
 /// and groups them by category. Toggle flips update local state only;
 /// the user must explicitly press "Apply" to write changes to the registry.
+/// Apply takes the shared session restore point first, so the protection no longer depends on
+/// whether the user reached these toggles here or through Tweaks Hub.
 /// </summary>
 public sealed partial class PrivacyViewModel : ViewModelBase
 {
     private readonly PrivacyService _service;
+    private readonly ISessionRestorePoint _restorePoint;
     private readonly Dictionary<PrivacyToggle, bool> _baselineStates = [];
 
     public BulkObservableCollection<PrivacyToggle> Toggles { get; } = new();
@@ -34,9 +37,10 @@ public sealed partial class PrivacyViewModel : ViewModelBase
 
     public BulkObservableCollection<PrivacyToggle> FilteredToggles { get; } = new();
 
-    public PrivacyViewModel(PrivacyService service)
+    public PrivacyViewModel(PrivacyService service, ISessionRestorePoint restorePoint)
     {
         _service = service;
+        _restorePoint = restorePoint;
         IsElevated = AdminHelper.IsElevated();
         // Read the registry-backed toggles off the UI thread so the eagerly-built VM
         // doesn't block startup; the UI update runs back on the UI thread (ConfigureAwait true).
@@ -120,7 +124,7 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ApplyChanges()
+    private async Task ApplyChanges()
     {
         if (PendingChangeCount == 0)
         {
@@ -141,6 +145,12 @@ public sealed partial class PrivacyViewModel : ViewModelBase
             return;
         }
 
+        // Before the write, never after: a snapshot taken afterwards would record the state the
+        // user is trying to be able to get back FROM. Taken after the confirmation, so declining
+        // costs nothing, and it is the same seam Tweaks Hub uses rather than a second copy.
+        var snapshotTaken = await _restorePoint
+            .EnsureAsync("SysManager Privacy & Telemetry").ConfigureAwait(true);
+
         var failed = _service.ApplyAll(changed);
         var failedSet = failed.ToHashSet();
 
@@ -152,15 +162,20 @@ public sealed partial class PrivacyViewModel : ViewModelBase
             _baselineStates[t] = t.IsEnabled;
         RecomputePendingChanges();
 
+        // Mentioned only when a point was actually created — Tweaks Hub's rule, verbatim. System
+        // Restore is disabled by default on many consumer machines, and implying a safety net that
+        // is not there would make this tab less safe than saying nothing.
+        var rp = snapshotTaken ? " Restore point created." : "";
+
         if (failed.Count == 0)
         {
-            StatusMessage = $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}.";
+            StatusMessage = $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}.{rp}";
             Log.Information("Privacy: applied {Count} pending changes", applied.Count);
         }
         else
         {
             StatusMessage = $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}; " +
-                $"{failed.Count} need administrator rights — relaunch as admin and try again.";
+                $"{failed.Count} need administrator rights — relaunch as admin and try again.{rp}";
             Log.Warning("Privacy: {Applied} applied, {Failed} failed (likely elevation required)",
                 applied.Count, failed.Count);
         }

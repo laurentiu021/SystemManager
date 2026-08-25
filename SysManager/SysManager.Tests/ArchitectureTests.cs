@@ -2844,6 +2844,87 @@ public partial class ArchitectureTests
     private static partial Regex RestorePointCreateCall();
 
     /// <summary>
+    /// Every automatic snapshot is taken BEFORE the change it protects, and is never claimed unless one
+    /// was actually created.
+    /// <para>Order is the entire value. A point created after the write records the state the user is
+    /// trying to get back FROM — it looks like protection and is the opposite of it, and nothing in the
+    /// type system or the tests notices, because the call is present and the flag is true.</para>
+    /// <para>The claim is the other half. System Restore ships disabled on many consumer machines and
+    /// Windows rate-limits creation to roughly one point per 24 hours, so "no point was created" is the
+    /// COMMON case; an unconditional "Restore point created." is therefore a lie often enough to matter,
+    /// and a safety net the user does not have is worse than none, because she presses the button on the
+    /// strength of it. In Debloater it would be false even when a point exists: System Restore does not
+    /// bring removed Appx packages back, which is why that tab's copy scopes the point explicitly.</para>
+    /// <para>The consumer list is derived from the source, not hard-coded, so a fourth tab that takes the
+    /// seam cannot quietly skip both checks — it fails here until it is listed.</para>
+    /// </summary>
+    [Fact]
+    public void EveryAutomaticSnapshot_ComesBeforeItsChangeAndIsNeverOverClaimed()
+    {
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+
+        // file -> the member that owns the mutation, and the mutation that must come AFTER the snapshot.
+        var expected = new (string File, string Member, string Mutation)[]
+        {
+            ("DebloaterViewModel.cs", "private async Task RemoveSelectedAsync()", "_service.RemoveAsync("),
+            ("EdgeOneDriveViewModel.cs", "private async Task RunOperationAsync(", "await operation("),
+            ("PrivacyViewModel.cs", "private async Task ApplyChanges()", "_service.ApplyAll("),
+        };
+
+        var consumers = Directory
+            .EnumerateFiles(vmDir, "*ViewModel.cs")
+            .Where(f => File.ReadAllText(f).Contains("ISessionRestorePoint", StringComparison.Ordinal))
+            .Select(f => Path.GetFileName(f))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            expected.Select(e => e.File).OrderBy(n => n, StringComparer.Ordinal).ToArray(),
+            consumers);
+
+        foreach (var (file, member, mutation) in expected)
+        {
+            // Comments stripped: the note AT each call site explains the ordering rule and names both
+            // sides of it, so a guard that reads prose would pass on code that has it backwards.
+            var slice = WithoutComments(MemberSlice(File.ReadAllText(Path.Combine(vmDir, file)), member));
+            Assert.False(string.IsNullOrWhiteSpace(slice),
+                $"{file}: '{member}' not found — the slice is empty, so every check below would pass "
+                + "without reading a line of code.");
+
+            var snapshot = slice.IndexOf("EnsureAsync", StringComparison.Ordinal);
+            var change = slice.IndexOf(mutation, StringComparison.Ordinal);
+
+            Assert.True(snapshot >= 0,
+                $"{file}: {member} changes the system without taking the session restore point first.");
+            Assert.True(change >= 0,
+                $"{file}: '{mutation}' is not inside {member} — this guard is measuring the wrong member, "
+                + "so its ordering check proves nothing.");
+            Assert.True(snapshot < change,
+                $"{file}: the restore point is taken AFTER {mutation}. A snapshot of the state the user "
+                + "is trying to escape is not a safety net.");
+
+            // Wherever the wording appears, the condition it sits under must be the snapshot result.
+            var claims = 0;
+            for (var i = slice.IndexOf("estore point", StringComparison.Ordinal); i >= 0;
+                 i = slice.IndexOf("estore point", i + 1, StringComparison.Ordinal))
+            {
+                claims++;
+                var window = slice[Math.Max(0, i - 150)..i];
+                Assert.True(SnapshotGuardedClaim().IsMatch(window),
+                    $"{file}: the restore-point wording at offset {i} is not conditional on the snapshot "
+                    + "result. Only claim a point when EnsureAsync actually created one.");
+            }
+
+            Assert.True(claims >= 1,
+                $"{file}: {member} takes a restore point but never tells the user — either the slice is "
+                + "truncated and this guard is vacuous, or the reassurance was dropped.");
+        }
+    }
+
+    [GeneratedRegex(@"snapshotTaken\s*\?", RegexOptions.Compiled)]
+    private static partial Regex SnapshotGuardedClaim();
+
+    /// <summary>
     /// Performance Mode must refuse to CAPTURE a recovery baseline while a game profile is live — and must
     /// still be allowed to LOAD one that was persisted earlier.
     /// <para>The lock added for #1501 stops the two tabs from snapshotting each other mid-change, but it is

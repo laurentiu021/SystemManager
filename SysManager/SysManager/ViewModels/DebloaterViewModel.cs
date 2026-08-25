@@ -16,10 +16,13 @@ namespace SysManager.ViewModels;
 /// user select them (with a curated "common bloat" preset), and removes the selection
 /// per-user after an impact confirmation. System-critical packages are denylisted by the
 /// service and shown disabled. Removal is reversible — apps can be reinstalled from the Store.
+/// A session restore point is taken before the first removal, but System Restore does not bring
+/// Appx packages back, so the Store remains the real undo and the copy says so.
 /// </summary>
 public sealed partial class DebloaterViewModel : ViewModelBase
 {
     private readonly DebloaterService _service;
+    private readonly ISessionRestorePoint _restorePoint;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<StoreApp> Apps { get; } = new();
@@ -40,9 +43,10 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         ? "There are no removable Store apps on this system."
         : "Press Refresh to scan installed Store apps.";
 
-    public DebloaterViewModel(DebloaterService service)
+    public DebloaterViewModel(DebloaterService service, ISessionRestorePoint restorePoint)
     {
         _service = service;
+        _restorePoint = restorePoint;
         StatusMessage = "Loading installed apps…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
@@ -156,7 +160,11 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         }
 
         IsBusy = true;
-        IsProgressIndeterminate = false;
+        // The snapshot takes seconds and reports no percentage, so the bar stays a marquee until it
+        // is done and only then switches to the determinate per-app progress below. Deliberately
+        // wordless: announcing the attempt would promise a point Windows refuses more often than it
+        // grants one, and nothing would retract it.
+        IsProgressIndeterminate = true;
         Progress = 0;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -164,6 +172,13 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         var failed = 0;
         try
         {
+            // Before the first removal, never after. Best-effort by design: Windows allows roughly
+            // one point per 24h and System Restore is off entirely on many consumer machines, so the
+            // removal must not be gated on it — and must never be claimed unless it really happened.
+            var snapshotTaken = await _restorePoint
+                .EnsureAsync("SysManager Debloater", _cts.Token).ConfigureAwait(true);
+            IsProgressIndeterminate = false;
+
             for (var i = 0; i < targets.Count; i++)
             {
                 _cts.Token.ThrowIfCancellationRequested();
@@ -207,9 +222,13 @@ public sealed partial class DebloaterViewModel : ViewModelBase
             }
             HasApps = Apps.Count > 0;
             ApplyFilter();
+            // The Store reinstall leads because it is the reassurance that is actually true here:
+            // System Restore does NOT restore removed Appx packages. The point is mentioned second
+            // and scoped to what it really covers, so it cannot be read as "your apps are safe".
+            var rp = snapshotTaken ? " A restore point covers the rest of the system, not the apps themselves." : "";
             StatusMessage = failed == 0
-                ? $"Removed {removed} app{(removed == 1 ? "" : "s")}. Reinstall any from the Microsoft Store if needed."
-                : $"Removed {removed}; {failed} could not be removed.";
+                ? $"Removed {removed} app{(removed == 1 ? "" : "s")}. Reinstall any from the Microsoft Store if needed.{rp}"
+                : $"Removed {removed}; {failed} could not be removed.{rp}";
             Log.Information("Debloater: removed {Removed}, failed {Failed}", removed, failed);
             if (removed > 0)
                 ActivityLogService.Instance.Log("Debloater", $"Removed {removed} app{(removed == 1 ? "" : "s")}");

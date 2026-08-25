@@ -111,7 +111,9 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
 - `BulkInstallerViewModel` — batch app installation via winget with progress tracking.
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
-- `PrivacyViewModel` — Windows privacy and telemetry toggles via registry.
+- `PrivacyViewModel` — Windows privacy and telemetry toggles via registry. Apply takes the shared
+  `ISessionRestorePoint` snapshot first — after the confirmation, so declining costs nothing — which
+  is the same point Tweaks Hub takes for the identical writes.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
 - `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
@@ -133,7 +135,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin.
 - `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
 - `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
-- `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store.
+- `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store. Takes the shared `ISessionRestorePoint` snapshot before the first removal, and words it honestly: System Restore does not bring Appx packages back, so the Store reinstall leads and the point is described as covering the rest of the system.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
 - `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
 - `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions.
@@ -146,12 +148,12 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Twelve are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirteen are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `IAppBlockerService` (AppBlockerService), `ICpuAffinityService`, `IFileLockService`,
 `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
-`ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, and `IGamingProfileService`
-(the last via a factory).
+`ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, `IGamingProfileService`, and
+`ISessionRestorePoint` (the last two via a factory).
 
 Two further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
 finds nothing:
@@ -309,6 +311,15 @@ Key services:
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested
   static method.
+- `SessionRestorePoint` — the single owner of the AUTOMATIC restore point (`ISessionRestorePoint`).
+  Every tab that changes system settings calls `EnsureAsync` before its first mutation; the first
+  call wins and the rest are no-ops, so a session takes at most one point no matter how many tabs
+  the user visits — Windows grants roughly one per 24 hours, so two independent attempts meant the
+  second reported "no snapshot" while a good one existed. Takes `RestorePointService.CreateAsync` as
+  a delegate rather than the sealed service, which keeps it substitutable without unsealing
+  production code. Returns true only when THIS call created a point, so no caller can claim one that
+  Windows refused. Consumed by `TweaksHubService`, `GamingProfileService`, `EdgeOneDriveViewModel`,
+  `DebloaterViewModel` and `PrivacyViewModel`.
 - `DebloaterService` — lists (`Get-AppxPackage`) and removes (`Remove-AppxPackage`,
   per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
   denylist of system-critical package families is enforced in code; the parser and
@@ -530,8 +541,8 @@ Key services:
   the scheduler; result-code description is a pure, unit-tested helper.
 - `TweaksHubService` — thin orchestrator behind the Tweaks Hub tab: loads `PrivacyService`
   toggles as tier-classified `TweakItem`s, applies/reverts a selected set via the same
-  reversible `PrivacyService.ApplyToggle`, and takes one `RestorePointService` snapshot before
-  the first change of a session (best-effort). It reimplements no tweak; `PendingApplyCount` /
+  reversible `PrivacyService.ApplyToggle`, and takes the shared `ISessionRestorePoint` snapshot
+  before the first change of a session (best-effort; since 1.68.0 it no longer owns that logic). It reimplements no tweak; `PendingApplyCount` /
   `PendingUndoCount` / `TweakItem.ClassifyTier` are pure, unit-tested helpers.
 - `SafetyDatabase` — curated safety ratings for Windows services.
 - `ThemeService` — runtime theme switching with 12 presets and persistence.

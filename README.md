@@ -623,6 +623,10 @@ a confirmation before it runs:
 - Category filter and search
 - Requires admin for HKLM-backed toggles
 - Fully reversible — re-enable any toggle with one click
+- **A Windows restore point is attempted before the first Apply of the session** — the same one
+  Tweaks Hub takes, so the protection no longer depends on which tab you reached the toggles
+  through. It is attempted after you confirm, so declining costs you nothing, and it is mentioned
+  only when one was really created
 
 ### File Shredder
 - Secure multi-pass file and folder deletion beyond recovery
@@ -692,6 +696,10 @@ Remove preinstalled Windows Store apps you don't use:
   components are denylisted and can never be selected or removed
 - **Impact summary + confirmation** before anything is uninstalled
 - **Reversible** — removal is per-user, so any app can be reinstalled from the Store
+- **A Windows restore point is attempted before the first removal**, shared with the other tabs
+  that change system settings. Described honestly rather than reassuringly: System Restore does
+  **not** bring Store apps back, so reinstalling from the Store stays the real undo and the app
+  says exactly that
 - Search and per-app descriptions help you decide before removing
 
 ### Browser Cleaner

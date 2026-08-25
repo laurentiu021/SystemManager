@@ -26,7 +26,18 @@ namespace SysManager.Tests;
 public class DebloaterViewModelTests
 {
     private static DebloaterViewModel NewVm() =>
-        new(new DebloaterService(Substitute.For<IPowerShellRunner>()));
+        new(new DebloaterService(Substitute.For<IPowerShellRunner>()), NoRestorePoint());
+
+    /// <summary>
+    /// A seam that answers "no point was created" — the common case on a consumer machine, where
+    /// System Restore is off or Windows has already used its 24-hour allowance.
+    /// </summary>
+    private static ISessionRestorePoint NoRestorePoint()
+    {
+        var rp = Substitute.For<ISessionRestorePoint>();
+        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        return rp;
+    }
 
     private static StoreApp Removable(string name) => new()
     {
@@ -82,7 +93,7 @@ public class DebloaterViewModelTests
         // exception-safe.
         using var dialog = new DialogAnswer(confirm: true);
 
-        var vm = new DebloaterViewModel(new DebloaterService(runner));
+        var vm = new DebloaterViewModel(new DebloaterService(runner), NoRestorePoint());
         var a = Removable("Contoso.AppA");
         var b = Removable("Contoso.AppB");
         vm.Apps.Add(a);
@@ -93,5 +104,108 @@ public class DebloaterViewModelTests
         Assert.Null(ex);                       // must not fault the command
         Assert.Equal("Failed", a.Status);      // first row failed, not frozen at "Removing…"
         Assert.Equal("Failed", b.Status);      // batch continued to the second row
+    }
+
+    // ---------- session restore point (#1500) ----------
+    // The snapshot has to happen BEFORE the first removal and must never be claimed unless Windows
+    // actually created one. Debloater is the tab where over-claiming would do the most damage: a
+    // restore point does NOT bring removed Appx packages back, so the Store reinstall has to lead
+    // and the point can only be described as covering the rest of the system.
+
+    private static ISessionRestorePoint RestorePointTaken()
+    {
+        var rp = Substitute.For<ISessionRestorePoint>();
+        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+        return rp;
+    }
+
+    /// <summary>A runner whose Remove-AppxPackage script reports the service's success sentinel.</summary>
+    private static IPowerShellRunner RunnerThatRemovesSuccessfully()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new Collection<PSObject> { new("__SM_RM_OK__") }));
+        return runner;
+    }
+
+    [Fact]
+    public async Task RemoveSelected_TakesTheRestorePointBeforeRemovingAnything()
+    {
+        var restorePoint = RestorePointTaken();
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), restorePoint);
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        await restorePoint.Received(1).EnsureAsync("SysManager Debloater", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RemoveSelected_WhenTheUserDeclines_TakesNoRestorePoint()
+    {
+        // Declining is not a system change, so it must not spend the one point Windows allows per day.
+        var restorePoint = RestorePointTaken();
+        using var dialog = new DialogAnswer(confirm: false);
+
+        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), restorePoint);
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.Contains("cancelled", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RemoveSelected_WithNothingSelected_TakesNoRestorePoint()
+    {
+        var restorePoint = RestorePointTaken();
+        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), restorePoint);
+        var app = Removable("Contoso.AppA");
+        app.IsSelected = false;
+        vm.Apps.Add(app);
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RemoveSelected_WhenAPointWasCreated_LeadsWithTheStoreAndScopesThePoint()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), RestorePointTaken());
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        // The true undo first...
+        Assert.Contains("Microsoft Store", vm.StatusMessage, StringComparison.Ordinal);
+        // ...and the point described for what it actually covers, never as a way to get the apps back.
+        Assert.Contains("not the apps themselves", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.True(vm.StatusMessage.IndexOf("Microsoft Store", StringComparison.Ordinal)
+                    < vm.StatusMessage.IndexOf("restore point", StringComparison.Ordinal),
+            $"the Store reinstall must lead, since it is the only real undo: \"{vm.StatusMessage}\"");
+    }
+
+    [Fact]
+    public async Task RemoveSelected_WhenNoPointWasCreated_ClaimsNoRestorePoint()
+    {
+        // System Restore is off on many consumer machines and Windows rate-limits it to about one point
+        // per 24h, so "no point" is the common case — and a safety net the user does not have is worse
+        // than none at all, because she would press the button on the strength of it.
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), NoRestorePoint());
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("restore point", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        // The removal itself still reported normally.
+        Assert.Contains("Removed 1 app", vm.StatusMessage, StringComparison.Ordinal);
     }
 }

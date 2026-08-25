@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.69.0] - 2026-08-25
+
+Two more of the tabs that change your PC now take a Windows restore point first: Debloater & Ads and
+Privacy & Telemetry. That was the whole point of the shared restore point added in 1.68.0 — the same
+protection whichever page you happen to open — and these were the two doors still left without it.
+Debloater says plainly what a restore point can and cannot undo, because it cannot bring removed
+Store apps back and pretending otherwise would be worse than saying nothing.
+
+### Added
+- **Debloater & Ads takes a restore point before the first removal.** The wording is deliberately
+  careful: System Restore does not restore removed Store apps, so reinstalling from the Microsoft
+  Store is still the real way back, and that comes first in the message. The point is described as
+  covering the rest of the system, which is what it actually does.
+- **Privacy & Telemetry takes one before Apply**, the same point Tweaks Hub already took for the
+  identical registry writes. Reaching a toggle from one tab or the other now gives the same answer.
+
+### Changed
+- The restore point is attempted **after** you confirm, not before, so declining a change no longer
+  spends the one point Windows grants per day.
+- Still only ever mentioned when a point was actually created. The progress text no longer announces
+  the attempt either: saying "creating a restore point" and then failing — the common case, since
+  System Restore ships switched off on many PCs — left you believing in a snapshot you did not have.
+
 ## [1.68.0] - 2026-08-25
 
 The automatic restore point now covers the tab where you would most want it. Turning a privacy switch

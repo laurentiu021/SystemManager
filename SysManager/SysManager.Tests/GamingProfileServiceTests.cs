@@ -248,7 +248,9 @@ public class GamingProfileServiceTests
             new TimerResolutionService(),
             new CpuAffinityService(),
             new StandbyMemoryService(),
-            restore,
+            // Never creates a point: these tests are about the engine, and a real System Restore
+            // call needs admin, takes seconds and is rate-limited.
+            new SessionRestorePoint((_, _) => Task.FromResult(false)),
             isElevated: false,
             storePath: path);
     }

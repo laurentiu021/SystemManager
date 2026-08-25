@@ -39,7 +39,8 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
         var ps = Substitute.For<IPowerShellRunner>();
         ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
           .Returns(new Collection<PSObject>());
-        var vm = new EdgeOneDriveViewModel(new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root));
+        var vm = new EdgeOneDriveViewModel(new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root),
+                                      NoRestorePoint());
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -124,7 +125,8 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
             var ps = Substitute.For<IPowerShellRunner>();
             ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
               .Returns(new Collection<PSObject>());
-            var vm = new EdgeOneDriveViewModel(new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root));
+            var vm = new EdgeOneDriveViewModel(new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root),
+                                      NoRestorePoint());
             await vm.InitializationComplete;
             // Force the "installed" precondition so the guard reaches the confirm dialog.
             vm.OneDriveInstalled = true;
@@ -139,4 +141,15 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
         }
         finally { DialogService.Instance = prevDialog; }
     }
+    /// <summary>
+    /// A session restore point that never materialises — the honest default on a machine with System
+    /// Restore off, and what keeps these tests about Edge/OneDrive rather than about snapshots.
+    /// </summary>
+    private static ISessionRestorePoint NoRestorePoint()
+    {
+        var rp = Substitute.For<ISessionRestorePoint>();
+        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        return rp;
+    }
+
 }

@@ -18,13 +18,15 @@ namespace SysManager.Services;
 public sealed class TweaksHubService : ITweaksHubService
 {
     private readonly PrivacyService _privacy;
-    private readonly RestorePointService _restore;
-    private bool _restorePointAttemptedThisSession;
+    // The once-per-session restore point used to live here as a private method plus a bool. It is
+    // now the shared ISessionRestorePoint, so the tabs that write the SAME settings get the same
+    // snapshot instead of only this one having it.
+    private readonly ISessionRestorePoint _restorePoint;
 
-    public TweaksHubService(PrivacyService privacy, RestorePointService restore)
+    public TweaksHubService(PrivacyService privacy, ISessionRestorePoint restorePoint)
     {
         _privacy = privacy;
-        _restore = restore;
+        _restorePoint = restorePoint;
     }
 
     /// <summary>Loads every tweak with its current applied state, classified into tiers.</summary>
@@ -46,7 +48,8 @@ public sealed class TweaksHubService : ITweaksHubService
         // CanExecute). Resuming on the captured UI context keeps those mutations on the UI
         // thread — RestorePointService.CreateAsync hops to the thread pool internally, so
         // without this the continuation would run off-thread (a real cross-thread defect).
-        bool restorePointCreated = await EnsureRestorePointAsync(ct).ConfigureAwait(true);
+        bool restorePointCreated = await _restorePoint
+            .EnsureAsync("SysManager Tweaks Hub", ct).ConfigureAwait(true);
 
         var failed = new List<TweakItem>();
         foreach (var item in tweaks)
@@ -58,27 +61,6 @@ public sealed class TweaksHubService : ITweaksHubService
                 failed.Add(item);
         }
         return new TweakApplyResult(failed, restorePointCreated);
-    }
-
-    /// <summary>
-    /// Attempts a restore point once per session. Returns true only if one was actually
-    /// created. Best-effort: System Restore needs admin and is rate-limited by Windows to one
-    /// per 24h, so a "no" is normal and must not be presented as a guaranteed safety net.
-    /// </summary>
-    private async Task<bool> EnsureRestorePointAsync(CancellationToken ct)
-    {
-        if (_restorePointAttemptedThisSession) return false;
-        // Mark attempted first so a slow/failed snapshot isn't retried before every batch.
-        _restorePointAttemptedThisSession = true;
-        try
-        {
-            return await _restore.CreateAsync("SysManager Tweaks Hub", ct).ConfigureAwait(true);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
-        {
-            Log.Debug("Tweaks Hub restore point skipped: {Error}", ex.Message);
-            return false;
-        }
     }
 
     // ── Pure helpers (unit-testable) ───────────────────────────────────────

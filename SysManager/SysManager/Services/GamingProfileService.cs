@@ -39,7 +39,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     private readonly ITimerResolutionService _timer;
     private readonly ICpuAffinityService _cpu;
     private readonly StandbyMemoryService _standby;
-    private readonly RestorePointService _restore;
+    private readonly ISessionRestorePoint _restorePoint;
     private readonly bool _isElevated;
     private readonly string _storePath;
 
@@ -50,7 +50,6 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     // _appliedSteps and _boundGame, so they must not overlap.
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Process? _boundGame;
-    private bool _restorePointAttemptedThisSession;
     private bool _disposed;
 
     public GamingProfileService(
@@ -58,7 +57,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         ITimerResolutionService timer,
         ICpuAffinityService cpu,
         StandbyMemoryService standby,
-        RestorePointService restore,
+        ISessionRestorePoint restorePoint,
         bool isElevated,
         string? storePath = null)
     {
@@ -66,7 +65,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         _timer = timer;
         _cpu = cpu;
         _standby = standby;
-        _restore = restore;
+        _restorePoint = restorePoint;
         _isElevated = isElevated;
         _storePath = storePath ?? Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -185,7 +184,12 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             return new GamingApplyResult([], RestorePointCreated: false, BlockedBy: blockedBy);
         }
 
-        bool restorePointCreated = await EnsureRestorePointAsync(ct).ConfigureAwait(true);
+        // Shared with every other tab that writes system state: one point per session, not one
+        // per feature. The private copy this replaced meant Tweaks Hub and Gaming Profile each
+        // attempted their own, so whichever ran first burned the 24-hour limit and the second
+        // reported "no restore point" while one actually existed.
+        bool restorePointCreated = await _restorePoint
+            .EnsureAsync("SysManager Gaming Profile", ct).ConfigureAwait(true);
 
         // Capture the machine-wide baseline BEFORE any change.
         var snapshot = await CaptureSnapshotAsync(profile, ct).ConfigureAwait(true);
@@ -411,21 +415,6 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         // No such service / access denied / not a Windows service host → treat as "not running".
         catch (InvalidOperationException) { return false; }
         catch (System.ComponentModel.Win32Exception) { return false; }
-    }
-
-    private async Task<bool> EnsureRestorePointAsync(CancellationToken ct)
-    {
-        if (_restorePointAttemptedThisSession) return false;
-        _restorePointAttemptedThisSession = true;
-        try
-        {
-            return await _restore.CreateAsync("SysManager Gaming Profile", ct).ConfigureAwait(true);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
-        {
-            Log.Debug("Gaming Profile restore point skipped: {Error}", ex.Message);
-            return false;
-        }
     }
 
     // ── Auto-revert on game exit (Process.Exited, NOT a poll loop) ─────────────

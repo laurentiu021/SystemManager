@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.70.1] - 2026-08-25
+
+Settings Watchdog could show a setting as unchanged while it had in fact changed. The page read your
+live settings twice — once to work out what had drifted, once to fill in the list of what it watches —
+and anything that moved between those two reads appeared in the list with its new value but without
+being flagged. Now both come from a single read, so the two halves of the page can no longer disagree.
+
+### Fixed
+- **Settings Watchdog: the drift list and the watched list now come from one read.** This was most
+  likely to bite in exactly the situation the tab exists for — the catalog watches settings that
+  Windows Update flips back underneath you, so a change arriving mid-refresh is the expected case,
+  not a rare one. The baseline file was also being loaded twice per refresh; now once.
+
 ## [1.70.0] - 2026-08-25
 
 Defender Tweaks now takes a Windows restore point before it changes anything, which was the last tab

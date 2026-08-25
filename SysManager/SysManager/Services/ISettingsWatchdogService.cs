@@ -35,8 +35,19 @@ public interface ISettingsWatchdogService
     /// <summary>
     /// The settings that have changed since the baseline. Returns an EMPTY list — never null — when
     /// there is no baseline or nothing drifted.
+    /// <para>Reads the baseline and the live values itself. A caller that is going to display those
+    /// live values as well must use the overload below and pass its own read in, or the two will come
+    /// from different moments.</para>
     /// </summary>
     IReadOnlyList<SettingDrift> DetectDrift();
+
+    /// <summary>
+    /// The settings that have changed, computed against an ALREADY-READ snapshot of the live values.
+    /// <para>Exists so a caller that shows both the drift list and the live values derives them from
+    /// ONE read. With two reads a setting that changes in between appears with its new value but no
+    /// drift verdict — which is precisely the state this tab exists to make visible.</para>
+    /// </summary>
+    IReadOnlyList<SettingDrift> DetectDrift(BaselineSnapshot baseline, IReadOnlyDictionary<string, int?> current);
 
     /// <summary>
     /// Writes one drifted setting back to its baseline value. Returns false when it cannot be

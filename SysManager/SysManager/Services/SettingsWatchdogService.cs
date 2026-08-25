@@ -95,8 +95,19 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     public IReadOnlyList<SettingDrift> DetectDrift()
     {
         var baseline = LoadBaseline();
-        if (baseline is null) return [];
-        return DetectChanges(Catalog, baseline.Values, ReadCurrent());
+        return baseline is null ? [] : DetectDrift(baseline, ReadCurrent());
+    }
+
+    /// <summary>
+    /// Drift against a snapshot the caller already read. The no-argument overload above is the
+    /// convenience path for callers that only want drifts and display nothing else.
+    /// </summary>
+    public IReadOnlyList<SettingDrift> DetectDrift(
+        BaselineSnapshot baseline, IReadOnlyDictionary<string, int?> current)
+    {
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(current);
+        return DetectChanges(Catalog, baseline.Values, current);
     }
 
     /// <summary>

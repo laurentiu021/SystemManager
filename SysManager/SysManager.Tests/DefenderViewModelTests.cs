@@ -20,6 +20,24 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class DefenderViewModelTests
 {
+    /// <summary>
+    /// A seam that answers "no point was created" — the common case, since System Restore ships
+    /// disabled on many consumer PCs and Windows grants roughly one point per 24 hours.
+    /// </summary>
+    private static ISessionRestorePoint NoRestorePoint()
+    {
+        var rp = Substitute.For<ISessionRestorePoint>();
+        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
+        return rp;
+    }
+
+    private static ISessionRestorePoint RestorePointTaken()
+    {
+        var rp = Substitute.For<ISessionRestorePoint>();
+        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>()).Returns(true);
+        return rp;
+    }
+
     private static DefenderViewModel NewVm()
     {
         // Runner returns an empty result set, so GetStatusAsync produces a default
@@ -27,7 +45,7 @@ public class DefenderViewModelTests
         var ps = Substitute.For<IPowerShellRunner>();
         ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
           .Returns(new Collection<PSObject>());
-        var vm = new DefenderViewModel(new DefenderService(ps));
+        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -94,7 +112,7 @@ public class DefenderViewModelTests
         var ps = Substitute.For<IPowerShellRunner>();
         ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
           .Returns(new Collection<PSObject>()); // empty -> DefenderStatus.Unavailable (all zeros)
-        var vm = new DefenderViewModel(new DefenderService(ps));
+        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
         await vm.InitializationComplete;
 
         // Pretend PUA was on so the toggle requests OFF (target 0), the dangerous case.
@@ -131,7 +149,7 @@ public class DefenderViewModelTests
           .Returns(_ => ++calls <= 1
               ? new Collection<PSObject>()
               : throw new System.InvalidOperationException("runspace is broken"));
-        var vm = new DefenderViewModel(new DefenderService(ps));
+        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
         await vm.InitializationComplete;
 
         var prevDialog = DialogService.Instance;
@@ -150,5 +168,116 @@ public class DefenderViewModelTests
 
         Assert.False(vm.IsBusy);
         Assert.Contains("could not change pua", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---------- session restore point (#1500) ----------
+    // All four Defender changes run through one funnel, so the snapshot happens in exactly one
+    // place. These pin both halves: that it is taken before the change, and that it is only ever
+    // claimed when Windows actually made one.
+
+    /// <summary>
+    /// A runner whose Get-MpPreference projection is readable, so ParseStatus reports Available and
+    /// the read-back verification can succeed — the empty-collection runner above always yields the
+    /// all-zeros Unavailable status, which only exercises the failure path.
+    /// </summary>
+    private static IPowerShellRunner RunnerReportingPua(int pua)
+    {
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("PUAProtection", pua));
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+          .Returns(new Collection<PSObject> { projection });
+        return ps;
+    }
+
+    [Fact]
+    public async Task TogglePua_TakesTheRestorePointBeforeChangingDefender()
+    {
+        var restorePoint = RestorePointTaken();
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), restorePoint);
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        await restorePoint.Received(1).EnsureAsync("SysManager Defender Tweaks", Arg.Any<System.Threading.CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TogglePua_WhenTheUserDeclines_TakesNoRestorePoint()
+    {
+        // Declining changes nothing, so it must not spend the single point Windows grants per day.
+        var restorePoint = RestorePointTaken();
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), restorePoint);
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>());
+    }
+
+    [Fact]
+    public async Task EveryChange_GoesThroughTheOneFunnel()
+    {
+        // The reason for a funnel rather than four private calls: a command that skips it changes
+        // Defender with no snapshot, and nothing else would notice.
+        var restorePoint = RestorePointTaken();
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), restorePoint);
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+
+        await restorePoint.Received(2).EnsureAsync("SysManager Defender Tweaks", Arg.Any<System.Threading.CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TogglePua_WhenAPointWasCreated_SaysSo()
+    {
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), RestorePointTaken());
+        await vm.InitializationComplete;
+        vm.PuaEnabled = false;   // so the toggle asks for ON (target 1), which the read-back confirms
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        Assert.Contains("updated", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Restore point created.", vm.StatusMessage, System.StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TogglePua_WhenNoPointWasCreated_ClaimsNone()
+    {
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), NoRestorePoint());
+        await vm.InitializationComplete;
+        vm.PuaEnabled = false;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        Assert.Contains("updated", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("restore point", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TogglePua_WhenTheChangeFails_ClaimsNoRestorePointEvenThoughOneWasMade()
+    {
+        // A point really was created here, but Defender rejected the change (Tamper Protection or
+        // no admin). Mentioning the snapshot next to "was not changed" would read as though
+        // something happened and could be undone. Nothing changed, so nothing is claimed.
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+          .Returns(new Collection<PSObject>());   // empty -> DefenderStatus.Unavailable
+        var vm = new DefenderViewModel(new DefenderService(ps), RestorePointTaken());
+        await vm.InitializationComplete;
+        vm.PuaEnabled = true;    // asks for OFF (target 0), which the all-zeros status would fake
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        Assert.Contains("was not changed", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("restore point", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
     }
 }

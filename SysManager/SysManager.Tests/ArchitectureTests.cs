@@ -2867,6 +2867,7 @@ public partial class ArchitectureTests
         var expected = new (string File, string Member, string Mutation)[]
         {
             ("DebloaterViewModel.cs", "private async Task RemoveSelectedAsync()", "_service.RemoveAsync("),
+            ("DefenderViewModel.cs", "private async Task RunOperationAsync(", "await change("),
             ("EdgeOneDriveViewModel.cs", "private async Task RunOperationAsync(", "await operation("),
             ("PrivacyViewModel.cs", "private async Task ApplyChanges()", "_service.ApplyAll("),
         };
@@ -2886,7 +2887,8 @@ public partial class ArchitectureTests
         {
             // Comments stripped: the note AT each call site explains the ordering rule and names both
             // sides of it, so a guard that reads prose would pass on code that has it backwards.
-            var slice = WithoutComments(MemberSlice(File.ReadAllText(Path.Combine(vmDir, file)), member));
+            var code = WithoutComments(File.ReadAllText(Path.Combine(vmDir, file)));
+            var slice = MemberSlice(code, member);
             Assert.False(string.IsNullOrWhiteSpace(slice),
                 $"{file}: '{member}' not found — the slice is empty, so every check below would pass "
                 + "without reading a line of code.");
@@ -2903,21 +2905,22 @@ public partial class ArchitectureTests
                 $"{file}: the restore point is taken AFTER {mutation}. A snapshot of the state the user "
                 + "is trying to escape is not a safety net.");
 
-            // Wherever the wording appears, the condition it sits under must be the snapshot result.
+            // Wherever the wording appears in this view model — the funnel or the helper that
+            // builds the message — the condition it sits under must be the snapshot result.
             var claims = 0;
-            for (var i = slice.IndexOf("estore point", StringComparison.Ordinal); i >= 0;
-                 i = slice.IndexOf("estore point", i + 1, StringComparison.Ordinal))
+            for (var i = code.IndexOf("estore point", StringComparison.Ordinal); i >= 0;
+                 i = code.IndexOf("estore point", i + 1, StringComparison.Ordinal))
             {
                 claims++;
-                var window = slice[Math.Max(0, i - 150)..i];
+                var window = code[Math.Max(0, i - 150)..i];
                 Assert.True(SnapshotGuardedClaim().IsMatch(window),
                     $"{file}: the restore-point wording at offset {i} is not conditional on the snapshot "
                     + "result. Only claim a point when EnsureAsync actually created one.");
             }
 
             Assert.True(claims >= 1,
-                $"{file}: {member} takes a restore point but never tells the user — either the slice is "
-                + "truncated and this guard is vacuous, or the reassurance was dropped.");
+                $"{file} takes a restore point but never tells the user it did — either the file is not "
+                + "being read and this guard is vacuous, or the reassurance was dropped.");
         }
     }
 

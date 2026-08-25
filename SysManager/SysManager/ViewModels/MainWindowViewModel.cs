@@ -463,7 +463,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(FileLockViewModel)] = new FileLockViewModel(new FileLockService()),
             [typeof(DisplayProfileViewModel)] = new DisplayProfileViewModel(new DisplayProfileService()),
             [typeof(CpuAffinityViewModel)] = new CpuAffinityViewModel(new CpuAffinityService()),
-            [typeof(DefenderViewModel)] = new DefenderViewModel(new DefenderService(new PowerShellRunner())),
+            [typeof(DefenderViewModel)] = new DefenderViewModel(new DefenderService(new PowerShellRunner()), sessionRestorePoint),
             [typeof(TaskSchedulerViewModel)] = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner())),
             [typeof(DarkModeViewModel)] = new DarkModeViewModel(new WindowsThemeService()),
             [typeof(StandbyMemoryViewModel)] = new StandbyMemoryViewModel(new StandbyMemoryService()),

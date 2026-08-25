@@ -16,11 +16,13 @@ namespace SysManager.ViewModels;
 /// ViewModel for the Defender Tweaks tab. Shows the current Microsoft Defender status,
 /// toggles PUA protection and Controlled Folder Access, and manages scan exclusion
 /// folders. Every change requires admin and is verified by reading the value back
-/// (Tamper Protection can silently reject it); changes are confirmed first.
+/// (Tamper Protection can silently reject it); changes are confirmed first. All four changes run
+/// through one funnel, which takes the shared session restore point before the first of them.
 /// </summary>
 public sealed partial class DefenderViewModel : ViewModelBase
 {
     private readonly DefenderService _service;
+    private readonly ISessionRestorePoint _restorePoint;
 
     public BulkObservableCollection<string> ExclusionPaths { get; } = new();
 
@@ -35,9 +37,10 @@ public sealed partial class DefenderViewModel : ViewModelBase
     [ObservableProperty] private bool _cfaEnabled;
     [ObservableProperty] private string? _selectedExclusion;
 
-    public DefenderViewModel(DefenderService service)
+    public DefenderViewModel(DefenderService service, ISessionRestorePoint restorePoint)
     {
         _service = service;
+        _restorePoint = restorePoint;
         IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Reading Defender status…";
         PropertyChanged += OnVmPropertyChanged;
@@ -101,36 +104,20 @@ public sealed partial class DefenderViewModel : ViewModelBase
     private async Task TogglePuaAsync()
     {
         if (!Confirm($"{(PuaEnabled ? "Disable" : "Enable")} potentially-unwanted-app (PUA) protection?")) return;
-        IsBusy = true;
-        IsProgressIndeterminate = true;
-        try
-        {
-            int target = PuaEnabled ? 0 : 1;
-            var status = await _service.SetPuaProtectionAsync(target).ConfigureAwait(true);
-            Apply(status);
-            ReportVerified("PUA protection", status, status.PuaProtection == target);
-        }
-        catch (InvalidOperationException ex) { StatusMessage = $"Could not change PUA protection: {ex.Message}"; }
-        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not change PUA protection: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        // Read the target BEFORE the change runs — Apply overwrites PuaEnabled from the read-back.
+        int target = PuaEnabled ? 0 : 1;
+        await RunOperationAsync(() => _service.SetPuaProtectionAsync(target),
+            "PUA protection", "change PUA protection", s => s.PuaProtection == target);
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ToggleCfaAsync()
     {
         if (!Confirm($"{(CfaEnabled ? "Disable" : "Enable")} Controlled Folder Access (ransomware protection)?")) return;
-        IsBusy = true;
-        IsProgressIndeterminate = true;
-        try
-        {
-            int target = CfaEnabled ? 0 : 1;
-            var status = await _service.SetControlledFolderAccessAsync(target).ConfigureAwait(true);
-            Apply(status);
-            ReportVerified("Controlled Folder Access", status, status.ControlledFolderAccess == target);
-        }
-        catch (InvalidOperationException ex) { StatusMessage = $"Could not change Controlled Folder Access: {ex.Message}"; }
-        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not change Controlled Folder Access: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        int target = CfaEnabled ? 0 : 1;
+        await RunOperationAsync(() => _service.SetControlledFolderAccessAsync(target),
+            "Controlled Folder Access", "change Controlled Folder Access",
+            s => s.ControlledFolderAccess == target);
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
@@ -147,17 +134,9 @@ public sealed partial class DefenderViewModel : ViewModelBase
         }
         if (!Confirm($"Exclude \"{path}\" from Defender scanning?\n\nFiles in an excluded folder are not scanned for malware.")) return;
 
-        IsBusy = true;
-        IsProgressIndeterminate = true;
-        try
-        {
-            var status = await _service.AddExclusionPathAsync(path).ConfigureAwait(true);
-            Apply(status);
-            ReportVerified("Exclusion", status, status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
-        }
-        catch (InvalidOperationException ex) { StatusMessage = $"Could not add the exclusion: {ex.Message}"; }
-        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not add the exclusion: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        await RunOperationAsync(() => _service.AddExclusionPathAsync(path),
+            "Exclusion", "add the exclusion",
+            s => s.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
     }
 
     [RelayCommand(CanExecute = nameof(CanRemoveExclusion))]
@@ -167,17 +146,9 @@ public sealed partial class DefenderViewModel : ViewModelBase
         if (path is null) return;
         if (!Confirm($"Stop excluding \"{path}\"?\n\nThe folder will be scanned for malware again.")) return;
 
-        IsBusy = true;
-        IsProgressIndeterminate = true;
-        try
-        {
-            var status = await _service.RemoveExclusionPathAsync(path).ConfigureAwait(true);
-            Apply(status);
-            ReportVerified("Exclusion removal", status, !status.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
-        }
-        catch (InvalidOperationException ex) { StatusMessage = $"Could not remove the exclusion: {ex.Message}"; }
-        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not remove the exclusion: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        await RunOperationAsync(() => _service.RemoveExclusionPathAsync(path),
+            "Exclusion removal", "remove the exclusion",
+            s => !s.ExclusionPaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
     }
 
     private bool HasSelectedExclusion => SelectedExclusion is not null;
@@ -193,6 +164,39 @@ public sealed partial class DefenderViewModel : ViewModelBase
            && path.Length <= 260
            && Directory.Exists(path);
 
+    /// <summary>
+    /// The shape all four Defender changes share: gate the UI, take the session restore point before
+    /// the first change of the session, run the change, adopt the returned status and report it
+    /// against a read-back.
+    /// <para>One funnel rather than four copies because the restore point belongs in exactly one
+    /// place — four private calls is the duplication that made Tweaks Hub and Gaming Profile each
+    /// burn the 24-hour allowance, with the loser reporting no snapshot while a good one existed.
+    /// The failure wording is passed in so each command keeps the message it already had.</para>
+    /// </summary>
+    private async Task RunOperationAsync(
+        Func<Task<DefenderStatus>> change,
+        string what,
+        string failureVerb,
+        Func<DefenderStatus, bool> applied)
+    {
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            // Before the change, never after. Defender preferences are machine-wide, so a snapshot
+            // taken afterwards would record the settings the user is trying to be able to undo.
+            var snapshotTaken = await _restorePoint
+                .EnsureAsync("SysManager Defender Tweaks").ConfigureAwait(true);
+
+            var status = await change().ConfigureAwait(true);
+            Apply(status);
+            ReportVerified(what, status, applied(status), snapshotTaken);
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not {failureVerb}: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not {failureVerb}: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
     private void Apply(DefenderStatus status)
     {
         IsAvailable = status.Available;
@@ -207,7 +211,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         RemoveExclusionCommand.NotifyCanExecuteChanged();
     }
 
-    private void ReportVerified(string what, DefenderStatus status, bool applied)
+    private void ReportVerified(string what, DefenderStatus status, bool applied, bool snapshotTaken)
     {
         // A read-back only proves anything when the status is actually readable. When the
         // Set failed (needs admin / PowerShell host fault), the service returns the all-zeros
@@ -216,7 +220,12 @@ public sealed partial class DefenderViewModel : ViewModelBase
         // unavailable read-back as a failure, never a silent success.
         if (applied && status.Available)
         {
-            StatusMessage = $"{what} updated.";
+            // Mentioned only when Windows really made one — the rule Tweaks Hub set. System Restore
+            // is switched off on many PCs and rate-limited to about one point a day, so silence here
+            // means "no snapshot", never a promise. Not mentioned on the failure paths below: those
+            // changed nothing, so there is nothing for a snapshot to reassure the user about.
+            var rp = snapshotTaken ? " Restore point created." : "";
+            StatusMessage = $"{what} updated.{rp}";
             Log.Information("Defender: {What} change applied", what);
         }
         else

@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.72.0] - 2026-08-25
+
+The Task Scheduler scan can be stopped. On a PC with a full task tree, listing every scheduled task
+takes a while, and until now there was no way to interrupt it — and pressing Refresh again during a
+scan started a second one on top of the first. Both are fixed.
+
+### Added
+- **A Cancel button while the task scan runs.** Whatever was already listed stays on screen, and the
+  status line says the scan was stopped rather than leaving "Loading…" underneath a half-filled grid.
+
+### Changed
+- **Refresh is disabled during a scan** instead of stacking a second one, which is how the Startup,
+  Windows Features and Windows Update tabs already behave — this tab was left out of that change.
+- **Selecting a different task now cancels the previous task's query.** Holding an arrow key down the
+  list used to start one background query per row it passed over, all still running after you had
+  moved on.
+
+### Fixed
+- Closing the tab mid-scan now stops the scan instead of leaving it running with nothing waiting for
+  the result.
+
+Enable/disable stays deliberately un-cancellable: it writes the new state and then reads it back, so
+stopping it halfway could leave a task toggled while the list still showed the old value.
+
 ## [1.71.0] - 2026-08-25
 
 Windows Features now takes a restore point before it changes anything. It was the last tab making a

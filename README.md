@@ -352,6 +352,9 @@ a confirmation before it runs:
 - **Enable / disable** any task; disabling is **fully reversible and never deletes
   the task** — System tasks show an extra warning before you disable them
 - Filter by name or path, and optionally hide system tasks to focus on the rest
+- **Stoppable** — the task scan can take a while on a machine with a full task tree, so there is a
+  Cancel button while it runs, and whatever was already listed stays on screen. Refresh is disabled
+  during a scan instead of stacking a second one on top
 - Changes need administrator and are verified by reading the task's state back
 - Overlaps [Startup Manager](#startup-manager) on purpose: that tab lists the third-party tasks among
   these next to the programs that launch at boot, because that is all the shorter answer to "why is my

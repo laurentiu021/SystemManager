@@ -22,6 +22,13 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
     private readonly TaskSchedulerService _service;
     private List<ScheduledTaskInfo> _all = [];
 
+    // TWO sources, deliberately. The list scan and the per-selection run-info query are unrelated
+    // operations: arrow-keying down the grid must supersede the previous run-info query without
+    // aborting a full refresh that happens to be running, and Cancel must stop the scan without
+    // killing the run-info query for the row the user just landed on.
+    private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _runInfoCts;
+
     public BulkObservableCollection<ScheduledTaskInfo> Tasks { get; } = new();
 
     [ObservableProperty] private bool _isElevated;
@@ -34,7 +41,24 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
         _service = service;
         IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Loading scheduled tasks…";
+        PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
+    }
+
+    private bool NotBusy => !IsBusy;
+
+    // Composed, not replaced: Enable/Disable already required a selection, and now also has to wait
+    // for an in-flight scan — both service calls share one runspace-per-call runner, so overlapping
+    // them lets two invocations interleave.
+    private bool CanToggle => !IsBusy && HasSelection;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IsBusy) or nameof(SelectedTask))
+        {
+            RefreshCommand.NotifyCanExecuteChanged();
+            ToggleEnabledCommand.NotifyCanExecuteChanged();
+        }
     }
 
     [RelayCommand]
@@ -44,19 +68,29 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
             System.Windows.Application.Current?.Shutdown();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Loading scheduled tasks…";
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
         try
         {
-            _all = (await _service.ListTasksAsync().ConfigureAwait(true)).ToList();
+            _all = (await _service.ListTasksAsync(_cts.Token).ConfigureAwait(true)).ToList();
             ApplyFilter();
             StatusMessage = _all.Count == 0
                 ? "No scheduled tasks found."
                 : $"{_all.Count} tasks. Select one to see when it last ran.";
+        }
+        catch (OperationCanceledException)
+        {
+            // The user pressed Cancel. Whatever was already listed stays on screen; saying so beats
+            // a half-loaded grid with a stale "Loading…" underneath it.
+            StatusMessage = _all.Count == 0
+                ? "Cancelled before any tasks were listed."
+                : $"Cancelled. Showing the {_all.Count} tasks listed before you stopped it.";
         }
         finally
         {
@@ -95,7 +129,26 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
 
     private async Task LoadRunInfoAsync(ScheduledTaskInfo task)
     {
-        var withInfo = await _service.LoadRunInfoAsync(task).ConfigureAwait(true);
+        // Each selection change supersedes the last. Holding an arrow key down used to queue one
+        // PowerShell round-trip per row passed over, all of them still running while the user had
+        // long since moved on.
+        _runInfoCts?.Cancel();
+        _runInfoCts?.Dispose();
+        _runInfoCts = new CancellationTokenSource();
+        var ct = _runInfoCts.Token;
+
+        ScheduledTaskInfo withInfo;
+        try
+        {
+            withInfo = await _service.LoadRunInfoAsync(task, ct).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer selection, or the view closed. Not a failure, and there is
+            // nothing to show: the row this query was for is no longer the one being looked at.
+            return;
+        }
+
         // Update the item in place if it's still the selection.
         if (ReferenceEquals(SelectedTask, task))
         {
@@ -112,7 +165,7 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
 
     private bool HasSelection => SelectedTask is not null;
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanToggle))]
     private async Task ToggleEnabledAsync()
     {
         var task = SelectedTask;
@@ -137,6 +190,28 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
         {
             StatusMessage = $"Couldn't change \"{task.Name}\" — this usually needs administrator rights.";
         }
+    }
+
+    /// <summary>
+    /// Stops the task-list scan. Deliberately does NOT cover Enable/Disable: that script writes the
+    /// new state and then reads it back, so a cancel landing between the two would leave the task
+    /// toggled while the grid still showed the old value — a worse outcome than waiting out a call
+    /// that takes a moment.
+    /// </summary>
+    [RelayCommand]
+    private void Cancel() => _cts?.Cancel();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _runInfoCts?.Cancel();
+            _runInfoCts?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 
     private void ReplaceTask(ScheduledTaskInfo oldTask, ScheduledTaskInfo newTask)

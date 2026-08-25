@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.73.0] - 2026-08-25
+
+Disk Analyzer now remembers your last scan of each folder and tells you what changed. Until now every
+reopen started blank, even though the rest of the app remembers things; now, after you re-scan a folder,
+a line reads e.g. "3.2 GB larger than your last scan on 12 Jul" - turning a one-off number into an
+answer to "why is my disk filling up?".
+
+### Added
+- **Disk Analyzer: a "since last scan" delta per folder.** The last scan of each root is saved locally
+  (disk-scan-history.json), and on the next scan of that folder the tab shows how much it grew or
+  shrank and when it was last measured. It is always phrased as "since your last scan", never as
+  continuous monitoring, because scanning is something you trigger. The history is bounded (a capped
+  number of folders, a capped number of roots) and follows the same never-lose-the-tab-on-a-bad-file
+  rule as the Speed Test history it is modelled on.
+
+### Notes
+- The scan history stays on this PC and is **not** part of Profile Export - folder paths and sizes are
+  specific to one machine, so a delta from another PC's disk would be meaningless here.
+
 ## [1.72.1] - 2026-08-25
 
 The Dashboard no longer tells you "~10s remaining" for a check it is not timing. When one of the

@@ -258,6 +258,7 @@ public class ProfileServiceTests : IDisposable
     [InlineData("last-crash.json")]
     [InlineData("activity.json")]
     [InlineData("resource-history-config.json")]
+    [InlineData("disk-scan-history.json")]   // folder paths + sizes on THIS disk; meaningless on another PC
     public void AvailableSections_NeverCarriesMachineSpecificState(string fileName)
     {
         WriteConfig(fileName, "{\"machine\":\"specific\"}");

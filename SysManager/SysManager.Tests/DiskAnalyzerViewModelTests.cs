@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.IO;
+using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -18,7 +20,9 @@ public class DiskAnalyzerViewModelTests
     // observe the populated collection instead of racing the background load.
     private static DiskAnalyzerViewModel NewVm()
     {
-        var vm = new DiskAnalyzerViewModel(new Services.DiskAnalyzerService());
+        var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(),
+            new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
+                "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N"))));
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -251,5 +255,60 @@ public class DiskAnalyzerViewModelTests
         var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
         Assert.True(File.Exists(path), $"{fileName} not found at {path}");
         return path;
+    }
+
+    // ---------- the "since last scan" delta wording (#1591) ----------
+    // DescribeTrend is the whole value of the feature: turning a one-off number into "what changed?".
+    // Tested at the source, so the branches are deterministic — no disk, no wall-clock.
+
+    private static DiskScanSnapshot Prior(long total, DateTime at) =>
+        new() { RootPath = @"C:\Data", TotalSize = total, CapturedAt = at };
+
+    [Fact]
+    public void Trend_WithNoPriorScan_IsEmpty()
+    {
+        // A first-ever scan of a root must show nothing, not "0 bytes larger".
+        Assert.Equal("", DiskAnalyzerViewModel.DescribeTrend(null, 5_000_000_000));
+    }
+
+    [Fact]
+    public void Trend_WhenLarger_SaysLargerAndNamesTheDate()
+    {
+        var prior = Prior(2_000_000_000, new DateTime(2026, 7, 12));
+        var text = DiskAnalyzerViewModel.DescribeTrend(prior, 5_200_000_000);
+
+        Assert.Contains("larger", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("smaller", text, StringComparison.Ordinal);
+        Assert.Contains("12 Jul 2026", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Trend_WhenSmaller_SaysSmaller()
+    {
+        var prior = Prior(5_000_000_000, new DateTime(2026, 7, 12));
+        var text = DiskAnalyzerViewModel.DescribeTrend(prior, 1_000_000_000);
+
+        Assert.Contains("smaller", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("larger", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Trend_WhenNegligiblyChanged_ReadsAsAboutTheSame()
+    {
+        // A few kilobytes on a multi-gigabyte folder is churn, not growth — it must not read as either.
+        var prior = Prior(5_000_000_000, new DateTime(2026, 7, 12));
+        var text = DiskAnalyzerViewModel.DescribeTrend(prior, 5_000_064_000);
+
+        Assert.Contains("About the same", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("larger", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("smaller", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Trend_ExactlyUnchanged_ReadsAsAboutTheSame()
+    {
+        var prior = Prior(5_000_000_000, new DateTime(2026, 7, 12));
+        Assert.Contains("About the same",
+            DiskAnalyzerViewModel.DescribeTrend(prior, 5_000_000_000), StringComparison.Ordinal);
     }
 }

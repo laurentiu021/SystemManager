@@ -21,6 +21,7 @@ namespace SysManager.ViewModels;
 public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 {
     private readonly DiskAnalyzerService _service;
+    private readonly DiskScanHistoryService _history;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<DiskUsageEntry> Entries { get; } = new();
@@ -28,6 +29,15 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
     [ObservableProperty] private string _selectedPath = "";
     [ObservableProperty] private string _scanSummary = "Select a drive or folder and click Analyze.";
+
+    // The delta line: "3.2 GB larger than your last scan on 12 Jul", or empty when this root has no
+    // remembered scan yet. Explicitly "since last scan", never framed as continuous monitoring — the
+    // sampling is user-triggered and irregular. Empty string keeps the row collapsed (see the view).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTrend))]
+    private string _trendSummary = "";
+
+    public bool HasTrend => !string.IsNullOrEmpty(TrendSummary);
     [ObservableProperty] private long _totalSize;
     [ObservableProperty] private int _totalFiles;
     [ObservableProperty] private int _totalFolders;
@@ -75,9 +85,10 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         ", plus any junction or symbolic link (following one would double-count, or lead outside the " +
         "folder you asked about).";
 
-    public DiskAnalyzerViewModel(DiskAnalyzerService service)
+    public DiskAnalyzerViewModel(DiskAnalyzerService service, DiskScanHistoryService history)
     {
         _service = service;
+        _history = history;
         // Probe drives off the UI thread: DriveInfo.IsReady can stall on a disconnected
         // mapped/removable volume. This tab is LAZY — NavItem.ContentFactory builds it on first open,
         // not at startup (the eager set is Dashboard, DarkMode and About; see the list above
@@ -134,6 +145,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Analyzing…";
+        TrendSummary = "";
         Entries.Clear();
         TotalSize = 0;
         TotalFiles = 0;
@@ -163,6 +175,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
                 ? "No subfolders found."
                 : string.Create(CultureInfo.InvariantCulture, $"{EntryCount} folders · {FormatSize(TotalSize)} total · {TotalFiles:N0} files");
             HasScanned = true;
+            await UpdateTrendAndRememberAsync(SelectedPath, ct).ConfigureAwait(true);
             StatusMessage = "Analysis complete.";
             ToastService.Instance.Show("Disk Analysis complete", $"{EntryCount} folders, {FormatSize(TotalSize)} total");
             Log.Information("Disk analysis completed: {Folders} folders, {Size} total",
@@ -186,6 +199,60 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             IsProgressIndeterminate = false;
             CurrentFolder = "";
         }
+    }
+
+    /// <summary>
+    /// Reads the remembered scan of <paramref name="root"/> to show what changed, then remembers this
+    /// scan in its place. Deliberately swallows its own failures: the scan has already completed and its
+    /// results are on screen, so a history read/write problem must degrade to "no trend line", never to a
+    /// broken tab. That is the same never-throw-to-the-caller contract the history service keeps
+    /// internally; this is the second half of it, at the call site.
+    /// </summary>
+    private async Task UpdateTrendAndRememberAsync(string root, CancellationToken ct)
+    {
+        try
+        {
+            var previous = await _history.FindAsync(root, ct).ConfigureAwait(true);
+            TrendSummary = DescribeTrend(previous, TotalSize);
+
+            var snapshot = new DiskScanSnapshot
+            {
+                RootPath = root,
+                CapturedAt = DateTime.Now,
+                TotalSize = TotalSize,
+                TopFolders = Entries
+                    .Select(e => new FolderUsage { Name = e.Name, SizeBytes = e.SizeBytes })
+                    .ToList(),
+            };
+            await _history.SaveAsync(snapshot, ct).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // The tab closed between the scan finishing and this running — nothing to record.
+        }
+    }
+
+    /// <summary>
+    /// The one-line "since last scan" delta. Returns empty when this root has never been scanned, so a
+    /// first-ever scan shows no trend rather than a misleading "0 bytes larger". A change smaller than a
+    /// tenth of a percent reads as "about the same" rather than a spurious few-kilobyte delta.
+    /// </summary>
+    internal static string DescribeTrend(DiskScanSnapshot? previous, long currentTotal)
+    {
+        if (previous is null) return "";
+
+        var on = previous.CapturedAt.ToString("d MMM yyyy", CultureInfo.CurrentCulture);
+        var delta = currentTotal - previous.TotalSize;
+        var magnitude = Math.Abs(delta);
+
+        // Below 0.1% of the previous total (and at least a token 1 MB) counts as unchanged, so ordinary
+        // churn does not read as growth.
+        var threshold = Math.Max(1L * 1024 * 1024, previous.TotalSize / 1000);
+        if (magnitude < threshold)
+            return $"About the same as your last scan on {on}.";
+
+        var direction = delta > 0 ? "larger" : "smaller";
+        return $"{FormatSize(magnitude)} {direction} than your last scan on {on}.";
     }
 
     [RelayCommand]

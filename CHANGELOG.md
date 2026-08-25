@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.72.1] - 2026-08-25
+
+The Dashboard no longer tells you "~10s remaining" for a check it is not timing. When one of the
+five startup checks took more than five seconds, the card showed a fixed "~10s remaining" that was
+never measured — it read the same whether the check finished in a moment or stalled. It now says
+"still checking…", which promises no time it cannot keep.
+
+### Fixed
+- **Dashboard: the slow-check hint no longer invents a countdown.** The five health checks are
+  pass/fail probes with no progress to measure, so there is no honest number to show; the app's real
+  time estimator stays where it belongs, on the operations that report progress (App Updates, Bulk
+  Installer, Cleanup). The hint is also dropped the moment its check finishes, so it stops leaving
+  five idle timers per refresh waiting to fire after the work is already done.
+
 ## [1.72.0] - 2026-08-25
 
 The Task Scheduler scan can be stopped. On a PC with a full task tree, listing every scheduled task

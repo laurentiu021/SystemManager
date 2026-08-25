@@ -182,10 +182,10 @@ public sealed class BrowserCleanerService
         catch (IOException) { yield break; }
         catch (UnauthorizedAccessException) { yield break; }
 
-        foreach (var dir in profileDirs)
+        // Project each profile dir to its relative path up front, so the loop body just yields the
+        // two defs it builds from that path (and CodeQL's missed-select does not flag the map).
+        foreach (var profileRel in profileDirs.Select(d => Path.Combine(profilesRel, Path.GetFileName(d))))
         {
-            var profileRel = Path.Combine(profilesRel, Path.GetFileName(dir));
-
             // Cookies: the sqlite database and its write-ahead/shared-memory sidecars. Named files
             // only — the profile root is never a target.
             yield return new("Firefox", "Cookies",

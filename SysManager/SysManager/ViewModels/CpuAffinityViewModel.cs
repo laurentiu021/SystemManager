@@ -33,11 +33,21 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
     private long _originalMask;
     private bool _hasOriginal;
 
+    // The full list; Processes is the filtered view the picker binds. Kept separate so typing in the
+    // filter never loses a process, exactly as ServicesViewModel keeps _allServices behind Services.
+    private List<RunningProcess> _allProcesses = [];
+
     public BulkObservableCollection<RunningProcess> Processes { get; } = new();
     public BulkObservableCollection<CoreToggle> Cores { get; } = new();
 
     [ObservableProperty] private RunningProcess? _selectedProcess;
     [ObservableProperty] private bool _isHybrid;
+
+    // A 300-row dropdown of svchost entries is a dead end for finding one game; this is the same
+    // name/PID filter the other list tabs (Services, Task Scheduler, Windows Features) already have.
+    [ObservableProperty] private string _filterText = "";
+
+    partial void OnFilterTextChanged(string value) => ApplyFilter();
 
     public CpuAffinityViewModel(ICpuAffinityService service)
     {
@@ -73,13 +83,39 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         try
         {
-            var procs = await Task.Run(_service.GetProcesses).ConfigureAwait(true);
-            Processes.ReplaceWith(procs);
+            // Preserve the selection across a refresh by PID: the list is a fresh set of records, so the
+            // previously-selected instance is gone, but the process it named may still be running.
+            var selectedId = SelectedProcess?.ProcessId;
+
+            _allProcesses = (await Task.Run(_service.GetProcesses).ConfigureAwait(true)).ToList();
+            ApplyFilter();
+
+            if (selectedId is { } id)
+                SelectedProcess = Processes.FirstOrDefault(p => p.ProcessId == id);
+
             StatusMessage = IsHybrid
                 ? "Hybrid CPU detected — P-cores and E-cores are labelled. Pick a process."
                 : "Pick a process, choose cores, then apply.";
         }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>
+    /// Narrows the picker to processes whose name or PID contains the filter text. Rebuilt from
+    /// <see cref="_allProcesses"/> every time, so clearing the box restores the full list.
+    /// </summary>
+    private void ApplyFilter()
+    {
+        var q = FilterText?.Trim();
+        if (string.IsNullOrEmpty(q))
+        {
+            Processes.ReplaceWith(_allProcesses);
+            return;
+        }
+
+        Processes.ReplaceWith(_allProcesses.Where(p =>
+            p.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || p.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture).Contains(q, StringComparison.Ordinal)));
     }
 
     partial void OnSelectedProcessChanged(RunningProcess? value)

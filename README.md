@@ -845,6 +845,12 @@ offers, "rate us" prompts:
 ### CPU Core Affinity
 - **Pin a process to specific CPU cores** — pick a running process and choose
   which logical CPUs it may run on, then Apply (or Restore the original)
+- **Filter the process list** by name or ID, so finding your game isn't a scroll
+  through hundreds of `svchost` entries — the same filter the Services, Task
+  Scheduler and Windows Features lists have
+- **See what's already pinned** — a process running on a subset of cores shows it
+  in the list ("chrome (1234) — 4 of 16 cores"), so you can tell at a glance what
+  you've already tuned instead of selecting each one to find out
 - **Hybrid-CPU aware** — on Intel 12th-gen+ CPUs, P-cores and E-cores are
   detected and labelled (via `GetLogicalProcessorInformationEx`), with one-click
   **P-cores** / **All cores** presets

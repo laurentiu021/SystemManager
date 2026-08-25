@@ -308,4 +308,146 @@ public class CpuAffinityViewModelTests
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
     }
+
+    // ---------- process filter (#1608) ----------
+    // A multi-process fake so the name/PID filter can be exercised deterministically. Homogeneous
+    // 4-core topology; the process masks vary so the pinned-marker tests have something to read.
+    private static ICpuAffinityService ServiceWithProcesses(params RunningProcess[] procs)
+    {
+        var service = Substitute.For<ICpuAffinityService>();
+        service.LogicalProcessorCount.Returns(4);
+        service.GetCores().Returns(new List<CpuCore>
+        {
+            new(0, 0, "Standard"), new(1, 0, "Standard"),
+            new(2, 0, "Standard"), new(3, 0, "Standard"),
+        });
+        service.GetProcesses().Returns(procs.ToList());
+        return service;
+    }
+
+    [Fact]
+    public void Filter_ByName_NarrowsToMatchingProcesses()
+    {
+        var vm = NewVm(ServiceWithProcesses(
+            new(10, "chrome", 0), new(11, "svchost", 0), new(12, "chromium", 0)));
+
+        Assert.Equal(3, vm.Processes.Count);
+
+        vm.FilterText = "chrom";
+
+        Assert.Equal(new[] { "chrome", "chromium" }, vm.Processes.Select(p => p.Name).OrderBy(n => n));
+        Assert.DoesNotContain(vm.Processes, p => p.Name == "svchost");
+    }
+
+    [Fact]
+    public void Filter_ByPid_Matches()
+    {
+        var vm = NewVm(ServiceWithProcesses(
+            new(4242, "game", 0), new(15, "other", 0)));
+
+        vm.FilterText = "4242";
+
+        Assert.Equal("game", Assert.Single(vm.Processes).Name);
+    }
+
+    [Fact]
+    public void Filter_IsCaseInsensitive()
+    {
+        var vm = NewVm(ServiceWithProcesses(new(10, "Discord", 0), new(11, "steam", 0)));
+
+        vm.FilterText = "DISCORD";
+
+        Assert.Equal("Discord", Assert.Single(vm.Processes).Name);
+    }
+
+    [Fact]
+    public void Filter_Cleared_RestoresTheFullList()
+    {
+        var vm = NewVm(ServiceWithProcesses(new(10, "a", 0), new(11, "b", 0), new(12, "c", 0)));
+
+        vm.FilterText = "a";
+        Assert.Single(vm.Processes);
+
+        vm.FilterText = "";
+        Assert.Equal(3, vm.Processes.Count);   // rebuilt from the backing list, not lost
+    }
+
+    [Fact]
+    public async Task Refresh_PreservesTheSelectionEvenWhenTheProcessMaskChanged()
+    {
+        // The selected process is still running on refresh, but its affinity changed (say, it was just
+        // pinned), so the new record is NOT value-equal to the old one. Only reselect-by-PID keeps it
+        // selected — a record with value equality would otherwise drop the selection to null the moment
+        // the mask differs, which is exactly the moment the user cares about it.
+        var service = Substitute.For<ICpuAffinityService>();
+        service.LogicalProcessorCount.Returns(4);
+        service.GetCores().Returns(new List<CpuCore>
+        {
+            new(0, 0, "Standard"), new(1, 0, "Standard"),
+            new(2, 0, "Standard"), new(3, 0, "Standard"),
+        });
+        service.GetProcesses().Returns(
+            new List<RunningProcess> { new(4242, "game", 0), new(15, "other", 0) },       // first load
+            new List<RunningProcess> { new(4242, "game", 0b0001), new(15, "other", 0) }); // after refresh: mask changed
+        var vm = NewVm(service);
+        vm.SelectedProcess = vm.Processes.First(p => p.ProcessId == 4242);
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.NotNull(vm.SelectedProcess);
+        Assert.Equal(4242, vm.SelectedProcess!.ProcessId);
+        Assert.Equal(0b0001, vm.SelectedProcess.AffinityMask);   // the refreshed record, reselected by PID
+    }
+
+    // ---------- pinned marker: RunningProcess.DescribeAffinity (pure) ----------
+    // Neutral "N of M cores" only for a real subset; nothing for unreadable (0) or all-cores.
+
+    [Theory]
+    [InlineData(0b0001, 4, "proc (7) — 1 of 4 cores")]
+    [InlineData(0b0101, 4, "proc (7) — 2 of 4 cores")]
+    [InlineData(0b0011, 4, "proc (7) — 2 of 4 cores")]
+    public void DescribeAffinity_ForASubset_ReportsTheCoreCount(long mask, int logical, string expected)
+    {
+        Assert.Equal(expected, RunningProcess.DescribeAffinity("proc", 7, mask, logical));
+    }
+
+    [Theory]
+    [InlineData(0, 4)]              // unreadable — no suffix
+    [InlineData(0b1111, 4)]         // all four cores — the default, not pinned
+    public void DescribeAffinity_ForNoneOrAllCores_HasNoSuffix(long mask, int logical)
+    {
+        Assert.Equal("proc (7)", RunningProcess.DescribeAffinity("proc", 7, mask, logical));
+    }
+
+    [Fact]
+    public void DescribeAffinity_AllCoresPlusStrayBit_StillHasNoSuffix()
+    {
+        // A stray high bit outside the machine's cores must not make an all-cores mask look like a
+        // subset. 0b1111 within 4 cores is still "all", regardless of the extra bit — the all-cores
+        // check masks with allCores first.
+        Assert.Equal("proc (7)", RunningProcess.DescribeAffinity("proc", 7, unchecked((long)0xF000_0000_0000_000F), 4));
+    }
+
+    [Fact]
+    public void DescribeAffinity_SubsetPlusStrayBit_CountsOnlyTheRealCores()
+    {
+        // bit 0 (a real core) + bit 60 (outside the 4 cores). This is a genuine subset, so it reaches
+        // the count — which must ignore the stray bit and report 1, not 2. Pins that PopCount runs over
+        // (mask & allCores), not the raw mask.
+        Assert.Equal("proc (7) — 1 of 4 cores",
+            RunningProcess.DescribeAffinity("proc", 7, unchecked((long)0x1000_0000_0000_0001), 4));
+    }
+
+    [Fact]
+    public void PinnedDisplay_UsesTheMachineCoreCount()
+    {
+        // The instance property feeds Environment.ProcessorCount to the pure helper. A single-core
+        // mask on a multi-core machine is always a subset, so the suffix must appear.
+        var single = new RunningProcess(7, "proc", 0b0001);
+        if (Environment.ProcessorCount > 1)
+            Assert.Contains("of " + Environment.ProcessorCount + " cores", single.PinnedDisplay);
+        // And an all-cores mask never gets a suffix.
+        var all = new RunningProcess(7, "proc", CpuAffinityService.AllCoresMask(Environment.ProcessorCount));
+        Assert.Equal("proc (7)", all.PinnedDisplay);
+    }
 }

@@ -124,9 +124,10 @@ public sealed partial class HostsFileService
         catch (IOException) { return preserved; }
         catch (UnauthorizedAccessException) { return preserved; }
 
-        foreach (var raw in rawLines)
+        // Trim in the projection: the loop body never needs the untrimmed line, and rawLines is
+        // already a materialised array from ReadAllLines, so this is the same work in the same order.
+        foreach (var line in rawLines.Select(r => r.Trim()))
         {
-            var line = raw.Trim();
 
             if (line.Length == 0)
             {

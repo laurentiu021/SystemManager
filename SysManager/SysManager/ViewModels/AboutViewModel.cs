@@ -30,7 +30,9 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     // Suppresses saving while the constructor applies the loaded value, so restoring the
     // preference does not immediately rewrite the same file.
-    private bool _loadingPreference;
+    // Armed and disarmed inside the constructor only, so it is readonly: re-arming it later would
+    // leave the preference save permanently suppressed instead of just during the initial load.
+    private readonly bool _loadingPreference;
 
     [ObservableProperty] private IReadOnlyList<ReleaseNote> _releaseHistory = [];
 

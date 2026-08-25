@@ -379,7 +379,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     // ── Designer / test dependency graph ────────────────────────────────────
     // Built lazily (and only when there is no DI container) so the parameterless ctor keeps
     // working in the XAML designer and unit tests exactly as before — every VM eager, no DI.
-    private Dictionary<Type, object>? _designerVms;
+    private readonly Dictionary<Type, object>? _designerVms;
 
     private Dictionary<Type, object> BuildDesignerGraph()
     {

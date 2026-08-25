@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.70.0] - 2026-08-25
+
+Defender Tweaks now takes a Windows restore point before it changes anything, which was the last tab
+still without one. Every tab that changes system settings is now covered by the same single snapshot,
+so the answer no longer depends on which page you opened.
+
+### Added
+- **Defender Tweaks takes a restore point before the first change of the session.** Its four changes
+  — PUA protection, Controlled Folder Access, and adding or removing a scan exclusion — now run
+  through one shared path instead of four near-identical copies, so none of them can skip the
+  snapshot. Each keeps the exact wording it had when something goes wrong.
+
+### Changed
+- A change Defender rejected — Tamper Protection on, or no administrator — no longer mentions the
+  restore point. Nothing was changed, so there is nothing for a snapshot to reassure you about, and
+  saying otherwise read as though something had happened.
+
 ## [1.69.0] - 2026-08-25
 
 Two more of the tabs that change your PC now take a Windows restore point first: Debloater & Ads and

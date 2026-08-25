@@ -128,7 +128,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected.
 - `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net.
 - `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit.
-- `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject).
+- `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). All four changes share one `RunOperationAsync` funnel that takes the shared `ISessionRestorePoint` snapshot before the first of them, so no command can skip it; each keeps its own failure wording, passed in.
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back.
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
 - `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Two loops drive it, both idle while the tab is hidden (`IsActive`) and both sampling off the UI thread: membership reconciles on a ~1&#160;s cadence, and the meters refresh every 50&#160;ms via one batched `GetPeaks` call per tick. The peak loop *parks* on an activation gate while hidden rather than ticking and skipping — at 50&#160;ms a skip-check still queues 20 Dispatcher continuations a second. (Per-row `GetPeak` on the UI thread was the 1.65.11 stutter fix.) Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Adds per-app output-device routing (via the guarded `AudioPolicyConfigFactory`; falls back to guiding the user to Windows sound settings when the OS lacks the interface) and named volume presets (persisted by `VolumePresetService`, keyed by exe name so they re-apply across restarts). Row VMs (`AudioSessionRowViewModel`) propagate volume/mute/route to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back.
@@ -319,7 +319,7 @@ Key services:
   a delegate rather than the sealed service, which keeps it substitutable without unsealing
   production code. Returns true only when THIS call created a point, so no caller can claim one that
   Windows refused. Consumed by `TweaksHubService`, `GamingProfileService`, `EdgeOneDriveViewModel`,
-  `DebloaterViewModel` and `PrivacyViewModel`.
+  `DebloaterViewModel`, `PrivacyViewModel` and `DefenderViewModel`.
 - `DebloaterService` — lists (`Get-AppxPackage`) and removes (`Remove-AppxPackage`,
   per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
   denylist of system-critical package families is enforced in code; the parser and

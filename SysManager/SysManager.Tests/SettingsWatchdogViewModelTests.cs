@@ -25,7 +25,11 @@ public class SettingsWatchdogViewModelTests
         var svc = Substitute.For<ISettingsWatchdogService>();
         svc.Catalog.Returns([]);
         svc.LoadBaseline().Returns(new BaselineSnapshot(new DateTime(2026, 1, 1), []));
+        // Both shapes stubbed: the view model uses the overload (one read for both lists), while
+        // other callers still use the no-argument one.
         svc.DetectDrift().Returns(drifts);
+        svc.DetectDrift(Arg.Any<BaselineSnapshot>(), Arg.Any<IReadOnlyDictionary<string, int?>>())
+           .Returns(drifts);
         return svc;
     }
 
@@ -164,7 +168,11 @@ public class SettingsWatchdogViewModelTests
         var svc = Substitute.For<ISettingsWatchdogService>();
         svc.Catalog.Returns([Setting("telemetry"), Setting("widgets"), Setting("web-search")]);
         svc.LoadBaseline().Returns(new BaselineSnapshot(new DateTime(2026, 1, 1), []));
+        // The view model hands its own read to the overload (one read for both lists, #1967); the
+        // no-argument shape stays stubbed for any caller that only wants drifts.
         svc.DetectDrift().Returns(drifts);
+        svc.DetectDrift(Arg.Any<BaselineSnapshot>(), Arg.Any<IReadOnlyDictionary<string, int?>>())
+           .Returns(drifts);
         svc.ReadCurrent().Returns(current);
         return svc;
     }
@@ -251,5 +259,105 @@ public class SettingsWatchdogViewModelTests
 
         Assert.Equal(@"HKLM\SOFTWARE\Test\telemetry\Val",
             vm.Watched.Single(w => w.Setting.Key == "telemetry").Location);
+    }
+
+    // ── one read per refresh (regression #1967) ────────────────────────────
+    // Refresh used to obtain the live values TWICE: DetectDrift() read them to compute drift, then
+    // Refresh read them again to build the watched list. A setting that changed between the two reads
+    // came out with its NEW value but no drift verdict — displayed as settled while having moved,
+    // which is the exact state this tab exists to surface. Both tests below fail on that version.
+
+    /// <summary>
+    /// The watched setting used by these two tests: telemetry, whose baseline is "Off (Security)" and
+    /// which Windows Update is known to raise back to "Full" — the scenario the tab is built for.
+    /// </summary>
+    private static WatchedSetting TelemetrySetting() => new(
+        "telemetry", "Diagnostic data (telemetry)", "Windows Update can raise it back to Full.",
+        "Privacy", @"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry",
+        new Dictionary<int, string> { [0] = "Off (Security)", [3] = "Full" });
+
+    /// <summary>
+    /// A service whose live read reports <paramref name="liveValue"/> while its baseline recorded 0,
+    /// and whose drift computation is the REAL pure function — so the verdict is honest for whatever
+    /// snapshot the view model actually passes in. The no-argument DetectDrift returns nothing, which
+    /// is what the old code path consulted.
+    /// </summary>
+    private static ISettingsWatchdogService ServiceWhereTelemetryReads(int liveValue)
+    {
+        var setting = TelemetrySetting();
+        var catalog = new[] { setting };
+        var baseline = new BaselineSnapshot(new DateTime(2026, 1, 1),
+            new Dictionary<string, int?> { ["telemetry"] = 0 });
+
+        var svc = Substitute.For<ISettingsWatchdogService>();
+        svc.Catalog.Returns(catalog);
+        svc.LoadBaseline().Returns(baseline);
+        // The FIRST read reports the live value; any further read in the same refresh reports the
+        // baseline instead. A refresh that reads twice therefore judges drift against a different
+        // snapshot than the one it displays, which is exactly the defect — and it now cannot pass
+        // unnoticed, because a fake returning the same value twice would hide it.
+        svc.ReadCurrent().Returns(
+            new Dictionary<string, int?> { ["telemetry"] = liveValue },
+            new Dictionary<string, int?> { ["telemetry"] = 0 });
+        svc.DetectDrift().Returns([]);
+        svc.DetectDrift(Arg.Any<BaselineSnapshot>(), Arg.Any<IReadOnlyDictionary<string, int?>>())
+           .Returns(ci => SettingsWatchdogService.DetectChanges(
+               catalog,
+               ((BaselineSnapshot)ci[0]!).Values,
+               (IReadOnlyDictionary<string, int?>)ci[1]!));
+        return svc;
+    }
+
+    [Fact]
+    public async Task Refresh_DerivesDriftFromItsOwnRead_NotASecondOneInsideTheService()
+    {
+        var svc = ServiceWhereTelemetryReads(3);
+
+        var vm = new SettingsWatchdogViewModel(svc);
+        await vm.InitializationComplete;
+
+        // The verdict must be computed against the snapshot this refresh read, so it has to be handed
+        // in. Calling the no-argument overload means the service reads again on its own, and the two
+        // lists then describe two different moments.
+        svc.Received().DetectDrift(Arg.Any<BaselineSnapshot>(), Arg.Any<IReadOnlyDictionary<string, int?>>());
+        svc.DidNotReceive().DetectDrift();
+    }
+
+    [Fact]
+    public async Task Refresh_NeverShowsAValueThatDisagreesWithItsOwnDriftFlag()
+    {
+        // Live telemetry reads "Full" while the baseline recorded "Off (Security)".
+        var svc = ServiceWhereTelemetryReads(3);
+
+        var vm = new SettingsWatchdogViewModel(svc);
+        await vm.InitializationComplete;
+
+        var row = Assert.Single(vm.Watched);
+        Assert.Equal("Full", row.CurrentLabel);
+
+        // The row shows a value that moved, so it must say so — and the drift list must contain it.
+        // The old code showed "Full" with HasDrifted false and an empty drift list, which is the
+        // WatchedRow doc comment ("the two views cannot disagree") being untrue.
+        Assert.True(row.HasDrifted,
+            $"the row shows \"{row.CurrentLabel}\" but is not marked as drifted — the value and the "
+            + "verdict came from different reads.");
+        Assert.Single(vm.Drifts);
+        Assert.Equal("telemetry", vm.Drifts[0].Drift.Setting.Key);
+    }
+
+    [Fact]
+    public async Task Refresh_WhenNothingMoved_MarksNoDrift()
+    {
+        // The settled case must stay settled: same seam, same single read, live value equals baseline.
+        var svc = ServiceWhereTelemetryReads(0);
+
+        var vm = new SettingsWatchdogViewModel(svc);
+        await vm.InitializationComplete;
+
+        var row = Assert.Single(vm.Watched);
+        Assert.Equal("Off (Security)", row.CurrentLabel);
+        Assert.False(row.HasDrifted);
+        Assert.Empty(vm.Drifts);
+        Assert.False(vm.HasDrift);
     }
 }

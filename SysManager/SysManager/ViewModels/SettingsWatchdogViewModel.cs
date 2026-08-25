@@ -65,16 +65,19 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         HasBaseline = baseline is not null;
         BaselineTaken = baseline is not null ? $"Baseline saved {baseline.TakenAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}" : "";
 
-        var drifts = _service.DetectDrift();
+        // ONE read of the live values, feeding BOTH lists. It used to be two — DetectDrift() read
+        // them, then this method read them again for the watched list — and a setting that changed
+        // between the two reads came out with its NEW value but no drift verdict, so it displayed as
+        // settled while having moved. That is the exact state this tab exists to surface, and it is
+        // not hypothetical: the catalog watches settings whose whole point is that Windows Update
+        // flips them back underneath you.
+        // Still read per refresh, not per session: stale displayed values would be their own quiet lie.
+        var current = _service.ReadCurrent();
+        var drifts = baseline is null ? [] : _service.DetectDrift(baseline, current);
         Drifts.ReplaceWith(drifts.Select(d => new DriftRow(d)));
         HasDrift = Drifts.Count > 0;
         RestoreSelectedCommand.NotifyCanExecuteChanged();
 
-        // Rebuilt on every refresh rather than once in the constructor, so the values shown are the
-        // LIVE ones — a list of watched settings with stale values would be its own quiet lie, and this
-        // is the same read DetectDrift performs. Drifted settings are marked so the two lists agree:
-        // the same setting cannot read as settled here while the drift list flags it below.
-        var current = _service.ReadCurrent();
         var drifted = drifts.Select(d => d.Setting.Key).ToHashSet(StringComparer.Ordinal);
         Watched.ReplaceWith(_service.Catalog.Select(s =>
             new WatchedRow(s, current.TryGetValue(s.Key, out var v) ? v : null, drifted.Contains(s.Key))));

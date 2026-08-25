@@ -19,11 +19,24 @@ public class PrivacyViewModelTests
     // The VM loads its toggles asynchronously off the UI thread (so startup isn't blocked);
     // wait for that init to finish before asserting loaded state, so the tests observe the
     // populated collections deterministically instead of racing the background load.
-    private static PrivacyViewModel NewVm()
+    private static PrivacyViewModel NewVm() => NewVm(NoRestorePoint());
+
+    private static PrivacyViewModel NewVm(ISessionRestorePoint restorePoint)
     {
-        var vm = new PrivacyViewModel(new PrivacyService());
+        var vm = new PrivacyViewModel(new PrivacyService(), restorePoint);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
+    }
+
+    /// <summary>
+    /// A seam that answers "no point was created" — the common case on a consumer machine, where
+    /// System Restore is off or Windows has already spent its 24-hour allowance.
+    /// </summary>
+    private static ISessionRestorePoint NoRestorePoint()
+    {
+        var rp = Substitute.For<ISessionRestorePoint>();
+        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        return rp;
     }
 
     [Fact]
@@ -138,16 +151,44 @@ public class PrivacyViewModelTests
     }
 
     [Fact]
-    public void ApplyChanges_WithNoPending_SetsNoChangesMessage()
+    public async Task ApplyChanges_WithNoPending_SetsNoChangesMessage()
     {
         var vm = NewVm();
-        vm.ApplyChangesCommand.Execute(null);
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
 
         Assert.Contains("no changes", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void ApplyChanges_WhenUserDeclinesConfirm_DoesNotApply_AndKeepsPending()
+    public async Task ApplyChanges_WithNoPending_TakesNoRestorePoint()
+    {
+        // Nothing is written, so nothing needs protecting — and Windows only grants about one point
+        // per 24 hours, so spending it on a no-op would deny it to the change that follows.
+        var restorePoint = NoRestorePoint();
+        var vm = NewVm(restorePoint);
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApplyChanges_WhenTheUserDeclines_TakesNoRestorePoint()
+    {
+        var restorePoint = NoRestorePoint();
+        using var dialog = new DialogAnswer(confirm: false);
+
+        var vm = NewVm(restorePoint);
+        vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled;
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        // The snapshot is taken after the confirmation, so a declined apply costs the user nothing.
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApplyChanges_WhenUserDeclinesConfirm_DoesNotApply_AndKeepsPending()
     {
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -159,7 +200,7 @@ public class PrivacyViewModelTests
             vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled; // create a pending change
             var pendingBefore = vm.PendingChangeCount;
 
-            vm.ApplyChangesCommand.Execute(null);
+            await vm.ApplyChangesCommand.ExecuteAsync(null);
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
             // Declining must NOT write to the registry: the change is still pending.
@@ -180,7 +221,7 @@ public class PrivacyViewModelTests
     [Fact]
     public async Task AfterConstruction_TheBusyFlagIsClear()
     {
-        var vm = new PrivacyViewModel(new PrivacyService());
+        var vm = new PrivacyViewModel(new PrivacyService(), NoRestorePoint());
 
         await vm.InitializationComplete;
 

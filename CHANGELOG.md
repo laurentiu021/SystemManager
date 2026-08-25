@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.74.0] - 2026-08-25
+
+The CPU Core Affinity process list is now filterable, and shows which processes are already pinned.
+Finding one game in a dropdown of 300 `svchost` entries was a dead end; now there's a name/ID filter
+like the other list tabs, and a process running on a subset of cores says so right in the list.
+
+### Added
+- **A filter box on the CPU Core Affinity process picker.** Type part of a name or the process ID to
+  narrow the list — the same affordance the Services, Task Scheduler and Windows Features tabs already
+  have. The selection is kept across a Refresh, even if the process's affinity changed in between.
+- **A "pinned" marker in the list.** A process running on a subset of cores shows it — e.g.
+  "chrome (1234) — 4 of 16 cores" — so you can see what you've already tuned instead of selecting each
+  one to infer it from the core checkboxes. The tab already read this and discarded it. The wording is
+  neutral (it reports the state, it doesn't claim SysManager set it), and a process on all cores or one
+  whose mask can't be read shows no marker.
+
 ## [1.73.0] - 2026-08-25
 
 Disk Analyzer now remembers your last scan of each folder and tells you what changed. Until now every

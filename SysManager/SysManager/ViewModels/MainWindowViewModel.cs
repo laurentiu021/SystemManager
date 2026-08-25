@@ -424,7 +424,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(CleanupViewModel)] = new CleanupViewModel(runner),
             [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), fixedDrives),
             [typeof(DuplicateFileViewModel)] = new DuplicateFileViewModel(new DuplicateFileService()),
-            [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService()),
+            [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService(), new DiskScanHistoryService()),
             [typeof(ProcessManagerViewModel)] = new ProcessManagerViewModel(new ProcessManagerService()),
             [typeof(BatteryHealthViewModel)] = new BatteryHealthViewModel(battery),
             [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(runner)),

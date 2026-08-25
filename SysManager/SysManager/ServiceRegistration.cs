@@ -39,6 +39,7 @@ public static class ServiceRegistration
         services.AddSingleton<IAppBlockerService, AppBlockerService>();
         services.AddSingleton<DeepCleanupService>();
         services.AddSingleton<DiskAnalyzerService>();
+        services.AddSingleton<DiskScanHistoryService>();
         services.AddSingleton<DuplicateFileService>();
         services.AddSingleton<EventLogService>();
         services.AddSingleton<FixedDriveService>();

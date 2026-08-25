@@ -84,7 +84,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `DeepCleanupViewModel` — scan-first deep cleanup + large-files finder.
 - `StartupViewModel` — startup program management (enable/disable via registry).
 - `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
-- `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down.
+- `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down. Remembers the last scan of each root via `DiskScanHistoryService` and shows a "since last scan" delta; the read-and-remember is best-effort, so a history failure degrades to no delta rather than breaking a completed scan.
 - `ProcessManagerViewModel` — running processes with kill, filter, sort. The kill path has three
   tiers, because one message cannot be true for all of them: `BootCriticalProcesses` (13 names) is
   refused outright, `HighConsequenceProcesses` (Defender's engine, Windows Installer and the servicing
@@ -279,6 +279,11 @@ Key services:
   descriptions from file version info and known-process database.
 - `SpeedTestHistoryService` — persists speed test results to JSON for
   historical charting and trend analysis.
+- `DiskScanHistoryService` — remembers the last Disk Analyzer scan per root (one snapshot each,
+  capped roots and capped folders-per-root) in `disk-scan-history.json`, so the tab can show what
+  changed since last time. Same never-throw-on-IO contract and `configDir` test seam as
+  `SpeedTestHistoryService`. Machine-specific by nature (absolute paths + sizes on this disk), so it
+  is deliberately absent from `ProfileService.Catalog` and pinned OUT by a test.
 - `ShortcutCleanerService` — scans Start Menu and Desktop for broken
   shortcuts (dead targets) and offers safe removal.
 - `BulkInstallerService` — installs apps via winget in batch with

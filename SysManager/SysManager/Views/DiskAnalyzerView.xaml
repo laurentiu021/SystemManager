@@ -51,6 +51,12 @@
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <StackPanel>
                 <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                <!-- What changed since the last scan of this folder. Collapsed until there is a prior
+                     scan to compare against, so a first-ever scan shows nothing rather than a zero. -->
+                <TextBlock Text="{Binding TrendSummary}" FontSize="12" Margin="0,0,0,6"
+                           Foreground="{DynamicResource TextSecondary}"
+                           AutomationProperties.Name="Change since last scan"
+                           Visibility="{Binding HasTrend, Converter={StaticResource BoolToVis}}"/>
                 <!-- The total is partial BY DESIGN: four Windows system subtrees are skipped because they
                      are slow or unreadable, and junctions are never followed (following one would
                      double-count, or walk outside the folder that was asked about). WinSxS alone is

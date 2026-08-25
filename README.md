@@ -489,6 +489,10 @@ a confirmation before it runs:
   reports, and names the exact folders on hover
 - Folders Windows wouldn't let it fully read are marked, so a partial figure never looks
   like a complete one
+- **Remembers your last scan of each folder** and shows what changed — "3.2 GB larger than your
+  last scan on 12 Jul" — so a one-off number becomes an answer to "why did my disk fill up?". It is
+  always phrased as *since your last scan*, never as live monitoring, because you choose when to
+  scan. Stored only on this PC and never carried to another (folder sizes here mean nothing there)
 
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, and status

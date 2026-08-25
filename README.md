@@ -451,6 +451,11 @@ a confirmation before it runs:
 - Toggle enable/disable per feature with confirmation dialog
 - Categorized: Virtualization, Networking, Development, Media & Print, Legacy
 - Shows reboot-required status after toggling
+- **A Windows restore point is attempted before the first toggle of the session**, shared with the
+  other tabs that change system settings. This is the tab where it matters most: turning a feature
+  back on is a second servicing operation that can itself fail, and unlike removing a Store app,
+  a restore point really does cover this kind of change. Mentioned only when Windows actually made
+  one, and never on a toggle that failed
 - Search/filter across all features
 - Requires administrator privileges for modifications
 

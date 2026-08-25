@@ -445,7 +445,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(BulkInstallerViewModel)] = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()), new AppIconService()),
             [typeof(FileShredderViewModel)] = new FileShredderViewModel(new FileShredderService()),
             [typeof(DnsHostsViewModel)] = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), new HostsFileService()),
-            [typeof(WindowsFeaturesViewModel)] = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner)),
+            [typeof(WindowsFeaturesViewModel)] = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner), sessionRestorePoint),
             [typeof(PrivacyViewModel)] = new PrivacyViewModel(new PrivacyService(), sessionRestorePoint),
             [typeof(ContextMenuViewModel)] = new ContextMenuViewModel(new ContextMenuService()),
             [typeof(SystemReportViewModel)] = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth)),

@@ -18,6 +18,7 @@ namespace SysManager.ViewModels;
 public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 {
     private readonly WindowsFeaturesService _service;
+    private readonly ISessionRestorePoint _restorePoint;
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _toggleCts;
 
@@ -33,9 +34,10 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
-    public WindowsFeaturesViewModel(WindowsFeaturesService service)
+    public WindowsFeaturesViewModel(WindowsFeaturesService service, ISessionRestorePoint restorePoint)
     {
         _service = service;
+        _restorePoint = restorePoint;
         // Scan and ToggleFeature both drive the shared WindowsFeaturesService PowerShell
         // runner (each subscribes its own LineReceived handler). Running them concurrently
         // would cross-contaminate the captured output (the SFC/DISM bug class). Re-evaluate
@@ -121,6 +123,15 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
         try
         {
+            // Before the change, never after. This is the tab where the snapshot matters most and is
+            // also genuinely useful: unlike removing a Store app, an optional feature is registry and
+            // system-file state, which is exactly what System Restore captures. Taken after the
+            // confirmation above, so declining costs the user nothing. Best-effort — the toggle is
+            // never gated on it, because Windows refuses a second point within 24h and System Restore
+            // is switched off entirely on many consumer machines.
+            var snapshotTaken = await _restorePoint
+                .EnsureAsync("SysManager Windows Features", _toggleCts.Token).ConfigureAwait(true);
+
             var (success, reboot) = feature.IsEnabled
                 ? await _service.DisableFeatureAsync(feature.Name, _toggleCts.Token)
                 : await _service.EnableFeatureAsync(feature.Name, _toggleCts.Token);
@@ -134,8 +145,11 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
                 if (reboot) PendingReboot = true;
 
+                // Only when Windows really made one. Not mentioned on the failure path below: that
+                // toggle changed nothing, so there is nothing for a snapshot to reassure anyone about.
+                var rp = snapshotTaken ? " Restore point created." : "";
                 StatusMessage = $"{feature.DisplayName} {(feature.IsEnabled ? "enabled" : "disabled")}" +
-                    (reboot ? " — reboot required." : ".");
+                    (reboot ? " — reboot required." : ".") + rp;
                 Log.Information("Feature {Feature} toggled to {State}, reboot={Reboot}",
                     feature.Name, feature.IsEnabled ? "Enabled" : "Disabled", reboot);
             }

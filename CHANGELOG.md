@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.71.0] - 2026-08-25
+
+Windows Features now takes a restore point before it changes anything. It was the last tab making a
+servicing-level change to Windows without one, and the one where it matters most: turning a feature back
+on is a second operation that can itself fail, possibly with a reboot already pending. Unlike removing a
+Store app, a restore point genuinely does cover this kind of change.
+
+### Added
+- **Windows Features takes a restore point before the first toggle of the session.** Taken after the
+  confirmation and after the "needs administrator" refusal, so neither declining nor being unelevated
+  spends the single point Windows grants per day. Best-effort, and reported only when one was really
+  created — never on a toggle that DISM rejected, since nothing changed in that case.
+
 ## [1.70.1] - 2026-08-25
 
 Settings Watchdog could show a setting as unchanged while it had in fact changed. The page read your

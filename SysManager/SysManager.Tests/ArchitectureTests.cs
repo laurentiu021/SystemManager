@@ -2870,6 +2870,7 @@ public partial class ArchitectureTests
             ("DefenderViewModel.cs", "private async Task RunOperationAsync(", "await change("),
             ("EdgeOneDriveViewModel.cs", "private async Task RunOperationAsync(", "await operation("),
             ("PrivacyViewModel.cs", "private async Task ApplyChanges()", "_service.ApplyAll("),
+            ("WindowsFeaturesViewModel.cs", "private async Task ToggleFeatureAsync(", "_service.DisableFeatureAsync("),
         };
 
         var consumers = Directory

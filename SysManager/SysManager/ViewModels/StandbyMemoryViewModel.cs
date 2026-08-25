@@ -25,7 +25,8 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
     private readonly DispatcherTimer? _timer;
     // Suppresses saving while the constructor applies the loaded values, so restoring a
     // preference does not immediately rewrite the same file.
-    private bool _loadingPreferences;
+    // Constructor-only, like AboutViewModel's equivalent flag — see the note there.
+    private readonly bool _loadingPreferences;
 
     [ObservableProperty] private string _totalDisplay = "—";
     [ObservableProperty] private string _availableDisplay = "—";

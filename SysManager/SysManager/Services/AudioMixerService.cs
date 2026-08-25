@@ -641,7 +641,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     // ── Core Audio COM interop (documented interfaces, exact vtable order) ──
 
     private static readonly Guid CLSID_MMDeviceEnumerator = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
-    private static Guid IID_IAudioSessionManager2 = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+    private static readonly Guid IID_IAudioSessionManager2 = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
     private const uint CLSCTX_ALL = 0x17;
 
     private enum EDataFlow { Render = 0, Capture = 1, All = 2 }

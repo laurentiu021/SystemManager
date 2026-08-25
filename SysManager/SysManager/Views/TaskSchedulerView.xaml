@@ -180,9 +180,13 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <DockPanel Grid.Column="0" VerticalAlignment="Center">
-                <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                <ProgressBar AutomationProperties.Name="Scanning scheduled tasks" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                              IsIndeterminate="{Binding IsProgressIndeterminate}"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                <Button DockPanel.Dock="Right" Content="Cancel" Command="{Binding CancelCommand}"
+                        AutomationProperties.Name="Cancel the task scan"
+                        Style="{StaticResource GhostButton}" Margin="0,0,12,0" Padding="10,2"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
             </DockPanel>
             <Button Grid.Column="1" Content="Enable / Disable" Command="{Binding ToggleEnabledCommand}"

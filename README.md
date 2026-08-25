@@ -724,6 +724,11 @@ Reclaim space and clear browsing traces, per browser:
 - **Per-category** with size shown: Cache, History, Cookies, Sessions
 - **Cookies/sessions are flagged and left unticked** by default — cleaning them
   signs you out, so it's always an explicit choice; cache and history are pre-selected
+- **Firefox gets cache, cookies and sessions — but not history, on purpose.** Firefox
+  keeps history and your bookmarks in the same file (`places.sqlite`), so clearing
+  "history" would delete your bookmarks with it. Rather than do that quietly, the tab
+  simply doesn't offer History for Firefox. Its cookies and sessions target only their
+  own named files — never saved logins, keys or bookmarks
 - **Confirmation with an impact summary** before anything is deleted
 - Per-user (no admin); locked files (browser open) are skipped, not forced, and
   symlinks/junctions are never followed

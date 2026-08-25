@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.0] - 2026-08-25
+
+Browser Cleaner now clears Firefox cookies and open-tab sessions, not just its cache. A Firefox user who
+opened this tab to clear browsing traces was, until now, only ever clearing cache — while the tab's own
+description promised the same categories it offers the other browsers.
+
+### Added
+- **Firefox: Cookies and Sessions can now be cleared**, alongside the cache it already handled. Both are
+  unticked by default and flagged "signs you out", the same as the Chrome/Edge/Brave/Opera cookie rows,
+  and each Firefox profile gets its own rows.
+
+### Notes
+- **Firefox History is deliberately not offered.** Firefox stores your history and your bookmarks in the
+  same file (`places.sqlite`), so a "clear history" would delete bookmarks too. Rather than do that
+  silently, the tab omits History for Firefox. Its cookies/sessions target only their own named files —
+  saved logins, keys, bookmarks and preferences are never touched.
+
 ## [1.74.0] - 2026-08-25
 
 The CPU Core Affinity process list is now filterable, and shows which processes are already pinned.

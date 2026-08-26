@@ -194,4 +194,72 @@ public class DiskHealthReportTests
         var r = new DiskHealthReport { PowerOnHours = hours };
         Assert.Equal(expected, r.PowerOnDisplay);
     }
+
+    // ---------- Windows' verdict caps the score ----------
+    // A drive Windows reports as Unhealthy used to score 100 whenever ANY SMART field was present,
+    // because HealthStatus was consulted only in the no-data branch. The same report object then
+    // said "Drive is failing - back up now and replace it." next to a green 100% gauge.
+
+    [Fact]
+    public void HealthPercent_UnhealthyDiskWithCleanSmartData_IsCappedNotPerfect()
+    {
+        // Every SMART counter is pristine, so the arithmetic alone gives 100.
+        var r = new DiskHealthReport
+        {
+            HealthStatus = "Unhealthy",
+            WearPercent = 0,
+            TemperatureC = 35,
+            ReadErrors = 0,
+            WriteErrors = 0,
+        };
+
+        Assert.Equal(20, r.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_WarningDiskWithCleanSmartData_IsCappedAt60()
+    {
+        var r = new DiskHealthReport { HealthStatus = "Warning", WearPercent = 0, TemperatureC = 35 };
+
+        Assert.Equal(60, r.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_UnhealthyDiskAlreadyBelowTheCeiling_KeepsTheWorseScore()
+    {
+        // The ceiling only ever lowers. A drive that scores 5 on wear must not be lifted to 20.
+        var r = new DiskHealthReport { HealthStatus = "Unhealthy", WearPercent = 95 };
+
+        Assert.Equal(5, r.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_HealthyDisk_IsNotCapped()
+    {
+        // "Healthy" maps to 100, so it must constrain nothing.
+        var r = new DiskHealthReport { HealthStatus = "Healthy", WearPercent = 0, TemperatureC = 35 };
+
+        Assert.Equal(100, r.HealthPercent);
+    }
+
+    [Fact]
+    public void HealthPercent_UnrecognisedStatusWithSmartData_IsNotCapped()
+    {
+        // An empty or unknown status is not evidence of anything, so the SMART arithmetic stands.
+        var r = new DiskHealthReport { HealthStatus = "", WearPercent = 10 };
+
+        Assert.Equal(90, r.HealthPercent);
+    }
+
+    [Theory]
+    [InlineData("Healthy", 100)]
+    [InlineData("Warning", 60)]
+    [InlineData("Unhealthy", 20)]
+    [InlineData("", null)]
+    [InlineData("Something else", null)]
+    [InlineData(null, null)]
+    public void StatusCeiling_IsTheSingleMappingBothCallersUse(string? status, int? expected)
+    {
+        Assert.Equal(expected, DiskHealthReport.StatusCeiling(status));
+    }
 }

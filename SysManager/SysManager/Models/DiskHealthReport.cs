@@ -79,20 +79,34 @@ public sealed partial class DiskHealthReport : ObservableObject
             if (ReadErrors is > 0) score -= (int)Math.Min(ReadErrors.Value * 5L, 20L);
             if (WriteErrors is > 0) score -= (int)Math.Min(WriteErrors.Value * 5L, 20L);
 
-            if (!WearPercent.HasValue && !TemperatureC.HasValue && ReadErrors is null && WriteErrors is null)
-            {
-                return HealthStatus switch
-                {
-                    "Healthy" => 100,
-                    "Warning" => 60,
-                    "Unhealthy" => 20,
-                    _ => null
-                };
-            }
+            // Windows' own verdict is a CEILING, not a tie-break. A drive it has flagged as failing
+            // cannot report a healthy score just because wear and temperature happen to look fine —
+            // HealthStatus covers conditions SMART counters do not (predictive-failure flags,
+            // reallocated-sector thresholds, driver-reported media errors). Before this, the gauge
+            // showed 100% on a drive whose own verdict line read "Drive is failing".
+            int? ceiling = StatusCeiling(HealthStatus);
 
-            return Math.Clamp(score, 0, 100);
+            if (!WearPercent.HasValue && !TemperatureC.HasValue && ReadErrors is null && WriteErrors is null)
+                return ceiling;
+
+            return Math.Clamp(ceiling is { } cap ? Math.Min(score, cap) : score, 0, 100);
         }
     }
+
+    /// <summary>
+    /// The highest score a drive may report given Windows' own <c>HealthStatus</c>, or null when the
+    /// status is absent or unrecognised (in which case it constrains nothing).
+    /// <para>Declared once and used for both the no-SMART fallback and the cap above.
+    /// <c>HealthScoreService</c> used to carry a second copy of this table that disagreed on
+    /// <c>Warning</c> (50 there, 60 here), which is how a duplicated mapping drifts.</para>
+    /// </summary>
+    internal static int? StatusCeiling(string? status) => status switch
+    {
+        "Healthy" => 100,
+        "Warning" => 60,
+        "Unhealthy" => 20,
+        _ => null,
+    };
 
     /// <summary>Color hex for the health percentage gauge.</summary>
     public string HealthPercentColorHex => HealthPercent switch

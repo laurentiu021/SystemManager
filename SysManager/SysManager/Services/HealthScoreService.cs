@@ -108,14 +108,19 @@ public sealed class HealthScoreService
     {
         if (disks is null || disks.Count == 0) return 100;
 
-        // Use the worst disk's health percentage, or map status string
-        int worstScore = disks.Select(d => d.HealthPercent ?? d.HealthStatus switch
-        {
-            "Healthy" => 100,
-            "Warning" => 50,
-            "Unhealthy" => 20,
-            _ => 80
-        }).Min();
+        // The worst disk decides. HealthPercent already folds in Windows' own verdict as a ceiling,
+        // so there is nothing left to map here.
+        //
+        // This used to be `?? d.HealthStatus switch { "Healthy" => 100, "Warning" => 50,
+        // "Unhealthy" => 20, _ => 80 }`, whose three named arms were unreachable: HealthPercent
+        // returns null ONLY when there is no SMART data AND the status is none of those three, so
+        // the fallback could only ever hit `_`. It read as if the Windows verdict were handled here
+        // while the percentage was quietly ignoring it, and its Warning value (50) disagreed with
+        // the real mapping (60).
+        //
+        // 80, not 100, for a drive we know nothing about: absent evidence is not a clean bill of
+        // health, and this is the only case that reaches it.
+        int worstScore = disks.Select(d => d.HealthPercent ?? 80).Min();
         return Math.Clamp(worstScore, 0, 100);
     }
 

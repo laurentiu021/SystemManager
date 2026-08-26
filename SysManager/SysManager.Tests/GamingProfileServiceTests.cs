@@ -485,7 +485,7 @@ public class GamingProfileServiceTests
         finally { if (File.Exists(path)) File.Delete(path); }
     }
 
-    // ── Ultra-audit fix: RecoverPendingAsync must serialize on _gate ───────────
+    // ── RecoverPendingAsync must serialize on _gate ────────────────────────────
     //
     // The startup crash-recovery sweep used to revert the leftover session and rewrite the store
     // WITHOUT holding _gate. After the user answers the "restore?" dialog the UI is live again, so a

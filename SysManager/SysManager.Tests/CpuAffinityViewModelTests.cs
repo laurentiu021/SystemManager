@@ -450,4 +450,130 @@ public class CpuAffinityViewModelTests
         var all = new RunningProcess(7, "proc", CpuAffinityService.AllCoresMask(Environment.ProcessorCount));
         Assert.Equal("proc (7)", all.PinnedDisplay);
     }
+
+    // ---------- Restore must target the TRUE original, not a re-baselined one ----------
+    // OnSelectedProcessChanged used to read the live mask into a single _originalMask field, so a
+    // Refresh after Apply re-baselined "original" to the mask the user had just pinned. Restore then
+    // wrote that same value back and still reported "Restored … to its original cores" — the button
+    // did nothing and said it worked. Before the selection-preserving Refresh, a refresh nulled the
+    // selection and Restore went disabled, which hid the defect rather than fixing it.
+
+    /// <summary>
+    /// A fake whose <c>GetAffinity</c> and <c>GetProcesses</c> reflect whatever <c>TrySetAffinity</c>
+    /// last wrote, so "the live mask changed because we pinned it" is modelled instead of assumed.
+    /// <paramref name="live"/> is a one-element box holding the current mask; <paramref name="writes"/>
+    /// records every applied mask in order.
+    /// </summary>
+    private static ICpuAffinityService LiveMaskService(int pid, string name, long[] live, List<long> writes)
+    {
+        var service = Substitute.For<ICpuAffinityService>();
+        service.LogicalProcessorCount.Returns(4);
+        service.GetCores().Returns(new List<CpuCore>
+        {
+            new(0, 0, "Standard"), new(1, 0, "Standard"),
+            new(2, 0, "Standard"), new(3, 0, "Standard"),
+        });
+        service.GetProcesses().Returns(_ => new List<RunningProcess> { new(pid, name, live[0]) });
+        service.GetAffinity(pid).Returns(_ => live[0]);
+        service.TrySetAffinity(pid, Arg.Any<long>(), out Arg.Any<string>())
+               .Returns(ci =>
+               {
+                   live[0] = (long)ci[1];
+                   writes.Add(live[0]);
+                   ci[2] = string.Empty;
+                   return true;
+               });
+        return service;
+    }
+
+    [Fact]
+    public async Task Restore_AfterApplyThenRefresh_WritesTheTrueOriginal_NotThePinnedMask()
+    {
+        const long allFour = 0b1111;
+        long[] live = [allFour];
+        var writes = new List<long>();
+        var vm = NewVm(LiveMaskService(4242, "game", live, writes));
+        vm.SelectedProcess = vm.Processes.First(p => p.ProcessId == 4242);
+
+        foreach (var c in vm.Cores) c.IsSelected = c.Index == 0;
+        vm.ApplyCommand.Execute(null);
+        Assert.Equal(0b0001, writes[^1]);
+
+        // The refresh that preserves the selection — this is what re-baselined "original".
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.True(vm.RestoreCommand.CanExecute(null));
+        vm.RestoreCommand.Execute(null);
+
+        // All four cores must come back. Before the fix this wrote 0b0001 — the pinned mask — so
+        // Restore was a no-op that still claimed success.
+        Assert.Equal(allFour, writes[^1]);
+        Assert.Equal(allFour, live[0]);
+        Assert.Contains("original cores", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Restore_StaysAvailableAcrossARefresh()
+    {
+        // Companion to the above: the captured original must survive a refresh, so the button is
+        // still offered rather than silently disappearing.
+        long[] live = [0b1111];
+        var vm = NewVm(LiveMaskService(4242, "game", live, new List<long>()));
+        vm.SelectedProcess = vm.Processes.First(p => p.ProcessId == 4242);
+        Assert.True(vm.RestoreCommand.CanExecute(null));
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.True(vm.RestoreCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Restore_WhenTheAffinityCouldNotBeRead_IsNotOffered()
+    {
+        // A protected or exiting process returns no mask, so nothing gets captured. The button must
+        // stay disabled rather than being offered for a restore that would silently do nothing —
+        // "selected" is not the same as "we know what to put back".
+        var service = Substitute.For<ICpuAffinityService>();
+        service.LogicalProcessorCount.Returns(4);
+        service.GetCores().Returns(new List<CpuCore>
+        {
+            new(0, 0, "Standard"), new(1, 0, "Standard"),
+            new(2, 0, "Standard"), new(3, 0, "Standard"),
+        });
+        service.GetProcesses().Returns(new List<RunningProcess> { new(4242, "protected", 0) });
+        service.GetAffinity(4242).Returns((long?)null);
+
+        var vm = NewVm(service);
+        vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 4242);
+
+        Assert.NotNull(vm.SelectedProcess);
+        Assert.True(vm.ApplyCommand.CanExecute(null));    // pinning is still allowed
+        Assert.False(vm.RestoreCommand.CanExecute(null)); // restoring is not
+    }
+
+    [Fact]
+    public void Restore_WhenAPidIsReused_UsesTheNewProcessOwnOriginal()
+    {
+        // Windows reuses pids, so the captured original is keyed on pid AND name. A different
+        // process that lands on a pid SysManager already pinned must be restored to what IT had,
+        // never to the previous tenant's affinity.
+        const long allFour = 0b1111;
+        long[] live = [allFour];
+        var writes = new List<long>();
+        var vm = NewVm(LiveMaskService(4242, "game", live, writes));
+
+        vm.SelectedProcess = vm.Processes.First(p => p.ProcessId == 4242);
+        foreach (var c in vm.Cores) c.IsSelected = c.Index == 0;
+        vm.ApplyCommand.Execute(null);
+        Assert.Equal(0b0001, live[0]);
+
+        // "game" exits; an unrelated process is handed the same pid, inheriting the live mask.
+        vm.SelectedProcess = new RunningProcess(4242, "other.exe", live[0]);
+        Assert.True(vm.RestoreCommand.CanExecute(null));
+        vm.RestoreCommand.Execute(null);
+
+        // Its own original is 0b0001, the mask it was seen with. Keyed on the pid alone this would
+        // have written 0b1111 and handed a stranger the old process's cores.
+        Assert.Equal(0b0001, writes[^1]);
+    }
 }

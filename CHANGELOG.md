@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.1] - 2026-08-26
+
+"Restore original cores" on the CPU Core Affinity tab could report success while putting nothing back.
+If you pinned a process and then refreshed the list, Restore quietly re-applied the cores you had just
+pinned instead of the ones the process started with — and still said it had restored them.
+
+### Fixed
+- **CPU Core Affinity: Restore now really returns a process to the cores it started on.** The tab
+  remembered "original cores" in a single slot that was re-read every time a process was selected, so
+  refreshing the list after pinning overwrote the remembered value with the pinned one. Restore then
+  wrote that same mask back — a no-op reported as a success. Each process's starting affinity is now
+  captured once, the first time the tab sees it, and kept for the rest of the session. Two related
+  edges are covered as well: the remembered value survives a refresh (so the button no longer
+  disappears), and Restore is not offered at all for a process whose affinity could not be read,
+  rather than being offered for a restore that would do nothing.
+
 ## [1.75.0] - 2026-08-25
 
 Browser Cleaner now clears Firefox cookies and open-tab sessions, not just its cache. A Firefox user who

@@ -4276,4 +4276,80 @@ public partial class ArchitectureTests
         throw new DirectoryNotFoundException(
             "Could not locate the SysManager app project from " + AppContext.BaseDirectory);
     }
+
+    /// <summary>
+    /// A revert baseline may not be captured inside a selection-changed handler with a plain
+    /// assignment. That is precisely how "Restore original cores" became a no-op that reported
+    /// success: <c>OnSelectedProcessChanged</c> re-read the live affinity into a single
+    /// <c>_originalMask</c> field, so refreshing the list after a pin overwrote the remembered value
+    /// with the pinned one — and the refresh re-selects the same process on purpose, to preserve the
+    /// selection. The two safe shapes are a keyed capture-once (<c>TryAdd</c> into a dictionary) or a
+    /// capture taken in the command that performs the change, immediately before it.
+    /// <para>Assignments that CLEAR the baseline are fine — forgetting is not re-baselining — as is
+    /// any assignment outside a change handler.</para>
+    /// </summary>
+    [Fact]
+    public void NoRevertBaseline_IsRecapturedInASelectionChangedHandler()
+    {
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var handlersScanned = 0;
+
+        foreach (var path in Directory.EnumerateFiles(vmDir, "*ViewModel.cs").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            // Comments stripped: the field this rule exists for documents the rule at its declaration,
+            // so a guard reading prose would pass on code that does the wrong thing.
+            var code = WithoutComments(File.ReadAllText(path));
+            var file = Path.GetFileName(path);
+
+            foreach (var handler in ChangeHandler().Matches(code).Cast<Match>())
+            {
+                var slice = MemberSlice(code, handler.Value);
+                if (string.IsNullOrWhiteSpace(slice)) continue;
+
+                // MemberSlice ends at the next private/public/internal/protected/doc-comment line, and
+                // `partial void` is none of those — so a run of consecutive change handlers would slice
+                // as one block and attribute a later handler's assignment to the first. Cut at the next
+                // handler declaration inside the slice.
+                var next = ChangeHandler().Match(slice, handler.Value.Length);
+                if (next.Success) slice = slice[..next.Index];
+                handlersScanned++;
+
+                foreach (var write in BaselineAssignment().Matches(slice).Cast<Match>())
+                {
+                    var rhs = write.Groups["rhs"].Value.Trim();
+
+                    // Clearing is allowed; so is assigning from another field of the same kind
+                    // (moving a baseline around, not re-reading the world).
+                    if (rhs is "null" or "default") continue;
+
+                    Assert.Fail(
+                        $"{file}: {handler.Value.Trim()} assigns the revert baseline "
+                        + $"'{write.Groups["target"].Value}' from '{rhs}'. A change handler runs again when the "
+                        + "list is refreshed and the same item is re-selected, so this overwrites the value a "
+                        + "Restore/Revert is supposed to return to — the command then re-applies the state the "
+                        + "user wanted to leave and reports success. Capture it once per item (TryAdd into a "
+                        + "dictionary keyed by identity) or capture it in the command that makes the change.");
+                }
+            }
+        }
+
+        // Vacuity floor: this guard is worthless if the patterns match nothing. The view models carry
+        // dozens of generated change handlers, so a collapse to zero means the shape drifted.
+        Assert.True(handlersScanned >= 40,
+            $"only {handlersScanned} change handlers were sliced — the handler pattern no longer matches "
+            + "the generated shape, so this guard is passing without reading any of them.");
+    }
+
+    /// <summary>Matches a generated <c>partial void On…Changed</c> declaration.</summary>
+    [GeneratedRegex(@"partial void On\w+Changed\([^)]*\)")]
+    private static partial Regex ChangeHandler();
+
+    /// <summary>
+    /// Matches an assignment to a field whose name marks it as a revert baseline. Deliberately
+    /// name-based: what makes a field a baseline is that a Restore/Revert reads it, which no
+    /// structural pattern can see from the assignment alone.
+    /// </summary>
+    [GeneratedRegex(@"(?<target>_(?:original|previous|baseline|before|prior)\w*)\s*=\s*(?<rhs>[^;]+);")]
+    private static partial Regex BaselineAssignment();
+
 }

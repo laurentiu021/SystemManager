@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.2] - 2026-08-26
+
+Timer Resolution had the two ends of its range the wrong way round, so "Enable" asked Windows for the
+slowest timer instead of the fastest one. The tab reported a 15.6 ms best case and a 0.5 ms worst
+case — exactly backwards — and Gaming Profile's "Finest timer resolution" switch had the same
+problem, promising 0.5 ms while requesting the 15.6 ms default.
+
+### Fixed
+- **Timer Resolution now really requests the fastest timer your hardware supports.** The Windows call
+  that reports the achievable range returns the slowest value first and the fastest second; its
+  parameter names say the opposite ("Minimum" means minimum precision, i.e. the longest interval), and
+  SysManager had trusted the names. Measured on real hardware the call returns 15.625 ms, then
+  0.5 ms, then the value in effect. The two are now read in the order the call actually uses, so the
+  tab shows the right numbers, Enable asks for the fast end, and the Gaming Profile switch does what
+  its label says. If you had used either one for lower input latency, it was not doing anything —
+  it now does.
+
 ## [1.75.1] - 2026-08-26
 
 "Restore original cores" on the CPU Core Affinity tab could report success while putting nothing back.

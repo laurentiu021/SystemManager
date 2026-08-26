@@ -261,4 +261,30 @@ public class HealthScoreServiceTests
             new List<DiskInfo>(),
             DateTime.Now);
     }
+
+    // ---------- The disk score honours the Windows verdict ----------
+
+    [Fact]
+    public void ComputeDiskScore_UnhealthyDiskWithCleanSmartData_IsNot100()
+    {
+        // The Dashboard used to report a perfect disk score for a drive the Disk Health tab was
+        // telling the user to replace.
+        var disks = new List<DiskHealthReport>
+        {
+            new() { HealthStatus = "Healthy", WearPercent = 0 },
+            new() { HealthStatus = "Unhealthy", WearPercent = 0, TemperatureC = 35 },
+        };
+
+        Assert.Equal(20, HealthScoreService.ComputeDiskScore(disks));
+    }
+
+    [Fact]
+    public void ComputeDiskScore_DiskWithNoDataAtAll_ScoresTheUnknownValue()
+    {
+        // HealthPercent is null only when there is neither SMART data nor a recognised status.
+        // Absent evidence is not a clean bill of health, so it scores 80 rather than 100.
+        var disks = new List<DiskHealthReport> { new() { HealthStatus = "Unknown to us" } };
+
+        Assert.Equal(80, HealthScoreService.ComputeDiskScore(disks));
+    }
 }

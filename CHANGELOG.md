@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.3] - 2026-08-26
+
+A drive that Windows itself reports as failing could still show a green 100% health score. Disk Health
+would say "Drive is failing — back up now and replace it." on one line and 100% on the next, and the
+Dashboard health score agreed with the 100%. If you have ever seen those two disagree, believe the
+warning.
+
+### Fixed
+- **A failing drive can no longer report a healthy score.** The percentage was worked out from wear,
+  temperature and error counts, and it only looked at Windows' own verdict when there were no such
+  readings at all. So a drive with normal wear and temperature scored 100 even when Windows had
+  flagged it as failing — which it does for problems those readings do not cover, such as
+  reallocated sectors or a predictive-failure warning from the drive itself. Windows' verdict is now a
+  ceiling: a drive it calls failing cannot score above 20, one it warns about cannot score above 60,
+  and a drive already scoring worse than that keeps the worse number. The Dashboard health score
+  follows the same rule, so the two tabs can no longer contradict each other.
+- **A drive we know nothing about no longer counts as perfect** in the Dashboard score. It counts as
+  80, because no readings and no verdict is not the same as a clean bill of health.
+
 ## [1.75.2] - 2026-08-26
 
 Timer Resolution had the two ends of its range the wrong way round, so "Enable" asked Windows for the

@@ -110,7 +110,7 @@ public sealed class AppBlockerServiceRegistryTests : IDisposable
         Assert.Equal(@"C:\Tools\dbg.exe", ReadDebugger("external.exe"));
     }
 
-    // ── Ultra-audit fix: never let App Blocker block SysManager itself ─────────
+    // ── Never let App Blocker block SysManager itself ──────────────────────────
     //
     // An IFEO block on our own exe is unrecoverable in-app (UnblockApp needs the app running,
     // but the next launch is redirected to the non-existent blocker path and fails) — the same

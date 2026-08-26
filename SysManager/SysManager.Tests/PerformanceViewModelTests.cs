@@ -244,7 +244,7 @@ public class PerformanceViewModelTests
         Assert.IsAssignableFrom<CommunityToolkit.Mvvm.Input.IAsyncRelayCommand>(vm.TrimRamCommand);
     }
 
-    // ── System-modification lock (ultra-audit #46) ──
+    // ── System-modification lock ──
     //
     // Every mutating command (Apply* / Restore All / Trim RAM / Create restore point /
     // Toggle hibernation) must serialize through OperationLockService before touching the

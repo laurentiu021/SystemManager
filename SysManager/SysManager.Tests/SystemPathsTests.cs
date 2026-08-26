@@ -109,7 +109,7 @@ public class SystemPathsTests
         Assert.Null(SystemPaths.ResolveSystemTool(null!));
     }
 
-    // ── winget resolution (ultra-audit P1: bare-name binary-planting LPE) ──
+    // ── winget resolution (bare-name binary-planting LPE) ──────────────────
     //
     // winget is an MSIX execution alias, not a System32 tool, so the System32 probes never match.
     // Before ResolveWinget, ResolveSystemTool("winget") fell through and returned the UNROOTED bare

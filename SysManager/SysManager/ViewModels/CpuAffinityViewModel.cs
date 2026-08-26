@@ -30,8 +30,18 @@ public sealed partial class CoreToggle : ObservableObject
 public sealed partial class CpuAffinityViewModel : ViewModelBase
 {
     private readonly ICpuAffinityService _service;
-    private long _originalMask;
-    private bool _hasOriginal;
+
+    /// <summary>
+    /// The affinity each process had when SysManager FIRST saw it this session, keyed by pid+name.
+    /// Captured once and never overwritten, which is the entire point: this used to be a single field
+    /// re-read on every selection change, so a Refresh after Apply re-baselined "original" to the mask
+    /// the user had just pinned — Restore then wrote the pinned value back and still reported
+    /// "Restored … to its original cores". Keyed on the name as well as the pid because Windows reuses
+    /// pids: a recycled pid is a different process and must not inherit the old one's original mask.
+    /// <para>One entry per process the user actually selects, so it is bounded by clicks rather than by
+    /// the process list; a refresh re-selecting the same process adds nothing.</para>
+    /// </summary>
+    private readonly Dictionary<(int Pid, string Name), long> _originalMasks = [];
 
     // The full list; Processes is the filtered view the picker binds. Kept separate so typing in the
     // filter never loses a process, exactly as ServicesViewModel keeps _allServices behind Services.
@@ -120,19 +130,30 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
 
     partial void OnSelectedProcessChanged(RunningProcess? value)
     {
-        _hasOriginal = false;
-        if (value is null) return;
+        if (value is null)
+        {
+            ApplyCommand.NotifyCanExecuteChanged();
+            RestoreCommand.NotifyCanExecuteChanged();
+            return;
+        }
 
         long? mask = _service.GetAffinity(value.ProcessId);
         if (mask is { } m)
         {
-            _originalMask = m;
-            _hasOriginal = true;
+            // Capture the original ONCE per process. TryAdd, not an assignment: re-selecting a process
+            // — which a Refresh now does automatically to preserve the selection — must not treat the
+            // mask SysManager itself just applied as the value to restore to.
+            _originalMasks.TryAdd(OriginalKey(value), m);
+
+            // The checkboxes always mirror the LIVE mask, so the grid shows what is true right now.
+            // Only the restore target is remembered.
             foreach (var c in Cores) c.IsSelected = CpuAffinityService.IsCoreInMask(m, c.Index);
         }
         ApplyCommand.NotifyCanExecuteChanged();
         RestoreCommand.NotifyCanExecuteChanged();
     }
+
+    private static (int Pid, string Name) OriginalKey(RunningProcess p) => (p.ProcessId, p.Name);
 
     private bool HasSelection => SelectedProcess is not null;
 
@@ -154,16 +175,19 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         }
     }
 
-    private bool CanRestore => SelectedProcess is not null && _hasOriginal;
+    private bool CanRestore =>
+        SelectedProcess is not null && _originalMasks.ContainsKey(OriginalKey(SelectedProcess));
 
     [RelayCommand(CanExecute = nameof(CanRestore))]
     private void Restore()
     {
         var proc = SelectedProcess;
-        if (proc is null || !_hasOriginal) return;
-        if (_service.TrySetAffinity(proc.ProcessId, _originalMask, out string error))
+        if (proc is null) return;
+        if (!_originalMasks.TryGetValue(OriginalKey(proc), out long original)) return;
+
+        if (_service.TrySetAffinity(proc.ProcessId, original, out string error))
         {
-            foreach (var c in Cores) c.IsSelected = CpuAffinityService.IsCoreInMask(_originalMask, c.Index);
+            foreach (var c in Cores) c.IsSelected = CpuAffinityService.IsCoreInMask(original, c.Index);
             StatusMessage = $"Restored {proc.Name} to its original cores.";
         }
         else

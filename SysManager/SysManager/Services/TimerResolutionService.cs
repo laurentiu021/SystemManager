@@ -32,7 +32,7 @@ public sealed partial class TimerResolutionService : ITimerResolutionService
     {
         try
         {
-            int status = NativeMethods.NtQueryTimerResolution(out uint finest, out uint coarsest, out uint current);
+            int status = NativeMethods.NtQueryTimerResolution(out uint coarsest, out uint finest, out uint current);
             if (status != NativeMethods.StatusSuccess)
             {
                 Log.Debug("NtQueryTimerResolution failed: NTSTATUS 0x{Status:X8}", status);
@@ -104,10 +104,17 @@ public sealed partial class TimerResolutionService : ITimerResolutionService
         /// <summary>STATUS_SUCCESS.</summary>
         public const int StatusSuccess = 0;
 
-        // NTSTATUS NtQueryTimerResolution(PULONG MaximumTime, PULONG MinimumTime, PULONG CurrentTime)
-        // Param order is (finest, coarsest, current) — "Maximum" (finest) comes FIRST.
+        // NTSTATUS NtQueryTimerResolution(PULONG MinimumResolution, PULONG MaximumResolution,
+        //                                 PULONG CurrentResolution)
+        //
+        // The order is (coarsest, finest, current), and the names are the trap: "Minimum" means
+        // minimum PRECISION, which is the LARGEST interval. Measured on real hardware, the call
+        // returns 156250 (15.6 ms) first, then 5000 (0.5 ms), then the current value — so the
+        // first out-param is the coarse Windows default, not the fine one. Binding these the other
+        // way round made Enable request the 15.6 ms default while the UI (and Gaming Profile's
+        // "Finest timer resolution (~0.5 ms)" toggle) claimed it had asked for 0.5 ms.
         [LibraryImport("ntdll.dll")]
-        internal static partial int NtQueryTimerResolution(out uint finest, out uint coarsest, out uint current);
+        internal static partial int NtQueryTimerResolution(out uint coarsest, out uint finest, out uint current);
 
         // NTSTATUS NtSetTimerResolution(ULONG DesiredTime, BOOLEAN SetResolution, PULONG ActualTime)
         // BOOLEAN is a 1-byte type → marshal bool as U1.

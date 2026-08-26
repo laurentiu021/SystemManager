@@ -4352,4 +4352,71 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(?<target>_(?:original|previous|baseline|before|prior)\w*)\s*=\s*(?<rhs>[^;]+);")]
     private static partial Regex BaselineAssignment();
 
+
+    /// <summary>
+    /// <c>NtQueryTimerResolution</c>'s out-parameters must be bound (coarsest, finest, current), at
+    /// the declaration AND the call site, and <c>Enable</c> must target the finest of the two.
+    /// <para>The NT signature's names are the trap: <c>MinimumResolution</c> comes FIRST and means
+    /// minimum PRECISION — the LARGEST interval. Measured on real hardware the call returns 156250
+    /// (15.6 ms), then 5000 (0.5 ms), then the current value. Bound the other way round,
+    /// <c>finest</c> held the coarse Windows default, so <c>Enable</c> requested 15.6 ms while the
+    /// tab and Gaming Profile's "Finest timer resolution (~0.5 ms)" toggle both reported that
+    /// 0.5 ms had been asked for.</para>
+    /// <para>Nothing else can catch this. The model, its display helpers and their tests all encode
+    /// the right convention already — only the marshalling disagreed, and a P/Invoke cannot be
+    /// mocked, so no unit test can observe which end of the range each field received.</para>
+    /// </summary>
+    [Fact]
+    public void TheTimerResolutionQuery_BindsItsOutParametersCoarsestFinestCurrent()
+    {
+        // Comments stripped: the declaration documents this exact ordering right above itself, so a
+        // guard that read prose would pass on code that has the binding backwards.
+        var code = WithoutComments(File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "TimerResolutionService.cs")));
+
+        string[] expected = ["coarsest", "finest", "current"];
+
+        foreach (var (label, regex) in new (string, Regex)[]
+        {
+            ("declaration", TimerQueryDeclaration()),
+            ("call site", TimerQueryCall()),
+        })
+        {
+            var m = regex.Match(code);
+            Assert.True(m.Success,
+                $"the NtQueryTimerResolution {label} no longer matches the shape this guard reads, so "
+                + "its ordering check proves nothing. Re-derive the pattern before trusting a pass.");
+
+            string[] actual = [m.Groups["p1"].Value, m.Groups["p2"].Value, m.Groups["p3"].Value];
+            Assert.Equal(expected, actual);
+        }
+
+        // The consumer half: requesting the coarse end is what made the feature inert. Asserted on
+        // the TARGET assignment specifically, not on the name appearing somewhere in the member —
+        // Enable() also reads FinestHundredNs in its query-failed guard, so a "does the slice
+        // mention it" check stayed green while the target was switched to the coarse end.
+        var enable = MemberSlice(code, "public TimerResolutionStatus Enable()");
+        Assert.False(string.IsNullOrWhiteSpace(enable),
+            "Enable() was not found — the slice is empty, so the check below would pass without "
+            + "reading a line of code.");
+
+        var target = EnableTarget().Match(enable);
+        Assert.True(target.Success,
+            "Enable() no longer assigns its requested resolution to a local this guard can read, so "
+            + "nothing here verifies which end of the range it asks for.");
+        Assert.Equal("FinestHundredNs", target.Groups["end"].Value);
+    }
+
+    /// <summary>Captures which end of the range Enable() requests.</summary>
+    [GeneratedRegex(@"uint target = status\.(?<end>\w+);")]
+    private static partial Regex EnableTarget();
+
+    /// <summary>Matches the ntdll import declaration and captures its three out-parameter names.</summary>
+    [GeneratedRegex(@"partial int NtQueryTimerResolution\(\s*out uint (?<p1>\w+),\s*out uint (?<p2>\w+),\s*out uint (?<p3>\w+)\s*\)")]
+    private static partial Regex TimerQueryDeclaration();
+
+    /// <summary>Matches the single call to that import and captures the order it binds.</summary>
+    [GeneratedRegex(@"NativeMethods\.NtQueryTimerResolution\(\s*out uint (?<p1>\w+),\s*out uint (?<p2>\w+),\s*out uint (?<p3>\w+)\s*\)")]
+    private static partial Regex TimerQueryCall();
+
 }

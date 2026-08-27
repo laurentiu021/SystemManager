@@ -4419,4 +4419,59 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"NativeMethods\.NtQueryTimerResolution\(\s*out uint (?<p1>\w+),\s*out uint (?<p2>\w+),\s*out uint (?<p3>\w+)\s*\)")]
     private static partial Regex TimerQueryCall();
 
+
+    /// <summary>
+    /// Every call into a temp-tree walker must pass the own-extraction exclusion.
+    /// </summary>
+    /// <remarks>
+    /// Both cleanups sweep all of <c>%TEMP%</c> — Tune-Up's temp cleanup and Deep Cleanup's
+    /// "Temporary files" definition — and for a single-file build that is where this process unpacked
+    /// its own native libraries. Deleting them made a clean run report errors (files the app holds open
+    /// refuse to delete) and broke a later lazy load for anything unpacked but not yet opened.
+    /// <para>The exclusion is a call-site argument with a <c>null</c> default, so nothing in the type
+    /// system stops a future edit from dropping it. No unit test can see it either: Deep Cleanup's
+    /// walkers are private, and the test host's <c>AppContext.BaseDirectory</c> never intersects a temp
+    /// fixture, so the real static cannot be exercised. A source guard is the only thing that pins
+    /// this, which a mutation proof confirmed by removing one call site's argument and watching every
+    /// test stay green.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryTempTreeWalkerCall_PassesTheOwnExtractionExclusion()
+    {
+        var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
+        string[] sweepers = ["TuneUpService.cs", "DeepCleanupService.cs"];
+        var callsChecked = 0;
+
+        foreach (var file in sweepers)
+        {
+            // Comments stripped: both files explain this rule in prose right beside the calls, so a
+            // guard that read comments would pass on code that had dropped the argument.
+            var code = WithoutComments(File.ReadAllText(Path.Combine(servicesDir, file)));
+
+            foreach (var call in TempWalkerCall().Matches(code).Cast<Match>())
+            {
+                var args = call.Groups["args"].Value;
+
+                // Skip the declarations: their parameter list names the type, a call site never does.
+                if (args.Contains("CancellationToken", StringComparison.Ordinal)) continue;
+
+                callsChecked++;
+                Assert.Contains("SystemPaths.OwnExtractionDirectory", args, StringComparison.Ordinal);
+            }
+        }
+
+        // Vacuity floor: five call sites exist today across the two services. A collapse means the
+        // pattern stopped matching, and this guard would then pass without reading a single call.
+        Assert.True(callsChecked >= 5,
+            $"only {callsChecked} walker calls were matched — the pattern no longer matches the call "
+            + "shape, so this guard proves nothing. Re-derive it before trusting a pass.");
+    }
+
+    /// <summary>
+    /// Matches a call to one of the temp-tree walkers and captures its argument list. Bounded to
+    /// argument lists without nested parentheses, which every current call site and declaration is.
+    /// </summary>
+    [GeneratedRegex(@"(?<!Directory\.)\bEnumerate(?:Files|Directories)\w*\((?<args>[^()]*)\)")]
+    private static partial Regex TempWalkerCall();
+
 }

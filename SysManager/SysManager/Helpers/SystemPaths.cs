@@ -142,4 +142,49 @@ internal static class SystemPaths
             return version;
         return new Version(0, 0);
     }
+
+    /// <summary>
+    /// The directory this build extracted itself into, resolved once because the sweep visits
+    /// thousands of paths.
+    /// </summary>
+    /// <remarks>
+    /// The shipped exe is published with <c>PublishSingleFile</c> and
+    /// <c>IncludeNativeLibrariesForSelfExtract</c>, so the .NET host unpacks its native libraries to
+    /// <c>%TEMP%\.net\&lt;app&gt;\&lt;hash&gt;</c> at startup and <see cref="AppContext.BaseDirectory"/>
+    /// points there. Sweeping that tree meant the app deleting its own runtime: loaded libraries refuse
+    /// to delete and were counted as errors, so a clean machine still reported failures, and anything
+    /// extracted but not yet loaded was removed for real, breaking a later lazy load (TraceEvent's
+    /// native components, which load when ETW starts for the Bandwidth Monitor, are exactly that shape).
+    /// <para>For a normal build <c>BaseDirectory</c> is the output folder, which no temp root contains,
+    /// so the exclusion is inert outside a single-file run.</para>
+    /// </remarks>
+    internal static string? OwnExtractionDirectory { get; } = Normalise(AppContext.BaseDirectory);
+
+    /// <summary>
+    /// True when <paramref name="candidate"/> IS <paramref name="subtree"/> or sits inside it.
+    /// Compared on a directory boundary, so a sibling such as <c>…\SysManagerX</c> is never mistaken
+    /// for <c>…\SysManager</c> — the same boundary rule the system-root checks use elsewhere.
+    /// Null or unusable input excludes nothing.
+    /// </summary>
+    internal static bool IsInsideSubtree(string candidate, string? subtree)
+    {
+        if (Normalise(subtree) is not { Length: > 0 } root) return false;
+        if (Normalise(candidate) is not { Length: > 0 } full) return false;
+
+        return full.Equals(root, StringComparison.OrdinalIgnoreCase)
+            || full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Absolute path with any trailing separator removed, or null when it cannot be formed.</summary>
+    private static string? Normalise(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        try
+        {
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        }
+        catch (ArgumentException) { return null; }
+        catch (NotSupportedException) { return null; }
+        catch (PathTooLongException) { return null; }
+    }
 }

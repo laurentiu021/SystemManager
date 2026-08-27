@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.5] - 2026-08-27
+
+Tune-Up's temp cleanup was reaching into SysManager's own working files. That could make a perfectly
+clean run report errors, and in the worst case stop a feature working until you restarted the app.
+
+### Fixed
+- **Cleanups no longer sweep the folder SysManager is running out of.** Because the app ships as a
+  single file, Windows unpacks part of it into your temp folder while it runs, and both temp cleanups
+  — Tune-Up's and Deep Cleanup's "Temporary files" — walked temp without knowing to leave that
+  alone. Files the app had open refused to delete and were counted as errors, so a cleanup could report
+  failures it caused itself. Files it had unpacked but not opened yet were deleted for real, which
+  could break a feature later in the same session — the per-app bandwidth view was the most likely
+  one, since it loads its extra components only when you start it. Both cleanups now skip that one
+  folder and nothing else, so everything they used to remove is still removed.
+
 ## [1.75.4] - 2026-08-27
 
 The in-app updater could not actually install an update: clicking Install closed SysManager and

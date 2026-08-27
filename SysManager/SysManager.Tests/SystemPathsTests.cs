@@ -183,4 +183,49 @@ public class SystemPathsTests
         var bad = SystemPaths.ParsePackageVersion(@"C:\Program Files\WindowsApps\SomethingElse");
         Assert.Equal(new Version(0, 0), bad);
     }
+
+    // ---------- the running build's own extraction directory (#1999) ----------
+    //
+    // The shipped exe is single-file with IncludeNativeLibrariesForSelfExtract, so the host unpacks
+    // native libraries into %TEMP%\.net\<app>\<hash> and AppContext.BaseDirectory points there. Both
+    // wholesale %TEMP% sweeps (Tune-Up's temp cleanup and Deep Cleanup's "Temporary files") must skip
+    // that tree, so the rule lives here rather than being copied into each service.
+
+    [Theory]
+    // A sibling whose name merely STARTS with the excluded path must not be swallowed: this is the
+    // boundary bug a bare StartsWith would introduce.
+    [InlineData(@"C:\Temp\.net\SysManagerX\lib.dll", @"C:\Temp\.net\SysManager", false)]
+    [InlineData(@"C:\Temp\.net\SysManager\lib.dll", @"C:\Temp\.net\SysManager", true)]
+    [InlineData(@"C:\Temp\.net\SysManager", @"C:\Temp\.net\SysManager", true)]
+    [InlineData(@"C:\Temp\.net\SysManager\", @"C:\Temp\.net\SysManager", true)]
+    [InlineData(@"C:\Temp\other\lib.dll", @"C:\Temp\.net\SysManager", false)]
+    [InlineData(@"C:\Temp\.net\sysmanager\lib.dll", @"C:\Temp\.net\SysManager", true)]  // case-insensitive
+    public void IsInsideSubtree_ComparesOnADirectoryBoundary(string candidate, string subtree, bool expected)
+    {
+        Assert.Equal(expected, SystemPaths.IsInsideSubtree(candidate, subtree));
+    }
+
+    [Fact]
+    public void IsInsideSubtree_WithNoSubtree_ExcludesNothing()
+    {
+        // Null must exclude NOTHING, not everything: the walkers pass this straight through, so
+        // getting it backwards would silently turn both cleanups into no-ops.
+        Assert.False(SystemPaths.IsInsideSubtree(@"C:\Temp\anything.txt", null));
+        Assert.False(SystemPaths.IsInsideSubtree(@"C:\Temp\anything.txt", ""));
+        Assert.False(SystemPaths.IsInsideSubtree(@"C:\Temp\anything.txt", "   "));
+    }
+
+    [Fact]
+    public void OwnExtractionDirectory_IsResolvedAndAbsolute()
+    {
+        // Under the test host this is the output folder rather than a temp extraction directory, which
+        // is the point: outside a single-file run the exclusion is inert. It must still resolve to an
+        // absolute path with no trailing separator, or the boundary comparison cannot work.
+        var own = SystemPaths.OwnExtractionDirectory;
+
+        Assert.False(string.IsNullOrWhiteSpace(own));
+        Assert.True(Path.IsPathFullyQualified(own!));
+        Assert.Equal(Path.TrimEndingDirectorySeparator(own!), own);
+        Assert.True(SystemPaths.IsInsideSubtree(own!, own));
+    }
 }

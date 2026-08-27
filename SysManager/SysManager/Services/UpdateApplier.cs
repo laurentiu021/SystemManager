@@ -36,13 +36,6 @@ internal static class UpdateApplier
     internal const string PreviousBuildFileName = "SysManager-previous.exe";
 
     /// <summary>
-    /// The one file name the applier is allowed to write. Derived from the running assembly rather
-    /// than hardcoded, so a rename of the produced executable cannot silently disable the check.
-    /// </summary>
-    private static string OwnExecutableName =>
-        Path.GetFileName(Environment.ProcessPath) is { Length: > 0 } name ? name : "SysManager.exe";
-
-    /// <summary>
     /// Where the outgoing executable is kept so a bad update can be undone.
     /// </summary>
     /// <remarks>
@@ -121,11 +114,15 @@ internal static class UpdateApplier
     /// 85 MB executable over that path and then launches it — and because the app's documented
     /// workflow is "Run as administrator", the writable set can be every file on the machine.</para>
     /// <para>The rule is deliberately narrow: an update replaces SysManager with SysManager, so the
-    /// target must be an EXISTING file (never a creation) whose name is this executable's own name.
-    /// Requiring existence matters as much as the name: a first install has nothing to update, and it
-    /// stops the applier being used to plant a new file where none was. Rejecting a target under a
-    /// system root is belt-and-braces for the case where someone has legitimately named a file
-    /// SysManager.exe inside Windows.</para>
+    /// target must be an EXISTING file (never a creation) carrying the same product resource as this
+    /// executable. Requiring existence matters as much as the identity: a first install has nothing to
+    /// update, and it stops the applier being used to plant a new file where none was. Rejecting a
+    /// target under a system root is belt-and-braces for the case where someone has legitimately put a
+    /// SysManager build inside Windows.</para>
+    /// <para>The identity is the PRODUCT resource, never the file name. The applier is the freshly
+    /// downloaded <c>SysManager-&lt;newVersion&gt;.exe</c> and the target is the older build it
+    /// replaces, so a name-equality rule can never be satisfied by a real update — it refused every
+    /// one, logged the refusal at Error, and returned after the old process had already exited.</para>
     /// <para>Returns a reason rather than a bare bool so the refusal can be logged specifically —
     /// a silent no-op here would look identical to a successful update.</para>
     /// </remarks>
@@ -163,12 +160,6 @@ internal static class UpdateApplier
             return false;
         }
 
-        if (!Path.GetFileName(full).Equals(OwnExecutableName, StringComparison.OrdinalIgnoreCase))
-        {
-            reason = $"the target is not named {OwnExecutableName}";
-            return false;
-        }
-
         // Location before existence: whether a path is protected is a property of the path, not of
         // whether a file happens to be sitting there. Checking it first also keeps this branch
         // deterministically reachable instead of being shadowed by the existence check below.
@@ -186,7 +177,59 @@ internal static class UpdateApplier
             return false;
         }
 
+        // "An update replaces SysManager with SysManager" — verified on the product resource, which
+        // needs the file to exist, hence last. Compared against THIS executable's own product rather
+        // than a hardcoded literal, keeping the original intent that a rename of what we ship cannot
+        // silently disable the check.
+        if (!TryReadProductName(Environment.ProcessPath, out var ownProduct))
+        {
+            // Fail closed: unable to establish what we are, so unable to establish what the target is.
+            reason = "this build's product name could not be read, so the target cannot be verified";
+            return false;
+        }
+
+        if (!TryReadProductName(full, out var targetProduct) ||
+            !string.Equals(targetProduct, ownProduct, StringComparison.Ordinal))
+        {
+            reason = $"the target is not a {ownProduct} build";
+            return false;
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Reads a file's Win32 <c>ProductName</c>, trimmed. False when there is none or it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// The product resource, not the file NAME, is what identifies one of our builds. The name cannot
+    /// do the job: the applier is the freshly downloaded <c>SysManager-&lt;newVersion&gt;.exe</c> while
+    /// its target is the build being replaced, so requiring the two to match refused every real update.
+    /// The product string is identical across versions and survives a user renaming the portable file,
+    /// which is a documented thing to do with a single-file app.
+    /// </remarks>
+    private static bool TryReadProductName(string? path, out string product)
+    {
+        product = "";
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        try
+        {
+            product = FileVersionInfo.GetVersionInfo(path).ProductName?.Trim() ?? "";
+            return product.Length > 0;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

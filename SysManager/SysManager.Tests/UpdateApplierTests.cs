@@ -363,20 +363,29 @@ public class UpdateApplierTests
     // validation which is the sole defense must be explicitly tested.
 
     /// <summary>
-    /// The name the applier will accept, derived the same way production does. In the test host this is
-    /// the runner's own executable, which is the point: the rule is "my own name", not a literal.
+    /// A valid target is a COPY of the running test host: identity is the Win32 product resource, and
+    /// the only way to get a file that genuinely carries this process's product is to copy this
+    /// process's own binary. A plain text file has no resource at all, which is why the earlier
+    /// write-some-bytes fixture no longer models an acceptable target.
     /// </summary>
-    private static string OwnExeName() => Path.GetFileName(Environment.ProcessPath)!;
+    private static string CopyOfThisBuild(DirectoryInfo dir, string name = "SysManager-vX.Y.Z.exe")
+    {
+        var target = Path.Combine(dir.FullName, name);
+        File.Copy(Environment.ProcessPath!, target);
+        return target;
+    }
 
     [Fact]
-    public void ApplyTarget_AcceptsAnExistingCopyOfThisExecutable()
+    public void ApplyTarget_AcceptsAnExistingBuildCarryingThisProduct_UnderAnyName()
     {
-        // The legitimate case, so the negative tests below cannot pass by refusing everything.
+        // The legitimate case, and it deliberately uses a DIFFERENT file name from the running process:
+        // in production the applier is SysManager-<new>.exe and the target is the older build, so a rule
+        // keyed on name equality could never accept a real update. Identity is the product resource.
         var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
         try
         {
-            var target = Path.Combine(dir.FullName, OwnExeName());
-            File.WriteAllText(target, "the installed build");
+            var target = CopyOfThisBuild(dir);
+            Assert.NotEqual(Path.GetFileName(target), Path.GetFileName(Environment.ProcessPath!));
 
             Assert.True(UpdateApplier.IsValidApplyTarget(target, out var reason), reason);
             Assert.Equal("", reason);
@@ -386,20 +395,20 @@ public class UpdateApplierTests
 
     [Theory]
     [InlineData("hosts")]                 // the file an attacker would aim at first
-    [InlineData("evil.exe")]
-    [InlineData("SysManager.dll")]        // right stem, wrong extension
-    [InlineData("notepad.exe")]
-    public void ApplyTarget_RefusesAFileThatIsNotThisExecutable(string fileName)
+    [InlineData("SysManager.exe")]        // even OUR canonical name cannot smuggle a foreign file in
+    [InlineData("SysManager-v9.9.9.exe")] // shaped exactly like a downloaded asset
+    public void ApplyTarget_RefusesAFileThatDoesNotCarryOurProduct(string fileName)
     {
         var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
         try
         {
-            // Existing and writable — the ONLY thing wrong with it is that it is not our own binary.
+            // Existing and writable, but no version resource, so it is not one of our builds — and the
+            // name, even our own, cannot make it one.
             var target = Path.Combine(dir.FullName, fileName);
             File.WriteAllText(target, "someone else's file");
 
             Assert.False(UpdateApplier.IsValidApplyTarget(target, out var reason));
-            Assert.Contains("not named", reason);
+            Assert.Contains("build", reason);
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -413,7 +422,7 @@ public class UpdateApplierTests
         var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
         try
         {
-            var target = Path.Combine(dir.FullName, OwnExeName());   // correct name, never created
+            var target = Path.Combine(dir.FullName, "SysManager-vX.Y.Z.exe");   // never created
 
             Assert.False(UpdateApplier.IsValidApplyTarget(target, out var reason));
             Assert.Contains("does not exist", reason);
@@ -427,7 +436,7 @@ public class UpdateApplierTests
         // Belt-and-braces for a file legitimately named like ours inside a system root: an elevated
         // SysManager must not be steerable into writing there, whatever the file is called.
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var target = Path.Combine(windows, "System32", OwnExeName());
+        var target = Path.Combine(windows, "System32", "SysManager-vX.Y.Z.exe");
 
         Assert.False(UpdateApplier.IsValidApplyTarget(target, out var reason));
         // Specifically for BEING in a system root — the location check runs before the existence check,
@@ -436,17 +445,25 @@ public class UpdateApplierTests
     }
 
     [Fact]
-    public void ApplyTarget_RefusesARealExistingSystemBinary()
+    public void ApplyTarget_RefusesARealBinaryCarryingADifferentProduct()
     {
-        // A file that genuinely exists, so this cannot pass via the existence check — the only thing
-        // that can refuse it is the name rule. Together with the test above (a system-root path bearing
-        // OUR name, refused for its location) this pins both branches as reachable rather than dead.
-        var existing = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.System), "notepad.exe");
-        Assert.True(File.Exists(existing), "probe file missing — this test needs a real System32 file");
+        // A genuine, signed Windows binary carries a real product resource ("Microsoft ... Operating
+        // System"), which is NOT ours. Copied out of System32 into a temp dir so the system-root check
+        // cannot be what refuses it: the ONLY thing left to reject it is the product mismatch, which is
+        // the branch a plain text file (no resource at all) never exercises.
+        var source = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "notepad.exe");
+        Assert.True(File.Exists(source), "probe file missing — this test needs a real System32 binary");
 
-        Assert.False(UpdateApplier.IsValidApplyTarget(existing, out var reason));
-        Assert.Contains("not named", reason);
+        var dir = Directory.CreateTempSubdirectory("ApplierForeign_");
+        try
+        {
+            var target = Path.Combine(dir.FullName, "SysManager-vX.Y.Z.exe");
+            File.Copy(source, target);
+
+            Assert.False(UpdateApplier.IsValidApplyTarget(target, out var reason));
+            Assert.Contains("build", reason);
+        }
+        finally { dir.Delete(recursive: true); }
     }
 
     [Fact]
@@ -464,7 +481,9 @@ public class UpdateApplierTests
             var traversal = Path.Combine(sub.FullName, "..", "hosts");
 
             Assert.False(UpdateApplier.IsValidApplyTarget(traversal, out var reason));
-            Assert.Contains("not named", reason);
+            // Refused because "hosts" is not one of our builds; the point here is that canonicalisation
+            // happened at all, so ".." was resolved before the decision rather than compared literally.
+            Assert.Contains("build", reason);
         }
         finally { dir.Delete(recursive: true); }
     }

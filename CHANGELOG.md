@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.4] - 2026-08-27
+
+The in-app updater could not actually install an update: clicking Install closed SysManager and
+nothing came back, and Roll back could quietly stop being offered. Both are fixed, so the updater
+works end to end.
+
+### Fixed
+- **"Install update" now replaces the running build instead of doing nothing.** The updater only
+  agreed to write over a file whose name matched the running program's, but the program doing the
+  writing is the freshly downloaded `SysManager-<newversion>.exe` while the file being replaced is the
+  older build — two different names, so the check could never pass and every update was silently
+  refused after the app had already closed. It now identifies a SysManager build by the product stamp
+  Windows keeps inside the file, which is the same across versions and survives you renaming the
+  portable .exe. Downloading and installing an update now completes and relaunches.
+- **Roll back no longer loses its safety copy when you download a newer update.** Cleaning up old
+  downloads deleted the checksum file that Roll back needs to confirm the saved build is intact.
+  Because that confirmation refuses to proceed without the checksum, Roll back would stop being
+  offered after the next download. The checksum is now kept alongside the saved build.
+
 ## [1.75.3] - 2026-08-26
 
 A drive that Windows itself reports as failing could still show a green 100% health score. Disk Health

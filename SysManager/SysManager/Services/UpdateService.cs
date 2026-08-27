@@ -543,10 +543,16 @@ public sealed class UpdateService
                     continue;
                 }
 
-                // Never prune the retained previous build. It matches the SysManager-*.exe pattern,
-                // so without this the very next update download would delete the one copy that makes
-                // rollback possible — silently, since pruning is best-effort and logs at Debug.
-                if (name.Equals(UpdateApplier.PreviousBuildFileName, StringComparison.OrdinalIgnoreCase))
+                // Never prune the retained previous build OR its checksum. Both match the
+                // SysManager-*.exe* pattern (the trailing * catches the sidecar), so without this the
+                // very next update download would delete the one copy that makes rollback possible —
+                // silently, since pruning is best-effort and logs at Debug.
+                //
+                // The sidecar is not optional: TryOpenVerifiedPreviousBuild fails CLOSED on a missing
+                // hash, and nothing rewrites it except another successful apply, so losing it disabled
+                // rollback permanently while the button stayed enabled.
+                if (name.Equals(UpdateApplier.PreviousBuildFileName, StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals(UpdateApplier.PreviousBuildFileName + ".sha256", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }

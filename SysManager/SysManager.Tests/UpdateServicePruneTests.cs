@@ -164,4 +164,45 @@ public class UpdateServicePruneTests : IDisposable
         Assert.Equal(0, UpdateService.PruneOldDownloads(_dir, keep));
         Assert.Equal(["SysManager-1.56.8.exe"], Remaining());
     }
+
+    [Fact]
+    public void Prune_KeepsTheRetainedPreviousBuildAndItsChecksum()
+    {
+        // #1998: the previous build's .sha256 matches the SysManager-*.exe* sweep pattern, and the
+        // guard used to exempt only the bare .exe. Losing the sidecar disabled rollback permanently,
+        // because TryOpenVerifiedPreviousBuild fails CLOSED on a missing hash and nothing rewrites it
+        // except another successful apply. Both files must survive a prune triggered by a new download.
+        var keep = Touch("SysManager-1.56.8.exe");
+        Touch("SysManager-1.56.8.exe.sha256");
+        Touch(UpdateApplier.PreviousBuildFileName);                 // SysManager-previous.exe
+        Touch(UpdateApplier.PreviousBuildFileName + ".sha256");
+
+        UpdateService.PruneOldDownloads(_dir, keep);
+
+        Assert.Contains(UpdateApplier.PreviousBuildFileName, Remaining());
+        Assert.Contains(UpdateApplier.PreviousBuildFileName + ".sha256", Remaining());
+    }
+
+    [Fact]
+    public void Prune_StillRemovesASupersededBuildWhileKeepingThePreviousPair()
+    {
+        // The exemption is narrow: an ordinary older download is still swept, so keeping the rollback
+        // pair does not turn the prune into a no-op.
+        Touch("SysManager-1.56.6.exe");
+        Touch("SysManager-1.56.6.exe.sha256");
+        var keep = Touch("SysManager-1.56.8.exe");
+        Touch(UpdateApplier.PreviousBuildFileName);
+        Touch(UpdateApplier.PreviousBuildFileName + ".sha256");
+
+        var removed = UpdateService.PruneOldDownloads(_dir, keep);
+
+        Assert.Equal(2, removed);   // the 1.56.6 exe and its hash
+        // Ordinal order: '1' (0x31) sorts before 'p' (0x70), so the versioned kept build comes first.
+        Assert.Equal(
+        [
+            "SysManager-1.56.8.exe",
+            UpdateApplier.PreviousBuildFileName,
+            UpdateApplier.PreviousBuildFileName + ".sha256",
+        ], Remaining());
+    }
 }

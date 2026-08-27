@@ -202,7 +202,7 @@ public sealed class DeepCleanupService
             foreach (var p in existing)
             {
                 if (ct.IsCancellationRequested) break;
-                foreach (var file in EnumerateFiles(p, ct))
+                foreach (var file in EnumerateFiles(p, ct, SystemPaths.OwnExtractionDirectory))
                 {
                     if (ct.IsCancellationRequested) break;
                     try
@@ -359,7 +359,7 @@ public sealed class DeepCleanupService
 
                 try
                 {
-                    foreach (var file in EnumerateFiles(path, ct))
+                    foreach (var file in EnumerateFiles(path, ct, SystemPaths.OwnExtractionDirectory))
                     {
                         if (ct.IsCancellationRequested) break;
                         try
@@ -381,7 +381,7 @@ public sealed class DeepCleanupService
                             Log.Debug(ex, "Deep cleanup: failed to delete file {File}", file);
                         }
                     }
-                    foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct))
+                    foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct, SystemPaths.OwnExtractionDirectory))
                     {
                         try { Directory.Delete(dir, recursive: false); }
                         catch (IOException ex) { Log.Debug(ex, "Deep cleanup: failed to delete directory {Dir}", dir); }
@@ -411,14 +411,22 @@ public sealed class DeepCleanupService
     private static long SafeLength(string path)
     { try { return new FileInfo(path).Length; } catch (IOException) { return 0; } catch (UnauthorizedAccessException) { return 0; } }
 
-    private static IEnumerable<string> EnumerateFiles(string root, CancellationToken ct)
+    /// <param name="excludeSubtree">
+    /// A directory tree to skip entirely, or null for none. Callers pass
+    /// <see cref="SystemPaths.OwnExtractionDirectory"/>: the "Temporary files" definition covers all of
+    /// %TEMP%, which for a single-file build is where this process unpacked its own native libraries.
+    /// Deleting those made a clean run report errors (loaded files refuse to delete) and broke a later
+    /// lazy load for anything unpacked but not yet opened.
+    /// </param>
+    private static IEnumerable<string> EnumerateFiles(
+        string root, CancellationToken ct, string? excludeSubtree = null)
     {
         // Guard the traversal ROOT itself, not just its children: if a cleanup-root
         // cache path is replaced by a junction/symlink (writable without admin, e.g.
         // %LOCALAPPDATA%\NVIDIA\GLCache), EnumerateFiles(root) would yield the LINK
         // TARGET's files and the caller would delete them — data loss outside the
         // target tree. IsReparsePoint fails safe (returns true on access error).
-        if (IsReparsePoint(root)) yield break;
+        if (IsReparsePoint(root) || SystemPaths.IsInsideSubtree(root, excludeSubtree)) yield break;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
@@ -446,17 +454,18 @@ public sealed class DeepCleanupService
             // files that live outside the cleanup target tree (data-loss risk).
             foreach (var d in dirs)
             {
-                if (!IsReparsePoint(d)) stack.Push(d);
+                if (!IsReparsePoint(d) && !SystemPaths.IsInsideSubtree(d, excludeSubtree)) stack.Push(d);
             }
         }
     }
 
-    private static IEnumerable<string> EnumerateDirectoriesDepthFirst(string root, CancellationToken ct)
+    private static IEnumerable<string> EnumerateDirectoriesDepthFirst(
+        string root, CancellationToken ct, string? excludeSubtree = null)
     {
         List<string> all = [];
         // Guard the root (see EnumerateFiles): a junction at the root must not be
         // traversed, or its target's subdirectories could be reached for deletion.
-        if (IsReparsePoint(root)) return all;
+        if (IsReparsePoint(root) || SystemPaths.IsInsideSubtree(root, excludeSubtree)) return all;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
@@ -468,7 +477,7 @@ public sealed class DeepCleanupService
             // link recursively) could reach outside the cleanup tree.
             foreach (var d in dirs)
             {
-                if (!IsReparsePoint(d)) stack.Push(d);
+                if (!IsReparsePoint(d) && !SystemPaths.IsInsideSubtree(d, excludeSubtree)) stack.Push(d);
             }
             if (!string.Equals(cur, root, StringComparison.OrdinalIgnoreCase)) all.Add(cur);
         }

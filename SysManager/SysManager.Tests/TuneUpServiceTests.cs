@@ -483,4 +483,75 @@ public class TuneUpServiceTests
             try { System.IO.Directory.Delete(baseDir, recursive: true); } catch { /* best effort */ }
         }
     }
+
+    // ---------- the app must not sweep its own extraction directory (#1999) ----------
+    //
+    // The shipped exe is single-file with IncludeNativeLibrariesForSelfExtract, so the host unpacks
+    // native libraries into %TEMP%\.net\<app>\<hash> and AppContext.BaseDirectory points there.
+    // Sweeping all of %TEMP% therefore targeted the running build's own runtime: loaded libraries
+    // refuse to delete and were counted as errors, and anything not yet loaded was deleted for real.
+
+    [Fact]
+    public void EnumerateFiles_SkipsTheExcludedSubtree_AndKeepsEverythingElse()
+    {
+        // Layout: temp/ordinary.txt          -> must be enumerated
+        //         temp/.net/app/native.dll   -> must NOT be enumerated (the excluded subtree)
+        var root = Path.Combine(Path.GetTempPath(), "smtu_" + Guid.NewGuid().ToString("N"));
+        var extraction = Path.Combine(root, ".net", "app");
+        Directory.CreateDirectory(extraction);
+        var ordinary = Path.Combine(root, "ordinary.txt");
+        var mine = Path.Combine(extraction, "native.dll");
+        File.WriteAllText(ordinary, "an unrelated temp file");
+        File.WriteAllText(mine, "a native library this process needs");
+
+        try
+        {
+            var found = TuneUpService
+                .EnumerateFilesSkippingReparsePoints(root, CancellationToken.None, extraction)
+                .ToList();
+
+            Assert.Contains(found, f => f.EndsWith("ordinary.txt", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(found, f => f.EndsWith("native.dll", StringComparison.OrdinalIgnoreCase));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void EnumerateFiles_WithNoExclusion_StillYieldsEverything()
+    {
+        // The exclusion must be opt-in: passing null (what every other caller does) changes nothing,
+        // so this cannot pass by the traversal having quietly become more restrictive for everyone.
+        var root = Path.Combine(Path.GetTempPath(), "smtu_" + Guid.NewGuid().ToString("N"));
+        var sub = Path.Combine(root, ".net", "app");
+        Directory.CreateDirectory(sub);
+        File.WriteAllText(Path.Combine(root, "ordinary.txt"), "x");
+        File.WriteAllText(Path.Combine(sub, "native.dll"), "x");
+
+        try
+        {
+            var found = TuneUpService
+                .EnumerateFilesSkippingReparsePoints(root, CancellationToken.None, null)
+                .ToList();
+
+            Assert.Contains(found, f => f.EndsWith("ordinary.txt", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(found, f => f.EndsWith("native.dll", StringComparison.OrdinalIgnoreCase));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void EnumerateFiles_WhenTheRootItselfIsExcluded_YieldsNothing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "smtu_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "native.dll"), "x");
+
+        try
+        {
+            Assert.Empty(TuneUpService
+                .EnumerateFilesSkippingReparsePoints(root, CancellationToken.None, root));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
 }

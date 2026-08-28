@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.11] - 2026-08-28
+
+The background-shade slider in Appearance can no longer make text hard to read. Dragging it to either
+end used to fade the writing into the background, with nothing telling you that was what happened.
+
+### Fixed
+- **The background slider keeps text readable at every position.** Appearance has a slider that makes the
+  app's background lighter or darker to taste. It moved the backgrounds but left the text colours where
+  they were, so at the far ends the writing and the panel behind it drifted close enough together to be a
+  strain — and since the slider is presented as harmless personalisation, nothing connected the cause to
+  the effect. Grey label text fell below the readable-text standard at a quarter of the positions the
+  slider can reach. The text now adjusts just enough to stay readable, and only when it otherwise would
+  not: if you have never moved the slider, nothing about your theme changes.
+
 ## [1.75.10] - 2026-08-28
 
 If you turn notifications off yourself while a Gaming Profile is running, ending the profile no longer

@@ -1,0 +1,115 @@
+name: Release integrity
+
+# Tagging and publishing are two separate steps in two separate workflows, and CI only confirms the
+# TAG appeared ("Merged version is tagged"). Nothing confirmed the RELEASE appeared, so a version
+# could exist as a tag, be announced in the CHANGELOG, and have no download behind it. That happened
+# twice from different causes: a tag push rejected server-side with "fatal error in commit_refs", and
+# a release run abandoned mid-flight during a GitHub Actions incident.
+#
+# Deliberately SCHEDULED and standalone rather than a step at the end of release.yml. Both real
+# failures were runs that never finished, so a verification step inside the same run would have been
+# abandoned along with everything else. A separate run on its own trigger is the only shape that
+# notices.
+on:
+  schedule:
+    - cron: '0 7 * * 1'   # every Monday 07:00 UTC, an hour after the CodeQL sweep
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Every version tag has a release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0        # tags are the whole point of this job
+
+      - name: Compare version tags against published releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Five tags predate this check and have no release. They are listed rather than backfilled:
+          # creating a release for an older tag steals the "Latest" badge, which GitHub assigns by
+          # DATE and not by semver, so a backfill would have to re-assert --latest on the newest
+          # release afterwards. Whether to backfill is tracked in the issue; this job's job is to
+          # ensure the list never grows.
+          KNOWN_GAPS="v0.13.6 v1.7.15 v1.52.75 v1.56.7 v1.65.9"
+
+          git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort > /tmp/tags.txt
+
+          # --paginate is load-bearing. A single default page returns 30 releases against 600+ tags,
+          # which reports almost every version as missing — a first attempt at this comparison
+          # produced exactly that useless list.
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq '.[].tag_name' | sort > /tmp/releases.txt
+
+          TAG_COUNT=$(wc -l < /tmp/tags.txt)
+          REL_COUNT=$(wc -l < /tmp/releases.txt)
+          echo "version tags: ${TAG_COUNT}   published releases: ${REL_COUNT}"
+
+          # Vacuity floor: an auth failure or a renamed repo would leave both files empty and this
+          # job would pass by comparing nothing against nothing.
+          if [ "${TAG_COUNT}" -lt 100 ] || [ "${REL_COUNT}" -lt 100 ]; then
+            echo "::error::Read back only ${TAG_COUNT} tags and ${REL_COUNT} releases. This repository has hundreds of both, so one of the two reads failed and this check proved nothing."
+            exit 1
+          fi
+
+          MISSING=$(comm -23 /tmp/tags.txt /tmp/releases.txt || true)
+
+          NEW_GAPS=""
+          for tag in ${MISSING}; do
+            case " ${KNOWN_GAPS} " in
+              *" ${tag} "*) echo "known historical gap, ignored: ${tag}" ;;
+              *) NEW_GAPS="${NEW_GAPS} ${tag}" ;;
+            esac
+          done
+
+          # A known gap that has since been published should be removed from the list, or it hides a
+          # real regression on that same tag later.
+          for tag in ${KNOWN_GAPS}; do
+            if grep -qxF "${tag}" /tmp/releases.txt; then
+              echo "::warning::${tag} is listed as a known gap but now has a release. Remove it from KNOWN_GAPS in this workflow so the list stays honest."
+            fi
+          done
+
+          if [ -n "${NEW_GAPS}" ]; then
+            echo "::error::These version tags have no GitHub Release, so anyone following the tag or reading the CHANGELOG finds no download:${NEW_GAPS}. Publish the missing release (gh release create <tag> with the built assets), then re-assert the Latest badge on the newest release, since GitHub assigns it by date rather than by semver."
+            exit 1
+          fi
+
+          echo "Every version tag outside the known historical gaps has a published release."
+
+      - name: The newest CHANGELOG version has a release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # The other half of the same failure: main can carry a version bump and a CHANGELOG entry
+          # while neither the tag nor the release exists, which is what "main claimed 1.75.2 with no
+          # tag and no release" looked like. Checked from the CHANGELOG rather than the csproj
+          # because the CHANGELOG is the announcement a reader acts on.
+          NEWEST=$(grep -m1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
+          if [ -z "${NEWEST}" ]; then
+            echo "::error::Could not read the newest version from CHANGELOG.md. If the heading format changed, update this check in the same PR."
+            exit 1
+          fi
+          echo "newest CHANGELOG version: ${NEWEST}"
+
+          if gh release view "v${NEWEST}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "v${NEWEST} is published."
+            exit 0
+          fi
+
+          echo "::error::CHANGELOG.md announces ${NEWEST} but there is no v${NEWEST} release. Either the auto-release tag push failed or the release run was abandoned; publish it by hand and check why the run did not finish."
+          exit 1

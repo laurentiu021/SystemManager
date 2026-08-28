@@ -318,7 +318,7 @@
                                                                                        Foreground="{DynamicResource Info}"/>
                                                                         </Border>
                                                                     </Grid>
-                                                                    <ProgressBar Height="2" Margin="0,3,0,0"
+                                                                    <ProgressBar AutomationProperties.Name="{Binding Label, StringFormat='Working on {0}'}" Height="2" Margin="0,3,0,0"
                                                                                  IsIndeterminate="True"
                                                                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                                                                 </StackPanel>

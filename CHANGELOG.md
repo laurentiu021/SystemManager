@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.6] - 2026-08-28
+
+If you use a screen reader, SysManager's progress bars now tell you what they are doing. Before, 33
+tabs all announced the same word, "Progress", and four bars announced nothing at all.
+
+### Fixed
+- **Every progress bar now says what it reports.** A screen reader announced the bare word "Progress"
+  on 33 different tabs, so it told you something was happening but never what — and four bars had no
+  announcement at all, including the strip under each sidebar entry and the spinner beside each
+  Dashboard alert. All 60 bars are now named for the thing they track: "Cleanup progress", "Driver scan
+  progress", "Update download progress", and so on. The bar under a sidebar entry names the tab it
+  belongs to, and the spinner beside a Dashboard alert names the check it is waiting on. Five more that
+  said only "Working", "Loading" or "Monitoring" got the same treatment.
+- Nothing changed visually. A name is read out, never drawn.
+
 ## [1.75.5] - 2026-08-27
 
 Tune-Up's temp cleanup was reaching into SysManager's own working files. That could make a perfectly

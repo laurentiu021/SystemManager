@@ -335,6 +335,11 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             OriginalUiEffectsEnabled = profile.DisableVisualEffects && PerformanceService.GetUiEffectsEnabled(),
             SearchWasRunning = profile.PauseSearchIndexing ? IsSearchRunning() : null,
             OriginalToastEnabled = profile.SilenceNotifications ? NotificationsTweak.ReadToastEnabled() : null,
+            // Captured alongside the value it qualifies: on its own, a ToastEnabled of 0 at revert cannot
+            // say whether this profile wrote it or the user did.
+            ToastWriteCountAtApply = profile.SilenceNotifications
+                ? NotificationBlockerService.ReadMasterToggleWriteCount()
+                : null,
         };
     }
 
@@ -392,7 +397,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         if (profile.FinestTimerResolution) steps.Add(new TimerResolutionTweak(_timer));
         if (profile.PurgeStandbyMemory) steps.Add(new StandbyPurgeTweak(_standby));
         if (profile.PauseSearchIndexing) steps.Add(new SearchIndexingTweak(snapshot.SearchWasRunning ?? false));
-        if (profile.SilenceNotifications) steps.Add(new NotificationsTweak(snapshot.OriginalToastEnabled));
+        if (profile.SilenceNotifications)
+            steps.Add(new NotificationsTweak(
+                snapshot.OriginalToastEnabled, writeCountAtApply: snapshot.ToastWriteCountAtApply));
         return steps;
     }
 

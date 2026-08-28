@@ -84,6 +84,18 @@ public sealed record GamingSnapshot
 
     /// <summary>The HKCU ToastEnabled DWORD before apply (null = value was absent → default on).</summary>
     public int? OriginalToastEnabled { get; init; }
+
+    /// <summary>
+    /// The Notifications tab's master-toggle write count at apply time (null = not captured).
+    /// </summary>
+    /// <remarks>
+    /// Revert compares this against the current count to tell a <c>ToastEnabled = 0</c> the profile wrote
+    /// from one the user wrote on the Notifications tab, which are byte-identical in the registry.
+    /// <para>Null means a snapshot taken before this field existed, or a profile that does not silence
+    /// notifications. Revert then skips the comparison and behaves exactly as it did before, so an
+    /// in-flight session written by an older build still reverts rather than refusing to.</para>
+    /// </remarks>
+    public int? ToastWriteCountAtApply { get; init; }
 }
 
 /// <summary>A profile + the snapshot taken when it was applied — the on-disk record of a live session.</summary>

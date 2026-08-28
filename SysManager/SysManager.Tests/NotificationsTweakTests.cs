@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using Microsoft.Win32;
 using SysManager.Models;
 using SysManager.Services;
@@ -159,5 +160,145 @@ public sealed class NotificationsTweakTests : IDisposable
         Seed(0);
 
         Assert.Equal(0, NotificationsTweak.ReadToastEnabled(_root));
+    }
+    // ── Who wrote the 0 (#1948) ────────────────────────────────────────────────
+
+    /// <summary>A disposable config directory, so the ledger never touches the real LocalAppData copy.</summary>
+    private sealed class TempConfig : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "SysManagerTests_Ledger_" + Guid.NewGuid().ToString("N"));
+
+        public void Dispose()
+        {
+            try { if (Directory.Exists(Path)) Directory.Delete(Path, recursive: true); }
+            catch (IOException) { /* best-effort cleanup */ }
+            catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
+        }
+    }
+
+    /// <summary>
+    /// The sequence this fix exists for: notifications on, profile applied, then the user mutes them
+    /// HERSELF mid-session, then the profile reverts.
+    /// </summary>
+    /// <remarks>
+    /// The registry cannot answer this on its own — the user's 0 and the tweak's 0 are byte-identical — so
+    /// the value-comparison guard cannot help and revert used to restore "absent", silently re-enabling
+    /// notifications the user had just deliberately turned off.
+    /// <para>Driven through the real <see cref="NotificationBlockerService"/> rather than by seeding the
+    /// registry directly. Writing the value by hand would exercise the comparison while proving nothing
+    /// about whether the Notifications tab actually records its write, which is the half that can rot.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Revert_WhenTheUserMutedNotificationsMidSession_LeavesThemMuted()
+    {
+        using var config = new TempConfig();
+        Seed(null);                                     // notifications on: value absent
+
+        var atApply = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+        var tweak = new NotificationsTweak(
+            originalToastEnabled: null, baseKey: _root, writeCountAtApply: atApply, configDir: config.Path);
+        await tweak.ApplyAsync(CancellationToken.None);
+        Assert.Equal(0, Current());                     // the profile silenced them
+
+        // The user opens Privacy & Security -> Notifications and turns the master toggle off herself.
+        new NotificationBlockerService(_root, config.Path).SetGlobalToastEnabled(false);
+
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Equal(0, Current());
+    }
+
+    /// <summary>
+    /// The ordinary case must still revert. Without this, "never restore when the value is 0" would pass the
+    /// test above while making the tweak permanent.
+    /// </summary>
+    [Fact]
+    public async Task Revert_WhenNobodyElseTouchedTheToggle_RestoresTheSnapshot()
+    {
+        using var config = new TempConfig();
+        Seed(null);
+
+        var atApply = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+        var tweak = new NotificationsTweak(
+            originalToastEnabled: null, baseKey: _root, writeCountAtApply: atApply, configDir: config.Path);
+        await tweak.ApplyAsync(CancellationToken.None);
+        Assert.Equal(0, Current());
+
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Null(Current());                         // back to absent = notifications on
+    }
+
+    /// <summary>
+    /// A snapshot written by a build from before this field existed has no count, and must revert exactly as
+    /// it did then rather than refusing to.
+    /// </summary>
+    /// <remarks>
+    /// This is the upgrade path: a session left active by an older build is reverted by the new one, and the
+    /// safe failure is "behave like before", not "never restore".
+    /// </remarks>
+    [Fact]
+    public async Task Revert_WithNoCapturedCount_FallsBackToTheOldBehaviour()
+    {
+        using var config = new TempConfig();
+        Seed(null);
+
+        var tweak = new NotificationsTweak(
+            originalToastEnabled: null, baseKey: _root, writeCountAtApply: null, configDir: config.Path);
+        await tweak.ApplyAsync(CancellationToken.None);
+
+        // Even a user write cannot be detected without a captured baseline, so the snapshot is restored.
+        new NotificationBlockerService(_root, config.Path).SetGlobalToastEnabled(false);
+
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Null(Current());
+    }
+
+    /// <summary>
+    /// The ledger has to survive the process, because revert can run in a later one: an ActiveSession left
+    /// behind by a run that closed mid-game is reverted on the next launch.
+    /// </summary>
+    /// <remarks>
+    /// Simulated by reading the count through a fresh service instance over the same directory, which is
+    /// what a second process would do. An in-memory marker would pass every test above and fail here.
+    /// </remarks>
+    [Fact]
+    public void TheWriteLedger_SurvivesTheProcessThatWroteIt()
+    {
+        using var config = new TempConfig();
+
+        var before = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+        new NotificationBlockerService(_root, config.Path).SetGlobalToastEnabled(false);
+        var after = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+
+        Assert.Equal(before + 1, after);
+    }
+
+    /// <summary>Every user write moves the count, so two writes cannot look like none.</summary>
+    [Fact]
+    public void TheWriteLedger_CountsEveryWrite()
+    {
+        using var config = new TempConfig();
+        var service = new NotificationBlockerService(_root, config.Path);
+
+        service.SetGlobalToastEnabled(false);
+        service.SetGlobalToastEnabled(true);
+        service.SetGlobalToastEnabled(false);
+
+        Assert.Equal(3, NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+    }
+
+    /// <summary>
+    /// A missing or unreadable ledger reads as 0 rather than throwing, and 0 equals the captured 0, so a lost
+    /// file degrades to the behaviour that shipped before the ledger existed instead of to never reverting.
+    /// </summary>
+    [Fact]
+    public void AMissingLedger_ReadsAsZeroRatherThanThrowing()
+    {
+        using var config = new TempConfig();
+
+        Assert.Equal(0, NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
     }
 }

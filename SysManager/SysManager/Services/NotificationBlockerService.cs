@@ -2,8 +2,11 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
+using System.Text.Json;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -47,15 +50,101 @@ public sealed class NotificationBlockerService : INotificationBlockerService
         "Microsoft.Explorer.Notification", // legacy shell bucket, not a user-facing sender
     };
 
+    // The write ledger. A profile writes ToastEnabled=0 and so does the Notifications tab, and the two
+    // are byte-identical, so the registry cannot say which one produced the 0 that Gaming Profile finds at
+    // revert. This counter is the discriminator: the Notifications tab increments it, Gaming Profile records
+    // it at apply, and a changed value at revert means the user has since moved the switch themselves.
+    //
+    // On disk rather than in memory because revert can run in a LATER PROCESS: an ActiveSession left behind
+    // by a run that closed mid-game is reverted on the next launch, and that is precisely when the marker
+    // must still exist. One file per feature is the established shape here (close-preference.json,
+    // darkmode-schedule.json, ...).
+    //
+    // Deliberately NOT in ProfileService.Catalog: the number only means something next to a snapshot taken
+    // on the same machine, so exporting it to another PC and importing it there would make revert compare
+    // against a count that never applied to it.
+    internal const string WriteLedgerFileName = "notification-master-writes.json";
+
     private readonly RegistryKey _baseKey;
+    private readonly string _ledgerPath;
 
     /// <summary>
     /// Creates the service over a registry root. Defaults to <see cref="Registry.CurrentUser"/>
     /// (the real per-user notification settings); tests pass a redirected root (a disposable
     /// HKCU subkey) so reads/writes never touch the machine's real configuration.
     /// </summary>
-    public NotificationBlockerService(RegistryKey? baseKey = null)
-        => _baseKey = baseKey ?? Registry.CurrentUser;
+    public NotificationBlockerService(RegistryKey? baseKey = null, string? configDir = null)
+    {
+        _baseKey = baseKey ?? Registry.CurrentUser;
+        _ledgerPath = LedgerPath(configDir);
+    }
+
+    /// <summary>Resolves the ledger file, overridable for tests exactly as the registry root is.</summary>
+    private static string LedgerPath(string? configDir) => Path.Combine(
+        configDir ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager"),
+        WriteLedgerFileName);
+
+    /// <summary>The stored shape. A record so the JSON stays explicit.</summary>
+    private sealed record Ledger(int Writes);
+
+    /// <summary>
+    /// How many times the Notifications tab has written the master toggle on this machine.
+    /// </summary>
+    /// <remarks>
+    /// Static so <see cref="NotificationsTweak"/> can read it without taking a dependency on this service,
+    /// mirroring how it already reads <see cref="PushKeyPath"/> and <see cref="ToastValueName"/> from here.
+    /// <para>Returns 0 when the file is missing or unreadable. That is the safe direction: a count that
+    /// looks unchanged makes Gaming Profile restore its snapshot, which is the behaviour that shipped before
+    /// this ledger existed — a lost file degrades to the old semantics rather than to never reverting.</para>
+    /// </remarks>
+    internal static int ReadMasterToggleWriteCount(string? configDir = null)
+    {
+        var path = LedgerPath(configDir);
+        try
+        {
+            if (!File.Exists(path)) return 0;
+            return JsonSerializer.Deserialize<Ledger>(File.ReadAllText(path))?.Writes ?? 0;
+        }
+        catch (IOException ex) { Log.Debug("Toast write-ledger read failed: {Error}", ex.Message); return 0; }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Toast write-ledger denied: {Error}", ex.Message); return 0; }
+        catch (JsonException ex) { Log.Debug("Toast write-ledger malformed: {Error}", ex.Message); return 0; }
+    }
+
+    /// <summary>
+    /// Records that the user-facing path just wrote the master toggle.
+    /// </summary>
+    /// <remarks>
+    /// A failure here is logged and swallowed: the toggle itself already succeeded, and refusing the user's
+    /// change because bookkeeping failed would be a worse outcome than a revert that restores when it could
+    /// have held back.
+    /// </remarks>
+    private void RecordMasterToggleWrite()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_ledgerPath)!);
+            var next = ReadMasterToggleWriteCountAt(_ledgerPath) + 1;
+            // AtomicFile, like every other store here: a torn write would read back as a malformed
+            // ledger, which degrades to 0 and makes revert restore when it should have held back.
+            AtomicFile.WriteAllText(_ledgerPath, JsonSerializer.Serialize(new Ledger(next)));
+        }
+        catch (IOException ex) { Log.Debug("Toast write-ledger update failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Toast write-ledger update denied: {Error}", ex.Message); }
+    }
+
+    /// <summary>Reads the ledger at an explicit path, so the instance uses its own injected location.</summary>
+    private static int ReadMasterToggleWriteCountAt(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return 0;
+            return JsonSerializer.Deserialize<Ledger>(File.ReadAllText(path))?.Writes ?? 0;
+        }
+        catch (IOException) { return 0; }
+        catch (UnauthorizedAccessException) { return 0; }
+        catch (JsonException) { return 0; }
+    }
 
     /// <inheritdoc />
     public bool IsGlobalToastEnabled()
@@ -80,6 +169,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
                 key.DeleteValue(ToastValueName, throwOnMissingValue: false); // absent = default = on
             else
                 key.SetValue(ToastValueName, 0, RegistryValueKind.DWord);
+            RecordMasterToggleWrite();
             Log.Information("Notifications: master toggle set to {Enabled}", enabled);
             return true;
         }

@@ -183,8 +183,12 @@
                                                 <Style TargetType="Border">
                                                     <Setter Property="Background" Value="Transparent"/>
                                                     <Style.Triggers>
+                                                        <!-- RowHover, not AccentSoft: AccentSoft is what marks the
+                                                             SELECTED item elsewhere in this same sidebar, so using it
+                                                             for hover made pointing at a group look identical to
+                                                             having opened it. -->
                                                         <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                                            <Setter Property="Background" Value="{DynamicResource RowHover}"/>
                                                         </Trigger>
                                                     </Style.Triggers>
                                                 </Style>

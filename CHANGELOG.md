@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.10] - 2026-08-28
+
+If you turn notifications off yourself while a Gaming Profile is running, ending the profile no longer
+turns them back on. Before, it quietly undid your change, so the switch looked like it did not stick.
+
+### Fixed
+- **Muting notifications during a game now sticks after the profile ends.** A Gaming Profile with "Silence
+  notifications" turns them off while you play and turns them back on afterwards. If you got interrupted
+  mid-game, went to Privacy & Security and turned notifications off yourself, ending the profile put them
+  back on — because Windows records both changes identically, so SysManager could not tell your change
+  from its own and assumed the switch was still its to undo. It now keeps a note of when the
+  Notifications page writes that setting, so it can recognise your change and leave it alone. The note is
+  saved to disk, so this still works if the app closes mid-game and cleans up on the next launch. The
+  ordinary case is unchanged: if you do not touch the switch, ending the profile restores notifications
+  exactly as before.
+
 ## [1.75.9] - 2026-08-28
 
 Text on the coloured buttons is readable on every theme now. On most of the twelve themes the white

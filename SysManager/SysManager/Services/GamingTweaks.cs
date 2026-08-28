@@ -181,7 +181,11 @@ internal sealed class SearchIndexingTweak(bool wasRunning) : IGamingTweak
 /// move the same switch from the Notifications tab while a profile is active; if they have, revert
 /// keeps their choice rather than resurrecting the pre-game state.
 /// </summary>
-internal sealed class NotificationsTweak(int? originalToastEnabled, RegistryKey? baseKey = null) : IGamingTweak
+internal sealed class NotificationsTweak(
+    int? originalToastEnabled,
+    RegistryKey? baseKey = null,
+    int? writeCountAtApply = null,
+    string? configDir = null) : IGamingTweak
 {
     // The key path and value name are NOT redeclared here. They are owned by
     // NotificationBlockerService, whose Notifications tab writes the same user-wide master toggle,
@@ -235,6 +239,22 @@ internal sealed class NotificationsTweak(int? originalToastEnabled, RegistryKey?
                 "Gaming Profile: notifications master toggle was changed while the profile was active "
                 + "(now {Current}); leaving the user's setting instead of restoring {Original}",
                 current, originalToastEnabled);
+            return Task.CompletedTask;
+        }
+
+        // The value IS 0 — but the guard above can only catch the user switching notifications back ON.
+        // The opposite order is invisible to it: if the user muted notifications themselves while the
+        // profile was active, the registry holds a 0 that is byte-identical to the one this tweak wrote, so
+        // restoring the snapshot would silently re-enable notifications they had just deliberately turned
+        // off. Nothing in the registry can attribute the write, which is why the Notifications tab keeps a
+        // write ledger and this compares against the count captured at apply.
+        var writesNow = NotificationBlockerService.ReadMasterToggleWriteCount(configDir);
+        if (writeCountAtApply is { } atApply && writesNow != atApply)
+        {
+            Log.Information(
+                "Gaming Profile: the user set the notifications master toggle themselves while the profile "
+                + "was active (ledger {AtApply} -> {Now}); leaving it muted instead of restoring {Original}",
+                atApply, writesNow, originalToastEnabled);
             return Task.CompletedTask;
         }
 

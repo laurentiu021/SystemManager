@@ -296,6 +296,12 @@ public sealed class ThemeService
             ("OutOutputBrush", C("#E6E6E6")), ("OutVerboseBrush", C("#9AA0A6")),
             ("OutInfoBrush", C("#38BDF8")), ("OutWarnBrush", C("#FBBF24")), ("OutErrorBrush", C("#F87171")),
             ("OutDebugBrush", C("#B388FF")), ("OutProgressBrush", C("#4ADE80")),
+
+            // Dashboard metric accents. The last two App.xaml brushes that were never re-themed, so a
+            // light preset kept these dark-theme mid-tones while the sibling CPU card used the
+            // mode-aware Success brush — one crisp card beside two washed-out ones. Dark values mirror
+            // App.xaml exactly (no visual change on dark).
+            ("MetricBlue", C("#3B82F6")), ("MetricPurple", C("#A855F7")),
         ]
         :
         [
@@ -318,6 +324,13 @@ public sealed class ThemeService
             // Danger #B91C1C already did. (Earlier values passed on #FFFFFF but dipped to ~3.6-4.3 on
             // the pastel presets — see ThemeStatusBrushTests, which now asserts against the tinted surface.)
             ("Info", C("#075985")), ("Success", C("#166534")), ("Warning", C("#9A3412")), ("Danger", C("#B91C1C")),
+
+            // Dashboard metric accents on light: blue-700 / purple-700, the same step already used for
+            // BadgeIndigoText / BadgePurpleText above. These are NON-TEXT marks — a ProgressBar fill and
+            // a 6px dot — so the bar is WCAG 1.4.11's 3:1 against their own Surface3 track, which the
+            // frozen dark tints missed badly (MetricBlue read 2.42:1 on soft-blossom). -700 rather than
+            // -800 keeps the hue identity: the 26px number must still read as "a blue metric", not black.
+            ("MetricBlue", C("#1D4ED8")), ("MetricPurple", C("#7E22CE")),
 
             // Console on light: dark-on-white body/verbose text; semantic lines reuse the AA light tones.
             ("OutOutputBrush", C("#1E1B4B")), ("OutVerboseBrush", C("#475569")),

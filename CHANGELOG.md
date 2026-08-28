@@ -10,6 +10,39 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.7] - 2026-08-28
+
+Five things you could see, or could not see, in the interface. On any light theme the Dashboard's
+MEMORY and GPU figures were washed out; sliders gave no sign of which one the keyboard was on; the
+per-drive checkboxes in System Health all sounded identical to a screen reader; Shortcut Cleaner's
+delete button looked like an ordinary one; and pointing at a sidebar group made it look already open.
+
+### Fixed
+- **The Dashboard's MEMORY and GPU figures are legible on light themes.** Every other colour in the
+  app is chosen per theme, but these two were fixed at the shades picked for the dark theme, so on a
+  light preset the MEMORY bar and its dot sat at 2.42:1 against their own track — visible if you knew
+  where to look, easy to miss otherwise — while the CPU card beside them, which uses a theme-aware
+  colour, stayed crisp. The same blue also tints the Quick action status line and its bar, so that was
+  washed out too. Both colours now darken on light themes to the same step already used by the badges
+  elsewhere in the app, which clears the 3:1 contrast that applies to a bar or a dot. Dark themes are
+  byte-for-byte unchanged.
+- **Sliders show which one has keyboard focus.** Sliders are keyboard controls by definition, since the
+  arrow keys change their value, but SysManager's slider draws its own track and thumb and that
+  replaced the outline Windows normally puts around a focused control. Tabbing through Audio Mixer or
+  Display Profiles moved focus invisibly. The slider now uses the same focus ring as every other
+  control in the app.
+- **Each drive's CHKDSK checkbox says which drive it is.** System Health lists one checkbox per drive,
+  and a screen reader announced only the control type for all of them, so you could hear that there
+  were six checkboxes but not which one was C:. Each now announces its own drive letter.
+- **Shortcut Cleaner's "Delete Selected" is styled as the destructive action it is.** It deletes files
+  from disk but wore the ordinary secondary style, so the three buttons in that row looked
+  interchangeable and the one that removes files was the least conspicuous of them. It now carries the
+  same red treatment the rest of the app uses for irreversible actions.
+- **Hovering a sidebar group no longer looks like opening it.** The group headers tinted themselves on
+  hover with the exact colour this window uses to mark the page you are on, so running the mouse down
+  the sidebar made each group in turn look like the open one. They now use the hover tint the nav rows
+  and table rows already use, which keeps the two meanings distinct.
+
 ## [1.75.6] - 2026-08-28
 
 If you use a screen reader, SysManager's progress bars now tell you what they are doing. Before, 33

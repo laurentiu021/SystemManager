@@ -2320,13 +2320,17 @@ public partial class ArchitectureTests
     /// <summary>
     /// Every control inside a DataGrid row must announce WHICH ROW it belongs to, and the name must be
     /// somewhere an automation peer can actually read it.
-    /// <para>Two distinct defects, both of which look correct in the markup. App Blocker set
+    /// <para>Three distinct defects, all of which look correct in the markup. App Blocker set
     /// <c>AutomationProperties.Name="Select application"</c> on the <c>DataGridCheckBoxColumn</c> itself —
     /// but a column is a definition, not a visual, so it has no automation peer and the generated
     /// CheckBox in every cell stayed unlabelled. Startup Manager's per-row "Open" button had no name at
     /// all, so all of its rows announced the single word "Open" with nothing to say which program would
     /// be opened. A row control that announces the same thing on every row is barely better than one
-    /// that announces nothing: the user can hear it but cannot tell the rows apart.</para>
+    /// that announces nothing: the user can hear it but cannot tell the rows apart. The third arrived
+    /// later and from the other direction: System Health's per-drive CHKDSK checkbox sits in an
+    /// ItemsControl item template rather than a DataGrid column, so both filters below missed it and it
+    /// announced the bare control type on every drive. Found by mutation — deleting its name left every
+    /// test green.</para>
     /// <para>Both populations are derived from the XAML tree rather than from a known list, so the next
     /// column or the next row button is caught without editing this test. Attribute lookup is by local
     /// name: <c>AutomationProperties.Name</c> is written unprefixed in XAML, so it arrives as a single
@@ -2351,12 +2355,18 @@ public partial class ArchitectureTests
         static bool IsInsideAColumn(System.Xml.Linq.XElement e) =>
             e.Ancestors().Any(a => a.Name.LocalName.EndsWith("Column", StringComparison.Ordinal));
 
+        // A row of an ItemsControl/ListBox/DataGrid cell: the DataContext is one item, so a name written
+        // here is re-evaluated per row and CAN identify it — which is exactly why leaving it off hurts.
+        static bool IsInsideAnItemTemplate(System.Xml.Linq.XElement e) =>
+            e.Ancestors().Any(a => a.Name.LocalName == "DataTemplate");
+
         var namedOnTheColumn = new List<string>();
         var unnamedRowControls = new List<string>();
         var sameOnEveryRow = new List<string>();
         var columnsSeen = 0;
         var namedRowControls = 0;
         var rowNameSetters = 0;
+        var itemTemplateSelectors = 0;
 
         foreach (var path in files)
         {
@@ -2388,6 +2398,26 @@ public partial class ArchitectureTests
                     var value = (string?)element.Attribute("Value") ?? "";
                     if (!value.Contains("{Binding", StringComparison.Ordinal))
                         sameOnEveryRow.Add($"{file} — <Setter> value \"{value}\"");
+                    continue;
+                }
+
+                // A selection control living in an item template. Same rule, different container:
+                // "CheckBox" on all six drives is as useless as "Open" on all forty rows.
+                if (name is ("CheckBox" or "RadioButton") && IsInsideAnItemTemplate(element))
+                {
+                    var boxName = element.Attributes()
+                        .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value;
+                    if (boxName is null)
+                    {
+                        unnamedRowControls.Add($"{file} — <{name}> in an item template carries no name");
+                    }
+                    else
+                    {
+                        itemTemplateSelectors++;
+                        if (!boxName.Contains("{Binding", StringComparison.Ordinal))
+                            sameOnEveryRow.Add($"{file} — <{name}> name \"{boxName}\"");
+                    }
+
                     continue;
                 }
 
@@ -2424,6 +2454,9 @@ public partial class ArchitectureTests
         Assert.True(rowNameSetters >= 10,
             $"only {rowNameSetters} ElementStyle name setters were found — six checkbox columns carry a "
             + "pair each, so a lower count means the Setter selector has stopped matching.");
+        Assert.True(itemTemplateSelectors >= 6,
+            $"only {itemTemplateSelectors} named item-template checkboxes were found — eight views carry "
+            + "one each, so a lower count means the DataTemplate ancestor test has stopped matching.");
 
         Assert.True(namedOnTheColumn.Count == 0,
             "AutomationProperties.Name is set on a DataGrid COLUMN, which is a definition rather than a "
@@ -2433,10 +2466,10 @@ public partial class ArchitectureTests
             + "it:\n  " + string.Join("\n  ", namedOnTheColumn));
 
         Assert.True(unnamedRowControls.Count == 0,
-            "these controls sit in a DataGrid cell template with no accessible name, so every row "
-            + "announces the same word — or nothing — and a screen-reader user cannot tell which row "
-            + "the control belongs to. Bind the name to a property of the row, as the sibling columns "
-            + $"do:\n  " + string.Join("\n  ", unnamedRowControls));
+            "these controls sit in a per-row template — a DataGrid cell or an ItemsControl item — with no "
+            + "accessible name, so every row announces the same word, or nothing, and a screen-reader user "
+            + "cannot tell which row the control belongs to. Bind the name to a property of the row, as "
+            + $"every sibling already does:\n  " + string.Join("\n  ", unnamedRowControls));
 
         // A constant name is the same defect one step later: present, readable, and identical on all
         // forty rows, so it still cannot tell them apart. Every one of the existing names binds a row
@@ -4492,5 +4525,108 @@ public partial class ArchitectureTests
     /// </summary>
     [GeneratedRegex(@"(?<!Directory\.)\bEnumerate(?:Files|Directories)\w*\((?<args>[^()]*)\)")]
     private static partial Regex TempWalkerCall();
+
+
+    /// <summary>
+    /// A style that replaces a keyboard-operable control's template must still provide a focus visual.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="NoStyle_SuppressesTheKeyboardFocusIndicator"/> catches only an explicit
+    /// <c>FocusVisualStyle="{x:Null}"</c>. Replacing the whole <c>ControlTemplate</c> removes the default
+    /// adorner just as effectively while leaving nothing for that guard to match, which is how the Slider
+    /// shipped with no keyboard cue at all: arrow keys change its value, and nothing showed which slider
+    /// had focus. Found by mutation — deleting the Slider's <c>FocusVisualStyle</c> setter left every test
+    /// green.
+    /// <para>Satisfied by either route the app already uses: the shared <c>FocusRing</c> adorner, or an
+    /// <c>IsKeyboardFocused</c> trigger drawing a ring inside the template.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryTemplatedKeyboardControl_ProvidesAFocusVisual()
+    {
+        // Controls a keyboard user drives directly. Deliberately not every control: a Border or a
+        // TextBlock is not focusable, and a Button family style is already covered above.
+        string[] keyboardDriven = ["Slider", "CheckBox", "RadioButton", "ToggleButton", "ComboBox"];
+
+        var appXaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "App.xaml"));
+        var offenders = new List<string>();
+        var stylesChecked = 0;
+
+        foreach (var type in keyboardDriven)
+        {
+            foreach (var style in TypedStyle(type).Matches(appXaml).Cast<Match>())
+            {
+                var body = style.Value;
+
+                // Only styles that take over the rendering can lose the default adorner.
+                if (!body.Contains("<ControlTemplate", StringComparison.Ordinal)) continue;
+                stylesChecked++;
+
+                // A control that cannot take focus needs no focus visual — ComboBox's internal toggle
+                // is Focusable="False" because the ComboBox itself is what the user tabs to.
+                if (NotFocusable().IsMatch(body)) continue;
+
+                var hasRing = body.Contains("FocusVisualStyle", StringComparison.Ordinal)
+                              && body.Contains("FocusRing", StringComparison.Ordinal);
+                var hasTrigger = body.Contains("IsKeyboardFocused", StringComparison.Ordinal)
+                                 || body.Contains("IsKeyboardFocusWithin", StringComparison.Ordinal);
+
+                // Style inheritance carries the setter: FilterChipCaution and FilterChipCritical are
+                // BasedOn FilterChip, which sets the ring, so they are covered without repeating it.
+                var basedOn = StyleBasedOn().Match(body);
+                if (!hasRing && !hasTrigger && basedOn.Success)
+                {
+                    var parent = TypedStyleWithKey(basedOn.Groups["key"].Value).Match(appXaml);
+                    if (parent.Success
+                        && parent.Value.Contains("FocusRing", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+                }
+
+                var key = StyleKey().Match(body);
+                if (!hasRing && !hasTrigger)
+                    offenders.Add($"{type} style '{(key.Success ? key.Groups["key"].Value : "implicit")}' "
+                                  + "replaces its template with no focus visual");
+            }
+        }
+
+        // Vacuity floor: several templated styles for these types exist today. A collapse means the
+        // pattern stopped matching and this guard is reading nothing.
+        Assert.True(stylesChecked >= 3,
+            $"only {stylesChecked} templated styles were found for {string.Join("/", keyboardDriven)} — "
+            + "the style pattern no longer matches, so this guard proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these styles replace a keyboard-operable control's template and provide no focus visual, so "
+            + "a keyboard user cannot see what has focus. Set FocusVisualStyle to the shared FocusRing, or "
+            + $"add an IsKeyboardFocused trigger inside the template:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A style that opts its own control out of focus entirely. Deliberately the SETTER form only:
+    /// matching the attribute form too made this skip the Slider, whose template children are
+    /// <c>Focusable="False"</c> while the Slider itself is exactly what the user tabs to — the guard
+    /// then went green on the very defect it was written for.
+    /// </summary>
+    [GeneratedRegex(@"<Setter\s+Property=""Focusable""\s+Value=""False""")]
+    private static partial Regex NotFocusable();
+
+    /// <summary>
+    /// Captures the key a style inherits from. Anchored to the style's own opening tag so a nested
+    /// style inside a ControlTemplate cannot donate its ring-bearing parent to the outer style.
+    /// </summary>
+    [GeneratedRegex(@"\A<Style[^>]*BasedOn=""\{StaticResource (?<key>\w+)\}""")]
+    private static partial Regex StyleBasedOn();
+
+    /// <summary>Captures a style's own key, anchored for the same reason as <see cref="StyleBasedOn"/>.</summary>
+    [GeneratedRegex(@"\A<Style[^>]*x:Key=""(?<key>\w+)""")]
+    private static partial Regex StyleKey();
+
+    private static Regex TypedStyleWithKey(string key) =>
+        new(@"<Style[^>]*x:Key=""" + Regex.Escape(key) + @"""(?:(?!</Style>).)*</Style>",
+            RegexOptions.Singleline);
+    private static Regex TypedStyle(string targetType) =>
+        new(@"<Style[^>]*TargetType=""" + Regex.Escape(targetType) + @"""(?:(?!</Style>).)*</Style>",
+            RegexOptions.Singleline);
 
 }

@@ -890,6 +890,11 @@
             <!-- names so snapping + value binding still work.                   -->
             <!-- ============================================================ -->
             <Style TargetType="Slider">
+                <!-- The template below replaces the whole control, which drops the default focus
+                     adorner, and a slider is keyboard-operated by definition (arrow keys change the
+                     value). The shared FocusRing adorner draws outside the control, so it needs no
+                     room inside the 4px track. -->
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                 <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
                 <Setter Property="Background" Value="{DynamicResource Border2}"/>
                 <Setter Property="MinHeight" Value="22"/>

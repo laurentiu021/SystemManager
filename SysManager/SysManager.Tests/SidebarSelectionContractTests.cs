@@ -169,6 +169,59 @@ public class SidebarSelectionContractTests
         Assert.Equal("{Binding Label}", (string?)liveExpander.Attribute("AutomationProperties.Name"));
     }
 
+    /// <summary>
+    /// No hover state in the sidebar may paint itself with the SELECTION brush.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="LiveRows_ShareSelectedVisualTreatment"/> pins the two brushes on the
+    /// <c>SidebarNavRow</c> style itself. It cannot see the group-header <c>Border</c>, which carries its
+    /// own inline style, and that header hovered in <c>AccentSoft</c> — the very brush this window uses to
+    /// mark the selected page. Two different meanings, one colour, in one control: moving the mouse down
+    /// the sidebar made each group look momentarily like the open one.
+    /// <para>Deliberately scoped to this window. Nine views elsewhere tint a hovered row with
+    /// <c>AccentSoft</c> and none of them use it for selection, so there is nothing to confuse; the rule
+    /// is not "AccentSoft is never a hover colour" but "not where it already means selected".</para>
+    /// </remarks>
+    [Fact]
+    public void NoSidebarHover_BorrowsTheSelectionBrush()
+    {
+        var document = LoadProjectXaml("MainWindow.xaml");
+
+        // Any trigger shape, including a MultiTrigger whose condition list mentions the property, so a
+        // future rewrite into conditions cannot slip past this.
+        var hoverTriggers = document
+            .Descendants()
+            .Where(element => element.Name.LocalName.EndsWith("Trigger", StringComparison.Ordinal))
+            .Where(element =>
+                (string?)element.Attribute("Property") == "IsMouseOver"
+                || element.Descendants(Presentation + "Condition")
+                    .Any(condition => (string?)condition.Attribute("Property") == "IsMouseOver"))
+            .ToList();
+
+        // Vacuity floor: three exist today (two row hovers and the keyboard-focus border's sibling).
+        Assert.True(
+            hoverTriggers.Count >= 3,
+            $"only {hoverTriggers.Count} hover triggers were found in MainWindow.xaml — the trigger "
+            + "selector has stopped matching, so this guard is reading nothing.");
+
+        var borrowed = hoverTriggers
+            .SelectMany(trigger => trigger.Descendants(Presentation + "Setter"))
+            .Where(setter =>
+                ((string?)setter.Attribute("Property"))?.EndsWith("Background", StringComparison.Ordinal)
+                    == true
+                && ((string?)setter.Attribute("Value"))?.Contains("AccentSoft", StringComparison.Ordinal)
+                    == true)
+            .Select(setter => (string?)setter.Attribute("Value") ?? "")
+            .ToList();
+
+        Assert.True(
+            borrowed.Count == 0,
+            "a sidebar hover state paints itself with AccentSoft, which is what this window uses to mark "
+            + "the SELECTED page: hovering a group then looks identical to having opened it. Use RowHover, "
+            + $"as the nav rows and DataGridRow already do. Found {borrowed.Count} occurrence(s): "
+            + string.Join(", ", borrowed));
+    }
+
     [Fact]
     public void LegacyTabItemStyle_IsNotKeptAsASecondSourceOfTruth()
     {

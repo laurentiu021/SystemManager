@@ -142,6 +142,58 @@ public class ThemeStatusBrushTests
             $"Light-theme '{key}' must meet WCAG AA (4.5:1) as small badge text on the most-tinted light surface; got {ratio:F2}:1.");
     }
 
+    /// <summary>
+    /// Mirrors <c>ThemeService.Lerp</c> so the track colour under a metric fill is derived with the
+    /// same maths the app uses, rather than an approximation of it.
+    /// </summary>
+    private static Color Lerp(Color a, Color b, double t) => Color.FromArgb(
+        255,
+        (byte)(a.R + (b.R - a.R) * t),
+        (byte)(a.G + (b.G - a.G) * t),
+        (byte)(a.B + (b.B - a.B) * t));
+
+    // Dashboard metric accents (#1623). Deliberately NOT folded into the theories above: both real
+    // usages are non-text — the ProgressBar fill and the 6px status dot — so the applicable bar is
+    // WCAG 1.4.11's 3:1 for graphical objects, not 4.5:1 for small text. Asserting 4.5 here would be
+    // over-strict for a fill and would reject a legitimate future value; asserting nothing would leave
+    // the defect free to return. The 26px bold percentage is large text, which 3:1 also covers.
+    //
+    // The surface is the fill's OWN track (Surface3), derived the way ThemeService derives it, because
+    // that is what the fill is measured against — not the card behind it.
+    [Theory]
+    [InlineData("MetricBlue")]
+    [InlineData("MetricPurple")]
+    public void LightPalette_MetricAccents_MeetNonTextContrastOnTheirTrack(string key)
+    {
+        var track = Lerp(LightTintedSurface, C("#0F172A"), 0.05);   // Surface3 = Lerp(Surface2, TextPrimary, 0.05)
+        var ratio = ContrastRatio(Lookup(ThemeService.StatusPalette(false), key), track);
+        Assert.True(ratio >= 3.0,
+            $"Light-theme '{key}' is a ProgressBar fill and a status dot, so it must meet WCAG 1.4.11 "
+            + $"(3:1) against its own Surface3 track; got {ratio:F2}:1.");
+    }
+
+    [Theory]
+    [InlineData("MetricBlue")]
+    [InlineData("MetricPurple")]
+    public void DarkPalette_MetricAccents_AreByteIdenticalToTheAppXamlDefaults(string key)
+    {
+        // The dark branch must be a no-op: these tints already worked there, and a shift would
+        // invalidate every dark-theme screenshot for no benefit.
+        var expected = key == "MetricBlue" ? C("#3B82F6") : C("#A855F7");
+        Assert.Equal(expected, Lookup(ThemeService.StatusPalette(true), key));
+    }
+
+    [Theory]
+    [InlineData("MetricBlue")]
+    [InlineData("MetricPurple")]
+    public void MetricAccents_PresentInBothModes_AndDiverge(string key)
+    {
+        // If the light rows were dropped, Lookup would throw rather than silently fall back, and the
+        // divergence assertion states the intent that light is NOT simply the dark value.
+        Assert.NotEqual(Lookup(ThemeService.StatusPalette(true), key),
+                        Lookup(ThemeService.StatusPalette(false), key));
+    }
+
     [Theory]
     [InlineData("CriticalText")]
     [InlineData("BadgeIndigoText")]

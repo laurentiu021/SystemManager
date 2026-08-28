@@ -392,4 +392,93 @@ public class ThemeStatusBrushTests
         }
         return 0.2126 * Ch(c.R) + 0.7152 * Ch(c.G) + 0.0722 * Ch(c.B);
     }
+    // ── Foregrounds on a filled surface (#1621, #1534) ─────────────────────────
+
+    /// <summary>
+    /// Every preset's accent must carry a label that clears AA. PrimaryButton is 13px SemiBold, which is
+    /// normal text under WCAG — large text needs 18.66px bold or 24px — so the bar is 4.5:1, and the
+    /// issue's suggestion of raising the font to 14px Bold to qualify for 3:1 would not have worked.
+    /// </summary>
+    [Fact]
+    public void TextOnAccent_ClearsAaAgainstEveryPresetAccent()
+    {
+        var offenders = new List<string>();
+
+        foreach (var preset in ThemePreset.Defaults.Values)
+        {
+            var ratio = ContrastRatio(ThemeService.OnColor(preset.Accent), preset.Accent);
+            if (ratio < 4.5)
+                offenders.Add($"{preset.Id} (accent #{preset.Accent.R:X2}{preset.Accent.G:X2}"
+                              + $"{preset.Accent.B:X2}) = {ratio:F2}:1");
+        }
+
+        // Vacuity floor: twelve presets ship today, so an empty loop would report a clean sweep of nothing.
+        Assert.True(ThemePreset.Defaults.Count >= 12,
+            $"only {ThemePreset.Defaults.Count} presets were found — this sweep proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these presets give their on-accent label less than the 4.5:1 a 13px SemiBold label needs. "
+            + "PrimaryButton, the checked ModePill and the checkbox tick all sit on this fill:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The choice must actually vary with the accent. A constant would pass the sweep above on most
+    /// presets while quietly failing whichever half it does not suit.
+    /// </summary>
+    [Fact]
+    public void TextOnAccent_IsNotOneConstantForEveryPreset()
+    {
+        var picks = ThemePreset.Defaults.Values
+            .Select(preset => ThemeService.OnColor(preset.Accent))
+            .Distinct()
+            .ToList();
+
+        Assert.Equal(2, picks.Count);
+    }
+
+    /// <summary>
+    /// Pinned because it was the deciding measurement. A softened near-black (#1A1A1A) reads better on a
+    /// saturated fill and was the first choice, but it does NOT clear the bar: against the default accent
+    /// #6366F1 it is 3.90:1 while white is 4.47:1, so neither reaches 4.5 and the app's own signature
+    /// colour would still fail. Only pure black does, which is why the helper returns Colors.Black rather
+    /// than a friendlier tone — and why a future "soften that harsh black" edit must not be made blindly.
+    /// </summary>
+    [Fact]
+    public void TextOnAccent_NeedsPureBlack_BecauseNearBlackMissesTheDefaultAccent()
+    {
+        var defaultAccent = ThemePreset.Defaults["midnight-indigo"].Accent;
+
+        Assert.True(ContrastRatio(Colors.White, defaultAccent) < 4.5,
+            "white was expected to fail against the default accent — if it now passes, re-derive this.");
+        Assert.True(ContrastRatio(C("#1A1A1A"), defaultAccent) < 4.5,
+            "#1A1A1A was expected to fail too; that is the reason pure black is used.");
+        Assert.True(ContrastRatio(Colors.Black, defaultAccent) >= 4.5);
+        Assert.Equal(Colors.Black, ThemeService.OnColor(defaultAccent));
+    }
+
+    /// <summary>
+    /// DangerButton's label had the same defect and needs the opposite answer per mode: white on the
+    /// dark-mode #EF4444 is 3.76:1, while white on the light-mode #B91C1C is 6.47:1 and correct.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TextOnDanger_ClearsAaAgainstTheDangerFill(bool isDark)
+    {
+        var danger = Lookup(ThemeService.StatusPalette(isDark), "Danger");
+        var ratio = ContrastRatio(ThemeService.TextOnDanger(isDark), danger);
+
+        Assert.True(ratio >= 4.5,
+            $"{(isDark ? "Dark" : "Light")}-mode DangerButton label is {ratio:F2}:1 against its own fill; "
+            + "the label is 13px SemiBold, so it needs 4.5:1.");
+    }
+
+    /// <summary>
+    /// The two modes must not land on the same answer — that is the whole reason this is derived per mode
+    /// instead of written once.
+    /// </summary>
+    [Fact]
+    public void TextOnDanger_DiffersBetweenModes()
+        => Assert.NotEqual(ThemeService.TextOnDanger(true), ThemeService.TextOnDanger(false));
 }

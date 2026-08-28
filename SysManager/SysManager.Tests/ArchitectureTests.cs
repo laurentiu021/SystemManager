@@ -4773,4 +4773,56 @@ public partial class ArchitectureTests
     /// <summary>Captures the FilterChip-family style a chip is bound to.</summary>
     [GeneratedRegex(@"StaticResource (?<style>FilterChip\w*)\}")]
     private static partial Regex FilterChipUsage();
+    /// <summary>
+    /// The hosted PowerShell's telemetry opt-out must stay in the source, and stay early.
+    /// </summary>
+    /// <remarks>
+    /// <c>PowerShellRunnerTelemetryTests</c> proves the variable is set, but it would keep passing if the
+    /// assignment moved somewhere that runs after a runspace already exists. This pins the shape: the
+    /// opt-out lives in a static constructor, so it cannot be reduced to a call some future entry point
+    /// forgets to make.
+    /// <para>Also pins that nothing else in the app writes the same variable, since a second writer could
+    /// set it to "0" and re-enable the subsystem while both the test and this guard stayed green.</para>
+    /// </remarks>
+    [Fact]
+    public void TheHostedPowerShell_OptsOutOfTelemetryInAStaticConstructor()
+    {
+        var runner = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "PowerShellRunner.cs"));
+
+        Assert.Contains("static PowerShellRunner()", runner, StringComparison.Ordinal);
+        Assert.Contains("POWERSHELL_TELEMETRY_OPTOUT", runner, StringComparison.Ordinal);
+        Assert.Contains("EnvironmentVariableTarget.Process", runner, StringComparison.Ordinal);
+
+        // The assignment must sit inside the static constructor, not merely somewhere in the file.
+        // Both callers must remain: the static constructor for earliness, and CreateRunspace for the
+        // unconditional guarantee at the one place a runspace is born. Losing either leaves the opt-out
+        // dependent on type-initialisation order, which is what the first attempt at this got wrong.
+        Assert.Contains("static PowerShellRunner() => OptOutOfPowerShellTelemetry();", runner, StringComparison.Ordinal);
+
+        var createRunspace = runner.IndexOf(
+            "private (Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process) CreateRunspace()",
+            StringComparison.Ordinal);
+        Assert.True(createRunspace > 0, "CreateRunspace was renamed — re-derive this guard.");
+        var callInside = runner.IndexOf("OptOutOfPowerShellTelemetry();", createRunspace, StringComparison.Ordinal);
+        Assert.True(callInside > createRunspace && callInside - createRunspace < 400,
+            "CreateRunspace no longer calls OptOutOfPowerShellTelemetry before building a runspace, so the "
+            + "opt-out depends on when the runtime initialises the type.");
+
+        // No second writer anywhere in the app: one could set it back to "0".
+        var appDir = FindAppProjectDir();
+        var otherWriters = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !Path.GetRelativePath(appDir, f)
+                .Split(Path.DirectorySeparatorChar)
+                .Any(segment => segment is "obj" or "bin"))
+            .Where(f => Path.GetFileName(f) != "PowerShellRunner.cs")
+            .Where(f => File.ReadAllText(f).Contains("POWERSHELL_TELEMETRY_OPTOUT", StringComparison.Ordinal))
+            .Select(f => Path.GetFileName(f))
+            .ToList();
+
+        Assert.True(otherWriters.Count == 0,
+            "another file also references the PowerShell telemetry opt-out variable; a second writer could "
+            + $"set it back to \"0\". Keep it owned by PowerShellRunner alone: {string.Join(", ", otherWriters)}");
+    }
 }

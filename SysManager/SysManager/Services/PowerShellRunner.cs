@@ -478,8 +478,54 @@ public sealed class PowerShellRunner : IPowerShellRunner
         return $"$env:PSModulePath='{escapedPath}';";
     }
 
+    /// <summary>
+    /// The single environment variable PowerShell 7 consults before sending telemetry.
+    /// </summary>
+    internal const string TelemetryOptOutVariable = "POWERSHELL_TELEMETRY_OPTOUT";
+
+    /// <summary>
+    /// Opts the hosted PowerShell out of telemetry before any runspace exists.
+    /// </summary>
+    /// <remarks>
+    /// The in-process runspace is the PowerShell 7 SDK, and <c>System.Management.Automation</c> pulls in
+    /// <c>Microsoft.ApplicationInsights</c> for one reason: its telemetry subsystem. That DLL is not
+    /// theoretical here — it resolves in the dependency graph and ships inside the self-contained
+    /// single-file .exe. PowerShell gates the whole subsystem on this one variable and nothing else.
+    /// <para>SysManager's standing promise, repeated on every release page, is that it transfers nothing
+    /// anywhere unless the user asks. Hosting a runspace that could report module loads to a third party
+    /// would contradict the only claim the product makes about itself, so the opt-out is set here rather
+    /// than trusted to a default.</para>
+    /// <para>A static constructor, not <c>App.OnStartup</c>: this runs before the first instance method
+    /// touches an SMA type, and it covers every host — the app, the test suite, and any future entry
+    /// point — instead of only the one that remembers to call it.</para>
+    /// <para><see cref="EnvironmentVariableTarget.Process"/> deliberately. This changes nothing the user
+    /// can see or keep; the machine and user scopes are what <c>EnvironmentVariableService</c> edits on
+    /// their behalf, and writing there would be a side effect nobody asked for. The elevated path starts
+    /// Windows PowerShell 5.1 as a child process, which inherits this, so one assignment covers both.</para>
+    /// </remarks>
+    static PowerShellRunner() => OptOutOfPowerShellTelemetry();
+
+    /// <summary>
+    /// Sets the opt-out. Idempotent, and called from both the static constructor and
+    /// <see cref="CreateRunspace"/>.
+    /// </summary>
+    /// <remarks>
+    /// Belt and braces on purpose. The static constructor alone would be enough in practice, but a
+    /// no-telemetry guarantee should not rest on when the runtime decides to initialise a type — and the
+    /// first version of this proved the hazard is real: exposing the name as a <c>const</c> meant reading it
+    /// inlined the literal and initialised nothing, so the accompanying test was red for a genuine reason.
+    /// Calling it again at the one place a runspace is born makes the ordering unconditional.
+    /// </remarks>
+    internal static void OptOutOfPowerShellTelemetry()
+        => Environment.SetEnvironmentVariable(
+            TelemetryOptOutVariable, "1", EnvironmentVariableTarget.Process);
+
     private (Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process) CreateRunspace()
     {
+        // Unconditional, immediately before the only runspace creation in the app, so the opt-out cannot
+        // depend on type-initialisation order. Idempotent, so calling it per runspace costs nothing.
+        OptOutOfPowerShellTelemetry();
+
         if (!_isElevated)
         {
             var initialSessionState = InitialSessionState.CreateDefault2();

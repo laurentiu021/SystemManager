@@ -165,6 +165,15 @@ machine, or your usage is transmitted anywhere — there is no server side to
 transmit it to. The application is a single portable executable that reads and
 writes only on the machine it runs on.
 
+That covers code written here. It does not automatically cover code SysManager
+hosts, so one dependency is worth naming: several features run PowerShell, and
+SysManager hosts the PowerShell 7 engine in-process. That engine has telemetry of
+its own, independent of ours, which Microsoft gates on a single environment
+variable. SysManager sets `POWERSHELL_TELEMETRY_OPTOUT=1` for its own process
+before any PowerShell session is created, so the hosted engine stays silent too.
+The variable is set for the running process only — your saved environment is never
+modified — and a test asserts it, so the opt-out cannot be dropped unnoticed.
+
 ### What the app stores, and where
 
 All of it stays on your PC, inside your own user profile. None of it is

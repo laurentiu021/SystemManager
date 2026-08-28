@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.13] - 2026-08-28
+
+SysManager runs PowerShell behind the scenes for some features, and that engine has its own usage
+reporting built in by Microsoft. It is now switched off. SysManager itself never sent anything, but the
+engine it borrows could have.
+
+### Fixed
+- **The PowerShell engine SysManager uses no longer has its usage reporting enabled.** Several features
+  work by running PowerShell, and rather than launching a separate window SysManager loads the PowerShell
+  engine inside itself. That engine ships with Microsoft's own usage-reporting component, which is turned
+  off by a single switch — and SysManager was not setting it. Nothing of yours was being collected by
+  SysManager, which has never had anything to send it to, but the borrowed engine could have reported its
+  own activity. The switch is now set before any PowerShell session starts, for this program only, so your
+  saved Windows settings are untouched. A test checks it stays set, and the privacy section of SECURITY.md
+  now names the dependency instead of only speaking for code written here.
+
 ## [1.75.12] - 2026-08-28
 
 Green now means "safe" again. The filter buttons on Services and System Logs were all green, including

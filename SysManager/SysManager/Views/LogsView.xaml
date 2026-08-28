@@ -151,23 +151,23 @@
                         <RadioButton Content="1h" GroupName="TimeRange" Margin="0,0,4,0"
                                      AutomationProperties.Name="1h — time range: last hour"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last hour'}"
-                                     Style="{StaticResource FilterChip}"/>
+                                     Style="{StaticResource FilterChipNeutral}"/>
                         <RadioButton Content="24h" GroupName="TimeRange" Margin="0,0,4,0"
                                      AutomationProperties.Name="24h — time range: last 24 hours"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 24 hours'}"
-                                     Style="{StaticResource FilterChip}"/>
+                                     Style="{StaticResource FilterChipNeutral}"/>
                         <RadioButton Content="7d" GroupName="TimeRange" Margin="0,0,4,0"
                                      AutomationProperties.Name="7d — time range: last 7 days"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 7 days'}"
-                                     Style="{StaticResource FilterChip}"/>
+                                     Style="{StaticResource FilterChipNeutral}"/>
                         <RadioButton Content="30d" GroupName="TimeRange" Margin="0,0,4,0"
                                      AutomationProperties.Name="30d — time range: last 30 days"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 30 days'}"
-                                     Style="{StaticResource FilterChip}"/>
+                                     Style="{StaticResource FilterChipNeutral}"/>
                         <RadioButton Content="All" GroupName="TimeRange"
                                      AutomationProperties.Name="Time range: all time"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='All'}"
-                                     Style="{StaticResource FilterChip}"/>
+                                     Style="{StaticResource FilterChipNeutral}"/>
                     </StackPanel>
 
                     <TextBlock Text="Max results" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>

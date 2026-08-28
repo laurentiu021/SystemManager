@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.12] - 2026-08-28
+
+Green now means "safe" again. The filter buttons on Services and System Logs were all green, including
+"Stopped" and the time ranges, so the colour that marks a safe service was also on buttons that say
+nothing about safety.
+
+### Changed
+- **Filter buttons that say nothing about safety are no longer green.** Services marks a service Safe,
+  Caution or Critical in green, amber and red — that part is intentional. But nine other filter buttons
+  borrowed the green one: "Running", "Stopped", "Advanced" and "All" in Services, and the 1h / 24h / 7d /
+  30d / All time ranges in System Logs. So a green "Stopped" sat one row under a green "Safe" in the same
+  row of buttons, and "last 24 hours" carried the same colour as "this service is safe". Those nine are
+  now plain grey, and turn purple when selected, which is the colour the rest of the app uses to show what
+  you have picked. Safe, "Safe to disable" and "Keep enabled" stay green, because each of those really is
+  a statement about safety.
+
 ## [1.75.11] - 2026-08-28
 
 The background-shade slider in Appearance can no longer make text hard to read. Dragging it to either

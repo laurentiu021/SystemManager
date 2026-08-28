@@ -4719,4 +4719,58 @@ public partial class ArchitectureTests
     /// <summary>Matches any Style block, keyed or implicit, up to its closing tag.</summary>
     [GeneratedRegex(@"<Style\b(?:(?!</Style>).)*</Style>", RegexOptions.Singleline)]
     private static partial Regex AnyStyle();
+    /// <summary>
+    /// The neutral filter chip must not borrow the Success palette, and System Logs must use only it.
+    /// </summary>
+    /// <remarks>
+    /// <c>FilterChip</c> is the green member of a three-way safety family — <c>SuccessBgSubtle</c>
+    /// background, a <c>Success</c> dot, <c>SuccessText</c> label — with <c>FilterChipCaution</c> and
+    /// <c>FilterChipCritical</c> as its siblings. Services uses all three as intended for Safe / Caution /
+    /// Critical. Nine other chips borrowed the green one while stating no safety level, so a green
+    /// "Stopped (n)" sat one row under a green "Safe (n)" in the same radio group: two meanings, one colour.
+    /// <para>Guarded because the trap has been re-entered three times already — Running, Keep enabled and
+    /// Advanced were all added to the green style after the defect was first written up. The System Logs
+    /// assertion is the load-bearing half: that view filters by time only, so any safety colour there is
+    /// wrong by construction, and a new time range added to the wrong style fails here rather than shipping.</para>
+    /// </remarks>
+    [Fact]
+    public void TheNeutralFilterChip_StaysNeutral_AndSystemLogsUsesOnlyIt()
+    {
+        var appDir = FindAppProjectDir();
+        var appXaml = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
+
+        var neutral = TypedStyleWithKey("FilterChipNeutral").Match(appXaml);
+        Assert.True(neutral.Success,
+            "FilterChipNeutral is missing. Services and System Logs need a chip that states a fact rather "
+            + "than a safety level; without it the green Safe chip's style gets borrowed again.");
+
+        foreach (var green in new[] { "Success", "SuccessText", "SuccessBgSubtle", "SuccessBorder" })
+        {
+            Assert.DoesNotContain($"{{DynamicResource {green}}}", neutral.Value, StringComparison.Ordinal);
+        }
+
+        // Selection reads as the app's identity colour, which is what the contract reserves purple for.
+        Assert.Contains("{DynamicResource Accent}", neutral.Value, StringComparison.Ordinal);
+
+        // System Logs filters by time range and by nothing else, so no chip there may carry a safety colour.
+        var logs = File.ReadAllText(Path.Combine(appDir, "Views", "LogsView.xaml"));
+        var chips = FilterChipUsage().Matches(logs).Cast<Match>()
+            .Select(m => m.Groups["style"].Value)
+            .ToList();
+
+        // Vacuity floor: five time-range chips ship today.
+        Assert.True(chips.Count >= 5,
+            $"only {chips.Count} filter chips were found in LogsView.xaml — the usage pattern has stopped "
+            + "matching, so this guard is reading nothing.");
+
+        var wrong = chips.Where(style => style != "FilterChipNeutral").Distinct().ToList();
+        Assert.True(wrong.Count == 0,
+            "System Logs filters by time range, which carries no safety meaning, so its chips must use "
+            + "FilterChipNeutral. These styles claim a severity colour instead: "
+            + string.Join(", ", wrong));
+    }
+
+    /// <summary>Captures the FilterChip-family style a chip is bound to.</summary>
+    [GeneratedRegex(@"StaticResource (?<style>FilterChip\w*)\}")]
+    private static partial Regex FilterChipUsage();
 }

@@ -573,6 +573,38 @@
                 <Setter Property="FontWeight" Value="Medium"/>
             </Style>
 
+            <!-- The neutral member of the FilterChip family. The other three state a safety level
+                 (Safe / Caution / Critical) and colour themselves accordingly; a time range or a
+                 run-state states a fact, and borrowing the green one made "Stopped" and "24h" claim
+                 the colour that means "this service is safe" one row above them.
+                 No status dot: a neutral filter has no status to signal. Checked is purple, which is
+                 what the colour contract already reserves for selection, so this reuses the app's
+                 existing meaning instead of introducing another one. -->
+            <Style x:Key="FilterChipNeutral" TargetType="RadioButton" BasedOn="{StaticResource FilterChip}">
+                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Bd" CornerRadius="{StaticResource RadiusPill}" Padding="8,4"
+                                    Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border2}" BorderThickness="1"
+                                    Cursor="Hand">
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <Style x:Key="FilterChipCaution" TargetType="RadioButton" BasedOn="{StaticResource FilterChip}">
                 <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
                 <Setter Property="Template">

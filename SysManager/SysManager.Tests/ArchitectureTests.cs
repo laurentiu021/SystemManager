@@ -2448,26 +2448,24 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// No two progress bars on the same page may be announced by the same name.
-    /// <para>Forty-four bars were announced as the bare word "Progress", and on four pages two or three
-    /// appeared at once: Deep Cleanup showed separate scan, cleanup and large-file bars, all three saying
-    /// "Progress". Worse, two were not progress at all — Disk Analyzer's drive-usage bar and Battery
-    /// Health's charge bar are GAUGES, so a screen reader announced "Progress 78" for a battery that is
-    /// 78% charged. Each now says what it reports.</para>
-    /// <para>The rule is uniqueness per view rather than "never call a bar Progress": on the 34 pages
-    /// with a single bar the bare word is uninformative but not ambiguous, and renaming those would mean
-    /// inventing 34 strings for no behavioural gain. Ambiguity is the defect; vagueness is polish.</para>
-    /// <para>Unnamed bars are ratcheted, not forbidden, and the allowance has since been tightened from
-    /// ten to FOUR. The six that carried a <c>Value</c> binding — the Dashboard's CPU, memory and GPU
-    /// gauges, its per-drive space bar, its quick-action bar, and Volume Control's per-session peak meter
-    /// — report a real reading, so they were named (#1939); the two per-row ones name their row, as the
-    /// guard above requires.</para>
-    /// <para>What remains is the four DECORATIVE strips: <c>IsIndeterminate="True"</c> with no
-    /// <c>Value</c> at all (Bulk Installer, MainWindow, two on the Dashboard). A spinner that only means
-    /// "working" arguably belongs OUT of the accessibility tree rather than named, and no convention for
-    /// hiding an element exists anywhere in this app yet — inventing one is a design decision, so it stays
-    /// on #1939. The ratchet lets these counts fall but never rise, so the debt is recorded in code rather
-    /// than in a comment nobody runs.</para>
+    /// Every progress bar carries a name, that name says what the bar reports, and no two bars on one
+    /// page share it. Four rules, all enforced below.
+    /// <para>The history: forty-four bars announced the bare word "Progress". On four pages two or three
+    /// appeared at once — Deep Cleanup showed separate scan, cleanup and large-file bars, all three
+    /// saying "Progress" — and two were not progress at all, since Disk Analyzer's drive-usage bar and
+    /// Battery Health's charge bar are GAUGES, so a screen reader announced "Progress 78" for a battery
+    /// at 78%.</para>
+    /// <para>Uniqueness alone was fixed first, on the reasoning that a single bar per page is
+    /// uninformative but not ambiguous. That reasoning was wrong in practice: it left 33 tabs where the
+    /// only announcement was "Progress", which tells a screen-reader user that something is happening
+    /// and nothing about what. All 60 bars now name their operation, gauge or row, so
+    /// <c>tooVagueToIdentify</c> rejects the bare words outright rather than tolerating them.</para>
+    /// <para><c>unnamedAllowance</c> is now EMPTY. The last four holdouts were decorative indeterminate
+    /// strips, and the open question was whether a "working" spinner belongs out of the accessibility
+    /// tree instead of being named. WPF has no declarative way to remove an element from the UIA tree
+    /// (<c>AutomationProperties.AccessibilityView</c> is UWP-only and fails to compile here), so hiding
+    /// them would have meant a custom style with real visual risk. Naming carries none, and the two that
+    /// sit inside item templates bind their row as the rule above requires.</para>
     /// </summary>
     [Fact]
     public void NoTwoProgressBarsOnAPage_AreAnnouncedTheSame()
@@ -2481,20 +2479,27 @@ public partial class ArchitectureTests
                                 || segment.Equals("bin", StringComparison.OrdinalIgnoreCase)))
             .ToArray();
 
-        // Views that still hold a bar with no name at all, with the count each is allowed. Fewer is
-        // always fine; one more is a regression.
-        // Only the decorative indeterminate strips are left. AudioMixerView is deliberately absent now:
-        // its peak meter was named, so a new unnamed bar there must fail.
-        var unnamedAllowance = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["DashboardView.xaml"] = 2,
-            ["BulkInstallerView.xaml"] = 1,
-            ["MainWindow.xaml"] = 1,
-        };
+        // EMPTY on purpose. Every bar in the app now carries a name, so there is nothing left to
+        // ratchet and any unnamed bar is a new one. The four this used to exempt were the sidebar's
+        // per-tab strip, Bulk Installer's search strip, the Dashboard's health-score strip and its
+        // per-alert spinner; the first and last are inside item templates and are bound to the row, as
+        // the repeating-bar rule below requires. Adding an entry here again means accepting a bar that
+        // announces no identity at all — settle the hide-decorative-elements convention instead.
+        var unnamedAllowance = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        // A name that could sit on any bar in any app identifies none of them. "Progress" was on 33
+        // bars across 33 tabs, so a screen reader said the same word everywhere and conveyed only that
+        // something was happening. Compared whole-string, so "Scan progress" is fine and "Progress" is
+        // not.
+        string[] tooVagueToIdentify =
+        [
+            "progress", "progress bar", "loading", "working", "busy", "please wait", "monitoring",
+        ];
 
         var ambiguous = new List<string>();
         var unnamedOverAllowance = new List<string>();
         var sameOnEveryRow = new List<string>();
+        var vague = new List<string>();
         var barsSeen = 0;
         var repeatingBars = 0;
 
@@ -2513,8 +2518,16 @@ public partial class ArchitectureTests
                 barsSeen++;
                 var name = bar.Attributes()
                     .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value;
-                if (string.IsNullOrWhiteSpace(name)) unnamed++;
-                else named.Add(name.Trim());
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    unnamed++;
+                }
+                else
+                {
+                    named.Add(name.Trim());
+                    if (tooVagueToIdentify.Contains(name.Trim(), StringComparer.OrdinalIgnoreCase))
+                        vague.Add($"{file} — bar announced \"{name.Trim()}\"");
+                }
 
                 // A bar inside a DataTemplate is drawn once per item, so a CONSTANT name says the same
                 // thing on every row and identifies none of them. The row guard above cannot see these:
@@ -2558,6 +2571,12 @@ public partial class ArchitectureTests
             + "moved into a view that had none. Name it for what it reports, or settle the "
             + $"hide-decorative-elements convention first:\n  "
             + string.Join("\n  ", unnamedOverAllowance));
+
+        Assert.True(vague.Count == 0,
+            "these progress bars are named something that would fit any bar in any application, so the "
+            + "announcement says only that something is happening. Name each one for the operation it "
+            + $"reports, e.g. \"Cleanup progress\" rather than \"Progress\":\n  "
+            + string.Join("\n  ", vague));
 
         Assert.True(sameOnEveryRow.Count == 0,
             "these progress bars are drawn once per item but announce a constant, so every row reports "

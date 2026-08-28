@@ -126,7 +126,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="3" Margin="0,8,0,0">
-            <ProgressBar AutomationProperties.Name="Progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+            <ProgressBar AutomationProperties.Name="App removal progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Value="{Binding Progress}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>

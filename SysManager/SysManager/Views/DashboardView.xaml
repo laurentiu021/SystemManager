@@ -259,7 +259,7 @@
             <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14"
                     Visibility="{Binding IsHealthScoreLoading, Converter={StaticResource BoolToVis}}">
                 <StackPanel Orientation="Horizontal">
-                    <ProgressBar IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <ProgressBar AutomationProperties.Name="Computing health score" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" VerticalAlignment="Center"/>
                     <TextBlock Text="Computing health score…" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
                 </StackPanel>
             </Border>
@@ -529,7 +529,7 @@
                                     <StackPanel Margin="0,0,0,8">
                                         <StackPanel Orientation="Horizontal">
                                             <!-- Loading spinner -->
-                                            <ProgressBar IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0"
+                                            <ProgressBar AutomationProperties.Name="{Binding Title, StringFormat='Checking {0}'}" IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0"
                                                          VerticalAlignment="Center">
                                                 <ProgressBar.Style>
                                                     <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">

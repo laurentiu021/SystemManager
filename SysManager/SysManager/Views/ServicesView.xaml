@@ -117,12 +117,12 @@
                     <RadioButton Content="{Binding RunningCount, StringFormat='Running ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Running}"
-                                 Style="{StaticResource FilterChip}"
+                                 Style="{StaticResource FilterChipNeutral}"
                                  AutomationProperties.Name="Filter running services"/>
                     <RadioButton Content="{Binding StoppedCount, StringFormat='Stopped ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Stopped}"
-                                 Style="{StaticResource FilterChip}"
+                                 Style="{StaticResource FilterChipNeutral}"
                                  AutomationProperties.Name="Filter stopped services"/>
 
                     <!-- Gaming recommendation: a different dataset from the safety level on the left.
@@ -146,13 +146,13 @@
                     <RadioButton Content="{Binding AdvancedCount, StringFormat='Advanced ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Advanced}"
-                                 Style="{StaticResource FilterChip}"
+                                 Style="{StaticResource FilterChipNeutral}"
                                  ToolTip="Only worth changing if you know what the service does"
                                  AutomationProperties.Name="Filter advanced services"/>
 
                     <RadioButton Content="All" GroupName="SafetyFilter" Margin="10,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=All}"
-                                 Style="{StaticResource FilterChip}"
+                                 Style="{StaticResource FilterChipNeutral}"
                                  AutomationProperties.Name="Show all services"/>
                 </WrapPanel>
             </StackPanel>

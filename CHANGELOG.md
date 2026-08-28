@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.8] - 2026-08-28
+
+The Services tab now explains what each service does. Most of those descriptions were showing as a
+file path like `@%SystemRoot%\system32\spoolsv.exe,-2` instead of a sentence, which also meant
+searching for a word in a description could not find it.
+
+### Fixed
+- **Service descriptions read as sentences instead of file paths.** Windows almost never stores a
+  service's description as text. It stores a pointer into the program that owns the service, and the
+  sentence lives inside that file so one copy of Windows can show it in any language. SysManager was
+  showing the pointer. On a standard Windows 11 install that is 404 of the 461 services that have a
+  description at all, so the column that is supposed to tell you whether something is safe to turn off
+  was showing you `@%SystemRoot%\system32\spoolsv.exe,-2`. It now follows the pointer and shows what
+  Windows itself shows: "This service spools print jobs and handles interaction with the printer."
+  Search improved with it, since the search box looks at the description too — typing "print" could
+  never match the Print Spooler while its description was a path. The few descriptions Windows already
+  stores as plain text are untouched, and the handful that cannot be resolved now show nothing rather
+  than the raw pointer.
+
 ## [1.75.7] - 2026-08-28
 
 Five things you could see, or could not see, in the interface. On any light theme the Dashboard's

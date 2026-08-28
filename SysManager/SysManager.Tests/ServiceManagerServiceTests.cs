@@ -141,4 +141,80 @@ public class ServiceManagerServiceTests
         await Assert.ThrowsAsync<ArgumentException>(
             () => ServiceManagerService.SetStartupTypeAsync("Winmgmt", startType, ps));
     }
+    // ── Description resolution (#1582) ─────────────────────────────────────────
+
+    [Fact]
+    public void ResolveDescription_IndirectReference_ReturnsTheResolvedText()
+    {
+        var resolved = ServiceManagerService.ResolveDescription(
+            @"@%SystemRoot%\system32\spoolsv.exe,-2",
+            _ => "This service spools print jobs.");
+
+        Assert.Equal("This service spools print jobs.", resolved);
+    }
+
+    [Theory]
+    [InlineData("Transfers files in the background using idle network bandwidth.")]
+    [InlineData("Provides user experience theme management.")]
+    public void ResolveDescription_PlainText_IsReturnedUnchanged(string description)
+    {
+        // 57 services on a stock install store real text here, and it must survive byte-for-byte.
+        Assert.Equal(
+            description,
+            ServiceManagerService.ResolveDescription(description, _ => "SHOULD NOT BE CALLED"));
+    }
+
+    [Fact]
+    public void ResolveDescription_PlainText_NeverReachesTheNativeResolver()
+    {
+        // Not merely a performance point: handing arbitrary description text to a resource loader is
+        // work that can only fail, and a resolver that returned something for plain text would
+        // silently replace a real sentence.
+        var calls = 0;
+        ServiceManagerService.ResolveDescription(
+            "Enables the detection of updates.",
+            _ => { calls++; return "replaced"; });
+
+        Assert.Equal(0, calls);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ResolveDescription_NoValue_IsEmpty(string? raw)
+    {
+        // 365 services carry no Description at all, so this is the most common input of the three.
+        Assert.Equal("", ServiceManagerService.ResolveDescription(raw, _ => "SHOULD NOT BE CALLED"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void ResolveDescription_FailedResolve_YieldsEmptyRatherThanTheRawReference(string? nativeResult)
+    {
+        // The defect this fix exists for was showing "@%SystemRoot%\system32\wuaueng.dll,-105" to the
+        // user. Falling back to the raw value on failure would reintroduce exactly that string for the
+        // 19 services whose binary or resource id cannot be resolved, and it would also put a DLL path
+        // back into what the tab's free-text filter searches.
+        var resolved = ServiceManagerService.ResolveDescription(
+            @"@%SystemRoot%\system32\wuaueng.dll,-105",
+            _ => nativeResult);
+
+        Assert.Equal("", resolved);
+    }
+
+    [Fact]
+    public void ResolveDescription_PassesTheWholeReferenceToTheResolver()
+    {
+        // The '@' is part of the indirect-string syntax the native API parses; stripping it would make
+        // every resolution fail while still looking plausible at the call site.
+        string? seen = null;
+        const string reference = @"@%SystemRoot%\system32\spoolsv.exe,-2";
+
+        ServiceManagerService.ResolveDescription(reference, source => { seen = source; return "text"; });
+
+        Assert.Equal(reference, seen);
+    }
 }

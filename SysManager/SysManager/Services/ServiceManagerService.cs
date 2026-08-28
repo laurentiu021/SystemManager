@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.Frozen;
+using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using SysManager.Models;
 
@@ -216,10 +217,74 @@ public sealed partial class ServiceManagerService
 
             using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
                 $@"SYSTEM\CurrentControlSet\Services\{name}");
-            return key?.GetValue("Description")?.ToString() ?? "";
+            return ResolveDescription(
+                key?.GetValue("Description")?.ToString(),
+                NativeMethods.LoadIndirectString);
         }
         catch (System.Security.SecurityException) { return ""; }
         catch (UnauthorizedAccessException) { return ""; }
+    }
+
+    /// <summary>
+    /// Turns a raw registry <c>Description</c> value into readable text.
+    /// </summary>
+    /// <remarks>
+    /// Windows rarely stores a service description as text. For most in-box services the value is an
+    /// indirect resource reference — <c>@%SystemRoot%\system32\spoolsv.exe,-2</c> — and the sentence
+    /// lives in that binary's resource table, which is how one binary serves every display language.
+    /// Reading the value verbatim put the DLL path in the Description column and, worse, made it what
+    /// the tab's free-text filter searched: typing "print" could not match the Print Spooler because
+    /// its description was a path. This is not a non-English-only problem; English Windows stores the
+    /// reference too, and <c>services.msc</c> resolves it at display time exactly like this.
+    /// <para>The native call is a parameter so the decision table above it is unit-testable without
+    /// depending on which binaries a given machine has. A failed resolve yields empty rather than the
+    /// raw reference: the reference is noise to a reader and pollutes the filter, and an empty cell is
+    /// already the normal case for the 365 services that ship no description at all.</para>
+    /// </remarks>
+    internal static string ResolveDescription(string? raw, Func<string, string?> resolveIndirect)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+
+        // '@' is the only marker of an indirect reference. Anything else is already a sentence and is
+        // passed through untouched — 57 services on a stock install store real text here.
+        if (raw[0] != '@') return raw;
+
+        var resolved = resolveIndirect(raw);
+        return string.IsNullOrWhiteSpace(resolved) ? "" : resolved;
+    }
+
+    private static partial class NativeMethods
+    {
+        /// <summary>Longest description observed is ~700 chars; 2048 leaves generous headroom.</summary>
+        private const int IndirectStringBuffer = 2048;
+
+        /// <summary>
+        /// Resolves an indirect string of the form <c>@[path\]file,-resourceId</c>, expanding
+        /// environment variables on the way, or returns null when it cannot.
+        /// </summary>
+        internal static string? LoadIndirectString(string source)
+        {
+            var buffer = new char[IndirectStringBuffer];
+
+            // A missing binary, a missing resource id and a malformed reference all return E_FAIL with
+            // the buffer untouched, so a non-zero HRESULT is the whole error story — there is no
+            // partial-write case to defend against.
+            if (SHLoadIndirectString(source, buffer, IndirectStringBuffer, IntPtr.Zero) != 0)
+                return null;
+
+            // The API null-terminates rather than returning a length.
+            var end = Array.IndexOf(buffer, '\0');
+            return new string(buffer, 0, end < 0 ? buffer.Length : end);
+        }
+
+        // Unicode-only: shlwapi exports no A/W pair for this one, so it correctly carries no EntryPoint
+        // suffix. Verified against the live export table — the W-suffixed name does not resolve.
+        [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
+        private static partial int SHLoadIndirectString(
+            string pszSource,
+            [Out] char[] pszOutBuf,
+            int cchOutBuf,
+            IntPtr ppvReserved);
     }
 
     // \A…\z (absolute anchors): ^…$ would accept a trailing newline in the service

@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.9] - 2026-08-28
+
+Text on the coloured buttons is readable on every theme now. On most of the twelve themes the white
+label on a purple, orange or green button was too faint against its own background, worst of all on
+Warm Ember where it was barely there. Those labels switch to dark text where dark reads better.
+
+### Changed
+- **Labels on coloured buttons now pick black or white, whichever you can actually read.** The main
+  action button on every tab takes its colour from the theme, and that colour ranges from a deep indigo
+  to a bright amber, but the label on it was always white. On Warm Ember that put white text on orange,
+  which measures as barely-there rather than merely low contrast; on ten of the twelve themes it was
+  below the readable-text standard. The label now switches to dark text on the themes where dark reads
+  better, which is eight of them. Ten themes look different as a result, and that is the fix: Lavender
+  and Soft Blossom keep white text because white is genuinely better there.
+- **The same applies to the red buttons and the checkbox tick.** "Delete", "Remove" and the other red
+  buttons had the identical problem in reverse — their white label was too faint on the dark theme and
+  fine on the light one — so they now follow the same rule per theme. The tick inside a ticked checkbox
+  sits on the same theme colour and was likewise always white, so it follows too.
+
 ## [1.75.8] - 2026-08-28
 
 The Services tab now explains what each service does. Most of those descriptions were showing as a

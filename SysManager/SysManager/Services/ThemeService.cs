@@ -192,6 +192,12 @@ public sealed class ThemeService
         SetBrush(res, "AccentPressed", Darken(theme.Accent, 0.12));
         SetBrush(res, "AccentSoft", Color.FromArgb(24, theme.Accent.R, theme.Accent.G, theme.Accent.B));
 
+        // The foreground for anything drawn ON the accent fill: the primary button's label, the checked
+        // mode pill's label, the checkbox tick. Those were hardcoded White, and the accent swings from
+        // indigo #6366F1 to amber #F59E0B across the presets, so white measured 2.15:1 on warm-ember and
+        // cleared AA on only two of the twelve.
+        SetBrush(res, "TextOnAccent", OnColor(theme.Accent));
+
         SetColor(res, "Surface0Color", theme.Background);
         SetColor(res, "Surface1Color", theme.Surface);
         SetColor(res, "Surface2Color", theme.Surface2);
@@ -258,6 +264,58 @@ public sealed class ThemeService
     {
         foreach (var (key, color) in StatusPalette(isDark))
             SetBrush(res, key, color);
+
+        SetBrush(res, "TextOnDanger", TextOnDanger(isDark));
+    }
+
+    /// <summary>
+    /// The legible foreground for the Danger fill in the given mode, for <c>DangerButton</c>'s label.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the palette rather than listed beside it, so retuning Danger carries its paired
+    /// foreground along instead of silently stranding it at a choice made for the old value.
+    /// <para>It has to be per-mode: white on the dark-mode <c>#EF4444</c> is 3.76:1 — below the 4.5:1 a
+    /// 13px SemiBold label needs — while white on the light-mode <c>#B91C1C</c> is 6.47:1 and correct.
+    /// One constant cannot serve both.</para>
+    /// </remarks>
+    internal static Color TextOnDanger(bool isDark) =>
+        OnColor(StatusPalette(isDark).First(entry => entry.Key == "Danger").Color);
+
+    /// <summary>
+    /// Black or white, whichever contrasts more against <paramref name="background"/> — the standard
+    /// WCAG-driven "on colour" rule for text or a mark drawn on a filled surface.
+    /// </summary>
+    /// <remarks>
+    /// Pure black, not a softened near-black. #1A1A1A was the first choice, because pure black can read
+    /// as harsh on a saturated fill, but it does not clear the bar: against the default accent #6366F1 it
+    /// measures 3.90:1 while white measures 4.47:1, so NEITHER reaches 4.5 and the app's own signature
+    /// colour would still fail. With pure black every preset clears it, the worst case being 4.60:1.
+    /// <para>Deliberately a local contrast implementation rather than one shared with the tests.
+    /// <c>ThemeStatusBrushTests</c> and <c>ThemeTextContrastTests</c> keep their own, so a mistake in this
+    /// formula shows up as a failing assertion instead of being cancelled out by a shared bug. The other
+    /// copy, <c>ChartTheme.Contrast</c>, is typed for SkiaSharp's SKColor and belongs to the chart stack.</para>
+    /// </remarks>
+    internal static Color OnColor(Color background) =>
+        ContrastAgainst(Colors.White, background) >= ContrastAgainst(Colors.Black, background)
+            ? Colors.White
+            : Colors.Black;
+
+    /// <summary>WCAG 2.x relative-luminance contrast ratio between two opaque colours.</summary>
+    private static double ContrastAgainst(Color a, Color b)
+    {
+        var (la, lb) = (RelativeLuminance(a), RelativeLuminance(b));
+        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+    }
+
+    private static double RelativeLuminance(Color c)
+    {
+        static double Channel(byte v)
+        {
+            var s = v / 255.0;
+            return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
+        }
+
+        return (0.2126 * Channel(c.R)) + (0.7152 * Channel(c.G)) + (0.0722 * Channel(c.B));
     }
 
     /// <summary>

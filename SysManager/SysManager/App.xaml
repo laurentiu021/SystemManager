@@ -312,7 +312,7 @@
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Accent}"/>
-                                    <Setter TargetName="Txt" Property="Foreground" Value="White"/>
+                                    <Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource TextOnAccent}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -429,7 +429,7 @@
             <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
                 <Setter Property="Background" Value="{DynamicResource Accent}"/>
                 <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextOnAccent}"/>
             </Style>
 
             <!-- Secondary: subtle surface with border -->
@@ -677,7 +677,7 @@
             <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
                 <Setter Property="Background" Value="{DynamicResource Danger}"/>
                 <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextOnDanger}"/>
                 <!-- Own template so the DISABLED state greys out to a neutral surface instead of
                      fading white-on-red to ~1.2:1 (illegible, esp. on light themes). Enabled/hover/
                      pressed/focus mirror ButtonBase. -->
@@ -1054,7 +1054,7 @@
                                         VerticalAlignment="Center">
                                     <Path x:Name="Check"
                                           Data="M 3 9 L 7 13 L 15 5"
-                                          Stroke="White" StrokeThickness="2"
+                                          Stroke="{DynamicResource TextOnAccent}" StrokeThickness="2"
                                           StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                           Visibility="Collapsed"
                                           SnapsToDevicePixels="True"/>

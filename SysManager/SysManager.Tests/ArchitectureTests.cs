@@ -4629,4 +4629,94 @@ public partial class ArchitectureTests
         new(@"<Style[^>]*TargetType=""" + Regex.Escape(targetType) + @"""(?:(?!</Style>).)*</Style>",
             RegexOptions.Singleline);
 
+    /// <summary>
+    /// A control filled with a theme brush must take its foreground from the paired theme token, never a
+    /// literal <c>White</c>.
+    /// </summary>
+    /// <remarks>
+    /// The accent swings from indigo <c>#6366F1</c> to amber <c>#F59E0B</c> across the twelve presets, so a
+    /// hardcoded white label measured 2.15:1 on warm-ember and cleared AA on only two of them —
+    /// <c>PrimaryButton</c>, the checked <c>ModePill</c> and the checkbox tick all sat on that fill. The
+    /// same defect existed one brush over: <c>DangerButton</c>'s white label is 3.76:1 on the dark-mode
+    /// <c>#EF4444</c>.
+    /// <para>Guarded as a class because the four known instances are not the interesting ones — the fifth
+    /// is. It is also invisible on the dark default a maintainer looks at most, and only appears after
+    /// switching presets, so review will not catch it.</para>
+    /// <para>The <c>ToggleSwitch</c> thumb is a KNOWN exception, listed below with its reason: it is the
+    /// one filled element whose backdrop changes with its own state, so no single colour can serve it.</para>
+    /// </remarks>
+    [Fact]
+    public void NoThemedFill_CarriesAHardcodedWhiteForeground()
+    {
+        // The fills whose colour is decided by the theme rather than fixed in the XAML.
+        string[] themedFills = ["Accent", "Danger"];
+
+        // The thumb sits on Surface4 when off and on Accent when on. Measured across all twelve presets,
+        // no single colour clears 3:1 against both: a mid-dark thumb reads 1.06-1.34:1 on the Accent track
+        // of the six light presets, which is worse than the white it would replace. Fixing it needs a
+        // state-dependent thumb, which is a visual change rather than a token swap, so it is tracked
+        // separately rather than silently tolerated.
+        string[] knownExceptions = ["ToggleSwitch"];
+
+        var appXaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "App.xaml"));
+        var offenders = new List<string>();
+        var themedFillStyles = 0;
+
+        foreach (var style in AnyStyle().Matches(appXaml).Cast<Match>())
+        {
+            var body = style.Value;
+            var key = StyleKey().Match(body) is { Success: true } m ? m.Groups["key"].Value : "(implicit)";
+
+            var fill = themedFills.FirstOrDefault(
+                f => body.Contains($"Property=\"Background\" Value=\"{{DynamicResource {f}}}\"",
+                                   StringComparison.Ordinal));
+            if (fill is null) continue;
+
+            themedFillStyles++;
+            if (knownExceptions.Contains(key, StringComparer.Ordinal)) continue;
+
+            // Foreground on the control, or Stroke on a glyph drawn inside it (the checkbox tick).
+            foreach (var literal in new[] { "Property=\"Foreground\" Value=\"White\"", "Stroke=\"White\"" })
+            {
+                if (body.Contains(literal, StringComparison.Ordinal))
+                    offenders.Add($"{key} fills with {fill} but sets a literal White ({literal})");
+            }
+        }
+
+        // Vacuity floor: four styles fill with a themed brush today. A collapse means the pattern stopped
+        // matching and this guard is reading nothing.
+        Assert.True(themedFillStyles >= 4,
+            $"only {themedFillStyles} styles were found filling with {string.Join("/", themedFills)} — the "
+            + "pattern no longer matches, so this guard proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these styles fill with a theme brush but hardcode a white foreground, so the label's contrast "
+            + "depends on which preset is active — it measured 2.15:1 on warm-ember. Bind the paired token "
+            + $"instead (TextOnAccent, TextOnDanger):\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The paired foreground tokens must actually be bound by the XAML.
+    /// </summary>
+    /// <remarks>
+    /// A brush computed in <c>ThemeService</c> that nothing references is this codebase's most persistent
+    /// defect shape: implemented, unit-tested, and reaching no pixel. Asserting the reference is what makes
+    /// the contrast tests meaningful rather than merely true.
+    /// </remarks>
+    [Theory]
+    [InlineData("TextOnAccent")]
+    [InlineData("TextOnDanger")]
+    public void EveryPairedForegroundToken_IsBoundBySomeStyle(string token)
+    {
+        var appDir = FindAppProjectDir();
+        var appXaml = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
+        var service = File.ReadAllText(Path.Combine(appDir, "Services", "ThemeService.cs"));
+
+        Assert.Contains($"\"{token}\"", service, StringComparison.Ordinal);
+        Assert.Contains($"{{DynamicResource {token}}}", appXaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>Matches any Style block, keyed or implicit, up to its closing tag.</summary>
+    [GeneratedRegex(@"<Style\b(?:(?!</Style>).)*</Style>", RegexOptions.Singleline)]
+    private static partial Regex AnyStyle();
 }

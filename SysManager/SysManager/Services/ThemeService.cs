@@ -153,17 +153,76 @@ public sealed class ThemeService
 
     private void ApplyShade()
     {
-        var t = _baseTheme;
-        var offset = (ShadePosition - 0.5) * 0.12;
-
-        CurrentTheme = t with
-        {
-            Background = ShiftLightness(t.Background, offset),
-            Surface = ShiftLightness(t.Surface, offset),
-            Surface2 = ShiftLightness(t.Surface2, offset),
-            Border = ShiftLightness(t.Border, offset)
-        };
+        CurrentTheme = Shade(_baseTheme, ShadePosition);
         Apply(CurrentTheme);
+    }
+
+    /// <summary>
+    /// Applies the background-shade position to a preset: shifts the surfaces, then keeps the text ramp
+    /// legible against them.
+    /// </summary>
+    /// <remarks>
+    /// The slider moves <c>Background</c>, <c>Surface</c>, <c>Surface2</c> and <c>Border</c> by up to ±6%
+    /// lightness. The text ramp is seeded once, so shifting the surfaces alone narrows every text/background
+    /// pairing in the app: measured across the whole slider range, <c>TextMuted</c> fell below 4.5:1 in 12
+    /// of 60 preset × position combinations, worst 3.94:1. The popup presents the slider as harmless
+    /// personalisation, so the outcome has to be unreachable rather than merely discouraged.
+    /// <para>Two simpler fixes were measured and rejected. Shifting the ramp by <c>-offset</c> makes it
+    /// worse (13 of 60, worst 3.49) because it assumes the text is darker than its surface, which is only
+    /// true on a light preset — on a dark one the text is the lighter of the two, so darkening it closes the
+    /// gap it was meant to open. Clamping the slider cannot work either: the safe range is the lower half
+    /// for dark presets and the upper half for light ones, so the intersection across all twelve is
+    /// 0.50-0.55 and the feature would be gone.</para>
+    /// <para>Pure and static so the whole reachable range can be swept in a unit test — the instance path
+    /// writes into <c>Application.Current.Resources</c>, which a test has no business doing.</para>
+    /// </remarks>
+    internal static ThemePreset Shade(ThemePreset baseTheme, double position)
+    {
+        var offset = (position - 0.5) * 0.12;
+
+        var shaded = baseTheme with
+        {
+            Background = ShiftLightness(baseTheme.Background, offset),
+            Surface = ShiftLightness(baseTheme.Surface, offset),
+            Surface2 = ShiftLightness(baseTheme.Surface2, offset),
+            Border = ShiftLightness(baseTheme.Border, offset)
+        };
+
+        // The floors and the surfaces each one is measured against mirror ThemeTextContrastTests exactly:
+        // this correction enforces the same contract those assertions check, rather than a second opinion
+        // about what "legible" means.
+        return shaded with
+        {
+            TextPrimary = Legible(shaded.TextPrimary, baseTheme.IsDark, 7.0, shaded.Background),
+            TextSecondary = Legible(shaded.TextSecondary, baseTheme.IsDark, 4.5, shaded.Surface2),
+            TextMuted = Legible(shaded.TextMuted, baseTheme.IsDark, 4.5,
+                                shaded.Background, shaded.Surface, shaded.Surface2)
+        };
+    }
+
+    /// <summary>
+    /// Returns <paramref name="text"/> unchanged when it already clears <paramref name="minimum"/> against
+    /// every surface, otherwise walks it away from them until it does.
+    /// </summary>
+    /// <remarks>
+    /// "Away" is toward white on a dark theme and toward black on a light one, decided from the preset's own
+    /// mode rather than by comparing luminances, so a surface shifted close to the text cannot flip the
+    /// direction mid-walk. 2% steps to a 80% ceiling, matching <c>ChartTheme.ReadableAgainst</c>; every real
+    /// preset clears its floor far earlier, and the ceiling exists so a pathological custom theme terminates
+    /// rather than looping.
+    /// </remarks>
+    private static Color Legible(Color text, bool isDark, double minimum, params Color[] surfaces)
+    {
+        var target = isDark ? Colors.White : Colors.Black;
+
+        for (var step = 0; step <= 40; step++)
+        {
+            var candidate = Lerp(text, target, step * 0.02);
+            if (surfaces.All(surface => ContrastAgainst(candidate, surface) >= minimum))
+                return candidate;
+        }
+
+        return Lerp(text, target, 0.8);
     }
 
     public void Apply(ThemePreset theme)

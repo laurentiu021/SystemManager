@@ -164,7 +164,7 @@ public class AppBlockerViewModelTests
     }
 
     [Theory]
-    [InlineData(AppBlockerService.BlockResult.BootCritical, "required for Windows to start")]
+    [InlineData(AppBlockerService.BlockResult.BootCritical, "part of Windows that has to keep working")]
     [InlineData(AppBlockerService.BlockResult.OwnExecutable, "SysManager itself")]
     [InlineData(AppBlockerService.BlockResult.ExternalDebuggerPresent, "already registered a debugger")]
     [InlineData(AppBlockerService.BlockResult.InvalidName, "not a valid executable name")]

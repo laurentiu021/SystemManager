@@ -175,6 +175,11 @@ public sealed class AppBlockerServiceRegistryTests : IDisposable
     [InlineData("lsass.exe")]
     [InlineData("explorer.exe")]
     [InlineData("csrss")]        // bare name; .exe is appended before the check
+    // Elevation-critical rather than boot-critical: Windows starts fine without the consent UI, but
+    // blocking it means no administrator prompt can ever appear again — including the one UnblockApp
+    // needs. Same circular hazard, different moment.
+    [InlineData("consent.exe")]
+    [InlineData("CONSENT")]      // case-insensitive + bare name
     public void TryBlockApp_BootCritical_ReportsBootCritical(string name)
     {
         // The distinction that mattered most: this previously told the user to check their admin

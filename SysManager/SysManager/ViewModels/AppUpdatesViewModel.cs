@@ -81,7 +81,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     {
         Log.Information("Admin elevation requested from App Updates tab");
         if (SysManager.Helpers.AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     partial void OnSelectAllChanged(bool value)

@@ -19,6 +19,37 @@ public partial class App : Application
     private const string MutexName = "Global\\SysManager_SingleInstance_laurentiu021";
     private const string PipeName = "SysManager_SingleInstance_Pipe_laurentiu021";
     private Mutex? _instanceMutex;
+
+    /// <summary>
+    /// True once an exit has been requested programmatically rather than by the user pressing X.
+    /// </summary>
+    /// <remarks>
+    /// Read by <c>MainWindow.OnClosing</c>, which must not ask the close-or-minimise question on this path.
+    /// WPF's <see cref="Application.Shutdown()"/> force-closes windows via
+    /// <c>Window.InternalClose(shutdown: true, ignoreCancel: true)</c> — that still INVOKES OnClosing and only
+    /// ignores the cancel. Without this flag, clicking "Run as administrator" produced a modal asking whether
+    /// to keep running in the notification area, and because the single-instance mutex is released in
+    /// <c>OnExit</c> — which cannot run while OnClosing waits on a modal — the elevated instance's
+    /// <see cref="TryWaitForMutexHandover"/> timed out and the relaunch silently did nothing.
+    /// <para>volatile because it is written on the UI thread and read during a shutdown that WPF may drive
+    /// from a different one.</para>
+    /// </remarks>
+    internal static volatile bool ExitRequested;
+
+    /// <summary>
+    /// The single way the app exits itself. Records the intent, then shuts down.
+    /// </summary>
+    /// <remarks>
+    /// Every programmatic exit goes through here — the admin relaunches in the view models and the tray icon's
+    /// Exit command — so that pressing X remains the only route that can reach the close-or-minimise prompt. A
+    /// fitness function asserts no view model calls <c>Application.Current?.Shutdown()</c> directly, because
+    /// this was already true of 38 sites and nothing prevented a 39th.
+    /// </remarks>
+    internal static void RequestShutdown()
+    {
+        ExitRequested = true;
+        Current?.Shutdown();
+    }
     private TrayIconService? _trayService;
     private CancellationTokenSource? _pipeCts;
 

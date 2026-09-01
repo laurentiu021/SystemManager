@@ -4918,4 +4918,84 @@ public partial class ArchitectureTests
     /// <summary>A ResolveSystemTool call, removed so a fixed site is not reported as a bare literal.</summary>
     [GeneratedRegex(@"(SysManager\.Helpers\.)?SystemPaths\.ResolveSystemTool\(\s*""[^""]*""\s*\)")]
     private static partial Regex ResolverCall();
+    [Fact]
+    public void NoViewModel_ShutsTheAppDownDirectly()
+    {
+        // Every admin-requiring tab exits so the elevated instance can take over, and all 38 sites did it as
+        // `Application.Current?.Shutdown()`. WPF's Shutdown force-closes windows with ignoreCancel: true, which
+        // still INVOKES MainWindow.OnClosing — so before the user has ever pressed X, and the close preference
+        // is therefore "Ask", clicking "Run as administrator" put up a modal asking whether to keep running in
+        // the notification area. The single-instance mutex is released in App.OnExit, which cannot run while
+        // that modal waits for a human, so the incoming elevated instance's handover wait timed out and the
+        // relaunch silently did nothing.
+        //
+        // App.RequestShutdown records the intent first. This guard exists because nothing stopped a new tab
+        // copying the old line from its neighbour, which is how it reached 38.
+        var root = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                        // App itself is what calls Shutdown; RequestShutdown is the seam in front of it.
+                        && !f.EndsWith("App.xaml.cs", StringComparison.Ordinal))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        var inspected = 0;
+
+        foreach (var file in files)
+        {
+            // Comments stripped BEFORE matching: App.xaml.cs and AdminHelper.cs both quote this exact call in
+            // prose to explain why it must not be used, and a guard that matches its own explanation goes red
+            // on correct code.
+            var code = string.Join('\n', File.ReadAllLines(file)
+                .Select(line => CommentTail().Replace(line, string.Empty)));
+
+            inspected++;
+            if (DirectShutdown().IsMatch(code))
+                offenders.Add(Path.GetFileName(file));
+        }
+
+        Assert.True(inspected >= 50,
+            $"the shutdown scan looked at only {inspected} files, so it is no longer looking at the app");
+
+        // A positive control on the pattern itself. Counting files is not enough: a pattern that matches
+        // nothing finds no offenders and passes, so a broken regex would report a clean codebase. These are the
+        // two spellings that were actually in the tree before this change.
+        Assert.Matches(DirectShutdown(), "Application.Current?.Shutdown();");
+        Assert.Matches(DirectShutdown(), "System.Windows.Application.Current?.Shutdown();");
+        Assert.DoesNotMatch(DirectShutdown(), "App.RequestShutdown();");
+
+        Assert.True(offenders.Count == 0,
+            "these call Application.Current.Shutdown() directly, which re-enters MainWindow.OnClosing and puts "
+            + "the close-or-minimise prompt in front of a programmatic exit. Call App.RequestShutdown() "
+            + "instead:\n  " + string.Join("\n  ", offenders));
+    }
+
+    [Fact]
+    public void MainWindowOnClosing_ReturnsEarlyWhenAnExitWasRequested()
+    {
+        // The other half. Routing every caller through App.RequestShutdown achieves nothing unless OnClosing
+        // actually honours the flag it sets, and a source scan for the callers cannot see that.
+        var source = File.ReadAllText(Path.Combine(
+            FindRepoRoot(), "SysManager", "SysManager", "MainWindow.xaml.cs"));
+
+        var onClosing = source.IndexOf("protected override void OnClosing", StringComparison.Ordinal);
+        Assert.True(onClosing > 0, "OnClosing not found — this guard would otherwise pass vacuously");
+
+        // The early return has to come BEFORE the preference is loaded, or the prompt still appears.
+        var guard = source.IndexOf("App.ExitRequested", onClosing, StringComparison.Ordinal);
+        var load = source.IndexOf("_closePreference.Load()", onClosing, StringComparison.Ordinal);
+
+        Assert.True(guard > 0, "MainWindow.OnClosing does not check App.ExitRequested");
+        Assert.True(load > 0, "the close-preference load moved — re-check what this guard is asserting about");
+        Assert.True(guard < load,
+            "the App.ExitRequested check must come before the close preference is loaded, or a programmatic "
+            + "exit still reaches the close-or-minimise prompt");
+    }
+
+    /// <summary>A direct Application.Shutdown call, in any of its qualified forms.</summary>
+    [GeneratedRegex(@"(System\.Windows\.)?Application\.Current\s*\??\.\s*Shutdown\s*\(")]
+    private static partial Regex DirectShutdown();
+
 }

@@ -40,7 +40,7 @@ public sealed partial class FileLockViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     private bool CanScan => !IsBusy && !string.IsNullOrWhiteSpace(Path);

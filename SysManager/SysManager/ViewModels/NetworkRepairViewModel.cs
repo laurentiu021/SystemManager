@@ -31,7 +31,7 @@ public sealed partial class NetworkRepairViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     [RelayCommand]

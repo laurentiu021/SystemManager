@@ -51,7 +51,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     /// <summary>True when no Defender operation is in flight — gates the mutating

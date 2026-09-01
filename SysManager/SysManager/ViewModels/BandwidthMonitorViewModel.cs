@@ -531,7 +531,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     // ── Live chart plumbing (mirrors ResourceHistoryViewModel's idiom) ─────

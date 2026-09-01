@@ -390,7 +390,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     [GeneratedRegex(@"^[A-Z]:$", RegexOptions.IgnoreCase)]

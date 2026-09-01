@@ -57,7 +57,7 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

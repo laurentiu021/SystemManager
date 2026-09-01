@@ -31,6 +31,17 @@ updates:
     commit-message:
       prefix: "deps(tests)"
       include: "scope"
+    ignore:
+      # Xunit.StaFact majors target xUnit v3. Verified on 4.0.23 (dependabot PR #2025): it pulls
+      # xunit.v3.core alongside this suite's xunit.core 2.9.3, and the "Build tests" step fails with
+      # hundreds of CS0433 — "the type 'FactAttribute' exists in both" — because every [Fact] and
+      # [Collection] becomes ambiguous.
+      #
+      # Adopting it is an xUnit v2 -> v3 migration of the whole suite, not a version bump, so it is
+      # tracked separately. Without this rule dependabot reopens the same unbuildable PR every Monday.
+      # Minor and patch updates inside 1.x are still wanted, which is why this is major-only.
+      - dependency-name: "Xunit.StaFact"
+        update-types: ["version-update:semver-major"]
     groups:
       nuget-minor-patch:
         update-types:

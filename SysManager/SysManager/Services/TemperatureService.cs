@@ -41,6 +41,19 @@ public sealed class TemperatureService : IDisposable
     private List<string>? _cachedStorageFriendlyNames; // DiskHealthService friendly names, guarded by _enrichGate
     private readonly SemaphoreSlim _enrichGate = new(1, 1);
 
+    // Whether the LibreHardwareMonitor open has been attempted. Guarded by _sensorLock, which is held
+    // wherever this is read or written. Mirrors _nvApiInitTried below: the point is that a FAILED attempt
+    // counts as an attempt, which ??= alone cannot express.
+    private bool _lhmInitTried;
+
+    private readonly TimeProvider _timeProvider;
+
+    // The non-admin storage read, with a short TTL. The elevated arm memoizes its SMART walk for the session;
+    // this arm had no cache at all, so the 2s Dashboard poll paid a full Storage-namespace connect plus one
+    // SMART association walk per disk, 30 times a minute. Guarded by _enrichGate.
+    private List<TemperatureReading>? _cachedDiskTemperatures;
+    private long _diskTemperaturesStamp;
+
     // The sensor TOPOLOGY — which hardware exists and how many temperature sensors each exposes — is
     // static hardware identity, exactly like the disk names above, so it is logged once per session
     // instead of once per hardware item per poll. It was 4 lines every 2 seconds (the Dashboard's
@@ -55,10 +68,19 @@ public sealed class TemperatureService : IDisposable
     // Guarded by _sensorLock, which is already held wherever this is read or written.
     private bool _loggedSensorTopology;
 
-    public TemperatureService(DiskHealthService diskHealth, bool skipHardwareInit = false)
+    /// <param name="diskHealth">Source of the SMART/temperature walk.</param>
+    /// <param name="skipHardwareInit">Set by tests so no kernel driver is loaded.</param>
+    /// <param name="timeProvider">
+    /// Clock for the storage-temperature time-to-live. Optional with a System default, like
+    /// <paramref name="skipHardwareInit"/>, so the ten existing construction sites are unaffected while a test
+    /// can still drive the TTL without sleeping.
+    /// </param>
+    public TemperatureService(DiskHealthService diskHealth, bool skipHardwareInit = false,
+        TimeProvider? timeProvider = null)
     {
         _diskHealth = diskHealth;
         _skipHardwareInit = skipHardwareInit;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -103,14 +125,26 @@ public sealed class TemperatureService : IDisposable
             try
             {
                 // Open the kernel-level monitor once and reuse it; subsequent polls
-                // only Update() the already-enumerated hardware.
-                _computer ??= OpenComputer();
+                // only Update() the already-enumerated hardware. Attempted at most ONCE per session:
+                // ??= latches on success only, so a failing open used to be retried on every 2s poll.
+                if (!_lhmInitTried)
+                {
+                    _lhmInitTried = true;
+                    _computer = TryOpenComputer();
+                }
+
+                if (_computer is null) return;
 
                 // Pre-fetch disk names from WMI for cross-reference (skipped on the fast path —
                 // the sampler doesn't need names). Memoized: disk models are static hardware, so
                 // resolve the Win32_DiskDrive query once and reuse it — the 2s poll no longer
                 // re-queries WMI every tick. Guarded by _sensorLock (already held here).
-                var diskNames = includeStorage ? (_cachedWmiDiskNames ??= GetDiskNamesFromWmi()) : [];
+                // ?? [] after the ??=, not instead of it: a null means the query faulted, so nothing is
+                // cached and the next poll retries, while this poll proceeds with no names rather than none of
+                // the other sensors.
+                var diskNames = includeStorage
+                    ? ((_cachedWmiDiskNames ??= GetDiskNamesFromWmi()) ?? [])
+                    : [];
 
                 foreach (var hardware in _computer.Hardware)
                 {
@@ -203,7 +237,8 @@ public sealed class TemperatureService : IDisposable
                             var name = hardware.Name;
 
                             // LHM often returns empty or cryptic names for storage
-                            if (string.IsNullOrWhiteSpace(name) || name.Length <= 3 || name.All(char.IsDigit))
+                            var namedByLhm = !(string.IsNullOrWhiteSpace(name) || name.Length <= 3 || name.All(char.IsDigit));
+                            if (!namedByLhm)
                             {
                                 // Try matching by index from WMI disk list
                                 var storageIndex = readings.Count(r => r.Component == "Storage");
@@ -212,7 +247,11 @@ public sealed class TemperatureService : IDisposable
                                     : $"Drive {storageIndex + 1}";
                             }
 
-                            readings.Add(new TemperatureReading("Storage", name, diskTemp.Value));
+                            // The flag travels with the reading instead of being re-derived downstream. The
+                            // enricher used to overwrite EVERY storage name by list position, clobbering both
+                            // a good LHM name and the WMI model just substituted above.
+                            readings.Add(new TemperatureReading("Storage", name, diskTemp.Value,
+                                NameIsPlaceholder: !namedByLhm));
                         }
                     }
                     else if (component == "Motherboard")
@@ -241,7 +280,21 @@ public sealed class TemperatureService : IDisposable
         }
     }
 
-    private static Computer OpenComputer()
+    /// <summary>
+    /// Opens LibreHardwareMonitor once, or returns null and gives up for the rest of the session.
+    /// </summary>
+    /// <remarks>
+    /// <c>Open()</c> loads a ring0 driver, reads SMBIOS and builds the CPU, motherboard and storage groups.
+    /// All of that is fault-prone under HVCI, Secure Boot, a locked driver or a WMI fault. The previous shape
+    /// was <c>_computer ??= OpenComputer()</c> with no try/catch inside, so a failure left <c>_computer</c>
+    /// null and the next Dashboard poll re-ran the heaviest possible init two seconds later — a kernel-driver
+    /// load and a full hardware enumeration every two seconds for the life of the process, with one Debug
+    /// line each time. The half-opened Computer was also dropped without <c>Close()</c>, abandoning whatever
+    /// Open() had already claimed.
+    /// <para>Same one-shot guard the NvAPI path below already uses (<c>_nvApiInitTried</c>) for exactly this
+    /// failure mode.</para>
+    /// </remarks>
+    private static Computer? TryOpenComputer()
     {
         var computer = new Computer
         {
@@ -250,8 +303,21 @@ public sealed class TemperatureService : IDisposable
             IsStorageEnabled = true,
             IsMotherboardEnabled = true
         };
-        computer.Open();
-        return computer;
+
+        try
+        {
+            computer.Open();
+            return computer;
+        }
+        catch (Exception ex)
+        {
+            // Broad on purpose: Open() reaches a kernel driver, SMBIOS and WMI, and the useful outcome is the
+            // same whatever it throws — give up cleanly rather than retry a driver load 30 times a minute.
+            Log.Debug("LibreHardwareMonitor could not be opened, giving up for this session: {Error}", ex.Message);
+            try { computer.Close(); }
+            catch (Exception closeEx) { Log.Debug("LHM close after a failed open also failed: {Error}", closeEx.Message); }
+            return null;
+        }
     }
 
     public void Dispose()
@@ -288,19 +354,7 @@ public sealed class TemperatureService : IDisposable
             }
             finally { _enrichGate.Release(); }
 
-            var storageReadings = readings
-                .Select((r, i) => (Reading: r, Index: i))
-                .Where(x => x.Reading.Component == "Storage")
-                .ToList();
-
-            for (int i = 0; i < storageReadings.Count; i++)
-            {
-                var (reading, idx) = storageReadings[i];
-                if (i < diskNames.Count && !string.IsNullOrWhiteSpace(diskNames[i]))
-                {
-                    readings[idx] = reading with { SensorName = diskNames[i] };
-                }
-            }
+            ApplyStorageNames(readings, diskNames);
         }
         catch (Exception ex)
         {
@@ -308,7 +362,65 @@ public sealed class TemperatureService : IDisposable
         }
     }
 
-    private static List<string> GetDiskNamesFromWmi()
+    /// <summary>
+    /// Disk models from Win32_DiskDrive, or null when WMI could not answer.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than empty on fault, so the caller's <c>??=</c> memoization does not cache a failure for
+    /// the whole session. A single transient fault on the first elevated poll used to strand LibreHardwareMonitor's
+    /// cryptic labels as "Drive 1", "Drive 2" until the app restarted.
+    /// <para>COMException is caught alongside ManagementException because WMI surfaces transient faults — RPC
+    /// server unavailable, repository errors — as COMException, which every other WMI reader in this codebase
+    /// already guards. It mattered more here than elsewhere: this prefetch runs BEFORE the hardware
+    /// enumeration loop, so an escaping COMException aborted the entire read through the outer catch-all and
+    /// the Temperatures card lost its CPU, GPU and motherboard rows as well.</para>
+    /// </remarks>
+    /// <summary>
+    /// Replaces placeholder storage names with the friendly names at the same position, when — and only
+    /// when — that position means anything.
+    /// </summary>
+    /// <remarks>
+    /// The two sequences are independently ordered. The readings are in LibreHardwareMonitor's device order;
+    /// the names are in MSFT_PhysicalDisk enumeration order. Nothing correlates them, and the substitution
+    /// used to be applied by index, unconditionally, over every storage reading — so a name LHM had reported
+    /// correctly, or a WMI model the producer had already substituted for a placeholder, was overwritten with
+    /// whatever name happened to sit at the same ordinal. A user then read a healthy NVMe's 38 °C under a
+    /// failing HDD's name, or the reverse, which hides a genuinely hot drive.
+    /// <para>Two guards, and each one alone is insufficient. A reading whose name LHM supplied is never
+    /// touched, so a correct name cannot be clobbered. And an unequal count is proof the ordinal pairing is
+    /// already broken — DiskHealthService.Collect silently SKIPS any disk with an unreadable WMI field, which
+    /// shifts every later index by one — so in that case nothing is substituted at all. Keeping "Drive 2" is
+    /// better than confidently showing the wrong model.</para>
+    /// <para>Keying LHM's device identifier against MSFT_PhysicalDisk.DeviceId would remove the guessing
+    /// entirely and is the better long-term shape. It needs a query change and a new property on
+    /// DiskHealthReport, so it is deliberately not part of this change.</para>
+    /// </remarks>
+    internal static void ApplyStorageNames(List<TemperatureReading> readings, IReadOnlyList<string> diskNames)
+    {
+        var storageReadings = readings
+            .Select((r, i) => (Reading: r, Index: i))
+            .Where(x => x.Reading.Component == "Storage")
+            .ToList();
+
+        if (storageReadings.Count != diskNames.Count)
+        {
+            Log.Debug("Storage name enrichment skipped: {Readings} sensors vs {Names} disks — the ordinal "
+                + "pairing would be a guess", storageReadings.Count, diskNames.Count);
+            return;
+        }
+
+        for (var i = 0; i < storageReadings.Count; i++)
+        {
+            var (reading, idx) = storageReadings[i];
+
+            if (!reading.NameIsPlaceholder) continue;
+            if (string.IsNullOrWhiteSpace(diskNames[i])) continue;
+
+            readings[idx] = reading with { SensorName = diskNames[i], NameIsPlaceholder = false };
+        }
+    }
+
+    private static List<string>? GetDiskNamesFromWmi()
     {
         List<string> names = [];
         try
@@ -326,9 +438,12 @@ public sealed class TemperatureService : IDisposable
                 }
             }
         }
-        catch (ManagementException ex)
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
             Log.Debug("WMI disk names failed: {Error}", ex.Message);
+            // Whatever was collected before the fault is still correct and still in order; only a completely
+            // empty result is worth retrying, so only that returns null.
+            return names.Count > 0 ? names : null;
         }
         return names;
     }
@@ -394,17 +509,56 @@ public sealed class TemperatureService : IDisposable
         }
     }
 
+    /// <summary>How long a non-admin storage temperature read is reused before collecting again.</summary>
+    /// <remarks>
+    /// The elevated arm memoizes its SMART walk for the whole session because disk NAMES are static hardware
+    /// identity. A temperature is not, so this arm gets a short time-to-live instead of a permanent cache.
+    /// Thirty seconds against a 2-second poll cuts the work about fifteenfold and loses nothing observable:
+    /// drive temperature moves on a minutes timescale.
+    /// </remarks>
+    internal static readonly TimeSpan DiskTemperatureTtl = TimeSpan.FromSeconds(30);
+
     private async Task ReadDiskTemperaturesAsync(List<TemperatureReading> readings)
     {
+        // The Dashboard polls every 2 s with includeStorage: true, and on the NON-elevated path — the default
+        // for most users — this used to call CollectAsync() cold every single tick: a fresh connect to
+        // the Windows Storage WMI namespace, an MSFT_PhysicalDisk query, and one
+        // MSFT_StorageReliabilityCounter association walk PER disk, thirty times a minute for as long as the
+        // Dashboard is on screen. The service's own comments call that "by far the heaviest part of a read";
+        // the memoization that followed was applied to the elevated arm only.
+        await _enrichGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var disks = await _diskHealth.CollectAsync();
-            foreach (var disk in disks.Where(d => d.TemperatureC.HasValue))
+            // GetElapsedTime over a stored GetTimestamp, not a wall-clock difference. EtwBandwidthSource
+            // spells out why: GetUtcNow moves when the user or NTP changes the clock, which would either
+            // freeze this cache or expire it instantly.
+            if (_cachedDiskTemperatures is not null
+                && _timeProvider.GetElapsedTime(_diskTemperaturesStamp) <= DiskTemperatureTtl)
             {
-                readings.Add(new TemperatureReading("Storage", disk.FriendlyName, disk.TemperatureC));
+                readings.AddRange(_cachedDiskTemperatures);
+                return;
             }
+
+            List<TemperatureReading> fresh = [];
+            try
+            {
+                var disks = await _diskHealth.CollectAsync().ConfigureAwait(false);
+                foreach (var disk in disks.Where(d => d.TemperatureC.HasValue))
+                {
+                    fresh.Add(new TemperatureReading("Storage", disk.FriendlyName, disk.TemperatureC));
+                }
+            }
+            catch (ManagementException ex) { Log.Debug("Disk temp unavailable: {Error}", ex.Message); return; }
+            catch (UnauthorizedAccessException ex) { Log.Debug("Disk temp denied: {Error}", ex.Message); return; }
+            catch (System.Runtime.InteropServices.COMException ex) { Log.Debug("Disk temp WMI COM error: 0x{HResult:X8}", ex.HResult); return; }
+
+            // Only a successful collect is cached. Caching a failure would hide the drives for the next
+            // 30 seconds instead of retrying on the next tick — the same mistake the WMI name query made by
+            // memoizing an empty result for the whole session.
+            _cachedDiskTemperatures = fresh;
+            _diskTemperaturesStamp = _timeProvider.GetTimestamp();
+            readings.AddRange(fresh);
         }
-        catch (ManagementException ex) { Log.Debug("Disk temp unavailable: {Error}", ex.Message); }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Disk temp denied: {Error}", ex.Message); }
+        finally { _enrichGate.Release(); }
     }
 }

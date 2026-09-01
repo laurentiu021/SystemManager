@@ -1737,8 +1737,14 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floor: if the regex stopped matching, this would pass while inspecting nothing.
-        Assert.True(scanned >= 5,
+        // Vacuity floor: if the regex stopped matching, this would pass while inspecting nothing. The
+        // number is a MEASURED population, not a target, and it falls every time a service adopts
+        // AtomicFile — it went from five to three when the two history writers moved to
+        // WriteAllLinesAsync. All three survivors are exempt below (ProfileService's export carve-out
+        // and two hash sidecars), so a broken regex still reports zero and still trips this. When the
+        // count legitimately drops again, re-measure and record which call went where; do not simply
+        // lower it, because an unexplained drop is what a broken regex looks like.
+        Assert.True(scanned >= 3,
             $"Only {scanned} raw File.Write* calls were seen across Services — the detection is "
             + "broken, not the code. Fix this guard rather than trusting it.");
 

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics.Eventing.Reader;
 using System.Reflection;
 using SysManager.Models;
 using SysManager.Services;
@@ -175,22 +176,21 @@ public class EventLogServiceTests
     public void MapLevel_UnknownValue_ReturnsInfo()
         => Assert.Equal(EventSeverity.Info, InvokeMapLevel((byte)99));
 
-    // ---------- SeverityToLevel ----------
-
-    private static byte InvokeSeverityToLevel(EventSeverity s)
-    {
-        var m = typeof(EventLogService).GetMethod("SeverityToLevel", BindingFlags.NonPublic | BindingFlags.Static)!;
-        return (byte)m.Invoke(null, new object[] { s })!;
-    }
+    // ---------- SeverityToLevels (the live inverse of MapLevel) ----------
 
     [Theory]
-    [InlineData(EventSeverity.Critical, (byte)1)]
-    [InlineData(EventSeverity.Error, (byte)2)]
-    [InlineData(EventSeverity.Warning, (byte)3)]
-    [InlineData(EventSeverity.Info, (byte)4)]
-    [InlineData(EventSeverity.Verbose, (byte)5)]
-    public void SeverityToLevel_RoundTrips(EventSeverity severity, byte expected)
-        => Assert.Equal(expected, InvokeSeverityToLevel(severity));
+    [InlineData(EventSeverity.Critical, new[] { 1 })]
+    [InlineData(EventSeverity.Error, new[] { 2 })]
+    [InlineData(EventSeverity.Warning, new[] { 3 })]
+    [InlineData(EventSeverity.Verbose, new[] { 5 })]
+    // Info is the case that matters and the reason the old test was wrong. MapLevel folds Level 0
+    // (LogAlways) into Info, so the XPath must ask for BOTH 0 and 4 or every LogAlways event silently
+    // disappears from an Info-filtered view. A dead twin of this method encoded `Info => 4` and a reflection
+    // test certified it; both are gone.
+    [InlineData(EventSeverity.Info, new[] { 0, 4 })]
+    public void SeverityToLevels_IsTheExactInverseOfMapLevel(EventSeverity severity, int[] expected)
+        => Assert.Equal(expected, EventLogService.SeverityToLevels(severity));
+
 
     // ---------- P2 #32 regression: Info filter must include Level 0 (LogAlways) ----------
 
@@ -302,5 +302,111 @@ public class EventLogServiceTests
         await foreach (var _ in svc.ReadAsync(
             new EventLogQueryOptions { LogName = "SysManagerAlsoMissing" }, CancellationToken.None)) { }
         Assert.Equal(EventLogService.ReadOutcome.LogNotFound, svc.LastOutcome);
+    }
+    // ---------- the read loop: a fault must end it, a cancel must surface as one ----------
+
+    private static EventLogQueryOptions Options(int maxResults = 500) =>
+        new() { LogName = "System", MaxResults = maxResults };
+
+    [Fact]
+    public async Task Enumerate_ReaderAlwaysFaults_EndsInsteadOfSpinning()
+    {
+        // The P1. The loop's only progress variable is the emitted count, which a failure never increments,
+        // so `catch (EventLogException) { continue; }` spun with no delay — one Task.Run per iteration, one
+        // core at 100%, the tab stuck loading with Refresh disabled because it is gated on not-busy. This
+        // test simply cannot finish against that code.
+        var svc = new EventLogService();
+        var reads = 0;
+
+        var entries = new List<FriendlyEventEntry>();
+        await foreach (var e in svc.Enumerate(Options(), () =>
+        {
+            reads++;
+            throw new EventLogException("reader is stale");
+        }, CancellationToken.None))
+        {
+            entries.Add(e);
+        }
+
+        Assert.Empty(entries);
+        // Ended on the first fault rather than retrying: EvtNext does not advance its cursor on these
+        // failures, so a retry re-throws the identical error and a budget would only postpone the exit.
+        Assert.Equal(1, reads);
+        Assert.Equal(EventLogService.ReadOutcome.Unavailable, svc.LastOutcome);
+    }
+
+    [Fact]
+    public async Task Enumerate_CancelledMidRead_ThrowsInsteadOfCompleting()
+    {
+        // The P2. `catch (OperationCanceledException) { yield break; }` made Cancel look like a finished
+        // load, so the caller reported "Loaded N events" for a truncated list and LogsViewModel's cancel
+        // branch was dead code. Two sibling scanners already throw after their loop for this exact reason.
+        var svc = new EventLogService();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in svc.Enumerate(Options(), () => null, cts.Token))
+            {
+                // The loop body never runs on an already-cancelled token; the throw is the assertion.
+            }
+        });
+    }
+
+    [Fact]
+    public async Task Enumerate_ReaderReturnsNull_CompletesCleanly()
+    {
+        // The ordinary end-of-results path, so the fault handling above cannot be satisfied by a loop that
+        // simply always stops. A null record means the result set is exhausted and the outcome stays Ok.
+        var svc = new EventLogService();
+
+        var entries = new List<FriendlyEventEntry>();
+        await foreach (var e in svc.Enumerate(Options(), () => null, CancellationToken.None))
+            entries.Add(e);
+
+        Assert.Empty(entries);
+        Assert.Equal(EventLogService.ReadOutcome.Ok, svc.LastOutcome);
+    }
+
+    [Fact]
+    public async Task GetXmlAsync_UnknownRecordId_ReturnsEmptyRatherThanThrowing()
+    {
+        // An event log is a ring buffer, so a row visible in the list can genuinely have rolled off by the
+        // time it is clicked. That is not an error worth surfacing — the detail pane just shows nothing.
+        var svc = new EventLogService();
+
+        var xml = await svc.GetXmlAsync("System", long.MaxValue);
+
+        Assert.Equal("", xml);
+    }
+
+    [Fact]
+    public async Task GetXmlAsync_NonPositiveRecordId_ShortCircuits()
+    {
+        // Project leaves RecordId at 0 when the record carries none, and querying EventRecordID=0 is a
+        // pointless round-trip.
+        var svc = new EventLogService();
+
+        Assert.Equal("", await svc.GetXmlAsync("System", 0));
+        Assert.Equal("", await svc.GetXmlAsync("System", -1));
+    }
+    [Fact]
+    public async Task Enumerate_ReadRaisesCancellation_NeverLooksLikeCompletion()
+    {
+        // The one route where swallowing OperationCanceledException inside the loop is observable: the read
+        // raises it while the token itself is NOT cancelled, so the post-loop guard has nothing to fire on.
+        // `catch (OperationCanceledException) { yield break; }` turned that into a clean finish, which is
+        // exactly the conversion LargeFileScanner and DuplicateFileService both throw to avoid.
+        var svc = new EventLogService();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in svc.Enumerate(
+                Options(), () => throw new OperationCanceledException(), CancellationToken.None))
+            {
+                // Reaching the body would mean the read succeeded; the throw is the assertion.
+            }
+        });
     }
 }

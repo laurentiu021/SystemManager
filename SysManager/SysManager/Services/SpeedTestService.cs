@@ -186,13 +186,80 @@ public sealed class SpeedTestService
 
     // ---------------- Ookla ----------------
 
+    /// <summary>
+    /// A verified Ookla CLI, held open so the bytes that were verified are the bytes that get executed.
+    /// </summary>
+    /// <remarks>
+    /// The CLI is cached under <c>%LocalAppData%\SysManager\tools</c>, which the user — and therefore any
+    /// process running as the user — can write to. Verifying a path and then launching that same path
+    /// leaves a window in which the file can be replaced, and when SysManager is elevated that window is a
+    /// way to get arbitrary code executed at high integrity by a caller who could not reach it otherwise.
+    /// Signature verification cannot close it, because the bytes checked are not the bytes mapped.
+    /// <para>Holding the file with <see cref="FileShare.Read"/> denies both writing and deleting for the
+    /// lifetime of this object, so the path cannot come to mean a different file. Measured that this does
+    /// not prevent execution: a pinned image still loads and runs, while an overwrite and a rename are both
+    /// refused. The same "act on the object you validated, not on the string" reasoning is written out at
+    /// length in <see cref="FileShredderService"/>.</para>
+    /// </remarks>
+    internal sealed class PinnedCli(string path, FileStream pin) : IDisposable
+    {
+        /// <summary>Full path of the pinned executable. Only meaningful while this object is alive.</summary>
+        public string Path { get; } = path;
+
+        public void Dispose() => pin.Dispose();
+    }
+
+    /// <summary>
+    /// Pins <paramref name="exe"/> against modification and deletion, then verifies it. On success the
+    /// caller owns the pin and must keep it alive until the process has exited.
+    /// </summary>
+    /// <remarks>
+    /// Pin first, verify second. The other order would leave the same gap, only narrower.
+    /// <para>On failure the pin is released BEFORE the rejected binary is deleted. That order is not
+    /// incidental: the pin denies deletion, and <see cref="TryDeleteExe"/> swallows the resulting
+    /// IOException at Debug level, so deleting while pinned would silently leave a binary that failed
+    /// verification sitting in the cache. Verification decides; this method cleans up.</para>
+    /// </remarks>
+    internal static PinnedCli PinAndVerify(string exe)
+    {
+        var pin = Pin(exe);
+        var verified = false;
+        try
+        {
+            VerifyOoklaSignature(exe);
+            verified = true;
+            return new PinnedCli(exe, pin);
+        }
+        finally
+        {
+            if (!verified)
+            {
+                pin.Dispose();
+                TryDeleteExe(exe);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens <paramref name="exe"/> for reading with writing and deleting denied to everyone else.
+    /// </summary>
+    /// <remarks>
+    /// Internal rather than private so the sharing mode can be unit-tested directly. Getting it wrong in
+    /// either direction is silent: too permissive and the swap this exists to prevent is still possible,
+    /// too restrictive and the image can no longer be executed at all.
+    /// </remarks>
+    internal static FileStream Pin(string exe) =>
+        new(exe, FileMode.Open, FileAccess.Read, FileShare.Read);
+
     public async Task<SpeedTestResult> RunOoklaAsync(
         IProgress<(int Percent, string Message)>? progress, CancellationToken ct, int? serverId = null)
     {
-        string exe;
+        // Held for the whole run, not only the preparation: the pin is what makes the verified binary and
+        // the executed binary the same object. Scoped by the `using` below, after the process has exited.
+        PinnedCli cli;
         try
         {
-            exe = await EnsureOoklaAsync(progress, ct).ConfigureAwait(false);
+            cli = await EnsureOoklaAsync(progress, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -215,6 +282,9 @@ public sealed class SpeedTestService
             // OCE branches above are ever restructured.
             throw new InvalidOperationException($"Could not prepare Ookla CLI: {ex.Message}", ex);
         }
+
+        using var pinnedCli = cli;
+        var exe = pinnedCli.Path;
 
         progress?.Report((20, "Running Ookla speedtest…"));
         var args = "--accept-license --accept-gdpr --format=json --progress=no";
@@ -326,7 +396,7 @@ public sealed class SpeedTestService
         }
     }
 
-    private static async Task<string> EnsureOoklaAsync(
+    private static async Task<PinnedCli> EnsureOoklaAsync(
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
         var toolsDir = Path.Join(
@@ -354,8 +424,9 @@ public sealed class SpeedTestService
             // TOCTOU guard: the cached exe lives in a user-writable dir, so an attacker
             // could swap it between runs. Re-verify its Authenticode signature every
             // time before we hand it back to be executed — not only right after download.
-            await Task.Run(() => VerifyOoklaSignature(exe), ct).ConfigureAwait(false);
-            return exe;
+            // The pin travels back with it, so the path cannot change meaning between here
+            // and Process.Start.
+            return await Task.Run(() => PinAndVerify(exe), ct).ConfigureAwait(false);
         }
 
         progress?.Report((5, "Downloading Ookla CLI…"));
@@ -428,18 +499,26 @@ public sealed class SpeedTestService
         if (!File.Exists(exe))
             throw new FileNotFoundException("speedtest.exe not found after extraction");
 
-        // Verify Authenticode signature on the freshly-extracted binary — fail-closed.
-        await Task.Run(() => VerifyOoklaSignature(exe), ct).ConfigureAwait(false);
-
-        return exe;
+        // Verify Authenticode signature on the freshly-extracted binary — fail-closed, and pinned first
+        // for the same reason as the cached branch above. Extraction has just written this file into a
+        // directory the user can write to, so the gap between verifying it and executing it is exactly as
+        // exploitable on the first run as on every later one.
+        return await Task.Run(() => PinAndVerify(exe), ct).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Verifies that <paramref name="exe"/> carries a valid Authenticode signature whose
-    /// subject is Ookla's — fail-closed (deletes the binary and throws on any mismatch or
-    /// missing signature). Runs both right after download AND on every cached-exe reuse,
-    /// since the cache lives in a user-writable directory (TOCTOU).
+    /// Verifies that <paramref name="exe"/> carries a valid Authenticode signature whose subject is
+    /// Ookla's — fail-closed, throwing on any mismatch or missing signature.
     /// </summary>
+    /// <remarks>
+    /// Deleting the rejected binary is <see cref="PinAndVerify"/>'s job, not this method's. It used to
+    /// delete here, which stopped working the moment the file was pinned against deletion during
+    /// verification: <see cref="TryDeleteExe"/> swallows the resulting IOException at Debug level, so a
+    /// binary that failed verification would have stayed in the cache while the exception still claimed it
+    /// had been removed. The caller releases the pin and then deletes.
+    /// <para>Called on every cached reuse as well as right after download, since the cache lives in a
+    /// user-writable directory.</para>
+    /// </remarks>
     private static void VerifyOoklaSignature(string exe)
     {
         try
@@ -452,7 +531,6 @@ public sealed class SpeedTestService
             if (!cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
             {
                 Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert.Subject);
-                TryDeleteExe(exe);
                 throw new InvalidOperationException(
                     $"Ookla speedtest.exe failed Authenticode verification (subject: {cert.Subject}). Binary deleted for security.");
             }
@@ -468,7 +546,6 @@ public sealed class SpeedTestService
             {
                 var statuses = string.Join(", ", chain.ChainStatus.Select(s => s.Status.ToString()));
                 Log.Warning("Ookla speedtest.exe certificate chain did not validate: {Status}", statuses);
-                TryDeleteExe(exe);
                 throw new InvalidOperationException(
                     $"Ookla speedtest.exe certificate chain failed validation ({statuses}). Binary deleted for security.");
             }
@@ -477,7 +554,6 @@ public sealed class SpeedTestService
         catch (System.Security.Cryptography.CryptographicException ex)
         {
             Log.Warning(ex, "Ookla speedtest.exe has no valid Authenticode signature");
-            TryDeleteExe(exe);
             throw new InvalidOperationException(
                 "Ookla speedtest.exe has no valid Authenticode signature. Binary deleted for security.", ex);
         }

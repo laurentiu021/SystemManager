@@ -40,11 +40,23 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # The key must hash every file that decides WHICH packages get restored. Under central package
+      # management a .csproj carries no versions at all — they are all in Directory.Packages.props, and
+      # Directory.Build.props adds a PackageReference of its own (Microsoft.SourceLink.GitHub). Hashing
+      # only .csproj therefore misses every version change.
+      #
+      # The failure is quiet rather than wrong: an unchanged key is an exact hit, actions/cache skips the
+      # save, and restore downloads the new version anyway. But it is never cached, so it is re-downloaded
+      # on every run until some unrelated .csproj edit rotates the key. Dependabot's grouped version bumps
+      # are precisely this shape, so it accumulates.
+      #
+      # global.json is intentionally absent: it pins the SDK, not the package set, and actions/setup-dotnet
+      # already governs that in the step above.
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 

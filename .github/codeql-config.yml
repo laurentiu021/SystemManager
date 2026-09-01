@@ -72,3 +72,33 @@ query-filters:
   # they contain; no correctness or performance impact.
   - exclude:
       id: cs/linq/missed-where
+  # cs/linq/missed-select is the same suggestion for the mapping case, and at one of its
+  # two sites the advice is actively wrong: GpuVramHelper's loop opens a registry subkey
+  # per iteration with `using var` and skips nulls, so mapping the sequence with .Select
+  # would place IDisposables in a lazy sequence that nothing disposes. The other site is
+  # inside UpdateApplier's system-root path check, where an explicit loop is the clearer
+  # form for a security decision.
+  - exclude:
+      id: cs/linq/missed-select
+  # cs/missed-ternary-operator is a readability suggestion (both branches assign the same
+  # variable, so use `?`), the same class as cs/nested-if-statements above. Its only hit is
+  # BootAnalyzerViewModel, whose if-branch already contains a ternary — folding the outer
+  # `if` in would nest one ternary inside another and read worse.
+  - exclude:
+      id: cs/missed-ternary-operator
+  # cs/call-to-unmanaged-code and cs/unmanaged-code are inventory queries: they report every
+  # P/Invoke by design, as an aid to a human reviewing interop. This app reads hardware,
+  # power plans, the registry and process state, so it declares 41 of them across 17 files
+  # (28 [LibraryImport] and 13 [DllImport], counted by attribute rather than by grepping lines)
+  # and the count can never reach zero — every new declaration adds another alert with
+  # nothing to fix. They accounted for 33 of 40 open alerts, which is what makes a real
+  # alert easy to overlook. What these queries gesture at is real, but they do not check it:
+  # neither reports whether an entry point is bound correctly, only that interop exists. The
+  # check that matters — an A/W-variant function must name its EntryPoint explicitly, or the
+  # bare name binds to no export — is currently a manual TEST-PROTOCOL step plus Gate-REVIEW
+  # treating any P/Invoke diff as merge-blocking. A source-scanning architecture test for it
+  # is the follow-up to this change, and is what actually replaces the coverage.
+  - exclude:
+      id: cs/call-to-unmanaged-code
+  - exclude:
+      id: cs/unmanaged-code

@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.17] - 2026-09-01
+
+The speed test uses a small program from Ookla, downloaded the first time you run it. SysManager already
+checked that program's signature before running it; now it also locks the file while it does so, closing a
+gap where the file could have been switched for another one in between.
+
+### Fixed
+- **The Ookla speed-test program is locked from the moment it is checked to the moment it finishes.** The
+  program is kept in your own user folder, which anything running under your account can write to. SysManager
+  checked its digital signature every time before running it — that part was already right — but it checked
+  the file by name and then started it by name, and in the gap between those two steps the file could have
+  been replaced. The checked file and the started file would not have been the same one, which is the only
+  thing a signature check is for. SysManager now holds the file open with changes and deletion blocked from
+  before the check until after the speed test ends, so the program that was approved is the program that
+  runs. This matters most when SysManager is running as administrator, where anything it starts inherits
+  those rights.
+- **A program that fails the signature check is now actually removed.** SysManager refuses to run it either
+  way, so nothing unsafe was ever started. But the removal was attempted while the file was still locked, so
+  it quietly failed and the rejected file stayed in the folder, to be rejected again on every later run. The
+  lock is now released first, so the file really goes.
+
 ## [1.75.16] - 2026-09-01
 
 File Shredder now tells you what it actually did. Before, a folder containing a shortcut to somewhere else

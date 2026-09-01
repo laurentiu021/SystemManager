@@ -263,4 +263,99 @@ public class FileShredderViewModelTests
 
         throw new FileNotFoundException("Could not locate FileShredderViewModel.cs from the test output.");
     }
+    // ---------- the reason a shred failed has to reach the screen ----------
+
+    [Fact]
+    public async Task ShredAll_WhenAFileCannotBeShredded_TheReasonReachesTheStatusLine()
+    {
+        // The service words its failures for the user — which files were left in place and why. The view
+        // model caught the exception, set Status to "Failed", logged a warning, and dropped the message:
+        // it contained no ex.Message anywhere. On screen the user saw the single word "Failed" for an
+        // operation whose whole point is knowing whether data is gone or still recoverable on disk.
+        //
+        // An open handle is the deterministic way to provoke it: the shredder opens with FileShare.None,
+        // so any other handle makes that open fail. No privileges, no reparse points, no timing.
+        var file = Path.Combine(Path.GetTempPath(), "smtest_shredlock_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(file, "locked by the test");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            using var hold = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            var vm = NewVm();
+            vm.Items.Add(new ShredItem
+            {
+                Path = file,
+                Name = Path.GetFileName(file),
+                SizeBytes = 1,
+                IsFolder = false
+            });
+
+            await vm.ShredAllCommand.ExecuteAsync(null);
+
+            // Asserted on the item name rather than the operating system's wording, which is localised.
+            Assert.Contains(Path.GetFileName(file), vm.StatusMessage);
+            Assert.NotEqual("Complete — 0 shredded, 1 failed.", vm.StatusMessage);
+            Assert.StartsWith("Complete — 0 shredded, 1 failed.", vm.StatusMessage);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task ShredAll_WhenEverythingSucceeds_TheStatusLineStaysShort()
+    {
+        // The negative half. Appending explanations unconditionally would put noise on every clean run,
+        // so a shred with nothing to report must produce exactly the summary and not a character more.
+        //
+        // Queues a FOLDER as well as a file, deliberately. An earlier version used a file only, which
+        // meant ShredFolderAsync — and therefore the notice — was never reached, and a mutation making the
+        // notice fire unconditionally left this test green. The folder is what exercises the path that can
+        // produce noise.
+        var file = Path.Combine(Path.GetTempPath(), "smtest_shredclean_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(file, "shred me");
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_shredcleandir_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        await File.WriteAllTextAsync(Path.Combine(dir, "inner.dat"), "shred me too");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = NewVm();
+            vm.Items.Add(new ShredItem
+            {
+                Path = file,
+                Name = Path.GetFileName(file),
+                SizeBytes = 1,
+                IsFolder = false
+            });
+            vm.Items.Add(new ShredItem
+            {
+                Path = dir,
+                Name = Path.GetFileName(dir),
+                SizeBytes = 1,
+                IsFolder = true
+            });
+
+            await vm.ShredAllCommand.ExecuteAsync(null);
+
+            Assert.Equal("Complete — 2 shredded, 0 failed.", vm.StatusMessage);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            if (File.Exists(file)) File.Delete(file);
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
 }

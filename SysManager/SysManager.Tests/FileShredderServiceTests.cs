@@ -2,8 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Security;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -587,5 +589,157 @@ public class FileShredderServiceTests
             expanded.Equals(progFiles, StringComparison.OrdinalIgnoreCase) ||
             expanded.Equals(shortForm, StringComparison.OrdinalIgnoreCase),
             $"Unexpected expansion: {expanded}");
+    }
+    // ---------- a deliberately skipped link must be reported, not passed off as success ----------
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(3, true)]
+    public void ShredFolderReport_Notice_AppearsOnlyWhenSomethingWasSkipped(int skipped, bool expectNotice)
+    {
+        // The report is what stops a skipped junction being reported as a completed shred. With nothing
+        // skipped it must stay silent, or every ordinary folder shred would grow a warning nobody needs.
+        var report = new ShredFolderReport
+        {
+            FilesShredded = 5,
+            SkippedLinks = Enumerable.Range(0, skipped).Select(i => $@"C:\temp\link{i}").ToList()
+        };
+
+        Assert.Equal(expectNotice, report.Notice is not null);
+        if (expectNotice)
+        {
+            Assert.Contains(skipped.ToString(CultureInfo.InvariantCulture), report.Notice);
+            // Singular and plural both have to read correctly — this text is shown to someone who does
+            // not know what a reparse point is, and "1 shortcuts were left alone" undermines the rest.
+            Assert.Contains(skipped == 1 ? "shortcut inside was" : "shortcuts inside were", report.Notice);
+            Assert.Contains("still on the computer", report.Notice);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFolderAsync_FolderWithoutLinks_ReportsNoNotice()
+    {
+        // The ordinary case, and the one that keeps the notice honest: two real files, both shredded,
+        // nothing skipped, nothing to tell the user.
+        var svc = NewService();
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_shredplain_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(dir, "a.dat"), "aaa");
+            await File.WriteAllTextAsync(Path.Combine(dir, "b.dat"), "bbb");
+
+            var report = await svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
+
+            Assert.Equal(2, report.FilesShredded);
+            Assert.Empty(report.SkippedLinks);
+            Assert.Null(report.Notice);
+            Assert.False(Directory.Exists(dir), "an empty folder should have been removed after the shred");
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ } }
+    }
+
+    [Fact]
+    public async Task ShredFolderAsync_JunctionInside_IsReportedNotSilentlySkipped()
+    {
+        // The walk correctly refuses to follow a junction — shredding through one would destroy data at
+        // its target, outside the selected folder. But the refusal used to be recorded nowhere, not even
+        // at Debug level, and the method then logged "Folder shredded successfully" while the folder was
+        // still on disk (TryRemoveIfEmpty cannot remove a directory that still holds the junction, and
+        // that failure is swallowed too). So the user was told their data was destroyed while looking at
+        // the folder containing it.
+        var svc = NewService();
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_shredjunc_" + Guid.NewGuid().ToString("N"));
+        var outside = Path.Combine(Path.GetTempPath(), "smtest_shredtarget_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(outside);
+        var keep = Path.Combine(outside, "must-survive.dat");
+        await File.WriteAllTextAsync(keep, "data outside the selected folder");
+        var link = Path.Combine(dir, "junction");
+
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(dir, "real.dat"), "shred me");
+
+            // mklink /J creates a directory junction and needs no admin rights — the same approach the
+            // mid-path junction test above uses.
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{outside}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || (File.GetAttributes(link) & FileAttributes.ReparsePoint) == 0)
+                    return; // environment can't create junctions (rare) — nothing to assert
+            }
+
+            var report = await svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
+
+            Assert.Contains(link, report.SkippedLinks);
+            Assert.NotNull(report.Notice);
+            // The safety behaviour itself must be unchanged: the file behind the junction is untouched.
+            Assert.True(File.Exists(keep), "the shred followed the junction and destroyed data outside the folder");
+        }
+        finally
+        {
+            try { Directory.Delete(link); } catch { /* ignore */ }
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+            try { Directory.Delete(outside, recursive: true); } catch { /* ignore */ }
+        }
+    }
+    [Fact]
+    public async Task ShredFolderAsync_ReparsePointRoot_IsRefusedAndTargetSurvives()
+    {
+        // The root guard had no test. Handing the shredder a junction AS the folder to shred used to walk
+        // straight into the link's target: the reparse-point skip inside EnumerateFilesSafe only inspects
+        // child entries, never the root it starts from, so everything at the target — outside the selected
+        // location entirely — would have been overwritten.
+        //
+        // Asserts the target's contents survive as well as the exception type. A SecurityException raised
+        // after the data was already destroyed would satisfy a type-only assertion and be worthless.
+        var svc = NewService();
+        var outside = Path.Combine(Path.GetTempPath(), "smtest_rootjunctarget_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        var keep = Path.Combine(outside, "must-survive.dat");
+        const string content = "data at the junction target";
+        await File.WriteAllTextAsync(keep, content);
+
+        var baseDir = Path.Combine(Path.GetTempPath(), "smtest_rootjunc_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        var link = Path.Combine(baseDir, "asjunction");
+
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{outside}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = System.Diagnostics.Process.Start(psi)!)
+            {
+                proc.WaitForExit(10_000);
+                if (proc.ExitCode != 0 || (File.GetAttributes(link) & FileAttributes.ReparsePoint) == 0)
+                    return; // environment can't create junctions (rare) — nothing to assert
+            }
+
+            await Assert.ThrowsAsync<SecurityException>(
+                () => svc.ShredFolderAsync(link, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.True(File.Exists(keep), "the shred followed the root junction and destroyed its target");
+            Assert.Equal(content, await File.ReadAllTextAsync(keep));
+        }
+        finally
+        {
+            try { Directory.Delete(link); } catch { /* ignore */ }
+            try { Directory.Delete(baseDir, recursive: true); } catch { /* ignore */ }
+            try { Directory.Delete(outside, recursive: true); } catch { /* ignore */ }
+        }
     }
 }

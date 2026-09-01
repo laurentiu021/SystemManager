@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.16] - 2026-09-01
+
+File Shredder now tells you what it actually did. Before, a folder containing a shortcut to somewhere else
+was reported as fully destroyed while it was still sitting on the disk, and when a file could not be shredded
+the only thing shown was the word "Failed".
+
+### Fixed
+- **A folder holding a shortcut is no longer reported as destroyed.** File Shredder deliberately refuses to
+  follow a shortcut that points somewhere outside the folder you picked, because overwriting through one
+  would destroy files you never selected. That refusal is right and has not changed. What was wrong is that
+  nothing said so: the folder was reported as shredded, no note was written anywhere, and the folder stayed
+  on the disk because the shortcut was still inside it. So you were told your files were gone while looking
+  at the folder holding them. The shredder now says how many shortcuts it left alone and that the folder is
+  still there. A folder with no shortcuts in it reads exactly as before, with nothing extra added.
+- **When a file cannot be shredded, the reason is now shown.** The shredder already worked out a clear
+  explanation for every file it had to leave behind — which ones they were, and why, whether locked by
+  another program or sharing its contents with a file elsewhere on the disk. That explanation went only into
+  the log file. On screen the file was marked "Failed" and nothing more, which for a tool whose entire job is
+  destroying data beyond recovery leaves out the only part that matters: those files are still on your
+  computer and still readable. The explanation now appears beside the summary at the bottom of the tab.
+
 ## [1.75.15] - 2026-09-01
 
 If your hosts file had a line with a typo in it, saving from the Hosts tab used to delete that line

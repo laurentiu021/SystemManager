@@ -190,7 +190,7 @@ public sealed partial class LogsViewModel : ViewModelBase
                 $"The {logName} log does not exist on this machine.",
             (0, EventLogService.ReadOutcome.Unavailable) =>
                 $"The {logName} log could not be opened. It may be disabled or in use.",
-            (> 0, EventLogService.ReadOutcome.Unavailable) =>
+            ( > 0, EventLogService.ReadOutcome.Unavailable) =>
                 $"Loaded {count} events from {logName}, then the log stopped responding — this list is "
                 + "incomplete. Try again to see the rest.",
             _ => $"Loaded {count} events from {logName}"

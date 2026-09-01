@@ -2,8 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Reflection;
 using System.Diagnostics.Eventing.Reader;
+using System.Reflection;
 using SysManager.Models;
 using SysManager.Services;
 

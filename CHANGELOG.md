@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.19] - 2026-09-01
+
+The Logs tab could get stuck loading forever, with one processor core pinned at full speed and the Refresh
+button greyed out. It also loads faster now, and pressing Cancel says "Cancelled" instead of pretending the
+list finished.
+
+### Fixed
+- **The Logs tab can no longer get stuck loading with a core at 100%.** Windows event logs are a rolling
+  buffer, so a busy log can move underneath a read that is already in progress. When that happened, SysManager
+  retried the same failed read over and over with nothing in between: the tab stayed on "Loading events…"
+  forever, Refresh stayed greyed out because it is disabled while loading, and one processor core sat at full
+  speed until the tab was closed or Cancel was pressed. Retrying could never have worked — Windows does not
+  move on to the next entry after that kind of failure — so SysManager now stops, keeps the events it already
+  read, and says the list is incomplete.
+- **Pressing Cancel now says "Cancelled" instead of reporting a finished list.** A cancelled load was
+  reported as a completed one, so a list stopped halfway through was described as "Loaded 137 events" with
+  nothing to indicate it was cut short. The same wrong message appeared when switching away from the tab
+  mid-load.
+- **A partly-read log now says so.** If a read stops early, the message under the list says how many events
+  arrived and that the rest are missing, rather than presenting the shortened list as everything there was.
+
+### Changed
+- **The Logs tab loads faster and uses less memory, especially at the larger row counts.** SysManager was
+  building the raw technical XML for every single event as it loaded, although that panel only ever shows the
+  one row you click. With the list set to 5000 rows that was 5000 pieces of work and 5000 stored blocks of
+  text nobody looked at. It is now produced for the row you select, when you select it. The panel behaves
+  exactly as before.
+
 ## [1.75.18] - 2026-09-01
 
 Several tabs open a built-in Windows program for you: File Explorer to show a file, Control Panel, Device

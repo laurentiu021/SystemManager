@@ -4,6 +4,7 @@
 
 using System.Reflection;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -254,5 +255,43 @@ public class LogsViewModelTests
             .Invoke(vm, null);
 
         Assert.Equal(0, vm.HighlightedCount);
+    }
+    // ---------- the status sentence ----------
+
+    [Fact]
+    public void DescribeLoad_PartialReadAfterAFault_SaysTheListIsIncomplete()
+    {
+        // A read that ends early because the reader faulted keeps the records it already emitted, and the
+        // count-only wording announced those as a finished load — "Loaded 137 events from System" about a
+        // list that stopped halfway. Same mistake as calling a cancelled scan complete.
+        var message = LogsViewModel.DescribeLoad(137, EventLogService.ReadOutcome.Unavailable, "System");
+
+        Assert.Contains("137", message);
+        Assert.Contains("incomplete", message);
+        Assert.DoesNotContain("could not be opened", message);
+    }
+
+    [Theory]
+    [InlineData(EventLogService.ReadOutcome.AccessDenied, "administrator rights")]
+    [InlineData(EventLogService.ReadOutcome.LogNotFound, "does not exist")]
+    [InlineData(EventLogService.ReadOutcome.Unavailable, "could not be opened")]
+    public void DescribeLoad_EmptyResult_ExplainsWhyRatherThanSayingZero(
+        EventLogService.ReadOutcome outcome, string expected)
+    {
+        // "Loaded 0 events" followed by "No events match your filters" told a standard user selecting
+        // Security that their filters matched nothing, when in fact the log was never read.
+        var message = LogsViewModel.DescribeLoad(0, outcome, "Security");
+
+        Assert.Contains(expected, message);
+        Assert.DoesNotContain("Loaded 0", message);
+    }
+
+    [Fact]
+    public void DescribeLoad_CleanRead_StaysShort()
+    {
+        // The negative case: a healthy load must not grow a caveat.
+        var message = LogsViewModel.DescribeLoad(42, EventLogService.ReadOutcome.Ok, "Application");
+
+        Assert.Equal("Loaded 42 events from Application", message);
     }
 }

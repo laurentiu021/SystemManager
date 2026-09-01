@@ -5,6 +5,7 @@
 using System.Buffers;
 using System.Diagnostics.Eventing.Reader;
 using System.Text.RegularExpressions;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -77,35 +78,90 @@ public sealed partial class EventLogService
         catch (EventLogNotFoundException) { LastOutcome = ReadOutcome.LogNotFound; yield break; }
         catch (EventLogException) { LastOutcome = ReadOutcome.Unavailable; yield break; }
 
-        int emitted = 0;
         using (reader)
         {
             var localReader = reader;
-            while (!ct.IsCancellationRequested && emitted < opt.MaxResults)
-            {
-                // ReadEvent() is a blocking COM/IO call. Run it on a thread-pool
-                // thread so enumerating large logs never blocks the UI thread the
-                // caller awaits on. (await Task.Yield() alone did not move the work
-                // off the UI thread — it only released it momentarily per 200 rows.)
-                EventRecord? rec;
-                try { rec = await Task.Run(() => localReader.ReadEvent(), ct).ConfigureAwait(false); }
-                catch (EventLogException) { continue; }
-                catch (OperationCanceledException) { yield break; }
-                if (rec is null) yield break;
-
-                FriendlyEventEntry? entry = null;
-                try { entry = Project(rec, opt.LogName); }
-                catch (EventLogException) { /* skip malformed record */ }
-                catch (InvalidOperationException) { /* skip malformed record */ }
-                finally { rec.Dispose(); }
-
-                if (entry is null) continue;
-                EventExplainer.Enrich(entry);
-
-                emitted++;
+            await foreach (var entry in Enumerate(opt, () => localReader.ReadEvent(), ct).ConfigureAwait(false))
                 yield return entry;
-            }
         }
+    }
+
+    /// <summary>
+    /// The read loop, over a caller-supplied record source.
+    /// </summary>
+    /// <param name="opt">Query options; only <see cref="EventLogQueryOptions.MaxResults"/> and the log name are used here.</param>
+    /// <param name="readNext">
+    /// Produces the next record, or null at the end of the result set. Separated from
+    /// <see cref="EventLogReader"/> so the failure and cancellation paths can be tested: there is no way to
+    /// make a real reader fault on demand, and those two paths held the two worst defects in this file.
+    /// </param>
+    /// <param name="ct">Cancellation token; observed between records and inside the thread-pool hop.</param>
+    /// <remarks>
+    /// A reader fault ENDS the enumeration rather than retrying it. The previous code did
+    /// <c>catch (EventLogException) { continue; }</c>, and since the loop's only progress variable is the
+    /// emitted count — which a failure never increments — a persistent fault spun with no delay, queueing one
+    /// <see cref="Task.Run(Action)"/> per iteration: the tab never finished loading, Refresh stayed disabled
+    /// because it is gated on not-busy, and a core sat at 100%.
+    /// <para>Terminating is not merely the simpler choice. <c>EvtNext</c> does not advance its cursor on a
+    /// stale result set or a lost Event Log service, so a retry re-throws the identical error; a retry budget
+    /// would postpone the same exit and add a number nobody can tune. It also matches
+    /// <c>MemoryTestService.CheckErrorLogsAsync</c>, whose catch already terminates its scan.</para>
+    /// </remarks>
+    internal async IAsyncEnumerable<FriendlyEventEntry> Enumerate(
+        EventLogQueryOptions opt,
+        Func<EventRecord?> readNext,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var emitted = 0;
+        while (!ct.IsCancellationRequested && emitted < opt.MaxResults)
+        {
+            // readNext() is a blocking COM/IO call. Run it on a thread-pool thread so enumerating large
+            // logs never blocks the UI thread the caller awaits on. (await Task.Yield() alone did not move
+            // the work off the UI thread — it only released it momentarily per 200 rows.)
+            //
+            // Cancellation is deliberately NOT caught: the TaskCanceledException from Task.Run must reach
+            // the caller, or Cancel reads as a completed load.
+            EventRecord? rec = null;
+            var faulted = false;
+            try { rec = await Task.Run(readNext, ct).ConfigureAwait(false); }
+            catch (EventLogException ex)
+            {
+                // Debug rather than Warning: a log rolling over mid-enumeration is routine, and the outcome
+                // below is what the user is actually told.
+                Log.Debug(ex, "EventLog: read faulted on {Log}, ending the enumeration", opt.LogName);
+                faulted = true;
+            }
+
+            if (faulted)
+            {
+                LastOutcome = ReadOutcome.Unavailable;
+                yield break;
+            }
+
+            if (rec is null) yield break;
+
+            FriendlyEventEntry? entry = null;
+            try { entry = Project(rec, opt.LogName); }
+            catch (EventLogException) { /* skip malformed record */ }
+            catch (InvalidOperationException) { /* skip malformed record */ }
+            finally { rec.Dispose(); }
+
+            if (entry is null) continue;
+            EventExplainer.Enrich(entry);
+
+            emitted++;
+            yield return entry;
+        }
+
+        // A cancelled read exits the loop above with partial results; reporting them as a finished load
+        // would mislead the user. Throw so the caller's cancel branch handles it — the same finalize
+        // LargeFileScanner and DuplicateFileService use, and the reason LogsViewModel's
+        // catch (OperationCanceledException) branch exists at all.
+        //
+        // Here rather than in ReadInternal: this is the loop whose condition exits on cancellation, so this
+        // is where a cancelled read otherwise looks like a completed one. The throw propagates outward
+        // through ReadInternal's await foreach.
+        ct.ThrowIfCancellationRequested();
     }
 
     private static FriendlyEventEntry Project(EventRecord rec, string logName)
@@ -123,11 +179,44 @@ public sealed partial class EventLogService
             SeverityLabel = severity.ToString(),
             Message = firstLine,
             FullMessage = fullMessage,
-            Xml = rec.ToXml(),
+            // Xml is deliberately NOT rendered here. Its only consumer is the detail pane's
+            // SelectedEntry.Xml binding — one row at a time — while the largest MaxResults option is 5000,
+            // so projecting it eagerly cost up to 5000 extra EvtRender round-trips per refresh and retained
+            // 5000 strings for the lifetime of the tab. LogsViewModel fills it on selection via
+            // GetXmlAsync. Unlike FullMessage, nothing filters on it.
             MachineName = rec.MachineName,
             UserName = rec.UserId?.Value,
             RecordId = rec.RecordId ?? 0
         };
+    }
+
+    /// <summary>
+    /// Renders the raw XML of a single event, for the detail pane.
+    /// </summary>
+    /// <remarks>
+    /// Looked up by record id rather than carried on every entry. See the note in <see cref="Project"/>:
+    /// rendering XML for a whole result set paid thousands of COM round-trips and held thousands of strings
+    /// to fill a field only the selected row shows. Returns an empty string when the record can no longer be
+    /// found — an event log is a ring buffer, so a row visible in the list can genuinely have rolled off by
+    /// the time it is clicked, and that is not an error worth a dialog.
+    /// </remarks>
+    public async Task<string> GetXmlAsync(string logName, long recordId, CancellationToken ct = default)
+    {
+        if (recordId <= 0) return "";
+
+        return await Task.Run(() =>
+        {
+            try
+            {
+                var query = new EventLogQuery(logName, PathType.LogName,
+                    $"*[System[EventRecordID={recordId}]]");
+                using var reader = new EventLogReader(query);
+                using var rec = reader.ReadEvent();
+                return rec?.ToXml() ?? "";
+            }
+            catch (EventLogException) { return ""; }
+            catch (UnauthorizedAccessException) { return ""; }
+        }, ct).ConfigureAwait(false);
     }
 
     private static string SafeFormatMessage(EventRecord rec)
@@ -215,23 +304,13 @@ public sealed partial class EventLogService
         return "*[System[" + string.Join(" and ", clauses) + "]]";
     }
 
-    private static byte SeverityToLevel(EventSeverity s) => s switch
-    {
-        EventSeverity.Critical => 1,
-        EventSeverity.Error => 2,
-        EventSeverity.Warning => 3,
-        EventSeverity.Info => 4,
-        EventSeverity.Verbose => 5,
-        _ => 4
-    };
-
     /// <summary>
     /// Maps a severity back to ALL event levels that <see cref="MapLevel"/> folds into it.
     /// Used by <see cref="BuildXPath"/> so the XPath Level clause is the exact inverse of
     /// the read-side classification. In particular, Level 0 (LogAlways) is classified as
     /// Info by MapLevel, so Info must query BOTH Level=0 and Level=4.
     /// </summary>
-    private static IEnumerable<int> SeverityToLevels(EventSeverity s) => s switch
+    internal static IEnumerable<int> SeverityToLevels(EventSeverity s) => s switch
     {
         EventSeverity.Critical => [1],
         EventSeverity.Error => [2],

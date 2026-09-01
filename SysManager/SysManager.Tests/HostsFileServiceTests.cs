@@ -532,4 +532,98 @@ public class HostsFileServiceTests
         }
         finally { try { Directory.Delete(dir, recursive: true); } catch { } }
     }
+
+    // ---------- unparseable non-comment lines ----------
+
+    [Theory]
+    [InlineData("127.0.0.1;localhost")]          // separator typo — one token, no whitespace
+    [InlineData("10.0.0.1")]                     // an IP with no hostname
+    [InlineData("192.168.1.300\tprinter.local")] // fourth octet out of range
+    [InlineData("localhost")]                    // a bare word
+    [InlineData("not-an-ip  some.host")]         // two tokens, first is not an IP
+    public async Task SaveHosts_UnparseableNonCommentLine_PreservedNotDeleted(string badLine)
+    {
+        // The line has no '#', so the preserved-comment capture used to reject it on the assumption
+        // that anything without a '#' is carried by `entries`. ReadHostsAsync never parsed it, so
+        // nothing carried it, and SaveHosts rewrites the whole file — the line was deleted the first
+        // time the user touched any unrelated entry in the UI.
+        //
+        // Each InlineData is a different reason to fail parsing (token count, IP validity, both), so a
+        // fix that only handled one shape stays red on the others.
+        var content = $"{badLine}\n127.0.0.1 localhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            svc.SaveHosts(entries);
+
+            var saved = File.ReadAllText(hosts);
+            Assert.Contains(badLine, saved);
+            Assert.Contains("127.0.0.1\tlocalhost", saved);   // the good entry is untouched
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public async Task SaveHosts_ParseableLine_EmittedOnceNotAlsoPreserved()
+    {
+        // The negative half of the fix. Preserving "everything without a '#'" would re-emit a normal
+        // entry as a raw line as well as an entry, duplicating every mapping in the file. The capture
+        // and ReadHostsAsync therefore have to agree on what counts as an entry, which is why they
+        // share one predicate rather than each having their own.
+        const string content = "0.0.0.0\tads.example.com\n127.0.0.1 localhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            svc.SaveHosts(entries);
+
+            var saved = File.ReadAllText(hosts);
+            Assert.Equal(1, saved.Split("ads.example.com").Length - 1);
+            Assert.Equal(1, saved.Split("localhost").Length - 1);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public async Task SaveHosts_WithUnparseableLine_IsStillFixedPoint()
+    {
+        // A preserved line is re-read on the next save and must be preserved again in the identical
+        // form, or the service — a singleton doing a whole-file rewrite — grows the file on every save.
+        // Preserving a line is the easy part; preserving it idempotently is the part worth pinning.
+        const string content =
+            "# Section A\n" +
+            "192.168.1.300\tprinter.local\n" +
+            "127.0.0.1\tlocalhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            svc.SaveHosts(await svc.ReadHostsAsync());
+            var afterFirst = File.ReadAllText(hosts);
+
+            svc.SaveHosts(await svc.ReadHostsAsync());
+            var afterSecond = File.ReadAllText(hosts);
+
+            Assert.Equal(afterFirst, afterSecond);
+            Assert.Equal(1, afterSecond.Split("192.168.1.300").Length - 1);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    public async Task ReadHostsAsync_UnparseableLine_StillNotAnEntry()
+    {
+        // Preserving the text must not become "accept it as an entry". An unparseable line has no
+        // usable IP, so turning it into a HostsEntry would put a broken mapping in the UI and write it
+        // back as if SysManager had authored it.
+        const string content = "192.168.1.300\tprinter.local\n127.0.0.1\tlocalhost\n";
+        var (svc, _, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            Assert.DoesNotContain(entries, e => e.Hostname == "printer.local");
+            Assert.Contains(entries, e => e.Hostname == "localhost" && e.IpAddress == "127.0.0.1");
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
 }

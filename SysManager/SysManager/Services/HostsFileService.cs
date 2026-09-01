@@ -69,7 +69,7 @@ public sealed partial class HostsFileService
             {
                 workLine = line[1..].TrimStart();
                 // If the remainder isn't a valid disabled entry (IP + hostname), skip it
-                if (!IsDisabledEntryLine(workLine)) continue;
+                if (!IsEntryLine(workLine)) continue;
                 isDisabled = true;
             }
 
@@ -105,16 +105,29 @@ public sealed partial class HostsFileService
     }
 
     /// <summary>
-    /// Extracts the user's standalone comment and blank lines from the current hosts file so
-    /// <see cref="SaveHosts"/> can re-emit them. A line is preserved when it is a pure comment
-    /// (starts with '#') that is NOT a commented-out IP entry (those round-trip as disabled
-    /// <see cref="HostsEntry"/> objects) and NOT one of SysManager's managed-header lines
-    /// (excluding them keeps repeated saves from accumulating duplicate headers). Interior blank
-    /// lines are kept for readability; leading/trailing blanks are trimmed so the block is a fixed
-    /// point. Returns an empty list when the file is absent — so a file with no comments produces
-    /// output byte-identical to the previous behaviour.
+    /// Extracts every line of the current hosts file that <see cref="SaveHosts"/> would otherwise
+    /// lose, so it can re-emit them.
     /// </summary>
-    private List<string> ReadStandaloneCommentLines()
+    /// <remarks>
+    /// SaveHosts rewrites the whole file from header + these lines + <see cref="HostsEntry"/> objects,
+    /// so anything neither emitted as an entry nor captured here is deleted. Three kinds are captured:
+    /// <list type="bullet">
+    /// <item>Pure comments — a '#' line that is not a commented-out IP entry (those round-trip as
+    /// disabled entries) and not one of SysManager's own managed-header lines (excluding those keeps
+    /// repeated saves from accumulating duplicate headers).</item>
+    /// <item>Lines that are not comments and do not parse as an entry: a typo'd IP, an IP with no
+    /// hostname, a stray word. <see cref="ReadHostsAsync"/> skips them, so nothing else carries them.
+    /// They are usually a line the user meant to work, which makes them worth keeping rather than
+    /// quietly discarding — the malformed text is the record of the intent.</item>
+    /// <item>Interior blank lines, for readability. Leading and trailing blanks are trimmed.</item>
+    /// </list>
+    /// The keep-or-skip decision uses <see cref="IsEntryLine"/>, the same predicate ReadHostsAsync
+    /// uses to accept a line. That shared test is what keeps the two in step: a line this method keeps
+    /// is exactly a line ReadHostsAsync did not turn into an entry, so nothing is duplicated and
+    /// nothing is dropped. Returns an empty list when the file is absent, so a file of plain entries
+    /// produces output byte-identical to the earlier behaviour.
+    /// </remarks>
+    private List<string> ReadPreservedLines()
     {
         List<string> preserved = [];
         if (!File.Exists(HostsPath)) return preserved;
@@ -137,12 +150,20 @@ public sealed partial class HostsFileService
                 continue;
             }
 
-            if (!line.StartsWith('#')) continue;                       // an IP entry — carried by `entries`
+            if (!line.StartsWith('#'))
+            {
+                // Carried by `entries` only if ReadHostsAsync could actually parse it. When it could
+                // not, this is the last chance to keep the line, so keep it verbatim.
+                if (IsEntryLine(line)) continue;
+                preserved.Add(line);
+                continue;
+            }
+
             if (line == ManagedHeaderLine1 || line == ManagedHeaderLine2) continue; // our own header
 
             // A '#' followed by a valid disabled entry (IP + hostname) is already represented as a
             // HostsEntry with IsEnabled=false — skip it here so it isn't duplicated.
-            if (IsDisabledEntryLine(line[1..].TrimStart())) continue;
+            if (IsEntryLine(line[1..].TrimStart())) continue;
 
             preserved.Add(line);
         }
@@ -167,10 +188,12 @@ public sealed partial class HostsFileService
     /// already contained SysManager's own output — losing the pristine original and
     /// defeating <see cref="RestoreBackup"/>.
     ///
-    /// Standalone comments and blank lines the user wrote (documentation, section headers)
-    /// are preserved verbatim above the entries, so an edit through the UI no longer strips
-    /// them. SysManager's own managed-header lines are excluded from that capture, making the
-    /// rewrite a fixed point — repeated saves don't accumulate duplicate headers or blanks.
+    /// Anything the user wrote that the parser does not turn into an entry is preserved verbatim
+    /// above the entries: standalone comments, blank lines, and lines that fail to parse at all
+    /// (a typo'd IP, an IP with no hostname). Without that, editing one entry through the UI
+    /// silently deleted the rest of the file's hand-written content. SysManager's own managed-header
+    /// lines are excluded from the capture, making the rewrite a fixed point — repeated saves don't
+    /// accumulate duplicate headers or blanks. See <see cref="ReadPreservedLines"/>.
     /// </remarks>
     public void SaveHosts(List<HostsEntry> entries)
     {
@@ -188,7 +211,7 @@ public sealed partial class HostsFileService
         // Re-emit the user's own standalone comments/blank lines (not IP mappings — those are
         // carried by `entries`). Without this, editing one entry through the UI silently deleted
         // every hand-written comment on the next save.
-        var preserved = ReadStandaloneCommentLines();
+        var preserved = ReadPreservedLines();
         if (preserved.Count > 0)
         {
             lines.AddRange(preserved);
@@ -297,20 +320,28 @@ public sealed partial class HostsFileService
     }
 
     /// <summary>
-    /// Determines whether a '#'-stripped remainder represents a disabled hosts entry
-    /// (IP + hostname), using the SAME acceptance test as <see cref="ReadHostsAsync"/>:
-    /// strip an optional inline comment, split on whitespace, require at least two
-    /// tokens, and validate the first as an IP address. This replaces the old
-    /// <c>LooksLikeIpStart</c> heuristic that only checked the leading character — which
-    /// missed IPv6 addresses starting with hex letters (e.g. <c>fe80::</c>) and
-    /// falsely matched digit-leading comments (e.g. <c># 5G adapter notes</c>).
+    /// Determines whether <paramref name="candidate"/> is a hosts entry (IP + at least one hostname):
+    /// strip an optional inline comment, split on whitespace, require at least two tokens, and
+    /// validate the first as an IP address.
     /// </summary>
-    private static bool IsDisabledEntryLine(string afterHash)
+    /// <remarks>
+    /// This is the single acceptance test for "would ReadHostsAsync turn this into a HostsEntry", and
+    /// all three callers depend on that being one definition rather than three lookalikes:
+    /// ReadHostsAsync itself, to decide whether a '#' line is a disabled entry; and
+    /// <see cref="ReadPreservedLines"/> twice, to avoid re-emitting a line that is already carried as
+    /// an entry. If this drifted from what ReadHostsAsync accepts, lines would be silently duplicated
+    /// or silently dropped depending on which way it drifted.
+    /// <para>Named for what it computes rather than for one caller. It replaced a
+    /// <c>LooksLikeIpStart</c> heuristic that only inspected the leading character, which missed IPv6
+    /// addresses starting with hex letters (<c>fe80::</c>) and falsely matched digit-leading comments
+    /// (<c># 5G adapter notes</c>).</para>
+    /// </remarks>
+    private static bool IsEntryLine(string candidate)
     {
-        if (afterHash.Length == 0) return false;
+        if (candidate.Length == 0) return false;
 
         // Mirror ReadHostsAsync: strip inline comment, then tokenize.
-        string[] parts = afterHash.Split(['#'], 2);
+        string[] parts = candidate.Split(['#'], 2);
         string entryPart = parts[0].Trim();
         string[] tokens = entryPart.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
 

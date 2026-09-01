@@ -68,6 +68,9 @@ public sealed class TemperatureService : IDisposable
     // Guarded by _sensorLock, which is already held wherever this is read or written.
     private bool _loggedSensorTopology;
 
+    /// <summary>
+    /// Creates the reader. No hardware is touched until the first read.
+    /// </summary>
     /// <param name="diskHealth">Source of the SMART/temperature walk.</param>
     /// <param name="skipHardwareInit">Set by tests so no kernel driver is loaded.</param>
     /// <param name="timeProvider">

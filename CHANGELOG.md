@@ -10,6 +10,40 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.21] - 2026-09-01
+
+A drive's temperature could be shown under a different drive's name, which is worse than showing no name at
+all — you could be looking at a healthy drive while worrying about the wrong one. The Temperatures readings are
+also cheaper to collect now, and a machine where the sensor library will not start no longer keeps retrying it
+every two seconds.
+
+### Fixed
+- **A temperature is no longer shown under the wrong drive's name.** SysManager reads drive temperatures from
+  one source and drive names from another, and it was pairing them purely by their order in each list — with
+  nothing to confirm the first temperature belonged to the first name. When the two lists did not line up, and
+  they do not whenever Windows cannot read one of the drives, every name after that point shifted onto the
+  wrong reading. So a healthy drive's 38 °C could appear under a failing drive's name, hiding the one that was
+  actually hot. Names are now only filled in where SysManager had no name of its own, and only when the two
+  lists are the same length — because a different length is proof the pairing cannot be trusted. When it cannot
+  be trusted, the generic "Drive 2" stays, which is honest rather than confidently wrong.
+- **The Temperatures card no longer goes completely blank because of one drive.** Fetching drive names uses a
+  part of Windows that occasionally reports a temporary error. That error was not being handled, and because
+  the names are fetched before the sensors are read, it wiped out the whole card — processor, graphics card and
+  motherboard readings included, not just the drive names. It is handled now, and a temporary failure is
+  retried on the next reading instead of being remembered for the rest of the session.
+- **A sensor library that cannot start is no longer retried every two seconds.** Reading processor and
+  motherboard temperatures needs a low-level component that will not load on some machines — certain security
+  settings block it. SysManager kept trying to load it on every reading, about thirty times a minute for as
+  long as the app was open, and each failed attempt left something behind. It now tries once, and if that
+  fails, stops trying and cleans up after itself.
+
+### Changed
+- **Drive temperatures are collected far less often when not running as administrator.** In that mode — the
+  normal one — each Dashboard reading was doing a full drive-health inspection, every two seconds. Drive
+  temperature changes over minutes, not seconds, so the result is now reused for up to 30 seconds. That is
+  roughly fifteen times less work for a number that reads the same either way. Running as administrator was
+  already doing this; only the ordinary path was missed.
+
 ## [1.75.20] - 2026-09-01
 
 Two Dashboard tiles were telling you things SysManager had not actually checked. If your drive health could

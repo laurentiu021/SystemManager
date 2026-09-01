@@ -243,7 +243,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "explorer.exe",
+                FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"),
                 Arguments = $"/select,\"{entry.Path}\"",
                 UseShellExecute = true
             })?.Dispose();

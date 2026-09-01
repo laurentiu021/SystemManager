@@ -362,7 +362,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     private void ShowInExplorer(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
-        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose(); }
+        try { Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose(); }
         catch (InvalidOperationException) { /* best-effort */ }
         catch (System.ComponentModel.Win32Exception) { /* best-effort */ }
     }

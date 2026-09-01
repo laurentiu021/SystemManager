@@ -4825,4 +4825,97 @@ public partial class ArchitectureTests
             "another file also references the PowerShell telemetry opt-out variable; a second writer could "
             + $"set it back to \"0\". Keep it owned by PowerShellRunner alone: {string.Join(", ", otherWriters)}");
     }
+
+    [Fact]
+    public void EveryProcessLaunch_NamesItsExecutableByFullPath()
+    {
+        // An unrooted executable name is resolved by the operating system, and both mechanisms this app
+        // uses consult somewhere the user can write. UseShellExecute=false sends CreateProcess through the
+        // calling process's OWN directory first — and SysManager ships as a portable .exe people run from
+        // Downloads. UseShellExecute=true sends ShellExecuteEx through
+        // HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths and then PATH, neither of which needs
+        // elevation to modify. When SysManager is running as administrator, whatever answers that lookup
+        // runs as administrator.
+        //
+        // SystemPaths.ResolveSystemTool exists for this and documents it at length. Nine launches were
+        // written without it anyway, across services and view models, and were only found by scanning. This
+        // is the scan, kept.
+        var sourceDir = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(sourceDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        var constructs = 0;
+
+        foreach (var file in files)
+        {
+            // Comments are stripped BEFORE matching. A guard that can match its own explanation goes red on
+            // correct code, and the text above contains every shape this looks for.
+            var code = string.Join('\n', File.ReadAllLines(file)
+                .Select(line => CommentTail().Replace(line, string.Empty)));
+
+            // The floor population: every launch construct, whatever it is handed, with resolver calls left
+            // in place because a resolved site is still a site. Counted separately from what gets judged —
+            // an earlier version counted only literals and set the floor above what a literal-only count
+            // could ever reach, so it went red on a clean tree.
+            constructs += LaunchSite().Matches(code).Count;
+
+            // Resolved launches are the fix, so remove the resolver call before looking for a bare literal;
+            // otherwise every site this test exists to protect would still read as an offender.
+            var judged = ResolverCall().Replace(code, "RESOLVED");
+
+            foreach (var match in LaunchTarget().Matches(judged).Cast<Match>())
+            {
+                var literal = match.Groups["exe"].Value;
+
+                // A rooted path, or anything with a separator, is not resolved by the OS search order.
+                if (literal.Contains('\\') || literal.Contains('/') || literal.Contains(':')) continue;
+
+                // Only executable-ish names are launched through the search order. A ms-settings: URI or a
+                // web address is handled by the shell as a protocol, not a file lookup, and is caught by the
+                // ':' test above anyway.
+                if (!literal.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                    && !literal.EndsWith(".msc", StringComparison.OrdinalIgnoreCase)
+                    && !literal.EndsWith(".cpl", StringComparison.OrdinalIgnoreCase)
+                    && !literal.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
+                    && !literal.EndsWith(".bat", StringComparison.OrdinalIgnoreCase)) continue;
+
+                offenders.Add($"{Path.GetFileName(file)}: \"{literal}\"");
+            }
+        }
+
+        // The vacuity floor. The offender check passes trivially on an empty match set, so a pattern that
+        // silently stopped matching would report a clean codebase. Measured at 33 launch constructs when
+        // this was written; 25 leaves room for refactoring without being satisfiable by nothing.
+        Assert.True(constructs >= 25,
+            $"the launch scan found only {constructs} ProcessStartInfo sites, so it is no longer looking at "
+            + "anything — fix the pattern rather than trusting the pass");
+
+        Assert.True(offenders.Count == 0,
+            "these launches name their executable by a bare filename, which the OS resolves through the "
+            + "calling process's directory, HKCU's App Paths key, or PATH — all writable without elevation. "
+            + "Wrap the name in SystemPaths.ResolveSystemTool, which pins it to System32 or the Windows "
+            + "directory:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>Any launch construct, whatever it is handed. The vacuity floor counts these.</summary>
+    [GeneratedRegex(@"new ProcessStartInfo\(|(?<![A-Za-z0-9_])FileName\s*=")]
+    private static partial Regex LaunchSite();
+
+    // The executable argument when it IS a literal: `new ProcessStartInfo("x"` or `FileName = "x"`. Anchored
+    // on `=` with a preceding boundary so a longer identifier such as `exeFileName` or
+    // `PreviousBuildFileName` cannot match — both did when this scan was first written by hand.
+    [GeneratedRegex(@"new ProcessStartInfo\(\s*""(?<exe>[^""]*)""|(?<![A-Za-z0-9_])FileName\s*=\s*""(?<exe>[^""]*)""")]
+    private static partial Regex LaunchTarget();
+
+    /// <summary>A `//` comment tail, so the scan never reads its own prose as code.</summary>
+    [GeneratedRegex(@"//.*$")]
+    private static partial Regex CommentTail();
+
+    /// <summary>A ResolveSystemTool call, removed so a fixed site is not reported as a bare literal.</summary>
+    [GeneratedRegex(@"(SysManager\.Helpers\.)?SystemPaths\.ResolveSystemTool\(\s*""[^""]*""\s*\)")]
+    private static partial Regex ResolverCall();
 }

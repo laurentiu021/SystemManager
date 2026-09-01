@@ -228,4 +228,21 @@ public class SystemPathsTests
         Assert.Equal(Path.TrimEndingDirectorySeparator(own!), own);
         Assert.True(SystemPaths.IsInsideSubtree(own!, own));
     }
+
+    [Fact]
+    public void ResolveSystemTool_WindowsDirectoryTool_ResolvesToRootedExistingPath()
+    {
+        // explorer.exe is the reason the Windows-directory fallback exists. It is NOT in System32, so a
+        // System32-only probe returned the bare name unchanged — which reads as resolution and pins nothing.
+        // Eight launches were routed through this helper on the strength of that fallback, so without this
+        // test the whole change could regress to a no-op that still looks like a fix.
+        var resolved = SystemPaths.ResolveSystemTool("explorer.exe");
+
+        Assert.True(Path.IsPathRooted(resolved), $"explorer.exe must resolve to a rooted path, got '{resolved}'");
+        Assert.True(File.Exists(resolved), $"resolved explorer.exe must exist, got '{resolved}'");
+        Assert.Equal(
+            Path.Combine(Path.GetDirectoryName(Environment.SystemDirectory)!, "explorer.exe"),
+            resolved,
+            ignoreCase: true);
+    }
 }

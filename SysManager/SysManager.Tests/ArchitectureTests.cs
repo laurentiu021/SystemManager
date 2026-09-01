@@ -4998,4 +4998,41 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(System\.Windows\.)?Application\.Current\s*\??\.\s*Shutdown\s*\(")]
     private static partial Regex DirectShutdown();
 
+    [Fact]
+    public void AtomicFile_FlushesTheTempOntoTheDevice_BeforeEverySwap()
+    {
+        // Closing a handle hands the bytes to the OS write-back cache; it does not ask the drive to persist
+        // them. The swap that follows is a metadata change NTFS journals, so the rename can become durable
+        // while the data blocks are still in volatile cache — after a power cut the destination exists under
+        // its final name and is empty. AtomicFile's summary promises this cannot happen, and the loaders that
+        // read these files treat an unparseable file as "no data" at Debug level, so it never surfaced.
+        //
+        // Structural rather than behavioural because nothing in managed code can observe whether
+        // FlushFileBuffers ran. What IS checkable is that the call is there and that it comes first.
+        var source = File.ReadAllText(Path.Combine(
+            FindRepoRoot(), "SysManager", "SysManager", "Helpers", "AtomicFile.cs"));
+
+        // Comments stripped BEFORE matching: the remarks explain FlushFileBuffers and reference Swap in
+        // prose, and a guard that reads its own explanation passes on code that flushes nothing.
+        var code = string.Join('\n', source.Split('\n')
+            .Select(line => CommentTail().Replace(line, string.Empty)));
+
+        string[] writers = ["private static void Write(", "private static async Task WriteAsync("];
+
+        foreach (var writer in writers)
+        {
+            var start = code.IndexOf(writer, StringComparison.Ordinal);
+            Assert.True(start > 0, $"{writer} was not found — this guard would otherwise pass vacuously");
+
+            var swap = code.IndexOf("Swap(temp, path)", start, StringComparison.Ordinal);
+            Assert.True(swap > start, $"{writer} no longer swaps a temp into place");
+
+            var flush = code.IndexOf("FlushToDisk(temp)", start, StringComparison.Ordinal);
+            Assert.True(flush > start && flush < swap,
+                $"{writer} must flush the temp onto the device before the swap, or a power cut can leave "
+                + "the destination durable under its final name while its contents are still in the "
+                + "operating system's write-back cache");
+        }
+    }
+
 }

@@ -210,4 +210,47 @@ public class AtomicFileTests : IDisposable
     {
         Assert.Throws<ArgumentNullException>(() => AtomicFile.WriteAllText(Path_("x.json"), null!));
     }
+    [Fact]
+    public void MoveIntoPlace_DestinationAppearedAfterTheProbe_StillSwapsItIn()
+    {
+        // Swap asks File.Exists and then acts on the answer, and those are two operations rather than one.
+        // Two writers saving a file that does not exist yet — the first save of a preset, profile or
+        // history — can both be told "absent", and this is the state the loser then lands in. Its
+        // Move(overwrite: false) threw IOException, and callers log a failed save at Debug, so the loser's
+        // data disappeared without a word. Every later write was already safe: it takes the Replace branch.
+        var path = Path_("first-save.json");
+        var temp = AtomicFile.UniqueTempPath(path);
+        File.WriteAllText(temp, "the writer that lost the race");
+        File.WriteAllText(path, "the writer that won it");
+
+        AtomicFile.MoveIntoPlace(temp, path);
+
+        Assert.Equal("the writer that lost the race", File.ReadAllText(path));
+        Assert.False(File.Exists(temp), "the temp must not be left behind once it has been swapped in");
+    }
+
+    [Fact]
+    public void MoveIntoPlace_TempIsMissing_StillFails()
+    {
+        // The catch filter is narrow on purpose. Only "the destination appeared" is recoverable; a missing
+        // temp is a real failure and must reach the caller rather than being absorbed by the fallback.
+        var path = Path_("never-written.json");
+        var missing = AtomicFile.UniqueTempPath(path);
+
+        Assert.ThrowsAny<IOException>(() => AtomicFile.MoveIntoPlace(missing, path));
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void WriteAllText_FirstCreation_LeavesNoTempBehind()
+    {
+        // The flush opens the temp a second time, between writing it and swapping it. If that handle were
+        // left open the swap would fail on a sharing violation, so this asserts the directory is clean.
+        var path = Path_("clean.json");
+
+        AtomicFile.WriteAllText(path, "{\"a\":1}");
+
+        Assert.Equal(path, Assert.Single(Directory.GetFiles(_dir)));
+    }
+
 }

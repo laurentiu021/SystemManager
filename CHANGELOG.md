@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.23] - 2026-09-01
+
+If the power went out or the machine was reset while SysManager was saving, a file it had just saved could come
+back empty the next time you opened the app — your presets, gaming profiles or history gone, with nothing on
+screen to say so. The very first save of one of those files could also quietly do nothing.
+
+### Fixed
+- **A power cut can no longer empty a file SysManager had just saved.** Saving works by writing the new
+  contents beside the old file and then swapping the two, so that being interrupted leaves you with one
+  version or the other, never half of each. The swap was reliable, but the contents were not: Windows
+  reports a save as finished once it has the data in memory, and it may write it to the drive seconds
+  later. Pull the plug in between and the swap has happened while the contents have not, so the file
+  exists under the right name and is empty. SysManager now waits for the drive to confirm it has the data
+  before swapping, which is what the promise of "either the old file or the new one" always required.
+  It matters most for the two files you would never think about: the record of what a gaming profile
+  changed on your PC, and the snapshot taken before a performance change. If either came back empty, the
+  app concluded there was nothing to undo while your PC was still changed.
+- **The first save of a preset or profile no longer fails when something else creates it at the same moment.**
+  Saving asked whether the file existed yet and then acted on the answer, and those are two separate steps.
+  Two saves arriving together for a file that did not exist yet could both be told "it does not", and the
+  second one then failed because the first had already created it. Failed saves are only recorded in the
+  diagnostic log, so that save simply vanished. Only ever the first save of a given file; every save after
+  that was already handled.
+
 ## [1.75.22] - 2026-09-01
 
 Pressing "Run as administrator" could ask you whether to keep SysManager running in the notification area, and

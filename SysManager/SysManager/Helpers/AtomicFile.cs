@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Text;
+using Serilog;
 
 namespace SysManager.Helpers;
 
@@ -18,8 +19,10 @@ namespace SysManager.Helpers;
 /// history, gaming profiles or volume presets.
 /// </para>
 /// <para>
-/// The fix is to write a temporary file in the same directory and then swap it in with a single
-/// filesystem operation. <see cref="File.Replace(string, string, string?)"/> is used when the
+/// The fix is to write a temporary file in the same directory, push it out of the operating system's
+/// write-back cache onto the device, and then swap it in with a single filesystem operation. The flush is
+/// what makes the power-loss half of the promise true: without it the rename can become durable while the
+/// data blocks are still in volatile cache, leaving an empty file under the final name. <see cref="File.Replace(string, string, string?)"/> is used when the
 /// destination already exists, because it preserves the destination's ACLs and attributes — a plain
 /// <c>Move(overwrite: true)</c> relinks a brand-new inode that inherits only the directory's default
 /// ACL, silently weakening the file. On first creation there is no descriptor to preserve, so a plain
@@ -103,6 +106,7 @@ internal static class AtomicFile
         try
         {
             writeTemp(temp);
+            FlushToDisk(temp);
             Swap(temp, path);
         }
         finally
@@ -117,6 +121,7 @@ internal static class AtomicFile
         try
         {
             await writeTemp(temp).ConfigureAwait(false);
+            FlushToDisk(temp);
             Swap(temp, path);
         }
         finally
@@ -154,12 +159,74 @@ internal static class AtomicFile
         return UniqueTempPath(path);
     }
 
+    /// <summary>
+    /// Pushes the temp file onto the device before the swap turns it into the destination.
+    /// </summary>
+    /// <remarks>
+    /// Closing a handle — which <c>File.WriteAllText</c> and its siblings do — hands the bytes to the
+    /// operating system's write-back cache. It does not ask the drive to persist them. The swap that
+    /// follows is a metadata change NTFS journals, so the rename can become durable while the data blocks
+    /// are still only in volatile cache: after a power cut the destination exists under its final name and
+    /// is empty or torn. That is the one outcome this class exists to prevent, and it is the quietest,
+    /// because the loaders reading these files treat an unparseable file as "no data" at Debug level.
+    /// <para>Stronger than <see cref="FileOptions.WriteThrough"/>, which bypasses the OS cache but leaves
+    /// the drive's own cache alone. This issues FlushFileBuffers, which commits it.</para>
+    /// <para>A device that cannot flush must not cost the caller a write that would otherwise have
+    /// completed — some network and virtual volumes refuse the call outright — so the failure is logged
+    /// and the swap proceeds. The result is then exactly the behaviour that shipped before this existed,
+    /// never a new exception.</para>
+    /// </remarks>
+    private static void FlushToDisk(string temp)
+    {
+        try
+        {
+            using var handle = new FileStream(temp, FileMode.Open, FileAccess.Write, FileShare.None);
+            handle.Flush(flushToDisk: true);
+        }
+        catch (IOException ex)
+        {
+            Log.Debug(ex, "Could not flush {Temp} onto the device; swapping it in regardless", temp);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug(ex, "Could not open {Temp} to flush it; swapping it in regardless", temp);
+        }
+    }
+
     private static void Swap(string temp, string path)
     {
         if (File.Exists(path))
             File.Replace(temp, path, destinationBackupFileName: null);
         else
+            MoveIntoPlace(temp, path);
+    }
+
+    /// <summary>
+    /// The first-creation swap: with no destination descriptor to preserve, a plain move is correct.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Swap"/> asks whether the destination exists and then acts on the answer, and those are
+    /// two operations rather than one. Two writers saving a file that does not exist yet — the first save
+    /// of a preset, profile or history — can both be told "absent", and the loser's
+    /// <c>Move(overwrite: false)</c> then throws because the winner got there first. Callers log a failed
+    /// save at Debug, so that writer's data would disappear without a word. Every subsequent write is
+    /// already safe, since it takes the <see cref="File.Replace(string, string, string?)"/> branch.
+    /// <para>The fallback is that same replace rather than <c>Move(overwrite: true)</c>, which would
+    /// relink a new inode inheriting only the directory's default ACL — the thing this class's summary
+    /// argues against. It also makes the last writer win, which is the contract
+    /// <see cref="UniqueTempPath"/> already states.</para>
+    /// <para>Internal so a test can drive the state the race produces without depending on timing.</para>
+    /// </remarks>
+    internal static void MoveIntoPlace(string temp, string path)
+    {
+        try
+        {
             File.Move(temp, path, overwrite: false);
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            File.Replace(temp, path, destinationBackupFileName: null);
+        }
     }
 
     private static void CleanUp(string temp)

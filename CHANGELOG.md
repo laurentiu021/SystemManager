@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.18] - 2026-09-01
+
+Several tabs open a built-in Windows program for you: File Explorer to show a file, Control Panel, Device
+Manager, Event Viewer. SysManager now always opens the real one from the Windows folder, instead of asking
+Windows to look up the name and trusting whatever it finds.
+
+### Fixed
+- **The built-in Windows programs SysManager opens are now named by their full location.** Ten places asked
+  Windows to find a program by name alone — File Explorer when you use "Show in folder" in Disk Analyzer,
+  Duplicate Finder, Deep Cleanup, Startup, Logs and the update screen; Control Panel, Sound, Power Options,
+  Device Manager and the rest of the Legacy Panels tab; and Event Viewer from Logs. Looking a name up is not
+  the same as finding the right program: Windows checks places that any program running as you can add
+  entries to, so the name could have been pointed at something else entirely. It never was, and none of this
+  needed fixing urgently, but SysManager is often run as administrator, and anything it opens then starts
+  with those same rights. Every one of these now names the actual file in the Windows folder, so there is
+  nothing to look up. Nothing changes in what you see or click.
+- **A check now stops this being reintroduced.** These ten were only found by searching for them, and nothing
+  would have stopped an eleventh being added later. The build now refuses any new code that opens a program
+  by name alone.
+
 ## [1.75.17] - 2026-09-01
 
 The speed test uses a small program from Ookla, downloaded the first time you run it. SysManager already

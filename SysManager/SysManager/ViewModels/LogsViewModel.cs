@@ -291,7 +291,7 @@ public sealed partial class LogsViewModel : ViewModelBase
         try
         {
             Directory.CreateDirectory(LogFolder);
-            Process.Start(new ProcessStartInfo("explorer.exe", LogFolder) { UseShellExecute = true })?.Dispose();
+            Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"), LogFolder) { UseShellExecute = true })?.Dispose();
         }
         catch (IOException ex) { StatusMessage = ex.Message; }
         catch (UnauthorizedAccessException ex) { StatusMessage = ex.Message; }
@@ -304,7 +304,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     {
         try
         {
-            Process.Start(new ProcessStartInfo("eventvwr.msc") { UseShellExecute = true })?.Dispose();
+            Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("eventvwr.msc")) { UseShellExecute = true })?.Dispose();
         }
         catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
         catch (System.ComponentModel.Win32Exception ex) { StatusMessage = ex.Message; }

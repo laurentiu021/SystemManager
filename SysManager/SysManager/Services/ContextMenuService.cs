@@ -420,7 +420,7 @@ public sealed partial class ContextMenuService
 
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true })?.Dispose();
+            Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe")) { UseShellExecute = true })?.Dispose();
             Log.Information("Explorer restarted to apply context menu changes");
         }
         catch (System.ComponentModel.Win32Exception ex)

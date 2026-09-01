@@ -276,7 +276,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "explorer.exe",
+                FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"),
                 Arguments = $"\"{entry.FullPath}\"",
                 UseShellExecute = true
             })?.Dispose();

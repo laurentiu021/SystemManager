@@ -4,6 +4,7 @@
 
 using System.Diagnostics;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -17,6 +18,12 @@ namespace SysManager.Services;
 /// and re-validates membership before launching. These are pure launchers; none modify the
 /// system, so no elevation or confirmation is needed (the applets themselves prompt for UAC
 /// when an action inside them requires it).
+/// <para>
+/// A hard-coded name is not the same as a hard-coded program. Every entry launches through
+/// <see cref="SysManager.Helpers.SystemPaths.ResolveSystemTool"/>, because <c>UseShellExecute=true</c>
+/// resolves an unrooted name through <c>HKCU</c>'s App Paths key and then PATH — both writable without
+/// elevation — so <c>"control.exe"</c> alone means whatever those lookups answer.
+/// </para>
 /// </summary>
 public sealed class LegacyPanelService
 {
@@ -56,7 +63,7 @@ public sealed class LegacyPanelService
         {
             var psi = new ProcessStartInfo
             {
-                FileName = panel.FileName,
+                FileName = SystemPaths.ResolveSystemTool(panel.FileName),
                 Arguments = panel.Arguments,
                 UseShellExecute = true
             };

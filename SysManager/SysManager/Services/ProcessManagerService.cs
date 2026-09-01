@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.IO;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -142,7 +143,7 @@ public sealed class ProcessManagerService
             // Dispose the returned Process handle — we don't track the launched explorer.
             Process.Start(new ProcessStartInfo
             {
-                FileName = "explorer.exe",
+                FileName = SystemPaths.ResolveSystemTool("explorer.exe"),
                 Arguments = $"/select,\"{filePath}\"",
                 UseShellExecute = true
             })?.Dispose();

@@ -168,6 +168,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         var completed = 0;
         var failed = 0;
 
+        // Everything the user needs to be told, in the order it happened. Previously the service built a
+        // careful explanation of what it could not shred and the catch below dropped it on the floor:
+        // item.Status showed the word "Failed" and ex.Message went only to the log file. For an operation
+        // whose entire purpose is destroying data, "it did not work" without "and these files are still
+        // on your disk" is the wrong half of the sentence.
+        List<string> notices = [];
+
         try
         {
             // Shred a SNAPSHOT of the queue, not the live collection: indexing Items across the
@@ -195,7 +202,9 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                         // mutates the bound Items collection (RemoveAt in finally) and item.Status,
                         // which throw if run off the UI thread. The service's internal awaits keep
                         // ConfigureAwait(false).
-                        await _service.ShredFolderAsync(item.Path, SelectedMethod, itemProgress, ct);
+                        var report = await _service.ShredFolderAsync(item.Path, SelectedMethod, itemProgress, ct);
+                        if (report.Notice is { } notice)
+                            notices.Add($"{item.Name}: {notice}");
                     }
                     else
                     {
@@ -216,10 +225,18 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     item.Status = "Failed";
                     failed++;
                     Log.Warning(ex, "Failed to shred: {Path}", item.Path);
+
+                    // The service words these for the user — which files were left in place, why a hard-
+                    // linked file cannot be shredded, that a junction would have destroyed data
+                    // elsewhere. Show it. The Status column is 160px and would truncate it, so it goes to
+                    // the wrapping caption at the bottom of the view instead.
+                    notices.Add($"{item.Name}: {ex.Message}");
                 }
             }
 
-            StatusMessage = $"Complete — {completed} shredded, {failed} failed.";
+            StatusMessage = notices.Count == 0
+                ? $"Complete — {completed} shredded, {failed} failed."
+                : $"Complete — {completed} shredded, {failed} failed. " + string.Join(" ", notices);
             ToastService.Instance.Show("File Shredder complete", $"{completed} shredded, {failed} failed");
 
             // COUNT ONLY — never a file name or path. activity.json is plain text under

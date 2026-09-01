@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.15] - 2026-09-01
+
+If your hosts file had a line with a typo in it, saving from the Hosts tab used to delete that line
+without saying so. Those lines are now kept exactly as you wrote them.
+
+### Fixed
+- **A hosts line SysManager cannot read is no longer deleted when you save.** The Hosts tab rebuilds the
+  whole file every time you save, from the entries it managed to read plus your comments. A line it could
+  not read belonged to neither group, so it vanished — and only after you changed something else entirely,
+  which made the two look unrelated. The kinds of line this affected are all small mistakes: a semicolon
+  where a space belonged, an address with no website name after it, a fourth number above 255, a word on
+  its own. Every one of them is a line somebody typed deliberately and got slightly wrong, so it is the
+  best record of what they meant — and the mistake is exactly why the tab could not read it back. Those
+  lines now survive a save untouched, alongside the comments that were already being kept. They still do
+  not appear in the list of entries, because SysManager cannot tell what address they were meant to point
+  at and will not guess.
+
 ## [1.75.14] - 2026-09-01
 
 App Blocker refuses to block one more Windows file. Blocking it was possible, and it would have stopped

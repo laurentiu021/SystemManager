@@ -32,7 +32,8 @@ public class DashboardViewModelTests
             // CONSUMES it — pointed at the real profile (which is what the old optional parameter
             // defaulted to) these tests would delete a genuine crash report before the user was ever
             // told about it (#1772).
-            new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")));
+            new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")),
+            new MemoryTestService());
     }
 
     // ---------- construction & defaults ----------
@@ -361,5 +362,96 @@ public class DashboardViewModelTests
 
         Assert.False(vm.HasTuneUpResult);
         Assert.Null(vm.TuneUpResult);
+    }
+    // ---------- the two alerts that stated things the app did not know ----------
+
+    [Fact]
+    public void ClassifySmartHealth_Unavailable_SaysSoInsteadOfClaimingHealth()
+    {
+        // The P1, from the user's side. An unreadable Storage namespace scored 100 and landed in the green
+        // branch, so "All SMART indicators healthy" appeared for a machine whose disks were never read.
+        // Unknown is also not "degrading" — nothing is degrading, nothing was measured — so it gets its own
+        // wording rather than borrowing the middle branch's.
+        var (title, severity) = DashboardViewModel.ClassifySmartHealth(
+            HealthScoreService.UnknownComponentScore, unavailable: true);
+
+        Assert.Contains("could not be read", title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
+        Assert.DoesNotContain("healthy", title);
+        Assert.DoesNotContain("degrading", title);
+    }
+
+    [Theory]
+    [InlineData(100, "All SMART indicators healthy", AlertSeverity.Green)]
+    [InlineData(90, "All SMART indicators healthy", AlertSeverity.Green)]
+    [InlineData(75, "Disk health degrading", AlertSeverity.Yellow)]
+    [InlineData(30, "Disk health critical", AlertSeverity.Red)]
+    public void ClassifySmartHealth_WithData_KeepsTheExistingThresholds(
+        int diskScore, string expectedFragment, AlertSeverity expectedSeverity)
+    {
+        // The measured cases must be untouched by the fix — the thresholds are what the System Health tab
+        // agrees with.
+        var (title, severity) = DashboardViewModel.ClassifySmartHealth(diskScore, unavailable: false);
+
+        Assert.Contains(expectedFragment, title);
+        Assert.Equal(expectedSeverity, severity);
+    }
+
+    [Fact]
+    public void ClassifyMemoryHealth_WheaErrors_IsRedAndCountsThem()
+    {
+        // The alert is titled after a 30-day hardware-error verdict and used to classify on memory USAGE, so
+        // a machine with real WHEA errors at 40% usage was told "No memory errors (30 days)".
+        var (title, severity) = DashboardViewModel.ClassifyMemoryHealth(
+            new MemoryTestService.MemoryErrorSummary(3, 0, DateTime.Now));
+
+        Assert.Contains("3", title);
+        Assert.Equal(AlertSeverity.Red, severity);
+        Assert.DoesNotContain("No memory errors", title);
+    }
+
+    [Fact]
+    public void ClassifyMemoryHealth_DiagnosticRan_IsYellow()
+    {
+        var (title, severity) = DashboardViewModel.ClassifyMemoryHealth(
+            new MemoryTestService.MemoryErrorSummary(0, 2, null));
+
+        Assert.Contains("2", title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
+    }
+
+    [Fact]
+    public void ClassifyMemoryHealth_NoErrors_IsGreen()
+    {
+        // The genuine good-news case, which is the only one allowed to say this.
+        var (title, severity) = DashboardViewModel.ClassifyMemoryHealth(
+            new MemoryTestService.MemoryErrorSummary(0, 0, null));
+
+        Assert.Equal("No memory errors (30 days)", title);
+        Assert.Equal(AlertSeverity.Green, severity);
+    }
+
+    [Fact]
+    public void ClassifyMemoryHealth_ScanFailed_IsNotGoodNews()
+    {
+        // A failed scan is not the same as a clean one, and the previous code had no way to tell them apart
+        // because it never ran a scan.
+        var (title, severity) = DashboardViewModel.ClassifyMemoryHealth(null);
+
+        Assert.Contains("could not be checked", title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
+    }
+
+    [Fact]
+    public void ClassifyMemoryHealth_SingularAndPlural_BothRead()
+    {
+        // Shown to someone who does not know what WHEA is; "1 memory hardware errors" undermines the rest.
+        var one = DashboardViewModel.ClassifyMemoryHealth(
+            new MemoryTestService.MemoryErrorSummary(1, 0, null)).Title;
+        var two = DashboardViewModel.ClassifyMemoryHealth(
+            new MemoryTestService.MemoryErrorSummary(2, 0, null)).Title;
+
+        Assert.Contains("1 memory hardware error ", one);
+        Assert.Contains("2 memory hardware errors ", two);
     }
 }

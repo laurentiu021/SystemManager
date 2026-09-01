@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.20] - 2026-09-01
+
+Two Dashboard tiles were telling you things SysManager had not actually checked. If your drive health could
+not be read, the tile still said your drives were healthy. And the "No memory errors" tile was not looking at
+memory errors at all — it was looking at how much memory was in use.
+
+### Fixed
+- **"All SMART indicators healthy" no longer appears when your drives could not be read.** Reading drive
+  health needs a part of Windows that is sometimes broken, switched off, or blocked without administrator
+  rights. When that happened SysManager got nothing back — and treated nothing back as a perfect result, so
+  the tile reported your drives were in good health without having looked at them. It now says the health
+  could not be read and points at the System Health tab. A drive that genuinely reports a problem is
+  unaffected: those wordings and thresholds are unchanged.
+- **The "No memory errors (30 days)" tile now actually looks for memory errors.** It was deciding based on how
+  much memory was currently in use, which has nothing to do with whether your memory has faulted. So a
+  computer with real memory hardware errors was told there were none as long as memory use was low, and a
+  perfectly healthy computer running a lot of programs was warned about "memory issues" that the System Health
+  tab then said did not exist. The tile now reads the same 30-day Windows error record the System Health tab
+  reads, and words the result the same way, so the two can no longer disagree. If that check itself cannot
+  run, it says so rather than reporting good news.
+- **The overall health score no longer counts unread information as perfect.** Drive health, memory and uptime
+  each scored full marks when their source returned nothing, so a computer where all three failed showed a
+  perfect score with no advice at all. An unread component is now scored as unknown, which is what a single
+  unreadable drive was already scored — the code said so in a comment while doing the opposite one screen
+  above.
+
 ## [1.75.19] - 2026-09-01
 
 The Logs tab could get stuck loading forever, with one processor core pinned at full speed and the Refresh

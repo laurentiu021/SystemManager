@@ -90,6 +90,17 @@ public sealed class HealthScoreService
         var recommendations = BuildRecommendations(
             diskScore, ramScore, uptimeScore, batteryScore, hasBattery, snapshot, disks, battery);
 
+        // Recorded so a consumer can say "could not read this" instead of reading a verdict out of a
+        // fallback number. The scores above already refuse to claim health; this is what makes the reason
+        // visible.
+        List<string> unavailable = [];
+        if (disks is null || disks.Count == 0) unavailable.Add(DiskComponent);
+        if (snapshot is null)
+        {
+            unavailable.Add(MemoryComponent);
+            unavailable.Add(UptimeComponent);
+        }
+
         return new HealthScoreResult
         {
             Score = overall,
@@ -98,15 +109,36 @@ public sealed class HealthScoreService
             UptimeScore = uptimeScore,
             BatteryScore = batteryScore,
             HasBattery = hasBattery,
-            Recommendations = recommendations
+            Recommendations = recommendations,
+            UnavailableComponents = unavailable
         };
     }
 
+    /// <summary>Component names used in <see cref="HealthScoreResult.UnavailableComponents"/>.</summary>
+    internal const string DiskComponent = "Disk";
+    internal const string MemoryComponent = "Memory";
+    internal const string UptimeComponent = "Uptime";
+
     // ── Component scoring ──────────────────────────────────────────────
+
+    /// <summary>The score for a health component whose source produced nothing at all.</summary>
+    /// <remarks>
+    /// The same value the per-drive unknown rule uses, for the same reason: absent evidence is not a clean
+    /// bill of health. It used to be 100 for a missing source, which is how a machine whose disk health could
+    /// not be read at all was told "All SMART indicators healthy" — the Dashboard's green branch is `>= 90`.
+    /// 80 keeps it out of every green branch while staying out of the alarming range, and
+    /// <see cref="HealthScoreResult.UnavailableComponents"/> is what lets a caller word it as unknown rather
+    /// than as mildly degraded.
+    /// </remarks>
+    internal const int UnknownComponentScore = 80;
 
     internal static int ComputeDiskScore(IReadOnlyList<DiskHealthReport>? disks)
     {
-        if (disks is null || disks.Count == 0) return 100;
+        // Not 100. DiskHealthService swallows ManagementException, UnauthorizedAccessException and
+        // COMException and returns its partially-filled list, so a Storage WMI namespace that is broken or
+        // access-denied arrives here as an empty list rather than as an exception — indistinguishable, at
+        // this point, from a machine with no drives. Either way nothing was measured.
+        if (disks is null || disks.Count == 0) return UnknownComponentScore;
 
         // The worst disk decides. HealthPercent already folds in Windows' own verdict as a ceiling,
         // so there is nothing left to map here.
@@ -118,15 +150,18 @@ public sealed class HealthScoreService
         // while the percentage was quietly ignoring it, and its Warning value (50) disagreed with
         // the real mapping (60).
         //
-        // 80, not 100, for a drive we know nothing about: absent evidence is not a clean bill of
-        // health, and this is the only case that reaches it.
-        int worstScore = disks.Select(d => d.HealthPercent ?? 80).Min();
+        // 80, not 100, for a drive we know nothing about: absent evidence is not a clean bill of health.
+        // The empty-list case above is a STRONGER absence of evidence and used to be scored more
+        // generously — this comment previously claimed a single unknown drive was "the only case that
+        // reaches it", which was how the contradiction survived.
+        int worstScore = disks.Select(d => d.HealthPercent ?? UnknownComponentScore).Min();
         return Math.Clamp(worstScore, 0, 100);
     }
 
     internal static int ComputeRamScore(SystemSnapshot? snapshot)
     {
-        if (snapshot is null) return 100;
+        // Same rule as the disk: a snapshot that never arrived is not evidence of healthy memory.
+        if (snapshot is null) return UnknownComponentScore;
         double usedPct = snapshot.Memory.UsedPercent;
 
         // Linear scale: 0% used = 100 score, 100% used = 0 score
@@ -145,7 +180,8 @@ public sealed class HealthScoreService
 
     internal static int ComputeUptimeScore(SystemSnapshot? snapshot)
     {
-        if (snapshot is null) return 100;
+        // Same rule as the disk and memory arms.
+        if (snapshot is null) return UnknownComponentScore;
         double days = snapshot.Os.Uptime.TotalDays;
 
         return days switch

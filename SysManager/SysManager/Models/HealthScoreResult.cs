@@ -43,6 +43,22 @@ public sealed record HealthScoreResult
     public int UptimeScore { get; init; } = 100;
     public int BatteryScore { get; init; } = 100;
     public bool HasBattery { get; init; }
+
+    /// <summary>
+    /// Components whose source produced no data at all, by name: "Disk", "Memory", "Uptime".
+    /// </summary>
+    /// <remarks>
+    /// Exists because a score alone cannot distinguish "healthy" from "never read". DiskHealthService
+    /// swallows WMI failures and returns its partially-filled list, so a broken or access-denied Storage
+    /// namespace arrives as an empty list, and the component score used to collapse that onto 100 — which the
+    /// Dashboard rendered as "All SMART indicators healthy". The scores now fall back to the same 80 the
+    /// per-drive unknown rule uses, so a false green is impossible, and this list lets a caller say
+    /// "unavailable" instead of guessing at a verdict from a number.
+    /// </remarks>
+    public IReadOnlyList<string> UnavailableComponents { get; init; } = [];
+
+    /// <summary>True when <paramref name="component"/> reported nothing. See <see cref="UnavailableComponents"/>.</summary>
+    public bool IsUnavailable(string component) => UnavailableComponents.Contains(component);
 }
 
 /// <summary>A single health recommendation shown below the gauge.</summary>

@@ -23,7 +23,8 @@ public class DashboardViewModelTests
             new WingetService(new PowerShellRunner()),
             // Redirected on purpose: reading a crash marker CONSUMES it, so pointing this at the real
             // profile would delete a genuine crash report before the user saw it (#1772).
-            new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")));
+            new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")),
+            new MemoryTestService());
     }
 
     [Fact]

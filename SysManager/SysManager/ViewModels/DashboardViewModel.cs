@@ -22,6 +22,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private readonly TemperatureService _temps;
     private readonly IWingetService _winget;
     private readonly CrashMarkerService _crashMarkers;
+
+    // The 30-day WHEA scan the memory alert is named after. Already a registered singleton; it was simply
+    // never reached from here, so the alert classified on a usage percentage instead.
+    private readonly MemoryTestService _memTest;
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _pollingCts;
 
@@ -106,7 +110,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// </param>
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
-        CrashMarkerService crashMarkers)
+        CrashMarkerService crashMarkers, MemoryTestService memTest)
     {
         _sys = sys;
         _tuneUp = tuneUp;
@@ -114,6 +118,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         _temps = temps;
         _winget = winget;
         _crashMarkers = crashMarkers;
+        _memTest = memTest;
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
@@ -483,25 +488,36 @@ public sealed partial class DashboardViewModel : ViewModelBase
         // Reuse the score LoadHealthScoreAsync already computed (it runs before the alert
         // scans) instead of recomputing the heavy WMI/SMART/battery work; fall back to a fresh
         // compute only if that load produced nothing (e.g. it failed).
-        var diskScore = (HealthResult ?? await _healthScore.ComputeAsync()).DiskScore;
+        var result = HealthResult ?? await _healthScore.ComputeAsync();
+        var (title, severity) = ClassifySmartHealth(
+            result.DiskScore, result.IsUnavailable(HealthScoreService.DiskComponent));
+
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
-            if (diskScore >= 90)
-            {
-                alert.Title = "All SMART indicators healthy";
-                alert.Severity = AlertSeverity.Green;
-            }
-            else if (diskScore >= 60)
-            {
-                alert.Title = "Disk health degrading — check System Health";
-                alert.Severity = AlertSeverity.Yellow;
-            }
-            else
-            {
-                alert.Title = "Disk health critical — immediate attention needed";
-                alert.Severity = AlertSeverity.Red;
-            }
+            alert.Title = title;
+            alert.Severity = severity;
         });
+    }
+
+    /// <summary>Pure decision for the SMART alert. Testable without WPF.</summary>
+    /// <remarks>
+    /// The unavailable case has to come first and cannot be inferred from the score. DiskHealthService
+    /// swallows WMI failures and returns an empty list, which used to score 100 and land in the green branch —
+    /// so a machine whose disk health could not be read was told "All SMART indicators healthy". Scoring it as
+    /// unknown instead would put it in the "degrading" branch, which is a different wrong answer: nothing is
+    /// degrading, nothing was measured.
+    /// </remarks>
+    internal static (string Title, AlertSeverity Severity) ClassifySmartHealth(int diskScore, bool unavailable)
+    {
+        if (unavailable)
+            return ("Disk health could not be read — see System Health", AlertSeverity.Yellow);
+
+        return diskScore switch
+        {
+            >= 90 => ("All SMART indicators healthy", AlertSeverity.Green),
+            >= 60 => ("Disk health degrading — check System Health", AlertSeverity.Yellow),
+            _ => ("Disk health critical — immediate attention needed", AlertSeverity.Red)
+        };
     }
 
     private async Task ScanAppUpdatesAsync(DashboardAlert alert)
@@ -540,21 +556,55 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private async Task ScanMemoryHealthAsync(DashboardAlert alert)
     {
-        // Reuse the already-computed score (see ScanSmartHealthAsync) rather than recomputing.
-        var result = HealthResult ?? await _healthScore.ComputeAsync();
+        // Reads the log, not the usage meter. This alert is titled after a 30-day hardware-error verdict, and
+        // it used to classify on RamScore — which HealthScoreService derives entirely from memory USAGE
+        // percent, a number with no relation to hardware errors. Both directions were wrong: real WHEA errors
+        // at 40% usage read as "No memory errors", and a healthy machine at 85% usage read as "Memory issues
+        // detected" while the System Health tab said the opposite. CheckErrorLogsAsync is the method whose
+        // whole purpose is this question, and it is already a registered singleton.
+        MemoryTestService.MemoryErrorSummary? summary = null;
+        try
+        {
+            summary = await _memTest.CheckErrorLogsAsync().ConfigureAwait(false);
+        }
+        catch (System.Diagnostics.Eventing.Reader.EventLogException ex)
+        {
+            Log.Warning("Dashboard: memory error scan failed: {Error}", ex.Message);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning("Dashboard: memory error scan denied: {Error}", ex.Message);
+        }
+
+        var (title, severity) = ClassifyMemoryHealth(summary);
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
-            if (result.RamScore >= 90)
-            {
-                alert.Title = "No memory errors (30 days)";
-                alert.Severity = AlertSeverity.Green;
-            }
-            else
-            {
-                alert.Title = "Memory issues detected — check System Health";
-                alert.Severity = AlertSeverity.Yellow;
-            }
+            alert.Title = title;
+            alert.Severity = severity;
         });
+    }
+
+    /// <summary>Pure decision for the memory alert. Testable without WPF.</summary>
+    /// <remarks>
+    /// Worded to match <c>SystemHealthViewModel</c>'s verdicts for the same summary, so the Dashboard tile and
+    /// the System Health tab can never disagree about the same 30 days. A null summary means the scan itself
+    /// failed, which is reported as unknown rather than as good news.
+    /// </remarks>
+    internal static (string Title, AlertSeverity Severity) ClassifyMemoryHealth(
+        MemoryTestService.MemoryErrorSummary? summary)
+    {
+        if (summary is null)
+            return ("Memory errors could not be checked — see System Health", AlertSeverity.Yellow);
+
+        if (summary.WheaMemoryErrors > 0)
+            return ($"{summary.WheaMemoryErrors} memory hardware error{(summary.WheaMemoryErrors == 1 ? "" : "s")} in 30 days — test your RAM",
+                AlertSeverity.Red);
+
+        if (summary.MemoryDiagnosticResults > 0)
+            return ($"Memory diagnostic ran {summary.MemoryDiagnosticResults} time{(summary.MemoryDiagnosticResults == 1 ? "" : "s")} — check results",
+                AlertSeverity.Yellow);
+
+        return ("No memory errors (30 days)", AlertSeverity.Green);
     }
 
     private Task ScanEventLogAsync(DashboardAlert alert)

@@ -27,15 +27,22 @@ public class HealthScoreServiceTests
     // ---------- ComputeDiskScore ----------
 
     [Fact]
-    public void ComputeDiskScore_NullDisks_Returns100()
+    public void ComputeDiskScore_NullDisks_ScoresUnknownNotPerfect()
     {
-        Assert.Equal(100, HealthScoreService.ComputeDiskScore(null));
+        // This test used to require 100. That requirement WAS the defect: DiskHealthService swallows WMI
+        // failures and returns its partially-filled list, so a Storage namespace that is broken or
+        // access-denied arrives here as nothing at all — and the Dashboard's green branch is `>= 90`, so a
+        // machine whose disks were never read was told "All SMART indicators healthy".
+        Assert.Equal(HealthScoreService.UnknownComponentScore, HealthScoreService.ComputeDiskScore(null));
     }
 
     [Fact]
-    public void ComputeDiskScore_EmptyList_Returns100()
+    public void ComputeDiskScore_EmptyList_ScoresUnknownNotPerfect()
     {
-        Assert.Equal(100, HealthScoreService.ComputeDiskScore([]));
+        // The empty list is the case that actually happens in the field, and it used to be scored MORE
+        // generously than a single unreadable drive (100 versus 80) despite being a stronger absence of
+        // evidence. The service's own comment claimed the per-drive case was "the only case that reaches it".
+        Assert.Equal(HealthScoreService.UnknownComponentScore, HealthScoreService.ComputeDiskScore([]));
     }
 
     [Fact]
@@ -73,9 +80,10 @@ public class HealthScoreServiceTests
     // ---------- ComputeRamScore ----------
 
     [Fact]
-    public void ComputeRamScore_NullSnapshot_Returns100()
+    public void ComputeRamScore_NullSnapshot_ScoresUnknownNotPerfect()
     {
-        Assert.Equal(100, HealthScoreService.ComputeRamScore(null));
+        // Same rule as the disk arm: a snapshot that never arrived is not evidence of healthy memory.
+        Assert.Equal(HealthScoreService.UnknownComponentScore, HealthScoreService.ComputeRamScore(null));
     }
 
     [Fact]
@@ -116,9 +124,12 @@ public class HealthScoreServiceTests
     // ---------- ComputeUptimeScore ----------
 
     [Fact]
-    public void ComputeUptimeScore_NullSnapshot_Returns100()
+    public void ComputeUptimeScore_NullSnapshot_ScoresUnknownNotPerfect()
     {
-        Assert.Equal(100, HealthScoreService.ComputeUptimeScore(null));
+        // Rewritten with its three siblings. This test required the defect: a snapshot that never arrived is
+        // not evidence of a freshly-rebooted machine, and scoring it perfect is how a machine whose reads all
+        // failed reported full health with no advice.
+        Assert.Equal(HealthScoreService.UnknownComponentScore, HealthScoreService.ComputeUptimeScore(null));
     }
 
     [Fact]
@@ -286,5 +297,22 @@ public class HealthScoreServiceTests
         var disks = new List<DiskHealthReport> { new() { HealthStatus = "Unknown to us" } };
 
         Assert.Equal(80, HealthScoreService.ComputeDiskScore(disks));
+    }
+    [Fact]
+    public void UnknownComponentScore_StaysBelowEveryGreenBranch()
+    {
+        // The whole fix hangs on this one number, and the tests for the individual arms cannot pin it: they
+        // compare the constant to itself, so raising it moves both sides of their assertion at once. Raising
+        // it to 90 or above puts every unread component straight back into the Dashboard's green branch —
+        // "All SMART indicators healthy" for a machine whose disks were never read — with no other code
+        // changing anywhere.
+        Assert.Equal(80, HealthScoreService.UnknownComponentScore);
+
+        // Stated as the relationship as well as the value, because 90 is the Dashboard's green threshold and
+        // that is the constraint that actually matters if either number is ever revisited.
+        Assert.True(HealthScoreService.UnknownComponentScore < 90,
+            "an unknown component must never reach a green verdict");
+        Assert.True(HealthScoreService.UnknownComponentScore >= 60,
+            "and must not read as degrading either — nothing was measured");
     }
 }

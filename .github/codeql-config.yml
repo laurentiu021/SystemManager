@@ -88,7 +88,8 @@ query-filters:
       id: cs/missed-ternary-operator
   # cs/call-to-unmanaged-code and cs/unmanaged-code are inventory queries: they report every
   # P/Invoke by design, as an aid to a human reviewing interop. This app reads hardware,
-  # power plans, the registry and process state, so it declares 55 of them across 19 files
+  # power plans, the registry and process state, so it declares 41 of them across 17 files
+  # (28 [LibraryImport] and 13 [DllImport], counted by attribute rather than by grepping lines)
   # and the count can never reach zero — every new declaration adds another alert with
   # nothing to fix. They accounted for 33 of 40 open alerts, which is what makes a real
   # alert easy to overlook. What these queries gesture at is real, but they do not check it:

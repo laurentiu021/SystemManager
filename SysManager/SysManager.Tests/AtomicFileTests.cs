@@ -253,4 +253,39 @@ public class AtomicFileTests : IDisposable
         Assert.Equal(path, Assert.Single(Directory.GetFiles(_dir)));
     }
 
+    [Fact]
+    public async Task WriteAllLinesAsync_ReplacesTheContents_AndLeavesNoTempBehind()
+    {
+        var path = Path_("history.log");
+        await File.WriteAllLinesAsync(path, ["old one", "old two", "old three"]);
+
+        await AtomicFile.WriteAllLinesAsync(path, ["kept one", "kept two"]);
+
+        Assert.Equal(["kept one", "kept two"], await File.ReadAllLinesAsync(path));
+        Assert.Equal(path, Assert.Single(Directory.GetFiles(_dir)));
+    }
+
+    [Fact]
+    public async Task WriteAllLinesAsync_WritesTheSameBytesAsTheFrameworkCall()
+    {
+        // Both history writers pruned with File.WriteAllLinesAsync directly and both now go through here,
+        // so this must not change a single byte. They prune by line count, so a trailing newline gained or
+        // lost would change what the next prune reads back.
+        string[] lines = ["one", "two", ""];
+        var viaFramework = Path_("framework.log");
+        var viaHelper = Path_("helper.log");
+
+        await File.WriteAllLinesAsync(viaFramework, lines);
+        await AtomicFile.WriteAllLinesAsync(viaHelper, lines);
+
+        Assert.Equal(await File.ReadAllBytesAsync(viaFramework), await File.ReadAllBytesAsync(viaHelper));
+    }
+
+    [Fact]
+    public async Task WriteAllLinesAsync_RejectsNullLines()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => AtomicFile.WriteAllLinesAsync(Path_("x.log"), null!));
+    }
+
 }

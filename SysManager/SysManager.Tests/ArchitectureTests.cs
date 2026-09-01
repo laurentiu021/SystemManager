@@ -5017,6 +5017,21 @@ public partial class ArchitectureTests
         var code = string.Join('\n', source.Split('\n')
             .Select(line => CommentTail().Replace(line, string.Empty)));
 
+        // The order lives in SwapIntoPlace now, because five services outside this class stage their own
+        // temp file and need the same two steps in the same order.
+        var swapIntoPlace = code.IndexOf("internal static void SwapIntoPlace(", StringComparison.Ordinal);
+        Assert.True(swapIntoPlace > 0,
+            "AtomicFile.SwapIntoPlace was not found — this guard would otherwise pass vacuously");
+
+        var flush = code.IndexOf("FlushOntoDevice(temp)", swapIntoPlace, StringComparison.Ordinal);
+        var swap = code.IndexOf("Swap(temp, path)", swapIntoPlace, StringComparison.Ordinal);
+        Assert.True(swap > swapIntoPlace, "SwapIntoPlace no longer swaps a temp into place");
+        Assert.True(flush > swapIntoPlace && flush < swap,
+            "SwapIntoPlace must flush the temp onto the device before the swap, or a power cut can leave "
+            + "the destination durable under its final name while its contents are still in the operating "
+            + "system's write-back cache");
+
+        // And neither writer may bypass it and swap on its own.
         string[] writers = ["private static void Write(", "private static async Task WriteAsync("];
 
         foreach (var writer in writers)
@@ -5024,15 +5039,91 @@ public partial class ArchitectureTests
             var start = code.IndexOf(writer, StringComparison.Ordinal);
             Assert.True(start > 0, $"{writer} was not found — this guard would otherwise pass vacuously");
 
-            var swap = code.IndexOf("Swap(temp, path)", start, StringComparison.Ordinal);
-            Assert.True(swap > start, $"{writer} no longer swaps a temp into place");
-
-            var flush = code.IndexOf("FlushToDisk(temp)", start, StringComparison.Ordinal);
-            Assert.True(flush > start && flush < swap,
-                $"{writer} must flush the temp onto the device before the swap, or a power cut can leave "
-                + "the destination durable under its final name while its contents are still in the "
-                + "operating system's write-back cache");
+            var body = code[start..code.IndexOf("finally", start, StringComparison.Ordinal)];
+            Assert.Contains("SwapIntoPlace(temp, path)", body, StringComparison.Ordinal);
         }
     }
+
+    [Fact]
+    public void NoServiceSwapsATempIntoPlaceOnItsOwn()
+    {
+        // Every File.Move and File.Replace in the app was measured before this guard was written: eleven
+        // sites, three of them inside AtomicFile and eight outside, and all eight were a temp-then-swap.
+        // Not one was an unrelated move. None of the eight flushed, so a power cut could make the rename
+        // durable while the contents were still in the write-back cache — including the swap of the app's
+        // own .exe during an update, which would leave a zero-length executable that will not start.
+        //
+        // The two update-path sites keep their own File.Move on purpose: File.Replace copies the outgoing
+        // file's attributes onto the replacement, and inheriting the old build's zone identifier is not a
+        // change worth making to the riskiest code in the app. They are allowlisted BY NAME and still have
+        // to flush, so the allowlist is not a way out of the durability requirement.
+        string[] stagesItsOwnSwap = ["UpdateApplier.cs", "UpdateService.cs"];
+
+        var root = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                        // AtomicFile is where the swap lives.
+                        && !f.EndsWith("AtomicFile.cs", StringComparison.Ordinal))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        List<string> allowedButNotDurable = [];
+        var inspected = 0;
+
+        foreach (var file in files)
+        {
+            // Stripped BEFORE matching. Defensive rather than currently load-bearing, and the
+            // distinction was measured: no scanned file's prose matches today, because the pattern needs
+            // an opening paren and five comments name these calls without one — in HostsFileService,
+            // UpdateApplier and DnsHostsViewModel. Add a paren to any of them and that file becomes a
+            // reported offender while its code is correct, so the stripping stays.
+            var code = string.Join('\n', File.ReadAllLines(file)
+                .Select(line => CommentTail().Replace(line, string.Empty)));
+
+            inspected++;
+            if (!HandRolledSwap().IsMatch(code)) continue;
+
+            var name = Path.GetFileName(file);
+            if (!stagesItsOwnSwap.Contains(name))
+            {
+                offenders.Add(name);
+                continue;
+            }
+
+            if (!code.Contains("AtomicFile.FlushOntoDevice(", StringComparison.Ordinal)
+                && !code.Contains("Flush(flushToDisk: true)", StringComparison.Ordinal))
+            {
+                allowedButNotDurable.Add(name);
+            }
+        }
+
+        Assert.True(inspected >= 100,
+            $"the swap scan looked at only {inspected} files, so it is no longer looking at the app");
+
+        Assert.True(offenders.Count == 0,
+            "these swap a file into place themselves instead of calling AtomicFile.SwapIntoPlace, which is "
+            + "what flushes the contents onto the device first:\n  " + string.Join("\n  ", offenders));
+
+        Assert.True(allowedButNotDurable.Count == 0,
+            "these are allowed to swap on their own but must still make the contents durable first, either "
+            + "via AtomicFile.FlushOntoDevice or their own Flush(flushToDisk: true):\n  "
+            + string.Join("\n  ", allowedButNotDurable));
+
+        // The pattern has to actually recognise a hand-rolled swap, and has to leave the shared one alone.
+        Assert.Matches(HandRolledSwap(), "File.Move(tmp, _dataPath, overwrite: true);");
+        Assert.Matches(HandRolledSwap(), "File.Replace(tempPath, HostsPath, destinationBackupFileName: null);");
+        Assert.DoesNotMatch(HandRolledSwap(), "AtomicFile.SwapIntoPlace(tempPath, HostsPath);");
+        Assert.DoesNotMatch(HandRolledSwap(), "AtomicFile.MoveIntoPlace(temp, path);");
+
+        // An allowlist that names a file which no longer exists is a rule nobody is checking.
+        var present = files.Select(Path.GetFileName).ToHashSet(StringComparer.Ordinal);
+        Assert.All(stagesItsOwnSwap, name => Assert.Contains(name, present));
+    }
+
+    /// <summary>A file swapped into place by hand, in either of the two forms the app used.</summary>
+    [GeneratedRegex(@"File\.(Move|Replace)\s*\(")]
+    private static partial Regex HandRolledSwap();
 
 }

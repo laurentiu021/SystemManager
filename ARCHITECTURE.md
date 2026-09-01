@@ -566,6 +566,13 @@ Key services:
 Key utility classes that don't fit neatly into Services or ViewModels (not an exhaustive list):
 
 - `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch.
+- `AtomicFile` — the single way every service persists user data. Writes a
+  uniquely-named temp file beside the destination, flushes it onto the device,
+  then swaps it in with one filesystem operation, so an interrupted save leaves
+  either the old file or the new one and never half of each. Load-bearing
+  because the loaders that read these files treat an unparseable file as "no
+  data" at Debug level, so a torn save would erase presets, profiles or history
+  without reporting anything.
 - `BulkObservableCollection<T>` — `ObservableCollection` subclass that
   suppresses change notifications during bulk add/remove for UI performance
   (in `ObservableCollectionExtensions.cs`).

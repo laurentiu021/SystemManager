@@ -6,6 +6,13 @@ using SysManager.Helpers;
 
 namespace SysManager.Models;
 
+/// <summary>
+/// One temperature sensor reading: what it belongs to, what it is called, and how hot it is.
+/// </summary>
+/// <param name="Component">Sensor group — "CPU", "GPU", "Storage". The Temperatures card groups by it.</param>
+/// <param name="SensorName">Display name. For storage this may have been supplied by the sensor library or guessed.</param>
+/// <param name="TemperatureC">Degrees Celsius, or null when the value could not be read.</param>
+/// <param name="RequiresAdmin">True when the value is null only because the app is not running elevated.</param>
 /// <param name="NameIsPlaceholder">
 /// True when the producer could not get a real name for this sensor and invented one. Only a reading so
 /// flagged may have its name replaced later: the storage enricher used to overwrite every storage name by

@@ -41,7 +41,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     [RelayCommand]

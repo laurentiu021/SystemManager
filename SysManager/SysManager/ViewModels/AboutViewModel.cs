@@ -782,7 +782,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
             // Give the applier a moment to start before we exit.
             await Task.Delay(500);
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
         }
         catch (InvalidOperationException ex)
         {
@@ -869,7 +869,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
             // Let the applier start before this process exits.
             await Task.Delay(500);
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
         }
         catch (InvalidOperationException ex)
         {

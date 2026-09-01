@@ -816,7 +816,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     // CQ-M4: Override Dispose to clean up the PerformanceService's PowerShellRunner

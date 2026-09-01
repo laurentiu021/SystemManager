@@ -180,6 +180,18 @@ public partial class MainWindow : Window
         //
         // Ask once, remember the answer, and honour it silently afterwards. The tray icon's
         // own Exit command still quits directly, since that intent is already unambiguous.
+
+        // A programmatic exit has already decided. Application.Shutdown() force-closes windows with
+        // ignoreCancel: true, which still calls this override — so without this early return, clicking
+        // "Run as administrator" (or the tray's Exit) asked the user whether to keep running in the
+        // notification area, and the modal held the single-instance mutex past the incoming elevated
+        // instance's handover wait. Pressing X is now the only caller that can reach the prompt.
+        if (App.ExitRequested)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
         if (Application.Current is not App app || app.TrayService is null)
         {
             base.OnClosing(e);
@@ -237,7 +249,7 @@ public partial class MainWindow : Window
                 // The single-instance mutex stayed held too, so the next launch handed itself over to
                 // an invisible instance and quit; and because the answer above is REMEMBERED, that
                 // repeated on every launch until the user found it in Task Manager.
-                Application.Current?.Shutdown();
+                App.RequestShutdown();
                 base.OnClosing(e);
                 return;
         }

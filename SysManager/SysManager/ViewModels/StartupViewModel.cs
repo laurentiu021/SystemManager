@@ -75,7 +75,7 @@ public sealed partial class StartupViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

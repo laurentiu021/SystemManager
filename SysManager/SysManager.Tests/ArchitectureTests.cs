@@ -5132,4 +5132,142 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"File\.(Move|Replace)\s*\(")]
     private static partial Regex HandRolledSwap();
 
+    [Fact]
+    public void EveryStringMarshallingInterop_BindsTheWideEntryPoint()
+    {
+        // TEST-PROTOCOL Phase 5 asked a human to check this. Nothing enforced it, and the two CodeQL
+        // queries that appeared to cover interop only counted declarations — they never looked at which
+        // export a declaration binds. The two styles fail differently:
+        //
+        //   [LibraryImport] binds the EXACT name, so a bare "SHFileOperation" binds an export that does
+        //   not exist (shell32 ships only ...A and ...W) and throws EntryPointNotFoundException the first
+        //   time the feature runs.
+        //
+        //   [DllImport] probes the bare name and then the W suffix — but only when CharSet is Unicode.
+        //   The default is Ansi, which silently binds the A variant and mangles non-ASCII paths. That is
+        //   the quiet half, and the one a manual review is least likely to catch.
+        //
+        // Measured population when this was written: 41 declarations, 28 LibraryImport and 13 DllImport,
+        // across 17 files, all correct. The guard is preventive, so its positive control below is what
+        // proves it can still fail.
+        //
+        // KNOWN BLIND SPOT, stated rather than papered over: a DllImport that marshals text only through
+        // a struct FIELD and declares no CharSet is invisible here, because nothing in the declaration
+        // mentions text. Covering it needs a classifier for which of our structs carry text, and two
+        // attempts were wrong in opposite directions — "any string token in the body" false-flagged
+        // PropVariant, whose only string is a GetString() return type, and "ignore lines with
+        // parentheses" then missed DEVMODE, DISPLAY_DEVICE and SHFILEOPSTRUCT, whose MarshalAs
+        // attributes share the field's line. A classifier that is wrong either way is worse than a
+        // stated gap: wrong one way it reds correct code, wrong the other it certifies code it never
+        // read. Every text-carrying struct passed to a DllImport today already declares CharSet.Unicode
+        // on that declaration, so the gap is only reachable by REMOVING one.
+        //
+        // Exports with no A/W pair at all. Each is Unicode-only in its own DLL, so a bare name is the
+        // only correct spelling and appending W would break it.
+        string[] noWideVariant =
+        [
+            "SHLoadIndirectString",   // shlwapi: Unicode-only, no A/W pair
+            "RmStartSession",         // rstrtmgr: the whole Restart Manager API is Unicode-only
+            "RmRegisterResources",
+            "RmGetList",
+            "RmEndSession",
+            "SHGetKnownFolderPath",   // shell32: returns a PWSTR, no A/W pair
+        ];
+
+        var root = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        var declarations = 0;
+        var stringMarshalling = 0;
+
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+
+            foreach (var match in InteropDeclaration().Matches(source).Cast<Match>())
+            {
+                declarations++;
+
+                var kind = match.Groups["kind"].Value;
+                var args = match.Groups["args"].Value;
+                var signature = match.Groups["sig"].Value;
+
+                var marshalsText = signature.Contains("string", StringComparison.Ordinal)
+                    || signature.Contains("StringBuilder", StringComparison.Ordinal)
+                    || args.Contains("StringMarshalling", StringComparison.Ordinal)
+                    || args.Contains("CharSet", StringComparison.Ordinal);
+                if (!marshalsText) continue;
+
+                stringMarshalling++;
+
+                var declared = InteropMethodName().Match(signature);
+                var name = declared.Success ? declared.Groups["name"].Value : "<unparsed>";
+                var explicitEntry = EntryPointArgument().Match(args);
+                var bound = explicitEntry.Success ? explicitEntry.Groups["entry"].Value : name;
+
+                if (bound.EndsWith('W')) continue;
+                if (noWideVariant.Contains(bound, StringComparer.Ordinal)) continue;
+
+                // A DllImport with CharSet.Unicode probes the W suffix itself, unless ExactSpelling
+                // turns that off.
+                if (kind == "DllImport"
+                    && args.Contains("CharSet.Unicode", StringComparison.Ordinal)
+                    && !args.Contains("ExactSpelling = true", StringComparison.Ordinal))
+                    continue;
+
+                var line = source[..match.Index].Count(c => c == '\n') + 1;
+                offenders.Add($"{Path.GetFileName(file)}:{line} {kind} {name} binds \"{bound}\"");
+            }
+        }
+
+        // Two floors, because either number falling to nothing means the extraction broke rather than
+        // the code improving. The second one is the one that caught my own first attempt: a regex that
+        // truncates attribute arguments at a nested bracket still finds declarations, it just misreads
+        // every one of them.
+        Assert.True(declarations >= 35,
+            $"only {declarations} interop declarations were found — the extraction is broken, not the "
+            + "code. There were 41 when this guard was written.");
+        Assert.True(stringMarshalling >= 15,
+            $"only {stringMarshalling} of them looked like they marshal text — the extraction is "
+            + "broken. There were 17 when this guard was written.");
+
+        Assert.True(offenders.Count == 0,
+            "these bind an entry point that is not the wide variant. A [LibraryImport] binds the exact "
+            + "name, so a bare A/W function name binds no export at all and throws at first use; a "
+            + "[DllImport] without CharSet.Unicode silently binds the A variant and mangles non-ASCII "
+            + "text. Name the EntryPoint explicitly, ending in W:\n  " + string.Join("\n  ", offenders));
+
+        // Positive control: the guard has to recognise both failure shapes, and leave the correct ones
+        // alone. Without this, a pattern that matches nothing would report a clean codebase.
+        Assert.Matches(InteropDeclaration(),
+            "[LibraryImport(\"shell32.dll\", StringMarshalling = StringMarshalling.Utf16)]\n"
+            + "private static partial int SHFileOperation(string path);");
+        Assert.Matches(EntryPointArgument(), "\"user32.dll\", EntryPoint = \"EnumDisplayDevicesW\"");
+        Assert.Equal("EnumDisplayDevices",
+            InteropMethodName().Match("public static partial bool EnumDisplayDevices(string? lpDevice)")
+                .Groups["name"].Value);
+    }
+
+    /// <summary>
+    /// One P/Invoke declaration: the attribute, any attributes between it and the signature, and the
+    /// signature up to its semicolon. Arguments are matched lazily to the closing <c>)]</c> rather than
+    /// with a negated bracket class, which truncates at the nested bracket of a following attribute.
+    /// </summary>
+    [GeneratedRegex(@"\[(?<kind>LibraryImport|DllImport)\((?<args>[\s\S]*?)\)\]\s*(?:\[[^\]]*\]\s*)*(?<sig>[^;{}]*?);",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex InteropDeclaration();
+
+    /// <summary>The declared method name in a P/Invoke signature.</summary>
+    [GeneratedRegex(@"(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex InteropMethodName();
+
+    /// <summary>An explicit EntryPoint argument, if the declaration names one.</summary>
+    [GeneratedRegex(@"EntryPoint\s*=\s*""(?<entry>[^""]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex EntryPointArgument();
+
 }

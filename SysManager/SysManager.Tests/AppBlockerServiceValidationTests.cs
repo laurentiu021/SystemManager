@@ -63,6 +63,10 @@ public class AppBlockerServiceValidationTests
     // case-insensitive + bare-name (the service appends .exe before the denylist check)
     [InlineData("WinLogon.exe")]
     [InlineData("lsass")]
+    // consent.exe is the UAC consent UI. Blocking it leaves no way to elevate, and unblocking writes to
+    // HKLM, which needs elevation — so the refusal must happen before any registry write, exactly as for
+    // the boot-critical set.
+    [InlineData("consent.exe")]
     public void BlockApp_BootCriticalExecutable_IsRefused(string exeName)
     {
         // Blocking a boot/logon-critical process via IFEO would render Windows

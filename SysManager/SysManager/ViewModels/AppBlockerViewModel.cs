@@ -105,9 +105,14 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
         // elevated — where the same guard refuses again, still without explaining itself.
         BlockStatus = result switch
         {
+            // Covers both denylist classes without claiming the wrong one. "Required to start" was true of
+            // winlogon.exe and false of consent.exe: Windows boots fine without the consent UI, and the
+            // damage only shows up the first time something asks for administrator rights. What both share
+            // is that blocking them removes the means of unblocking them.
             AppBlockerService.BlockResult.BootCritical =>
-                $"{exeName} is required for Windows to start, so SysManager will not block it. "
-                + "Blocking it could leave the computer unable to boot, with no way to undo it from here.",
+                $"{exeName} is a part of Windows that has to keep working, so SysManager will not block it. "
+                + "Blocking it could stop the computer starting, or stop Windows being able to ask for "
+                + "permission — and neither could be undone from here.",
             AppBlockerService.BlockResult.OwnExecutable =>
                 $"{exeName} is SysManager itself. Blocking it would stop SysManager from launching, "
                 + "and unblocking has to be done from inside the app — so this one is refused.",

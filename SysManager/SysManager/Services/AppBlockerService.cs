@@ -34,18 +34,31 @@ public sealed partial class AppBlockerService : IAppBlockerService
         Path.Combine(Environment.SystemDirectory, "SysManager_Blocked.exe");
 
     /// <summary>
-    /// Boot- and logon-critical executables that must never be blocked. An IFEO
-    /// Debugger redirection on these is applied by the kernel/session manager during
-    /// boot and login; blocking one (e.g. winlogon.exe or lsass.exe) causes a fatal
-    /// boot/login failure that this app can no longer launch to undo. Mirrors the
-    /// system-process set in <see cref="IconExtractorService"/>, restricted to the
-    /// processes whose absence breaks startup.
+    /// Executables that must never be blocked, because the block cannot be undone.
     /// </summary>
+    /// <remarks>
+    /// Two distinct hazards, both ending in the same place — a machine the user cannot repair from inside
+    /// this app.
+    /// <para><b>Boot and logon critical.</b> An IFEO Debugger redirection on these is honoured by the
+    /// kernel/session manager during boot and login, so blocking one (winlogon.exe, lsass.exe) causes a
+    /// fatal boot/login failure and the app can never launch again to undo it. Mirrors the system-process
+    /// set in <see cref="IconExtractorService"/>, restricted to the processes whose absence breaks startup.</para>
+    /// <para><b>Elevation critical.</b> <c>consent.exe</c> is the UAC consent UI that the AppInfo service
+    /// launches for every elevation request. Blocking it means no elevation prompt can ever appear again —
+    /// and <see cref="UnblockApp"/> writes to HKLM, which requires elevation, which requires consent.exe.
+    /// The undo depends on the thing it disabled, so recovery means editing the registry offline. Windows
+    /// still boots and logs in fine, which is exactly why this one does not look dangerous and is worth
+    /// naming separately: the machine appears healthy right up to the first time something needs admin.</para>
+    /// <para>The same circular shape is what the self-block guard below exists for. A candidate belongs
+    /// here if blocking it removes the means of unblocking it, whether that happens at boot or at the first
+    /// elevation.</para>
+    /// </remarks>
     private static readonly HashSet<string> BootCriticalExecutables = new(StringComparer.OrdinalIgnoreCase)
     {
         "winlogon.exe", "wininit.exe", "csrss.exe", "smss.exe", "services.exe",
         "lsass.exe", "lsaiso.exe", "fontdrvhost.exe", "dwm.exe", "logonui.exe",
-        "explorer.exe", "svchost.exe", "ctfmon.exe", "userinit.exe", "spoolsv.exe"
+        "explorer.exe", "svchost.exe", "ctfmon.exe", "userinit.exe", "spoolsv.exe",
+        "consent.exe"
     };
 
     private readonly RegistryKey _baseKey;

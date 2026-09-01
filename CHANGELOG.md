@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.14] - 2026-09-01
+
+App Blocker refuses to block one more Windows file. Blocking it was possible, and it would have stopped
+Windows ever asking you for permission again — including the permission needed to undo it.
+
+### Fixed
+- **App Blocker will no longer block the Windows permission prompt.** App Blocker stops a chosen program
+  from starting, and it already refuses the handful of Windows files that the computer needs in order to
+  start at all. Missing from that list was the small Windows program that draws the "Do you want to allow
+  this app to make changes?" box. Nothing stopped you picking it — the file browser accepts it like any
+  other program — and blocking it would have meant Windows could never ask for permission again. Undoing
+  the block needs permission, so there would have been no way back from inside SysManager, or from anywhere
+  else on the running computer. It is now refused like the others.
+- **The refusal message says what is actually true.** That message read "is required for Windows to start …
+  could leave the computer unable to boot", which was right for the files already on the list and wrong for
+  this one: Windows starts perfectly well without the permission prompt, and the damage only shows up the
+  first time something needs it. The message now covers both cases without claiming the wrong one.
+
 ## [1.75.13] - 2026-08-28
 
 SysManager runs PowerShell behind the scenes for some features, and that engine has its own usage

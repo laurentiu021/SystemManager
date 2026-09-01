@@ -69,6 +69,13 @@ Coverage is collected automatically on CI via `coverlet` and uploaded to
 [Codecov](https://codecov.io/gh/laurentiu021/SystemManager). The badge in
 `README.md` reflects the latest `main` branch result.
 
+The same CI job uploads test results to Codecov's test analytics, which reads JUnit XML
+and no other format. `dotnet test` therefore runs two loggers: `trx` for the CI artifact
+and the `Passed! - Failed: N` diagnostic line, and `junit` for the upload. A guard step
+checks the JUnit report exists, has a `<testsuites>` root, and holds at least 4000 test
+cases before the upload runs, because the CLI uploads an unreadable report just as
+happily as a readable one and Codecov never reports the rejection back.
+
 ## Test infrastructure
 
 ### Frameworks
@@ -79,6 +86,7 @@ Coverage is collected automatically on CI via `coverlet` and uploaded to
 | NSubstitute 6.1 | Mocking/substitution for interface-based testing |
 | NetArchTest.Rules 1.3 | Architecture fitness functions — MVVM dependency direction, and guards that pin recurring defect classes |
 | coverlet | Code coverage collection |
+| JunitXml.TestLogger | JUnit XML test report — the only format Codecov's test analytics parses |
 | Xunit.StaFact | STA thread support for WPF-dependent tests |
 
 Package versions are managed centrally in `SysManager/Directory.Packages.props`

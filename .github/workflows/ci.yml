@@ -309,6 +309,7 @@ jobs:
           dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj
           -c Release --no-build
           --logger "trx;LogFileName=unit-results.trx"
+          --logger "junit;LogFileName=unit-results.junit.xml"
           --collect:"XPlat Code Coverage"
           --results-directory TestResults
 
@@ -323,13 +324,45 @@ jobs:
           flags: unittests
           fail_ci_if_error: false
 
+      # Codecov's test-analytics parser reads JUnit XML and nothing else. A TRX is accepted by the CLI,
+      # uploaded, and discarded server-side without a word, which is how the upload step below stayed
+      # green for months while the Tests tab held zero tests (the test-analytics API returned
+      # `{"count":0,"results":[]}`). Nothing checked what was being handed over, so now this does.
+      #
+      # The case floor is the part that matters. Existence and a well-formed root would both pass on an
+      # empty report, so a logger that silently stops recording would look identical to a healthy run.
+      #
+      # Sits after the coverage upload on purpose: a failing step skips the ones that follow, and a
+      # malformed test report is no reason to lose the coverage number too.
+      - name: Verify the JUnit report before uploading it
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          report=TestResults/unit-results.junit.xml
+          if [ ! -s "$report" ]; then
+            echo "::error::$report is missing or empty, so there is nothing Codecov can parse. Written instead:"
+            ls -la TestResults || true
+            exit 1
+          fi
+          if ! grep -q "<testsuites" "$report"; then
+            echo "::error::$report has no <testsuites> root, so Codecov will drop it silently. First 400 bytes:"
+            head -c 400 "$report"
+            exit 1
+          fi
+          cases=$({ grep -o "<testcase " "$report" || true; } | wc -l)
+          echo "JUnit report: $(wc -c < "$report") bytes, $cases test cases."
+          if [ "$cases" -lt 4000 ]; then
+            echo "::error::the JUnit report holds only $cases test cases, under the floor of 4000. Either the run was truncated or the junit logger stopped recording; a report this small would upload cleanly and tell Codecov nothing."
+            exit 1
+          fi
+
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           report_type: test_results
-          files: TestResults/**/unit-results.trx
+          files: TestResults/unit-results.junit.xml
 
       - name: Upload test results
         if: always()

@@ -55,6 +55,32 @@ public sealed partial class LogsViewModel : ViewModelBase
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private FriendlyEventEntry? _selectedEntry;
 
+    /// <summary>
+    /// Fills the detail pane's XML when a row is selected.
+    /// </summary>
+    /// <remarks>
+    /// The reader no longer renders XML for every record — it used to, for up to 5000 rows per refresh, to
+    /// populate a field only the selected row displays. Fetched here instead, once per row: the guard on
+    /// IsNullOrEmpty makes re-selecting a row free, and a row whose event has since rolled out of the log
+    /// simply gets an empty pane rather than an error, which is the honest answer for a ring buffer.
+    /// <para>Fire-and-forget because this hook is void and runs on the UI thread. The await resumes on the
+    /// captured context, so assigning to the bound property is safe, and the captured entry is re-checked
+    /// against the current selection so a fast click-through cannot write one row's XML onto another.</para>
+    /// </remarks>
+    partial void OnSelectedEntryChanged(FriendlyEventEntry? value)
+    {
+        if (value is null || !string.IsNullOrEmpty(value.Xml)) return;
+
+        _ = FillXmlAsync(value);
+    }
+
+    private async Task FillXmlAsync(FriendlyEventEntry entry)
+    {
+        var xml = await _eventLogs.GetXmlAsync(entry.LogName, entry.RecordId).ConfigureAwait(true);
+        if (ReferenceEquals(SelectedEntry, entry))
+            entry.Xml = xml;
+    }
+
     [ObservableProperty] private int _criticalCount;
     [ObservableProperty] private int _errorCount;
     [ObservableProperty] private int _warningCount;
@@ -139,6 +165,37 @@ public sealed partial class LogsViewModel : ViewModelBase
 
     // ---------- Commands ----------
 
+    /// <summary>
+    /// The sentence shown under the list once a load finishes.
+    /// </summary>
+    /// <remarks>
+    /// Distinguishes "nothing matched" from "not allowed to look". The Security log is readable only by an
+    /// elevated process, and the reader used to swallow that refusal and return an empty sequence — so a
+    /// standard user selecting Security saw "Loaded 0 events", then the empty-state's "No events match your
+    /// filters", with no way to know the filters were never applied to anything.
+    /// <para>The partial case is the newer one. A read that ends early because the reader faulted keeps the
+    /// records it already emitted, and the count-only wording announced those as a finished load. Saying
+    /// "Loaded 137 events" about a list that stopped halfway is the same mistake as calling a cancelled scan
+    /// complete, so it now says the list may be incomplete.</para>
+    /// <para>Pure and internal so it can be tested directly: forcing an outcome through the real service is
+    /// not possible from a test, and this is the sentence the user actually reads.</para>
+    /// </remarks>
+    internal static string DescribeLoad(int count, EventLogService.ReadOutcome outcome, string logName)
+        => (count, outcome) switch
+        {
+            (0, EventLogService.ReadOutcome.AccessDenied) =>
+                $"Windows would not let SysManager read the {logName} log. This log requires "
+                + "administrator rights — restart SysManager as administrator to view it.",
+            (0, EventLogService.ReadOutcome.LogNotFound) =>
+                $"The {logName} log does not exist on this machine.",
+            (0, EventLogService.ReadOutcome.Unavailable) =>
+                $"The {logName} log could not be opened. It may be disabled or in use.",
+            (> 0, EventLogService.ReadOutcome.Unavailable) =>
+                $"Loaded {count} events from {logName}, then the log stopped responding — this list is "
+                + "incomplete. Try again to see the rest.",
+            _ => $"Loaded {count} events from {logName}"
+        };
+
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
@@ -199,22 +256,7 @@ public sealed partial class LogsViewModel : ViewModelBase
                 });
             }
 
-            // Distinguish "nothing matched" from "not allowed to look". The Security log is
-            // readable only by an elevated process, and the reader used to swallow that refusal
-            // and return an empty sequence — so a standard user selecting Security saw
-            // "Loaded 0 events", then the empty-state's "No events match your filters", and had
-            // no way to know the filters were never applied to anything.
-            StatusMessage = (Entries.Count, _eventLogs.LastOutcome) switch
-            {
-                (0, EventLogService.ReadOutcome.AccessDenied) =>
-                    $"Windows would not let SysManager read the {SelectedLog} log. This log requires "
-                    + "administrator rights — restart SysManager as administrator to view it.",
-                (0, EventLogService.ReadOutcome.LogNotFound) =>
-                    $"The {SelectedLog} log does not exist on this machine.",
-                (0, EventLogService.ReadOutcome.Unavailable) =>
-                    $"The {SelectedLog} log could not be opened. It may be disabled or in use.",
-                _ => $"Loaded {Entries.Count} events from {SelectedLog}"
-            };
+            StatusMessage = DescribeLoad(Entries.Count, _eventLogs.LastOutcome, SelectedLog);
             LoadWasRefused = Entries.Count == 0 && _eventLogs.LastOutcome != EventLogService.ReadOutcome.Ok;
             UpdateVisibleCount();
         }

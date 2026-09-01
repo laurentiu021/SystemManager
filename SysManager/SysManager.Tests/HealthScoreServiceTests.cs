@@ -124,9 +124,12 @@ public class HealthScoreServiceTests
     // ---------- ComputeUptimeScore ----------
 
     [Fact]
-    public void ComputeUptimeScore_NullSnapshot_Returns100()
+    public void ComputeUptimeScore_NullSnapshot_ScoresUnknownNotPerfect()
     {
-        Assert.Equal(100, HealthScoreService.ComputeUptimeScore(null));
+        // Rewritten with its three siblings. This test required the defect: a snapshot that never arrived is
+        // not evidence of a freshly-rebooted machine, and scoring it perfect is how a machine whose reads all
+        // failed reported full health with no advice.
+        Assert.Equal(HealthScoreService.UnknownComponentScore, HealthScoreService.ComputeUptimeScore(null));
     }
 
     [Fact]
@@ -294,13 +297,6 @@ public class HealthScoreServiceTests
         var disks = new List<DiskHealthReport> { new() { HealthStatus = "Unknown to us" } };
 
         Assert.Equal(80, HealthScoreService.ComputeDiskScore(disks));
-    }
-    [Fact]
-    public void ComputeUptimeScore_NullSnapshot_ScoresUnknownNotPerfect()
-    {
-        // The third arm with the same bug and the only one that had no test at all, which is presumably why
-        // it survived two rewrites of the other two.
-        Assert.Equal(HealthScoreService.UnknownComponentScore, HealthScoreService.ComputeUptimeScore(null));
     }
     [Fact]
     public void UnknownComponentScore_StaysBelowEveryGreenBranch()

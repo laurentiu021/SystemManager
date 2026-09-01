@@ -5,6 +5,7 @@
 using System.IO;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -97,9 +98,10 @@ public sealed class BandwidthHistoryService
             var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
             var kept = Prune(lines, DateTime.Now, TimeSpan.FromDays(RetentionDays));
             if (kept.Count == lines.Length) return;
-            var tmp = _dataPath + ".tmp";
-            await File.WriteAllLinesAsync(tmp, kept, ct).ConfigureAwait(false);
-            File.Move(tmp, _dataPath, overwrite: true);
+            // AtomicFile names the temp, flushes it onto the device and swaps it in. Doing it here
+            // meant a fixed "<path>.tmp" that two writers would share, and no cleanup when the swap
+            // failed, so the temp stayed behind for good.
+            await AtomicFile.WriteAllLinesAsync(_dataPath, kept, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { /* shutdown */ }
         catch (IOException ex) { Log.Debug("Bandwidth history prune failed: {Error}", ex.Message); }

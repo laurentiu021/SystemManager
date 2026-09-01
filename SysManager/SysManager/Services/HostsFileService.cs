@@ -236,17 +236,11 @@ public sealed partial class HostsFileService
         {
             File.WriteAllLines(tempPath, lines);
 
-            // File.Replace preserves the target's existing ACL/owner and attributes
-            // (it copies the security descriptor of the file being replaced onto the
-            // replacement), so the security-hardened system hosts file keeps its DACL.
-            // File.Move(overwrite:true) would instead relink a brand-new inode that
-            // inherits only the directory's default ACL — silently weakening the file.
-            // File.Replace requires the destination to already exist; on the very first
-            // creation there is no descriptor to preserve, so a plain Move is correct.
-            if (File.Exists(HostsPath))
-                File.Replace(tempPath, HostsPath, destinationBackupFileName: null);
-            else
-                File.Move(tempPath, HostsPath, overwrite: false);
+            // AtomicFile.SwapIntoPlace owns the two-branch swap and the flush that has to precede
+            // it, so the ACL rationale is stated once there instead of twice here: File.Replace copies
+            // the replaced file's security descriptor onto the replacement, which is how the hardened
+            // system hosts file keeps its DACL, and it needs the destination to already exist.
+            AtomicFile.SwapIntoPlace(tempPath, HostsPath);
         }
         finally
         {
@@ -280,10 +274,7 @@ public sealed partial class HostsFileService
         {
             File.Copy(BackupPath, tempPath, overwrite: true);
 
-            if (File.Exists(HostsPath))
-                File.Replace(tempPath, HostsPath, destinationBackupFileName: null);
-            else
-                File.Move(tempPath, HostsPath, overwrite: false);
+            AtomicFile.SwapIntoPlace(tempPath, HostsPath);
         }
         finally
         {

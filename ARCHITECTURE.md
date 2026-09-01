@@ -572,7 +572,12 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   either the old file or the new one and never half of each. Load-bearing
   because the loaders that read these files treat an unparseable file as "no
   data" at Debug level, so a torn save would erase presets, profiles or history
-  without reporting anything.
+  without reporting anything. Services that must stage their own temp file — the
+  hosts-file writer, which has to keep the system file's hardened DACL — call
+  `SwapIntoPlace` for the same flush-then-swap, and the update path calls
+  `FlushOntoDevice` alone, because replacing the app's own executable must not
+  inherit the outgoing build's attributes. A fitness function asserts nobody
+  swaps a file into place without one of the two.
 - `BulkObservableCollection<T>` — `ObservableCollection` subclass that
   suppresses change notifications during bulk add/remove for UI performance
   (in `ObservableCollectionExtensions.cs`).

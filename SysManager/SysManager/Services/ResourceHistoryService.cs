@@ -251,12 +251,11 @@ public sealed class ResourceHistoryService : IDisposable
             var kept = Prune(lines, DateTime.Now, TimeSpan.FromDays(_retentionDays));
             // Only rewrite when something actually changed, to avoid needless disk churn.
             if (kept.Count == lines.Length) return;
-            // Atomic rewrite: write to a temp file in the same directory, then swap it in
-            // with a single File.Move. A crash mid-write can then only leave a stray .tmp
-            // (never read — the sampler reads _dataPath), never a truncated history file.
-            var tmp = _dataPath + ".tmp";
-            await File.WriteAllLinesAsync(tmp, kept, ct).ConfigureAwait(false);
-            File.Move(tmp, _dataPath, overwrite: true);
+            // Atomic rewrite through AtomicFile: it names the temp, flushes it onto the device and
+            // swaps it in, so an interrupted prune leaves the old history or the new one. Doing it here
+            // covered a crash but not a power cut — the swap became durable while the contents were
+            // still in the write-back cache — and the fixed "<path>.tmp" was never cleaned up.
+            await AtomicFile.WriteAllLinesAsync(_dataPath, kept, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { /* shutdown */ }
         catch (IOException ex) { Log.Debug("Resource history prune failed: {Error}", ex.Message); }

@@ -100,14 +100,33 @@ internal static class AtomicFile
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Writes <paramref name="lines"/> to <paramref name="path"/> atomically, one line each followed by a
+    /// newline, matching <see cref="File.WriteAllLinesAsync(string, IEnumerable{string}, CancellationToken)"/>
+    /// byte for byte.
+    /// </summary>
+    /// <remarks>
+    /// Exists so the history writers, which prune line-based files, do not have to name a temp, flush it and
+    /// swap it themselves. Both did, both used a fixed <c>"&lt;path&gt;.tmp"</c>, and neither deleted it when
+    /// the swap failed — so the temp handling had to move in here rather than merely be corrected in place.
+    /// </remarks>
+    public static async Task WriteAllLinesAsync(
+        string path, IEnumerable<string> lines, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(lines);
+
+        await WriteAsync(path, temp => File.WriteAllLinesAsync(temp, lines, ct))
+            .ConfigureAwait(false);
+    }
+
     private static void Write(string path, Action<string> writeTemp)
     {
         var temp = PrepareTempPath(path);
         try
         {
             writeTemp(temp);
-            FlushToDisk(temp);
-            Swap(temp, path);
+            SwapIntoPlace(temp, path);
         }
         finally
         {
@@ -121,8 +140,7 @@ internal static class AtomicFile
         try
         {
             await writeTemp(temp).ConfigureAwait(false);
-            FlushToDisk(temp);
-            Swap(temp, path);
+            SwapIntoPlace(temp, path);
         }
         finally
         {
@@ -176,7 +194,7 @@ internal static class AtomicFile
     /// and the swap proceeds. The result is then exactly the behaviour that shipped before this existed,
     /// never a new exception.</para>
     /// </remarks>
-    private static void FlushToDisk(string temp)
+    internal static void FlushOntoDevice(string temp)
     {
         try
         {
@@ -191,6 +209,21 @@ internal static class AtomicFile
         {
             Log.Debug(ex, "Could not open {Temp} to flush it; swapping it in regardless", temp);
         }
+    }
+
+    /// <summary>
+    /// Makes <paramref name="temp"/> durable and then makes it <paramref name="path"/>, in that order.
+    /// </summary>
+    /// <remarks>
+    /// The one durable swap in the app, for the services that stage their own temp file rather than handing
+    /// contents to <see cref="WriteAllText(string, string)"/> — the hosts file, which must keep its own
+    /// hardened DACL, and the history writers. Before this existed each of them repeated the two-branch
+    /// swap inline, one of them repeated its six-line rationale comment too, and none of them flushed.
+    /// </remarks>
+    internal static void SwapIntoPlace(string temp, string path)
+    {
+        FlushOntoDevice(temp);
+        Swap(temp, path);
     }
 
     private static void Swap(string temp, string path)

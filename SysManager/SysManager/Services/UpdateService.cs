@@ -208,8 +208,12 @@ public sealed class UpdateService
                 progress?.Report((read, total));
             }
 
-            // Flush before hashing.
+            // Flush before hashing — and onto the device, not merely out of the managed buffer, so
+            // the move below cannot become durable while the download is still in the write-back cache.
+            // The stored hash would catch a torn file on reuse, so this is the mildest of these cases,
+            // but it costs one line.
             await file.FlushAsync(ct).ConfigureAwait(false);
+            file.Flush(flushToDisk: true);
             file.Close();
 
             // Compute SHA-256 on the completed temp file.

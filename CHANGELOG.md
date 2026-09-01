@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.24] - 2026-09-01
+
+The previous release stopped a power cut from emptying a file SysManager had just saved. That fix covered the
+shared code every settings file goes through — and five more places had never used it, including the one that
+replaces SysManager's own program file when it updates itself.
+
+### Fixed
+- **An interrupted update can no longer leave SysManager unable to start.** Installing an update copies the
+  new version into place and then swaps it with the old one. Windows reports the copy as finished once it has
+  the data in memory, so losing power in between could leave the program file present and empty — and an
+  empty program file does not open at all, with no obvious way back. SysManager now waits for the drive to
+  confirm it has the new version before the swap.
+- **The hosts-file editor and both history files got the same protection.** Saving your hosts entries,
+  restoring the backup of them, and trimming the bandwidth or resource history all wrote a replacement file
+  and swapped it in, and none of them waited for the drive. All four now go through the same code the rest of
+  the app uses, which also means the hosts file keeps its own Windows permissions exactly as before.
+- **Trimming the history files no longer leaves a leftover file behind.** Both used the same fixed name for
+  the file they write before swapping, and neither deleted it if the swap failed, so a failure left it there
+  for good. They no longer name it themselves.
+- **A downloaded update is confirmed on the drive before it is stored.** The mildest of the five, because a
+  damaged download is already caught by its checksum when it is next used, but it is the same one-line
+  omission.
+
 ## [1.75.23] - 2026-09-01
 
 If the power went out or the machine was reset while SysManager was saving, a file it had just saved could come

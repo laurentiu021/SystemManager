@@ -7,6 +7,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using Serilog;
+using SysManager.Helpers;
 
 [assembly: InternalsVisibleTo("SysManager.Tests")]
 
@@ -295,6 +296,13 @@ internal static class UpdateApplier
                 // regressions. Best-effort: failing to retain a copy must never abort an update that
                 // is otherwise fine, so PreserveCurrentBuild swallows its own errors.
                 PreserveCurrentBuild(targetExe, updatesDir);
+                // File.Copy reports success once Windows has the bytes in memory. The move that follows
+                // is a metadata change, so a power cut between the two can leave targetExe — the app's
+                // own executable — present and zero-length, which means it will not start at all.
+                // Deliberately NOT AtomicFile.SwapIntoPlace: that replaces via File.Replace, which
+                // copies the outgoing file's attributes onto the replacement, and inheriting the old
+                // build's zone identifier and creation time is not a change worth making here.
+                AtomicFile.FlushOntoDevice(staging);
                 File.Move(staging, targetExe, overwrite: true);
                 return true;
             }

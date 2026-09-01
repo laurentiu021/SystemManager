@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.22] - 2026-09-01
+
+Pressing "Run as administrator" could ask you whether to keep SysManager running in the notification area, and
+then not restart with administrator rights at all. The same thing could happen when quitting from the
+notification-area icon.
+
+### Fixed
+- **"Run as administrator" now actually restarts SysManager with administrator rights.** Every tab that needs
+  administrator rights offers that button, and it works by starting a new copy of SysManager and closing the
+  current one. Closing it went through the same path as pressing the X button — so if you had never told
+  SysManager what X should do, it stopped to ask whether to keep running in the notification area. That
+  question is the right one when you press X and completely wrong here, and while it sat on screen the new
+  copy was waiting for the old one to finish letting go. It gave up after a few seconds. The result was a
+  confusing question followed by nothing happening. The question is now only asked when you press X, which is
+  the only time it makes sense.
+- **Quitting from the notification-area icon no longer asks whether to keep running in the notification area.**
+  The same cause, and the same nonsensical question — you had just told it to quit.
+
 ## [1.75.21] - 2026-09-01
 
 A drive's temperature could be shown under a different drive's name, which is worse than showing no name at

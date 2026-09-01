@@ -600,7 +600,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     // ── Cleanup ──────────────────────────────────────────────────────────

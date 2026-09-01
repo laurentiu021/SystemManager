@@ -54,7 +54,7 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     /// <summary>Re-reads the baseline and live state and rebuilds both the watched list and the drifts.</summary>

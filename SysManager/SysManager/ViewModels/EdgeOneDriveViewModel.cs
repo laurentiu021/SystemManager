@@ -86,7 +86,7 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

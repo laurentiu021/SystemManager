@@ -922,7 +922,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     // ── Tune-Up (preserved from original) ─────────────────────────────────

@@ -242,7 +242,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     // Gated on NotBusy like the other runner-driven commands: CheckModule and
@@ -514,7 +514,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         if (!AdminHelper.IsElevated())
         {
             StatusMessage = "Admin required. Relaunching elevated...";
-            if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current?.Shutdown();
+            if (AdminHelper.RelaunchAsAdmin()) App.RequestShutdown();
             return;
         }
 

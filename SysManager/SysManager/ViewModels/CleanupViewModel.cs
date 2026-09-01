@@ -228,7 +228,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            System.Windows.Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     [RelayCommand]
@@ -369,7 +369,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
                 StatusMessage = "SFC cancelled — admin privileges required.";
                 return;
             }
-            if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current?.Shutdown();
+            if (AdminHelper.RelaunchAsAdmin()) App.RequestShutdown();
             return;
         }
 
@@ -476,7 +476,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
                 StatusMessage = "DISM cancelled — admin privileges required.";
                 return;
             }
-            if (AdminHelper.RelaunchAsAdmin()) System.Windows.Application.Current?.Shutdown();
+            if (AdminHelper.RelaunchAsAdmin()) App.RequestShutdown();
             return;
         }
 

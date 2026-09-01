@@ -40,7 +40,7 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     private void RelaunchAsAdmin()
     {
         if (AdminHelper.RelaunchAsAdmin())
-            Application.Current?.Shutdown();
+            App.RequestShutdown();
     }
 
     private async Task RefreshListAsync()

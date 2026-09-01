@@ -9,7 +9,8 @@ namespace SysManager.Helpers;
 
 /// <summary>
 /// Resolves bare Windows tool names (sfc.exe, netsh.exe, reg.exe, schtasks.exe, powercfg.exe,
-/// powershell.exe, …) to their full trusted paths under %SystemRoot%\System32.
+/// powershell.exe, explorer.exe, …) to their full trusted paths under %SystemRoot%\System32 or
+/// %SystemRoot% itself.
 /// <para>
 /// Launching a system tool by bare filename with <c>UseShellExecute=false</c> lets the Win32
 /// <c>CreateProcess</c> search order look in the CALLING process's own directory FIRST. SysManager
@@ -17,6 +18,14 @@ namespace SysManager.Helpers;
 /// sometimes elevated — so an attacker-planted <c>netsh.exe</c> / <c>reg.exe</c> next to it would be
 /// executed with administrator rights (binary-planting / local privilege escalation). Pinning the
 /// full System32 path closes that vector while leaving behaviour otherwise identical.
+/// </para>
+/// <para>
+/// <c>UseShellExecute=true</c> needs the same pinning for a different reason. <c>ShellExecuteEx</c>
+/// resolves an unrooted name through <c>HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths</c>
+/// and then PATH. HKCU needs no elevation to write, and per-user tool installs routinely prepend
+/// user-writable directories to PATH, so a bare name is whatever those lookups answer. Every launch in
+/// this app therefore goes through here regardless of which mechanism starts the process; a test
+/// enforces it.
 /// </para>
 /// </summary>
 internal static class SystemPaths
@@ -70,6 +79,23 @@ internal static class SystemPaths
         foreach (var direct in candidates.Select(name => Path.Combine(systemDirectory, name)))
         {
             if (fileExists(direct)) return direct;
+        }
+
+        // Then the Windows directory itself. explorer.exe lives there rather than in System32, so a
+        // System32-only probe returned the bare name unchanged — which looks like resolution and provides
+        // no protection whatsoever. %WINDIR% carries the same trust as System32: writable by
+        // administrators and TrustedInstaller only.
+        //
+        // Derived as the parent of systemDirectory rather than taken as another parameter, so the existing
+        // injection seam and every test written against it keep working unchanged. %WINDIR%\System32's
+        // parent is %WINDIR% on every supported Windows, and for an injected fake directory the parent is
+        // that fake's parent, which is the consistent answer.
+        if (Path.GetDirectoryName(systemDirectory) is { Length: > 0 } windowsDirectory)
+        {
+            foreach (var direct in candidates.Select(name => Path.Combine(windowsDirectory, name)))
+            {
+                if (fileExists(direct)) return direct;
+            }
         }
 
         return fileName;

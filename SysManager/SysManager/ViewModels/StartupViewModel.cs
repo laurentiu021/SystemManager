@@ -217,7 +217,7 @@ public sealed partial class StartupViewModel : ViewModelBase
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = "explorer.exe",
+                    FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"),
                     Arguments = $"/select,\"{path}\"",
                     UseShellExecute = true
                 })?.Dispose();

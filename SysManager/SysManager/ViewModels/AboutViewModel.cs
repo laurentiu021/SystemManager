@@ -894,7 +894,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         var dir = Path.GetDirectoryName(DownloadedPath);
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
-            try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{DownloadedPath}\"") { UseShellExecute = true })?.Dispose(); }
+            try { Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{DownloadedPath}\"") { UseShellExecute = true })?.Dispose(); }
             catch (InvalidOperationException) { /* explorer launch is best-effort */ }
             catch (System.ComponentModel.Win32Exception) { /* explorer launch is best-effort */ }
         }

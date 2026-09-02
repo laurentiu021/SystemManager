@@ -17,6 +17,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class UninstallerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly UninstallerService _service;
     private readonly EtaCalculator _uninstallEta = new();
     private readonly Action<PowerShellLine> _lineHandler;

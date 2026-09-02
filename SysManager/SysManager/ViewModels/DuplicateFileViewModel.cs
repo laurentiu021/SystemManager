@@ -26,6 +26,10 @@ namespace SysManager.ViewModels;
 /// </remarks>
 public sealed partial class DuplicateFileViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelScanCommand : null;
+
     private readonly DuplicateFileService _service;
     private CancellationTokenSource? _cts;
 

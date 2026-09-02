@@ -19,6 +19,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class TaskSchedulerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly TaskSchedulerService _service;
     private List<ScheduledTaskInfo> _all = [];
 

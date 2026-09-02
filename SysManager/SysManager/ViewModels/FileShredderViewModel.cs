@@ -19,6 +19,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class FileShredderViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsShredding ? CancelCommand : null;
+
     private readonly FileShredderService _service;
     private CancellationTokenSource? _cts;
 

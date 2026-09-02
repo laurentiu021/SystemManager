@@ -22,6 +22,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class SystemFixesViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly SystemFixService _service;
     private CancellationTokenSource? _cts;
 

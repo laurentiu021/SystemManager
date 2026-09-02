@@ -5,6 +5,7 @@
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using NetArchTest.Rules;
 using SysManager.Services;
 
@@ -989,6 +990,99 @@ public partial class ArchitectureTests
     /// </summary>
     [GeneratedRegex(@"""([A-Za-z0-9][A-Za-z0-9._-]*\.json)""", RegexOptions.Compiled)]
     private static partial Regex JsonStateFile();
+
+    /// <summary>
+    /// Every tab with a Cancel button must let Escape reach it, and must pair Escape with the SAME busy
+    /// flag its own Cancel button is shown by.
+    /// </summary>
+    /// <remarks>
+    /// The app answers "is something running?" five different ways: <c>IsBusy</c> on twelve tabs, and
+    /// <c>IsShredding</c>, <c>IsScanning</c>, <c>IsHttpTesting</c> and <c>IsOoklaTesting</c> on the rest.
+    /// A shell that tested <c>IsBusy</c> would silently skip four tabs, and the pairing is invisible to
+    /// the compiler — nothing stops a view model gating Escape on a flag that has nothing to do with the
+    /// operation its Cancel button stops.
+    /// <para>So the contract is derived from the VIEW, which is the one place the intended pairing is
+    /// already stated: the element that carries <c>Command="{Binding Cancel…}"</c> also carries the
+    /// <c>Visibility</c> binding that decides when that button appears. The view model's
+    /// <c>EscapeCancel</c> override must name both.</para>
+    /// <para>Parsed with XDocument rather than a regex over the text, so "the same element" is a fact of
+    /// the tree instead of a guess about how close two attributes happen to be.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand()
+    {
+        var app = FindAppProjectDir();
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        var binding = new Regex(@"^\{Binding\s+(?<name>\w+)", RegexOptions.CultureInvariant);
+
+        var offenders = new List<string>();
+        var pairs = 0;
+
+        foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var document = XDocument.Load(view);
+
+            foreach (var element in document.Descendants())
+            {
+                var command = binding.Match((string?)element.Attribute("Command") ?? string.Empty);
+                var visibility = binding.Match((string?)element.Attribute("Visibility") ?? string.Empty);
+                if (!command.Success || !visibility.Success) continue;
+
+                var commandName = command.Groups["name"].Value;
+                if (!commandName.StartsWith("Cancel", StringComparison.Ordinal)) continue;
+
+                var flag = visibility.Groups["name"].Value;
+                pairs++;
+
+                var viewName = Path.GetFileNameWithoutExtension(view);
+                var vmPath = Path.Combine(app, "ViewModels", viewName + "Model.cs");
+                if (!File.Exists(vmPath))
+                {
+                    offenders.Add($"{viewName}.xaml binds {commandName} but {viewName}Model.cs does not exist");
+                    continue;
+                }
+
+                // Comments stripped: several view models explain the Escape wiring in prose, and a
+                // Contains against the raw text would be satisfied by the explanation of an override
+                // that had been deleted.
+                var vm = string.Join('\n', File.ReadAllLines(vmPath)
+                    .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+                var overrideAt = vm.IndexOf("override IRelayCommand? EscapeCancel", StringComparison.Ordinal);
+                if (overrideAt < 0)
+                {
+                    offenders.Add($"{viewName}Model has no EscapeCancel override, so Escape does nothing "
+                                  + $"while {flag} is true and {commandName} is the button on screen");
+                    continue;
+                }
+
+                // The override's own expression, not the whole file: another member could mention the
+                // command and make this pass while Escape was gated on something unrelated.
+                var end = vm.IndexOf(';', overrideAt);
+                var expression = end > overrideAt ? vm[overrideAt..end] : vm[overrideAt..];
+
+                if (!expression.Contains(commandName, StringComparison.Ordinal))
+                    offenders.Add($"{viewName}Model gates Escape on something other than {commandName}, "
+                                  + "which is the command its own Cancel button runs");
+                if (!expression.Contains(flag, StringComparison.Ordinal))
+                    offenders.Add($"{viewName}Model gates Escape on a different flag than {flag}, which is "
+                                  + "what shows its Cancel button — so Escape and the button disagree "
+                                  + "about when there is something to stop");
+            }
+        }
+
+        // Vacuity floor: twelve tabs bind Cancel with a visibility flag today. A parse that stopped
+        // finding them would report success having checked nothing.
+        Assert.True(pairs >= 12,
+            $"only {pairs} Cancel-with-visibility bindings were found across Views/ — the parse is "
+            + "broken, not the views.");
+
+        Assert.True(offenders.Count == 0,
+            "Escape must stop the operation the tab's own Cancel button stops, gated on the same flag:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({pairs} Cancel bindings checked)");
+    }
 
     /// <summary>
     /// Every issue template must apply at least one label, and every label it names must be one this

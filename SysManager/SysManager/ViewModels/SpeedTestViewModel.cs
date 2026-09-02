@@ -16,6 +16,10 @@ namespace SysManager.ViewModels;
 /// <summary>HTTP + Ookla speed tests with persistent history.</summary>
 public sealed partial class SpeedTestViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        (IsOoklaTesting || IsHttpTesting) ? CancelSpeedCommand : null;
+
     public NetworkSharedState Shared { get; }
     private readonly SpeedTestHistoryService _history;
     private readonly EtaCalculator _eta = new();

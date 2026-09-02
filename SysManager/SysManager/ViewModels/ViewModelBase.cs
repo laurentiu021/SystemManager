@@ -3,6 +3,7 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Serilog;
 
 namespace SysManager.ViewModels;
@@ -25,6 +26,21 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     /// false while the override was releasing everything — exactly the window that needs guarding.</para>
     /// </summary>
     protected bool IsDisposed { get; private set; }
+
+    /// <summary>
+    /// The command Escape should run on this tab, or <c>null</c> when there is nothing to stop.
+    /// </summary>
+    /// <remarks>
+    /// One property rather than a "can cancel" flag beside a command, because the two must not be
+    /// separable. The app answers "is something running?" five different ways — <c>IsBusy</c> on twelve
+    /// tabs, and <c>IsShredding</c>, <c>IsScanning</c>, <c>IsHttpTesting</c> and <c>IsOoklaTesting</c> on
+    /// the rest — so a shell that tested <c>IsBusy</c> would silently skip four of them. Returning the
+    /// command only while busy puts the flag and the command in one expression, in the view model that
+    /// owns both.
+    /// <para>Defaults to null, which is the correct default rather than a gap: a tab with nothing to
+    /// cancel must not swallow the key. Escape then falls through to whatever else would handle it.</para>
+    /// </remarks>
+    protected internal virtual IRelayCommand? EscapeCancel => null;
 
     /// <summary>
     /// Completes when the constructor's <see cref="InitializeAsync"/> work has finished

@@ -20,6 +20,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class BrowserCleanerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly BrowserCleanerService _service;
     private CancellationTokenSource? _cts;
 

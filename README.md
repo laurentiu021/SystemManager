@@ -169,6 +169,10 @@ within a table or a row of filter chips. In the sidebar, `Enter` also opens the 
 on, the way it opens a folder in File Explorer. Opening the appearance panel moves focus into it, `Tab`
 cycles the themes inside it, and `Escape` closes it and puts focus back on the button you opened it from.
 
+`Escape` also stops whatever the open tab is doing — a disk scan, a cleanup, a speed test — on all sixteen
+tabs that can be cancelled. It only acts while something is running, and only after the control you are on
+has had its own chance to use the key, so it still closes a drop-down or undoes a text edit first.
+
 The focus outline is deliberately two thin lines of opposite shade — one light, one dark — rather
 than a single accent-coloured ring. A single colour cannot be visible everywhere: it has to show up
 on a purple primary button, a red delete button, a grey secondary button and a plain card, and any

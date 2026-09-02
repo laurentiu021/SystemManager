@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.0] - 2026-09-02
+
+Pressing Escape now stops whatever the current tab is doing — a disk scan, a cleanup, a speed test. Until
+now Escape did nothing anywhere in the app, and the Cancel button only appears once an operation is
+already running, so if you were not using a mouse there was no reliable way to stop one.
+
+### Added
+- **Escape stops the operation on the open tab.** Sixteen tabs can cancel what they are doing, and the
+  Cancel button for each is deliberately hidden until there is something to cancel — which is right for
+  the mouse, but meant the button appeared in the middle of the keyboard order, at an unpredictable place,
+  while the scan was already running. Escape now does it directly, on every one of those tabs. It only
+  acts while something is actually running, and only after the control you are on has had its own chance
+  to use the key, so it does not interfere with closing a drop-down or undoing an edit in a text box.
+  Stopping is always the safe direction — nothing is left half-changed, because each of these operations
+  was already built to be stoppable.
+
 ## [1.75.32] - 2026-09-02
 
 If you opened the appearance panel with the keyboard, you landed nowhere: the panel appeared but the

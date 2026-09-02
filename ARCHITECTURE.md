@@ -588,6 +588,13 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 - `GatewayHelper` — default gateway IP lookup for network tabs.
 - `EtaCalculator` — estimates time remaining for long-running operations.
 - `KnownFolders` — resolves Windows Known Folder paths via shell API.
+- `SystemPaths` — the one place Windows locations are resolved. Turns a bare tool
+  name into a full System32 path so nothing launches by name off the PATH, and
+  owns the two temp exclusions every wholesale %TEMP% sweep must honour:
+  `BundleExtractionRoot`, the shared folder single-file apps unpack into, and
+  `OwnExtractionDirectory`, this build's own leaf under it. Deleting either
+  breaks a running program's later lazy loads, which no in-use check can
+  prevent because nothing holds those files open yet.
 - `RecycleBinHelper` — empties the Recycle Bin via the shell API; shared by Deep
   Cleanup and the One-Click Tune-Up so the interop has one source of truth.
 - `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.

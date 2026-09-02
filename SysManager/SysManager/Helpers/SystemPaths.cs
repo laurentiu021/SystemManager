@@ -187,6 +187,43 @@ internal static class SystemPaths
     internal static string? OwnExtractionDirectory { get; } = Normalise(AppContext.BaseDirectory);
 
     /// <summary>
+    /// The root the .NET host extracts single-file bundles into — every app's, not just this one's.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="OwnExtractionDirectory"/> is one LEAF of this root: <c>&lt;root&gt;\&lt;app&gt;\&lt;hash&gt;</c>.
+    /// Excluding only the leaf spared this app's unpacked libraries and left every sibling exposed, so a
+    /// temp sweep deleted the extracted native libraries of any other single-file .NET app the user had
+    /// running — inflicting on them precisely the failure documented on <see cref="OwnExtractionDirectory"/>,
+    /// including the "extracted but not yet loaded" case, which no in-use check can see because nothing
+    /// holds those files open yet.
+    /// <para>Resolved through <see cref="ResolveBundleExtractionRoot"/> so both branches are testable: a
+    /// property computed at type initialisation cannot be re-pointed by a test.</para>
+    /// </remarks>
+    internal static string? BundleExtractionRoot { get; } = ResolveBundleExtractionRoot(
+        Environment.GetEnvironmentVariable("DOTNET_BUNDLE_EXTRACT_BASE_DIR"), Path.GetTempPath());
+
+    /// <summary>
+    /// Where single-file bundles are extracted: <paramref name="overrideDir"/> when the host has been
+    /// redirected with <c>DOTNET_BUNDLE_EXTRACT_BASE_DIR</c>, otherwise <c>&lt;temp&gt;\.net</c>.
+    /// </summary>
+    internal static string? ResolveBundleExtractionRoot(string? overrideDir, string tempPath) =>
+        Normalise(string.IsNullOrWhiteSpace(overrideDir) ? Path.Join(tempPath, ".net") : overrideDir);
+
+    /// <summary>
+    /// True when <paramref name="candidate"/> sits in ANY of <paramref name="subtrees"/>. Nulls and blanks
+    /// among them exclude nothing, so a caller can pass a value that may not resolve on this machine.
+    /// </summary>
+    internal static bool IsInsideAnySubtree(string candidate, params string?[] subtrees)
+    {
+        foreach (var subtree in subtrees)
+        {
+            if (IsInsideSubtree(candidate, subtree)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// True when <paramref name="candidate"/> IS <paramref name="subtree"/> or sits inside it.
     /// Compared on a directory boundary, so a sibling such as <c>…\SysManagerX</c> is never mistaken
     /// for <c>…\SysManager</c> — the same boundary rule the system-root checks use elsewhere.

@@ -73,6 +73,12 @@ public sealed class ProfileService
         ("volume", "Volume presets", "volume-presets.json", Base.Local, null),   // VolumePresetService → Local
         ("closebehaviour", "Close-button behaviour", "close-preference.json", Base.Local, null), // ClosePreferenceService → Local
         ("standby", "Standby-memory preference", "standby-preference.json", Base.Local, null), // StandbyPreferenceService → Local
+        // AppIconService → Local. This is a consent bit, not a cache: it records whether the Bulk
+        // Installer may fetch icons from the web, and it defaults to off. It was the only user
+        // preference the app persists that a profile did not carry, so exporting on one PC and
+        // importing on another silently reset the choice — the same shape as "updatecheck", which is
+        // also a network-consent preference and has always been carried.
+        ("appicons", "App-icon fetching", "icon-fetch.json", Base.Local, null),
     ];
 
     /// <summary>

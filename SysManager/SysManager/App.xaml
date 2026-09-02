@@ -226,6 +226,7 @@
                                               Cursor="Hand" Padding="0" Margin="0"
                                               Focusable="True"
                                               KeyboardNavigation.IsTabStop="True"
+                                              KeyboardNavigation.AcceptsReturn="True"
                                               AutomationProperties.AutomationId="{Binding Id, StringFormat={}{0}-header}"
                                               AutomationProperties.Name="{Binding Label}">
                                     <ToggleButton.Template>

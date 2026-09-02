@@ -24,6 +24,11 @@
             <Setter Property="Padding" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <!-- WPF's ButtonBase activates on Space, and on Enter ONLY when this attached property is
+                 set. In a list of navigation rows Enter is the key people reach for first — it is what
+                 opens a folder in Explorer and an entry in the Start menu — so without this the sidebar
+                 answered Space and silently ignored Enter. -->
+            <Setter Property="KeyboardNavigation.AcceptsReturn" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -381,8 +386,10 @@
                         </StackPanel>
                         <!-- Theme button — a Border rather than a Button (to keep the compact
                              28x28 chip visual), so it needs explicit accessibility: a UIA name,
-                             a tab stop, keyboard focus, and Enter/Space activation, matching what
-                             a real Button would give screen-reader and keyboard users. -->
+                             a tab stop, keyboard focus, and Enter/Space activation.
+                             A Button would supply the peer and Space, but NOT Enter: ButtonBase
+                             honours Enter only where KeyboardNavigation.AcceptsReturn is set, which
+                             is why the nav rows set it explicitly. -->
                         <Border Grid.Column="1" x:Name="ThemeBtn" Width="28" Height="28" CornerRadius="8"
                                 Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border1}"
                                 BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="ThemeBtn_Click"

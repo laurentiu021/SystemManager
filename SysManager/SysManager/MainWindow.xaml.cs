@@ -266,8 +266,9 @@ public partial class MainWindow : Window
 
     private void ThemeBtn_Click(object sender, MouseButtonEventArgs e) => ToggleThemePopup();
 
-    // Enter/Space activate the theme chip for keyboard users, matching a Button's behaviour
-    // (the chip is a Border, so it does not get this for free).
+    // Enter/Space activate the theme chip for keyboard users. The chip is a Border, so it gets
+    // neither for free — and a Button would only have given it Space, since ButtonBase treats Enter
+    // as a click only where KeyboardNavigation.AcceptsReturn is set.
     private void ThemeBtn_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key is Key.Enter or Key.Space)

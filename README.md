@@ -165,7 +165,8 @@ changes at all.
 ### Keyboard navigation
 The app is operable without a mouse, and the control you are on is always visible. `Tab` moves
 forward, `Shift+Tab` back, `Space` presses a button or ticks a checkbox, and the arrow keys move
-within a table or a row of filter chips.
+within a table or a row of filter chips. In the sidebar, `Enter` also opens the tab or group you are
+on, the way it opens a folder in File Explorer.
 
 The focus outline is deliberately two thin lines of opposite shade — one light, one dark — rather
 than a single accent-coloured ring. A single colour cannot be visible everywhere: it has to show up

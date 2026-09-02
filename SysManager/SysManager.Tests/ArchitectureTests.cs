@@ -5270,4 +5270,82 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"EntryPoint\s*=\s*""(?<entry>[^""]+)""", RegexOptions.CultureInvariant)]
     private static partial Regex EntryPointArgument();
 
+    [Fact]
+    public void NoViewModelDispose_BlocksOnAWaitItCannotWin()
+    {
+        // PerformanceViewModel.Dispose used to block on _snapshotGate.Wait(TimeSpan.FromSeconds(2)).
+        // Dispose runs on the UI thread — MainWindow.OnClosed and OnApplicationExit, and the container
+        // disposal in App.OnExit — and every gate-held await in EnsureSnapshotAsync captures the UI
+        // SynchronizationContext, so its finally { ReleaseSnapshotGate(); } can only run as a dispatcher
+        // continuation. Blocking the dispatcher does not wait for the holder to finish; it guarantees the
+        // holder cannot finish. The two seconds were always burned in full, the wait always returned
+        // false, and the snapshot clear it was protecting was skipped in exactly the case it existed for.
+        // Closing the window during an Apply froze the window for two seconds and achieved nothing.
+        //
+        // So a timeout is not "safer" than Wait(0) here, it is strictly worse, and a bare Wait() is the
+        // same deadlock with no exit. Wait(0) is the only defensible form: it clears whenever the gate is
+        // free, which is nearly always, and gives up instantly when it is not.
+        //
+        // Scoped to view models because that is where the dispatcher is, and the scope was measured. The
+        // four Task.Wait calls in Services all wait on a task started with Task.Run, which runs with no
+        // SynchronizationContext, so their continuations resume on the pool and no dispatcher is
+        // involved. GamingProfileService's bounded gate wait is sound for the reason its own source
+        // states: all three of its acquisitions use ConfigureAwait(false).
+        var dir = Path.Combine(FindRepoRoot(), "SysManager", "SysManager", "ViewModels");
+        var files = Directory.GetFiles(dir, "*.cs");
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        var withDispose = 0;
+
+        foreach (var file in files)
+        {
+            // Comments stripped before matching: the explanation above this guard's own subject lives in
+            // PerformanceViewModel's Dispose and discusses timeouts at length.
+            var code = string.Join('\n', File.ReadAllLines(file)
+                .Select(line => CommentTail().Replace(line, string.Empty)));
+
+            var start = code.IndexOf("protected override void Dispose(bool", StringComparison.Ordinal);
+            if (start < 0) continue;
+
+            withDispose++;
+
+            foreach (var match in BlockingWaitInDispose().Matches(code[start..]).Cast<Match>())
+            {
+                var line = code[..(start + match.Index)].Count(c => c == '\n') + 1;
+                offenders.Add($"{Path.GetFileName(file)}:{line}");
+            }
+        }
+
+        Assert.True(withDispose >= 40,
+            $"only {withDispose} view models were seen to override Dispose(bool) — the scan is broken, "
+            + "not the code. There were 46 when this guard was written.");
+
+        Assert.True(offenders.Count == 0,
+            "these block inside a view model's Dispose, which runs on the UI thread. If whatever they "
+            + "wait on releases from a dispatcher continuation, the wait can never be satisfied — it "
+            + "freezes the window for its full timeout and then gives up. Use Wait(0):\n  "
+            + string.Join("\n  ", offenders));
+
+        // The permitted form is still there, and still inside the gate: deleting the clear entirely would
+        // otherwise satisfy the assertion above while losing the protection.
+        var performance = File.ReadAllText(Path.Combine(dir, "PerformanceViewModel.cs"));
+        Assert.Contains("_snapshotGate.Wait(0)", performance, StringComparison.Ordinal);
+
+        // Positive control: the pattern has to recognise every blocking form and leave Wait(0) alone.
+        Assert.Matches(BlockingWaitInDispose(), ".Wait(TimeSpan.FromSeconds(2))");
+        Assert.Matches(BlockingWaitInDispose(), ".Wait(2000)");
+        Assert.Matches(BlockingWaitInDispose(), ".Wait()");
+        Assert.Matches(BlockingWaitInDispose(), ".Wait(cancellationToken)");
+        Assert.DoesNotMatch(BlockingWaitInDispose(), ".Wait(0)");
+        Assert.DoesNotMatch(BlockingWaitInDispose(), ".Wait(0, ct)");
+    }
+
+    /// <summary>
+    /// A blocking wait that is not the immediate, non-blocking <c>Wait(0)</c> form. A bare <c>Wait()</c>
+    /// and <c>Wait(token)</c> both block indefinitely, so both count.
+    /// </summary>
+    [GeneratedRegex(@"\.Wait\(\s*(?!0\s*[,)])", RegexOptions.CultureInvariant)]
+    private static partial Regex BlockingWaitInDispose();
+
 }

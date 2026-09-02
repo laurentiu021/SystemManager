@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.25] - 2026-09-02
+
+Closing SysManager immediately after changing something on the Performance tab could leave the window frozen
+for two seconds before it disappeared.
+
+### Fixed
+- **Closing the window during a performance change no longer freezes it for two seconds.** Before it changes
+  anything, the Performance tab records what your settings were, so that "Restore All" can put them back.
+  That recording can take a few seconds, because reading Windows power settings is slow. If you closed the
+  window while it was still going, the shutdown waited for the recording to finish before letting go — and it
+  waited on the very thing the recording needed in order to finish, so it could only ever run out of patience.
+  The result was a two-second freeze that accomplished nothing: it gave up and carried on regardless. Shutdown
+  no longer waits at all. Nothing about your recorded settings changes; the wait was the only thing that was
+  ever going to happen, and now it does not.
+
 ## [1.75.24] - 2026-09-01
 
 The previous release stopped a power cut from emptying a file SysManager had just saved. That fix covered the

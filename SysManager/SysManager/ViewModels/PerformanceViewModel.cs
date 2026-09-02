@@ -829,9 +829,24 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             // Clear the snapshot INSIDE the gate. Clearing it outside meant a tab closed mid-Apply
             // could null the recovery snapshot while EnsureSnapshotAsync was still capturing or saving
             // it — the exact "a tweak applied with no snapshot left to revert it" outcome the gate
-            // exists to prevent. Bounded, like GamingProfileService's Dispose: the holder finishes in
-            // well under this, and a teardown must never hang waiting for it.
-            if (_snapshotGate.Wait(TimeSpan.FromSeconds(2)))
+            // exists to prevent.
+            //
+            // Wait(0), never a timeout. This runs on the UI thread (MainWindow.OnClosed and
+            // OnApplicationExit, and the container disposal in OnExit), and every gate-held await in
+            // EnsureSnapshotAsync captures the UI SynchronizationContext, so its
+            // finally { ReleaseSnapshotGate(); } can only run as a dispatcher continuation. Blocking the
+            // dispatcher does not "wait for the holder to finish" — it guarantees the holder can never
+            // finish, so a timeout is always burned in full and always returns false. Closing the window
+            // during an Apply froze it for two seconds and then skipped this clear anyway, in exactly the
+            // case the clear was written for. Wait(0) reaches the same outcome without the freeze, and
+            // still clears whenever the gate is free, which is almost always.
+            //
+            // This is why the earlier version's appeal to GamingProfileService.Dispose did not hold:
+            // that service acquires its gate with ConfigureAwait(false) at every site, so its release
+            // continuation runs off the UI thread and its bounded wait really does acquire. Adding the
+            // same discipline here would move HasSnapshot and the _snapshot assignment off the UI
+            // thread, which is a thread-affinity change and not something to make inside a bug fix.
+            if (_snapshotGate.Wait(0))
             {
                 try { _snapshot = null; }
                 finally { _snapshotGate.Release(); }

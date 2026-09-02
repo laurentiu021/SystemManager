@@ -233,7 +233,7 @@ public class ProfileServiceTests : IDisposable
         [
             "theme.json", "speedtest-history.json", "update-check.json", "darkmode-schedule.json",
             "gaming-profiles.json", "volume-presets.json", "close-preference.json",
-            "standby-preference.json",
+            "standby-preference.json", "icon-fetch.json",
         ];
         foreach (var f in files) WriteConfig(f, "{}");
 
@@ -241,7 +241,8 @@ public class ProfileServiceTests : IDisposable
 
         Assert.Equal(files.Length, keys.Length);
         Assert.Equal(
-            new[] { "closebehaviour", "darkmode", "gaming", "speedtest", "standby", "theme", "updatecheck", "volume" },
+            new[] { "appicons", "closebehaviour", "darkmode", "gaming", "speedtest", "standby", "theme",
+                    "updatecheck", "volume" },
             keys);
     }
 
@@ -259,6 +260,9 @@ public class ProfileServiceTests : IDisposable
     [InlineData("activity.json")]
     [InlineData("resource-history-config.json")]
     [InlineData("disk-scan-history.json")]   // folder paths + sizes on THIS disk; meaningless on another PC
+    // A count of how many times the master toggle was written on THIS machine, used to decide whether a
+    // restore point is still needed. Carried over, it would claim work had been done here that was not.
+    [InlineData("notification-master-writes.json")]
     public void AvailableSections_NeverCarriesMachineSpecificState(string fileName)
     {
         WriteConfig(fileName, "{\"machine\":\"specific\"}");

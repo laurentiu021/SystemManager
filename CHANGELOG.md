@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.31] - 2026-09-02
+
+Exporting your settings and importing them on another PC carried everything except one choice: whether
+the Bulk Installer may download app icons from the web. That one was quietly reset to off. It travels
+with the profile now.
+
+### Fixed
+- **A profile now carries your app-icon choice.** Every other preference the app remembers was included
+  in an exported profile — theme, dark-mode schedule, gaming profiles, volume presets, close-button
+  behaviour, standby memory, the update check — but the "Load app icons from the web" switch was not, so
+  importing on a second PC left it off no matter what you had chosen. It is a choice like the others and
+  is now part of the export. As with everything in a profile, restart SysManager afterwards for it to
+  take effect.
+
 ## [1.75.30] - 2026-09-02
 
 In Task Scheduler, the "What it does" column was simply blank for most tasks, because Windows never

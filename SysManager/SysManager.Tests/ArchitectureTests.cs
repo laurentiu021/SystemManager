@@ -898,6 +898,99 @@ public partial class ArchitectureTests
     private static partial Regex CategoryLink();
 
     /// <summary>
+    /// Every JSON file the services persist must be a decision: carried by a profile, or deliberately
+    /// left out of one. A new state file that is neither is a silent gap.
+    /// </summary>
+    /// <remarks>
+    /// The app writes 18 distinct JSON files under its config folders and a profile carries 9 of them.
+    /// What kept the other 9 out was their absence from a list — nothing asserted the absence was
+    /// intentional, so a 19th could be added and never classified. That is how <c>icon-fetch.json</c>
+    /// went unnoticed: it holds the network-consent bit for icon fetching, it is a user preference by any
+    /// reading, and a profile silently reset it.
+    /// <para>The excluded set is read by reflection from
+    /// <see cref="ProfileServiceTests.AvailableSections_NeverCarriesMachineSpecificState"/>'s own
+    /// <c>[InlineData]</c> rows rather than restated here. Two copies of that list would drift, and the
+    /// drift would be invisible: this guard would pass on a file the other test no longer covers.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryPersistedStateFile_IsEitherInAProfileOrDeliberatelyNot()
+    {
+        // Not persisted state at all, with the reason. Anything added here is claiming "this literal is
+        // not a file this app writes", which is checkable by reading the owning service.
+        var notState = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ProcessDescriptions.json"] =
+                "an embedded resource read through GetManifestResourceStream — shipped data, never written",
+        };
+
+        var services = Path.Combine(FindAppProjectDir(), "Services");
+        var catalog = File.ReadAllText(Path.Combine(services, "ProfileService.cs"));
+        var carried = JsonStateFile().Matches(catalog).Cast<Match>()
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var excluded = typeof(ProfileServiceTests)
+            .GetMethod(nameof(ProfileServiceTests.AvailableSections_NeverCarriesMachineSpecificState))!
+            .GetCustomAttributes<Xunit.InlineDataAttribute>()
+            .Select(a => (string)a.GetData(null!).First()[0]!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Both sources must yield SOMETHING, and deliberately not a population-sized floor. A floor of
+        // "at least 9 exclusions" would fire the moment someone deletes one row — reporting "the
+        // reflection is broken" about a file that had simply stopped being classified, which is the
+        // report the rule below gives correctly and by name. Only "read nothing at all" is this check's
+        // business.
+        Assert.True(carried.Count > 0,
+            "no files were parsed out of the profile catalog — its shape changed and this guard is no "
+            + "longer reading it.");
+        Assert.True(excluded.Count > 0,
+            "no deliberate exclusions were read from the machine-specific theory — the reflection is "
+            + "broken, not the code.");
+
+        var unclassified = new List<string>();
+        var literals = 0;
+
+        foreach (var path in Directory.EnumerateFiles(services, "*.cs")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            // Comment lines dropped: several services name a sibling's file in prose to explain a
+            // convention, and prose is not persistence.
+            var code = string.Join('\n', File.ReadAllLines(path)
+                .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+            foreach (var match in JsonStateFile().Matches(code).Cast<Match>())
+            {
+                var file = match.Groups[1].Value;
+                literals++;
+                if (carried.Contains(file) || excluded.Contains(file) || notState.ContainsKey(file)) continue;
+                unclassified.Add($"{file}  (written by {Path.GetFileName(path)})");
+            }
+        }
+
+        Assert.True(literals >= 15,
+            $"only {literals} .json literals were found across Services/ — the pattern is broken, not "
+            + "the code.");
+
+        // "named by", not "persisted by": this cannot tell a write from a read, which is precisely why
+        // the third option exists. Naming all three keeps the reader from assuming the only fix is a
+        // catalog entry.
+        Assert.True(unclassified.Count == 0,
+            "these JSON files are named by a service and appear in none of the three lists, so nobody has "
+            + "decided whether a profile should carry them — add a catalog entry, an [InlineData] row on "
+            + "AvailableSections_NeverCarriesMachineSpecificState with the reason, or an entry in this "
+            + "guard's notState map if it is not a file the app writes at all:\n  "
+            + string.Join("\n  ", unclassified.Distinct(StringComparer.Ordinal))
+            + $"\n({literals} literals seen, {carried.Count} carried, {excluded.Count} excluded)");
+    }
+
+    /// <summary>
+    /// A JSON file name in a string literal. Deliberately narrow: it must start with an alphanumeric, so
+    /// a path fragment or a format string is not mistaken for a file the app persists.
+    /// </summary>
+    [GeneratedRegex(@"""([A-Za-z0-9][A-Za-z0-9._-]*\.json)""", RegexOptions.Compiled)]
+    private static partial Regex JsonStateFile();
+
+    /// <summary>
     /// Every issue template must apply at least one label, and every label it names must be one this
     /// repository actually defines.
     /// </summary>

@@ -989,7 +989,7 @@ offers, "rate us" prompts:
 - Export your SysManager settings to a single portable JSON file and import them on
   another PC: **theme and appearance, dark-mode schedule, gaming profiles, volume
   presets, close-button behaviour, standby-memory preference, update-check preference,
-  and speed-test history**
+  app-icon fetching preference, and speed-test history**
 - **Selective export** (tick which sections to include) and **selective import**
   (confirm what a profile contains before anything is overwritten)
 - **Version-aware** — refuses profiles created by a newer, incompatible build

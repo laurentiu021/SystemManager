@@ -111,6 +111,11 @@ public class SidebarSelectionContractTests
                 && (string?)trigger.Attribute("Value") == "True");
         AssertSetter(focusTrigger, "BorderBrush", "{DynamicResource Accent}");
 
+        // Focusable is necessary but not sufficient: ButtonBase treats Enter as a click only where
+        // this is set, so without it a row could be tabbed to and then not opened with the key most
+        // people press. Asserted on the style, which is what both the leaf and single-item rows use.
+        AssertSetter(buttonStyle, "KeyboardNavigation.AcceptsReturn", "True");
+
         var navItemsControls = document
             .Descendants(Presentation + "ItemsControl")
             .Where(element =>
@@ -134,6 +139,9 @@ public class SidebarSelectionContractTests
 
         Assert.Equal("True", (string?)header.Attribute("Focusable"));
         Assert.Equal("True", (string?)header.Attribute("KeyboardNavigation.IsTabStop"));
+        // The header is a ToggleButton, so it too answers Space by default and Enter only with this.
+        // Reaching a collapsed group and being unable to open it is the same dead end as not reaching it.
+        Assert.Equal("True", (string?)header.Attribute("KeyboardNavigation.AcceptsReturn"));
         Assert.Equal(
             "{Binding Id, StringFormat={}{0}-header}",
             (string?)header.Attribute("AutomationProperties.AutomationId"));

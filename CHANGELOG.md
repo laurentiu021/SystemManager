@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.29] - 2026-09-02
+
+If you move around the app with the keyboard instead of the mouse, pressing Enter on anything in the
+left-hand menu did nothing at all. Space worked, Enter did not. Both work now.
+
+### Fixed
+- **Enter now opens a page or a group in the left-hand menu.** You could reach every entry with Tab and
+  see where you were, but the key most people press to open the thing they have landed on was ignored —
+  including on the group headings, so a closed group could be reached and then not opened. Only Space
+  did anything. This is the key that opens a folder in File Explorer and an entry in the Start menu, so
+  Enter doing nothing read as the menu being broken rather than as a different key being required.
+
 ## [1.75.28] - 2026-09-02
 
 In Task Scheduler, clicking a task looks up when it last ran and when it runs next. Typing anything in the

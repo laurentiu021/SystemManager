@@ -5416,4 +5416,104 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\.Wait\(\s*(?!0\s*[,)])", RegexOptions.CultureInvariant)]
     private static partial Regex BlockingWaitInDispose();
 
+    /// <summary>
+    /// A documentation comment that describes parameters, a return value or a thrown exception must also
+    /// carry a <c>&lt;summary&gt;</c>. Those tags describe the pieces and never say what the member is
+    /// for, which is the half a reader needs first.
+    /// <para>This exists because I introduced exactly that defect: adding a <c>&lt;param&gt;</c> to
+    /// <see cref="LogService.Init"/> to explain the new log-directory seam left the member with no
+    /// summary, and CodeQL raised <c>cs/xmldoc/missing-summary</c> against main after the merge.</para>
+    /// <para>CodeQL has this rule already, so the guard looks redundant. It is not, for two measured
+    /// reasons. CodeQL reported ONE instance where a sweep of the whole solution found THREE — it does
+    /// not report a private member (<c>DeepCleanupService.EnumerateFiles</c>) and it does not scan the
+    /// test project (<see cref="DialogAnswer"/>). And CodeQL is not a required check on main, so a fourth
+    /// could merge between scans. This runs in the blocking suite, over every project.</para>
+    /// </summary>
+    [Fact]
+    public void EveryDocumentedMember_CarriesASummary()
+    {
+        var solution = Path.Combine(FindRepoRoot(), "SysManager");
+        var offenders = new List<string>();
+        var documented = 0;
+        var summarised = 0;
+
+        foreach (var path in Directory
+                     .EnumerateFiles(solution, "*.cs", SearchOption.AllDirectories)
+                     .Where(p => !Path.GetRelativePath(solution, p)
+                         .Split(Path.DirectorySeparatorChar)
+                         .Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                                         || segment.Equals("bin", StringComparison.OrdinalIgnoreCase))))
+        {
+            var lines = File.ReadAllLines(path);
+
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (!lines[i].TrimStart().StartsWith("///", StringComparison.Ordinal)) continue;
+
+                // A block is a run of consecutive /// lines. Whatever follows is the member it documents,
+                // which this does not need to parse: the tags inside the block already say whether it
+                // claims to describe parameters.
+                var start = i;
+                var block = new List<string>();
+                while (i < lines.Length
+                       && lines[i].TrimStart().StartsWith("///", StringComparison.Ordinal))
+                {
+                    block.Add(lines[i]);
+                    i++;
+                }
+
+                var text = string.Join('\n', block);
+                var hasSummary = CarriesASummary().IsMatch(text);
+                if (hasSummary) summarised++;
+                if (!DocumentsAMember().IsMatch(text)) continue;
+
+                documented++;
+                if (hasSummary) continue;
+
+                offenders.Add($"{Path.GetFileName(path)}:{start + 1} documents parameters or a return "
+                              + "value but has no <summary>");
+            }
+        }
+
+        // Two vacuity floors, because two separate patterns have to keep working for a clean result to
+        // mean anything. Measured at the time of writing: 35 blocks document a member, and all 2078 carry
+        // a summary. Either detector going quiet would report success while inspecting nothing.
+        Assert.True(documented >= 25,
+            $"Only {documented} documentation blocks were seen to document a parameter, return value or "
+            + "exception — the detection is broken, not the code. Fix this guard rather than trusting it.");
+        Assert.True(summarised >= 1600,
+            $"Only {summarised} documentation blocks were seen to carry a summary — the detection is "
+            + "broken, not the code. Fix this guard rather than trusting it.");
+
+        Assert.True(offenders.Count == 0,
+            "These documentation comments describe parameters, a return value or a thrown exception but "
+            + "never say what the member is for. Add a <summary>:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({documented} blocks document a member, {summarised} carry a summary)");
+
+        // The word boundary is load-bearing, not decoration: <paramref/> shares its first six characters
+        // with <param>, and 109 summaries here use one. Without the boundary every one of them would read
+        // as "documents a parameter", and the guard would start demanding a summary from blocks that
+        // already have one — a false red on 109 compliant comments.
+        Assert.Matches(DocumentsAMember(), "/// <param name=\"x\">why</param>");
+        Assert.Matches(DocumentsAMember(), "/// <returns>a thing</returns>");
+        Assert.Matches(DocumentsAMember(), "/// <exception cref=\"IOException\">when</exception>");
+        Assert.DoesNotMatch(DocumentsAMember(), "/// <summary>see <paramref name=\"x\"/> above</summary>");
+        Assert.Matches(CarriesASummary(), "/// <summary>what it is</summary>");
+        Assert.Matches(CarriesASummary(), "/// <inheritdoc/>");
+    }
+
+    /// <summary>
+    /// A documentation tag describing a piece of a member rather than the member itself. The word
+    /// boundary keeps <c>&lt;paramref/&gt;</c> from reading as <c>&lt;param&gt;</c>.
+    /// </summary>
+    [GeneratedRegex(@"<(param|returns|exception|typeparam)\b", RegexOptions.CultureInvariant)]
+    private static partial Regex DocumentsAMember();
+
+    /// <summary>
+    /// Either an explicit summary, or an <c>&lt;inheritdoc/&gt;</c> that supplies one from the base member.
+    /// </summary>
+    [GeneratedRegex(@"<(summary|inheritdoc)\b", RegexOptions.CultureInvariant)]
+    private static partial Regex CarriesASummary();
+
 }

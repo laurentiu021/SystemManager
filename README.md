@@ -42,6 +42,7 @@ winget install laurentiu021.SysManager
 - [Features](#features) — all 58 tabs, grouped
 - [Screenshots](#screenshots)
 - [Install](#install)
+  - [Verifying the download](#verifying-the-download)
 - [Uninstalling](#uninstalling)
 - [Build from source](#build-from-source)
 - [First-time flow](#first-time-flow)

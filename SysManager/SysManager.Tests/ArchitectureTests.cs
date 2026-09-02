@@ -3419,6 +3419,88 @@ public partial class ArchitectureTests
                     RegexOptions.Compiled)]
     private static partial Regex NavEntry();
 
+    /// <summary>
+    /// No sidebar label may be longer than the longest one that already ships, counted separately for the
+    /// entries that render a PREVIEW pill beside the text.
+    /// </summary>
+    /// <remarks>
+    /// The sidebar is a fixed 220px column (MainWindow.xaml). After the row's 28px left padding, 14px
+    /// right padding, the 13px glyph and its 10px margin, the label has roughly 155px — about 24
+    /// characters at FontSize 13. The longest label that ships, "Profile Export / Import", is 23. So this
+    /// budget says "no longer than what is already there", NOT "proven to fit": whether that one already
+    /// ellipsizes cannot be settled without running the app, which happens on the other workstation.
+    /// <para>Two budgets, because one number cannot express the constraint. A PREVIEW pill takes fixed
+    /// width out of the same column, so a pilled row has less room for text — and the pill is exactly
+    /// where this went wrong before: a horizontal StackPanel measured with infinite width pushed it past
+    /// the sidebar edge and clipped it to "PR" (documented at MainWindow.xaml:308-311). That layout is
+    /// fixed and the label now ellipsizes instead, which is a softer failure but still a nav entry whose
+    /// name cannot be read.</para>
+    /// <para>Both numbers are measured from the current source, not carried over: the issue that asked
+    /// for this cited a maximum of 20-21 characters, and the real maximum had already moved to 23.</para>
+    /// </remarks>
+    [Fact]
+    public void EverySidebarLabel_FitsTheColumnItIsDrawnIn()
+    {
+        const int PilledBudget = 21;   // "Scheduled Maintenance"
+        const int PlainBudget = 23;    // "Profile Export / Import"
+
+        var vm = File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+        var nav = MemberSlice(vm, "private NavGroup[] BuildNavGroups()");
+        Assert.True(nav.Length > 2000,
+            $"the BuildNavGroups slice is {nav.Length} chars — too short to hold the sidebar, so this "
+            + "guard would measure almost nothing.");
+
+        // Reuses NavEntry() rather than a second pattern for the same construct: two regexes for one
+        // shape drift, and then one of them silently stops seeing entries the other still finds.
+        var entries = NavEntry().Matches(nav).Cast<Match>().ToArray();
+        Assert.True(entries.Length >= 50,
+            $"only {entries.Length} nav entries parsed — the shape of BuildNavGroups changed and this "
+            + "guard is no longer reading the sidebar; fix the pattern rather than trusting the pass.");
+
+        var offenders = new List<string>();
+        var pilled = 0;
+        var atBudget = 0;
+
+        for (var i = 0; i < entries.Length; i++)
+        {
+            var navId = entries[i].Groups[1].Value;
+            var label = entries[i].Groups[2].Value;
+
+            // The flag is a trailing argument, so it lives between this entry and the next one.
+            var from = entries[i].Index + entries[i].Length;
+            var to = i + 1 < entries.Length ? entries[i + 1].Index : nav.Length;
+            var showsPill = nav[from..to].Contains("inDevelopment: true", StringComparison.Ordinal);
+            if (showsPill) pilled++;
+
+            var budget = showsPill ? PilledBudget : PlainBudget;
+            if (label.Length == budget) atBudget++;
+            if (label.Length > budget)
+            {
+                offenders.Add($"{navId} \"{label}\" is {label.Length} chars, over the "
+                              + $"{(showsPill ? "PREVIEW" : "plain")} budget of {budget}");
+            }
+        }
+
+        // Both populations must be seen. The pill flag is optional, so a capture that stopped finding it
+        // would classify every row as plain and quietly hand seven of them two extra characters.
+        Assert.True(pilled >= 5,
+            $"only {pilled} PREVIEW entries were recognised — the inDevelopment detection is broken, not "
+            + "the sidebar. Fix this guard rather than trusting its pass.");
+
+        // And at least one label must sit exactly ON its budget, or the numbers have drifted above the
+        // real maximum and the guard has quietly stopped being a ratchet.
+        Assert.True(atBudget >= 1,
+            $"no label reaches either budget ({PilledBudget}/{PlainBudget}), so both are now looser than "
+            + "the longest label that ships. Re-measure and lower them, or this permits growth silently.");
+
+        Assert.True(offenders.Count == 0,
+            "these sidebar labels are longer than anything that currently ships, in a fixed 220px column "
+            + "where the text already ellipsizes near this length — shorten the label, or re-measure and "
+            + "raise the budget deliberately with the reason:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({entries.Length} entries, {pilled} with a PREVIEW pill, {atBudget} exactly at budget)");
+    }
+
     [GeneratedRegex(@"Text=""([^""]*)""", RegexOptions.Compiled)]
     private static partial Regex TextAttribute();
 

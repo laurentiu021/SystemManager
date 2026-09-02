@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.28] - 2026-09-02
+
+In Task Scheduler, clicking a task looks up when it last ran and when it runs next. Typing anything in the
+search box threw that away: both columns went back to a dash and the task you had selected was deselected.
+
+### Fixed
+- **Task Scheduler keeps the run times after you search.** Selecting a task takes a moment because the app
+  asks Windows for its last and next run time separately, one task at a time. That answer was only ever
+  written to the list on screen, not to the full list the search box filters — so the first character you
+  typed rebuilt the grid from the copy that never got the answer, the two columns reverted to "—", and the
+  selection went with them. Searching again did not help: the information had been discarded, not hidden.
+  Unchecking "Hide system tasks" did the same thing. Enabling or disabling a task was never affected, and
+  the difference is what pointed at the cause — that path already updated both lists.
+
 ## [1.75.27] - 2026-09-02
 
 On the six light colour themes you could not tell whether a switch was on or off — the little circle was white

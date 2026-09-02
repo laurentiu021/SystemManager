@@ -24,6 +24,10 @@ public sealed class DialogAnswer : IDisposable
 {
     private readonly IDialogService _previous;
 
+    /// <summary>
+    /// Swaps in a substitute dialog service that always answers <paramref name="confirm"/>, keeping the
+    /// previous instance for <see cref="Dispose"/> to restore.
+    /// </summary>
     /// <param name="confirm">What <see cref="IDialogService.Confirm"/> returns — the user's click.</param>
     public DialogAnswer(bool confirm)
     {

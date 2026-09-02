@@ -113,6 +113,10 @@ public static partial class LogService
     [GeneratedRegex(@"(?i)([A-Z]:\\Users\\)[^\\]+")]
     private static partial Regex FallbackUserPathRegex();
 
+    /// <summary>
+    /// Builds the rolling log sink and publishes it as both <see cref="Logger"/> and Serilog's global
+    /// <see cref="Log.Logger"/>. Also the only way to set <see cref="LogDir"/>.
+    /// </summary>
     /// <param name="logDir">
     /// Where to write. Null keeps the per-user default. Supplied only by a test that must not touch the
     /// real log directory; the app's two call sites in <c>App.OnStartup</c> pass nothing, and they are

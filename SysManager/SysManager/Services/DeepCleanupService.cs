@@ -412,6 +412,12 @@ public sealed class DeepCleanupService
     private static long SafeLength(string path)
     { try { return new FileInfo(path).Length; } catch (IOException) { return 0; } catch (UnauthorizedAccessException) { return 0; } }
 
+    /// <summary>
+    /// Walks <paramref name="root"/> depth-first and yields every file under it, skipping reparse points
+    /// and the excluded subtrees. Enumeration errors skip that directory rather than abort the walk.
+    /// </summary>
+    /// <param name="root">Directory to walk. Yields nothing if it is itself a reparse point or excluded.</param>
+    /// <param name="ct">Stops the walk between directories; a cancelled walk simply ends.</param>
     /// <param name="excludeSubtrees">
     /// Directory trees to skip entirely. Callers pass <see cref="SystemPaths.BundleExtractionRoot"/> and
     /// <see cref="SystemPaths.OwnExtractionDirectory"/>: the "Temporary files" definition covers all of

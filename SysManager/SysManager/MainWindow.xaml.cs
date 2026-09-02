@@ -281,7 +281,33 @@ public partial class MainWindow : Window
     private void ToggleThemePopup()
     {
         if (ThemePopupHost.Child is null)
-            ThemePopupHost.Child = new Views.ThemePopup();
+        {
+            var popup = new Views.ThemePopup();
+            // Escape is handled on the CHILD, not on the Popup. With AllowsTransparency the popup lives
+            // in its own PresentationSource, so key events route through the child's tree; a handler on
+            // the Popup element itself never sees them.
+            popup.PreviewKeyDown += ThemePopup_PreviewKeyDown;
+            ThemePopupHost.Child = popup;
+        }
+
         ThemePopupHost.IsOpen = !ThemePopupHost.IsOpen;
+    }
+
+    // Focus is moved on Opened rather than straight after setting IsOpen: at that point the child has
+    // been realised, so there is something focusable to move to.
+    private void ThemePopupHost_Opened(object sender, EventArgs e) =>
+        ThemePopupHost.Child?.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+
+    // Covers both exits — Escape below and the outside click StaysOpen="False" already handles. Without
+    // it, focus is left on a panel that no longer exists and the next Tab restarts from the top of the
+    // window. Selecting a preset does NOT close the popup, so this does not fight trying several themes.
+    private void ThemePopupHost_Closed(object sender, EventArgs e) => ThemeBtn.Focus();
+
+    private void ThemePopup_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not Key.Escape) return;
+
+        ThemePopupHost.IsOpen = false;
+        e.Handled = true;
     }
 }

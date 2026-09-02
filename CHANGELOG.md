@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.32] - 2026-09-02
+
+If you opened the appearance panel with the keyboard, you landed nowhere: the panel appeared but the
+keyboard was still outside it, so you could not reach any of the themes, and there was no key that closed
+it again. Opening it now puts you inside it, Tab moves between the themes, and Escape closes it.
+
+### Fixed
+- **The appearance panel can now be used without a mouse.** Every theme in that panel was already set up
+  to be reached with Tab and chosen with Enter, but opening the panel never moved the keyboard into it, so
+  none of that could be got at — and nothing closed the panel except clicking outside it. Escape now
+  closes it and returns you to the button you opened it from, so the next Tab carries on where you were
+  instead of starting again at the top of the window.
+
 ## [1.75.31] - 2026-09-02
 
 Exporting your settings and importing them on another PC carried everything except one choice: whether

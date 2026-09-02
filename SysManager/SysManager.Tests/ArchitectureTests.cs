@@ -898,6 +898,102 @@ public partial class ArchitectureTests
     private static partial Regex CategoryLink();
 
     /// <summary>
+    /// Every issue template must apply at least one label, and every label it names must be one this
+    /// repository actually defines.
+    /// </summary>
+    /// <remarks>
+    /// GitHub SILENTLY DROPS a label a template names but the repository does not define. All three
+    /// templates asked for <c>needs-triage</c>, which never existed here, so <c>bug_report</c> applied
+    /// only <c>bug</c>, <c>feature_request</c> only <c>enhancement</c>, and <c>general_issue</c> — whose
+    /// sole label it was — applied NOTHING. Every issue opened through the template a reporter is most
+    /// likely to pick arrived unlabelled, and no error said so.
+    /// <para>The label list is held here rather than fetched, because a unit test must not depend on the
+    /// network or on a token. That makes it a ratchet: naming a new label in a template fails this test
+    /// until someone adds it here, which is the moment to check the label exists.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryIssueTemplate_AppliesALabelThisRepositoryDefines()
+    {
+        string[] defined =
+        [
+            "bug", "documentation", "duplicate", "enhancement", "good first issue", "help wanted",
+            "invalid", "manual", "performance", "question", "security", "ux", "wontfix",
+        ];
+
+        var dir = Path.Combine(FindRepoRoot(), ".github", "ISSUE_TEMPLATE");
+        var offenders = new List<string>();
+        var templates = 0;
+        var matched = 0;
+        var labelsChecked = 0;
+
+        foreach (var path in Directory.EnumerateFiles(dir, "*.yml").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var name = Path.GetFileName(path);
+            // config.yml is the chooser, not a template: it has no labels: key and is not meant to.
+            if (name.Equals("config.yml", StringComparison.OrdinalIgnoreCase)) continue;
+
+            templates++;
+            var declared = TemplateLabels().Match(File.ReadAllText(path));
+            if (!declared.Success)
+            {
+                offenders.Add($"{name} declares no labels: key, so issues from it arrive unlabelled");
+                continue;
+            }
+
+            matched++;
+            var labels = declared.Groups["list"].Value
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(l => l.Trim('"', '\''))
+                .Where(l => l.Length > 0)
+                .ToArray();
+
+            if (labels.Length == 0)
+            {
+                offenders.Add($"{name} has an empty labels: list, so issues from it arrive unlabelled");
+                continue;
+            }
+
+            foreach (var label in labels)
+            {
+                labelsChecked++;
+                if (!defined.Contains(label, StringComparer.Ordinal))
+                {
+                    offenders.Add($"{name} asks for '{label}', which this repository does not define — "
+                                  + "GitHub will drop it without an error");
+                }
+            }
+        }
+
+        // Three assertions, in this order, because each has to be able to name its own cause.
+        //
+        // The first draft put a `labelsChecked >= 3` floor ahead of the rule. There are exactly three
+        // labels across the three templates, so emptying one dropped the count to 2 and the FLOOR fired
+        // first — reporting "the pattern is broken, not the templates" about a genuinely broken template.
+        // A floor set that tight cannot coexist with the rule it protects; found by mutating a template
+        // and reading which message came back.
+        Assert.True(templates >= 3,
+            $"only {templates} issue template(s) were found — the path is wrong, not the templates.");
+
+        // A pattern that stopped matching reports every template as unlabelled, which reads as three
+        // broken templates rather than one broken regex. None matching AT ALL is the pattern's fault.
+        Assert.True(matched > 0,
+            $"the labels: pattern matched none of the {templates} templates — the pattern is broken, "
+            + "not the templates.");
+
+        Assert.True(offenders.Count == 0,
+            "an issue template applies a label that does not exist, or none at all:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({templates} templates, {matched} with a labels: key, {labelsChecked} labels checked)");
+    }
+
+    /// <summary>
+    /// The <c>labels:</c> list at the top of an issue-form template, in either YAML flow style
+    /// (<c>[bug, ux]</c> or <c>["bug", "ux"]</c>).
+    /// </summary>
+    [GeneratedRegex(@"^labels:\s*\[(?<list>[^\]]*)\]\s*$", RegexOptions.Multiline)]
+    private static partial Regex TemplateLabels();
+
+    /// <summary>
     /// A field a search box matches against must be visible somewhere in that tab's view. Otherwise the
     /// user is invited to filter by text the app never shows them — and it hides a whole unreachable
     /// field: the Process Manager loaded a plain-English description and a category from its 108-entry

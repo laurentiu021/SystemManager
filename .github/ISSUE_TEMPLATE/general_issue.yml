@@ -1,7 +1,7 @@
 name: Report a bug or general issue
 description: Report a crash, stability problem, unexpected behaviour, or anything else
 title: "[Issue]: "
-labels: [needs-triage]
+labels: [bug]
 assignees: []
 body:
   - type: markdown

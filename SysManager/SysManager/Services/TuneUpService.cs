@@ -185,7 +185,7 @@ public sealed class TuneUpService
                 // symbolic links). SearchOption.AllDirectories follows them, so a
                 // junction inside %TEMP% pointing elsewhere would let this delete real
                 // user data outside TEMP. Mirrors DeepCleanupService's safe traversal.
-                foreach (var file in EnumerateFilesSkippingReparsePoints(dir, ct, SystemPaths.OwnExtractionDirectory))
+                foreach (var file in EnumerateFilesSkippingReparsePoints(dir, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
                 {
                     ct.ThrowIfCancellationRequested();
                     try
@@ -203,7 +203,7 @@ public sealed class TuneUpService
                 // Try to remove empty subdirectories, deepest first. Reparse points are
                 // excluded so a junction is never deleted/recursed as if it were a real
                 // directory. Depth = separator count (a deeper path can be shorter).
-                foreach (var sub in EnumerateDirectoriesSkippingReparsePoints(dir, ct, SystemPaths.OwnExtractionDirectory)
+                foreach (var sub in EnumerateDirectoriesSkippingReparsePoints(dir, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory)
                              .OrderByDescending(d => d.Count(c => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar)))
                 {
                     ct.ThrowIfCancellationRequested();
@@ -240,13 +240,13 @@ public sealed class TuneUpService
     /// files.
     /// </param>
     internal static IEnumerable<string> EnumerateFilesSkippingReparsePoints(
-        string root, CancellationToken ct, string? excludeSubtree = null)
+        string root, CancellationToken ct, params string?[] excludeSubtrees)
     {
         // Guard the traversal ROOT too: if the root itself is a junction/symlink,
         // descending into it would follow the link out of the temp tree and yield
         // (then delete) unrelated files — amplified when running elevated. Child dirs
         // are already filtered below; the root needs the same check.
-        if (IsReparsePoint(root) || SystemPaths.IsInsideSubtree(root, excludeSubtree)) yield break;
+        if (IsReparsePoint(root) || SystemPaths.IsInsideAnySubtree(root, excludeSubtrees)) yield break;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
@@ -261,7 +261,7 @@ public sealed class TuneUpService
                 yield return file;
 
             foreach (var d in dirs)
-                if (!IsReparsePoint(d) && !SystemPaths.IsInsideSubtree(d, excludeSubtree)) stack.Push(d);
+                if (!IsReparsePoint(d) && !SystemPaths.IsInsideAnySubtree(d, excludeSubtrees)) stack.Push(d);
         }
     }
 
@@ -270,12 +270,12 @@ public sealed class TuneUpService
     /// skipping reparse points so a junction is never deleted or recursed as a real dir.
     /// </summary>
     private static IEnumerable<string> EnumerateDirectoriesSkippingReparsePoints(
-        string root, CancellationToken ct, string? excludeSubtree = null)
+        string root, CancellationToken ct, params string?[] excludeSubtrees)
     {
         List<string> all = [];
         // Same root guard as EnumerateFilesSkippingReparsePoints: never recurse a
         // junction/symlink root out of the temp tree.
-        if (IsReparsePoint(root) || SystemPaths.IsInsideSubtree(root, excludeSubtree)) return all;
+        if (IsReparsePoint(root) || SystemPaths.IsInsideAnySubtree(root, excludeSubtrees)) return all;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
@@ -284,7 +284,7 @@ public sealed class TuneUpService
             IEnumerable<string> dirs;
             try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
             foreach (var d in dirs)
-                if (!IsReparsePoint(d) && !SystemPaths.IsInsideSubtree(d, excludeSubtree)) { stack.Push(d); all.Add(d); }
+                if (!IsReparsePoint(d) && !SystemPaths.IsInsideAnySubtree(d, excludeSubtrees)) { stack.Push(d); all.Add(d); }
         }
         return all;
     }

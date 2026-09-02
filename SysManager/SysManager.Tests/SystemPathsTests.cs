@@ -245,4 +245,55 @@ public class SystemPathsTests
             resolved,
             ignoreCase: true);
     }
+    [Theory]
+    // Redirected by the host variable: taken as given, only normalised.
+    [InlineData(@"D:\bundles\", null, @"D:\bundles")]
+    [InlineData(@"D:\bundles", null, @"D:\bundles")]
+    // Not redirected: <temp>\.net, with or without the trailing separator the environment supplies.
+    [InlineData(null, @"C:\Temp\", @"C:\Temp\.net")]
+    [InlineData(null, @"C:\Temp", @"C:\Temp\.net")]
+    [InlineData("", @"C:\Temp\", @"C:\Temp\.net")]
+    [InlineData("   ", @"C:\Temp\", @"C:\Temp\.net")]
+    public void ResolveBundleExtractionRoot_PrefersTheHostOverrideThenTempDotNet(
+        string? overrideDir, string? tempPath, string expected)
+    {
+        // The root matters more than this app's own leaf under it: excluding only the leaf left every
+        // OTHER single-file .NET app's extracted native libraries exposed to a wholesale %TEMP% sweep.
+        Assert.Equal(expected, SystemPaths.ResolveBundleExtractionRoot(overrideDir, tempPath ?? @"C:\Temp"));
+    }
+
+    [Fact]
+    public void BundleExtractionRoot_IsResolvedAndContainsNothingElsesTemp()
+    {
+        // Resolved once at type initialisation, so a test can only assert shape — which is exactly why
+        // the branching lives in ResolveBundleExtractionRoot above.
+        var root = SystemPaths.BundleExtractionRoot;
+
+        Assert.False(string.IsNullOrWhiteSpace(root));
+        Assert.True(Path.IsPathFullyQualified(root!));
+        Assert.Equal(Path.TrimEndingDirectorySeparator(root!), root);
+
+        // A sibling of the extraction root inside the same temp folder must NOT be excluded, or a sweep
+        // would silently spare unrelated temp files.
+        Assert.False(SystemPaths.IsInsideSubtree(Path.Join(Path.GetTempPath(), "unrelated.tmp"), root));
+    }
+
+    [Fact]
+    public void IsInsideAnySubtree_ExcludesAMatchInAnyPosition_AndIgnoresBlanks()
+    {
+        // The walkers pass the extraction root AND this process's own leaf, so a candidate matching
+        // either has to be excluded regardless of order — and a null among them must exclude nothing,
+        // since BundleExtractionRoot can fail to resolve on an unusual machine.
+        const string other = @"C:\Temp\.net\SomeOtherApp\abc123\native.dll";
+        const string root = @"C:\Temp\.net";
+        const string own = @"C:\Temp\.net\SysManager-v1.0.0\hash";
+
+        Assert.True(SystemPaths.IsInsideAnySubtree(other, root, own));
+        Assert.True(SystemPaths.IsInsideAnySubtree(other, own, root));
+        Assert.True(SystemPaths.IsInsideAnySubtree(other, null, root));
+        Assert.False(SystemPaths.IsInsideAnySubtree(other, null, ""));
+        Assert.False(SystemPaths.IsInsideAnySubtree(@"C:\Temp\unrelated.tmp", root, own));
+        Assert.False(SystemPaths.IsInsideAnySubtree(other));
+    }
+
 }

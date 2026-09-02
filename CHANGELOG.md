@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.26] - 2026-09-02
+
+Cleaning temporary files could delete part of another program while it was running, which usually showed up
+later as that program failing to do something it had worked fine at before.
+
+### Fixed
+- **Temporary-file cleanup no longer deletes pieces of other running programs.** Some programs, SysManager
+  included, ship as a single file and unpack the parts they need into a shared folder inside your temp
+  folder while they run. SysManager already knew to leave its own unpacked parts alone — it had learned
+  that the hard way — but it only skipped its own, so everything belonging to every other program in that
+  same shared folder was fair game. Deleting those does not usually fail loudly: the program keeps running
+  on what it had already loaded and then breaks later, when it reaches for a part that is no longer there,
+  with nothing to connect the failure to a cleanup that happened earlier. Both cleanups — the "Temporary
+  files" category in Deep Cleanup and the temp step in One-Click Tune-Up — now leave that whole shared
+  folder alone.
+- **The description of that category no longer promises more than it delivered.** It said anything still in
+  use is skipped automatically, which is only true of files a program is holding open. It now says that,
+  and adds that the folder programs unpack themselves into is skipped entirely.
+
 ## [1.75.25] - 2026-09-02
 
 Closing SysManager immediately after changing something on the Performance tab could leave the window frozen

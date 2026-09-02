@@ -87,7 +87,8 @@ public sealed class DeepCleanupService
                 [Path.Combine(windowsDir, "Installer", "$PatchCache$")]),
 
             new("Temporary files",
-                "Per-user and system TEMP folders. Anything still in use is skipped automatically.",
+                "Per-user and system TEMP folders. Files an app is holding open are skipped, and the "
+                + "folder apps unpack themselves into is left alone entirely.",
                 [tempUser, Path.Combine(windowsDir, "Temp")]),
 
             new("Prefetch files",
@@ -202,7 +203,7 @@ public sealed class DeepCleanupService
             foreach (var p in existing)
             {
                 if (ct.IsCancellationRequested) break;
-                foreach (var file in EnumerateFiles(p, ct, SystemPaths.OwnExtractionDirectory))
+                foreach (var file in EnumerateFiles(p, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
                 {
                     if (ct.IsCancellationRequested) break;
                     try
@@ -359,7 +360,7 @@ public sealed class DeepCleanupService
 
                 try
                 {
-                    foreach (var file in EnumerateFiles(path, ct, SystemPaths.OwnExtractionDirectory))
+                    foreach (var file in EnumerateFiles(path, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
                     {
                         if (ct.IsCancellationRequested) break;
                         try
@@ -381,7 +382,7 @@ public sealed class DeepCleanupService
                             Log.Debug(ex, "Deep cleanup: failed to delete file {File}", file);
                         }
                     }
-                    foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct, SystemPaths.OwnExtractionDirectory))
+                    foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
                     {
                         try { Directory.Delete(dir, recursive: false); }
                         catch (IOException ex) { Log.Debug(ex, "Deep cleanup: failed to delete directory {Dir}", dir); }
@@ -411,22 +412,23 @@ public sealed class DeepCleanupService
     private static long SafeLength(string path)
     { try { return new FileInfo(path).Length; } catch (IOException) { return 0; } catch (UnauthorizedAccessException) { return 0; } }
 
-    /// <param name="excludeSubtree">
-    /// A directory tree to skip entirely, or null for none. Callers pass
+    /// <param name="excludeSubtrees">
+    /// Directory trees to skip entirely. Callers pass <see cref="SystemPaths.BundleExtractionRoot"/> and
     /// <see cref="SystemPaths.OwnExtractionDirectory"/>: the "Temporary files" definition covers all of
-    /// %TEMP%, which for a single-file build is where this process unpacked its own native libraries.
-    /// Deleting those made a clean run report errors (loaded files refuse to delete) and broke a later
-    /// lazy load for anything unpacked but not yet opened.
+    /// %TEMP%, which is where every single-file .NET app unpacks its native libraries. Deleting those made
+    /// a clean run report errors (loaded files refuse to delete) and broke a later lazy load for anything
+    /// unpacked but not yet opened — and excluding only this process's own leaf did that to every OTHER
+    /// app under the same root.
     /// </param>
     private static IEnumerable<string> EnumerateFiles(
-        string root, CancellationToken ct, string? excludeSubtree = null)
+        string root, CancellationToken ct, params string?[] excludeSubtrees)
     {
         // Guard the traversal ROOT itself, not just its children: if a cleanup-root
         // cache path is replaced by a junction/symlink (writable without admin, e.g.
         // %LOCALAPPDATA%\NVIDIA\GLCache), EnumerateFiles(root) would yield the LINK
         // TARGET's files and the caller would delete them — data loss outside the
         // target tree. IsReparsePoint fails safe (returns true on access error).
-        if (IsReparsePoint(root) || SystemPaths.IsInsideSubtree(root, excludeSubtree)) yield break;
+        if (IsReparsePoint(root) || SystemPaths.IsInsideAnySubtree(root, excludeSubtrees)) yield break;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
@@ -454,18 +456,18 @@ public sealed class DeepCleanupService
             // files that live outside the cleanup target tree (data-loss risk).
             foreach (var d in dirs)
             {
-                if (!IsReparsePoint(d) && !SystemPaths.IsInsideSubtree(d, excludeSubtree)) stack.Push(d);
+                if (!IsReparsePoint(d) && !SystemPaths.IsInsideAnySubtree(d, excludeSubtrees)) stack.Push(d);
             }
         }
     }
 
     private static IEnumerable<string> EnumerateDirectoriesDepthFirst(
-        string root, CancellationToken ct, string? excludeSubtree = null)
+        string root, CancellationToken ct, params string?[] excludeSubtrees)
     {
         List<string> all = [];
         // Guard the root (see EnumerateFiles): a junction at the root must not be
         // traversed, or its target's subdirectories could be reached for deletion.
-        if (IsReparsePoint(root) || SystemPaths.IsInsideSubtree(root, excludeSubtree)) return all;
+        if (IsReparsePoint(root) || SystemPaths.IsInsideAnySubtree(root, excludeSubtrees)) return all;
         var stack = new Stack<string>();
         stack.Push(root);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
@@ -477,7 +479,7 @@ public sealed class DeepCleanupService
             // link recursively) could reach outside the cleanup tree.
             foreach (var d in dirs)
             {
-                if (!IsReparsePoint(d) && !SystemPaths.IsInsideSubtree(d, excludeSubtree)) stack.Push(d);
+                if (!IsReparsePoint(d) && !SystemPaths.IsInsideAnySubtree(d, excludeSubtrees)) stack.Push(d);
             }
             if (!string.Equals(cur, root, StringComparison.OrdinalIgnoreCase)) all.Add(cur);
         }

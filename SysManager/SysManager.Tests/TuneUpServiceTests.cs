@@ -517,10 +517,47 @@ public class TuneUpServiceTests
     }
 
     [Fact]
+    public void EnumerateFiles_SkipsAnotherAppsExtractionFolder_NotJustOurOwn()
+    {
+        // The half the leaf exclusion above could never cover. Every single-file .NET app unpacks under
+        // the SAME root, so excluding only our own <root>\<app>\<hash> spared our native libraries and
+        // left every sibling to be deleted — inflicting on another running app exactly the failure our
+        // own exclusion exists to prevent, including the "extracted but not yet loaded" case that no
+        // in-use check can see, because nothing holds those files open yet.
+        //
+        // Layout: temp/ordinary.txt                    -> must be enumerated
+        //         temp/.net/ours/hash/ours.dll         -> must NOT be (our leaf)
+        //         temp/.net/theirs/hash/theirs.dll     -> must NOT be (the root, and the actual defect)
+        var root = Path.Combine(Path.GetTempPath(), "smtu_" + Guid.NewGuid().ToString("N"));
+        var extractionRoot = Path.Combine(root, ".net");
+        var ours = Path.Combine(extractionRoot, "ours", "hash");
+        var theirs = Path.Combine(extractionRoot, "theirs", "hash");
+        Directory.CreateDirectory(ours);
+        Directory.CreateDirectory(theirs);
+        File.WriteAllText(Path.Combine(root, "ordinary.txt"), "an unrelated temp file");
+        File.WriteAllText(Path.Combine(ours, "ours.dll"), "a native library this process needs");
+        File.WriteAllText(Path.Combine(theirs, "theirs.dll"), "a native library another app needs");
+
+        try
+        {
+            var found = TuneUpService
+                .EnumerateFilesSkippingReparsePoints(root, CancellationToken.None, extractionRoot, ours)
+                .ToList();
+
+            Assert.Contains(found, f => f.EndsWith("ordinary.txt", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(found, f => f.EndsWith("ours.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(found, f => f.EndsWith("theirs.dll", StringComparison.OrdinalIgnoreCase));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public void EnumerateFiles_WithNoExclusion_StillYieldsEverything()
     {
-        // The exclusion must be opt-in: passing null (what every other caller does) changes nothing,
-        // so this cannot pass by the traversal having quietly become more restrictive for everyone.
+        // A null among the exclusions must exclude NOTHING rather than everything. Real callers pass
+        // SystemPaths.BundleExtractionRoot, which resolves to null on a machine where that path cannot
+        // be formed, and the walkers hand it straight to the comparison — so getting this backwards
+        // would silently turn the temp cleanup into a no-op on exactly those machines.
         var root = Path.Combine(Path.GetTempPath(), "smtu_" + Guid.NewGuid().ToString("N"));
         var sub = Path.Combine(root, ".net", "app");
         Directory.CreateDirectory(sub);
@@ -530,7 +567,7 @@ public class TuneUpServiceTests
         try
         {
             var found = TuneUpService
-                .EnumerateFilesSkippingReparsePoints(root, CancellationToken.None, null)
+                .EnumerateFilesSkippingReparsePoints(root, CancellationToken.None, (string?)null)
                 .ToList();
 
             Assert.Contains(found, f => f.EndsWith("ordinary.txt", StringComparison.OrdinalIgnoreCase));

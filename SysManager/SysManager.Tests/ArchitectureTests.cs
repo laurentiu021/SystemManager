@@ -4494,7 +4494,7 @@ public partial class ArchitectureTests
     /// test stay green.</para>
     /// </remarks>
     [Fact]
-    public void EveryTempTreeWalkerCall_PassesTheOwnExtractionExclusion()
+    public void EveryTempTreeWalkerCall_PassesBothExtractionExclusions()
     {
         var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
         string[] sweepers = ["TuneUpService.cs", "DeepCleanupService.cs"];
@@ -4514,6 +4514,14 @@ public partial class ArchitectureTests
                 if (args.Contains("CancellationToken", StringComparison.Ordinal)) continue;
 
                 callsChecked++;
+
+                // BOTH, not either. OwnExtractionDirectory is one LEAF of BundleExtractionRoot, so on
+                // its own it spared this app's unpacked native libraries and left every other
+                // single-file .NET app's siblings under the same root to be deleted — the exact failure
+                // OwnExtractionDirectory's own documentation describes, inflicted on someone else. The
+                // leaf stays because for a non-single-file build BaseDirectory is the output folder,
+                // which no extraction root contains.
+                Assert.Contains("SystemPaths.BundleExtractionRoot", args, StringComparison.Ordinal);
                 Assert.Contains("SystemPaths.OwnExtractionDirectory", args, StringComparison.Ordinal);
             }
         }

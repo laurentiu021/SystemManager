@@ -4644,6 +4644,44 @@ public partial class ArchitectureTests
             RegexOptions.Singleline);
 
     /// <summary>
+    /// The toggle switch binds a thumb brush in BOTH states, since its backdrop changes with its own state.
+    /// </summary>
+    /// <remarks>
+    /// Asserting the tokens exist and measure well is not the same as asserting the switch uses them. The
+    /// contrast theories in <c>ThemeTextContrastTests</c> would stay green with the XAML back on
+    /// <c>White</c>, which is this codebase's most persistent defect shape: implemented, unit-tested, and
+    /// reaching no pixel. So this reads the style itself — the base thumb binds <c>ToggleThumb</c>, and the
+    /// <c>IsChecked</c> trigger re-points it at <c>TextOnAccent</c> because the track becomes the accent.
+    /// </remarks>
+    [Fact]
+    public void ToggleSwitch_BindsAThumbBrushForEachState()
+    {
+        var appXaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "App.xaml"));
+
+        var style = TypedStyleWithKey("ToggleSwitch").Match(appXaml);
+        Assert.True(style.Success, "the ToggleSwitch style was not found — this guard would pass vacuously");
+        var body = style.Value;
+
+        Assert.Contains("Background=\"{DynamicResource ToggleThumb}\"", body, StringComparison.Ordinal);
+        Assert.Contains(
+            "<Setter TargetName=\"Thumb\" Property=\"Background\" Value=\"{DynamicResource TextOnAccent}\"/>",
+            body, StringComparison.Ordinal);
+
+        // The ON assertion is only meaningful while the track still turns Accent in the same trigger.
+        Assert.Contains(
+            "<Setter TargetName=\"Track\" Property=\"Background\" Value=\"{DynamicResource Accent}\"/>",
+            body, StringComparison.Ordinal);
+
+        // And the brush has to be DERIVED, not just published. ThemeTextContrastTests computes the
+        // expected colour itself, because Apply no-ops without a WPF Application, so it would stay green
+        // if ThemeService published a literal instead — the same colour would be asserted against itself.
+        // Reading the derivation out of the source is what closes that: a mutation setting ToggleThumb to
+        // Colors.White passed every contrast theory and only this line caught it.
+        var service = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "ThemeService.cs"));
+        Assert.Contains("SetBrush(res, \"ToggleThumb\", OnColor(surface4));", service, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A control filled with a theme brush must take its foreground from the paired theme token, never a
     /// literal <c>White</c>.
     /// </summary>
@@ -4656,8 +4694,13 @@ public partial class ArchitectureTests
     /// <para>Guarded as a class because the four known instances are not the interesting ones — the fifth
     /// is. It is also invisible on the dark default a maintainer looks at most, and only appears after
     /// switching presets, so review will not catch it.</para>
-    /// <para>The <c>ToggleSwitch</c> thumb is a KNOWN exception, listed below with its reason: it is the
-    /// one filled element whose backdrop changes with its own state, so no single colour can serve it.</para>
+    /// <para>The <c>ToggleSwitch</c> thumb used to be listed as a known exception, on the reasoning that
+    /// it is the one filled element whose backdrop changes with its own state, so no single colour can
+    /// serve it. That reasoning was right and the conclusion was wrong: the answer was a thumb brush PER
+    /// STATE — <c>ToggleThumb</c> off, <c>TextOnAccent</c> on — not an exemption. The exception is gone,
+    /// and with it the hole that made it unnecessary in the first place: this only ever looked for a
+    /// literal White in a foreground or a glyph stroke, and the thumb is a Border BACKGROUND, so the
+    /// defect would have survived here even with no exception listed.</para>
     /// </remarks>
     [Fact]
     public void NoThemedFill_CarriesAHardcodedWhiteForeground()
@@ -4665,12 +4708,12 @@ public partial class ArchitectureTests
         // The fills whose colour is decided by the theme rather than fixed in the XAML.
         string[] themedFills = ["Accent", "Danger"];
 
-        // The thumb sits on Surface4 when off and on Accent when on. Measured across all twelve presets,
-        // no single colour clears 3:1 against both: a mid-dark thumb reads 1.06-1.34:1 on the Accent track
-        // of the six light presets, which is worse than the white it would replace. Fixing it needs a
-        // state-dependent thumb, which is a visual change rather than a token swap, so it is tracked
-        // separately rather than silently tolerated.
-        string[] knownExceptions = ["ToggleSwitch"];
+        // EMPTY. The thumb sits on Surface4 when off and on Accent when on, and the note here used to
+        // say that no single colour clears 3:1 against both — true, and the reason the answer is a brush
+        // per state rather than an exemption. Off it binds ToggleThumb (12.32-15.76:1 across the twelve
+        // presets), on it binds TextOnAccent (4.60-9.78:1). Adding a name back here means accepting a
+        // fill whose contrast depends on which preset is active.
+        string[] knownExceptions = [];
 
         var appXaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "App.xaml"));
         var offenders = new List<string>();
@@ -4689,8 +4732,15 @@ public partial class ArchitectureTests
             themedFillStyles++;
             if (knownExceptions.Contains(key, StringComparer.Ordinal)) continue;
 
-            // Foreground on the control, or Stroke on a glyph drawn inside it (the checkbox tick).
-            foreach (var literal in new[] { "Property=\"Foreground\" Value=\"White\"", "Stroke=\"White\"" })
+            // Foreground on the control, Stroke on a glyph drawn inside it (the checkbox tick), or
+            // Background on a child element of the template (the toggle thumb). The third was missing,
+            // which is the whole reason the thumb needed an exception entry to stay quiet — a guard that
+            // cannot see the shape of a defect does not need to be told to ignore it.
+            foreach (var literal in new[]
+                     {
+                         "Property=\"Foreground\" Value=\"White\"", "Stroke=\"White\"",
+                         "Background=\"White\"", "Property=\"Background\" Value=\"White\"",
+                     })
             {
                 if (body.Contains(literal, StringComparison.Ordinal))
                     offenders.Add($"{key} fills with {fill} but sets a literal White ({literal})");
@@ -4720,6 +4770,7 @@ public partial class ArchitectureTests
     [Theory]
     [InlineData("TextOnAccent")]
     [InlineData("TextOnDanger")]
+    [InlineData("ToggleThumb")]
     public void EveryPairedForegroundToken_IsBoundBySomeStyle(string token)
     {
         var appDir = FindAppProjectDir();

@@ -205,4 +205,81 @@ public class ThemeTextContrastTests
             "the uncorrected ramp was expected to fail against the shifted surface — if it now passes, "
             + "this test no longer proves the correction does anything.");
     }
+    // ── The toggle switch has to be readable in BOTH states ─────────────────
+    // The thumb was hardcoded White and the IsChecked trigger moved it without changing its brush, so
+    // one colour had to work on two different backgrounds and failed on each for opposite presets. OFF
+    // sits on Surface4, which is Lerp(Surface2, TextPrimary, 0.1) — near-white on the six light presets,
+    // where a white thumb measured 1.33-1.67:1 and the switch had no readable state at all. ON sits on
+    // Accent, where white measured 2.15:1 on warm-ember and 2.54:1 on dark-forest.
+    //
+    // Two theories rather than one combined assertion: the halves fail on disjoint sets of presets, so a
+    // single check could stay green with one half regressed while the other carried it.
+    //
+    // 3:1 is WCAG 1.4.11 for a non-text UI component. The real margins are far wider (12.32-15.76 OFF,
+    // 4.60-9.78 ON), so this floor exists to catch a future seed edit rather than to be scraped past.
+
+    [Theory]
+    [MemberData(nameof(AllPresets))]
+    public void ToggleThumb_IsReadableOnItsTrack_WhenOff(string presetId)
+    {
+        var p = ThemePreset.Defaults[presetId];
+        var track = Lerp(p.Surface2, p.TextPrimary, 0.1);
+        var thumb = ThemeService.OnColor(track);
+
+        var ratio = ContrastRatio(thumb, track);
+        Assert.True(ratio >= 3.0,
+            $"Preset '{presetId}': the OFF toggle thumb must clear 3:1 against its Surface4 track; "
+            + $"got {ratio:F2}:1. A white thumb was 1.33:1 here before this rule existed.");
+    }
+
+    [Theory]
+    [MemberData(nameof(AllPresets))]
+    public void ToggleThumb_IsReadableOnTheAccent_WhenOn(string presetId)
+    {
+        var p = ThemePreset.Defaults[presetId];
+        // The ON thumb deliberately uses TextOnAccent — the same brush as the primary button's label —
+        // because the IsChecked trigger turns the track into Accent.
+        var thumb = ThemeService.OnColor(p.Accent);
+
+        var ratio = ContrastRatio(thumb, p.Accent);
+        Assert.True(ratio >= 3.0,
+            $"Preset '{presetId}': the ON toggle thumb must clear 3:1 against the Accent track; "
+            + $"got {ratio:F2}:1. A white thumb was 2.15:1 on warm-ember before this rule existed.");
+    }
+
+    [Fact]
+    public void AWhiteToggleThumb_WouldStillFail_OnBothCounts()
+    {
+        // Positive control. Both theories above would pass trivially if OnColor ever returned white
+        // everywhere, so this pins that the OLD value genuinely fails — on the light presets when off,
+        // and on warm-ember and dark-forest when on. If either of these stops failing, the theories
+        // above have stopped proving anything.
+        var white = System.Windows.Media.Colors.White;
+
+        var light = ThemePreset.Defaults["clean-indigo"];
+        var lightTrack = Lerp(light.Surface2, light.TextPrimary, 0.1);
+        Assert.True(ContrastRatio(white, lightTrack) < 3.0,
+            "a white OFF thumb on clean-indigo's track was the defect; if it now clears 3:1 the surface "
+            + "ramp changed and these rules need re-deriving.");
+
+        foreach (var id in new[] { "warm-ember", "dark-forest" })
+        {
+            var accent = ThemePreset.Defaults[id].Accent;
+            Assert.True(ContrastRatio(white, accent) < 3.0,
+                $"a white ON thumb on {id}'s accent was the second defect; if it now clears 3:1 the "
+                + "accent seed changed and these rules need re-deriving.");
+        }
+    }
+
+    /// <summary>
+    /// Mirrors <c>ThemeService.Lerp</c> so the toggle track is derived with the same maths the app uses,
+    /// rather than an approximation of it. <c>ThemeStatusBrushTests</c> keeps the same mirror for the
+    /// same reason; <c>ThemeService.Lerp</c> is private and is not worth widening for a test.
+    /// </summary>
+    private static Color Lerp(Color a, Color b, double t) => Color.FromArgb(
+        255,
+        (byte)(a.R + (b.R - a.R) * t),
+        (byte)(a.G + (b.G - a.G) * t),
+        (byte)(a.B + (b.B - a.B) * t));
+
 }

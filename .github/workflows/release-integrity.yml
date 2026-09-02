@@ -106,10 +106,38 @@ jobs:
           fi
           echo "newest CHANGELOG version: ${NEWEST}"
 
-          if gh release view "v${NEWEST}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            echo "v${NEWEST} is published."
-            exit 0
+          if ! gh release view "v${NEWEST}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "::error::CHANGELOG.md announces ${NEWEST} but there is no v${NEWEST} release. Either the auto-release tag push failed or the release run was abandoned; publish it by hand and check why the run did not finish."
+            exit 1
           fi
 
-          echo "::error::CHANGELOG.md announces ${NEWEST} but there is no v${NEWEST} release. Either the auto-release tag push failed or the release run was abandoned; publish it by hand and check why the run did not finish."
-          exit 1
+          # Existing is not the same as usable. `gh release view` succeeds for a release with zero
+          # assets, so a run that died after creating the release and before uploading leaves exactly
+          # the outcome this workflow exists to catch — a reader follows the CHANGELOG and finds no
+          # download — while every check above passes. The two names below are the ones the README
+          # tells a user to fetch and verify.
+          ASSETS=$(gh release view "v${NEWEST}" --repo "${GITHUB_REPOSITORY}" \
+            --json assets --jq '.assets[] | "\(.name) \(.size)"')
+
+          MISSING=""
+          for name in "SysManager-v${NEWEST}.exe" "SysManager-v${NEWEST}.exe.sha256"; do
+            if ! printf '%s\n' "${ASSETS}" | grep -qF "${name} "; then
+              MISSING="${MISSING} ${name}"
+            fi
+          done
+
+          if [ -n "${MISSING}" ]; then
+            echo "::error::v${NEWEST} exists but is missing the assets a user downloads:${MISSING}. Re-run the release job's upload step, or upload them with gh release upload."
+            exit 1
+          fi
+
+          # A zero-byte or truncated upload is the failure mode, so the floor is deliberately far below
+          # the real size (~84 MB) rather than tracking it. Tracking it would go red the day the binary
+          # legitimately slims down, which is not a release-integrity problem.
+          EXE_SIZE=$(printf '%s\n' "${ASSETS}" | awk -v n="SysManager-v${NEWEST}.exe" '$1 == n { print $2 }')
+          if [ "${EXE_SIZE:-0}" -lt 10000000 ]; then
+            echo "::error::v${NEWEST}'s executable is only ${EXE_SIZE:-0} bytes, so the upload was truncated or empty. Re-upload it and verify the published SHA256 against the rebuilt binary."
+            exit 1
+          fi
+
+          echo "v${NEWEST} is published with its executable (${EXE_SIZE} bytes) and checksum."

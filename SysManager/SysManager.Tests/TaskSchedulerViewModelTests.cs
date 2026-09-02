@@ -230,4 +230,107 @@ public class TaskSchedulerViewModelTests
             "closing the view left a PowerShell scan running with nothing waiting for it.");
         await vm.InitializationComplete;
     }
+
+    // ── the run info the user waited for survives a filter keystroke ──────
+
+    private static PSObject Row(params (string Name, object? Value)[] properties)
+    {
+        var row = new PSObject();
+        foreach (var (name, value) in properties) row.Properties.Add(new PSNoteProperty(name, value));
+        return row;
+    }
+
+    /// <summary>
+    /// A runner that answers both scripts with real rows, unlike <see cref="RunnerSpy"/> which returns
+    /// empty collections. The list has to be non-empty for the filter to have anything to rebuild, and
+    /// the run-info query has to return dates for there to be anything to lose.
+    /// </summary>
+    private static IPowerShellRunner PopulatedRunner(DateTime lastRun, DateTime nextRun)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(),
+                        Arg.Any<CancellationToken>())
+              .Returns(ci =>
+              {
+                  var script = (string)ci[0]!;
+                  if (script.Contains(ListMarker, StringComparison.Ordinal))
+                  {
+                      return Task.FromResult(new Collection<PSObject>
+                      {
+                          Row(("TaskName", "Defrag"), ("TaskPath", @"\Microsoft\Windows\Defrag\"),
+                              ("State", "Ready"), ("Author", "Microsoft"), ("Description", "desc")),
+                          Row(("TaskName", "Backup"), ("TaskPath", @"\Custom\"),
+                              ("State", "Ready"), ("Author", "me"), ("Description", "desc")),
+                      });
+                  }
+                  if (script.Contains(InfoParams, StringComparison.Ordinal))
+                  {
+                      return Task.FromResult(new Collection<PSObject>
+                      {
+                          Row(("LastRunTime", lastRun), ("NextRunTime", nextRun)),
+                      });
+                  }
+                  return Task.FromResult(new Collection<PSObject>());
+              });
+        return runner;
+    }
+
+    /// <summary>
+    /// Selecting a row costs a PowerShell round-trip to fill in Last run / Next run. Typing one
+    /// character in the filter box threw that away: the enriched row was written to <c>Tasks</c> and to
+    /// the selection, but never back to the unfiltered backing list the filter rebuilds from — so both
+    /// columns snapped back to "—" and the selection was dropped, while the toggle path (Enable/Disable)
+    /// updated the backing list correctly and kept its result.
+    /// </summary>
+    [Fact]
+    public async Task AFilterKeystroke_KeepsTheRunInfoTheSelectionJustPaidFor()
+    {
+        var lastRun = new DateTime(2026, 8, 30, 14, 5, 0);
+        var nextRun = new DateTime(2026, 9, 3, 6, 0, 0);
+        var vm = new TaskSchedulerViewModel(new TaskSchedulerService(PopulatedRunner(lastRun, nextRun)));
+        await vm.InitializationComplete;
+
+        Assert.Equal(2, vm.Tasks.Count);
+        var defrag = vm.Tasks.Single(t => t.Name == "Defrag");
+        Assert.Null(defrag.LastRun);         // the list scan does not fetch run info
+
+        vm.SelectedTask = defrag;
+
+        // Precondition, not decoration: if the query never landed there would be nothing to lose and
+        // the assertions below would pass on an empty premise.
+        Assert.Equal(lastRun, vm.SelectedTask!.LastRun);
+        Assert.Equal(nextRun, vm.SelectedTask!.NextRun);
+
+        vm.Filter = "Defrag";                // one keystroke, and the grid is rebuilt from the backing list
+
+        var shown = Assert.Single(vm.Tasks);
+        Assert.Equal(lastRun, shown.LastRun);
+        Assert.Equal(nextRun, shown.NextRun);
+        Assert.Same(shown, vm.SelectedTask);
+    }
+
+    /// <summary>
+    /// The same loss through the other filter, because <c>HideSystemTasks</c> and <c>Filter</c> are two
+    /// entry points to one rebuild — fixing only the one a bug report happened to name would leave the
+    /// checkbox still discarding the data.
+    /// </summary>
+    [Fact]
+    public async Task HidingSystemTasks_AlsoKeepsTheRunInfo()
+    {
+        var lastRun = new DateTime(2026, 8, 30, 14, 5, 0);
+        var nextRun = new DateTime(2026, 9, 3, 6, 0, 0);
+        var vm = new TaskSchedulerViewModel(new TaskSchedulerService(PopulatedRunner(lastRun, nextRun)));
+        await vm.InitializationComplete;
+
+        var backup = vm.Tasks.Single(t => t.Name == "Backup");   // third-party, survives the checkbox
+        vm.SelectedTask = backup;
+        Assert.Equal(lastRun, vm.SelectedTask!.LastRun);
+
+        vm.HideSystemTasks = true;
+
+        var shown = Assert.Single(vm.Tasks);
+        Assert.Equal("Backup", shown.Name);
+        Assert.Equal(lastRun, shown.LastRun);
+        Assert.Same(shown, vm.SelectedTask);
+    }
 }

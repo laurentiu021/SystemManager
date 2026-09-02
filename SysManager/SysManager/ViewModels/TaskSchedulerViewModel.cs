@@ -152,11 +152,10 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
         // Update the item in place if it's still the selection.
         if (ReferenceEquals(SelectedTask, task))
         {
-            int idx = Tasks.IndexOf(task);
             _reassigningSelection = true;
             try
             {
-                if (idx >= 0) Tasks[idx] = withInfo;
+                ReplaceInBothLists(task, withInfo);
                 SelectedTask = withInfo;
             }
             finally { _reassigningSelection = false; }
@@ -214,12 +213,28 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
         base.Dispose(disposing);
     }
 
-    private void ReplaceTask(ScheduledTaskInfo oldTask, ScheduledTaskInfo newTask)
+    /// <summary>
+    /// Swaps a task for an updated copy in BOTH lists. There are two: <c>Tasks</c> is what the grid
+    /// shows, and <c>_all</c> is the unfiltered set <see cref="ApplyFilter"/> rebuilds <c>Tasks</c> from.
+    /// </summary>
+    /// <remarks>
+    /// Extracted because the two update paths had drifted. Enable/Disable wrote to both lists; the
+    /// per-selection run-info query wrote only to <c>Tasks</c>, so one keystroke in the filter box
+    /// rebuilt the grid from the stale copy in <c>_all</c> and the Last run / Next run columns the user
+    /// had just waited for snapped back to "—", taking the selection with them. One method that knows
+    /// about both lists is the difference between fixing that and fixing it again later.
+    /// </remarks>
+    private void ReplaceInBothLists(ScheduledTaskInfo oldTask, ScheduledTaskInfo newTask)
     {
         int allIdx = _all.FindIndex(t => t.FullPath == oldTask.FullPath);
         if (allIdx >= 0) _all[allIdx] = newTask;
         int idx = Tasks.IndexOf(oldTask);
         if (idx >= 0) Tasks[idx] = newTask;
+    }
+
+    private void ReplaceTask(ScheduledTaskInfo oldTask, ScheduledTaskInfo newTask)
+    {
+        ReplaceInBothLists(oldTask, newTask);
         SelectedTask = newTask;
     }
 }

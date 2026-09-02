@@ -238,7 +238,8 @@ public sealed class ThemeService
         SetBrush(res, "Surface1", theme.Surface);
         SetBrush(res, "Surface2", theme.Surface2);
         SetBrush(res, "Surface3", Lerp(theme.Surface2, theme.TextPrimary, 0.05));
-        SetBrush(res, "Surface4", Lerp(theme.Surface2, theme.TextPrimary, 0.1));
+        var surface4 = Lerp(theme.Surface2, theme.TextPrimary, 0.1);
+        SetBrush(res, "Surface4", surface4);
         SetBrush(res, "Border1", theme.Border);
         SetBrush(res, "Border2", Lerp(theme.Border, theme.TextPrimary, 0.08));
         SetBrush(res, "BorderAccent", Lerp(theme.Border, theme.Accent, 0.2));
@@ -256,6 +257,15 @@ public sealed class ThemeService
         // indigo #6366F1 to amber #F59E0B across the presets, so white measured 2.15:1 on warm-ember and
         // cleared AA on only two of the twelve.
         SetBrush(res, "TextOnAccent", OnColor(theme.Accent));
+
+        // The OFF thumb of a toggle switch, drawn on the Surface4 track. It was hardcoded White, and
+        // Surface4 is near-white on the six light presets, so the thumb measured 1.33 to 1.67:1 there —
+        // the switch had no readable state at all, which is worse than a label at 2:1. The ON thumb is
+        // not this brush: the IsChecked trigger turns the track into Accent, so it uses TextOnAccent
+        // above. That split is load-bearing rather than tidy — a single brush left the ON state at
+        // 2.15:1 on warm-ember and 2.54:1 on dark-forest, a defect the light-preset audit missed
+        // because both are dark presets.
+        SetBrush(res, "ToggleThumb", OnColor(surface4));
 
         SetColor(res, "Surface0Color", theme.Background);
         SetColor(res, "Surface1Color", theme.Surface);

@@ -21,6 +21,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class DebloaterViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly DebloaterService _service;
     private readonly ISessionRestorePoint _restorePoint;
     private CancellationTokenSource? _cts;

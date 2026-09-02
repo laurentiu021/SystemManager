@@ -18,6 +18,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsScanning ? CancelCommand : null;
+
     private readonly ShortcutCleanerService _service;
     private CancellationTokenSource? _cts;
 

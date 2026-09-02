@@ -20,6 +20,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelAnalysisCommand : null;
+
     private readonly DiskAnalyzerService _service;
     private readonly DiskScanHistoryService _history;
     private CancellationTokenSource? _cts;

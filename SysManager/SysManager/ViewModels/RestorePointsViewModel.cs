@@ -20,6 +20,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class RestorePointsViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly RestorePointService _service;
     private CancellationTokenSource? _cts;
 

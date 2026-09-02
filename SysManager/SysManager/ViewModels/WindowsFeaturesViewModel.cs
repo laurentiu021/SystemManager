@@ -17,6 +17,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly WindowsFeaturesService _service;
     private readonly ISessionRestorePoint _restorePoint;
     private CancellationTokenSource? _scanCts;

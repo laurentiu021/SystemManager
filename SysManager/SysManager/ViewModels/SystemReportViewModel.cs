@@ -21,6 +21,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class SystemReportViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly SystemReportService _service;
     private CancellationTokenSource? _cts;
 

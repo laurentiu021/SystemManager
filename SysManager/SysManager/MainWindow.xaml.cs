@@ -303,6 +303,33 @@ public partial class MainWindow : Window
     // window. Selecting a preset does NOT close the popup, so this does not fight trying several themes.
     private void ThemePopupHost_Closed(object sender, EventArgs e) => ThemeBtn.Focus();
 
+    /// <summary>
+    /// Escape stops whatever the open tab is doing.
+    /// </summary>
+    /// <remarks>
+    /// Bubbling <c>KeyDown</c>, deliberately not <c>PreviewKeyDown</c>. A ComboBox closing its dropdown
+    /// and a TextBox reverting an edit both consume Escape and both come first; this only ever sees the
+    /// key nothing else wanted. The theme popup is likewise unaffected — it handles Escape on its own
+    /// child and marks it handled.
+    /// <para>Nothing happens unless the tab returns a command, which its view model does only while it
+    /// has something running. Cancelling is always the safe direction — every cancel path here is a
+    /// CancellationToken the services already honour — so unlike a destructive action this is a
+    /// legitimate thing for a bare keypress to do.</para>
+    /// <para><c>IsContentCreated</c> is checked so this cannot construct a view model as a side effect of
+    /// a keypress. In practice the selected tab is always materialised; relying on that rather than
+    /// asserting it is how a lazy graph gets built by accident.</para>
+    /// </remarks>
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not Key.Escape) return;
+        if (DataContext is not MainWindowViewModel vm) return;
+        if (vm.SelectedNav is not { IsContentCreated: true, Content: ViewModelBase active }) return;
+        if (active.EscapeCancel is not { } cancel) return;
+
+        cancel.Execute(null);
+        e.Handled = true;
+    }
+
     private void ThemePopup_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key is not Key.Escape) return;

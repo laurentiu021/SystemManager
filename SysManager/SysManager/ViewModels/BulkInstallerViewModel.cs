@@ -20,6 +20,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class BulkInstallerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly BulkInstallerService _service;
     private readonly AppIconService _iconService;
     private readonly EtaCalculator _installEta = new();

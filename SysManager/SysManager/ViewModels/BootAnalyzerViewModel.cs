@@ -19,6 +19,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class BootAnalyzerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly BootAnalyzerService _service;
     private CancellationTokenSource? _cts;
 

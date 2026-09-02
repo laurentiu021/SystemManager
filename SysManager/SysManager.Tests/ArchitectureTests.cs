@@ -1781,6 +1781,48 @@ public partial class ArchitectureTests
     private static partial Regex NonAnchorCharacter();
 
     /// <summary>The repository root — the docs the guards read are not copied to the test output.</summary>
+    /// <summary>
+    /// The zero-based line of a named step in a workflow, failing with the same message wherever it is
+    /// used: a renamed step must update its guard rather than silently lose it.
+    /// </summary>
+    /// <remarks>
+    /// Extracted because three release-workflow guards had declared this identically as a local function
+    /// and a fourth was about to. The body slicers around it are deliberately NOT shared: one keeps
+    /// comments so it can count non-comment <c>throw</c> lines, one requires 300 characters of code, one
+    /// only requires non-emptiness. Those differences are the checks, so folding them together would
+    /// weaken all three.
+    /// </remarks>
+    private static int ReleaseStepLine(string[] lines, string name)
+    {
+        var at = Array.FindIndex(lines, l => l.Trim() == $"- name: {name}");
+        Assert.True(at >= 0,
+            $"release.yml has no step named \"{name}\". If it was renamed, update this guard in the "
+            + "same PR — do not delete it.");
+        return at;
+    }
+
+    /// <summary>
+    /// A workflow step's body, bounded at its own next step and with comment lines removed.
+    /// </summary>
+    /// <remarks>
+    /// Comments are dropped because a step's explanation names the very things a guard asserts, so a
+    /// <c>Contains</c> against the raw slice can be satisfied by prose — and worse, by a condition that
+    /// was commented OUT rather than deleted, which read as a working gate on the first draft of the
+    /// announcement guard.
+    /// </remarks>
+    private static string ReleaseStepCode(string[] lines, int at)
+    {
+        var end = Array.FindIndex(lines, at + 1,
+            l => l.TrimStart().StartsWith("- name:", StringComparison.Ordinal));
+        if (end < 0) end = lines.Length;
+        var code = string.Join('\n', lines[(at + 1)..end]
+            .Where(l => !l.TrimStart().StartsWith('#')));
+        Assert.False(string.IsNullOrWhiteSpace(code),
+            $"the step at line {at + 1} has no non-comment body, so every assertion on it would pass "
+            + "while inspecting nothing.");
+        return code;
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -2139,14 +2181,7 @@ public partial class ArchitectureTests
         var lines = File.ReadAllLines(
             Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
 
-        int StepLine(string name)
-        {
-            var at = Array.FindIndex(lines, l => l.Trim() == $"- name: {name}");
-            Assert.True(at >= 0,
-                $"release.yml has no step named \"{name}\". If it was renamed, update this guard in the "
-                + "same PR — do not delete it.");
-            return at;
-        }
+        int StepLine(string name) => ReleaseStepLine(lines, name);
 
         var publish = StepLine("Publish single-file exe");
         var rename = StepLine("Rename exe with version");
@@ -2249,51 +2284,94 @@ public partial class ArchitectureTests
         var lines = File.ReadAllLines(
             Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
 
-        int StepLine(string name)
-        {
-            var at = Array.FindIndex(lines, l => l.Trim() == $"- name: {name}");
-            Assert.True(at >= 0,
-                $"release.yml has no step named \"{name}\". If it was renamed, update this guard in the "
-                + "same PR — do not delete it.");
-            return at;
-        }
+        int StepLine(string name) => ReleaseStepLine(lines, name);
 
         var gate = StepLine("Decide whether this release gets an announcement");
         var announce = StepLine("Post announcement to Discussions");
         Assert.True(gate < announce,
             $"the gate (line {gate + 1}) runs after the announcement it decides (line {announce + 1}).");
 
-        // Each step is sliced to its OWN boundary. A slice that ran to the end of the file would let
-        // either step be satisfied by the other's text, which is how a check like this goes vacuous.
-        //
-        // Comment lines are dropped, and that is not tidiness. Commenting the condition out rather than
-        // deleting it left this guard GREEN on the first draft: `Contains` matches the condition inside
-        // `# if: steps.announce...` just as happily as the real thing, so a disabled gate read as a
-        // working one. Found by mutating exactly that.
-        string Body(int at)
-        {
-            var end = Array.FindIndex(lines, at + 1,
-                l => l.TrimStart().StartsWith("- name:", StringComparison.Ordinal));
-            if (end < 0) end = lines.Length;
-            var code = lines[(at + 1)..end]
-                .Where(l => !l.TrimStart().StartsWith('#'));
-            var slice = string.Join('\n', code);
-            Assert.False(string.IsNullOrWhiteSpace(slice),
-                $"the step at line {at + 1} has no non-comment body, so every assertion on it would "
-                + "pass while inspecting nothing.");
-            return slice;
-        }
-
-        var announceBody = Body(announce);
+        // Each step is sliced to its OWN boundary, comments removed — see ReleaseStepCode for why the
+        // comment stripping is load-bearing rather than tidiness.
+        var announceBody = ReleaseStepCode(lines, announce);
         Assert.Contains("if: steps.announce.outputs.post == 'true'", announceBody, StringComparison.Ordinal);
 
         // The gate has to actually decide. Without the comparison it could emit a constant and the
         // condition above would be satisfied on every release — the wall back, with a gate in front of it.
-        var gateBody = Body(gate);
+        var gateBody = ReleaseStepCode(lines, gate);
         Assert.Contains("id: announce", gateBody, StringComparison.Ordinal);
         Assert.Contains("${VERSION##*.}", gateBody, StringComparison.Ordinal);
         Assert.Contains("post=false", gateBody, StringComparison.Ordinal);
         Assert.Contains("post=true", gateBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A winget publish that fails must not take the release announcement down with it.
+    /// </summary>
+    /// <remarks>
+    /// Publishing to winget depends on a third-party repository and on a PAT with a finite lifetime, so
+    /// it fails for reasons that have nothing to do with the release being good. When it did, the job
+    /// stopped there: the binary and the release notes were already public and the announcement never
+    /// posted, so the release existed and nobody was told. The six winget steps carry
+    /// <c>continue-on-error</c> for exactly that reason, and a separate step reports the outcome so a
+    /// skipped publish is still visible.
+    /// <para>Nothing pinned it. Stripping those six directives, or adding a winget condition to the
+    /// announcement, left the whole suite green — the sibling guards assert the announcement step EXISTS
+    /// and runs after the smoke check, which a suppressed announcement still satisfies.</para>
+    /// <para>The <c>if:</c> on the announcement is checked for what it must NOT say. It legitimately
+    /// carries the feature-release gate, so this cannot demand the absence of a condition — only that no
+    /// condition ties it to the winget result.</para>
+    /// </remarks>
+    [Fact]
+    public void AWingetFailure_DoesNotSuppressTheReleaseAnnouncement()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+
+        string[] wingetSteps =
+        [
+            "Sync the winget-pkgs fork with upstream",
+            "Update winget package (attempt 1)",
+            "Re-sync the fork before retrying",
+            "Update winget package (attempt 2)",
+            "Re-sync the fork before the final attempt",
+            "Update winget package (attempt 3)",
+        ];
+
+        var unguarded = new List<string>();
+        foreach (var step in wingetSteps)
+        {
+            var body = ReleaseStepCode(lines, ReleaseStepLine(lines, step));
+            if (!body.Contains("continue-on-error: true", StringComparison.Ordinal))
+                unguarded.Add(step);
+        }
+
+        Assert.True(unguarded.Count == 0,
+            "these winget steps can fail the job, which would leave the release and its notes public "
+            + "with no announcement — a release nobody is told about. Restore continue-on-error, or "
+            + "move the announcement ahead of them and say why here:\n  "
+            + string.Join("\n  ", unguarded));
+
+        // The outcome must still be reported, or continue-on-error turns a skipped publish into silence.
+        var outcome = ReleaseStepCode(lines, ReleaseStepLine(lines, "Determine the winget outcome"));
+        Assert.DoesNotContain("continue-on-error", outcome, StringComparison.Ordinal);
+
+        var announceBody = ReleaseStepCode(
+            lines, ReleaseStepLine(lines, "Post announcement to Discussions"));
+        var conditions = announceBody.Split('\n')
+            .Where(l => l.TrimStart().StartsWith("if:", StringComparison.Ordinal))
+            .ToArray();
+
+        // Vacuity floor: the announcement does carry a condition (the feature-release gate). If none
+        // parsed, the `if:` shape changed and the check below would be inspecting nothing.
+        Assert.True(conditions.Length >= 1,
+            "the announcement step has no if: line at all — the feature-release gate is gone, or this "
+            + "guard is no longer reading the condition it means to check.");
+
+        foreach (var condition in conditions)
+        {
+            Assert.DoesNotContain("winget", condition, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     /// <summary>
@@ -2323,14 +2401,7 @@ public partial class ArchitectureTests
         var lines = File.ReadAllLines(
             Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
 
-        int StepLine(string name)
-        {
-            var at = Array.FindIndex(lines, l => l.Trim() == $"- name: {name}");
-            Assert.True(at >= 0,
-                $"release.yml has no step named \"{name}\". If it was renamed, update this guard in the "
-                + "same PR — do not delete it.");
-            return at;
-        }
+        int StepLine(string name) => ReleaseStepLine(lines, name);
 
         // Sliced to the step's OWN boundary and required to be substantial: a collapsed slice would
         // make every token check below pass by measuring nothing.

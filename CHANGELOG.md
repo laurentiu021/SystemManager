@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.27] - 2026-09-02
+
+On the six light colour themes you could not tell whether a switch was on or off — the little circle was white
+on an almost-white background. On Warm Ember and Dark Forest the same thing happened the other way round, once
+the switch was on.
+
+### Fixed
+- **Switches can now be read on every colour theme.** The circle inside a switch was always white. On the
+  light themes the track behind it is very pale, so the circle was invisible and the only way to tell a
+  switch's state was to click it and watch what happened. Checking every theme turned up the mirror image of
+  the same problem: on Warm Ember and Dark Forest, the track turns amber or green when the switch is on, and a
+  white circle on those is nearly as hard to see. The circle now takes its colour from whatever is behind it,
+  which is different in each state, so it stands out in both. It affects every switch in the app.
+
 ## [1.75.26] - 2026-09-02
 
 Cleaning temporary files could delete part of another program while it was running, which usually showed up

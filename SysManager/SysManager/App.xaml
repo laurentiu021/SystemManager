@@ -503,8 +503,12 @@
                                      trigger can light the Accent ring without shifting the thumb/track layout. -->
                                 <Border x:Name="Track" CornerRadius="11" Background="{DynamicResource Surface4}"
                                         BorderThickness="1.5" BorderBrush="Transparent"/>
+                                <!-- OFF thumb: derived from the track it sits on, not White. Surface4 is
+                                     near-white on the light presets, where a white thumb measured 1.33-1.67:1
+                                     and the switch had no readable state. The ON thumb is set in the IsChecked
+                                     trigger instead, because the track becomes Accent there. -->
                                 <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9"
-                                        Background="White" HorizontalAlignment="Left" Margin="2,2,0,2"
+                                        Background="{DynamicResource ToggleThumb}" HorizontalAlignment="Left" Margin="2,2,0,2"
                                         VerticalAlignment="Center">
                                     <Border.Effect>
                                         <DropShadowEffect ShadowDepth="1" BlurRadius="3" Opacity="0.3" Color="Black"/>
@@ -514,6 +518,12 @@
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
                                     <Setter TargetName="Track" Property="Background" Value="{DynamicResource Accent}"/>
+                                    <!-- The thumb changes brush with the track, not just position. Keeping the
+                                         OFF brush here left a white thumb on the accent fill: 2.15:1 on
+                                         warm-ember and 2.54:1 on dark-forest. TextOnAccent is the brush that
+                                         already exists for "drawn on the accent", used by the primary button's
+                                         label and the checkbox tick. -->
+                                    <Setter TargetName="Thumb" Property="Background" Value="{DynamicResource TextOnAccent}"/>
                                     <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
                                     <Setter TargetName="Thumb" Property="Margin" Value="0,2,2,2"/>
                                 </Trigger>

@@ -2134,6 +2134,73 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The release announcement must stay gated to feature releases.
+    /// </summary>
+    /// <remarks>
+    /// One announcement per release made Discussions unusable: all 645 discussions were release bot
+    /// posts and the five human categories were empty, so the only low-friction channel for someone who
+    /// will not open an issue had no human content on its first screen at all.
+    /// <para>The gate reads the patch component rather than a bump type, because release.yml is also
+    /// runnable from a tag and does not otherwise know how the version was decided. Patch 0 is exactly
+    /// what semantic-release produces for <c>feat:</c> and <c>feat!:</c>.</para>
+    /// <para>Guarded because deleting three lines restores the wall, and nothing else in the suite would
+    /// notice — the sibling guard above asserts only that the announcement step EXISTS and runs after
+    /// the smoke check, which a gated step still does.</para>
+    /// </remarks>
+    [Fact]
+    public void TheAnnouncement_OnlyPostsForFeatureReleases()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+
+        int StepLine(string name)
+        {
+            var at = Array.FindIndex(lines, l => l.Trim() == $"- name: {name}");
+            Assert.True(at >= 0,
+                $"release.yml has no step named \"{name}\". If it was renamed, update this guard in the "
+                + "same PR — do not delete it.");
+            return at;
+        }
+
+        var gate = StepLine("Decide whether this release gets an announcement");
+        var announce = StepLine("Post announcement to Discussions");
+        Assert.True(gate < announce,
+            $"the gate (line {gate + 1}) runs after the announcement it decides (line {announce + 1}).");
+
+        // Each step is sliced to its OWN boundary. A slice that ran to the end of the file would let
+        // either step be satisfied by the other's text, which is how a check like this goes vacuous.
+        //
+        // Comment lines are dropped, and that is not tidiness. Commenting the condition out rather than
+        // deleting it left this guard GREEN on the first draft: `Contains` matches the condition inside
+        // `# if: steps.announce...` just as happily as the real thing, so a disabled gate read as a
+        // working one. Found by mutating exactly that.
+        string Body(int at)
+        {
+            var end = Array.FindIndex(lines, at + 1,
+                l => l.TrimStart().StartsWith("- name:", StringComparison.Ordinal));
+            if (end < 0) end = lines.Length;
+            var code = lines[(at + 1)..end]
+                .Where(l => !l.TrimStart().StartsWith('#'));
+            var slice = string.Join('\n', code);
+            Assert.False(string.IsNullOrWhiteSpace(slice),
+                $"the step at line {at + 1} has no non-comment body, so every assertion on it would "
+                + "pass while inspecting nothing.");
+            return slice;
+        }
+
+        var announceBody = Body(announce);
+        Assert.Contains("if: steps.announce.outputs.post == 'true'", announceBody, StringComparison.Ordinal);
+
+        // The gate has to actually decide. Without the comparison it could emit a constant and the
+        // condition above would be satisfied on every release — the wall back, with a gate in front of it.
+        var gateBody = Body(gate);
+        Assert.Contains("id: announce", gateBody, StringComparison.Ordinal);
+        Assert.Contains("${VERSION##*.}", gateBody, StringComparison.Ordinal);
+        Assert.Contains("post=false", gateBody, StringComparison.Ordinal);
+        Assert.Contains("post=true", gateBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The release workflow must prove the artifact reports the tag it was built from — statically,
     /// and again at runtime.
     /// <para>publish.ps1 injects Version, FileVersion and AssemblyVersion from the tag and nothing

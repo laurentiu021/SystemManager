@@ -55,4 +55,13 @@ public sealed record ScheduledTaskInfo(
     public string AuthorDisplay => string.IsNullOrWhiteSpace(Author)
         ? "No publisher recorded for this task."
         : $"Created by: {Author}";
+
+    /// <summary>
+    /// What the task is for, phrased for a cell. A great many Windows tasks carry no description at all,
+    /// and the raw value rendered as an empty cell — which reads as data that failed to load rather than
+    /// data Windows never had. Says so instead.
+    /// </summary>
+    public string DescriptionDisplay => string.IsNullOrWhiteSpace(Description)
+        ? "No description provided by Windows."
+        : Description;
 }

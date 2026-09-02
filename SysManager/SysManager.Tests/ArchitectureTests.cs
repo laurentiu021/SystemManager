@@ -3774,7 +3774,15 @@ public partial class ArchitectureTests
         (string Fetched, string Bound)[] contract =
         [
             ("@{ n='State'; e={ [string]$_.State } }, Author, Description", "{Binding AuthorDisplay}"),
-            ("Author, Description", "{Binding Description}"),
+            // DescriptionDisplay, not the raw field: most Windows tasks carry no description, and the
+            // raw binding rendered those rows as an empty cell.
+            //
+            // The `Binding="` prefix is load-bearing, unlike the other rows. DescriptionDisplay is bound
+            // TWICE in this view — as the column's own value and as the Task column's tooltip — so a bare
+            // substring check would be satisfied by the tooltip alone, and the column could quietly go
+            // back to the raw field while this guard stayed green. A tooltip is `Value="`, a column is
+            // `Binding="`; only the latter is the cell. Caught by mutating exactly that.
+            ("Author, Description", "Binding=\"{Binding DescriptionDisplay}\""),
             ("Select-Object LastRunTime, NextRunTime", "{Binding NextRunDisplay}"),
             ("Select-Object LastRunTime, NextRunTime", "{Binding LastRunDisplay}"),
         ];

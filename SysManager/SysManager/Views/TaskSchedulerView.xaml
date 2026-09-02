@@ -95,6 +95,13 @@
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                <!-- The description on hover over the NAME, which is where someone
+                                     deciding whether to disable "Adobe Acrobat Update Task" is looking.
+                                     It is also the only place the full text is readable: the "What it
+                                     does" column trims, and its own tooltip is the publisher. Each
+                                     column's tooltip therefore shows something that column does not
+                                     already display. -->
+                                <Setter Property="ToolTip" Value="{Binding DescriptionDisplay}"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -147,8 +154,8 @@
                          what the category chip is derived from, so a user who wonders why something is
                          labelled "System" can now see the answer. Same trimming + hover shape as the
                          Description column in ServicesView. -->
-                    <DataGridTextColumn Header="What it does" Binding="{Binding Description}"
-                                        Width="*" MinWidth="120" SortMemberPath="Description">
+                    <DataGridTextColumn Header="What it does" Binding="{Binding DescriptionDisplay}"
+                                        Width="*" MinWidth="120" SortMemberPath="DescriptionDisplay">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>

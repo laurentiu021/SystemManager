@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.75.30] - 2026-09-02
+
+In Task Scheduler, the "What it does" column was simply blank for most tasks, because Windows never
+recorded a description for them — but a blank cell looks like something failed to load. It now says so.
+Hovering a task's name shows the full text, which the column has to cut short.
+
+### Fixed
+- **"What it does" no longer looks broken on tasks Windows never described.** A great many Windows
+  scheduled tasks carry no description at all. The column showed those as an empty cell, which reads as
+  missing data rather than as data that was never there; it now reads "No description provided by
+  Windows." A blank value made of spaces is treated the same way, since it looks identical.
+- **The full description is now readable.** The column is narrow and cuts long text off with an ellipsis,
+  and hovering it showed the publisher instead. Hovering the task's own name now shows the whole
+  description, so nothing is displayed with no way to read the rest of it.
+
 ## [1.75.29] - 2026-09-02
 
 If you move around the app with the keyboard instead of the mouse, pressing Enter on anything in the

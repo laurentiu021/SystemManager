@@ -276,6 +276,51 @@ public class SidebarSelectionContractTests
                 (string?)setter.Attribute("Property") == property
                 && (string?)setter.Attribute("Value") == value);
 
+    /// <summary>
+    /// The appearance popup must take focus when it opens, give it back when it closes, and close on
+    /// Escape.
+    /// </summary>
+    /// <remarks>
+    /// A <c>Popup</c> is not a <c>Window</c>: it gets no Escape-to-close and no focus containment. Every
+    /// preset card inside was already <c>Focusable</c>, a tab stop, and Enter-activatable — someone had
+    /// clearly built for the keyboard — but opening the panel left focus behind on the chip, so none of
+    /// it could be reached and there was no way out but the mouse. <c>Key.Escape</c> appeared nowhere in
+    /// the app.
+    /// <para>Asserted rather than demonstrated: the behaviour needs the app running, which happens on the
+    /// other workstation. What is pinned here is the wiring that makes it possible, on both sides — the
+    /// XAML hooks and the handlers they name. Half of it is useless alone: an <c>Opened</c> attribute
+    /// with a handler that does not move focus reads as fixed and is not.</para>
+    /// </remarks>
+    [Fact]
+    public void TheAppearancePopup_TakesFocusAndGivesItBack()
+    {
+        var document = LoadProjectXaml("MainWindow.xaml");
+        var popup = document
+            .Descendants(Presentation + "Popup")
+            .Single(element => (string?)element.Attribute(Xaml + "Name") == "ThemePopupHost");
+
+        Assert.Equal("True", (string?)popup.Attribute("Focusable"));
+        // Without Cycle, Tab walks out of the panel and behind it, which is worse than not focusing it.
+        Assert.Equal("Cycle", (string?)popup.Attribute("KeyboardNavigation.TabNavigation"));
+        Assert.Equal("ThemePopupHost_Opened", (string?)popup.Attribute("Opened"));
+        Assert.Equal("ThemePopupHost_Closed", (string?)popup.Attribute("Closed"));
+
+        // The handlers have to DO the thing. Comments are stripped first: this file explains the focus
+        // moves in prose beside them, and a Contains against the raw text would be satisfied by the
+        // explanation of a handler that had been emptied.
+        var code = string.Join('\n', LoadProjectSource("MainWindow.xaml.cs")
+            .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+        Assert.Contains("MoveFocus(new TraversalRequest(FocusNavigationDirection.First))", code,
+                        StringComparison.Ordinal);
+        Assert.Contains("ThemePopupHost_Closed(object sender, EventArgs e) => ThemeBtn.Focus()", code,
+                        StringComparison.Ordinal);
+        // Escape must be handled on the CHILD: with AllowsTransparency the popup has its own
+        // PresentationSource, so a handler on the Popup element never sees the key.
+        Assert.Contains("popup.PreviewKeyDown += ThemePopup_PreviewKeyDown", code, StringComparison.Ordinal);
+        Assert.Contains("Key.Escape", code, StringComparison.Ordinal);
+    }
+
     private static XDocument LoadProjectXaml(string fileName)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -284,6 +329,19 @@ public class SidebarSelectionContractTests
         {
             var candidate = Path.Combine(directory.FullName, "SysManager", fileName);
             if (File.Exists(candidate)) return XDocument.Load(candidate);
+        }
+
+        throw new FileNotFoundException($"Could not locate SysManager/{fileName} from the test output.");
+    }
+
+    private static string[] LoadProjectSource(string fileName)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "SysManager", fileName);
+            if (File.Exists(candidate)) return File.ReadAllLines(candidate);
         }
 
         throw new FileNotFoundException($"Could not locate SysManager/{fileName} from the test output.");

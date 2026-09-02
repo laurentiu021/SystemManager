@@ -415,8 +415,16 @@
                         </Border>
                     </Grid>
                     <!-- Theme popup -->
+                    <!-- A Popup is not a Window: it gets no Escape-to-close and no focus containment of
+                         its own. Every preset card inside is already Focusable, a tab stop, and
+                         Enter-activatable, and none of that was reachable, because opening the panel left
+                         focus behind on the chip. TabNavigation=Cycle keeps Tab inside the panel instead
+                         of walking out behind it; Opened moves focus in; Closed puts it back on the chip,
+                         so dismissing does not leave focus nowhere. -->
                     <Popup x:Name="ThemePopupHost" Placement="Top" PlacementTarget="{Binding ElementName=ThemeBtn}"
                            StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+                           Focusable="True" KeyboardNavigation.TabNavigation="Cycle"
+                           Opened="ThemePopupHost_Opened" Closed="ThemePopupHost_Closed"
                            HorizontalOffset="0" VerticalOffset="-8"/>
                 </StackPanel>
             </Grid>

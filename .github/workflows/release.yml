@@ -684,7 +684,32 @@ jobs:
             echo "Re-run this workflow once fixed. The release itself does not need to be recreated."
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # One announcement per release turned Discussions into a wall: every one of the 645 discussions
+      # was a release bot post, and the five human categories were empty, so the only low-friction
+      # channel for someone who will not open an issue had no human first screen at all.
+      #
+      # Gated on the patch component rather than on a bump type, because release.yml is also runnable
+      # from a tag and does not otherwise know how the version was decided. Patch 0 is exactly the set
+      # semantic-release produces for feat: and feat!: — 1.76.0, 2.0.0 — while every fix: lands as
+      # 1.75.30 and above. Deliberately NOT `endsWith(version, '.0')`, which is the same test written
+      # so that 1.75.10 makes a reader stop and check.
+      - name: Decide whether this release gets an announcement
+        id: announce
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          patch="${VERSION##*.}"
+          if [ "$patch" = "0" ]; then
+            echo "post=true" >> "$GITHUB_OUTPUT"
+            echo "$VERSION is a feature release — posting an announcement."
+          else
+            echo "post=false" >> "$GITHUB_OUTPUT"
+            echo "$VERSION is a patch release — no announcement, so human threads stay readable."
+          fi
+
       - name: Post announcement to Discussions
+        if: steps.announce.outputs.post == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |

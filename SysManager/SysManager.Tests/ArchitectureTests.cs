@@ -92,19 +92,17 @@ public partial class ArchitectureTests
         //   · SettingsWatchdogService and WindowsThemeService — both constructed concretely by tests,
         //     both now behind the shared `string? configDir = null` seam.
         //
-        // The ONE that remains is the hard one:
-        //   · LogService is a `static partial class` by design — Serilog's sink is configured once per
-        //     process — so it has no instance to hang the shared `string? configDir = null` seam on. It
-        //     is also the only offender no test constructs, so its risk is the lowest of the set; it
-        //     needs a design decision (dropping the static-sink model) rather than a mechanical edit.
-        //
         // ThemeService came off in #1741's follow-up: its path moved to an instance field set from the
         // same seam, and its one WPF touch-point (Apply) now no-ops without an Application, so the
         // persistence path is exercised headlessly by ThemeServiceTests instead of being left untested.
-        string[] known =
-        [
-            "LogService.<LogDir>k__BackingField",
-        ];
+        //
+        // EMPTY. The last entry was LogService, which could not take the shared constructor seam: it is a
+        // `static partial class` because Serilog's sink is configured once per process, so there is no
+        // instance to hang a parameter on. It now takes the directory on Init instead, and the assertion
+        // after this loop pins that seam — because a private setter makes the backing field non-readonly,
+        // so the rule below would stop matching it for a reason unrelated to being redirectable. Without
+        // that assertion this entry would have gone quiet rather than being satisfied.
+        string[] known = [];
 
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         Assert.False(string.IsNullOrEmpty(profile));   // else every check below would be vacuous
@@ -146,6 +144,17 @@ public partial class ArchitectureTests
         Assert.True(fixedSince.Count == 0,
             "These no longer hold a static user-profile path, so remove them from the `known` list " +
             "above — a stale allowance silently weakens this guard:\n  " + string.Join("\n  ", fixedSince));
+        // The one service that solved this differently still has to be able to solve it. LogService keeps
+        // a static path because its sink is process-wide, so what makes it testable is that Init accepts
+        // the directory. Checked by reflection rather than by reading the source: what matters is that a
+        // caller can pass one, not how the parameter is written.
+        var init = typeof(LogService).GetMethod("Init", BindingFlags.Public | BindingFlags.Static);
+        Assert.NotNull(init);
+        var logDirParameter = init!.GetParameters()
+            .FirstOrDefault(p => p.ParameterType == typeof(string) && p.IsOptional);
+        Assert.True(logDirParameter is not null,
+            "LogService.Init must accept an optional directory, or its static LogDir is unredirectable "
+            + "again and the empty allowance above is hiding that rather than recording it.");
     }
 
     /// <summary>

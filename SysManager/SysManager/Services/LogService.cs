@@ -36,8 +36,57 @@ public static partial class LogService
     /// </summary>
     internal const string StartupMessage = "SysManager {Version} started";
 
-    public static string LogDir { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager", "logs");
+    /// <summary>
+    /// Where the rolling log is written. Settable only through <see cref="Init(string?)"/>, and only
+    /// before the sink exists.
+    /// </summary>
+    /// <remarks>
+    /// This was <c>static readonly</c>, which made it the last entry on the user-data-path ratchet: a
+    /// resolved path in static state cannot be pointed at a temp directory by any test, because
+    /// <see cref="Environment.GetFolderPath"/> resolves through the Win32 known-folder function and
+    /// ignores the <c>LOCALAPPDATA</c> environment variable. That is not a hypothetical — a service
+    /// holding its path this way had tests that wrote into the user's real speed-test history.
+    /// <para>The usual fix, a constructor-injected <c>string? configDir = null</c>, does not apply here:
+    /// this is a static class because Serilog's sink is configured once per process, so there is no
+    /// instance to hang a parameter on. The seam is <see cref="Init(string?)"/> instead.</para>
+    /// </remarks>
+    public static string LogDir { get; private set; } = ResolveLogDir();
+
+    /// <summary>
+    /// Decides the log directory for a call to <see cref="Init(string?)"/>, or refuses. Also produces the
+    /// default, so there is one entry point rather than a resolver beside a parameterless helper.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Init(string?)"/> and pure, so the refusal can be tested without building
+    /// a real Serilog sink and assigning the global <c>Log.Logger</c> — a test that did that would leak
+    /// into every other test in the run.
+    /// <para>Both parameters are optional so this is also what produces the default, which is what
+    /// <c>StaticPathMethods_AcceptARedirect</c> requires of any static member that can resolve a path
+    /// under the user profile: a default is fine, having no parameter to override is not. A separate
+    /// parameterless <c>DefaultLogDir()</c> failed that rule, and giving it a parameter nobody would pass
+    /// would have satisfied the letter of it and nothing else.</para>
+    /// <para>Redirecting after the sink exists is refused rather than ignored. Ignoring it would leave
+    /// <see cref="LogDir"/> naming one directory while the sink wrote to another, and every reader of
+    /// that property — the crash dialog, the About tab, a support bundle — would point a user at an
+    /// empty folder. Failing loudly at the one call site is cheaper than that.</para>
+    /// </remarks>
+    internal static string ResolveLogDir(string? requested = null, bool loggerExists = false)
+    {
+        if (!string.IsNullOrWhiteSpace(requested))
+        {
+            if (loggerExists)
+            {
+                throw new InvalidOperationException(
+                    "The log directory cannot be changed once the sink is writing: LogDir would name one "
+                    + "directory while the log went to another. Pass it on the first Init call instead.");
+            }
+
+            return requested;
+        }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager", "logs");
+    }
 
     // Dynamically build regex from the actual user profile parent directory
     // (e.g. C:\Users) so it works even if Windows is installed on a non-standard
@@ -64,8 +113,14 @@ public static partial class LogService
     [GeneratedRegex(@"(?i)([A-Z]:\\Users\\)[^\\]+")]
     private static partial Regex FallbackUserPathRegex();
 
-    public static void Init()
+    /// <param name="logDir">
+    /// Where to write. Null keeps the per-user default. Supplied only by a test that must not touch the
+    /// real log directory; the app's two call sites in <c>App.OnStartup</c> pass nothing, and they are
+    /// mutually exclusive, so this runs exactly once per process.
+    /// </param>
+    public static void Init(string? logDir = null)
     {
+        LogDir = ResolveLogDir(logDir, Logger is not null);
         Directory.CreateDirectory(LogDir);
         // Scrub the user name centrally, on the way to the file. SanitizePath already existed and
         // was applied at 15 call sites, while 60 others logged a raw path — so whether the user's

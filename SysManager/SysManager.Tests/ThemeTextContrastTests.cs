@@ -22,38 +22,70 @@ public class ThemeTextContrastTests
     public static IEnumerable<object[]> AllPresets =>
         ThemePreset.Defaults.Values.Select(p => new object[] { p.Id });
 
-    // TextMuted is body/label text — WCAG AA for normal text is 4.5:1. It must clear that against
-    // the WORST-CASE (lowest-contrast) layered surface it renders on. Surface3/Surface4 are derived
-    // by Lerp toward TextPrimary (higher contrast for muted, so not the worst case); the seeded
-    // Surface2 is the worst common case, so we assert against Background, Surface, and Surface2.
+    // TextMuted is body/label text — WCAG AA for normal text is 4.5:1 — and it must clear that on the
+    // WORST-CASE layered surface it renders on, which is Surface4, not Surface2.
+    //
+    // This check used to stop at Surface2 on the reasoning that "Surface3/Surface4 are derived by Lerp
+    // toward TextPrimary (higher contrast for muted, so not the worst case)". That is backwards.
+    // Lerping the SURFACE toward the text colour moves the surface CLOSER to the text, so contrast
+    // DROPS: Surface4 is the lowest-contrast surface in the ramp, and it was the one left unasserted.
+    // Six of twelve presets were sub-AA there — including midnight-indigo, the default — while this
+    // theory reported the ramp clean (#1555). Fourteen places in the app put muted text on those two
+    // surfaces, among them the Tweaks Hub "DEFAULT" badge at FontSize 10 and the elevation badge.
+    //
+    // The derived surfaces are computed here with the same Lerp factors ThemeService.Apply uses, so the
+    // test and the service cannot drift to different definitions of the same colour.
     [Theory]
     [MemberData(nameof(AllPresets))]
     public void TextMuted_MeetsWcagAa_OnEveryLayeredSurface(string presetId)
     {
         var p = ThemePreset.Defaults[presetId];
+        var surface3 = Lerp(p.Surface2, p.TextPrimary, 0.05);
+        var surface4 = Lerp(p.Surface2, p.TextPrimary, 0.10);
+
+        // Non-vacuity floor. If the lerp factors were ever zeroed here, the two rows below would silently
+        // become repeats of Surface2 and this theory would go back to covering nothing above it — passing,
+        // which is exactly how the gap survived the first time.
+        Assert.NotEqual(p.Surface2, surface3);
+        Assert.NotEqual(surface3, surface4);
+
         foreach (var (label, surface) in new[]
                  {
                      ("Background", p.Background),
                      ("Surface", p.Surface),
                      ("Surface2", p.Surface2),
+                     ("Surface3 (derived)", surface3),
+                     ("Surface4 (derived)", surface4),
                  })
         {
             var ratio = ContrastRatio(p.TextMuted, surface);
             Assert.True(ratio >= 4.5,
-                $"Preset '{presetId}': TextMuted must meet WCAG AA (4.5:1) on {label}; got {ratio:F2}:1.");
+                $"Preset '{presetId}': TextMuted must meet WCAG AA (4.5:1) on {label}; got {ratio:F2}:1. "
+                + "Surface3 and Surface4 are DERIVED by lerping Surface2 toward TextPrimary, which lowers "
+                + "contrast — so a muted colour that only just clears 4.5:1 on Surface2 will fail here. "
+                + "Move TextMuted away from the surface (lighter on a dark preset, darker on a light one) "
+                + "rather than adjusting the lerp, which is what gives the ramp its elevation.");
         }
     }
 
     // TextSecondary is the next tier up and should comfortably clear AA everywhere; assert it too so
-    // a future palette tweak can't quietly regress it below the muted tier.
+    // a future palette tweak can't quietly regress it below the muted tier. Held to Surface4 for the
+    // same reason as the muted tier above — sky-breeze sat at 4.39:1 there while passing on Surface2.
     [Theory]
     [MemberData(nameof(AllPresets))]
     public void TextSecondary_MeetsWcagAa_OnSurface2(string presetId)
     {
         var p = ThemePreset.Defaults[presetId];
-        var ratio = ContrastRatio(p.TextSecondary, p.Surface2);
-        Assert.True(ratio >= 4.5,
-            $"Preset '{presetId}': TextSecondary must meet WCAG AA (4.5:1) on Surface2; got {ratio:F2}:1.");
+        foreach (var (label, surface) in new[]
+                 {
+                     ("Surface2", p.Surface2),
+                     ("Surface4 (derived)", Lerp(p.Surface2, p.TextPrimary, 0.10)),
+                 })
+        {
+            var ratio = ContrastRatio(p.TextSecondary, surface);
+            Assert.True(ratio >= 4.5,
+                $"Preset '{presetId}': TextSecondary must meet WCAG AA (4.5:1) on {label}; got {ratio:F2}:1.");
+        }
     }
 
     // TextPrimary is the highest tier — hold it to the stricter AAA bar (7:1) on the base background,
@@ -141,11 +173,18 @@ public class ThemeTextContrastTests
             var shaded = ThemeService.Shade(seeded, position);
             positionsChecked++;
 
+            // Includes the DERIVED surfaces, for the same reason the seeded check above does: they are the
+            // lowest-contrast rungs of the ramp, and the slider shifts Surface2 underneath them.
+            var shadedSurface3 = Lerp(shaded.Surface2, shaded.TextPrimary, 0.05);
+            var shadedSurface4 = Lerp(shaded.Surface2, shaded.TextPrimary, 0.10);
+
             foreach (var (label, surface) in new[]
                      {
                          ("Background", shaded.Background),
                          ("Surface", shaded.Surface),
                          ("Surface2", shaded.Surface2),
+                         ("Surface3 (derived)", shadedSurface3),
+                         ("Surface4 (derived)", shadedSurface4),
                      })
             {
                 var muted = ContrastRatio(shaded.TextMuted, surface);
@@ -153,9 +192,16 @@ public class ThemeTextContrastTests
                     offenders.Add($"shade {position:F2}: TextMuted on {label} = {muted:F2}:1");
             }
 
-            var secondary = ContrastRatio(shaded.TextSecondary, shaded.Surface2);
-            if (secondary < 4.5)
-                offenders.Add($"shade {position:F2}: TextSecondary on Surface2 = {secondary:F2}:1");
+            foreach (var (label, surface) in new[]
+                     {
+                         ("Surface2", shaded.Surface2),
+                         ("Surface4 (derived)", shadedSurface4),
+                     })
+            {
+                var secondary = ContrastRatio(shaded.TextSecondary, surface);
+                if (secondary < 4.5)
+                    offenders.Add($"shade {position:F2}: TextSecondary on {label} = {secondary:F2}:1");
+            }
 
             var primary = ContrastRatio(shaded.TextPrimary, shaded.Background);
             if (primary < 7.0)
@@ -195,13 +241,21 @@ public class ThemeTextContrastTests
     [Fact]
     public void TheCorrection_EngagesWhereTheSliderWouldOtherwiseBreachTheFloor()
     {
-        // midnight-indigo at the top of the range is the worst measured case: 3.94:1 before the fix.
+        // Measured against the DERIVED Surface4, because that is the rung the slider actually breaches.
+        //
+        // This test used to point at Surface2, where midnight-indigo measured 3.94:1 uncorrected. #1555
+        // re-seeded that preset's muted colour for the derived surfaces, which lifted Surface2 to 5.11:1 —
+        // so the example stopped breaching, the correction stopped engaging for the reason being asserted,
+        // and the test's own third assertion fired to say it no longer proved anything. It was right. The
+        // breach did not go away, it just moved down the ramp: the same preset at the same slider position
+        // measures 3.84:1 on Surface4.
         var seeded = ThemePreset.Defaults["midnight-indigo"];
         var shaded = ThemeService.Shade(seeded, 1.0);
+        var shadedSurface4 = Lerp(shaded.Surface2, shaded.TextPrimary, 0.10);
 
         Assert.NotEqual(seeded.TextMuted, shaded.TextMuted);
-        Assert.True(ContrastRatio(shaded.TextMuted, shaded.Surface2) >= 4.5);
-        Assert.True(ContrastRatio(seeded.TextMuted, shaded.Surface2) < 4.5,
+        Assert.True(ContrastRatio(shaded.TextMuted, shadedSurface4) >= 4.5);
+        Assert.True(ContrastRatio(seeded.TextMuted, shadedSurface4) < 4.5,
             "the uncorrected ramp was expected to fail against the shifted surface — if it now passes, "
             + "this test no longer proves the correction does anything.");
     }

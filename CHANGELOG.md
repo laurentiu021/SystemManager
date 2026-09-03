@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.5] - 2026-09-03
+
+Small grey labels — the "DEFAULT" tag in Tweaks Hub, the administrator badge, and similar — were too faint to
+read comfortably on six of the twelve colour themes, including the one the app starts with. They are slightly
+clearer now.
+
+### Fixed
+- **Faint small text on layered panels.** The app builds two lighter panel shades out of each theme rather
+  than picking them by hand, and it turned out the check that guards text legibility skipped exactly those two
+  shades — on the reasoning that they were the safe ones, when they are the hardest. Measured across all
+  twelve themes, small grey text fell below the accessibility standard on half of them, worst on Midnight
+  Indigo, which is the default. The shade slider made it worse: on Warm Sand it dropped below the standard
+  from the slider's own default position outward, and at the far end of the range some themes were down to
+  3.84 against a 4.5 requirement. Six themes now use a slightly clearer grey, the slider's automatic
+  correction covers those two panel shades as well, and the check that failed to notice any of it now looks
+  at them.
+
+### Changed
+- **Six themes have a slightly clearer grey for small labels.** Midnight Indigo, Deep Ocean, Violet Night,
+  Clean Indigo, Sky Breeze and Mint Fresh only — the smallest change that clears the standard on every panel
+  shade, along the colour each theme already used. Sky Breeze's mid-grey moved too. The other six themes are
+  untouched, and no layout, wording or behaviour changed anywhere.
+
 ## [1.76.4] - 2026-09-03
 
 Volume Control no longer claims to know which speakers or headset an app is playing through when it does not.

@@ -188,15 +188,29 @@ public sealed class ThemeService
             Border = ShiftLightness(baseTheme.Border, offset)
         };
 
+        // TextPrimary is corrected first because the two DERIVED surfaces are lerped toward it, so they
+        // cannot be computed until it is final. Derived here with the same factors Apply uses, from the
+        // shaded Surface2 and the corrected primary — which is exactly the pair Apply will be handed.
+        var primary = Legible(shaded.TextPrimary, baseTheme.IsDark, 7.0, shaded.Background);
+        var surface3 = Lerp(shaded.Surface2, primary, 0.05);
+        var surface4 = Lerp(shaded.Surface2, primary, 0.10);
+
         // The floors and the surfaces each one is measured against mirror ThemeTextContrastTests exactly:
         // this correction enforces the same contract those assertions check, rather than a second opinion
         // about what "legible" means.
+        //
+        // Surface3/Surface4 were missing from both sides of that mirror until #1555. Measured across all
+        // twelve presets and twenty-one slider positions, the slider pushed muted text as low as 3.84:1 on
+        // Surface4 — and on warm-sand it did so from the DEFAULT position outward, so this was reachable
+        // without the user touching anything. Correcting against only the seeded rungs left the two rungs
+        // that actually carry the worst contrast unprotected.
         return shaded with
         {
-            TextPrimary = Legible(shaded.TextPrimary, baseTheme.IsDark, 7.0, shaded.Background),
-            TextSecondary = Legible(shaded.TextSecondary, baseTheme.IsDark, 4.5, shaded.Surface2),
+            TextPrimary = primary,
+            TextSecondary = Legible(shaded.TextSecondary, baseTheme.IsDark, 4.5,
+                                    shaded.Surface2, surface4),
             TextMuted = Legible(shaded.TextMuted, baseTheme.IsDark, 4.5,
-                                shaded.Background, shaded.Surface, shaded.Surface2)
+                                shaded.Background, shaded.Surface, shaded.Surface2, surface3, surface4)
         };
     }
 
@@ -579,10 +593,10 @@ public sealed record ThemePreset(
     {
         ["midnight-indigo"] = new("midnight-indigo", "Midnight Indigo", true,
             C("#6366F1"), C("#070A0F"), C("#0E1218"), C("#151A23"), C("#1F2633"),
-            C("#F1F3F7"), C("#A3ADBF"), C("#7B8396")), // muted: WCAG AA on Surface2 (was #6B7489, 3.72)
+            C("#F1F3F7"), C("#A3ADBF"), C("#9097A7")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #7B8396, 4.09 / 3.53)
         ["deep-ocean"] = new("deep-ocean", "Deep Ocean", true,
             C("#3B82F6"), C("#050D1A"), C("#0A1628"), C("#0F1D33"), C("#1A2D4D"),
-            C("#E2E8F0"), C("#94A3B8"), C("#78879B")), // muted: WCAG AA on Surface2 (was #64748B, 3.55)
+            C("#E2E8F0"), C("#94A3B8"), C("#8D9AAC")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #78879B, 4.11 / 3.59)
         ["dark-forest"] = new("dark-forest", "Dark Forest", true,
             C("#10B981"), C("#020F0A"), C("#021A12"), C("#03261A"), C("#0A3D2A"),
             C("#D1FAE5"), C("#6EE7B7"), C("#34D399")),
@@ -591,22 +605,23 @@ public sealed record ThemePreset(
             C("#FDF2F8"), C("#F9A8D4"), C("#F472B6")),
         ["violet-night"] = new("violet-night", "Violet Night", true,
             C("#A855F7"), C("#0A0515"), C("#0F0A1A"), C("#160F26"), C("#2D1B4E"),
-            C("#F3E8FF"), C("#C4B5FD"), C("#8E60F6")), // muted: WCAG AA on Surface2 (was #8B5CF6, 4.39)
+            C("#F3E8FF"), C("#C4B5FD"), C("#A078F7")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #8E60F6, 4.14 / 3.62)
         ["warm-ember"] = new("warm-ember", "Warm Ember", true,
             C("#F59E0B"), C("#0F0A04"), C("#1A1008"), C("#24180C"), C("#3D2A12"),
             C("#FEF3C7"), C("#FCD34D"), C("#FBBF24")),
         ["clean-indigo"] = new("clean-indigo", "Clean Indigo", false,
             C("#6366F1"), C("#FFFFFF"), C("#F8FAFC"), C("#F1F5F9"), C("#E2E8F0"),
-            C("#1E1B4B"), C("#4338CA"), C("#5D5FE2")), // muted: WCAG AA on Surface2 (was #6366F1, 4.08)
+            C("#1E1B4B"), C("#4338CA"), C("#5153C6")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #5D5FE2, 4.14 / 3.74)
         ["sky-breeze"] = new("sky-breeze", "Sky Breeze", false,
             C("#0EA5E9"), C("#F8FAFC"), C("#F0F9FF"), C("#E0F2FE"), C("#BAE6FD"),
-            C("#0C4A6E"), C("#0369A1"), C("#0572AB")), // muted: WCAG AA on Surface2 (was #0284C7, 3.57)
+            // The only preset needing BOTH tiers re-seeded: secondary was 4.39 on Surface4 (was #0369A1).
+            C("#0C4A6E"), C("#02669D"), C("#04679A")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #0572AB, 4.20 / 3.88)
         ["warm-sand"] = new("warm-sand", "Warm Sand", false,
             C("#D97706"), C("#FFFBEB"), C("#FEF3C7"), C("#FDE68A"), C("#FCD34D"),
             C("#451A03"), C("#78350F"), C("#92400E")),
         ["mint-fresh"] = new("mint-fresh", "Mint Fresh", false,
             C("#16A34A"), C("#F0FDF4"), C("#DCFCE7"), C("#BBF7D0"), C("#86EFAC"),
-            C("#14532D"), C("#166534"), C("#15783A")), // muted: WCAG AA on Surface2 (was #15803D, 4.14)
+            C("#14532D"), C("#166534"), C("#136C34")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #15783A, 4.22 / 3.91)
         ["soft-blossom"] = new("soft-blossom", "Soft Blossom", false,
             C("#DB2777"), C("#FDF2F8"), C("#FCE7F3"), C("#FBCFE8"), C("#F9A8D4"),
             C("#500724"), C("#831843"), C("#9D174D")),

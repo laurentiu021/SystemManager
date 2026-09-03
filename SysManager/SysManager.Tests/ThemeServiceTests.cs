@@ -3,8 +3,8 @@
 // License: MIT
 
 using System.IO;
-using System.Windows.Media;
 using System.Text.Json;
+using System.Windows.Media;
 using SysManager.Services;
 
 namespace SysManager.Tests;

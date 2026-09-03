@@ -18,11 +18,12 @@ README's Screenshots section.
 
 ## Outstanding recapture
 
-Every shot in this folder, and both GIFs under [`docs/gifs/`](../gifs/), was taken before
-1.76.1 gave the twelve sidebar groups their icons. The rail in each one is therefore a
-column of text with an empty margin beside it, which is not what the app looks like now.
-Nothing else in the shots is stale — the change was confined to that rail and to the
-administrator badge, which is now a shield rather than a padlock.
+Every shot in this folder, and both GIFs under [`docs/gifs/`](../gifs/), predates two
+changes to the left-hand rail. 1.76.1 gave the twelve groups their icons, so the rail in
+each image is a column of text with an empty margin beside it. 1.76.2 replaced each
+collapsed group's subtitle — a truncated list of page names — with a written two-line
+description. Nothing else in the shots is stale: both changes were confined to that rail
+and to the administrator badge, which is now a shield rather than a padlock.
 
 The whole set wants retaking in one pass rather than piecemeal, so that the rail matches
 across all of them. Until then treat the sidebar in every image as out of date.

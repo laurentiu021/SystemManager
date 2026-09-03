@@ -388,6 +388,53 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// An audio route SysManager cannot read must be shown as unknown, not as the system default.
+    /// </summary>
+    /// <remarks>
+    /// <c>GetSessionOutputDevice</c> used to return two states where it needed three: an empty id meant both
+    /// "this app follows the default" and "the route could not be read", and the row resolved either into the
+    /// entry flagged <c>IsDefault</c> — by NAME, because the picker holds real endpoints only. The read is a
+    /// stub that always fails, so every picker asserted the app was on the default device whatever Windows was
+    /// really doing with it, and an app the user had routed to a headset displayed "Speakers".
+    /// <para>Three things have to hold together and each can be broken alone, which is why they are one test:
+    /// the interface must keep the nullable return that lets "unknown" be expressed, the implementation must
+    /// not collapse it back with <c>?? string.Empty</c>, and the view must actually bind the flag. The last is
+    /// this codebase's most repeated defect — a property implemented, unit-tested, and bound by nothing, which
+    /// no compiler and no view-model test can see. <see cref="EveryViewModelCommand_IsReachableFromTheUi"/>
+    /// catches that for commands; a bool is not a command.</para>
+    /// </remarks>
+    [Fact]
+    public void TheAudioRouteRead_ReportsUnknownRatherThanTheDefault()
+    {
+        var appDir = FindAppProjectDir();
+        var contract = File.ReadAllText(Path.Combine(appDir, "Services", "IAudioMixerService.cs"));
+        var service = File.ReadAllText(Path.Combine(appDir, "Services", "AudioMixerService.cs"));
+        var view = File.ReadAllText(Path.Combine(appDir, "Views", "AudioMixerView.xaml"));
+
+        Assert.Contains("string? GetSessionOutputDevice", contract, StringComparison.Ordinal);
+
+        // Scoped to the method body, because the file legitimately uses "?? string.Empty" elsewhere and the
+        // prose above this guard names the very expression it forbids.
+        var at = service.IndexOf("public string? GetSessionOutputDevice", StringComparison.Ordinal);
+        Assert.True(at > 0,
+            "AudioMixerService.GetSessionOutputDevice no longer returns string?, so the service cannot say "
+            + "\"I do not know\" and the picker is back to naming a device it is only guessing at.");
+        var body = service[at..service.IndexOf("public bool SetSessionOutputDevice", at, StringComparison.Ordinal)];
+        Assert.DoesNotContain("?? string.Empty", body, StringComparison.Ordinal);
+
+        // The XAML half. Sliced from the picker's own binding forward, so the comment above it — which
+        // explains the placeholder in prose — cannot satisfy the assertions by itself.
+        var pickerAt = view.IndexOf("SelectedItem=\"{Binding SelectedOutputDevice", StringComparison.Ordinal);
+        Assert.True(pickerAt > 0, "AudioMixerView no longer binds the per-app output picker.");
+        var picker = view[pickerAt..];
+
+        Assert.Contains("OutputRouteUnknown", picker, StringComparison.Ordinal);
+        var placeholderAt = picker.IndexOf("OutputRouteUnknown", StringComparison.Ordinal);
+        var placeholder = picker[..placeholderAt];
+        Assert.Contains("IsHitTestVisible=\"False\"", placeholder, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The gold elevation banner means one thing and only one thing: you are running as administrator,
     /// so MORE is available. Every tab that shows it must say so.
     /// </summary>

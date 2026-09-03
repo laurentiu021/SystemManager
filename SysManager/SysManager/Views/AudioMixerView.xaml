@@ -117,11 +117,26 @@
                                                            Foreground="{DynamicResource TextMuted}"/>
                                                 <TextBlock Text="Output:" Style="{StaticResource Caption}"
                                                            VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                                <ComboBox ItemsSource="{Binding OutputDevices}"
-                                                          SelectedItem="{Binding SelectedOutputDevice, Mode=TwoWay}"
-                                                          DisplayMemberPath="FriendlyName" MinWidth="160" FontSize="12"
-                                                          VerticalContentAlignment="Center"
-                                                          AutomationProperties.Name="{Binding DisplayName, StringFormat='Output device for {0}'}"/>
+                                                <!-- The placeholder overlay exists because an unread route must
+                                                     not render as a device name. SysManager can SET an app's
+                                                     output device but cannot yet read back which one Windows
+                                                     is using, and the picker used to fill that gap with the
+                                                     system default — a confident claim about the user's
+                                                     machine that was frequently wrong. IsHitTestVisible=False
+                                                     so the text never swallows a click meant for the box. -->
+                                                <Grid>
+                                                    <ComboBox ItemsSource="{Binding OutputDevices}"
+                                                              SelectedItem="{Binding SelectedOutputDevice, Mode=TwoWay}"
+                                                              DisplayMemberPath="FriendlyName" MinWidth="160" FontSize="12"
+                                                              VerticalContentAlignment="Center"
+                                                              ToolTip="SysManager can send this app to a specific device, but Windows does not report which one it is using now."
+                                                              AutomationProperties.Name="{Binding DisplayName, StringFormat='Output device for {0}'}"/>
+                                                    <TextBlock Text="Choose a device" FontSize="12"
+                                                               Margin="10,0,0,0" VerticalAlignment="Center"
+                                                               IsHitTestVisible="False"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               Visibility="{Binding OutputRouteUnknown, Converter={StaticResource FlexVis}}"/>
+                                                </Grid>
                                             </StackPanel>
                                             <Button Margin="0,8,0,0" HorizontalAlignment="Left"
                                                     Style="{StaticResource GhostButton}" Padding="8,4"

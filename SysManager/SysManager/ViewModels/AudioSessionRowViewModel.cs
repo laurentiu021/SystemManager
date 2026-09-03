@@ -68,6 +68,17 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     [ObservableProperty] private AudioDevice? _selectedOutputDevice;
 
     /// <summary>
+    /// True when SysManager could not read which device this app is currently routed to. Drives the picker's
+    /// placeholder, so an unknown route reads as unknown instead of as the system default.
+    /// </summary>
+    /// <remarks>
+    /// Not derived from <see cref="SelectedOutputDevice"/> being null, although today the two agree. A user
+    /// who opens the picker and closes it without choosing leaves the selection null, and that is not the
+    /// same claim: this flag says the SERVICE could not tell us, which is what the placeholder is about.
+    /// </remarks>
+    [ObservableProperty] private bool _outputRouteUnknown;
+
+    /// <summary>
     /// True when true in-app routing is available for THIS row (the device picker is shown). False
     /// for the system-sounds pseudo-session (never routable) and when the OS lacks the routing
     /// interface. Set by the parent VM.
@@ -227,18 +238,38 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Sets the current output-device selection from the service snapshot without writing back
-    /// (used on refresh). Matches by endpoint id; a null/empty id selects the default device.
+    /// Sets the current output-device selection from the service snapshot without writing back (used on
+    /// refresh), and records whether the route is actually known.
     /// </summary>
-    public void SetOutputDeviceFromService(string endpointId)
+    /// <param name="endpointId">
+    /// <c>null</c> when SysManager could not read the route at all, <see cref="string.Empty"/> when it read
+    /// successfully and there is no override, or the endpoint id the app is routed to.
+    /// </param>
+    /// <remarks>
+    /// The three cases used to be two, and the missing one was a lie. Anything falsy selected the entry
+    /// flagged <see cref="AudioDevice.IsDefault"/>, so a failed read and "this app follows the default" both
+    /// rendered as the default device's NAME — and since the read is currently a stub that always returns
+    /// null (see <c>AudioPolicyConfigFactory.GetPersistedDefaultEndpoint</c>), every picker claimed the app
+    /// was on the default device whatever Windows was really doing with it.
+    /// <para>An id that matches no device in the list is unknown too, not the default. If Windows persisted a
+    /// route to an endpoint that is unplugged or gone, the app is routed somewhere this list cannot name;
+    /// showing the default there is the same lie in a rarer case.</para>
+    /// </remarks>
+    public void SetOutputDeviceFromService(string? endpointId)
     {
         _suppressPropagation = true;
         try
         {
-            SelectedOutputDevice = string.IsNullOrEmpty(endpointId)
-                ? OutputDevices.FirstOrDefault(d => d.IsDefault)
-                : OutputDevices.FirstOrDefault(d => string.Equals(d.Id, endpointId, StringComparison.OrdinalIgnoreCase))
-                  ?? OutputDevices.FirstOrDefault(d => d.IsDefault);
+            var device = endpointId switch
+            {
+                null => null,
+                "" => OutputDevices.FirstOrDefault(d => d.IsDefault),
+                _ => OutputDevices.FirstOrDefault(
+                    d => string.Equals(d.Id, endpointId, StringComparison.OrdinalIgnoreCase)),
+            };
+
+            SelectedOutputDevice = device;
+            OutputRouteUnknown = device is null;
         }
         finally { _suppressPropagation = false; }
     }

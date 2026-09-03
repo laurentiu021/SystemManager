@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.6] - 2026-09-03
+
+A theme you build yourself in the appearance panel is now kept readable the same way the built-in ones are.
+Before, it was the one kind of theme the app applied exactly as typed, so four unlucky colour choices could
+leave text you could not read — with no way back except deleting a file by hand.
+
+### Fixed
+- **A custom theme now gets the same readability protection as a built-in one.** Every built-in theme goes
+  through a step that nudges its text until it stands out from the panels behind it. A custom theme skipped
+  that step entirely and was applied exactly as typed, so white text on a white background was accepted. It
+  goes through the same step now. Applying a custom theme also used to throw away the background-shade slider's
+  position; it keeps it.
+- **Green and mid-grey backgrounds no longer get the wrong warning colours.** Whether a custom background
+  counted as dark was decided by adding its red, green and blue values together, which treats all three as
+  equally bright when the eye does not. A pure green background was called dark, so the app installed the
+  colours meant for dark backgrounds and its amber warning text landed on bright green — effectively invisible.
+  Mid-grey had the same problem. Brightness is now measured the way the accessibility standard measures it.
+
 ## [1.76.5] - 2026-09-03
 
 Small grey labels — the "DEFAULT" tag in Tweaks Hub, the administrator badge, and similar — were too faint to

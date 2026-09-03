@@ -402,6 +402,59 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every way of setting a theme goes through the one path that keeps its text legible.
+    /// </summary>
+    /// <remarks>
+    /// <c>ApplyShade</c> is where <c>Shade</c> runs, and <c>Shade</c> is where the text ramp is corrected
+    /// against its surfaces. <c>SetPreset</c> and <c>SetAccent</c> both call it; <c>SetCustom</c> built
+    /// <c>CurrentTheme</c> itself and called <c>Apply</c> directly, so a custom theme was the only kind that
+    /// never went through the correction at all — four typed hex values could produce white on white while
+    /// every shipped preset was held to a contrast floor. It also silently discarded the shade slider's
+    /// position.
+    /// <para>Asserted on the source rather than by calling the method, because <c>SetCustom</c> ends in
+    /// <c>Save()</c>, which writes the user's real theme file.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryThemeEntryPoint_GoesThroughTheLegibilityCorrection()
+    {
+        var service = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "ThemeService.cs"));
+
+        foreach (var entry in new[] { "SetPreset", "SetAccent", "SetCustom" })
+        {
+            var at = service.IndexOf($"public void {entry}(", StringComparison.Ordinal);
+            Assert.True(at > 0, $"ThemeService.{entry} was renamed — update this guard, don't drop it.");
+
+            // To the next method declaration, so the slice is this method and nothing after it.
+            var end = service.IndexOf("\n    public ", at + 1, StringComparison.Ordinal);
+            if (end < 0) end = service.IndexOf("\n    private ", at + 1, StringComparison.Ordinal);
+            Assert.True(end > at, $"could not bound {entry}'s body.");
+            var body = service[at..end];
+
+            Assert.Contains("ApplyShade();", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("CurrentTheme = new ThemePreset", body, StringComparison.Ordinal);
+        }
+
+        // The channel-sum heuristic: two or more channels added on one line. Matching ".R +" alone is too
+        // broad — Lerp legitimately writes (byte)(a.R + (b.R - a.R) * t), one channel per line — so the shape
+        // that identifies a sum is several channels meeting in a single expression.
+        var summing = service.Split('\n')
+            .Select((line, i) => (Line: line.Trim(), Number: i + 1))
+            .Where(l => l.Line.Contains(".R +", StringComparison.Ordinal)
+                        && l.Line.Contains(".G +", StringComparison.Ordinal))
+            .Select(l => $"line {l.Number}: {l.Line}")
+            .ToArray();
+
+        Assert.True(summing.Length == 0,
+            "a background's brightness is being judged by adding its channels, which weights them equally "
+            + "where the eye does not: #00FF00 sums to 255 and was called DARK on a relative luminance of "
+            + "0.715, so the dark arm of the status palette went onto bright green at 1.05:1. Use "
+            + "IsDarkBackground, which asks RelativeLuminance:\n  " + string.Join("\n  ", summing));
+
+        Assert.Contains("RelativeLuminance(background) < 0.18", service, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// No test in the blocking suite may wait by sleeping.
     /// </summary>
     /// <remarks>

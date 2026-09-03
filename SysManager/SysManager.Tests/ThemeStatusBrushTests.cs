@@ -481,4 +481,58 @@ public class ThemeStatusBrushTests
     [Fact]
     public void TextOnDanger_DiffersBetweenModes()
         => Assert.NotEqual(ThemeService.TextOnDanger(true), ThemeService.TextOnDanger(false));
+
+    /// <summary>
+    /// Which arm of the palette a custom background gets is decided by perceived brightness, not by adding
+    /// the three channels together.
+    /// </summary>
+    /// <remarks>
+    /// <c>SetCustom</c> used <c>background.R + background.G + background.B &lt; 384</c>, which weights every
+    /// channel equally where the eye does not. <c>#00FF00</c> sums to 255 and was called DARK on a relative
+    /// luminance of 0.715, so this file's whole subject — the per-mode status palette — was installed the
+    /// wrong way round: the dark arm's <c>WarningText #FCD34D</c> landed on bright green at 1.05:1.
+    /// <c>#7F7F7F</c> sums to 381 and was mis-called dark for the same reason.
+    /// <para>Both boundary rows are here on purpose. Navy passing and mid-grey failing is what distinguishes
+    /// a luminance test from a channel-sum test; a data set of only obvious blacks and whites cannot tell the
+    /// two apart and would pass against the defect.</para>
+    /// <para><paramref name="armIsLegible"/> is false for one row, and that is a real limitation rather than
+    /// an exemption. The palette has two arms, calibrated for dark and for light surfaces. On a mid-grey
+    /// background NEITHER is legible — the light arm measures 1.77:1 on <c>#7F7F7F</c> — because a background
+    /// of middling luminance is not what either arm was built for. Classifying it correctly is still strictly
+    /// better than classifying it wrongly, but the honest assertion here is about the classification, not
+    /// about an outcome the palette cannot produce.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("#00FF00", false, true, "saturated green: sum 255 says dark, luminance 0.715 says light")]
+    [InlineData("#7F7F7F", false, false, "mid grey: sum 381 says dark, luminance 0.212 says light")]
+    [InlineData("#FFFF00", false, true, "yellow, light on both readings")]
+    [InlineData("#000080", true, true, "navy: dark on both readings, so the fix must not over-correct")]
+    [InlineData("#070A0F", true, true, "the default preset's own background")]
+    [InlineData("#FFFFFF", false, true, "white")]
+    public void ACustomBackground_IsClassifiedByLuminance(
+        string hex, bool expectedDark, bool armIsLegible, string why)
+    {
+        var background = (Color)ColorConverter.ConvertFromString(hex)!;
+
+        Assert.Equal(expectedDark, ThemeService.IsDarkBackground(background));
+
+        // The consequence, not just the flag: where an arm can serve the background at all, the one this
+        // picks has to be the legible one.
+        var warning = Lookup(ThemeService.StatusPalette(expectedDark), "WarningText");
+        var ratio = ContrastRatio(warning, background);
+        if (armIsLegible)
+        {
+            Assert.True(ratio >= 4.5,
+                $"{hex} ({why}): the {(expectedDark ? "dark" : "light")} arm's WarningText is {ratio:F2}:1 "
+                + "on it.");
+        }
+        else
+        {
+            // Pinned rather than skipped: if a future palette change made mid-grey legible, this row should
+            // be revisited and promoted, not left quietly claiming a limitation that no longer exists.
+            Assert.True(ratio < 4.5,
+                $"{hex} is now legible on the arm it selects ({ratio:F2}:1). The two-arm limitation this row "
+                + "documents has been fixed — flip armIsLegible to true and delete this branch.");
+        }
+    }
 }

@@ -16,6 +16,17 @@ A short animated tour also lives under [`docs/gifs/`](../gifs/)
 (`feature-tour.gif`, `cleanup-tools.gif`) and is embedded at the top of the
 README's Screenshots section.
 
+## Outstanding recapture
+
+Every shot in this folder, and both GIFs under [`docs/gifs/`](../gifs/), was taken before
+1.76.1 gave the twelve sidebar groups their icons. The rail in each one is therefore a
+column of text with an empty margin beside it, which is not what the app looks like now.
+Nothing else in the shots is stale — the change was confined to that rail and to the
+administrator badge, which is now a shield rather than a padlock.
+
+The whole set wants retaking in one pass rather than piecemeal, so that the rail matches
+across all of them. Until then treat the sidebar in every image as out of date.
+
 ## Format and size
 
 - **Format**: PNG. No JPEG (banding in the dark theme looks bad).

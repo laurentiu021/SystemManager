@@ -2335,10 +2335,88 @@ public partial class ArchitectureTests
         Assert.True(offenders.Count == 0,
             "These glyphs are above U+FFFF and name no font, so Windows falls back to Segoe UI Emoji "
             + "and draws a colour emoji instead of an icon. Use the Segoe Fluent Icons equivalent with "
-            + "FontFamily=\"Segoe Fluent Icons,Segoe MDL2 Assets\" (the shield is &#xE83D;):\n  "
+            + "FontFamily=\"Segoe Fluent Icons,Segoe MDL2 Assets\" (the shield this app uses is "
+            + "&#xEA18;):\n  "
             + string.Join("\n  ", offenders)
             + $"\n({scanned} astral references seen, {glyphs} icon glyphs scanned)");
     }
+
+    /// <summary>
+    /// Every sidebar group carries a distinct glyph, and none of them is the glyph the elevation badge
+    /// draws.
+    /// </summary>
+    /// <remarks>
+    /// Two failure modes, and the second is the one that needs a rule. Twelve groups drawn with the same
+    /// icon differentiate nothing — which is the state the rail was already in with twelve empty ones. And
+    /// the badge previously drew <c>E72E</c>, the padlock, which is now the Privacy &amp; Security group's
+    /// icon: one symbol cannot mean both a topic and "needs administrator" in a window that shows both at
+    /// once.
+    /// <para>Lives here rather than beside the other nav assertions in the integration project, because
+    /// CI compile-checks that project without executing it. The assertion that would have caught the
+    /// empty gutter on day one was there, failing, unrun, for as long as the gutter existed.</para>
+    /// <para>Deliberately scoped to the shell's own chrome. Glyphs repeat freely across empty-state
+    /// illustrations — <c>E946</c> appears in seven of them — and that is fine: those are never on screen
+    /// together, and none of them is an identity symbol.</para>
+    /// </remarks>
+    [Fact]
+    public void EverySidebarGroupGlyph_IsDistinctAndNotTheElevationBadge()
+    {
+        var app = FindAppProjectDir();
+        var vm = File.ReadAllText(Path.Combine(app, "ViewModels", "MainWindowViewModel.cs"));
+        var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml"));
+
+        var groups = GroupGlyph().Matches(vm).Cast<Match>()
+            .Select(m => (Id: m.Groups["id"].Value, Glyph: m.Groups["glyph"].Value.ToUpperInvariant()))
+            .ToArray();
+
+        Assert.True(groups.Length >= 12,
+            $"only {groups.Length} group glyphs were parsed out of BuildNavGroups — the Group(...) call "
+            + "shape changed and this guard is no longer reading the sidebar.");
+
+        var duplicates = groups
+            .GroupBy(g => g.Glyph, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key} is used by {string.Join(", ", g.Select(x => x.Id))}")
+            .ToArray();
+        Assert.True(duplicates.Length == 0,
+            "two sidebar groups draw the same icon, so the rail differentiates nothing between them:\n  "
+            + string.Join("\n  ", duplicates));
+
+        // The badge's glyph, sliced from its own element. Asserting the slice was found matters: a marker
+        // that stops matching would otherwise leave this comparing against an empty string, which every
+        // group glyph trivially differs from.
+        var badgeAt = shell.IndexOf("AutomationProperties.AutomationId=\"ElevationBadge\"",
+                                    StringComparison.Ordinal);
+        Assert.True(badgeAt > 0,
+            "MainWindow.xaml has no element with AutomationId=\"ElevationBadge\" — if it was renamed, "
+            + "update this guard in the same PR rather than losing the check.");
+
+        var badge = CharacterReference().Match(shell, badgeAt);
+        Assert.True(badge.Success,
+            "no character reference follows the elevation badge, so its glyph could not be read.");
+
+        var badgeGlyph = badge.Groups["hex"].Value.ToUpperInvariant();
+        var clash = groups.Where(g => string.Equals(g.Glyph, badgeGlyph, StringComparison.Ordinal))
+            .Select(g => g.Id)
+            .ToArray();
+
+        Assert.True(clash.Length == 0,
+            $"the elevation badge draws U+{badgeGlyph}, which is also the icon for "
+            + $"{string.Join(", ", clash)}. The badge means \"needs administrator\" and the group means a "
+            + "topic — one symbol cannot carry both in a window that shows them together. Change one.");
+    }
+
+    /// <summary>
+    /// A sidebar group declaration, capturing its id and the escaped codepoint of its glyph:
+    /// <c>Group("grp-x", "Label", ""</c>.
+    /// </summary>
+    [GeneratedRegex(@"Group\(""(?<id>[^""]+)"",\s*""[^""]+"",\s*""\\u(?<glyph>[0-9A-Fa-f]{4})""",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex GroupGlyph();
+
+    /// <summary>A XAML character reference, capturing the hex codepoint.</summary>
+    [GeneratedRegex(@"&#x(?<hex>[0-9A-Fa-f]{4});", RegexOptions.CultureInvariant)]
+    private static partial Regex CharacterReference();
 
     // A character reference above U+FFFF — i.e. &#x1F???; and up, which is where the emoji planes are.
     // Five hex digits or more cannot be a BMP icon-font glyph.

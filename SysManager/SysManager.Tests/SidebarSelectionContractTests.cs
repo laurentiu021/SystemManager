@@ -59,7 +59,10 @@ public class SidebarSelectionContractTests
 
         Assert.Equal(2, liveRows.Count);
         Assert.Equal(2, liveMarks.Count);
-        Assert.Equal(4, liveTexts.Count);
+        // Three, and which three matters: the single-item row's glyph and label, and the leaf row's label.
+        // A leaf has no glyph of its own — the group above it carries the icon — so a fourth here would
+        // mean the empty gutter came back.
+        Assert.Equal(3, liveTexts.Count);
         Assert.All(liveRows, row => Assert.Null(row.Attribute("Background")));
         Assert.All(liveMarks, mark => Assert.Null(mark.Attribute("Visibility")));
         Assert.All(

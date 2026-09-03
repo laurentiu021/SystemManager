@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.1] - 2026-09-03
+
+The twelve groups down the left of the window now have icons. They were meant to all along: the space for
+one was reserved next to every entry in that list, and it was empty, so the whole rail was a column of
+text with a blank margin beside it.
+
+### Fixed
+- **The sidebar icons appear.** Each entry in the navigation list had a slot for an icon and a property to
+  hold it, and nothing ever put a character in that property — so the slot rendered as whitespace on all
+  fifty-eight entries. Every one of the twelve groups now has its own symbol, all distinct: a house for
+  Dashboard, a hard drive for Storage, a trash can for Cleanup, a shield for Privacy & Security, and so
+  on. The individual pages inside a group are deliberately left without one. Fifty-eight icons in a rail
+  this narrow is noise, and the group heading is what you actually scan; the reclaimed space goes to the
+  page names, which now have room to be read in full.
+
+### Changed
+- **The "running as administrator" badge is a shield rather than a padlock.** The padlock is what the
+  Privacy & Security group in the list directly above it now uses, and one symbol cannot mean both a
+  subject and "this window has administrator rights" a few centimetres apart. The badge, its position, and
+  its colour are otherwise unchanged.
+
 ## [1.76.0] - 2026-09-02
 
 Pressing Escape now stops whatever the current tab is doing — a disk scan, a cleanup, a speed test. Until

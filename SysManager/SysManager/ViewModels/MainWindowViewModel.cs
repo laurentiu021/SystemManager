@@ -150,7 +150,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             {
                 Id = id,
                 Label = label,
-                Glyph = "",
                 ViewType = viewType,
                 IsInDevelopment = inDevelopment,
                 ContentFactory = () => _sp.GetRequiredService<TVm>(),
@@ -168,7 +167,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             Id = id,
             Label = label,
-            Glyph = "",
             ViewType = viewType,
             Content = content,
             IsInDevelopment = inDevelopment,
@@ -180,10 +178,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private NavGroup[] BuildNavGroups() =>
     [
-        Group("grp-dashboard", "Dashboard",
+        Group("grp-dashboard", "Dashboard", "\uE80F",  // Home
             EagerItem("nav-dashboard", "Dashboard", typeof(Views.DashboardView), _dashboard ?? Eager<DashboardViewModel>())),
 
-        Group("grp-system", "System",
+        Group("grp-system", "System", "\uE770",  // SettingsDisplaySound
             Tab<SystemHealthViewModel>("nav-system-health",    "System Health",    typeof(Views.SystemHealthView)),
             Tab<WindowsUpdateViewModel>("nav-windows-update",  "Windows Update",   typeof(Views.WindowsUpdateView)),
             Tab<PerformanceViewModel>("nav-performance",       "Performance Mode", typeof(Views.PerformanceView)),
@@ -196,14 +194,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<SystemFixesViewModel>("nav-system-fixes",      "System Fixes",     typeof(Views.SystemFixesView)),
             Tab<TweaksHubViewModel>("nav-tweaks-hub",          "Tweaks Hub",       typeof(Views.TweaksHubView), inDevelopment: true)),
 
-        Group("grp-gaming", "Gaming & Profiles",
+        Group("grp-gaming", "Gaming & Profiles", "\uE7FC",  // Game
             Tab<GamingProfileViewModel>("nav-gaming-profile",   "Gaming Profile",       typeof(Views.GamingProfileView), inDevelopment: true),
             Tab<StandbyMemoryViewModel>("nav-standby-cleaner",  "Standby List Cleaner", typeof(Views.StandbyMemoryView)),
             Tab<TimerResolutionViewModel>("nav-timer-resolution", "Timer Resolution",   typeof(Views.TimerResolutionView)),
             Tab<CpuAffinityViewModel>("nav-cpu-affinity",       "CPU Core Affinity",    typeof(Views.CpuAffinityView)),
             Tab<DisplayProfileViewModel>("nav-display-profiles", "Display Profiles",    typeof(Views.DisplayProfileView))),
 
-        Group("grp-monitor", "Monitor",
+        Group("grp-monitor", "Monitor", "\uE9D9",  // Diagnostic
             Tab<ProcessManagerViewModel>("nav-processes",       "Process Manager",    typeof(Views.ProcessManagerView)),
             Tab<ResourceHistoryViewModel>("nav-resource-history", "Resource History", typeof(Views.ResourceHistoryView), inDevelopment: true),
             Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(Views.PrivacyMonitorView)),
@@ -212,29 +210,29 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true),
             Tab<BandwidthMonitorViewModel>("nav-bandwidth-monitor", "Bandwidth Monitor", typeof(Views.BandwidthMonitorView))),
 
-        Group("grp-cleanup", "Cleanup",
+        Group("grp-cleanup", "Cleanup", "\uE74D",  // Delete
             Tab<CleanupViewModel>("nav-cleanup",                     "Quick Cleanup",         typeof(Views.CleanupView)),
             Tab<DeepCleanupViewModel>("nav-deep-cleanup",            "Deep Cleanup",          typeof(Views.DeepCleanupView)),
             Tab<ShortcutCleanerViewModel>("nav-shortcut-cleaner",    "Shortcut Cleaner",      typeof(Views.ShortcutCleanerView)),
             Tab<ScheduledMaintenanceViewModel>("nav-scheduled-maintenance", "Scheduled Maintenance", typeof(Views.ScheduledMaintenanceView), inDevelopment: true)),
 
-        Group("grp-storage", "Storage",
+        Group("grp-storage", "Storage", "\uEDA2",  // HardDrive
             Tab<DiskAnalyzerViewModel>("nav-disk-analyzer", "Disk Analyzer",    typeof(Views.DiskAnalyzerView)),
             Tab<DuplicateFileViewModel>("nav-duplicates",   "Duplicate Finder", typeof(Views.DuplicateFileView))),
 
-        Group("grp-network", "Network",
+        Group("grp-network", "Network", "\uE968",  // NetworkTower
             Tab<PingViewModel>("nav-ping",                   "Ping",           typeof(Views.PingView)),
             Tab<TracerouteViewModel>("nav-traceroute",       "Traceroute",     typeof(Views.TracerouteView)),
             Tab<SpeedTestViewModel>("nav-speed-test",        "Speed Test",     typeof(Views.SpeedTestView)),
             Tab<NetworkRepairViewModel>("nav-network-repair", "Network Repair", typeof(Views.NetworkRepairView)),
             Tab<DnsHostsViewModel>("nav-dns-hosts", "DNS & Hosts", typeof(Views.DnsHostsView))),
 
-        Group("grp-apps", "Apps",
+        Group("grp-apps", "Apps", "\uE71D",  // AllApps
             Tab<AppUpdatesViewModel>("nav-app-updates",    "App Updates",    typeof(Views.AppUpdatesView)),
             Tab<BulkInstallerViewModel>("nav-bulk-installer", "Bulk Installer", typeof(Views.BulkInstallerView)),
             Tab<UninstallerViewModel>("nav-uninstaller",   "Uninstaller",    typeof(Views.UninstallerView))),
 
-        Group("grp-privacy", "Privacy & Security",
+        Group("grp-privacy", "Privacy & Security", "\uE72E",  // Lock
             Tab<PrivacyViewModel>("nav-privacy-settings",  "Privacy & Telemetry",   typeof(Views.PrivacyView)),
             Tab<FileShredderViewModel>("nav-file-shredder", "File Shredder",         typeof(Views.FileShredderView)),
             Tab<AppBlockerViewModel>("nav-app-blocker",     "App Blocker",           typeof(Views.AppBlockerView)),
@@ -244,13 +242,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView)),
             Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(Views.NotificationBlockerView), inDevelopment: true)),
 
-        Group("grp-customization", "Customization",
+        Group("grp-customization", "Customization", "\uE790",  // Personalize
             Tab<ContextMenuViewModel>("nav-context-menu",   "Context Menu",          typeof(Views.ContextMenuView)),
             // DarkMode is eager (schedule poll must run app-wide); hand the DI singleton to its NavItem.
             EagerItem("nav-dark-mode", "Dark Mode Scheduler", typeof(Views.DarkModeView), Eager<DarkModeViewModel>()),
             Tab<AudioMixerViewModel>("nav-volume-control",  "Volume Control",        typeof(Views.AudioMixerView))),
 
-        Group("grp-info", "Info",
+        Group("grp-info", "Info", "\uE946",  // Info
             Tab<DriversViewModel>("nav-drivers",       "Drivers",        typeof(Views.DriversView)),
             Tab<BatteryHealthViewModel>("nav-battery", "Battery Health", typeof(Views.BatteryHealthView)),
             Tab<LogsViewModel>("nav-logs",             "System Logs",    typeof(Views.LogsView)),
@@ -260,15 +258,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             // that same instance so the sidebar version label and the tab show one shared VM.
             EagerItem("nav-about", "About", typeof(Views.AboutView), About)),
 
-        Group("grp-advanced", "Advanced",
+        Group("grp-advanced", "Advanced", "\uE713",  // Settings
             Tab<ProfileViewModel>("nav-profile-export", "Profile Export / Import", typeof(Views.ProfileView)),
             Tab<CliInterfaceViewModel>("nav-cli-interface", "CLI Interface",     typeof(Views.CliInterfaceView), inDevelopment: true),
             Tab<EnvironmentVariablesViewModel>("nav-env-variables", "Environment Variables", typeof(Views.EnvironmentVariablesView))),
     ];
 
-    private static NavGroup Group(string id, string label, params NavItem[] children)
+    /// <summary>
+    /// Builds a sidebar group. <paramref name="glyph"/> is a Segoe Fluent Icons codepoint, drawn on the
+    /// group header and — for a single-item group — on its flat row.
+    /// </summary>
+    /// <remarks>
+    /// Every codepoint used here was checked against the installed font files, not chosen from a list:
+    /// each is present in BOTH Segoe Fluent Icons and Segoe MDL2 Assets, because the app falls back to
+    /// MDL2 on Windows 10 and a codepoint missing from it renders as an empty box.
+    /// </remarks>
+    private static NavGroup Group(string id, string label, string glyph, params NavItem[] children)
     {
-        var g = new NavGroup { Id = id, Label = label, Glyph = "" };
+        var g = new NavGroup { Id = id, Label = label, Glyph = glyph };
         foreach (var c in children) g.Children.Add(c);
         g.Subtitle = string.Join(" · ", children.Select(c => c.Label));
         g.Tooltip = string.Join("\n", children.Select(c => c.Label));

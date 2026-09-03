@@ -65,9 +65,9 @@ public class NavGroupTests
             Label = "Test",
             Glyph = "T",
             Children = {
-            new NavItem { Id = "a", Label = "A", Glyph = "A",
+            new NavItem { Id = "a", Label = "A",
                 Content = new object(), ViewType = typeof(object) },
-            new NavItem { Id = "b", Label = "B", Glyph = "B",
+            new NavItem { Id = "b", Label = "B",
                 Content = new object(), ViewType = typeof(object) },
         }
         };
@@ -89,7 +89,6 @@ public class NavGroupTests
         {
             Id = "a",
             Label = "A",
-            Glyph = "A",
             Content = new object(),
             ViewType = typeof(object),
         };
@@ -103,7 +102,6 @@ public class NavGroupTests
         {
             Id = "a",
             Label = "A",
-            Glyph = "A",
             Content = new object(),
             ViewType = typeof(object),
             IsInDevelopment = true,
@@ -163,7 +161,6 @@ public class NavGroupTests
     {
         Id = "a",
         Label = "A",
-        Glyph = "A",
         Content = new object(),
         ViewType = typeof(object),
     };

@@ -219,42 +219,28 @@ public sealed partial class CleanupViewModel : ViewModelBase
         _tempCts = new CancellationTokenSource();
         try
         {
-            await _runner.RunScriptViaPwshAsync(@"
-                $paths = @($env:TEMP, ""$env:SystemRoot\Temp"")
-                $script:totalBytes = 0
-                $reparse = [IO.FileAttributes]::ReparsePoint
-                # Windows PowerShell 5.1's Get-ChildItem -Recurse FOLLOWS junctions and
-                # symbolic links, so a reparse point inside %TEMP% pointing elsewhere
-                # could let Remove-Item delete real user data outside the temp tree.
-                # Walk manually with an explicit stack and never descend into a reparse
-                # point; delete a reparse point itself WITHOUT -Recurse (removes the link,
-                # not its target).
-                function Clear-TempDir([string]$root) {
-                    $stack = New-Object System.Collections.Stack
-                    $stack.Push($root)
-                    while ($stack.Count -gt 0) {
-                        $cur = $stack.Pop()
-                        try { $children = Get-ChildItem -LiteralPath $cur -Force -ErrorAction SilentlyContinue } catch { continue }
-                        foreach ($c in $children) {
-                            $isReparse = ($c.Attributes -band $reparse) -eq $reparse
-                            if ($c.PSIsContainer) {
-                                if ($isReparse) {
-                                    try { [IO.Directory]::Delete($c.FullName, $false) } catch {}
-                                } else {
-                                    $stack.Push($c.FullName)
-                                }
-                            } else {
-                                try { $script:totalBytes += $c.Length } catch {}
-                                try { Remove-Item -LiteralPath $c.FullName -Force -ErrorAction SilentlyContinue } catch {}
-                            }
-                        }
-                    }
-                }
-                foreach ($p in $paths) {
-                    if (Test-Path $p) { Clear-TempDir $p }
-                }
-                ""Freed approximately $([Math]::Round($script:totalBytes/1MB,1)) MB""
-            ", cancellationToken: _tempCts.Token);
+            // Delegated to TuneUpService rather than kept as a third temp sweeper. The inline PowerShell this
+            // replaces walked %TEMP% with no exclusions at all, while both C# sweepers pass
+            // SystemPaths.BundleExtractionRoot and SystemPaths.OwnExtractionDirectory — so this command could
+            // delete the .NET single-file extraction root, its own and that of every other running single-file
+            // app, which is the failure SystemPaths documents (an app whose payload is extracted but not yet
+            // loaded cannot be detected as in use).
+            //
+            // It also fixes the reported total. The script did `$totalBytes += $c.Length` BEFORE
+            // `Remove-Item -ErrorAction SilentlyContinue`, and SilentlyContinue makes a locked file a
+            // non-terminating error, so the empty catch never fired and a file it failed to delete was still
+            // counted as freed — while the confirmation dialog above says "Files in use may be skipped".
+            // CleanTempFiles captures the size, deletes, and only then adds, counting failures separately.
+            Console.Append(PowerShellLine.Output("Cleaning user and Windows Temp folders..."));
+            var (bytesFreed, filesDeleted, errors) = await TuneUpService.CleanTempFilesAsync(_tempCts.Token);
+            Console.Append(PowerShellLine.Output(string.Create(CultureInfo.InvariantCulture,
+                $"Freed {bytesFreed / 1024.0 / 1024.0:F1} MB across {filesDeleted} file(s).")));
+            if (errors > 0)
+            {
+                Console.Append(PowerShellLine.Output(string.Create(CultureInfo.InvariantCulture,
+                    $"{errors} file(s) were in use or protected and were skipped.")));
+            }
+
             StatusMessage = "Temp cleanup done";
             Log.Information("Temp cleanup completed");
             ActivityLogService.Instance.Log("Quick Cleanup", "Cleared temporary files");

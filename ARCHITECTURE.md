@@ -221,6 +221,11 @@ Key services:
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming
   launcher caches, Windows caches). Per-file try/catch so locked files
   are skipped, not forced.
+- `CleanupPreScanService` (`ICleanupPreScanService`) — sizes the temp folders and the current user's
+  Recycle Bin for the two labels Quick Cleanup shows before the user asks for anything. Behind an
+  interface because the work used to sit inline in `CleanupViewModel`, whose constructor fires it and
+  forgets it: building the view-model started a recursive walk of both locations, 30 times over in one
+  unit-test file, and one test then asserted the walk finished inside fifteen seconds.
 - `LargeFileScanner` — read-only biggest-files discovery; skips WinSxS,
   pagefile, hiberfil, System Volume Information.
 - `UpdateService` — GitHub Releases API client with explicit

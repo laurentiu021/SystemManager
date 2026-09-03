@@ -56,12 +56,8 @@ public class StartupViewModelTests
     public async Task ScanAsync_PopulatesEntries()
     {
         var vm = new StartupViewModel(new Services.StartupService());
-        // Constructor fires auto-scan. Poll until it completes (up to 15s).
-        for (int i = 0; i < 30; i++)
-        {
-            await Task.Delay(500);
-            if (!vm.IsBusy) break;
-        }
+        // The constructor fires the scan and forgets it; this is the task it started.
+        await vm.InitializationComplete;
         // On any Windows machine there should be at least 1 startup item.
         Assert.True(vm.Entries.Count > 0, "Expected at least one startup entry");
         Assert.True(vm.TotalCount > 0);
@@ -71,12 +67,8 @@ public class StartupViewModelTests
     public async Task ScanAsync_UpdatesScanSummary()
     {
         var vm = new StartupViewModel(new Services.StartupService());
-        // Constructor fires auto-scan. Poll until it completes (up to 15s).
-        for (int i = 0; i < 30; i++)
-        {
-            await Task.Delay(500);
-            if (!vm.IsBusy) break;
-        }
+        // The constructor fires the scan and forgets it; this is the task it started.
+        await vm.InitializationComplete;
         // After scan, summary should contain counts if entries were found
         if (vm.TotalCount > 0)
             Assert.Contains("enabled", vm.ScanSummary, StringComparison.OrdinalIgnoreCase);
@@ -86,11 +78,8 @@ public class StartupViewModelTests
     public async Task ScanAsync_CountsAreConsistent()
     {
         var vm = new StartupViewModel(new Services.StartupService());
-        for (int i = 0; i < 30; i++)
-        {
-            await Task.Delay(500);
-            if (!vm.IsBusy) break;
-        }
+        // The constructor fires the scan and forgets it; this is the task it started.
+        await vm.InitializationComplete;
         Assert.Equal(vm.Entries.Count, vm.TotalCount);
         Assert.Equal(vm.EnabledCount + vm.DisabledCount, vm.TotalCount);
     }
@@ -140,8 +129,9 @@ public class StartupViewModelTests
         // and adds boot time, so it must ask first. Declining must short-circuit BEFORE any
         // write — proven here by the entry staying disabled (SetEnabledAsync is never reached).
         var vm = new StartupViewModel(new StartupService());
-        // Let the ctor's auto-scan settle so it can't overwrite our seeded entry mid-test.
-        for (int i = 0; i < 30 && vm.IsBusy; i++) await Task.Delay(200);
+        // Wait for the ctor's auto-scan to finish before seeding, so it cannot overwrite the seeded
+        // entry mid-test. The task itself, not a sampled IsBusy flag.
+        await vm.InitializationComplete;
 
         vm.Entries.Clear();
         var disabled = new StartupEntry { Name = "Seeded", Command = "c:\\x.exe", IsEnabled = false };
@@ -169,7 +159,9 @@ public class StartupViewModelTests
     {
         // Nothing to enable → no confirmation dialog (and no write). Guards against nagging.
         var vm = new StartupViewModel(new StartupService());
-        for (int i = 0; i < 30 && vm.IsBusy; i++) await Task.Delay(200);
+        // Wait for the ctor's auto-scan to finish before seeding, so it cannot overwrite the seeded
+        // entry mid-test. The task itself, not a sampled IsBusy flag.
+        await vm.InitializationComplete;
 
         vm.Entries.Clear();
         vm.Entries.Add(new StartupEntry { Name = "On", Command = "c:\\y.exe", IsEnabled = true });

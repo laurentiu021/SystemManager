@@ -38,6 +38,7 @@ public static class ServiceRegistration
         services.AddSingleton<AppAlertService>();
         services.AddSingleton<IAppBlockerService, AppBlockerService>();
         services.AddSingleton<DeepCleanupService>();
+        services.AddSingleton<ICleanupPreScanService, CleanupPreScanService>();
         services.AddSingleton<DiskAnalyzerService>();
         services.AddSingleton<DiskScanHistoryService>();
         services.AddSingleton<DuplicateFileService>();

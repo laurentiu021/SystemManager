@@ -434,6 +434,70 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The two elevation banners that share a slot must share one geometry.
+    /// </summary>
+    /// <remarks>
+    /// 27 views render both banners in the same <c>Grid.Row</c>, swapped on <c>IsElevated</c>, and the two
+    /// were hand-written with different geometry: <c>CornerRadius="8" Padding="14,12"</c> when not elevated
+    /// in 27 of 27 views, <c>CornerRadius="12" Padding="12,8"</c> when elevated in 29 of 29. Measured, the
+    /// banner in that fixed slot was 61.29px in one state and 35.29px in the other, so everything below it
+    /// jumped 26px at the moment the user granted elevation — and the corners visibly changed shape with it.
+    /// <para>18px of that jump is the "Run as administrator" button, which the elevated state has nothing to
+    /// replace with, and no geometry removes it. This asserts the part that was an accident: one radius, one
+    /// padding, both states.</para>
+    /// <para>Companion to <see cref="EveryGoldElevationBanner_PromisesMoreAccess"/>, which guards what the
+    /// banner SAYS. Same parse, different concern, so they stay separate tests. Both read the markup rather
+    /// than a comment, which also means a view that copies the old block without the comment cannot slip
+    /// past.</para>
+    /// </remarks>
+    [Fact]
+    public void BothAdminBanners_ShareOneGeometry()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var seen = new List<(string View, string State, string Geometry)>();
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            XDocument doc;
+            try { doc = XDocument.Parse(File.ReadAllText(file)); }
+            catch (System.Xml.XmlException) { continue; }
+
+            foreach (var border in doc.Descendants().Where(e => e.Name.LocalName == "Border"))
+            {
+                var visibility = (string?)border.Attribute("Visibility") ?? "";
+                if (!visibility.Contains("IsElevated", StringComparison.Ordinal)) continue;
+
+                var radius = (string?)border.Attribute("CornerRadius");
+                var padding = (string?)border.Attribute("Padding");
+                if (radius is null || padding is null) continue;
+
+                // Inverse == shown when NOT elevated, which is the other banner in the same slot.
+                var state = visibility.Contains("Inverse", StringComparison.Ordinal) ? "not-elevated" : "elevated";
+                seen.Add((Path.GetFileName(file), state, $"CornerRadius={radius} Padding={padding}"));
+            }
+        }
+
+        // Guards the guard: with no banners parsed, "all geometries agree" is true of an empty set.
+        Assert.True(seen.Count >= 50,
+            $"only {seen.Count} elevation banners parsed out of Views/ — the markup this reads has changed "
+            + "shape, so the check is passing on an empty set.");
+
+        var geometries = seen
+            .GroupBy(b => b.Geometry, StringComparer.Ordinal)
+            .OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Key} — {g.Count()} banner(s): "
+                         + string.Join(", ", g.Select(b => $"{b.View} ({b.State})").Take(4))
+                         + (g.Count() > 4 ? ", …" : ""))
+            .ToArray();
+
+        Assert.True(geometries.Length == 1,
+            "the elevation banners do not agree on their geometry. Both states occupy the SAME slot in 27 "
+            + "views, so a difference here is the layout below them jumping the moment the user elevates — "
+            + "which is the one moment the app should look steady. Pick one radius and one padding:\n  "
+            + string.Join("\n  ", geometries));
+    }
+
+    /// <summary>
     /// <c>TextWrapping="Wrap"</c> must not sit inside a horizontal <c>StackPanel</c>, where it does
     /// nothing.
     /// </summary>

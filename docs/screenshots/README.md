@@ -22,8 +22,9 @@ Every shot in this folder, and both GIFs under [`docs/gifs/`](../gifs/), predate
 changes to the left-hand rail. 1.76.1 gave the twelve groups their icons, so the rail in
 each image is a column of text with an empty margin beside it. 1.76.2 replaced each
 collapsed group's subtitle — a truncated list of page names — with a written two-line
-description. Nothing else in the shots is stale: both changes were confined to that rail
-and to the administrator badge, which is now a shield rather than a padlock.
+description. 1.76.3 then gave the administrator strip at the top of 31 pages a single
+geometry, so where a shot shows that strip its corners and height are also out of date.
+Nothing else in the shots is stale.
 
 The whole set wants retaking in one pass rather than piecemeal, so that the rail matches
 across all of them. Until then treat the sidebar in every image as out of date.

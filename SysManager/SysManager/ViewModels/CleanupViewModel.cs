@@ -18,6 +18,11 @@ public sealed partial class CleanupViewModel : ViewModelBase
 {
     private readonly IPowerShellRunner _runner;
 
+    // The temp/Recycle-Bin sizing, behind a seam. It used to be inline here, which meant constructing this
+    // view-model kicked off a recursive walk of both temp folders and every per-SID Recycle Bin folder — 30
+    // times over in one unit-test file, one of which then asserted the walk finished inside fifteen seconds.
+    private readonly ICleanupPreScanService _preScan;
+
     private readonly EtaCalculator _sfcEta = new();
     private readonly EtaCalculator _dismEta = new();
 
@@ -63,9 +68,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// <summary>True whenever any background task is running — for a small badge.</summary>
     public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsSfcRunning || IsDismRunning;
 
-    public CleanupViewModel(IPowerShellRunner runner)
+    public CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan)
     {
         _runner = runner;
+        _preScan = preScan;
         _runner.LineReceived += OnRunnerLineReceived;
         _runner.ProgressChanged += OnRunnerProgressChanged;
         IsElevated = AdminHelper.IsElevated();
@@ -142,57 +148,11 @@ public sealed partial class CleanupViewModel : ViewModelBase
         }
         try
         {
-            var (tempLabel, binLabel) = await Task.Run(() =>
-            {
-                // Measure temp folders
-                long tempBytes = 0;
-                var tempPaths = new[] { Environment.GetEnvironmentVariable("TEMP") ?? "", System.IO.Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp") };
-                foreach (var p in tempPaths.Where(x => !string.IsNullOrEmpty(x) && System.IO.Directory.Exists(x)))
-                {
-                    try
-                    {
-                        foreach (var f in System.IO.Directory.EnumerateFiles(p, "*", System.IO.SearchOption.AllDirectories))
-                        {
-                            try { tempBytes += new System.IO.FileInfo(f).Length; }
-                            catch (IOException) { /* skip inaccessible file */ }
-                            catch (UnauthorizedAccessException) { /* skip protected file */ }
-                        }
-                    }
-                    catch (IOException) { /* skip inaccessible directory */ }
-                    catch (UnauthorizedAccessException) { /* skip protected directory */ }
-                }
-                var tLabel = tempBytes > 0 ? string.Create(CultureInfo.InvariantCulture, $"{tempBytes / 1024.0 / 1024.0:F1} MB can be freed") : "Empty";
+            var measured = await _preScan.MeasureAsync();
 
-                // Measure recycle bin (rough estimate via shell folder)
-                string bLabel;
-                try
-                {
-                    long binBytes = 0;
-                    // The Recycle Bin lives in a hidden $Recycle.Bin folder on EVERY fixed drive,
-                    // one per-SID subfolder per user. Empty (SHEmptyRecycleBin) only clears the
-                    // CURRENT user's bin, so size only THIS user's per-SID folders — summing the
-                    // whole tree over-reports what emptying can actually free on a multi-user box.
-                    foreach (var recyclePath in RecycleBinHelper.CurrentUserBinPaths())
-                    {
-                        if (!Directory.Exists(recyclePath)) continue;
-                        foreach (var f in Directory.EnumerateFiles(recyclePath, "*", SearchOption.AllDirectories))
-                        {
-                            try { binBytes += new FileInfo(f).Length; }
-                            catch (IOException) { /* skip inaccessible file */ }
-                            catch (UnauthorizedAccessException) { /* skip protected file */ }
-                        }
-                    }
-                    bLabel = binBytes > 0 ? string.Create(CultureInfo.InvariantCulture, $"{binBytes / 1024.0 / 1024.0:F1} MB in Recycle Bin") : "Empty";
-                }
-                catch (IOException) { bLabel = "Unable to scan"; }
-                catch (UnauthorizedAccessException) { bLabel = "Unable to scan"; }
-
-                return (tLabel, bLabel);
-            });
-
-            // Update on the calling (UI) thread so PropertyChanged fires correctly
-            TempSizeLabel = tempLabel;
-            RecycleBinLabel = binLabel;
+            // Assigned on the calling (UI) thread so PropertyChanged fires correctly.
+            TempSizeLabel = measured.TempLabel;
+            RecycleBinLabel = measured.RecycleBinLabel;
         }
         catch (IOException ex) { Log.Debug("Pre-scan failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Pre-scan access denied: {Error}", ex.Message); }

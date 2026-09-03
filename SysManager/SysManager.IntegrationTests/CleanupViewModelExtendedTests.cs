@@ -12,70 +12,70 @@ public class CleanupViewModelExtendedTests
     [Fact]
     public void IsTempRunning_DefaultsFalse()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.False(vm.IsTempRunning);
     }
 
     [Fact]
     public void IsBinRunning_DefaultsFalse()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.False(vm.IsBinRunning);
     }
 
     [Fact]
     public void IsSfcRunning_DefaultsFalse()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.False(vm.IsSfcRunning);
     }
 
     [Fact]
     public void IsDismRunning_DefaultsFalse()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.False(vm.IsDismRunning);
     }
 
     [Fact]
     public void IsAnyRunning_FalseByDefault()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.False(vm.IsAnyRunning);
     }
 
     [Fact]
     public void IsAnyRunning_TrueWhenSfcRuns()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner()) { IsSfcRunning = true };
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService()) { IsSfcRunning = true };
         Assert.True(vm.IsAnyRunning);
     }
 
     [Fact]
     public void IsAnyRunning_TrueWhenDismRuns()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner()) { IsDismRunning = true };
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService()) { IsDismRunning = true };
         Assert.True(vm.IsAnyRunning);
     }
 
     [Fact]
     public void IsAnyRunning_TrueWhenTempRuns()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner()) { IsTempRunning = true };
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService()) { IsTempRunning = true };
         Assert.True(vm.IsAnyRunning);
     }
 
     [Fact]
     public void IsAnyRunning_TrueWhenBinRuns()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner()) { IsBinRunning = true };
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService()) { IsBinRunning = true };
         Assert.True(vm.IsAnyRunning);
     }
 
     [Fact]
     public void IsAnyRunning_RaisesPropertyChanged()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         var fired = false;
         vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.IsAnyRunning)) fired = true; };
         vm.IsSfcRunning = true;
@@ -85,21 +85,21 @@ public class CleanupViewModelExtendedTests
     [Fact]
     public void SfcStatus_DefaultsIdle()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.Equal("Idle", vm.SfcStatus);
     }
 
     [Fact]
     public void DismStatus_DefaultsIdle()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.Equal("Idle", vm.DismStatus);
     }
 
     [Fact]
     public void CancelCommand_DoesNotThrow()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         var ex = Record.Exception(() => vm.CancelCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -113,7 +113,7 @@ public class CleanupViewModelExtendedTests
     [InlineData("RelaunchAsAdminCommand")]
     public void CommandExists(string propName)
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         var p = vm.GetType().GetProperty(propName);
         Assert.NotNull(p);
         Assert.NotNull(p!.GetValue(vm));
@@ -122,14 +122,14 @@ public class CleanupViewModelExtendedTests
     [Fact]
     public void Console_Present()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.NotNull(vm.Console);
     }
 
     [Fact]
     public void ToggleStates_Independently()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         vm.IsSfcRunning = true;
         vm.IsDismRunning = true;
         Assert.True(vm.IsSfcRunning && vm.IsDismRunning);
@@ -141,7 +141,7 @@ public class CleanupViewModelExtendedTests
     [Fact]
     public void IsElevated_IsBoolean()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.IsType<bool>(vm.IsElevated);
     }
 }

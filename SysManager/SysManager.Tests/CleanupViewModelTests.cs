@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Reflection;
+using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -23,7 +24,26 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class CleanupViewModelTests
 {
-    private static CleanupViewModel NewVm() => new(new PowerShellRunner());
+    /// <summary>
+    /// A pre-scan that answers instantly with fixed numbers.
+    /// </summary>
+    /// <remarks>
+    /// Every test in this file builds a view-model, and the constructor fires the pre-scan. While that work
+    /// was inline it meant 30 recursive walks of both temp folders and every per-SID Recycle Bin folder per
+    /// run of this file, and one test asserted the walk finished inside fifteen seconds — a claim about the
+    /// machine, not the code, which duly failed on a normally-used desktop while passing on a CI runner with
+    /// an empty profile.
+    /// </remarks>
+    private static ICleanupPreScanService StubPreScan(
+        string temp = "12.3 MB can be freed", string bin = "4.5 MB in Recycle Bin")
+    {
+        var preScan = Substitute.For<ICleanupPreScanService>();
+        preScan.MeasureAsync().Returns(Task.FromResult(new CleanupPreScan(temp, bin)));
+        return preScan;
+    }
+
+    private static CleanupViewModel NewVm(ICleanupPreScanService? preScan = null) =>
+        new(new PowerShellRunner(), preScan ?? StubPreScan());
 
     // ---------- construction & defaults ----------
 
@@ -260,7 +280,7 @@ public class CleanupViewModelTests
     public void RunnerLineReceived_AppendsToConsole()
     {
         var runner = new PowerShellRunner();
-        var vm = new CleanupViewModel(runner);
+        var vm = new CleanupViewModel(runner, StubPreScan());
         var before = vm.Console.Lines.Count;
 
         // Simulate the runner emitting a line. The VM subscribes in its
@@ -280,7 +300,7 @@ public class CleanupViewModelTests
     public void RunnerProgressChanged_UpdatesProgressProperty()
     {
         var runner = new PowerShellRunner();
-        var vm = new CleanupViewModel(runner);
+        var vm = new CleanupViewModel(runner, StubPreScan());
 
         var ev = typeof(PowerShellRunner)
             .GetField(nameof(PowerShellRunner.ProgressChanged), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
@@ -347,41 +367,44 @@ public class CleanupViewModelTests
 
     // ---------- pre-scan labels (added in v0.12.2) ----------
 
+    /// <summary>
+    /// Both size labels read "Scanning…" until the measurement lands, then hold what it measured.
+    /// </summary>
+    /// <remarks>
+    /// One test where there were three, and it asserts more than they did.
+    /// <para><c>TempSizeLabel_DefaultIsScanning</c> and <c>RecycleBinLabel_DefaultIsScanning</c> read the
+    /// label straight after construction and were only ever right by luck: the pre-scan is fire-and-forget,
+    /// so they were racing it and would have flipped the moment the measurement got fast.</para>
+    /// <para><c>PreScan_EventuallyPopulatesLabels</c> polled <c>Task.Delay(500)</c> thirty times and then
+    /// asserted the labels had changed — which is the assertion "this machine can enumerate the whole temp
+    /// tree and Recycle Bin in fifteen seconds". A property of the machine, not the code. It failed on a
+    /// normally-used desktop and passed on a CI runner with an empty profile (#2084).</para>
+    /// <para>The gate replaces the clock: the measurement completes exactly when this test says so, and
+    /// <c>InitializationComplete</c> — which <see cref="ViewModelBase"/> exposes for precisely this — replaces
+    /// the polling. It also asserts the labels hold the MEASURED values, where the old test only asserted
+    /// they were no longer "Scanning…" and would have passed on any garbage.</para>
+    /// </remarks>
     [Fact]
-    public void TempSizeLabel_DefaultIsScanning()
+    public async Task SizeLabels_ReadScanning_UntilTheMeasurementLands()
     {
-        // The constructor fires PreScanAsync which sets "Scanning…" initially.
-        var vm = NewVm();
+        var gate = new TaskCompletionSource<CleanupPreScan>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var preScan = Substitute.For<ICleanupPreScanService>();
+        preScan.MeasureAsync().Returns(gate.Task);
+        var vm = NewVm(preScan);
+
         Assert.Equal("Scanning…", vm.TempSizeLabel);
-    }
-
-    [Fact]
-    public void RecycleBinLabel_DefaultIsScanning()
-    {
-        var vm = NewVm();
         Assert.Equal("Scanning…", vm.RecycleBinLabel);
-    }
 
-    [Fact]
-    public async Task PreScan_EventuallyPopulatesLabels()
-    {
-        var vm = NewVm();
-        // PreScanAsync runs on construction via fire-and-forget.
-        // Poll until labels change or timeout (up to 15s for slow CI).
-        for (int i = 0; i < 30; i++)
-        {
-            await Task.Delay(500);
-            if (vm.TempSizeLabel != "Scanning…" && vm.RecycleBinLabel != "Scanning…")
-                break;
-        }
-        // After scan, labels should no longer be "Scanning…"
-        Assert.NotEqual("Scanning…", vm.TempSizeLabel);
-        Assert.NotEqual("Scanning…", vm.RecycleBinLabel);
+        gate.SetResult(new CleanupPreScan("412.7 MB can be freed", "18.0 MB in Recycle Bin"));
+        await vm.InitializationComplete;
+
+        Assert.Equal("412.7 MB can be freed", vm.TempSizeLabel);
+        Assert.Equal("18.0 MB in Recycle Bin", vm.RecycleBinLabel);
     }
 
     // A "…_CanBeSetDirectly" round-trip was removed here: it set a bare [ObservableProperty]
     // and read it straight back, so only the source generator could fail it. The labels' real
-    // behaviour is covered by …_DefaultIsScanning and PreScan_EventuallyPopulatesLabels above.
+    // behaviour is covered by SizeLabels_ReadScanning_UntilTheMeasurementLands above.
     // ---------- progress feedback (regression) ----------
     // CleanupView.xaml binds a progress bar to IsBusy and the sidebar spinner reads the same flag,
     // but this VM never assigned it — so nothing appeared while SFC or DISM ran, which is minutes of

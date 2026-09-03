@@ -235,6 +235,16 @@ public partial class ArchitectureTests
     /// Walks up from the test binary to the directory holding this project's sources. The build copies
     /// no .cs files to the output, so the assembly location alone cannot answer this.
     /// </summary>
+    /// <summary>
+    /// Locates the <c>SysManager.Tests</c> source directory.
+    /// </summary>
+    /// <remarks>
+    /// Walks up from the output folder first, which is how it works under <c>dotnet test</c>. That walk fails
+    /// whenever the tests are hosted from somewhere else in the tree, and then every guard that reads test
+    /// source throws instead of running. The sibling fallback covers it: the app project is found by the same
+    /// upward walk looking for a SUBPATH, which succeeds from anywhere under the repository, and the test
+    /// project is its sibling.
+    /// </remarks>
     private static string FindTestSourceDirectory()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -243,6 +253,10 @@ public partial class ArchitectureTests
             if (File.Exists(Path.Combine(dir.FullName, "SysManager.Tests.csproj"))) return dir.FullName;
             dir = dir.Parent;
         }
+
+        var sibling = Path.Combine(
+            Directory.GetParent(FindAppProjectDir())!.FullName, "SysManager.Tests");
+        if (File.Exists(Path.Combine(sibling, "SysManager.Tests.csproj"))) return sibling;
 
         throw new DirectoryNotFoundException(
             "Could not locate the SysManager.Tests source directory from " + AppContext.BaseDirectory);
@@ -385,6 +399,65 @@ public partial class ArchitectureTests
             "ViewModel invokes them, so a user cannot reach the feature they implement. Either bind " +
             "them in the View or remove them — shipping an unreachable command means the CHANGELOG " +
             "can announce a feature that does not exist:\n  " + string.Join("\n  ", unreachable));
+    }
+
+    /// <summary>
+    /// No test in the blocking suite may wait by sleeping.
+    /// </summary>
+    /// <remarks>
+    /// <c>await Task.Delay(...)</c> in a test is a guess about how fast the machine is. Two lived here and
+    /// both were wrong in the same way: <c>PreScan_EventuallyPopulatesLabels</c> polled 30 x 500&#160;ms and
+    /// then asserted a recursive walk of the temp folders and the Recycle Bin had finished — which failed on a
+    /// normally-used desktop and passed on a CI runner with an empty profile (#2084) — and five waits in
+    /// <c>StartupViewModelTests</c> sampled <c>IsBusy</c> on the same 15-second budget. Every one of them was
+    /// waiting for a fire-and-forget constructor task that <see cref="ViewModelBase.InitializationComplete"/>
+    /// already exposes.
+    /// <para>A bounded wait is a different thing and stays allowed: <c>Task.WhenAny(work, Task.Delay(5s))</c>
+    /// fails a hang instead of hanging, and it is the delay that is never awaited on its own. The rule is
+    /// therefore about <c>await Task.Delay</c> specifically, not about the method.</para>
+    /// <para>Comment lines are stripped before searching. The prose above names the very expression it
+    /// forbids, and several test files explain in comments why they do NOT use it — matching those would make
+    /// this guard fail on the files that already got it right.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTestWaitsBySleeping()
+    {
+        var testDir = FindTestSourceDirectory();
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        // Split so the needles do not appear literally in this file, which the scan also reads: written whole
+        // they matched these very lines and the guard reported ITSELF as the offender.
+        var sleepingAwait = "await Task." + "Delay(";
+        var blockingSleep = "Thread." + "Sleep(";
+
+        foreach (var file in Directory.GetFiles(testDir, "*.cs"))
+        {
+            var lines = File.ReadAllLines(file);
+            scanned++;
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i].Trim();
+                if (line.StartsWith("//", StringComparison.Ordinal)
+                    || line.StartsWith("///", StringComparison.Ordinal)
+                    || line.StartsWith("*", StringComparison.Ordinal)) continue;
+
+                if (line.Contains(sleepingAwait, StringComparison.Ordinal)
+                    || line.Contains(blockingSleep, StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}  {line}");
+            }
+        }
+
+        Assert.True(scanned >= 200,
+            $"only {scanned} test source files were scanned — the source directory lookup is wrong and this "
+            + "guard is reading almost nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These tests wait by sleeping, which makes them assert how fast the machine is rather than what "
+            + "the code does. Await the thing itself: ViewModelBase.InitializationComplete for a "
+            + "fire-and-forget constructor task, a TaskCompletionSource the test completes for anything else. "
+            + "A bounded Task.WhenAny(work, Task.Delay(...)) timeout is fine and is not matched here:\n  "
+            + string.Join("\n  ", offenders));
     }
 
     /// <summary>

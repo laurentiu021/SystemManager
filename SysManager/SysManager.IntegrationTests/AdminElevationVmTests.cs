@@ -31,14 +31,14 @@ public class AdminElevationVmTests
     [Fact]
     public void CleanupVm_ExposesIsElevated()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.Equal(Helpers.AdminHelper.IsElevated(), vm.IsElevated);
     }
 
     [Fact]
     public void CleanupVm_HasRelaunchCommand()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.NotNull(vm.RelaunchAsAdminCommand);
     }
 
@@ -60,7 +60,7 @@ public class AdminElevationVmTests
     public void AllElevationVms_Report_SameElevationFlag()
     {
         var a = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService()).IsElevated;
-        var b = new CleanupViewModel(new PowerShellRunner()).IsElevated;
+        var b = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService()).IsElevated;
         var c = new AppUpdatesViewModel(new WingetService(new PowerShellRunner())).IsElevated;
         Assert.Equal(a, b);
         Assert.Equal(b, c);

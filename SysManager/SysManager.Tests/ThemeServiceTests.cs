@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Text.Json;
+using System.Windows.Media;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -93,5 +94,56 @@ public class ThemeServiceTests : IDisposable
         reloaded.Initialize();
 
         Assert.Equal(0.8, reloaded.ShadePosition, precision: 3);
+    }
+
+    /// <summary>
+    /// Saving a custom theme and loading it back must be a fixed point: the file that comes out of a reload
+    /// has to be byte-identical to the one that went in.
+    /// </summary>
+    /// <remarks>
+    /// <c>CurrentTheme</c> is a pure function of <c>(_baseTheme, ShadePosition)</c>. <c>Save</c> persisted
+    /// <c>CurrentTheme</c> — the derived value — and <c>Load</c>'s custom branch hands those four colours back
+    /// to <c>SetCustom</c> as the new BASE. So every launch derived from an already-derived theme and a custom
+    /// theme degraded a little each time, silently, with the user never touching anything.
+    /// <para>Two independent drift channels, one per row here. At a non-default slider position the shade
+    /// offset re-applies to already-shifted surfaces. At the DEFAULT position the offset is zero, but
+    /// <c>Legible</c> still walks <c>TextPrimary</c> in 2% steps whenever it misses 7:1 against the
+    /// background — and the walked value was what got saved, so the text marched on every restart with the
+    /// slider untouched. A test at only one position would miss whichever channel it did not sit on.</para>
+    /// <para>Asserting the FILE rather than a property is deliberate: the file is what survives a restart, and
+    /// comparing generation 2 with generation 3 alone would pass even if generation 1 to 2 had already
+    /// shifted — a drift that stops after one step is still a drift.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData(0.8, "#FF101418", "#FFF1F3F7", "off-centre slider: the shade offset re-shifts the surfaces")]
+    [InlineData(0.5, "#FF202020", "#FF606060", "default slider: Legible still walks a text colour under 7:1")]
+    public void ACustomTheme_SurvivesAReloadUnchanged(
+        double shade, string background, string text, string channel)
+    {
+        var first = new ThemeService(_dir);
+        first.SetShade(shade);
+        // SetCustom saves immediately, which also persists the shade SetShade only debounced.
+        first.SetCustom(
+            (Color)ColorConverter.ConvertFromString("#FF6366F1")!,
+            (Color)ColorConverter.ConvertFromString(background)!,
+            (Color)ColorConverter.ConvertFromString("#FF181C22")!,
+            (Color)ColorConverter.ConvertFromString(text)!);
+
+        var generation1 = File.ReadAllText(ThemeFile);
+
+        var second = new ThemeService(_dir);
+        second.Initialize();
+        var generation2 = File.ReadAllText(ThemeFile);
+
+        var third = new ThemeService(_dir);
+        third.Initialize();
+        var generation3 = File.ReadAllText(ThemeFile);
+
+        Assert.Equal(generation1, generation2);
+        Assert.Equal(generation2, generation3);
+        Assert.Equal("custom", third.CurrentPresetId);
+        Assert.True(generation1.Contains(text, StringComparison.OrdinalIgnoreCase),
+            $"{channel}: the saved file should hold the colour the user typed ({text}), not a value derived "
+            + $"from it. It holds:\n{generation1}");
     }
 }

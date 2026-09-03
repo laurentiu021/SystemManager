@@ -255,6 +255,40 @@ public class AudioMixerViewModelTests
     // Calls are captured inside the stub rather than asserted with Received(n), for the reason the
     // neighbouring test gives: an NSubstitute substitute is not thread-safe.
 
+    /// <summary>
+    /// An unknown route must still be unknown after the device list is re-read.
+    /// </summary>
+    /// <remarks>
+    /// <c>RefreshDevicesAsync</c> snapshots each row's selection before <c>ReplaceWith</c> and re-applies it
+    /// afterwards, and it did so as <c>r.SelectedOutputDevice?.Id ?? string.Empty</c>. Under the three-state
+    /// contract the empty string means "read succeeded, no override", which resolves to the entry flagged
+    /// <c>IsDefault</c> and marks the row KNOWN — so the snapshot silently converted "we do not know" into "it
+    /// is on the default device". That refresh runs every tenth pass of the 1 Hz reconcile loop, so every
+    /// routable row reverted from the placeholder to naming a device about ten seconds after the tab opened,
+    /// undoing the fix that introduced the placeholder. The route read is still a stub returning null, so this
+    /// was every row on every machine, not an edge case.
+    /// <para>Twelve passes, not ten: the refresh fires ON the tenth, and stopping there would leave the
+    /// assertion sitting exactly on the boundary it is trying to cross.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AnUnknownRoute_StaysUnknownAcrossADeviceRefresh()
+    {
+        var writes = new List<(string Session, string Device)>();
+        using var vm = NewVm(RoutableService(writes, route: null));
+        var row = vm.Sessions.Single();
+
+        Assert.True(row.OutputRouteUnknown, "the row should start unknown — the route read is a stub");
+        Assert.Null(row.SelectedOutputDevice);
+
+        for (var pass = 0; pass < 12; pass++) await vm.ReconcileAsync();
+
+        Assert.True(row.OutputRouteUnknown,
+            "after the device refresh the row claims to know its route. The placeholder is gone and the "
+            + "picker now names a device the app never read.");
+        Assert.Null(row.SelectedOutputDevice);
+        Assert.Empty(writes);   // and re-applying a snapshot must never write back
+    }
+
     private static IAudioMixerService RoutableService(
         List<(string Session, string Device)> writes, string? route = null)
     {

@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.7] - 2026-09-03
+
+Two things that went wrong in yesterday's last two updates. A theme you built yourself drifted a little every
+time you started the app, and the Volume Control output picker went back to naming a device it had not actually
+read, about ten seconds after you opened the tab. Both are fixed.
+
+### Fixed
+- **A custom theme no longer drifts on every restart.** The app saved the theme *after* applying its
+  readability adjustments, then read that adjusted version back as your starting point the next time — so each
+  launch adjusted an already-adjusted theme. With the background-shade slider off centre the panels crept
+  lighter or darker every time; even with the slider untouched the text colour walked, a little further on each
+  start. It now saves the colours you actually chose. If your custom theme has already drifted, re-picking your
+  colours once will fix it for good.
+- **The output picker in Volume Control stops re-claiming a device it never read.** 1.76.4 made the picker say
+  "Choose a device" rather than guessing your default, because Windows does not report which device an app is
+  using. But the app re-reads the device list every ten seconds, and that refresh treated "we do not know" as
+  "no preference set" — so the guess came back. It stays honest now.
+
 ## [1.76.6] - 2026-09-03
 
 A theme you build yourself in the appearance panel is now kept readable the same way the built-in ones are.

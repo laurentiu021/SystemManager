@@ -546,9 +546,16 @@ public sealed class ThemeService
         {
             var dir = Path.GetDirectoryName(_settingsPath)!;
             Directory.CreateDirectory(dir);
+            // _baseTheme, NOT CurrentTheme. CurrentTheme is a pure function of (_baseTheme, ShadePosition)
+            // and must never become an input to itself. Persisting the derived theme made a custom one
+            // degrade a little on every launch: Load's custom branch feeds these four colours back in as the
+            // new base, so the shade offset re-applied to already-shifted surfaces, and Legible() re-walked
+            // an already-walked TextPrimary. At a non-default slider position the surfaces drifted until
+            // IsDarkBackground flipped; even at the default position the text marched, because Legible walks
+            // whenever it misses 7:1 and the walked value was what got saved.
             var data = new ThemeSettings(CurrentPresetId, CurrentMode, ShadePosition,
-                CurrentTheme.Accent.ToString(), CurrentTheme.Background.ToString(),
-                CurrentTheme.Surface.ToString(), CurrentTheme.TextPrimary.ToString());
+                _baseTheme.Accent.ToString(), _baseTheme.Background.ToString(),
+                _baseTheme.Surface.ToString(), _baseTheme.TextPrimary.ToString());
             var json = JsonSerializer.Serialize(data, JsonDefaults.Indented);
             AtomicFile.WriteAllText(_settingsPath, json);
         }

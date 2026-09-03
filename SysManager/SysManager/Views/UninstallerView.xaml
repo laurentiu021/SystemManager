@@ -29,7 +29,7 @@
 
         <!-- Elevation banner: not elevated -->
         <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
+                BorderThickness="1" CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <DockPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -49,7 +49,7 @@
              the neutral Surface2/Border1 geometry of the not-elevated banner directly above instead, so
              the slot does not change appearance when the user elevates on another tab and arrives here. -->
         <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,12"
+                BorderThickness="1" CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
             <!-- DockPanel, not the sibling banners' horizontal StackPanel: this message is the longest in
                  the app, and a StackPanel hands its children infinite width along its orientation, so

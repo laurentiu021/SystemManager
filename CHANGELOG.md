@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.3] - 2026-09-03
+
+The strip at the top of a page that says whether SysManager is running as administrator changes when you
+grant it. It used to change more than it needed to: the corners went from slightly rounded to more rounded,
+and the strip got 26 pixels shorter, so everything below it jumped.
+
+### Fixed
+- **The administrator strip keeps its shape when you elevate.** Thirty-one pages draw two versions of that
+  strip in the same place — one asking for administrator rights, one confirming you have them — and the two
+  had been written with different corner rounding and different internal spacing. Swapping between them moved
+  everything underneath by 26 pixels and visibly changed the corners, at the exact moment the app should look
+  steady. Both now use the same rounding and spacing, so the only thing that changes is the wording, the
+  colour, and the "Run as administrator" button disappearing once there is nothing left to click. That button
+  is 18 of the original 26 pixels and cannot be helped; the other 8, and the corners, were an accident.
+
+### Changed
+- **The strip asking for administrator rights is slightly more rounded and 8 pixels shorter.** It adopted the
+  rounding and spacing the confirming version already used, which is also the rounding every other card in
+  the app uses. Nothing moved position and no wording changed.
+
 ## [1.76.2] - 2026-09-03
 
 When a group in the left-hand list is closed, the line under its name now tells you what the group is for,

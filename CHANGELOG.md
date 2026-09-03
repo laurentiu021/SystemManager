@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.2] - 2026-09-03
+
+When a group in the left-hand list is closed, the line under its name now tells you what the group is for,
+in plain words, on two lines. It used to try to list every page inside the group on one line, which meant it
+listed two or three of them and cut the rest off mid-word.
+
+### Fixed
+- **The closed groups in the sidebar say what they are for.** That line was built by stringing together the
+  names of every page in the group, which for System came to 175 characters in a space about 26 wide — so
+  what you actually read was "System Health · Windows Upda…", two pages out of eleven. Ten of the twelve
+  groups were cut off, Storage included, which only holds two pages. Each group now has a short written
+  line instead, on two lines so it fits whole: System reads "Updates, startup, repairs, restore points",
+  Privacy & Security reads "Tracking, ads and preinstalled apps". It also answers a more useful question —
+  if ads keep appearing, "ads" is easier to spot than "Debloater & Ads". The count in brackets and the
+  hover tooltip, which still lists every page by name, are unchanged.
+
 ## [1.76.1] - 2026-09-03
 
 The twelve groups down the left of the window now have icons. They were meant to all along: the space for

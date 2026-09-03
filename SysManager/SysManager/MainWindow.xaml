@@ -227,11 +227,21 @@
                                                                    FontSize="10" Foreground="{DynamicResource TextSecondary}"
                                                                    Opacity="0.7" Margin="2,0,0,0"/>
                                                     </StackPanel>
-                                                    <!-- Subtitle: visible only when collapsed -->
+                                                    <!-- Subtitle: visible only when collapsed. Wraps to
+                                                         exactly two lines; on one it had about 26
+                                                         characters, which truncated all eleven groups.
+                                                         WPF has no MaxLines (that is WinUI), so the
+                                                         ceiling is LineHeight x 2 with BlockLineHeight
+                                                         pinning the line box, which makes the height
+                                                         independent of font metrics. TextTrimming stays
+                                                         as the backstop for copy that outgrows even two. -->
                                                     <TextBlock Text="{Binding Subtitle}"
                                                                FontFamily="{StaticResource UiFont}"
                                                                FontSize="11" Foreground="{DynamicResource TextSecondary}"
                                                                Opacity="0.65" Margin="23,2,0,0"
+                                                               TextWrapping="Wrap"
+                                                               LineHeight="14" LineStackingStrategy="BlockLineHeight"
+                                                               MaxHeight="28"
                                                                TextTrimming="CharacterEllipsis">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">

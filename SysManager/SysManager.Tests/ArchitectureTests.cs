@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -2413,6 +2414,121 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"Group\(""(?<id>[^""]+)"",\s*""[^""]+"",\s*""\\u(?<glyph>[0-9A-Fa-f]{4})""",
                     RegexOptions.CultureInvariant)]
     private static partial Regex GroupGlyph();
+
+    /// <summary>
+    /// Every sidebar group's collapsed subtitle is written copy that fits the two lines it is given.
+    /// </summary>
+    /// <remarks>
+    /// The subtitle used to be every child label joined with " · ". For System that produced 175 characters
+    /// in a slot about 26 wide, so two of eleven tabs survived the ellipsis — and the same was true of ten
+    /// other groups, Storage included, which has only two children. Both halves of the fix need pinning:
+    /// written copy that still gets one line is no better off, and a two-line box holding a 175-character
+    /// label dump is no better either.
+    /// <para>The " · " test is the sharp one. It fails the moment someone goes back to generating the
+    /// subtitle from child labels, which is the specific thing that was wrong, rather than merely checking
+    /// that some string is present.</para>
+    /// </remarks>
+    [Fact]
+    public void EverySidebarGroupSubtitle_IsWrittenCopyThatFitsTwoLines()
+    {
+        var app = FindAppProjectDir();
+        var vm = File.ReadAllText(Path.Combine(app, "ViewModels", "MainWindowViewModel.cs"));
+        var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml"));
+
+        var groups = GroupSubtitle().Matches(vm).Cast<Match>()
+            .Select(m => (Id: m.Groups["id"].Value,
+                          Label: m.Groups["label"].Value,
+                          Subtitle: m.Groups["subtitle"].Value))
+            .ToArray();
+
+        Assert.True(groups.Length >= 12,
+            $"only {groups.Length} group subtitles were parsed out of BuildNavGroups — the Group(...) call "
+            + "shape changed and this guard is no longer reading the sidebar.");
+
+        var blank = groups.Where(g => string.IsNullOrWhiteSpace(g.Subtitle)).Select(g => g.Id).ToArray();
+        Assert.True(blank.Length == 0,
+            "these groups print nothing under their label while collapsed, so the rail says how many tabs "
+            + $"are hidden but not what they are for: {string.Join(", ", blank)}");
+
+        var dumped = groups.Where(g => g.Subtitle.Contains(" · ", StringComparison.Ordinal))
+            .Select(g => $"{g.Id}: \"{g.Subtitle}\"")
+            .ToArray();
+        Assert.True(dumped.Length == 0,
+            "a group subtitle is a list of child labels joined with \" · \" again. That is the defect this "
+            + "replaced: the joined string ran to 175 characters for System in a slot two lines deep, so it "
+            + "truncated and named two tabs out of eleven. Write a line in the user's words instead — the "
+            + "verbatim child list is already in the tooltip.\n  "
+            + string.Join("\n  ", dumped));
+
+        // 26 characters per line at FontSize 11 in the ~136px the slot actually has, times the two lines the
+        // TextBlock is clamped to. Over budget is not a crash; the tail just goes silently to the ellipsis,
+        // which is precisely the failure this guard exists to keep from coming back.
+        const int budget = 52;
+        var overlong = groups.Where(g => g.Subtitle.Length > budget)
+            .Select(g => $"{g.Id}: {g.Subtitle.Length} chars, \"{g.Subtitle}\"")
+            .ToArray();
+        Assert.True(overlong.Length == 0,
+            $"these subtitles are longer than the {budget} characters two lines hold, so their tail is "
+            + "trimmed away unread:\n  " + string.Join("\n  ", overlong));
+
+        var echoes = groups
+            .Where(g => string.Equals(g.Subtitle, g.Label, StringComparison.OrdinalIgnoreCase))
+            .Select(g => g.Id)
+            .ToArray();
+        Assert.True(echoes.Length == 0,
+            "these subtitles just repeat the group label printed directly above them, which tells a reader "
+            + $"nothing they cannot already see: {string.Join(", ", echoes)}");
+
+        // Everything above reads the CALL SITES. On its own that leaves the factory free to ignore what they
+        // pass — put the join back inside Group() and twelve well-written arguments would sail past while
+        // the rail truncated exactly as before. So the assignment itself is asserted, not merely the strings.
+        var factoryAt = vm.IndexOf("private static NavGroup Group(", StringComparison.Ordinal);
+        Assert.True(factoryAt > 0, "the Group(...) factory was renamed; update this guard in the same PR.");
+        var factory = vm[factoryAt..vm.IndexOf("partial void OnSelectedNavChanged", StringComparison.Ordinal)];
+        Assert.Contains("g.Tooltip", factory, StringComparison.Ordinal);   // the slice really is the factory
+
+        Assert.Contains("g.Subtitle = subtitle;", factory, StringComparison.Ordinal);
+        Assert.DoesNotContain("Subtitle = string.Join", factory, StringComparison.Ordinal);
+
+        // The XAML half, sliced forward from the binding so that the prose above it — which names
+        // TextWrapping, LineHeight and MaxLines while explaining them — cannot satisfy these on its own.
+        var subtitleAt = shell.IndexOf("Text=\"{Binding Subtitle}\"", StringComparison.Ordinal);
+        Assert.True(subtitleAt > 0,
+            "MainWindow.xaml no longer binds a TextBlock to Subtitle, so the written copy reaches nobody.");
+        var element = shell[subtitleAt..shell.IndexOf('>', subtitleAt)];
+
+        Assert.Contains("TextWrapping=\"Wrap\"", element, StringComparison.Ordinal);
+        Assert.Contains("LineStackingStrategy=\"BlockLineHeight\"", element, StringComparison.Ordinal);
+
+        var lineHeight = Measure(SubtitleLineHeight(), element);
+        var maxHeight = Measure(SubtitleMaxHeight(), element);
+        Assert.True(lineHeight > 0 && maxHeight > 0,
+            $"the subtitle's line clamp could not be read (LineHeight={lineHeight}, MaxHeight={maxHeight}). "
+            + "WPF has no MaxLines — that is WinUI — so those two attributes ARE the two-line limit.");
+        Assert.True(Math.Abs(maxHeight - (lineHeight * 2)) < 0.01,
+            $"the subtitle allows {maxHeight / lineHeight:0.##} lines, not two. MaxHeight must be exactly "
+            + $"twice LineHeight ({lineHeight} x 2 = {lineHeight * 2}); the copy is written to a two-line "
+            + $"budget and MaxHeight={maxHeight} silently changes it.");
+    }
+
+    /// <summary>Reads a numeric XAML attribute out of an element slice, or 0 when it is absent.</summary>
+    private static double Measure(Regex pattern, string element) =>
+        pattern.Match(element) is { Success: true } m
+            ? double.Parse(m.Groups["v"].Value, CultureInfo.InvariantCulture)
+            : 0;
+
+    /// <summary>
+    /// A sidebar group declaration, capturing its id, label and written subtitle.
+    /// </summary>
+    [GeneratedRegex(@"Group\(""(?<id>[^""]+)"",\s*""(?<label>[^""]+)"",\s*""\\u[0-9A-Fa-f]{4}"",\s*""(?<subtitle>[^""]*)""",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex GroupSubtitle();
+
+    [GeneratedRegex(@"LineHeight=""(?<v>[0-9.]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex SubtitleLineHeight();
+
+    [GeneratedRegex(@"MaxHeight=""(?<v>[0-9.]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex SubtitleMaxHeight();
 
     /// <summary>A XAML character reference, capturing the hex codepoint.</summary>
     [GeneratedRegex(@"&#x(?<hex>[0-9A-Fa-f]{4});", RegexOptions.CultureInvariant)]

@@ -25,7 +25,6 @@ public sealed partial class NavItem : ObservableObject, IDisposable
 
     public required string Id { get; init; }
     public required string Label { get; init; }
-    public required string Glyph { get; init; }
     public required Type ViewType { get; init; }
 
     /// <summary>

@@ -242,17 +242,45 @@ public class MainWindowViewModelTests
         Assert.Equal(ids.Count, ids.Distinct().Count());
     }
 
+    /// <summary>
+    /// Leaf nav items carry a label, a view and content. They no longer carry a glyph.
+    /// </summary>
+    /// <remarks>
+    /// This assertion used to include <c>Glyph</c>, and it was FAILING the whole time: every item was
+    /// constructed with <c>Glyph = ""</c>, so the non-blank check could not pass. It went unnoticed
+    /// because CI compile-checks this project without executing it — the one test that would have caught
+    /// the empty sidebar gutter on day one was in the one place nothing runs it.
+    /// <para>Icons now live on the group, so the glyph half moved to
+    /// <see cref="NavGroups_CarryDistinctGlyphs"/>, where it is a real assertion instead of an
+    /// impossible one.</para>
+    /// </remarks>
     [Fact]
-    public void NavItems_AllHaveLabelsAndGlyphs()
+    public void NavItems_AllHaveLabelsAndAView()
     {
         var vm = new MainWindowViewModel();
         Assert.All(vm.NavItems, n =>
         {
             Assert.False(string.IsNullOrWhiteSpace(n.Label));
-            Assert.False(string.IsNullOrWhiteSpace(n.Glyph));
             Assert.NotNull(n.Content);
             Assert.NotNull(n.ViewType);
         });
+    }
+
+    /// <summary>
+    /// Every group carries a glyph, and no two groups share one.
+    /// </summary>
+    /// <remarks>
+    /// Distinctness is the point rather than mere presence: twelve rows drawn with the same icon
+    /// differentiate nothing, which is the state the sidebar was already in with twelve empty ones.
+    /// </remarks>
+    [Fact]
+    public void NavGroups_CarryDistinctGlyphs()
+    {
+        var vm = new MainWindowViewModel();
+        Assert.All(vm.NavGroups, g => Assert.False(string.IsNullOrWhiteSpace(g.Glyph)));
+
+        var glyphs = vm.NavGroups.Select(g => g.Glyph).ToList();
+        Assert.Equal(glyphs.Count, glyphs.Distinct(StringComparer.Ordinal).Count());
     }
 
     // ── NavGroup tests ──────────────────────────────────────────────

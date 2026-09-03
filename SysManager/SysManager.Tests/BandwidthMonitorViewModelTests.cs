@@ -507,7 +507,6 @@ public class BandwidthMonitorViewModelTests : IDisposable
     {
         Id = "nav-test",
         Label = "Test",
-        Glyph = "",
         ViewType = typeof(object),
         Content = content,
     };
@@ -544,7 +543,6 @@ public class BandwidthMonitorViewModelTests : IDisposable
         {
             Id = "nav-lazy",
             Label = "Lazy",
-            Glyph = "",
             ViewType = typeof(object),
             ContentFactory = () => { built++; return new object(); },
         };

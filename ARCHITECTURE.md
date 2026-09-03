@@ -35,6 +35,8 @@ The sidebar organises tabs into 12 groups (11 collapsible + a flat top-level Das
 `NavItem` hierarchy built by `BuildNavGroups()` using `Group()` plus one of two item helpers:
 `Tab<TVm>()`, which defers resolving the view-model until the tab is first opened, and `EagerItem()`
 for the few entries whose view-model must exist at startup. Dashboard renders as a flat top-level entry.
+Each group carries an icon, passed to `Group()` as a Segoe Fluent Icons code point and asserted distinct;
+leaves carry none, so the icon column belongs to the twelve headings rather than the fifty-eight pages.
 Collapsed groups show a child count badge, subtitle (derived
 from child labels joined with " · "), and tooltip.
 `MainWindowViewModel.SelectedNav` mirrors selection into `NavItem.IsSelected`.

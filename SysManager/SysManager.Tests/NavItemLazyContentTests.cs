@@ -25,7 +25,6 @@ public class NavItemLazyContentTests
     {
         Id = "lazy",
         Label = "Lazy",
-        Glyph = "",
         ViewType = typeof(object),
         ContentFactory = factory,
     };
@@ -90,7 +89,6 @@ public class NavItemLazyContentTests
         {
             Id = "eager",
             Label = "Eager",
-            Glyph = "",
             ViewType = typeof(object),
             Content = vm,
         };
@@ -133,7 +131,7 @@ public class NavItemLazyContentTests
     [Fact]
     public void Content_WithNeitherEagerNorFactory_Throws()
     {
-        var item = new NavItem { Id = "bad", Label = "Bad", Glyph = "", ViewType = typeof(object) };
+        var item = new NavItem { Id = "bad", Label = "Bad", ViewType = typeof(object) };
         Assert.Throws<InvalidOperationException>(() => _ = item.Content);
     }
 }

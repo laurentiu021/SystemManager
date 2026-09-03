@@ -5447,9 +5447,42 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryTempTreeWalkerCall_PassesBothExtractionExclusions()
     {
-        var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
+        var appDir = FindAppProjectDir();
+        var servicesDir = Path.Combine(appDir, "Services");
         string[] sweepers = ["TuneUpService.cs", "DeepCleanupService.cs"];
         var callsChecked = 0;
+
+        // A THIRD sweeper existed for a long time and this guard could not see it: CleanupViewModel swept
+        // %TEMP% with an inline PowerShell string, which is neither of the two filenames below and is not a
+        // C# call at all. It passed no exclusions of any kind. So before checking the known walkers, assert
+        // that nobody has grown a new temp sweep outside them — a directory walk over %TEMP% or
+        // %SystemRoot%\Temp anywhere in ViewModels/ or in a script string is out of bounds by construction,
+        // because the exclusions live behind the two services' walkers.
+        var strays = new List<string>();
+        foreach (var file in Directory.GetFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)
+                                 && !sweepers.Contains(Path.GetFileName(f))))
+        {
+            var text = WithoutComments(File.ReadAllText(file));
+            var sweepsTemp = text.Contains("$env:TEMP", StringComparison.Ordinal)
+                             || text.Contains(@"$env:SystemRoot\Temp", StringComparison.Ordinal);
+            if (!sweepsTemp) continue;
+
+            // A sweep is a walk plus a delete. Reading or reporting a temp path is fine.
+            var deletes = text.Contains("Remove-Item", StringComparison.Ordinal)
+                          || text.Contains("Directory]::Delete", StringComparison.Ordinal)
+                          || text.Contains(".Delete()", StringComparison.Ordinal);
+            if (deletes) strays.Add(Path.GetFileName(file));
+        }
+
+        Assert.True(strays.Count == 0,
+            "these files walk and delete inside %TEMP% without going through TuneUpService or "
+            + "DeepCleanupService, so they cannot be passing SystemPaths.BundleExtractionRoot and "
+            + "SystemPaths.OwnExtractionDirectory — which means they can delete the .NET single-file "
+            + "extraction root of this app and of every other running single-file app. Route the work through "
+            + $"TuneUpService.CleanTempFilesAsync instead of writing a third sweeper:\n  "
+            + string.Join("\n  ", strays));
 
         foreach (var file in sweepers)
         {

@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.8] - 2026-09-03
+
+Quick Cleanup's "Clean TEMP" could delete files that other running programs were relying on, and the amount it
+reported freeing counted files it had not actually deleted. Both are fixed by having it use the same cleanup
+engine the rest of the app already uses.
+
+### Fixed
+- **Clean TEMP no longer touches the folder running programs unpack themselves into.** Modern single-file
+  Windows programs — including SysManager itself — unpack part of themselves into a folder inside Temp while
+  they run. Two of the app's three cleanup paths already left that folder alone; this one did not, so cleaning
+  temp files could break a program that was open at the time, or SysManager itself. It now shares the cleanup
+  engine the other two use, which skips that folder by design.
+- **"Freed X MB" now counts only what was actually deleted.** The old count added a file's size before trying
+  to delete it, so a file that was locked and skipped still counted toward the total — on the same screen whose
+  confirmation says files in use may be skipped. Skipped files are now reported separately, as a count.
+
 ## [1.76.7] - 2026-09-03
 
 Two things that went wrong in yesterday's last two updates. A theme you built yourself drifted a little every

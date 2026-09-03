@@ -119,6 +119,17 @@ public sealed class ThemeService
         return timer;
     }
 
+    /// <summary>
+    /// Builds and applies a theme from the four colours the appearance popup collects.
+    /// </summary>
+    /// <remarks>
+    /// Goes through <see cref="ApplyShade"/> like <see cref="SetPreset"/> and <see cref="SetAccent"/> do,
+    /// rather than assigning <see cref="CurrentTheme"/> itself. It used to do the latter, with two
+    /// consequences: the shade slider's position was silently discarded whenever a custom theme was applied,
+    /// and — more importantly — a custom theme was the ONLY kind that never went through the text-legibility
+    /// correction inside <see cref="Shade"/>. Four typed hex values could therefore produce white on white,
+    /// while every shipped preset was held to a contrast floor. Same machinery for both now.
+    /// </remarks>
     public void SetCustom(Color accent, Color background, Color surface, Color text)
     {
         CurrentMode = "custom";
@@ -126,7 +137,7 @@ public sealed class ThemeService
         _baseTheme = new ThemePreset(
             Id: "custom",
             Name: "Custom",
-            IsDark: background.R + background.G + background.B < 384,
+            IsDark: IsDarkBackground(background),
             Accent: accent,
             Background: background,
             Surface: surface,
@@ -135,21 +146,25 @@ public sealed class ThemeService
             TextPrimary: text,
             TextSecondary: Lerp(text, background, 0.3),
             TextMuted: Lerp(text, background, 0.55));
-        CurrentTheme = new ThemePreset(
-            Id: "custom",
-            Name: "Custom",
-            IsDark: background.R + background.G + background.B < 384,
-            Accent: accent,
-            Background: background,
-            Surface: surface,
-            Surface2: Lerp(surface, background, 0.5),
-            Border: Lerp(surface, text, 0.15),
-            TextPrimary: text,
-            TextSecondary: Lerp(text, background, 0.3),
-            TextMuted: Lerp(text, background, 0.55));
-        Apply(CurrentTheme);
+        ApplyShade();
         Save();
     }
+
+    /// <summary>
+    /// Whether a background counts as dark, for choosing which arm of the status palette to install.
+    /// </summary>
+    /// <remarks>
+    /// Perceptual luminance, not the sum of the channels. The sum treats every channel as equally bright, so
+    /// <c>#00FF00</c> summed to 255 and was classified DARK despite a relative luminance of 0.715 — the dark
+    /// status palette then put <c>WarningText #FCD34D</c> on bright green at 1.05:1. <c>#7F7F7F</c> summed to
+    /// 381 and was mis-called dark for the same reason. 0.18 is the midpoint used by the same WCAG formula
+    /// the contrast tests apply, so the classification and the assertions agree on what "dark" means.
+    /// </remarks>
+    /// <remarks>
+    /// <c>internal</c> for the same reason <see cref="Shade"/> is: it is pure, and the alternative way to
+    /// exercise it is to call <see cref="SetCustom"/>, which persists to the user's real theme file.
+    /// </remarks>
+    internal static bool IsDarkBackground(Color background) => RelativeLuminance(background) < 0.18;
 
     private void ApplyShade()
     {

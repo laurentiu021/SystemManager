@@ -104,6 +104,7 @@ fully open source.
 | No telemetry / no account | ✅ | ❌ | ❌ | ✅ | ✅ |
 | Fully local (no cloud) | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Portable single `.exe` | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Code-signed binary | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Disk / cache cleanup | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Privacy & telemetry toggles | ✅ | ⚠️ | ✅ | ✅ | ❌ |
 | Network diagnostics (ping / traceroute / speed) | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -112,6 +113,11 @@ fully open source.
 | Free | ✅ | ⚠️ | ✅ | ✅ | ✅ |
 
 <sub>⚠️ = partial, paywalled, or limited. Comparison reflects the free editions as of 2026; features evolve — corrections welcome via an issue.</sub>
+
+<sub>The signing row is the one where SysManager loses, and it is here on purpose — a table a project wins
+every row of tells you nothing. Builds are unsigned, so Windows shows a warning on first launch. Why, what
+that warning looks like, and how to check the download yourself:
+[First launch](#first-launch-windows-will-warn-you) · [Verifying the download](#verifying-the-download).</sub>
 
 ## Features
 

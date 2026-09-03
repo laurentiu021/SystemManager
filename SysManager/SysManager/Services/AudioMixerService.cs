@@ -460,17 +460,20 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     private object? _policyConfig; // IAudioPolicyConfig (undocumented)
 
     /// <inheritdoc/>
-    public string GetSessionOutputDevice(string sessionId)
+    public string? GetSessionOutputDevice(string sessionId)
     {
         lock (_gate)
         {
-            if (_disposed || !ProbeRoutingLocked() || _policyConfig is null) return string.Empty;
-            if (!_routingKeys.TryGetValue(sessionId, out var key)) return string.Empty;
+            // null, not string.Empty, on every path that means "we do not know". Empty is reserved for a
+            // successful read that found no override; conflating the two is what made the picker assert the
+            // default device for apps it knew nothing about.
+            if (_disposed || !ProbeRoutingLocked() || _policyConfig is null) return null;
+            if (!_routingKeys.TryGetValue(sessionId, out var key)) return null;
             try
             {
-                return AudioPolicyConfigFactory.GetPersistedDefaultEndpoint(_policyConfig, key.Pid) ?? string.Empty;
+                return AudioPolicyConfigFactory.GetPersistedDefaultEndpoint(_policyConfig, key.Pid);
             }
-            catch (COMException ex) { Log.Debug("GetSessionOutputDevice failed: {Error}", ex.Message); return string.Empty; }
+            catch (COMException ex) { Log.Debug("GetSessionOutputDevice failed: {Error}", ex.Message); return null; }
         }
     }
 

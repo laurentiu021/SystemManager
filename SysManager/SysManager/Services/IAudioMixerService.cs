@@ -70,10 +70,20 @@ public interface IAudioMixerService
     bool IsRoutingSupported { get; }
 
     /// <summary>
-    /// Reads the endpoint id this session is currently routed to, or an empty string for
-    /// "follow the system default" (or when routing can't be read). Best-effort.
+    /// Reads the endpoint id this session is currently routed to.
     /// </summary>
-    string GetSessionOutputDevice(string sessionId);
+    /// <returns>
+    /// The endpoint id when the app has an override; <see cref="string.Empty"/> when the read succeeded and
+    /// there is no override, so the app follows the system default; <c>null</c> when the route could not be
+    /// read at all.
+    /// </returns>
+    /// <remarks>
+    /// Three states, not two. The old contract folded "could not read" into the empty string alongside
+    /// "follows the default", and the caller turned an empty string into the default device's name — so a
+    /// failed read was displayed as a confident claim about the user's system. Callers must render
+    /// <c>null</c> as unknown.
+    /// </remarks>
+    string? GetSessionOutputDevice(string sessionId);
 
     /// <summary>
     /// Routes a session's app to a specific output device (empty <paramref name="deviceId"/> =

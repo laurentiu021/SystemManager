@@ -235,7 +235,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   row; on builds where it doesn't, the row shows a "Choose output device…" button that opens
   Windows' per-app sound settings so you're never left without a path. Plug a headset in while
   the tab is open and it appears on its own — the device list is re-read every ten seconds, and
-  each app keeps the destination you picked for it
+  each app keeps the destination you picked for it. Windows does not report which device an app
+  is currently using, so the picker says "Choose a device" rather than guessing: the override
+  you set stays in force in Windows, but SysManager will not claim to know it after a restart
 - **Volume presets** — save the current per-app volumes and mutes as a named preset (e.g.
   "Gaming", "Focus") and re-apply it in one click; presets are keyed by app so they work
   across restarts, and are stored locally in `%LocalAppData%\SysManager`

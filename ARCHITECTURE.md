@@ -389,7 +389,10 @@ Key services:
   SET call is invoked only after a successful `QueryInterface` for the exact IID and any failure
   returns false), and its endpoint-id/process-token string helpers are pure + unit-tested. The
   routing SET path can only be runtime-verified on a real desktop (laptop workstation), not the
-  build box.
+  build box. The READ path (`GetPersistedDefaultEndpoint`) is deliberately unimplemented and returns
+  null, so `IAudioMixerService.GetSessionOutputDevice` has a three-state contract — an endpoint id,
+  `string.Empty` for "read succeeded, no override", or null for "could not read" — and the row VM
+  renders null as unknown rather than as the default device.
 - `VolumePresetService` — persists named per-app volume/mute presets as JSON under
   `%LocalAppData%\SysManager\volume-presets.json`, keyed by exe name so a preset re-applies to
   whatever instance of an app is running. Save/parse/upsert and the "apply preset → live

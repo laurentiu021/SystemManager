@@ -261,7 +261,11 @@ public class AudioMixerViewModelTests
         var service = ServiceWith(Session("s1"));
         service.IsRoutingSupported.Returns(true);
         service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers, Headset });
-        if (route is not null) service.GetSessionOutputDevice("s1").Returns(route);
+        // Always configured, including with null. An unconfigured substitute does NOT return null for a
+        // string-returning member — NSubstitute's auto-values hand back string.Empty — so leaving it alone
+        // made a test for the "could not read the route" path silently exercise the "no override" path
+        // instead, and it reported the wrong state while looking correct.
+        service.GetSessionOutputDevice("s1").Returns(route);
         service.SetSessionOutputDevice(Arg.Any<string>(), Arg.Any<string>()).Returns(call =>
         {
             writes.Add(((string)call[0], (string)call[1]));
@@ -273,10 +277,12 @@ public class AudioMixerViewModelTests
     /// <summary>
     /// Routing an app to a device and then putting it back on the default must CLEAR the override, not pin
     /// the app to whichever device happens to be default right now.
-    /// <para>Goes headset-then-default rather than selecting the default directly: the row is built with the
-    /// default already selected (the service's route-read is a stub returning empty), so assigning it again
-    /// is not a property change, the write path would never run, and the test would pass while asserting
-    /// nothing.</para>
+    /// <para>Goes headset-then-default rather than selecting the default directly. It had to: the row used to
+    /// be built with the default already selected, because the route-read stub's empty answer resolved to that
+    /// entry, so assigning it again was not a property change, the write path never ran, and the test passed
+    /// while asserting nothing. The row now starts with no selection at all, so the first assignment is a real
+    /// change too — but the two-step is kept, because it is the sequence a user actually performs and it still
+    /// proves the second write clears rather than re-pins.</para>
     /// </summary>
     [Fact]
     public void PuttingAnAppBackOnTheDefaultDevice_ClearsTheOverride()
@@ -307,20 +313,36 @@ public class AudioMixerViewModelTests
     }
 
     /// <summary>
-    /// The read mirror: a route the service cannot resolve selects the default entry, and doing so must NOT
-    /// write back. A refresh that echoed its own snapshot would re-assert a route on every pass, and on the
-    /// failure branch would report a routing error the user never caused.
+    /// The read mirror, in all three of its states, and none of them may write back.
     /// </summary>
+    /// <remarks>
+    /// The service used to answer with two states where it needed three: an empty id meant both "this app
+    /// follows the system default" and "the route could not be read", and the row turned either into the
+    /// default device's NAME. Since the read is a stub that always fails, every picker asserted the app was on
+    /// the default device whatever Windows was doing with it. This test's earlier form pinned that: its own
+    /// data row said "nothing is known about this app's route" while asserting the default was displayed.
+    /// <para>An unresolvable id is unknown for the same reason. A route to an unplugged endpoint means the app
+    /// IS routed somewhere this list cannot name, and showing the default there is the same false claim in a
+    /// rarer case.</para>
+    /// <para>The no-write half is unchanged and is the part that catches a live regression: a refresh that
+    /// echoed its own snapshot would re-assert a route every pass, and on the failure branch would report a
+    /// routing error the user never caused.</para>
+    /// </remarks>
     [Theory]
-    [InlineData("", "the route-read stub returns empty, so nothing is known about this app's route")]
-    [InlineData("{unplugged}", "the persisted route names a device that is no longer present")]
-    public void ARouteTheServiceCannotResolve_SelectsTheDefaultEntry_AndWritesNothing(string route, string why)
+    [InlineData("", false, "an empty id is a SUCCESSFUL read finding no override, so the app follows the default")]
+    [InlineData("{unplugged}", true, "the persisted route names a device that is no longer present")]
+    [InlineData(null, true, "null is the service saying it could not read the route at all")]
+    public void TheReadMirror_ShowsWhatIsKnown_AndWritesNothing(string? route, bool unknown, string why)
     {
         var writes = new List<(string Session, string Device)>();
         using var vm = NewVm(RoutableService(writes, route));
 
         var row = vm.Sessions.Single();
-        Assert.True(row.SelectedOutputDevice?.IsDefault, why);
+        Assert.Equal(unknown, row.OutputRouteUnknown);
+        if (unknown)
+            Assert.Null(row.SelectedOutputDevice);
+        else
+            Assert.True(row.SelectedOutputDevice?.IsDefault, why);
         Assert.Empty(writes);
     }
 

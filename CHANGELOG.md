@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.4] - 2026-09-03
+
+Volume Control no longer claims to know which speakers or headset an app is playing through when it does not.
+The picker beside each app used to always show your default device, even for an app you had sent somewhere
+else, so it could tell you an app was on the speakers while Windows was sending it to a headset.
+
+### Fixed
+- **The output-device picker stops naming a device it is only guessing at.** SysManager can send an app to a
+  specific device, but Windows does not report which one an app is currently using — that read is not
+  implemented. The picker filled the gap with your default device anyway, which looked like a fact and was
+  frequently wrong: pick a headset for an app, restart the app, and the picker went back to saying "Speakers"
+  while the headset override was still in force. It now shows "Choose a device" until you choose one, and its
+  tooltip says why. Choosing still works exactly as before, and choosing your default device still clears the
+  override. The same applies when an app is routed to a device that has since been unplugged: that reads as
+  unknown too, rather than as your default.
+
 ## [1.76.3] - 2026-09-03
 
 The strip at the top of a page that says whether SysManager is running as administrator changes when you

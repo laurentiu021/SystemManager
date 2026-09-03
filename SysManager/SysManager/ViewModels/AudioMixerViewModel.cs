@@ -286,8 +286,16 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         // rather than letting ReplaceWith's null-guard throw into the fire-and-forget init.
         var devices = await Task.Run(_service.GetRenderDevices).ConfigureAwait(true);
 
-        var chosen = Sessions.ToDictionary(r => r.SessionId, r => r.SelectedOutputDevice?.Id ?? string.Empty,
-                                           StringComparer.Ordinal);
+        // string?, carrying all three states. Collapsing an unknown route to string.Empty here undid the fix
+        // that introduced the placeholder: empty means "read succeeded, no override", which
+        // SetOutputDeviceFromService resolves to the IsDefault entry and marks as KNOWN. Since this runs every
+        // tenth reconcile pass, every routable row silently went from "Choose a device" back to naming the
+        // default device about ten seconds after the tab was opened — the exact false claim the placeholder
+        // exists to avoid.
+        var chosen = Sessions.ToDictionary(
+            r => r.SessionId,
+            r => r.OutputRouteUnknown ? null : (r.SelectedOutputDevice?.Id ?? string.Empty),
+            StringComparer.Ordinal);
         OutputDevices.ReplaceWith(devices ?? []);
         // Gated on the row's own routing capability, matching the construction-time gate in MergeInto: the
         // system-sounds pseudo-session shows no picker, so it must not be handed a destination it cannot use.

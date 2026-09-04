@@ -245,4 +245,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         }
         base.Dispose(disposing);
     }
+
+    // Forward any running state to IsBusy so the sidebar progress indicator works
+    partial void OnIsSpeedTestingChanged(bool value) => IsBusy = value;
 }

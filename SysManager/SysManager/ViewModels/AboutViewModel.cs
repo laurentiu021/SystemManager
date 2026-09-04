@@ -927,6 +927,8 @@ public sealed partial class AboutViewModel : ViewModelBase
         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "About: access denied reading build date"); }
         return string.Empty;
     }
+    // Forward any running state to IsBusy so the sidebar progress indicator works
+    partial void OnIsDownloadingChanged(bool value) => IsBusy = value;
 }
 
 /// <summary>Single release entry in the "What's new" history.</summary>

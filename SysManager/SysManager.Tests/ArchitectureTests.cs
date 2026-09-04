@@ -5452,6 +5452,70 @@ public partial class ArchitectureTests
 
 
     /// <summary>
+    /// A view-model that tracks its own "running" state must forward it to <c>IsBusy</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>NavItem</c> forwards <c>ViewModelBase.IsBusy</c> to the slim progress bar under the tab's name in
+    /// the sidebar — the only indication, while the user is looking at another tab, that this one is working.
+    /// A view-model that keeps a private running flag and never assigns <c>IsBusy</c> gets no bar at all.
+    /// <para>Five tabs were in that state, and they were the slowest ones in the app: Speed Test (a full
+    /// up/down test), Traceroute (up to thirty hops), Network Repair (three netsh resets), About (an ~85&#160;MB
+    /// update download) and DNS &amp; Hosts. README promised the bar for "any long-running operation", so the
+    /// documentation was describing four view-models' behaviour as if it were all of them.</para>
+    /// <para>The flag is the single source of truth: the fix is a generated <c>On…Changed</c> hook assigning
+    /// <c>IsBusy</c>, never a second flag set alongside the first. Whether the assignment goes through the hook
+    /// or happens inline in the command is left open — several tabs predate the hook idiom and set it directly,
+    /// which is equally correct.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryViewModelThatTracksRunningState_ForwardsItToIsBusy()
+    {
+        // Not a tab: a row inside the Volume Control list, with no sidebar entry to draw a bar under. Its
+        // flag means "the user is dragging this slider", which is not background work.
+        var notTabs = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["AudioSessionRowViewModel.cs"] = "a row inside Volume Control, not a tab; IsUserAdjusting is a "
+                                              + "drag gesture rather than work in progress",
+        };
+
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var withFlags = 0;
+        var missing = new List<string>();
+
+        foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs"))
+        {
+            var name = Path.GetFileName(file);
+            var code = WithoutComments(File.ReadAllText(file));
+            var flags = RunningStateFlag().Matches(code).Select(m => m.Groups["flag"].Value).ToList();
+            if (flags.Count == 0) continue;
+
+            withFlags++;
+            if (notTabs.ContainsKey(name)) continue;
+            if (code.Contains("IsBusy =", StringComparison.Ordinal)) continue;
+
+            missing.Add($"{name} tracks {string.Join(", ", flags)} but never assigns IsBusy");
+        }
+
+        // Vacuity floor: fourteen view-models carry such a flag today. A collapse means the pattern stopped
+        // matching the declaration shape, and this guard would pass having read nothing.
+        Assert.True(withFlags >= 12,
+            $"only {withFlags} view-models with a running-state flag were found — the declaration pattern no "
+            + "longer matches, so this guard proves nothing. Re-derive it before trusting a pass.");
+
+        Assert.True(missing.Count == 0,
+            "these view-models track whether they are working and never tell the shell, so their tab shows no "
+            + "progress bar while the user is on another tab. Forward the existing flag — "
+            + "`partial void OnIsXChanged(bool value) => IsBusy = value;` — rather than adding a second flag. "
+            + "If the type is not a tab, add it to the exclusion list in this test WITH its reason:\n  "
+            + string.Join("\n  ", missing));
+    }
+
+    /// <summary>An observable bool whose name says work is in progress.</summary>
+    [GeneratedRegex(@"\[ObservableProperty\][^;]{0,200}?private bool _(?<flag>is\w+(?:ing|Running|Loading));",
+                    RegexOptions.Singleline)]
+    private static partial Regex RunningStateFlag();
+
+    /// <summary>
     /// The snapshot cache lock may hold only the one-time cached queries, never a per-poll one.
     /// </summary>
     /// <remarks>

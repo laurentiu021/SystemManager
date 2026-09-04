@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.13] - 2026-09-04
+
+Five of the slowest screens never showed the thin progress line under their name in the left-hand list, so if
+you started something and switched away, nothing told you it was still going. Speed Test, Traceroute, Network
+Repair, DNS &amp; Hosts and the update download in About now show it like every other screen.
+
+### Fixed
+- **The progress line appears on the five screens that were missing it.** Each of them already kept track of
+  whether it was working — it just never passed that on to the window frame, which is what draws the line. So
+  the tabs where you are most likely to walk away mid-job were the ones that looked idle: a speed test takes
+  up to a minute, a traceroute walks up to thirty hops, a network repair runs three resets in a row, and the
+  update download in About is around 85&#160;MB. A check now fails the build if a screen tracks its own
+  working state without passing it on, so the next one cannot be added without it.
+
 ## [1.76.12] - 2026-09-04
 
 Two pieces of background work the app was doing for no reason. Nothing looks different; the app just asks

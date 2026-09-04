@@ -35,6 +35,26 @@ public class NetworkRepairViewModelTests
     }
 
     [Fact]
+    public void Repairing_DrivesIsBusy_SoTheSidebarShowsProgress()
+    {
+        // NavItem forwards ViewModelBase.IsBusy to the slim progress bar under the tab's name, which is the
+        // only sign — while the user is looking at another tab — that this one is working. Five tabs kept a
+        // running flag and never assigned IsBusy, so their bar never appeared; this asserts the generated
+        // On…Changed hook actually fires, which the source-shape guard in ArchitectureTests cannot.
+        //
+        // One behaviour test for the mechanism rather than five identical ones: the other four are the same
+        // one-line shape, and EveryViewModelThatTracksRunningState_ForwardsItToIsBusy is what keeps them there.
+        var vm = new NetworkRepairViewModel(NewShared());
+        Assert.False(vm.IsBusy);
+
+        vm.IsRepairing = true;
+        Assert.True(vm.IsBusy, "a repair is running and the shell was never told");
+
+        vm.IsRepairing = false;
+        Assert.False(vm.IsBusy, "the bar has to clear when the work finishes, or the tab looks stuck");
+    }
+
+    [Fact]
     public async Task FlushDns_WhenUserDeclinesConfirm_DoesNothing()
     {
         var vm = new NetworkRepairViewModel(NewShared());

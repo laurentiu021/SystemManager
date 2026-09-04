@@ -111,4 +111,7 @@ public sealed partial class NetworkRepairViewModel : ViewModelBase
         { RepairStatus = $"✗ Error: {ex.Message}"; }
         finally { IsRepairing = false; }
     }
+
+    // Forward any running state to IsBusy so the sidebar progress indicator works
+    partial void OnIsRepairingChanged(bool value) => IsBusy = value;
 }

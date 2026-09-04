@@ -289,8 +289,8 @@ public class SidebarSelectionContractTests
     /// clearly built for the keyboard — but opening the panel left focus behind on the chip, so none of
     /// it could be reached and there was no way out but the mouse. <c>Key.Escape</c> appeared nowhere in
     /// the app.
-    /// <para>Asserted rather than demonstrated: the behaviour needs the app running, which happens on the
-    /// other workstation. What is pinned here is the wiring that makes it possible, on both sides — the
+    /// <para>Asserted rather than demonstrated: the behaviour needs the app running, which a source-level
+    /// test cannot do. What is pinned here is the wiring that makes it possible, on both sides — the
     /// XAML hooks and the handlers they name. Half of it is useless alone: an <c>Opened</c> attribute
     /// with a handler that does not move focus reads as fixed and is not.</para>
     /// </remarks>

@@ -44,6 +44,10 @@ non-releasing PR leaves that version alone.
 - [ ] CHANGELOG entry added, opening with a one-line plain-English lead under the version heading
       before the first `###` category (CI checks the lead separately, because the release notes are
       copied from it verbatim)
+- [ ] CHANGELOG heading dated **today in UTC** — and re-dated if the merge slips to another UTC day.
+      This is the only gate that runs *after* the squash merge, when the branch is already gone: the
+      tag push that triggers the release requires the date to be today, so a stale date fails the
+      release rather than the PR. It has published yesterday's date twice.
 - [ ] `Version` / `FileVersion` / `AssemblyVersion` in `SysManager/SysManager/SysManager.csproj`
       bumped one step from the newest release tag and equal to the new CHANGELOG heading
       (`fix:` = patch, `feat:` = minor)

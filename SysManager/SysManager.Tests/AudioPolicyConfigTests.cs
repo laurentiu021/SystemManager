@@ -9,7 +9,7 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for the pure, easy-to-get-wrong string helpers in <see cref="AudioPolicyConfigFactory"/> —
 /// the endpoint-id wrapping and the process token. The COM activation path itself is undocumented
-/// and can only be exercised on a real Windows desktop (verified on the laptop workstation), so it
+/// and can only be exercised by running the app on a real Windows desktop, so it
 /// is intentionally not unit-tested here; these pin the formatting the routing SET call depends on.
 /// </summary>
 public class AudioPolicyConfigTests

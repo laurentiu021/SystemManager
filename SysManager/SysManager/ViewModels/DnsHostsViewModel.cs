@@ -614,4 +614,6 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         }
         base.Dispose(disposing);
     }
+    // Forward any running state to IsBusy so the sidebar progress indicator works
+    partial void OnIsDnsApplyingChanged(bool value) => IsBusy = value;
 }

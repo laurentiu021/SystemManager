@@ -411,8 +411,12 @@ public partial class ArchitectureTests
     /// never went through the correction at all — four typed hex values could produce white on white while
     /// every shipped preset was held to a contrast floor. It also silently discarded the shade slider's
     /// position.
-    /// <para>Asserted on the source rather than by calling the method, because <c>SetCustom</c> ends in
-    /// <c>Save()</c>, which writes the user's real theme file.</para>
+    /// <para>Asserted on the source, and the reason is coverage rather than safety. It used to say that
+    /// <c>SetCustom</c> could not be called because it ends in <c>Save()</c> and would write the user's real
+    /// theme file — true before #1741 made <c>SettingsPath</c> redirectable, and false since:
+    /// <c>ThemeServiceTests</c> now calls <c>SetCustom</c> for real against a temp directory. What a source
+    /// check still buys is the entry point nobody wrote a test for. A behaviour test covers the three methods
+    /// named below; this covers a fourth added later, before anyone thinks to test it.</para>
     /// </remarks>
     [Fact]
     public void EveryThemeEntryPoint_GoesThroughTheLegibilityCorrection()
@@ -425,11 +429,15 @@ public partial class ArchitectureTests
             var at = service.IndexOf($"public void {entry}(", StringComparison.Ordinal);
             Assert.True(at > 0, $"ThemeService.{entry} was renamed — update this guard, don't drop it.");
 
-            // To the next method declaration, so the slice is this method and nothing after it.
-            var end = service.IndexOf("\n    public ", at + 1, StringComparison.Ordinal);
-            if (end < 0) end = service.IndexOf("\n    private ", at + 1, StringComparison.Ordinal);
-            Assert.True(end > at, $"could not bound {entry}'s body.");
-            var body = service[at..end];
+            // Brace-matched, not "up to the next member declaration". That heuristic looked for the next
+            // `public` and only fell back to `private` when there was none — so for a method followed by
+            // private members it skipped past them to a later public one. SetCustom's slice measured 6727
+            // characters against a real body of 675, swallowing IsDarkBackground, ApplyShade, Shade and
+            // Legible. Nothing in that region calls ApplyShade() today, so the assertion below was still
+            // being satisfied by SetCustom's own call — but one added call anywhere in those six kilobytes
+            // and this guard could no longer tell whether SetCustom still does it.
+            var body = BalancedBlock(service, $"public void {entry}(");
+            Assert.True(body.Length > 0, $"could not bound {entry}'s body.");
 
             Assert.Contains("ApplyShade();", body, StringComparison.Ordinal);
             Assert.DoesNotContain("CurrentTheme = new ThemePreset", body, StringComparison.Ordinal);
@@ -610,11 +618,15 @@ public partial class ArchitectureTests
     /// The two elevation banners that share a slot must share one geometry.
     /// </summary>
     /// <remarks>
-    /// 27 views render both banners in the same <c>Grid.Row</c>, swapped on <c>IsElevated</c>, and the two
-    /// were hand-written with different geometry: <c>CornerRadius="8" Padding="14,12"</c> when not elevated
-    /// in 27 of 27 views, <c>CornerRadius="12" Padding="12,8"</c> when elevated in 29 of 29. Measured, the
-    /// banner in that fixed slot was 61.29px in one state and 35.29px in the other, so everything below it
-    /// jumped 26px at the moment the user granted elevation — and the corners visibly changed shape with it.
+    /// 31 views render both banners in the same <c>Grid.Row</c>, swapped on <c>IsElevated</c> — 62 banners,
+    /// one pair per view — and the two states were hand-written with different geometry:
+    /// <c>CornerRadius="8" Padding="14,12"</c> when not elevated against <c>CornerRadius="12" Padding="12,8"</c>
+    /// when elevated. Measured, the banner in that fixed slot was 61.29px in one state and 35.29px in the
+    /// other, so everything below it jumped 26px at the moment the user granted elevation — and the corners
+    /// visibly changed shape with it. Both states are on <c>CornerRadius="12" Padding="12,8"</c> now.
+    /// <para>The counts above are what this guard parses today, re-derived. It previously said "27 of 27" and
+    /// "29 of 29", which were the totals at the time it was written and disagreed with each other and with
+    /// the tree; a reader could not reconcile them against a failure message quoting the same numbers.</para>
     /// <para>18px of that jump is the "Run as administrator" button, which the elevated state has nothing to
     /// replace with, and no geometry removes it. This asserts the part that was an accident: one radius, one
     /// padding, both states.</para>
@@ -664,9 +676,10 @@ public partial class ArchitectureTests
             .ToArray();
 
         Assert.True(geometries.Length == 1,
-            "the elevation banners do not agree on their geometry. Both states occupy the SAME slot in 27 "
-            + "views, so a difference here is the layout below them jumping the moment the user elevates — "
-            + "which is the one moment the app should look steady. Pick one radius and one padding:\n  "
+            $"the elevation banners do not agree on their geometry. Both states occupy the SAME slot in the "
+            + $"{seen.Select(b => b.View).Distinct(StringComparer.Ordinal).Count()} views parsed here, so a "
+            + "difference is the layout below them jumping the moment the user elevates — which is the one "
+            + "moment the app should look steady. Pick one radius and one padding:\n  "
             + string.Join("\n  ", geometries));
     }
 
@@ -1595,6 +1608,16 @@ public partial class ArchitectureTests
             "dotnet format",
             File.ReadAllText(Path.Combine(root, "CONTRIBUTING.md")),
             StringComparison.Ordinal);
+
+        // The one gate that is NOT in ci.yml, which is why the checklist omitted it and why this guard could
+        // not see the omission: auto-release requires the newest CHANGELOG heading to be dated today in UTC,
+        // and it runs AFTER the squash merge, when the branch is gone. A stale date fails the release rather
+        // than the pull request, and it has published yesterday's date twice.
+        var autoRelease = File.ReadAllText(
+            Path.Combine(root, ".github", "workflows", "auto-release.yml"));
+        Assert.Contains("TODAY=$(date -u +%Y-%m-%d)", autoRelease, StringComparison.Ordinal);
+        Assert.Contains(items, item => item.Line > releaseSection
+                                       && item.Text.Contains("UTC", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -4132,11 +4155,14 @@ public partial class ArchitectureTests
     /// entries that render a PREVIEW pill beside the text.
     /// </summary>
     /// <remarks>
-    /// The sidebar is a fixed 220px column (MainWindow.xaml). After the row's 28px left padding, 14px
-    /// right padding, the 13px glyph and its 10px margin, the label has roughly 155px — about 24
-    /// characters at FontSize 13. The longest label that ships, "Profile Export / Import", is 23. So this
-    /// budget says "no longer than what is already there", NOT "proven to fit": whether that one already
-    /// ellipsizes cannot be settled without running the app, which happens on the other workstation.
+    /// The sidebar is a fixed 220px column (MainWindow.xaml). A leaf row's <c>Padding="28,9,14,9"</c> leaves
+    /// the label 178px — roughly 27 characters at FontSize 13. The longest label that ships, "Profile Export /
+    /// Import", is 23. So this budget says "no longer than what is already there", NOT "proven to fit":
+    /// whether that one already ellipsizes cannot be settled without running the app.
+    /// <para>The derivation used to subtract "the 13px glyph and its 10px margin" as well, leaving 155px.
+    /// Leaf rows carry no glyph — <c>NavItem</c> has no such member, and the only two glyph bindings left in
+    /// MainWindow.xaml are the group header's own and the single-item row reading its group's — so the budget
+    /// was charging every leaf 23px it does not spend.</para>
     /// <para>Two budgets, because one number cannot express the constraint. A PREVIEW pill takes fixed
     /// width out of the same column, so a pilled row has less room for text — and the pill is exactly
     /// where this went wrong before: a horizontal StackPanel measured with infinite width pushed it past

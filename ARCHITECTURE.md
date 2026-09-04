@@ -396,8 +396,7 @@ Key services:
   output device). Feature-detected (`TryCreate` returns null when it can't bind), guarded (the
   SET call is invoked only after a successful `QueryInterface` for the exact IID and any failure
   returns false), and its endpoint-id/process-token string helpers are pure + unit-tested. The
-  routing SET path can only be runtime-verified on a real desktop (laptop workstation), not the
-  build box. The READ path (`GetPersistedDefaultEndpoint`) is deliberately unimplemented and returns
+  routing SET path can only be runtime-verified by running the app on real audio hardware. The READ path (`GetPersistedDefaultEndpoint`) is deliberately unimplemented and returns
   null, so `IAudioMixerService.GetSessionOutputDevice` has a three-state contract — an endpoint id,
   `string.Empty` for "read succeeded, no override", or null for "could not read" — and the row VM
   renders null as unknown rather than as the default device.

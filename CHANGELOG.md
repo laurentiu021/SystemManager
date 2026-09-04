@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.11] - 2026-09-04
+
+If Windows cannot report your drive's health — common on desktop SATA and NVMe drives, and always the case in
+a virtual machine — the Landing tab said "Disk health degrading" and showed a warning. Nothing was degrading.
+It now says the health could not be read, which is what actually happened.
+
+### Fixed
+- **A drive whose health cannot be read is no longer reported as degrading.** SysManager scores an unmeasured
+  drive cautiously on purpose, so it can never be called healthy without evidence. But that cautious score was
+  then read as a verdict, and the warning band starts just below it — so a machine that reported no drive
+  health at all was told its disk was on the way out. The tab now distinguishes "could not read this" from "we
+  read it and it looks worse than it should", and only the second one warns. A machine with one readable drive
+  and one unreadable one still reports the readable drive's verdict, so a genuinely failing disk is never
+  hidden behind a "could not read" message.
+
 ## [1.76.10] - 2026-09-04
 
 The "can be freed" and "in Recycle Bin" figures on the Cleanup tab could stop counting partway through a

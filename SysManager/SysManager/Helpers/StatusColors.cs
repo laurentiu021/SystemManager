@@ -47,4 +47,16 @@ internal static class StatusColors
     /// report".
     /// </summary>
     public const string Neutral = "TextMuted";
+
+    /// <summary>
+    /// Every distinct brush key above (<see cref="Elevated"/> shares <see cref="Warning"/>'s), so a caller can
+    /// assert that a <c>*ColorHex</c> value names one of them without restating the list.
+    /// </summary>
+    /// <remarks>
+    /// Exists because two tests asserted the shape instead — <c>Assert.Matches("^#[0-9A-Fa-f]{6}$", …)</c> —
+    /// and went permanently red when these became brush keys. A test that names the set cannot rot that way,
+    /// and a copy of the set in the test would be a second source of truth in the one class whose whole point
+    /// is being the first.
+    /// </remarks>
+    public static readonly string[] AllBrushKeys = [Good, Warning, Info, Bad, Neutral];
 }

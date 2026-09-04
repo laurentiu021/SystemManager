@@ -30,11 +30,13 @@ public class DiskAnalyzerViewModelTests
     [Fact]
     public void Constructor_InitialState_IsCorrect()
     {
+        // TotalFolders was asserted here too. It was computed from a full recursive
+        // Entries.Sum(e => e.FolderCount) on every scan and read by nothing — no binding, no other
+        // code — and this assertion on its default value is what made it look exercised.
         var vm = NewVm();
         Assert.False(vm.IsBusy);
         Assert.Equal(0, vm.TotalSize);
         Assert.Equal(0, vm.TotalFiles);
-        Assert.Equal(0, vm.TotalFolders);
         Assert.Equal(0, vm.EntryCount);
         Assert.Empty(vm.Entries);
         Assert.Contains("Select", vm.ScanSummary);

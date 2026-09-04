@@ -44,9 +44,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     public bool HasTrend => !string.IsNullOrEmpty(TrendSummary);
     [ObservableProperty] private long _totalSize;
     [ObservableProperty] private int _totalFiles;
-    [ObservableProperty] private int _totalFolders;
     [ObservableProperty] private int _entryCount;
-    [ObservableProperty] private string _currentFolder = "";
 
     // Distinguishes the un-run state from a completed zero-result scan so the big empty-state overlay
     // doesn't tell the user to "pick a folder and analyze" right after they did exactly that. Set true
@@ -153,7 +151,6 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         Entries.Clear();
         TotalSize = 0;
         TotalFiles = 0;
-        TotalFolders = 0;
         EntryCount = 0;
 
         UpdateDriveInfo();
@@ -162,7 +159,6 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         {
             var progress = new Progress<DiskAnalyzerService.AnalysisProgress>(p =>
             {
-                CurrentFolder = p.CurrentFolder;
                 StatusMessage = $"Scanning folder {p.FoldersScanned}: {p.CurrentFolder}";
             });
 
@@ -173,7 +169,6 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             EntryCount = Entries.Count;
             TotalSize = Entries.Sum(e => e.SizeBytes);
             TotalFiles = Entries.Sum(e => e.FileCount);
-            TotalFolders = Entries.Sum(e => e.FolderCount);
 
             ScanSummary = EntryCount == 0
                 ? "No subfolders found."
@@ -201,7 +196,6 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         {
             IsBusy = false;
             IsProgressIndeterminate = false;
-            CurrentFolder = "";
         }
     }
 

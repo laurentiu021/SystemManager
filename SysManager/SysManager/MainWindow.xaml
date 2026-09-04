@@ -498,8 +498,14 @@
                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 AutomationProperties.LiveSetting="Assertive"
                 Margin="0,0,20,20" Visibility="Collapsed">
+            <!-- Themed status brushes, not literal greens. The container follows the theme via Surface2
+                 while the three greens here were fixed at #22C55E — the DARK-mode value — so the tick
+                 measured 1.65:1 on soft-blossom and never better than 2.08:1 on any light preset, against
+                 7.66:1 on midnight-indigo where it was chosen. ThemeService already seeds Success per mode
+                 (#22C55E dark, #166534 light) for exactly this reason; its own comment beside those values
+                 calls the failure "one crisp card beside two washed-out ones". -->
             <Border Background="{DynamicResource Surface2}" CornerRadius="10"
-                    BorderBrush="#4022C55E" BorderThickness="1"
+                    BorderBrush="{DynamicResource SuccessBorder}" BorderThickness="1"
                     Padding="14,12,18,12">
                 <Border.Effect>
                     <DropShadowEffect ShadowDepth="4" BlurRadius="24" Opacity="0.5" Color="Black"/>
@@ -511,9 +517,9 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
-                            Background="#2022C55E" Margin="0,0,10,0">
+                            Background="{DynamicResource SuccessBgSubtle}" Margin="0,0,10,0">
                         <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                   FontSize="14" Foreground="#22C55E"
+                                   FontSize="14" Foreground="{DynamicResource Success}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">

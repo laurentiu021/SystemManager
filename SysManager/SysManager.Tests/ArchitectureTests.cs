@@ -5471,6 +5471,90 @@ public partial class ArchitectureTests
 
 
     /// <summary>
+    /// A text column in a report grid must not accept typing.
+    /// </summary>
+    /// <remarks>
+    /// Ten cells across App Updates and Windows Update entered edit mode on a double-click. Typing there
+    /// changed the in-memory row and nothing else, so the app appeared to accept an edit it silently discarded
+    /// — and one of them was App Updates' <c>Id</c>, the value <c>WingetService.UpgradeAsync</c> builds
+    /// <c>winget upgrade --id "…"</c> from, which turns a working row into an error row.
+    /// <para>Per-column, not grid-level. Both grids carry a <c>DataGridCheckBoxColumn</c> for row selection,
+    /// and <c>DataGrid.IsReadOnly="True"</c> renders those checkboxes untickable — it would break "Upgrade
+    /// selected" outright. The 20 views that DO set it grid-wide have no checkbox column, which is why they
+    /// can. Reading the omission as forgetfulness and setting it globally would have been the wrong fix.</para>
+    /// <para>Nothing reaches a command line through an edited cell: <c>WingetId.IsValid</c> rejects the value
+    /// and <c>AppUpdatesViewModel</c> catches the <c>ArgumentException</c> per row. This is a UI-honesty rule,
+    /// not a security one.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryReportTextColumn_IsReadOnly()
+    {
+        // view -> the column Header allowed to be editable, and why.
+        var editors = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["EnvironmentVariablesView.xaml"] =
+                "Value — this tab is an editor, not a report: Apply / Discard / Restore backup sit beside the "
+                + "grid and UpdateSourceTrigger=PropertyChanged carries each keystroke to the view-model",
+        };
+
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var columnsChecked = 0;
+        var typeable = new List<string>();
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            var name = Path.GetFileName(file);
+            var text = File.ReadAllText(file);
+
+            // Every grid in the file must be read-only for the grid-level form to count for any column in it.
+            var grids = DataGridOpeningTag().Matches(text).Select(m => m.Value).ToList();
+            if (grids.Count == 0) continue;
+            var gridReadOnly = grids.TrueForAll(g => g.Contains("IsReadOnly=\"True\"", StringComparison.Ordinal));
+
+            foreach (var column in ReportTextColumn().Matches(text).Select(m => m.Value))
+            {
+                columnsChecked++;
+                if (gridReadOnly || column.Contains("IsReadOnly", StringComparison.Ordinal)) continue;
+
+                var header = ColumnHeader().Match(column).Groups["header"].Value;
+                if (editors.TryGetValue(name, out var allowed)
+                    && allowed.StartsWith(header + " ", StringComparison.Ordinal)) continue;
+
+                typeable.Add($"{name}: {header}");
+            }
+        }
+
+        // Vacuity floor: 125 text columns across the views today, measured with this exact pattern. The
+        // count matters twice over — a first pass at this used a pattern that also matched
+        // <DataGridTextColumn.CellStyle>, a property element rather than a column. There are 43 of those, so
+        // the population read as 168 and every per-view "typeable cells" number was inflated with it.
+        Assert.True(columnsChecked >= 118,
+            $"only {columnsChecked} report text columns were parsed out of 125 measured — the pattern no "
+            + "longer matches the column shape, so this guard proves nothing.");
+
+        Assert.True(typeable.Count == 0,
+            "these report cells enter edit mode on a double-click, and the edit goes nowhere. Add "
+            + "IsReadOnly=\"True\" to the column — NOT to the DataGrid, which would also stop the user "
+            + "ticking a DataGridCheckBoxColumn. If the cell is genuinely meant to be edited, name it in the "
+            + "exception list in this test WITH its reason:\n  " + string.Join("\n  ", typeable));
+    }
+
+    /// <summary>A <c>DataGrid</c> opening tag.</summary>
+    [GeneratedRegex(@"<DataGrid(?![.\w])[^>]*?>", RegexOptions.Singleline)]
+    private static partial Regex DataGridOpeningTag();
+
+    /// <summary>
+    /// A <c>DataGridTextColumn</c> element. The negative lookahead keeps
+    /// <c>&lt;DataGridTextColumn.CellStyle&gt;</c> — a property element, not a column — out of the match.
+    /// </summary>
+    [GeneratedRegex(@"<DataGridTextColumn(?![.\w])[^>]*?/?>", RegexOptions.Singleline)]
+    private static partial Regex ReportTextColumn();
+
+    /// <summary>A column's <c>Header</c> attribute value.</summary>
+    [GeneratedRegex(@"Header=""(?<header>[^""]*)""")]
+    private static partial Regex ColumnHeader();
+
+    /// <summary>
     /// A view-model that tracks its own "running" state must forward it to <c>IsBusy</c>.
     /// </summary>
     /// <remarks>

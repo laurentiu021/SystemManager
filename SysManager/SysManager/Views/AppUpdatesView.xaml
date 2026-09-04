@@ -88,12 +88,12 @@
                             </Style>
                         </DataGridCheckBoxColumn.EditingElementStyle>
                     </DataGridCheckBoxColumn>
-                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="120" SortMemberPath="Name"/>
-                    <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="2*" MinWidth="120" SortMemberPath="Id"/>
-                    <DataGridTextColumn Header="Current" Binding="{Binding CurrentVersion}" Width="*" MinWidth="80" SortMemberPath="CurrentVersion"/>
-                    <DataGridTextColumn Header="Available" Binding="{Binding AvailableVersion}" Width="*" MinWidth="80" SortMemberPath="AvailableVersion"/>
-                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="80" MinWidth="60" SortMemberPath="Source"/>
-                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" MinWidth="80" SortMemberPath="Status"/>
+                    <DataGridTextColumn IsReadOnly="True" Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="120" SortMemberPath="Name"/>
+                    <DataGridTextColumn IsReadOnly="True" Header="Id" Binding="{Binding Id}" Width="2*" MinWidth="120" SortMemberPath="Id"/>
+                    <DataGridTextColumn IsReadOnly="True" Header="Current" Binding="{Binding CurrentVersion}" Width="*" MinWidth="80" SortMemberPath="CurrentVersion"/>
+                    <DataGridTextColumn IsReadOnly="True" Header="Available" Binding="{Binding AvailableVersion}" Width="*" MinWidth="80" SortMemberPath="AvailableVersion"/>
+                    <DataGridTextColumn IsReadOnly="True" Header="Source" Binding="{Binding Source}" Width="80" MinWidth="60" SortMemberPath="Source"/>
+                    <DataGridTextColumn IsReadOnly="True" Header="Status" Binding="{Binding Status}" Width="*" MinWidth="80" SortMemberPath="Status"/>
                 </DataGrid.Columns>
             </DataGrid>
 

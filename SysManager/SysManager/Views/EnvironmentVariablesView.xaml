@@ -131,6 +131,11 @@
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" IsReadOnly="True" Width="180"/>
                         <DataGridTextColumn Header="Scope" Binding="{Binding ScopeLabel}" IsReadOnly="True" Width="70"/>
+                        <!-- The one editable report cell in the app, and deliberately so: this tab IS an
+                             editor, with Apply / Discard / Restore backup beside the grid, and
+                             UpdateSourceTrigger=PropertyChanged is what carries each keystroke to the
+                             view-model for Apply to write. A uniformity sweep must not make this read-only;
+                             EveryReportTextColumn_IsReadOnly names it as the exception. -->
                         <DataGridTextColumn Header="Value" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="*">
                             <!-- Trim the *display* of a long value (e.g. a full PATH) against the
                                  Remove button and expose it on hover; the edit box still shows the

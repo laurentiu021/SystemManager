@@ -225,7 +225,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Binding="{Binding KB}" Width="100" MinWidth="70"
+                    <DataGridTextColumn IsReadOnly="True" Binding="{Binding KB}" Width="100" MinWidth="70"
                                         SortMemberPath="KB">
                         <DataGridTextColumn.Header>
                             <TextBlock Text="KB"
@@ -240,7 +240,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="80" MinWidth="60"
+                    <DataGridTextColumn IsReadOnly="True" Header="Size" Binding="{Binding Size}" Width="80" MinWidth="60"
                                         SortMemberPath="Size">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -251,7 +251,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="200" MinWidth="120"
+                    <DataGridTextColumn IsReadOnly="True" Header="Status" Binding="{Binding Status}" Width="200" MinWidth="120"
                                         SortMemberPath="Status">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -263,7 +263,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Date" Binding="{Binding DateDisplay}" Width="100" MinWidth="80"
+                    <DataGridTextColumn IsReadOnly="True" Header="Date" Binding="{Binding DateDisplay}" Width="100" MinWidth="80"
                                         SortMemberPath="Date">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">

@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.14] - 2026-09-04
+
+Double-clicking a cell in the App Updates or Windows Update list used to put a cursor in it, as if you could
+change what it said. You could type — and the app threw the change away. Those lists are reports now, and
+behave like it.
+
+### Fixed
+- **Report cells no longer pretend to be editable.** Ten cells across App Updates and Windows Update accepted
+  typing that went nowhere. One of them was the app's internal Id for a package, which is what gets handed to
+  Windows' installer — retyping it turned a row that would have updated into a row that reports an error, for
+  no reason the user could see. The tick boxes for choosing rows are untouched and still work.
+
 ## [1.76.13] - 2026-09-04
 
 Five of the slowest screens never showed the thin progress line under their name in the left-hand list, so if

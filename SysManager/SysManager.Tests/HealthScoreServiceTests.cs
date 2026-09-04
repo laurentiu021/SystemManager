@@ -298,6 +298,56 @@ public class HealthScoreServiceTests
 
         Assert.Equal(80, HealthScoreService.ComputeDiskScore(disks));
     }
+
+    // ---------- UnavailableComponents ----------
+
+    [Fact]
+    public void UnavailableComponents_DrivesPresentButNoneReadable_MarksTheDiskUnavailable()
+    {
+        // The score alone cannot carry this. Two drives with no SMART data score the deliberate unknown 80,
+        // and ClassifySmartHealth reads 80 with unavailable=false through its `>= 60` branch as "Disk health
+        // degrading" — a claim about failing hardware on a machine where nothing was measured. The test
+        // directly below UnknownComponentScore_StaysBelowEveryGreenBranch asserts that intent in prose
+        // ("must not read as degrading either — nothing was measured") while this path delivered exactly that.
+        var disks = new List<DiskHealthReport>
+        {
+            new() { FriendlyName = "Samsung SSD", HealthStatus = "" },
+            new() { FriendlyName = "WDC HDD", HealthStatus = "" }
+        };
+        Assert.All(disks, d => Assert.Null(d.HealthPercent));   // the premise, not an assumption
+
+        var unavailable = HealthScoreService.UnavailableComponents(disks, null);
+
+        Assert.Contains(HealthScoreService.DiskComponent, unavailable);
+    }
+
+    [Fact]
+    public void UnavailableComponents_OneReadableDriveAmongUnreadable_KeepsTheDiskAvailable()
+    {
+        // The negative half, and the reason the rule is All rather than Any: marking the component
+        // unavailable here would replace "Disk health critical" with "could not be read" and hide a drive
+        // Windows has already flagged as failing.
+        var disks = new List<DiskHealthReport>
+        {
+            new() { FriendlyName = "Failing drive", HealthStatus = "Unhealthy" },
+            new() { FriendlyName = "Unreadable drive", HealthStatus = "" }
+        };
+
+        var unavailable = HealthScoreService.UnavailableComponents(disks, null);
+
+        Assert.DoesNotContain(HealthScoreService.DiskComponent, unavailable);
+        Assert.Equal(20, HealthScoreService.ComputeDiskScore(disks));   // and the failing verdict survives
+    }
+
+    [Fact]
+    public void UnavailableComponents_NoDrivesAtAll_StillMarksTheDiskUnavailable()
+    {
+        Assert.Contains(HealthScoreService.DiskComponent,
+            HealthScoreService.UnavailableComponents([], null));
+        Assert.Contains(HealthScoreService.DiskComponent,
+            HealthScoreService.UnavailableComponents(null, null));
+    }
+
     [Fact]
     public void UnknownComponentScore_StaysBelowEveryGreenBranch()
     {

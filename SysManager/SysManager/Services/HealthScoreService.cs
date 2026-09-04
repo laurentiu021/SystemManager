@@ -93,13 +93,7 @@ public sealed class HealthScoreService
         // Recorded so a consumer can say "could not read this" instead of reading a verdict out of a
         // fallback number. The scores above already refuse to claim health; this is what makes the reason
         // visible.
-        List<string> unavailable = [];
-        if (disks is null || disks.Count == 0) unavailable.Add(DiskComponent);
-        if (snapshot is null)
-        {
-            unavailable.Add(MemoryComponent);
-            unavailable.Add(UptimeComponent);
-        }
+        var unavailable = UnavailableComponents(disks, snapshot);
 
         return new HealthScoreResult
         {
@@ -112,6 +106,40 @@ public sealed class HealthScoreService
             Recommendations = recommendations,
             UnavailableComponents = unavailable
         };
+    }
+
+    /// <summary>
+    /// Which components produced no usable evidence, so a consumer can say "could not read this" instead of
+    /// reading a verdict out of a fallback number. The scores already refuse to claim health; this is what
+    /// makes the reason visible.
+    /// </summary>
+    /// <remarks>
+    /// Pure and internal for the same reason <see cref="ComputeDiskScore"/> is: the decision is worth
+    /// asserting, and asserting it through <see cref="ComputeAsync"/> would mean querying WMI.
+    /// <para>Drives present but none readable is the same absence of evidence as no drives at all, and it is
+    /// the common case — plenty of consumer SATA and NVMe disks expose nothing through
+    /// <c>MSFT_StorageReliabilityCounter</c>, and a VM exposes nothing whatever. Testing only for an empty
+    /// list left that machine scored at the deliberate unknown 80, which
+    /// <c>DashboardViewModel.ClassifySmartHealth</c> then reads through its <c>&gt;= 60</c> branch as "Disk
+    /// health degrading" — the outcome that method's own remarks rule out, because nothing is degrading when
+    /// nothing was measured.</para>
+    /// <para>Deliberately <c>All</c>, not <c>Any</c>. With one readable drive at 30% and one unreadable,
+    /// <c>Any</c> would mark the component unavailable and replace a critical-disk warning with "could not be
+    /// read", hiding a failing drive. A mixed read keeps the worst measured verdict. <c>All</c> also covers
+    /// the empty list, which is why that case is no longer spelled out.</para>
+    /// </remarks>
+    internal static List<string> UnavailableComponents(
+        IReadOnlyList<DiskHealthReport>? disks, SystemSnapshot? snapshot)
+    {
+        List<string> unavailable = [];
+        if (disks is null || disks.All(d => d.HealthPercent is null)) unavailable.Add(DiskComponent);
+        if (snapshot is null)
+        {
+            unavailable.Add(MemoryComponent);
+            unavailable.Add(UptimeComponent);
+        }
+
+        return unavailable;
     }
 
     /// <summary>Component names used in <see cref="HealthScoreResult.UnavailableComponents"/>.</summary>

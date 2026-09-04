@@ -45,7 +45,6 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         "New York, US (ID: 10390)",
     };
     [ObservableProperty] private int _speedProgress;
-    [ObservableProperty] private string _speedStatus = "";
     [ObservableProperty] private string _httpStatus = "";
     [ObservableProperty] private string _ooklaStatus = "";
     [ObservableProperty] private bool _isSpeedTesting;

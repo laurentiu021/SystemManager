@@ -1844,9 +1844,13 @@ public partial class ArchitectureTests
             }
         }
 
-        Assert.True(checkedProperties >= 40,
-            $"only {checkedProperties} model properties were inspected — the detection is probably no "
-            + "longer matching the [ObservableProperty] declarations.");
+        // Measured: 187 today. The floor is set just under that rather than at a token value, because the
+        // defect it has to catch is precisely a pattern that still matches MOST declarations — the previous
+        // prefix saw 164 of these 187 and its floor of 40 reported nothing wrong for as long as it shipped.
+        Assert.True(checkedProperties >= 180,
+            $"only {checkedProperties} model properties were inspected, out of 187 measured — the detection "
+            + "is no longer matching every [ObservableProperty] declaration. A pattern that matches most of "
+            + "them still leaves the rest unguarded, so fix this before trusting a pass.");
 
         Assert.True(dead.Count == 0,
             "these model properties are never written and never shown, so they can only ever present an "
@@ -1858,7 +1862,22 @@ public partial class ArchitectureTests
     private static partial Regex TypeDeclaration();
 
     /// <summary>An <c>[ObservableProperty]</c> backing field, capturing the field name without its underscore.</summary>
-    [GeneratedRegex(@"\[ObservableProperty\][^\n]*\n?\s*(?:private|internal)\s+[\w\?<>,\[\]\. ]+?\s+_(\w+)\s*[;=]",
+    /// <remarks>
+    /// The prefix was <c>[^\n]*\n?</c>, which is wrong in both directions.
+    /// <para>It let the match run to the end of the attribute's own line and then across ONE newline, so for
+    /// the single-line form followed by a plain field —
+    /// <c>[ObservableProperty] private string _label = "";</c> then <c>private string? _target;</c> — it walked
+    /// past <c>_label</c> and captured <c>_target</c>, a field that is not observable at all. Four such
+    /// mis-captures exist in <c>ViewModels/</c> today.</para>
+    /// <para>And one newline is not enough for the multi-attribute form, so every property carrying a
+    /// <c>[NotifyPropertyChangedFor]</c> beside it was invisible: 23 of the 187 properties in
+    /// <c>Models/</c>, including six on <c>DiskHealthReport</c> alone. The guard's floor of 40 could never
+    /// reveal that, since 164 clears it comfortably.</para>
+    /// <para>Now: optional whitespace, then any number of further attributes, then the field. Nothing on the
+    /// attribute's own line can be skipped over.</para>
+    /// </remarks>
+    [GeneratedRegex(@"\[ObservableProperty\]\s*(?:\[[^\]]*\]\s*)*(?:private|internal)\s+"
+        + @"[\w\?<>,\[\]\. ]+?\s+_(\w+)\s*[;=]",
         RegexOptions.Compiled)]
     private static partial Regex ObservablePropertyField();
 

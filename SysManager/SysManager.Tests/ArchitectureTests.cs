@@ -5497,6 +5497,80 @@ public partial class ArchitectureTests
 
 
     /// <summary>
+    /// A view may not paint itself with a literal colour; the theme decides colours.
+    /// </summary>
+    /// <remarks>
+    /// The completion toast fixed three greens at <c>#22C55E</c> — the DARK-mode value — while its container
+    /// followed the theme through <c>Surface2</c>. Measured against each preset's real <c>Surface2</c>, the
+    /// tick came out at 1.65:1 on soft-blossom and never better than 2.08:1 on any of the six light presets,
+    /// against 7.66:1 on midnight-indigo where the value was chosen. WCAG asks 4.5:1 for text and 3:1 for a
+    /// meaningful graphic; it cleared neither.
+    /// <para><c>NoThemedFill_CarriesAHardcodedWhiteForeground</c> pins the same class and could not see this
+    /// one: it reads App.xaml styles whose Background binds <c>Accent</c> or <c>Danger</c>, and looks for the
+    /// literal <c>White</c>. Different file, different fill, different literal. This is the general rule, and
+    /// it is cheap because the view layer is nearly clean already — seven literals in total before the toast
+    /// was fixed, four of which are legitimate.</para>
+    /// </remarks>
+    [Fact]
+    public void NoViewPaintsItselfWithALiteralColour()
+    {
+        // file -> the reason its literals are colours being SHOWN rather than colours being applied.
+        var swatches = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ThemePopup.xaml"] = "the custom-theme editor's 24x24 preview squares: each is an x:Name'd Border "
+                                  + "whose fill the code-behind replaces with the value being edited, so the "
+                                  + "literal is a designer-time default and the swatch's job is to BE a colour",
+        };
+
+        // Literals that must NOT follow the theme, allowed by exact value and only where they appear. The
+        // FocusRing is two stacked strokes precisely because no single themed colour survives every surface
+        // it lands on — PrimaryButton's accent fill, DangerButton's red, a raised grey and a card — where the
+        // accent itself falls to 1.00:1 against one of them. Theme-independence is the feature.
+        var themeIndependent = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["App.xaml"] = ["Stroke=\"#111111\"", "Stroke=\"#FFFFFF\""],
+        };
+
+        var appDir = FindAppProjectDir();
+        var files = Directory.GetFiles(appDir, "*.xaml")
+            .Concat(Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml"))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .ToList();
+
+        // Vacuity floor: the view layer is 30-odd files. Zero would mean the enumeration broke.
+        Assert.True(files.Count >= 25,
+            $"only {files.Count} view files were enumerated — this guard is reading the wrong folder.");
+
+        var offenders = new List<string>();
+        foreach (var file in files)
+        {
+            var name = Path.GetFileName(file);
+            if (swatches.ContainsKey(name)) continue;
+
+            var text = File.ReadAllText(file);
+            var allowed = themeIndependent.TryGetValue(name, out var values) ? values : [];
+            foreach (var m in LiteralColourAttribute().Matches(text).Cast<Match>())
+            {
+                if (allowed.Contains(m.Value, StringComparer.Ordinal)) continue;
+                var line = text[..m.Index].Count(c => c == '\n') + 1;
+                offenders.Add($"{name}:{line} {m.Value}");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "these views set a colour the theme cannot change, so whichever preset they were eyeballed against "
+            + "is the only one they are correct on. Bind a themed brush — Success/SuccessText/SuccessBorder, "
+            + "Danger…, TextPrimary, Surface… — or, if the element's purpose is to display a colour rather "
+            + "than be styled by one, name the file in the exception list in this test WITH that reason:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A colour-bearing attribute given a literal hex value.</summary>
+    [GeneratedRegex(@"(?:Foreground|Background|Fill|Stroke|BorderBrush)=""#[0-9A-Fa-f]{6,8}""")]
+    private static partial Regex LiteralColourAttribute();
+
+    /// <summary>
     /// A text column in a report grid must not accept typing.
     /// </summary>
     /// <remarks>

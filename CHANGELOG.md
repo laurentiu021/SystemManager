@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.15] - 2026-09-04
+
+On any of the six light colour themes, the green tick on the little "finished" pop-up was almost invisible
+against its own background. It was a fixed green picked for the dark themes and never changed for the others.
+
+### Fixed
+- **The "finished" pop-up's tick is readable on the light themes.** Its background follows whichever theme you
+  picked, but the tick, its circle and the border were fixed to one green chosen against a dark background. On
+  the light themes that left the tick at between 1.65 and 2.08 times the contrast of its background, where 4.5
+  is the readable threshold — so the pop-up said something had finished and you could barely see the mark
+  confirming it. All three now come from the theme, which already keeps a lighter green for dark themes and a
+  darker one for light. A check now fails the build if any screen fixes a colour the theme cannot change.
+
 ## [1.76.14] - 2026-09-04
 
 Double-clicking a cell in the App Updates or Windows Update list used to put a cursor in it, as if you could

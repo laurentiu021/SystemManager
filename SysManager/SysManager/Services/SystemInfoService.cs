@@ -27,7 +27,7 @@ public sealed class SystemInfoService
     private SystemSnapshot Capture()
     {
         OsInfo osStatic;
-        CpuInfo cpu;
+        CpuInfo cpuStatic;
         List<DiskInfo> disks;
         IReadOnlyList<MemoryModule> modules;
 
@@ -45,7 +45,7 @@ public sealed class SystemInfoService
 
             // CPU name/cores/threads/clock are static; only LoadPercentage is dynamic.
             _cachedCpuStatic ??= QueryCpuStatic();
-            cpu = (_cachedCpuStatic ?? new CpuInfo("Unknown", 0, 0, 0, 0)) with { LoadPercent = QueryCpuLoad() };
+            cpuStatic = _cachedCpuStatic ?? new CpuInfo("Unknown", 0, 0, 0, 0);
 
             // Disk info is static (models don't change at runtime).
             _cachedDisks ??= QueryDisks();
@@ -57,6 +57,11 @@ public sealed class SystemInfoService
             _cachedModules ??= QueryMemoryModules();
             modules = _cachedModules ?? [];
         }
+
+        // Outside the lock, with QueryDynamicOs below. The lock exists to serialise the ??= caches, and a
+        // dynamic query needs none of it — while it was inside, every concurrent CaptureAsync waited on a WMI
+        // round-trip it had no interest in. The Dashboard polls this at 300 ms, so the wait was frequent.
+        var cpu = cpuStatic with { LoadPercent = QueryCpuLoad() };
 
         // One Win32_OperatingSystem query for BOTH the dynamic uptime and memory totals —
         // previously two separate round-trips (QueryUptime + QueryMemory) to the same class.

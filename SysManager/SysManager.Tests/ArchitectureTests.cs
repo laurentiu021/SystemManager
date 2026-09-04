@@ -4333,6 +4333,28 @@ public partial class ArchitectureTests
     private static partial Regex BlockComment();
 
     /// <summary>
+    /// The body of the block that <paramref name="opener"/> introduces, delimited by counting braces, or ""
+    /// when the opener is absent. Unlike <see cref="MemberSlice"/> this cannot run past its block, so a
+    /// caller asserting "X does not appear in here" cannot be fooled by X appearing further down the file.
+    /// </summary>
+    private static string BalancedBlock(string source, string opener)
+    {
+        var at = source.IndexOf(opener, StringComparison.Ordinal);
+        if (at < 0) return "";
+        var open = source.IndexOf('{', at + opener.Length);
+        if (open < 0) return "";
+
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}' && --depth == 0) return source[(open + 1)..i];
+        }
+
+        return "";   // unbalanced: report nothing rather than the rest of the file
+    }
+
+    /// <summary>
     /// A member's text from its declaration up to the next member at the same indentation — enough to
     /// assert what one method does without matching an identical call elsewhere in the file.
     /// </summary>
@@ -5428,6 +5450,47 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"NativeMethods\.NtQueryTimerResolution\(\s*out uint (?<p1>\w+),\s*out uint (?<p2>\w+),\s*out uint (?<p3>\w+)\s*\)")]
     private static partial Regex TimerQueryCall();
 
+
+    /// <summary>
+    /// The snapshot cache lock may hold only the one-time cached queries, never a per-poll one.
+    /// </summary>
+    /// <remarks>
+    /// <c>SystemInfoService.Capture</c> takes <c>_cacheLock</c> to serialise four <c>??=</c> caches, each of
+    /// which runs its WMI query once per process. <c>QueryCpuLoad</c> ran inside that block too, so every
+    /// concurrent <c>CaptureAsync</c> queued behind a WMI round-trip it had no interest in — and the Dashboard
+    /// polls this at 300 ms, so the queue was rarely empty.
+    /// <para>The rule is expressed as a shape rather than as two method names: inside the block, a
+    /// <c>Query…</c> call must sit on a line that also caches its result with <c>??=</c>. That catches a
+    /// third dynamic query added later, which a name list could not.</para>
+    /// </remarks>
+    [Fact]
+    public void TheSnapshotCacheLock_HoldsOnlyCachedQueries()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "SystemInfoService.cs")));
+        var block = BalancedBlock(source, "lock (_cacheLock)");
+
+        // Vacuity floor. An empty or mis-sliced block would satisfy every assertion below without reading
+        // the code, and the four caches are what identify this block as the right one.
+        var cached = block.Split('\n').Count(l => l.Contains("??=", StringComparison.Ordinal));
+        Assert.True(cached >= 4,
+            $"only {cached} cached queries were found inside lock (_cacheLock) (block length "
+            + $"{block.Length}) — the slice is not the cache block, so this guard proves nothing.");
+
+        var offenders = block.Split('\n')
+            .Where(l => QueryCallInLock().IsMatch(l) && !l.Contains("??=", StringComparison.Ordinal))
+            .Select(l => l.Trim())
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "these queries run while holding _cacheLock, so every other CaptureAsync caller waits for them. "
+            + "The lock exists for the ??= caches; a per-poll query belongs after the block, beside "
+            + "QueryDynamicOs:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A call to one of the service's own Query* methods.</summary>
+    [GeneratedRegex(@"\bQuery[A-Z]\w*\(")]
+    private static partial Regex QueryCallInLock();
 
     /// <summary>
     /// Every call into a temp-tree walker must pass the own-extraction exclusion.

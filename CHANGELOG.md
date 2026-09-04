@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.12] - 2026-09-04
+
+Two pieces of background work the app was doing for no reason. Nothing looks different; the app just asks
+Windows fewer questions and does less writing while you use it.
+
+### Fixed
+- **Reading the system's vitals no longer makes other parts of the app wait.** The Landing tab reads CPU and
+  memory three times a second. That read held a lock for the whole trip out to Windows and back, so anything
+  else asking for the same information at that moment queued behind it, even though it had no interest in the
+  part being locked. The lock now covers only the details that are read once per session.
+- **Trimming the history files no longer rebuilds every line it keeps.** Both the resource-usage and bandwidth
+  histories drop entries older than the retention window. Doing so rebuilt every surviving line from scratch,
+  and the result was thrown away whenever nothing needed dropping — which is almost every time, since a trim
+  only has work to do once entries age out. Surviving lines are now kept exactly as they were read.
+
 ## [1.76.11] - 2026-09-04
 
 If Windows cannot report your drive's health — common on desktop SATA and NVMe drives, and always the case in

@@ -88,6 +88,35 @@ public class ResourceHistoryServiceTests
     public void Prune_EmptyInput_ReturnsEmpty()
         => Assert.Empty(ResourceHistoryService.Prune([], DateTime.Now, TimeSpan.FromDays(7)));
 
+    [Fact]
+    public void Prune_HandsBackTheLinesItRead_WithoutReserialisingThem()
+    {
+        // Prune used to rebuild every kept line through Serialize, and PruneAsync then threw the whole result
+        // away whenever nothing had been dropped — which is almost every call, since a prune only has work to
+        // do once samples pass the retention window. The kept lines are now the exact text that was read.
+        //
+        // Asserted with a line that parses to the right sample but is NOT byte-identical to what Serialize
+        // emits, because comparing against Serialize's own output would pass either way — Serialize is
+        // TryParse's inverse. The variant is the canonical line with one leading space: JSON ignores it,
+        // Serialize never writes it. Derived from the serialiser rather than typed, so it cannot drift from
+        // the model's naming policy.
+        var now = new DateTime(2026, 6, 29, 12, 0, 0);
+        var spaced = " " + ResourceHistoryService.Serialize(Sample(now.AddHours(-1)));
+        Assert.True(ResourceHistoryService.TryParse(spaced, out var parsed), "the fixture must parse");
+        Assert.Equal(now.AddHours(-1), parsed!.Timestamp);
+        Assert.NotEqual(spaced, ResourceHistoryService.Serialize(parsed));   // the premise of this test
+
+        var lines = new[]
+        {
+            ResourceHistoryService.Serialize(Sample(now.AddDays(-10))),   // expired, forces the drop path
+            spaced,
+        };
+
+        var kept = ResourceHistoryService.Prune(lines, now, TimeSpan.FromDays(7));
+
+        Assert.Equal([spaced], kept);
+    }
+
     // ── Downsample ────────────────────────────────────────────────────────
 
     [Fact]

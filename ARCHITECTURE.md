@@ -136,7 +136,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Two loops drive it, both idle while the tab is hidden (`IsActive`) and both sampling off the UI thread: membership reconciles on a ~1&#160;s cadence, and the meters refresh every 50&#160;ms via one batched `GetPeaks` call per tick. The peak loop *parks* on an activation gate while hidden rather than ticking and skipping — at 50&#160;ms a skip-check still queues 20 Dispatcher continuations a second. (Per-row `GetPeak` on the UI thread was the 1.65.11 stutter fix.) Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Adds per-app output-device routing (via the guarded `AudioPolicyConfigFactory`; falls back to guiding the user to Windows sound settings when the OS lacks the interface) and named volume presets (persisted by `VolumePresetService`, keyed by exe name so they re-apply across restarts). Row VMs (`AudioSessionRowViewModel`) propagate volume/mute/route to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back.
 - `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin.
 - `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
-- `ProfileViewModel` — export/import SysManager's own config (theme, speed-test history) as a portable JSON profile with selective sections and version checking.
+- `ProfileViewModel` — export/import SysManager's own config as a portable JSON profile with selective sections and version checking. The sections are whatever `ProfileService.Catalog` lists (nine today: theme, speed-test history, update-check preference, dark-mode schedule, gaming profiles, volume presets, close-button behaviour, standby-memory preference, app-icon fetching), and a section is skipped on export when its file does not exist yet.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store. Takes the shared `ISessionRestorePoint` snapshot before the first removal, and words it honestly: System Restore does not bring Appx packages back, so the Store reinstall leads and the point is described as covering the rest of the system.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
 - `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
@@ -144,16 +144,17 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`) and wrapping every sample in one `Task.Run` so no source runs its work on the render thread, reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. Read-only.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
-  used by Cleanup, Windows Update, System Health, App Updates, and Uninstaller.
+  used by Cleanup, Windows Update, System Health, App Updates, and System Fixes —
+  the views whose XAML references it.
 
 ## Services
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirteen are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Fourteen are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
-`IAppBlockerService` (AppBlockerService), `ICpuAffinityService`, `IFileLockService`,
-`INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
+`IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `ICpuAffinityService`,
+`IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, `IGamingProfileService`, and
 `ISessionRestorePoint` (the last two via a factory).
 
@@ -169,7 +170,9 @@ finds nothing:
 
 Key services:
 - `PingMonitorService` / `TracerouteService` / `TracerouteMonitorService` —
-  network probes on `System.Net.NetworkInformation.Ping` and `tracert`.
+  network probes on `System.Net.NetworkInformation.Ping`. Traceroute walks the TTL itself
+  (`PingOptions(ttl, true)`, reading `TtlExpired` replies) rather than shelling out to a
+  command-line tool, which is why it needs no admin rights.
 - `SpeedTestService` — HTTP speed test against Cloudflare plus the Ookla CLI,
   auto-downloaded on first use.
 - `PowerShellRunner` — wraps `System.Management.Automation` to run scripts
@@ -624,15 +627,19 @@ transient registrations at the top of `ServiceRegistration.cs`).
 
 `MainWindowViewModel` resolves child VMs from the container **lazily**: each tab's
 `NavItem` holds a `ContentFactory` and builds its view-model from DI only when the tab
-is first opened (`NavItem.Content`). This avoids constructing all ~50 tab VMs at startup
-— most kick off a background scan/timer in their constructor, so eager construction ran
-that work up front for tabs the user might never open. A small set stays eager because
-its constructor drives always-on, app-wide behavior independent of its tab: `Dashboard`
-(the initially-selected tab), `DarkModeViewModel` (owns the theme-schedule poll), and
-`AboutViewModel` (its startup update-check feeds the app-shell version label and update
-banner). The four Network tabs also stay eager because they share one
-`NetworkSharedState` and their constructors do no work. In tests/designer (no DI
-container) every VM is built eagerly via a manual dependency graph, exactly as before.
+is first opened (`NavItem.Content`). This avoids constructing all 55 lazily-registered tab
+VMs at startup — most kick off a background scan/timer in their constructor, so eager
+construction ran that work up front for tabs the user might never open.
+
+**Exactly three** stay eager, each because its constructor drives always-on, app-wide
+behavior independent of its tab: `Dashboard` (the initially-selected tab), `DarkModeViewModel`
+(owns the theme-schedule poll), and `AboutViewModel` (its startup update-check feeds the
+app-shell version label and update banner). That list is not maintained by hand here —
+`ArchitectureTests.OnlyTheJustifiedTabs_AreBuiltAtStartup` fails the build on a fourth, and
+carries the same three names with the same reasons. The Network tabs were the last exception
+to go: they share one `NetworkSharedState`, which turned out not to require eager construction.
+
+In tests/designer (no DI container) every VM is built eagerly via a manual dependency graph.
 
 ## Admin elevation
 

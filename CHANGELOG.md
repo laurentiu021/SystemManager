@@ -210,7 +210,7 @@ text with a blank margin beside it.
 - **The sidebar icons appear.** Each entry in the navigation list had a slot for an icon and a property to
   hold it, and nothing ever put a character in that property — so the slot rendered as whitespace on all
   fifty-eight entries. Every one of the twelve groups now has its own symbol, all distinct: a house for
-  Dashboard, a hard drive for Storage, a trash can for Cleanup, a shield for Privacy & Security, and so
+  Dashboard, a hard drive for Storage, a trash can for Cleanup, a padlock for Privacy & Security, and so
   on. The individual pages inside a group are deliberately left without one. Fifty-eight icons in a rail
   this narrow is noise, and the group heading is what you actually scan; the reclaimed space goes to the
   page names, which now have room to be read in full.

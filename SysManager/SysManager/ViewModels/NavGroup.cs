@@ -33,7 +33,8 @@ public sealed partial class NavGroup : ObservableObject
 
     /// <summary>
     /// Short subtitle shown under the group label when collapsed.
-    /// Abbreviated child labels joined with " · ".
+    /// Written copy describing what the group covers, set per group at the call site in
+    /// <c>MainWindowViewModel.BuildNavGroups</c> -- not derived from the child labels.
     /// </summary>
     public string Subtitle { get; set; } = "";
 

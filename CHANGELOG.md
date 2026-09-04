@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.9] - 2026-09-04
+
+In Volume Control, sending an app to a particular speaker or headset looked like it had not worked: the "Choose
+a device" prompt stayed printed over the name you picked, and about ten seconds later the box emptied itself.
+The sound really was going where you sent it — only the screen had forgotten.
+
+### Fixed
+- **Volume Control keeps showing the output device you picked.** The picker shows a "Choose a device" prompt
+  while SysManager cannot read where Windows is sending an app, which is every app today because Windows does
+  not report it. Choosing a device did route the app, but it did not clear that prompt, so the prompt was drawn
+  on top of the chosen name — and the tab's ten-second device re-read then treated the app as unrouted and
+  blanked the box, discarding the only record of what the user had set. Picking a device now counts as knowing
+  the route, because SysManager is what set it.
+
 ## [1.76.8] - 2026-09-03
 
 Quick Cleanup's "Clean TEMP" could delete files that other running programs were relying on, and the amount it

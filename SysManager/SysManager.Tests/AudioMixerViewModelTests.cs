@@ -289,6 +289,58 @@ public class AudioMixerViewModelTests
         Assert.Empty(writes);   // and re-applying a snapshot must never write back
     }
 
+    /// <summary>
+    /// Picking a device makes the route KNOWN — SysManager is the one that just set it.
+    /// </summary>
+    /// <remarks>
+    /// The flag stayed set after a successful write, and the placeholder TextBlock shares its Grid cell with
+    /// the ComboBox at <c>Margin="10,0,0,0"</c> — exactly where the box draws its selected item — so
+    /// "Choose a device" was painted over the name the user had just chosen.
+    /// </remarks>
+    [Fact]
+    public void AUserPickedDevice_IsNoLongerAnUnknownRoute()
+    {
+        var writes = new List<(string Session, string Device)>();
+        using var vm = NewVm(RoutableService(writes, route: null));
+        var row = vm.Sessions.Single();
+        Assert.True(row.OutputRouteUnknown, "the row should start unknown — the route read is a stub");
+
+        row.SelectedOutputDevice = row.OutputDevices.Single(d => d.Id == "{hdst}");
+
+        Assert.False(row.OutputRouteUnknown,
+            "the write succeeded, so the route is not unreadable any more — SysManager set it. While the flag "
+            + "stays up the placeholder is drawn on top of the device the user picked.");
+        Assert.Equal([("s1", "{hdst}")], writes);
+    }
+
+    /// <summary>
+    /// A device the user picked must still be selected after the device list is re-read.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the same defect, and the damaging half. <c>RefreshDevicesAsync</c> snapshots each row
+    /// as <c>OutputRouteUnknown ? null : id</c>, so a row still flagged unknown after a hand-made pick
+    /// snapshotted as null and was re-applied as null — the picker went blank on the tenth reconcile pass,
+    /// about ten seconds after the choice. Windows kept the route; only the UI forgot, which leaves the user
+    /// with no way to see or undo what they set. Introduced with the three-state flag in v1.76.7: before it,
+    /// the snapshot read the selection directly and a hand-made pick survived.
+    /// <para>Twelve passes for the reason the neighbouring test gives: the refresh fires ON the tenth.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AUserPickedDevice_SurvivesADeviceRefresh()
+    {
+        var writes = new List<(string Session, string Device)>();
+        using var vm = NewVm(RoutableService(writes, route: null));
+        var row = vm.Sessions.Single();
+
+        row.SelectedOutputDevice = row.OutputDevices.Single(d => d.Id == "{hdst}");
+
+        for (var pass = 0; pass < 12; pass++) await vm.ReconcileAsync();
+
+        Assert.Equal("{hdst}", row.SelectedOutputDevice?.Id);
+        Assert.False(row.OutputRouteUnknown);
+        Assert.Equal([("s1", "{hdst}")], writes);   // re-applying the snapshot must not write again
+    }
+
     private static IAudioMixerService RoutableService(
         List<(string Session, string Device)> writes, string? route = null)
     {

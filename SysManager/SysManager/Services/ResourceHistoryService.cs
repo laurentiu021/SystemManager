@@ -285,12 +285,17 @@ public sealed class ResourceHistoryService : IDisposable
     public static List<string> Prune(IEnumerable<string> lines, DateTime now, TimeSpan retention)
     {
         var cutoff = now - retention;
-        var kept = new List<ResourceSample>();
+
+        // Timestamp paired with the ORIGINAL line, not with the parsed sample. Sorting pairs keeps the
+        // oldest-first contract while handing back the exact text that was read, so a prune no longer
+        // re-serialises every line it keeps -- work the caller discards outright whenever nothing was
+        // dropped, which is almost every call.
+        var kept = new List<(DateTime Stamp, string Line)>();
         foreach (var line in lines)
             if (TryParse(line, out var s) && s!.Timestamp >= cutoff)
-                kept.Add(s);
-        kept.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
-        return kept.Select(Serialize).ToList();
+                kept.Add((s!.Timestamp, line));
+        kept.Sort((a, b) => a.Stamp.CompareTo(b.Stamp));
+        return kept.ConvertAll(k => k.Line);
     }
 
     /// <summary>

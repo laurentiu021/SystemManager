@@ -60,6 +60,30 @@ public class BandwidthHistoryTests
     }
 
     [Fact]
+    public void Prune_HandsBackTheLinesItRead_WithoutReserialisingThem()
+    {
+        // The sibling of the same assertion in ResourceHistoryServiceTests. Both services carried the same
+        // Prune shape, so both were rebuilding every kept line through Serialize for a result PruneAsync
+        // discards whenever nothing was dropped. Pinned in both places rather than in whichever one was
+        // touched first.
+        //
+        // The variant line is the canonical one with a leading space: JSON ignores it, Serialize never writes
+        // it. Derived from the serialiser so it cannot drift from the model's naming policy.
+        var now = new DateTime(2026, 7, 22, 12, 0, 0);
+        var spaced = " " + BandwidthHistoryService.Serialize(S(now.AddHours(-1), 2, 2));
+        Assert.True(BandwidthHistoryService.TryParse(spaced, out var parsed), "the fixture must parse");
+        Assert.NotEqual(spaced, BandwidthHistoryService.Serialize(parsed!));   // the premise of this test
+
+        var lines = new[]
+        {
+            BandwidthHistoryService.Serialize(S(now.AddDays(-10), 1, 1)),   // expired, forces the drop path
+            spaced,
+        };
+
+        Assert.Equal([spaced], BandwidthHistoryService.Prune(lines, now, TimeSpan.FromDays(7)));
+    }
+
+    [Fact]
     public void Downsample_AtOrBelowCap_ReturnsUnchanged()
     {
         var now = new DateTime(2026, 7, 22, 12, 0, 0);

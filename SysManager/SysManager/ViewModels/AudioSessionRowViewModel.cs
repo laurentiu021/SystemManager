@@ -75,6 +75,10 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     /// Not derived from <see cref="SelectedOutputDevice"/> being null, although today the two agree. A user
     /// who opens the picker and closes it without choosing leaves the selection null, and that is not the
     /// same claim: this flag says the SERVICE could not tell us, which is what the placeholder is about.
+    /// <para>Two writers, and both are needed. <see cref="SetOutputDeviceFromService"/> sets it from what the
+    /// read produced; <see cref="OnSelectedOutputDeviceChanged"/> clears it after a successful write. Without
+    /// the second one an app the user routed by hand stayed flagged unreadable, which drew the placeholder over
+    /// the chosen name and made the parent's refresh snapshot discard the choice ten seconds later.</para>
     /// </remarks>
     [ObservableProperty] private bool _outputRouteUnknown;
 
@@ -213,11 +217,16 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     /// choice on failure — reverting it would fight the user's own click — but the status now SAYS the
     /// routing did not take, which the old comment promised ("left to the parent VM's status") without
     /// anything ever reporting it.
+    /// <para>A successful write also settles <see cref="OutputRouteUnknown"/>: the route is no longer
+    /// unreadable once SysManager is the one that set it. Failure leaves the flag alone, because a refused
+    /// write moved nothing — whatever the route was before, it still is.</para>
     /// </summary>
     partial void OnSelectedOutputDeviceChanged(AudioDevice? value)
     {
         if (_suppressPropagation || !RoutingSupported || value is null) return;
-        if (!_service.SetSessionOutputDevice(SessionId, value.IsDefault ? string.Empty : value.Id))
+        if (_service.SetSessionOutputDevice(SessionId, value.IsDefault ? string.Empty : value.Id))
+            OutputRouteUnknown = false;
+        else
             _reportFailure?.Invoke(
                 $"Could not move {DisplayName} to {value.FriendlyName} — Windows refused the change.");
     }

@@ -58,11 +58,25 @@ public class DeepCleanupViewUiTests
         Assert.Contains(vm.NavItems, n => n.Id == "nav-about");
     }
 
+    /// <summary>
+    /// About closes out the Info group — the last thing in the sidebar before Advanced.
+    /// </summary>
+    /// <remarks>
+    /// Was <c>NavItems_CorrectOrder_AboutLast</c>, asserting <c>NavItems.Last().Id == "nav-about"</c>. That
+    /// stopped being true when the Advanced group was appended after Info, so the real last entry is
+    /// <c>nav-env-variables</c> — and nothing said so, because CI only compile-checks this project.
+    /// <para>Rewritten to the invariant that survived the change rather than deleted: About belongs at the end
+    /// of Info, which is where the shell's own comment puts it ("About is eager … the sidebar version label
+    /// and the tab show one shared VM"). Asserting it as the last of its group cannot rot when a group is
+    /// appended, only when About itself moves — which is the thing worth catching.</para>
+    /// </remarks>
     [Fact]
-    public void NavItems_CorrectOrder_AboutLast()
+    public void NavItems_AboutIsLastInTheInfoGroup()
     {
         var vm = new MainWindowViewModel();
-        Assert.Equal("nav-about", vm.NavItems.Last().Id);
+        var info = vm.NavGroups.Single(g => g.Id == "grp-info");
+
+        Assert.Equal("nav-about", info.Children[^1].Id);
     }
 
     [Fact]

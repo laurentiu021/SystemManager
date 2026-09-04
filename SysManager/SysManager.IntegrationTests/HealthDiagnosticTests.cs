@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.ComponentModel;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.IntegrationTests;
@@ -16,7 +17,7 @@ public class HealthDiagnosticTests
         Assert.Equal(HealthVerdict.Unknown, d.Verdict);
         Assert.Equal("Waiting for data…", d.Headline);
         Assert.Equal("", d.Detail);
-        Assert.Equal("#9AA0A6", d.ColorHex);
+        Assert.Equal(StatusColors.Neutral, d.ColorHex);
         Assert.Equal(0, d.WorstLossPercent);
         Assert.Equal(0, d.WorstJitterMs);
         Assert.Equal(0, d.AveragePingMs);

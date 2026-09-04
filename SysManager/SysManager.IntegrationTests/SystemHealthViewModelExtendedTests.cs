@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -31,7 +32,7 @@ public class SystemHealthViewModelExtendedTests
         Assert.Equal(0, vm.WheaMemoryErrors);
         Assert.Equal(0, vm.MemoryDiagnosticResults);
         Assert.False(string.IsNullOrWhiteSpace(vm.MemoryHealthVerdict));
-        Assert.Matches("^#[0-9A-Fa-f]{6}$", vm.MemoryHealthColorHex);
+        Assert.Contains(vm.MemoryHealthColorHex, StatusColors.AllBrushKeys);
     }
 
     [Fact]

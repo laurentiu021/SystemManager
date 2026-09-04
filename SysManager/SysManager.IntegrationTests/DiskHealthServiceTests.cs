@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Services;
 
 namespace SysManager.IntegrationTests;
@@ -37,7 +38,7 @@ public class DiskHealthServiceTests
             Assert.False(string.IsNullOrWhiteSpace(r.FriendlyName));
             Assert.False(string.IsNullOrWhiteSpace(r.MediaType));
             Assert.False(string.IsNullOrWhiteSpace(r.Verdict));
-            Assert.Matches("^#[0-9A-Fa-f]{6}$", r.VerdictColorHex);
+            Assert.Contains(r.VerdictColorHex, StatusColors.AllBrushKeys);
         }
     }
 

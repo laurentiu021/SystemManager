@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -72,7 +73,7 @@ public class HealthAnalyzerExtendedTests
             M("dns", TargetRole.PublicDns, avg: 15, jitter: 2),
         });
         Assert.Contains("healthy", diag.Headline, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("#06D6A0", diag.ColorHex);
+        Assert.Equal(StatusColors.Good, diag.ColorHex);
     }
 
     // ---------- Local network ----------
@@ -234,13 +235,13 @@ public class HealthAnalyzerExtendedTests
     // ---------- Verdict colors ----------
 
     [Theory]
-    [InlineData(HealthVerdict.Good, "#06D6A0")]
-    [InlineData(HealthVerdict.LocalNetwork, "#FF6B6B")]
-    [InlineData(HealthVerdict.IspOrUpstream, "#FFD166")]
-    [InlineData(HealthVerdict.GameServer, "#F72585")]
-    [InlineData(HealthVerdict.StreamingService, "#B388FF")]
-    [InlineData(HealthVerdict.Mixed, "#FF6B6B")]
-    [InlineData(HealthVerdict.Unknown, "#9AA0A6")]
+    [InlineData(HealthVerdict.Good, StatusColors.Good)]
+    [InlineData(HealthVerdict.LocalNetwork, StatusColors.Bad)]
+    [InlineData(HealthVerdict.IspOrUpstream, StatusColors.Warning)]
+    [InlineData(HealthVerdict.GameServer, StatusColors.Info)]
+    [InlineData(HealthVerdict.StreamingService, StatusColors.Info)]
+    [InlineData(HealthVerdict.Mixed, StatusColors.Bad)]
+    [InlineData(HealthVerdict.Unknown, StatusColors.Neutral)]
     public void AllVerdicts_ProduceValidColor(HealthVerdict expectedVerdict, string expectedColor)
     {
         // Build the conditions to trigger each verdict

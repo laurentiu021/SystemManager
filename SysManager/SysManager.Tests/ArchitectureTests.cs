@@ -5448,7 +5448,11 @@ public partial class ArchitectureTests
     public void EveryTempTreeWalkerCall_PassesBothExtractionExclusions()
     {
         var appDir = FindAppProjectDir();
-        var servicesDir = Path.Combine(appDir, "Services");
+
+        // The two files allowed to sweep %TEMP% themselves. This list bounds the STRAY check below only —
+        // the walker-argument check further down finds its own files by looking for callers, because a
+        // hardcoded list there could only ever check what it was already looking at. CleanupPreScanService
+        // began calling the walker and went unchecked for exactly that reason.
         string[] sweepers = ["TuneUpService.cs", "DeepCleanupService.cs"];
         var callsChecked = 0;
 
@@ -5484,20 +5488,33 @@ public partial class ArchitectureTests
             + $"TuneUpService.CleanTempFilesAsync instead of writing a third sweeper:\n  "
             + string.Join("\n  ", strays));
 
-        foreach (var file in sweepers)
-        {
-            // Comments stripped: both files explain this rule in prose right beside the calls, so a
-            // guard that read comments would pass on code that had dropped the argument.
-            var code = WithoutComments(File.ReadAllText(Path.Combine(servicesDir, file)));
+        // The files to check: the two sanctioned sweepers, PLUS any other file that calls one of the
+        // walkers. Only TuneUpService's are reachable from outside (DeepCleanupService's are private), so an
+        // outside caller is always a `...SkippingReparsePoints` call — that is what makes discovery cheap and
+        // exact. Comments stripped before matching: the sweepers explain this rule in prose right beside the
+        // calls, so a guard that read comments would pass on code that had dropped the argument.
+        var callers = Directory.GetFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .Select(f => (Path: f, Code: WithoutComments(File.ReadAllText(f))))
+            .Where(f => sweepers.Contains(Path.GetFileName(f.Path))
+                        || f.Code.Contains("SkippingReparsePoints(", StringComparison.Ordinal))
+            .ToList();
 
+        foreach (var (path, code) in callers)
+        {
             foreach (var call in TempWalkerCall().Matches(code).Cast<Match>())
             {
                 var args = call.Groups["args"].Value;
 
-                // Skip the declarations: their parameter list names the type, a call site never does.
-                if (args.Contains("CancellationToken", StringComparison.Ordinal)) continue;
+                // Skip the declarations. Matching the bare type name was wrong: a call site passing
+                // `CancellationToken.None` contains it too, so both of CleanupPreScanService's calls were
+                // skipped as if they were declarations — the guard read them and checked nothing. A
+                // declaration is the type followed by a parameter NAME; a call is followed by a dot.
+                if (DeclaredCancellationParameter().IsMatch(args)) continue;
 
                 callsChecked++;
+                var where = $"{Path.GetFileName(path)}: {call.Value}";
 
                 // BOTH, not either. OwnExtractionDirectory is one LEAF of BundleExtractionRoot, so on
                 // its own it spared this app's unpacked native libraries and left every other
@@ -5505,24 +5522,38 @@ public partial class ArchitectureTests
                 // OwnExtractionDirectory's own documentation describes, inflicted on someone else. The
                 // leaf stays because for a non-single-file build BaseDirectory is the output folder,
                 // which no extraction root contains.
-                Assert.Contains("SystemPaths.BundleExtractionRoot", args, StringComparison.Ordinal);
-                Assert.Contains("SystemPaths.OwnExtractionDirectory", args, StringComparison.Ordinal);
+                Assert.True(args.Contains("SystemPaths.BundleExtractionRoot", StringComparison.Ordinal)
+                            && args.Contains("SystemPaths.OwnExtractionDirectory", StringComparison.Ordinal),
+                    $"this walker call passes neither or only one extraction exclusion — {where}");
             }
         }
 
-        // Vacuity floor: five call sites exist today across the two services. A collapse means the
-        // pattern stopped matching, and this guard would then pass without reading a single call.
-        Assert.True(callsChecked >= 5,
-            $"only {callsChecked} walker calls were matched — the pattern no longer matches the call "
-            + "shape, so this guard proves nothing. Re-derive it before trusting a pass.");
+        // Vacuity floor, re-measured: seven call sites across three files (five in the two sweepers, two in
+        // CleanupPreScanService). A collapse means the pattern or the declaration filter stopped matching,
+        // and this guard would then pass without reading a single call.
+        Assert.True(callsChecked >= 7,
+            $"only {callsChecked} walker calls were matched across {callers.Count} file(s) — the pattern no "
+            + "longer matches the call shape, so this guard proves nothing. Re-derive it before trusting a "
+            + "pass.");
     }
 
     /// <summary>
     /// Matches a call to one of the temp-tree walkers and captures its argument list. Bounded to
     /// argument lists without nested parentheses, which every current call site and declaration is.
     /// </summary>
+    /// <remarks>
+    /// Deliberately loose on the name. DeepCleanupService's walkers are private and named plainly
+    /// (<c>EnumerateFiles</c>, <c>EnumerateDirectoriesDepthFirst</c>), so matching only
+    /// <c>...SkippingReparsePoints</c> silently dropped its three call sites — the vacuity floor is what
+    /// caught that. The <c>Directory.</c> lookbehind is what keeps the loose form from matching the BCL call
+    /// of the same name.
+    /// </remarks>
     [GeneratedRegex(@"(?<!Directory\.)\bEnumerate(?:Files|Directories)\w*\((?<args>[^()]*)\)")]
     private static partial Regex TempWalkerCall();
+
+    /// <summary>A <c>CancellationToken</c> PARAMETER, i.e. the type followed by a name — a declaration.</summary>
+    [GeneratedRegex(@"\bCancellationToken\s+\w")]
+    private static partial Regex DeclaredCancellationParameter();
 
 
     /// <summary>

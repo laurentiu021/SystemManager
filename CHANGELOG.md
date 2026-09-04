@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.10] - 2026-09-04
+
+The "can be freed" and "in Recycle Bin" figures on the Cleanup tab could stop counting partway through a
+folder, and could count files that live outside the folder they claim to describe. Both are now measured the
+same way the cleanup itself works, so the number matches what pressing the button would actually free.
+
+### Fixed
+- **The Cleanup tab's size estimates stop under-reporting.** Both figures walked their folders with a method
+  that gives up entirely the moment it meets one folder Windows will not let it open — so on most machines the
+  total stopped early and reported less than was really there, with nothing on screen to say so. They now use
+  the same walker the cleanup uses, which skips what it cannot read and keeps going.
+- **The Recycle Bin figure no longer counts files that are not in the bin.** The old walk followed folder
+  shortcuts, and deleting a folder shortcut puts one *in* the Recycle Bin — so a single deleted shortcut could
+  add every file it pointed at, live data included, to the "in Recycle Bin" total. The new walker never follows
+  them.
+- **"Can be freed" no longer promises space Clean TEMP will leave alone.** Since 1.76.8 the temp cleanup skips
+  the folder running programs unpack themselves into. The estimate did not, so it counted bytes the cleanup
+  would correctly refuse to delete. It now applies the same two exclusions.
+
 ## [1.76.9] - 2026-09-04
 
 In Volume Control, sending an app to a particular speaker or headset looked like it had not worked: the "Choose

@@ -83,7 +83,7 @@ happily as a readable one and Codecov never reports the rejection back.
 | Package | Purpose |
 |---|---|
 | xUnit 2.9 | Test framework |
-| NSubstitute 6.1 | Mocking/substitution for interface-based testing |
+| NSubstitute 6.2 | Mocking/substitution for interface-based testing |
 | NetArchTest.Rules 1.3 | Architecture fitness functions — MVVM dependency direction, and guards that pin recurring defect classes |
 | coverlet | Code coverage collection |
 | JunitXml.TestLogger | JUnit XML test report — the only format Codecov's test analytics parses |

@@ -70,8 +70,15 @@ dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
 difference. A clean build does not catch it, so run it before you push:
 
 ```powershell
-dotnet format SysManager/SysManager/SysManager.csproj --verify-no-changes
-# drop --verify-no-changes to let it fix the file in place
+# All four, because CI checks all four — a single-project run passes while the PR fails.
+foreach ($p in @(
+    'SysManager/SysManager/SysManager.csproj',
+    'SysManager/SysManager.Tests/SysManager.Tests.csproj',
+    'SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj',
+    'SysManager/SysManager.UITests/SysManager.UITests.csproj')) {
+  dotnet format $p --verify-no-changes
+}
+# drop --verify-no-changes to let it fix the files in place
 ```
 
 ## Project layout
@@ -127,7 +134,7 @@ guide. That said, a few explicit rules:
 
 ### Author headers
 
-Every source file opens with a three-line attribution block. All 688 of them
+Every source file opens with a three-line attribution block. All 704 of them
 carry it, and a test fails the build if a new file doesn't — so copy the shape
 exactly. In `.cs` files (the `— summary` after the class name is optional):
 

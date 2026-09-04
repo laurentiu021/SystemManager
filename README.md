@@ -147,8 +147,8 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 > 🔬 = Preview — fully implemented and usable, marked in-app while it settles in.
 
 Groups expand and collapse with a click. Collapsed groups show a child count
-badge, a subtitle with abbreviated child labels, and a tooltip with the full
-list. Dashboard renders as a flat top-level entry without an expander arrow.
+badge, a written one-line summary of what the group covers, and a tooltip with the
+full list. Dashboard renders as a flat top-level entry without an expander arrow.
 Each tab shows a slim progress bar under its name when performing a
 long-running operation, so you always know which tab is working.
 
@@ -961,7 +961,7 @@ offers, "rate us" prompts:
   load and refreshes with "Scan system".
 - **System Tray** — background health monitoring (60s polling), CPU/RAM tooltip,
   Windows notifications when RAM > 90%, uptime > 14 days, or disk health degrades.
-  Context menu: Show / Exit.
+  Context menu: Show SysManager / Volume mixer / Exit.
 - **Closing is your choice** — the first time you close the window, SysManager asks
   whether it should keep running in the notification area or close completely, and
   remembers the answer. If you pick the notification area, it tells you where the

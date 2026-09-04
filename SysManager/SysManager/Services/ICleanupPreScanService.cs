@@ -6,10 +6,14 @@ namespace SysManager.Services;
 
 /// <summary>The two headline numbers Quick Cleanup shows before the user asks for anything.</summary>
 /// <param name="TempLabel">
-/// A finished, user-facing phrase for the temp folders — "412.7 MB can be freed", "Empty", or
-/// "Unable to scan".
+/// A finished, user-facing phrase for the temp folders — "412.7 MB can be freed" or "Empty". Never
+/// "Unable to scan": the temp walk skips what it cannot read rather than giving up, so it always produces a
+/// figure. A folder it could not open at all therefore reads as "Empty".
 /// </param>
-/// <param name="RecycleBinLabel">The same for the current user's Recycle Bin.</param>
+/// <param name="RecycleBinLabel">
+/// The same for the current user's Recycle Bin, which can also be "Unable to scan" — enumerating the per-SID
+/// folders across every fixed drive can fail outright, and reporting "Empty" for that would be a claim.
+/// </param>
 public sealed record CleanupPreScan(string TempLabel, string RecycleBinLabel);
 
 /// <summary>

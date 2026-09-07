@@ -87,13 +87,20 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="Memory health" Style="{StaticResource SectionTitle}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0"
+                            <!-- DockPanel, not a horizontal StackPanel: the verdict is a full sentence, and
+                                 inside a horizontal StackPanel its TextWrapping is inert — the child is
+                                 measured with infinite width, so a long verdict was clipped. MaxWidth stays
+                                 as a readability cap on line length, which is what it is good for; it was
+                                 never a substitute for a real width to wrap against. -->
+                            <DockPanel Margin="0,8,0,0">
+                                <Ellipse Width="10" Height="10" DockPanel.Dock="Left" VerticalAlignment="Center"
+                                         Margin="0,0,10,0"
                                          Fill="{Binding MemoryHealthColorHex, Converter={StaticResource HexBrush}}"/>
                                 <TextBlock Text="{Binding MemoryHealthVerdict}"
                                            Foreground="{Binding MemoryHealthColorHex, Converter={StaticResource HexBrush}}"
-                                           FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="620" VerticalAlignment="Center"/>
-                            </StackPanel>
+                                           FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="620"
+                                           HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                            </DockPanel>
                             <TextBlock Text="Scans the last 30 days of the System event log for hardware errors (WHEA) and Windows Memory Diagnostic results."
                                        Style="{StaticResource Subtle}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                         </StackPanel>

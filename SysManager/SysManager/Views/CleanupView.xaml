@@ -95,12 +95,16 @@
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
                         Background="{DynamicResource Surface1}"
                         Visibility="{Binding SfcVerdict, Converter={StaticResource FlexVis}}">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="SFC result:" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"
+                    <!-- DockPanel, not a horizontal StackPanel: the verdict is a full sentence, and inside a
+                         horizontal StackPanel its TextWrapping is inert — the child is measured with infinite
+                         width, so long verdicts were clipped rather than wrapped. -->
+                    <DockPanel>
+                        <TextBlock Text="SFC result:" DockPanel.Dock="Left" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="{Binding SfcVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    Foreground="{Binding SfcVerdictColorHex, Converter={StaticResource HexBrush}}"/>
-                    </StackPanel>
+                    </DockPanel>
                 </Border>
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
                             Visibility="{Binding IsDismRunning, Converter={StaticResource FlexVis}}">
@@ -114,12 +118,14 @@
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
                         Background="{DynamicResource Surface1}"
                         Visibility="{Binding DismVerdict, Converter={StaticResource FlexVis}}">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="DISM result:" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"
+                    <!-- DockPanel for the same reason as the SFC verdict above. -->
+                    <DockPanel>
+                        <TextBlock Text="DISM result:" DockPanel.Dock="Left" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="{Binding DismVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
-                    </StackPanel>
+                    </DockPanel>
                 </Border>
             </StackPanel>
         </Border>

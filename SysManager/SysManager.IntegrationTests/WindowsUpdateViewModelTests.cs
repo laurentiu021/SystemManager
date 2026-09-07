@@ -68,11 +68,20 @@ public class WindowsUpdateViewModelTests
 
     // ---------- commands ----------
 
+    /// <summary>
+    /// Every command the Windows Update tab is expected to expose.
+    /// </summary>
+    /// <remarks>
+    /// <c>ListFeatureUpdatesCommand</c> was a row here and had to go — see
+    /// <c>WindowsUpdateAutoCheckTests.CommandExists</c> for the trace. This list is the SECOND copy of that
+    /// one, which is why the same stale row survived in two places: repairing one and grepping only its own
+    /// file would have left this identical theory still asserting a command deleted three months earlier.
+    /// </remarks>
     [Theory]
     [InlineData("CheckModuleCommand")]
     [InlineData("InstallModuleCommand")]
     [InlineData("ListUpdatesCommand")]
-    [InlineData("ListFeatureUpdatesCommand")]
+    [InlineData("DeferFeatureUpdatesCommand")]
     [InlineData("ShowHistoryCommand")]
     [InlineData("CheckPendingRebootCommand")]
     [InlineData("InstallUpdatesCommand")]

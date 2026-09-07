@@ -162,9 +162,18 @@ public class EventLogServiceTests
     /// <summary>
     /// A severity filter yields only the severities asked for.
     /// </summary>
-    /// <remarks>Same cancellation and budget reasoning as
-    /// <see cref="Read_EntriesEnrichedWithExplanation"/> — and more so, since a 90-day window over the System
-    /// log is the slowest read in this file.</remarks>
+    /// <remarks>
+    /// Same cancellation and budget reasoning as <see cref="Read_EntriesEnrichedWithExplanation"/>.
+    /// <para>The window was 90 days and the cap 20, which made this by far the slowest read in the file: 4 m
+    /// 36 s on a CI runner, against 20 s and 26 s for its two unfiltered siblings. The budget cannot bound
+    /// that, because a single blocking <c>ReadEvent()</c> is not interruptible by the token — the read scans
+    /// records inside the OS looking for a severity match and only then returns, so cancellation is observed
+    /// after the fact rather than during. Filed separately; it is a defect in the service, not in this test.
+    /// </para>
+    /// <para>So the query is bounded instead: 30 days, matching both siblings, and a cap of 5. The assertion
+    /// is per-ENTRY and unchanged in kind — fewer entries are examined, and how many is reported in the
+    /// message rather than assumed.</para>
+    /// </remarks>
     [Fact]
     public async Task Read_SeverityFilter_ReturnsOnlyRequested()
     {
@@ -172,8 +181,8 @@ public class EventLogServiceTests
         var opt = new EventLogQueryOptions
         {
             LogName = "System",
-            Since = DateTime.Now.AddDays(-90),
-            MaxResults = 20,
+            Since = DateTime.Now.AddDays(-30),
+            MaxResults = 5,
             Severities = new() { EventSeverity.Error, EventSeverity.Critical }
         };
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));

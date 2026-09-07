@@ -37,12 +37,18 @@ public class WindowsUpdateAutoCheckTests
     /// Every command the Windows Update tab is expected to expose.
     /// </summary>
     /// <remarks>
-    /// <c>ListFeatureUpdatesCommand</c> was a row here for a long time and had to go: PR #609 ("Windows Update
-    /// install never applied updates (fake success)") deleted <c>ListFeatureUpdatesAsync</c> from the view
-    /// model and left this row behind, so the assertion has been failing ever since — invisibly, because this
-    /// project was compile-checked in CI and never executed. The feature-updates command that DOES exist is
-    /// <c>DeferFeatureUpdatesCommand</c>, and it is asserted below on its own merits rather than as a rename
-    /// of the deleted one.
+    /// <c>ListFeatureUpdatesCommand</c> was a row here and had to go: PR #609 ("Windows Update install never
+    /// applied updates (fake success)", merged 2026-06-03) deleted <c>ListFeatureUpdatesAsync</c> from the
+    /// view model and left this row behind, so the assertion failed for three months — invisibly, because
+    /// this project was compile-checked in CI and never executed. The feature-updates command that DOES exist
+    /// is <c>DeferFeatureUpdatesCommand</c>, and it is asserted below on its own merits rather than as a
+    /// rename of the deleted one.
+    /// <para>The identical list is duplicated in <c>WindowsUpdateViewModelTests.Command_IsExposedAndNotNull</c>,
+    /// which is how one deleted command produced two failures — both copies name commands as STRINGS and look
+    /// them up by reflection, so the compiler cannot see the reference at all. A third copy in
+    /// <c>LightTouchViewModelTests.WindowsUpdateVm_AllCommandsExist</c> names the properties directly and
+    /// never rotted: deleting a command would not have compiled. That is the difference worth noticing —
+    /// a string-keyed assertion over a compiler-checkable thing buys nothing and hides a rename for months.</para>
     /// </remarks>
     [Theory]
     [InlineData("CheckModuleCommand")]

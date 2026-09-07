@@ -70,12 +70,28 @@ public class LightTouchViewModelTests
 
     // ---------- Windows Update ----------
 
+    /// <summary>
+    /// Constructing the Windows Update view model wires its console and does no work.
+    /// </summary>
+    /// <remarks>
+    /// The second assertion was <c>Assert.False(vm.ModuleAvailable)</c>, which held while the constructor
+    /// probed for PSWindowsUpdate. PR #611 ("install Windows Update via WUA COM API", merged 2026-06-03)
+    /// deferred that probe to the History view and made the constructor set <c>ModuleAvailable = true</c>
+    /// optimistically — so the test has asserted the opposite of the documented behaviour ever since,
+    /// invisibly, because this project was compile-checked in the pipeline and never executed.
+    /// <para><c>IsBusy</c> is the property that actually encodes what this test's name claims. The view
+    /// model's own comment promises it: "This keeps the constructor side-effect-free and IsBusy stays false
+    /// until the user triggers an action." Asserting that is asserting the contract, and it cannot rot the
+    /// way an optimistic default did. It also puts this test on the same shape as every other
+    /// <c>*_Ctor_IsSafe</c> in this file — console wired, not busy — instead of leaving it the one that
+    /// reached for an unrelated flag.</para>
+    /// </remarks>
     [Fact]
     public void WindowsUpdateVm_Ctor_IsSafe()
     {
         var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
         Assert.NotNull(vm.Console);
-        Assert.False(vm.ModuleAvailable);
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]

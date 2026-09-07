@@ -180,31 +180,11 @@ public class SystemHealthViewModelTests
         Assert.False(dt.IsSelected);
     }
 
-    [Fact]
-    public void DriveTarget_Display_WithLabel()
-    {
-        var dt = new DriveTarget { Letter = "D:", Label = "Data", SizeGB = 500, FileSystem = "NTFS" };
-        Assert.Contains("D:", dt.Display);
-        Assert.Contains("Data", dt.Display);
-        Assert.Contains("500", dt.Display);
-    }
-
-    [Fact]
-    public void DriveTarget_Display_WithoutLabel()
-    {
-        var dt = new DriveTarget { Letter = "C:", Label = "", SizeGB = 250, FileSystem = "NTFS" };
-        Assert.Contains("C:", dt.Display);
-        Assert.Contains("250", dt.Display);
-    }
-
-    [Fact]
-    public void DriveTarget_Display_LabelSameAsLetter()
-    {
-        var dt = new DriveTarget { Letter = "C:", Label = "C:", SizeGB = 100, FileSystem = "NTFS" };
-        // Should use the short format (no duplicate label)
-        var display = dt.Display;
-        Assert.DoesNotContain("C:  C:", display);
-    }
+    // DriveTarget_Display_WithLabel / _WithoutLabel / _LabelSameAsLetter were removed with the property
+    // they tested (#2100). All three asserted the composition of a string no view ever bound — the chkdsk
+    // row builds that line from Letter, Label, SizeGB and FileSystem individually — so they were the reason
+    // an unreachable property survived three audits: a property with tests looks covered.
+    // What the row actually shows is pinned by ArchitectureTests.EveryFieldTheChkdskPickerFillsIn_IsShownInItsRow.
 
     [Fact]
     public void DriveTarget_StatusSetter_FiresPropertyChanged()

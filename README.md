@@ -190,6 +190,7 @@ it is drawn on — above the 3:1 WCAG asks of a non-text indicator.
 Manage Windows Explorer right-click entries — toggle them on or off without
 deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - **Presets:** Win10 Default (classic full menu), Win11 Default (modern compact), Custom
+- The preset currently applied is marked with a tick, so you can see which style you are on without applying one
 - Selecting a preset resets to clean defaults, disabling third-party entries — re-enable individually
 - **Win10/Win11 style toggle** — switch between classic and modern menu (restarts Explorer)
 - **Visual preview on hover** — real screenshots of each menu style
@@ -992,7 +993,10 @@ offers, "rate us" prompts:
   button appears in the About tab only when a retained copy exists, asks for
   confirmation, and notes that whatever the newer version fixed will come back too.
   One generation is kept, so it never accumulates copies of the app.
-- Full release-note history pulled live from GitHub.
+- Full release-note history pulled live from GitHub — the notes for the newest
+  version appear under the update check, the last ten releases below it, and each
+  card links to its release on GitHub. If GitHub cannot be reached, the section
+  says so instead of going blank.
 - **"Report a problem"** opens the GitHub bug-report form with your SysManager
   version and administrator state already filled in — the two fields reports most
   often miss — and **"Ask a question"** opens Discussions for anything that is not

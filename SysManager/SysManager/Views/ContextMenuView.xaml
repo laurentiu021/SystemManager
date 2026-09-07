@@ -10,6 +10,80 @@
              mc:Ignorable="d"
              Background="{DynamicResource Surface0}">
 
+    <UserControl.Resources>
+        <!--
+            The Menu Style buttons had no way to show which style is currently applied.
+            ActivePresetId was maintained at four sites — seeded from the registry on load, set on every
+            Apply, and set to "custom" the moment any individual entry is toggled — and read by nothing, so
+            the tab asked the user to choose between three options without saying which one they were on.
+            The view even carried a comment reading "Custom indicator" above a button that indicated nothing.
+
+            AccentSoft fill plus an Accent border, the pair already used for the highlighted card in Deep
+            Cleanup, and NOT PrimaryButton: a purple fill is reserved for primary ACTIONS, while this is a
+            state. The tick carries the same meaning for anyone who cannot separate the two fills, and it is
+            what the accessible name appends so a screen reader says it too.
+
+            One style, three buttons, discriminated by ConverterParameter — the button's own preset id.
+        -->
+        <Style x:Key="PresetButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+
+        <!--
+            Three thin styles rather than one: a DataTrigger's ConverterParameter cannot be a binding, so each
+            button's own preset id has to be a literal. They differ in that one value and nothing else.
+
+            Content and AutomationProperties.Name are SETTERS here, not attributes on the buttons, because a
+            local value on the element outranks a style trigger in WPF's precedence order — leaving them on
+            the buttons made the tick and the state-carrying name silently dead while the fill still changed,
+            which is the same defect this whole change set is closing, one layer down.
+            NoLocalValueOutranksAStyleTriggerThatSetsIt pins it.
+        -->
+        <Style x:Key="PresetButtonWin10" TargetType="Button" BasedOn="{StaticResource PresetButton}">
+            <Setter Property="Content" Value="Win10 Default"/>
+            <Setter Property="AutomationProperties.Name" Value="Apply Win10 Default menu style"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ActivePresetId, Converter={StaticResource IsEqual}, ConverterParameter=win10}" Value="True">
+                    <Setter Property="Content" Value="✓ Win10 Default"/>
+                    <Setter Property="AutomationProperties.Name" Value="Win10 Default — the menu style currently applied"/>
+                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PresetButtonWin11" TargetType="Button" BasedOn="{StaticResource PresetButton}">
+            <Setter Property="Content" Value="Win11 Default"/>
+            <Setter Property="AutomationProperties.Name" Value="Apply Win11 Default menu style"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ActivePresetId, Converter={StaticResource IsEqual}, ConverterParameter=win11}" Value="True">
+                    <Setter Property="Content" Value="✓ Win11 Default"/>
+                    <Setter Property="AutomationProperties.Name" Value="Win11 Default — the menu style currently applied"/>
+                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PresetButtonCustom" TargetType="Button" BasedOn="{StaticResource PresetButton}">
+            <Setter Property="Content" Value="Custom"/>
+            <Setter Property="AutomationProperties.Name" Value="Apply Custom menu style"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ActivePresetId, Converter={StaticResource IsEqual}, ConverterParameter=custom}" Value="True">
+                    <Setter Property="Content" Value="✓ Custom"/>
+                    <Setter Property="AutomationProperties.Name" Value="Custom — the menu style currently applied"/>
+                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
     <Grid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -66,10 +140,8 @@
                            Foreground="{DynamicResource TextMuted}" Margin="0,0,0,10"/>
                 <StackPanel Orientation="Horizontal">
                     <!-- Win10 button with hover preview -->
-                    <Button Content="Win10 Default" Margin="0,0,8,0"
-                            AutomationProperties.Name="Apply Win10 Default menu style"
-                            Command="{Binding ApplyPresetCommand}" CommandParameter="win10"
-                            Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12">
+                    <Button Command="{Binding ApplyPresetCommand}" CommandParameter="win10"
+                            Style="{StaticResource PresetButtonWin10}">
                         <Button.ToolTip>
                             <ToolTip Placement="Bottom" MaxWidth="520">
                                 <StackPanel>
@@ -92,10 +164,8 @@
                         </Button.ToolTip>
                     </Button>
                     <!-- Win11 button with hover preview -->
-                    <Button Content="Win11 Default" Margin="0,0,8,0"
-                            AutomationProperties.Name="Apply Win11 Default menu style"
-                            Command="{Binding ApplyPresetCommand}" CommandParameter="win11"
-                            Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12">
+                    <Button Command="{Binding ApplyPresetCommand}" CommandParameter="win11"
+                            Style="{StaticResource PresetButtonWin11}">
                         <Button.ToolTip>
                             <ToolTip Placement="Bottom" MaxWidth="520">
                                 <StackPanel>
@@ -122,10 +192,8 @@
                         </Button.ToolTip>
                     </Button>
                     <!-- Custom indicator -->
-                    <Button Content="Custom" Margin="0,0,8,0"
-                            AutomationProperties.Name="Apply Custom menu style"
-                            Command="{Binding ApplyPresetCommand}" CommandParameter="custom"
-                            Style="{StaticResource SecondaryButton}" Padding="12,8" FontSize="12"
+                    <Button Command="{Binding ApplyPresetCommand}" CommandParameter="custom"
+                            Style="{StaticResource PresetButtonCustom}"
                             ToolTip="Active menu style + your manual entry toggles from the list below. Toggle any entry to switch to Custom mode."/>
                 </StackPanel>
                 <TextBlock Text="ⓘ Hover over Win10/Win11 buttons for a visual preview of each menu style."

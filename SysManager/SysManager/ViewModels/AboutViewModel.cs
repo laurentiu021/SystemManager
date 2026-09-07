@@ -396,6 +396,24 @@ public sealed partial class AboutViewModel : ViewModelBase
         OpenUrl(url);
     }
 
+    /// <summary>
+    /// Open one release-history entry on GitHub.
+    /// </summary>
+    /// <remarks>
+    /// <c>ReleaseNote.Url</c> was populated for all ten entries and read by nothing, so the history cards
+    /// were dead ends: the user could read a note and not reach the release it came from. Takes the url as a
+    /// parameter rather than reading a selected item, because the list is an <c>ItemsControl</c> with no
+    /// selection — each card carries its own.
+    /// <para>Guarded on the value through <c>CanExecute</c> rather than an early return inside the body: an
+    /// entry whose <c>HtmlUrl</c> came back empty greys its link out instead of accepting a click that does
+    /// nothing, and the decision becomes observable to a test (<c>OpenUrl</c> is a no-op without a WPF
+    /// <c>Application</c>, so a guard inside the body would assert nothing).</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanOpenRelease))]
+    private void OpenRelease(string? url) => OpenUrl(url!);
+
+    private static bool CanOpenRelease(string? url) => !string.IsNullOrWhiteSpace(url);
+
     [RelayCommand]
     private void OpenRepo() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}");
 

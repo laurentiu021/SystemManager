@@ -416,7 +416,9 @@ public sealed partial class DriveTarget : ObservableObject
     public string MediaType { get; init; } = "";
     public string BusType { get; init; } = "";
 
-    public string Display => string.IsNullOrWhiteSpace(Label) || Label == Letter
-        ? $"{Letter}  ·  {SizeGB:F0} GB {FileSystem}"
-        : $"{Letter}  {Label}  ·  {SizeGB:F0} GB {FileSystem}";
+    // Display was removed here (#2100). It composed "C:  Windows  ·  476 GB NTFS" and nothing bound it: the
+    // chkdsk row builds that line from Letter, Label, SizeGB and FileSystem individually, so the property was
+    // a second, unused way to say the same thing — kept alive only by five tests that read it exactly the way
+    // the missing binding would have. EveryFieldTheChkdskPickerFillsIn_IsShownInItsRow covers what the row
+    // actually shows.
 }

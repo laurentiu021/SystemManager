@@ -59,6 +59,8 @@
                 <Button Content="Add Folder" Command="{Binding AddFolderCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                 <Button Content="Shred All" Command="{Binding ShredAllCommand}"
+                        AutomationProperties.Name="Shred all listed items"
+                        AutomationProperties.HelpText="Overwrites every item in the list so it cannot be recovered, then deletes it. This cannot be undone, not even from the Recycle Bin. SysManager asks you to confirm first."
                         Style="{StaticResource DangerButton}" Margin="0,0,8,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}"
                         Style="{StaticResource GhostButton}"

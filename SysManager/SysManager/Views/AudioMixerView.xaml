@@ -35,8 +35,11 @@
                 <Button Content="Apply" Command="{Binding ApplyPresetCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
                         AutomationProperties.Name="Apply selected preset"/>
+                <!-- DangerButton: DeletePreset rewrites the presets file on disk immediately, so there is
+                     no undo, and it was the quietest control in its own row. The confirmation dialog was
+                     already there; what was missing is the signal BEFORE the click. -->
                 <Button Content="Delete" Command="{Binding DeletePresetCommand}"
-                        Style="{StaticResource GhostButton}" Margin="0,0,16,0"
+                        Style="{StaticResource DangerButton}" Margin="0,0,16,0"
                         AutomationProperties.Name="Delete selected preset"/>
 
                 <TextBox Text="{Binding NewPresetName, UpdateSourceTrigger=PropertyChanged}"

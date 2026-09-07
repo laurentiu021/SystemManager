@@ -480,6 +480,68 @@
                 </Setter>
             </Style>
 
+            <!--
+                DangerGhostButton — a destructive action that repeats once per row.
+
+                DangerButton is the app's mark for "this destroys something", and every use of it is a
+                single deliberate control in a toolbar or a footer. Process Manager's kill button is the
+                first destructive control that appears once per DataGrid row, and this machine lists ~470
+                processes: filling all of them red reads as "this whole screen is dangerous" rather than
+                "this button is", which spends the loudest signal in the app on nothing.
+
+                So: red outline and red glyph at rest, and a solid red fill on hover or keyboard focus, at
+                which point it looks exactly like every other destructive action. Restraint in the grid,
+                the full signal the moment the pointer is on it.
+
+                It exists as a NAMED style because the treatment was previously a GhostButton carrying
+                Foreground="{DynamicResource Danger}" inline — the only place in the app marking danger
+                that way, so one meaning had two mechanisms and the next row-level destructive button had
+                to guess. A style can be reused and can be found; a pair of attributes in a DataTemplate
+                cannot.
+            -->
+            <Style x:Key="DangerGhostButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusMd}"
+                                    Padding="{TemplateBinding Padding}"
+                                    BorderThickness="1" BorderBrush="{DynamicResource Danger}">
+                                <ContentPresenter x:Name="Cp" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Danger}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextOnDanger}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Danger}"/>
+                                    <Setter TargetName="Bd" Property="Opacity" Value="0.75"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextOnDanger}"/>
+                                </Trigger>
+                                <!-- Keyboard focus gets the same fill as hover: a red outline alone is not a
+                                     visible focus indicator against a red border. -->
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Danger}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextOnDanger}"/>
+                                </Trigger>
+                                <!-- Disabled greys out to a neutral border rather than fading red, for the
+                                     same reason DangerButton owns its own template: a faded red on a light
+                                     preset is both illegible and still alarming. -->
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Border1}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                    <Setter Property="Opacity" Value="0.6"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- ============================================================ -->
             <!-- ToggleSwitch — purple pill toggle (on/off/locked)             -->
             <!-- ============================================================ -->

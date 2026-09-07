@@ -1545,6 +1545,100 @@ public partial class ArchitectureTests
     private static partial Regex SearchableFieldSpan();
 
     /// <summary>
+    /// A button whose command destroys something at click time must look like it.
+    /// </summary>
+    /// <remarks>
+    /// #2008 recorded two attempts at making this mechanical and both fail against the real code, so this
+    /// is neither of them. Matching LABELS catches "Deselect All", "Remove duplicates" and "Save current as
+    /// preset" — precision far too low to gate a build. Matching CONFIRMATION DIALOGS looks better, since a
+    /// command calling <c>DialogService.Instance.Confirm</c> reads like the app marking its own irreversible
+    /// actions, but of 25 buttons bound to a confirming command only 3 wear a destructive style and the
+    /// other 22 are right as they are: <c>SelectAll</c> confirms because selecting everything is a big
+    /// action, <c>ApplyChanges</c> because it writes staged edits. Confirmation means "this is significant",
+    /// not "this destroys something".
+    /// <para>What IS mechanical is a list. Each row names a command that performs an immediate,
+    /// unrecoverable change and the style its button must carry — data, not a heuristic, so it has no
+    /// false positives to argue with, and adding the next one is one row. It catches the regression
+    /// #1615 actually was: Shortcut Cleaner's "Delete Selected" quietly wearing <c>SecondaryButton</c>.</para>
+    /// <para>The staged-edit commands are deliberately absent, and that is the judgement the list encodes.
+    /// <c>DeleteVariableCommand</c> looks like the strongest candidate in the app and is not one: it removes
+    /// a row from an in-memory collection and says "deleted for real when you press Apply", with Discard
+    /// able to undo it. #2008's own table lists it as an immediate deletion, which is wrong by the exemption
+    /// the same issue defines for <c>RemoveDirectory</c>, <c>RemoveEntry</c>, <c>RemoveItem</c> and
+    /// <c>RemoveTarget</c>.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryImmediatelyDestructiveButton_WearsADestructiveStyle()
+    {
+        // command → (view, acceptable styles). Two styles are acceptable because one destructive control per
+        // screen and one per DataGrid row are different problems: ~470 filled red buttons in a process list
+        // read as "this screen is dangerous" rather than "this button is".
+        (string Command, string View, string[] Styles)[] destructive =
+        [
+            ("DeletePresetCommand", "AudioMixerView.xaml", ["DangerButton"]),
+            ("KillProcessCommand", "ProcessManagerView.xaml", ["DangerButton", "DangerGhostButton"]),
+            ("DeleteSelectedCommand", "ShortcutCleanerView.xaml", ["DangerButton"]),
+            ("ShredAllCommand", "FileShredderView.xaml", ["DangerButton"]),
+            ("UninstallSelectedCommand", "UninstallerView.xaml", ["DangerButton"]),
+        ];
+
+        var appDir = FindAppProjectDir();
+        var viewsDir = Path.Combine(appDir, "Views");
+        var offenders = new List<string>();
+        var checkedButtons = 0;
+
+        // Every style named above must exist. Found by mutating this guard: deleting DangerGhostButton
+        // outright leaves the app BUILDING and this test GREEN, because a StaticResource inside a
+        // DataTemplate is resolved when the template is realised, not at compile time — so the reference
+        // survives compilation and throws only when the user opens that tab. The compiler is no protection
+        // here, which makes checking the definition part of the job rather than belt-and-braces.
+        var appXaml = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
+        foreach (var style in destructive.SelectMany(d => d.Styles).Distinct(StringComparer.Ordinal))
+            if (!appXaml.Contains($"x:Key=\"{style}\"", StringComparison.Ordinal))
+                offenders.Add($"App.xaml — the style {style} is referenced but no longer defined; "
+                              + "the tab using it will throw when it opens");
+
+        foreach (var (command, view, styles) in destructive)
+        {
+            var path = Path.Combine(viewsDir, view);
+            Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
+
+            var xaml = Collapse(File.ReadAllText(path));
+            var at = xaml.IndexOf(command, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                offenders.Add($"{view} — nothing binds {command} any more; update this guard or the view");
+                continue;
+            }
+
+            checkedButtons++;
+
+            // The button's own element: back to the nearest "<Button" and forward to its close. A window
+            // around the command reference would reach into the neighbouring control's style.
+            var open = xaml.LastIndexOf("<Button", at, StringComparison.Ordinal);
+            var close = xaml.IndexOf('>', at);
+            if (open < 0 || close < 0)
+            {
+                offenders.Add($"{view} — could not read the element around {command}");
+                continue;
+            }
+
+            var element = xaml[open..close];
+            if (!styles.Any(style => element.Contains($"StaticResource {style}", StringComparison.Ordinal)))
+                offenders.Add($"{view} — {command} is on a button styled as neither "
+                              + string.Join(" nor ", styles));
+        }
+
+        Assert.True(checkedButtons == destructive.Length,
+            $"only {checkedButtons} of {destructive.Length} listed commands were found in their views");
+
+        Assert.True(offenders.Count == 0,
+            "These buttons perform an immediate, unrecoverable change while looking like an ordinary "
+            + "action, so the only warning the user gets arrives after the click:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// Each list that can filter itself down to nothing must have something to say when it does.
     /// </summary>
     /// <remarks>

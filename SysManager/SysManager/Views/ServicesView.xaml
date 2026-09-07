@@ -287,7 +287,7 @@
             <ProgressBar AutomationProperties.Name="Service list progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
         </DockPanel>
     </Grid>
 </UserControl>

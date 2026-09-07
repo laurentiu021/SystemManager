@@ -111,7 +111,7 @@
                              VerticalAlignment="Center" Margin="0,0,12,0" IsIndeterminate="True"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
-                           Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                           Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <!-- Content is bound via an inner TextBlock: StringFormat on a ContentControl's
                          Content (an int) isn't applied without ContentStringFormat on the template, so

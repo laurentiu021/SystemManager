@@ -102,7 +102,13 @@
                         <TextBlock Text="SFC result:" DockPanel.Dock="Left" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <!-- Announced: an SFC repair runs for many minutes with the window in the
+                             background, and this is the sentence that says how it ended. The "SFC /scannow
+                             is running" label above is static text, so a live region could not announce it
+                             even if it carried one — what changes there is visibility, not content. Start
+                             and progress are covered by the status line at the bottom of the tab. -->
                         <TextBlock Text="{Binding SfcVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   AutomationProperties.LiveSetting="Polite"
                                    Foreground="{Binding SfcVerdictColorHex, Converter={StaticResource HexBrush}}"/>
                     </DockPanel>
                 </Border>
@@ -124,6 +130,7 @@
                                    Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="{Binding DismVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   AutomationProperties.LiveSetting="Polite"
                                    Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
                     </DockPanel>
                 </Border>
@@ -140,7 +147,7 @@
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Value="{Binding Progress}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
         </DockPanel>
     </Grid>
 </UserControl>

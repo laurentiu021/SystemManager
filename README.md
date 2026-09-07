@@ -199,6 +199,17 @@ not a tooltip for the same reason: a tooltip needs a mouse hovering over the con
 someone who tabbed to it, and it is not reliably handed to assistive software. It is kept to those six
 deliberately. An explanation on every button in the app would make it slower to navigate, not clearer.
 
+Every tab also reads out what it is doing as it works. The line at the bottom of each tab — "Scanning…",
+"Removed 1,204 files", "Scan complete." — is announced on all 52 tabs that have one, as are the SFC and DISM
+results when a system repair finishes and Deep Cleanup's scan and clean summaries. Announcements are polite,
+so they wait their turn rather than cutting across whatever you are reading.
+
+What is deliberately *not* announced matters just as much. Deep Cleanup's percentage changes several times a
+second and its current folder changes per directory; the repair ETAs tick continuously. Reading those aloud
+would talk over you without telling you anything, so each tab announces the coarsest line it has and leaves
+the fast-moving numbers on screen only. Both halves of that are enforced by a test, because a change that
+announced everything would look like an improvement.
+
 ### Context Menu Manager
 Manage Windows Explorer right-click entries — toggle them on or off without
 deleting anything (uses the standard `LegacyDisable` registry mechanism):

@@ -4858,6 +4858,187 @@ public partial class ArchitectureTests
             + $"row:\n  " + string.Join("\n  ", sameOnEveryRow));
     }
 
+    /// <summary>
+    /// Every tab's status line is a live region, and the fast-moving readouts beside them are not.
+    /// </summary>
+    /// <remarks>
+    /// 52 tabs report what a long operation is doing through one <c>TextBlock</c> bound to
+    /// <c>StatusMessage</c>, and none of them was announced: WCAG 4.1.3 asks that a status change which
+    /// never receives focus still reach assistive software, and <c>AutomationProperties.LiveSetting</c> is
+    /// the channel. Before this guard the whole project had two occurrences of it, both the same element —
+    /// the toast overlay in <c>MainWindow.xaml</c> — so a screen-reader user started a DISM repair or a drive
+    /// scan and heard nothing at all: no progress, no completion, no verdict.
+    /// <para><b>Both directions, and the negative half is the important one.</b> Over-announcing is the real
+    /// hazard here. Deep Cleanup's percentage changes several times a second and its current-folder path
+    /// changes per directory; marking those live would produce continuous speech instead of information, and
+    /// a well-meaning sweep that added the attribute everywhere would look like an improvement. So the fast
+    /// readouts are asserted to stay silent, by name.</para>
+    /// <para><b>The style pair is checked too.</b> 49 of the status lines are <c>Caption</c> and two are
+    /// <c>Subtle</c>, so the announced style exists twice — <c>StatusLine</c> and <c>SubtleStatusLine</c> —
+    /// because neither look changes here. A fix applied to one and forgotten on the other is otherwise
+    /// invisible: every view would still reference a style that exists, and this guard would still pass.</para>
+    /// <para>Parsed as XML rather than matched as text, like the progress-bar guard above: the status line in
+    /// Duplicate Finder declares its style as a nested <c>&lt;TextBlock.Style&gt;</c> element to add a tooltip
+    /// trigger, and a string scan for a <c>Style="…"</c> attribute reports that one as unstyled.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryStatusLine_IsALiveRegion_AndTheFastReadoutsAreNot()
+    {
+        // Announced status lines resolve to one of these, or carry the attribute outright.
+        string[] announcedStyles = ["{StaticResource StatusLine}", "{StaticResource SubtleStatusLine}"];
+
+        // Fast-changing readouts that sit BESIDE a coarser line which is announced instead. A live region on
+        // any of these is speech, not information. Named individually because each is a judgement, not a
+        // pattern — and every one has to be found, or the rule below covers nothing.
+        //
+        // The rule is "announce the coarsest line each tab has", which is why this list is not simply
+        // "anything that updates often". Deep Cleanup's percentage and folder path can be silent because
+        // ScanStatusLine says the same thing more slowly; the SFC and DISM ETAs can be silent because the
+        // verdict and the tab's status line cover start and finish. Duplicate Finder's status line updates
+        // five times a second and carries a file name, and is announced anyway — it is the only line that tab
+        // has, so silencing it would leave a screen-reader user with nothing at all, including no "Scan
+        // complete." Splitting a coarse line out of it, the way Deep Cleanup already does, is #2143 — and
+        // when that lands, the per-file property belongs in this list.
+        string[] mustStaySilent =
+        [
+            "ScanProgress", "LargeCurrentFolder", "SfcEtaText", "DismEtaText",
+        ];
+
+        var appDir = FindAppProjectDir();
+        var viewsDir = Path.Combine(appDir, "Views");
+        var files = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly).ToArray();
+
+        var silent = new List<string>();
+        var overAnnounced = new List<string>();
+        var statusLinesSeen = 0;
+        var fastReadoutsFound = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var path in files)
+        {
+            var root = System.Xml.Linq.XDocument.Load(path).Root;
+            if (root is null) continue;
+            var file = Path.GetFileName(path);
+
+            foreach (var block in root.DescendantsAndSelf().Where(e => e.Name.LocalName == "TextBlock"))
+            {
+                // The bound property, compared EXACTLY. A substring test looked equivalent and is not:
+                // "SfcEtaTextRenamed".Contains("SfcEtaText") is true, so renaming a binding satisfied the
+                // floor below while the guard no longer watched anything. Found by mutating exactly that.
+                var bound = BoundProperty(Attr(block, "Text"));
+                if (bound is null) continue;
+
+                if (bound.Equals("StatusMessage", StringComparison.Ordinal))
+                {
+                    statusLinesSeen++;
+                    if (!IsAnnounced(block, announcedStyles))
+                        silent.Add($"{file} — the StatusMessage line is not a live region, so nothing this "
+                                   + "tab reports while it works is announced");
+                }
+
+                if (mustStaySilent.Contains(bound, StringComparer.Ordinal))
+                {
+                    fastReadoutsFound.Add(bound);
+                    if (IsAnnounced(block, announcedStyles))
+                        overAnnounced.Add($"{file} — {bound} is a live region. It changes many times per "
+                                          + "operation, so announcing it means continuous speech; only the "
+                                          + "coarse status line and the final verdict are announced.");
+                }
+            }
+        }
+
+        // Both shared styles must exist AND both must carry the setting. Checking only one would let the
+        // pair drift apart while every view still referenced a style that resolves.
+        var appXaml = XamlCode(Path.Combine(appDir, "App.xaml"));
+        foreach (var style in (string[])["StatusLine", "SubtleStatusLine"])
+        {
+            var at = appXaml.IndexOf($"x:Key=\"{style}\"", StringComparison.Ordinal);
+            if (at < 0)
+            {
+                silent.Add($"App.xaml — the {style} style is gone, so the views referencing it will throw "
+                           + "when they open");
+                continue;
+            }
+
+            var end = appXaml.IndexOf("</Style>", at, StringComparison.Ordinal);
+            var body = end < 0 ? appXaml[at..] : appXaml[at..end];
+            if (!body.Contains("AutomationProperties.LiveSetting", StringComparison.Ordinal))
+                silent.Add($"App.xaml — {style} no longer sets AutomationProperties.LiveSetting, so every "
+                           + "view using it went quiet at once while still resolving");
+        }
+
+        // Vacuity floor: 52 status lines, one per tab that has one, measured. Raise it when a tab gains one;
+        // a drop means the Text attribute read stopped matching and the whole sweep found nothing.
+        Assert.True(statusLinesSeen >= 50,
+            $"only {statusLinesSeen} StatusMessage lines were found across {files.Length} views, out of 52 "
+            + "measured — the element read is out of date, so a pass proves nothing.");
+
+        // The negative half needs its own floor, and it is the half most likely to go quiet: an absence
+        // check over a population it never found reports success. Every name in mustStaySilent has to be
+        // located, or the list has drifted from the views and the over-announcing rule covers nothing.
+        var missingFast = mustStaySilent.Except(fastReadoutsFound, StringComparer.Ordinal).ToList();
+        Assert.True(missingFast.Count == 0,
+            "these fast-changing bindings were not found in any view, so asserting they are not live regions "
+            + "proves nothing. They were renamed or removed — update the list with the current names rather "
+            + $"than deleting the rows:\n  " + string.Join("\n  ", missingFast));
+
+        Assert.True(silent.Count == 0,
+            "a status line that is not a live region is invisible to a screen reader: the user starts a scan "
+            + "or a repair and is told nothing, including that it finished:\n  " + string.Join("\n  ", silent));
+
+        Assert.True(overAnnounced.Count == 0,
+            "these are fast-changing readouts and must NOT be live regions — announcing them talks over the "
+            + "user instead of informing them:\n  " + string.Join("\n  ", overAnnounced));
+    }
+
+    /// <summary>An attribute's value by local name, ignoring the namespace prefix.</summary>
+    private static string? Attr(System.Xml.Linq.XElement element, string localName) =>
+        element.Attributes().FirstOrDefault(a => a.Name.LocalName == localName)?.Value;
+
+    /// <summary>
+    /// The last segment of the property path a <c>{Binding …}</c> attribute value reads, or null when the
+    /// value is not a binding.
+    /// </summary>
+    /// <remarks>
+    /// Exact rather than substring, which is the whole reason this exists: a caller testing
+    /// <c>value.Contains("SfcEtaText")</c> also matches <c>SfcEtaTextRenamed</c>, so renaming a binding kept
+    /// a vacuity floor satisfied while the guard silently stopped watching anything. The LAST segment, so a
+    /// compound path like <c>DataContext.StatusMessage</c> still resolves to the property.
+    /// </remarks>
+    private static string? BoundProperty(string? attributeValue)
+    {
+        if (attributeValue is null) return null;
+
+        var at = attributeValue.IndexOf("{Binding ", StringComparison.Ordinal);
+        if (at < 0) return null;
+
+        var rest = attributeValue[(at + "{Binding ".Length)..].TrimStart();
+        var end = rest.IndexOfAny([',', '}', ' ']);
+        var path = (end < 0 ? rest : rest[..end]).Trim();
+        if (path.Length == 0) return null;
+
+        var dot = path.LastIndexOf('.');
+        return dot < 0 ? path : path[(dot + 1)..];
+    }
+
+    /// <summary>
+    /// True when this element is a live region: by the attribute, by an announced style reference, or by a
+    /// nested <c>&lt;TextBlock.Style&gt;</c> based on one.
+    /// </summary>
+    private static bool IsAnnounced(System.Xml.Linq.XElement element, string[] announcedStyles)
+    {
+        if (Attr(element, "AutomationProperties.LiveSetting") is not null) return true;
+
+        var style = Attr(element, "Style");
+        if (style is not null && announcedStyles.Contains(style, StringComparer.Ordinal)) return true;
+
+        // The nested form: <TextBlock.Style><Style BasedOn="{StaticResource StatusLine}">…
+        return element.Elements()
+            .Where(e => e.Name.LocalName.EndsWith(".Style", StringComparison.Ordinal))
+            .SelectMany(e => e.Elements().Where(s => s.Name.LocalName == "Style"))
+            .Any(s => Attr(s, "BasedOn") is { } basedOn
+                      && announcedStyles.Contains(basedOn, StringComparer.Ordinal));
+    }
+
     /// <summary>A style that suppresses the focus indicator outright.</summary>
     [GeneratedRegex(@"FocusVisualStyle""\s*Value=""\{x:Null\}""", RegexOptions.Compiled)]
     private static partial Regex NulledFocusVisual();

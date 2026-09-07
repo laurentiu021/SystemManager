@@ -95,7 +95,7 @@
         </WrapPanel>
 
         <!-- Status -->
-        <TextBlock Grid.Row="5" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+        <TextBlock Grid.Row="5" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"
                    VerticalAlignment="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"/>
     </Grid>
 </UserControl>

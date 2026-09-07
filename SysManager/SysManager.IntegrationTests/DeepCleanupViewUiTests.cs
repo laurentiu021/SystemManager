@@ -17,7 +17,7 @@ public class DeepCleanupViewUiTests
     {
         StaHelper.Run(() =>
         {
-            EnsureAppResources();
+            AppResources.Ensure();
             var view = new DeepCleanupView();
             Assert.NotNull(view);
         });
@@ -28,7 +28,7 @@ public class DeepCleanupViewUiTests
     {
         StaHelper.Run(() =>
         {
-            EnsureAppResources();
+            AppResources.Ensure();
             var view = new DeepCleanupView { DataContext = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()) };
             Assert.IsType<DeepCleanupViewModel>(view.DataContext);
         });
@@ -89,21 +89,4 @@ public class DeepCleanupViewUiTests
         Assert.True(deepIdx == cleanupIdx + 1, "Deep cleanup should follow Cleanup in nav");
     }
 
-    private static void EnsureAppResources()
-    {
-        if (System.Windows.Application.Current == null)
-        {
-            try
-            {
-                var _ = new System.Windows.Application
-                {
-                    ShutdownMode = ShutdownMode.OnExplicitShutdown
-                };
-                var uri = new Uri("pack://application:,,,/SysManager;component/App.xaml", UriKind.Absolute);
-                var dict = (ResourceDictionary)Application.LoadComponent(uri);
-                System.Windows.Application.Current?.Resources.MergedDictionaries.Add(dict);
-            }
-            catch { }
-        }
-    }
 }

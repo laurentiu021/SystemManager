@@ -1600,18 +1600,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryImmediatelyDestructiveButton_WearsADestructiveStyle()
     {
-        // command → (view, acceptable styles). Two styles are acceptable because one destructive control per
-        // screen and one per DataGrid row are different problems: ~470 filled red buttons in a process list
-        // read as "this screen is dangerous" rather than "this button is".
-        (string Command, string View, string[] Styles)[] destructive =
-        [
-            ("DeletePresetCommand", "AudioMixerView.xaml", ["DangerButton"]),
-            ("KillProcessCommand", "ProcessManagerView.xaml", ["DangerButton", "DangerGhostButton"]),
-            ("DeleteSelectedCommand", "ShortcutCleanerView.xaml", ["DangerButton"]),
-            ("ShredAllCommand", "FileShredderView.xaml", ["DangerButton"]),
-            ("UninstallSelectedCommand", "UninstallerView.xaml", ["DangerButton"]),
-        ];
-
+        var destructive = DestructiveControls;
         var appDir = FindAppProjectDir();
         var viewsDir = Path.Combine(appDir, "Views");
         var offenders = new List<string>();
@@ -1633,7 +1622,7 @@ public partial class ArchitectureTests
             var path = Path.Combine(viewsDir, view);
             Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
 
-            var xaml = Collapse(File.ReadAllText(path));
+            var xaml = XamlCode(path);
             var at = xaml.IndexOf(command, StringComparison.Ordinal);
             if (at < 0)
             {
@@ -1643,17 +1632,12 @@ public partial class ArchitectureTests
 
             checkedButtons++;
 
-            // The button's own element: back to the nearest "<Button" and forward to its close. A window
-            // around the command reference would reach into the neighbouring control's style.
-            var open = xaml.LastIndexOf("<Button", at, StringComparison.Ordinal);
-            var close = xaml.IndexOf('>', at);
-            if (open < 0 || close < 0)
+            if (ReadButtonElement(xaml, view, command, out var element) is { } problem)
             {
-                offenders.Add($"{view} — could not read the element around {command}");
+                offenders.Add(problem);
                 continue;
             }
 
-            var element = xaml[open..close];
             if (!styles.Any(style => element.Contains($"StaticResource {style}", StringComparison.Ordinal)))
                 offenders.Add($"{view} — {command} is on a button styled as neither "
                               + string.Join(" nor ", styles));
@@ -1667,6 +1651,171 @@ public partial class ArchitectureTests
             + "action, so the only warning the user gets arrives after the click:\n  "
             + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// The commands that perform an immediate, unrecoverable change: the command, the view it lives in, and
+    /// the styles its button is allowed to wear.
+    /// </summary>
+    /// <remarks>
+    /// Two styles are acceptable for one row because a destructive control per screen and one per DataGrid
+    /// row are different problems: ~470 filled red buttons in a process list read as "this screen is
+    /// dangerous" rather than "this button is".
+    /// <para>Shared by <see cref="EveryImmediatelyDestructiveButton_WearsADestructiveStyle"/> and
+    /// <see cref="EveryImmediatelyDestructiveButton_ExplainsWhatItWillDo"/>. One list, because two guards
+    /// each holding a private copy of "which controls are destructive" is how one of them silently stops
+    /// covering a control the other still checks — and the count each asserts would still look right.</para>
+    /// </remarks>
+    private static (string Command, string View, string[] Styles)[] DestructiveControls =>
+    [
+        ("DeletePresetCommand", "AudioMixerView.xaml", ["DangerButton"]),
+        ("KillProcessCommand", "ProcessManagerView.xaml", ["DangerButton", "DangerGhostButton"]),
+        ("DeleteSelectedCommand", "ShortcutCleanerView.xaml", ["DangerButton"]),
+        ("ShredAllCommand", "FileShredderView.xaml", ["DangerButton"]),
+        ("UninstallSelectedCommand", "UninstallerView.xaml", ["DangerButton"]),
+    ];
+
+    /// <summary>
+    /// A view's XAML as a single line with its comments removed — the form these guards match against.
+    /// </summary>
+    /// <remarks>
+    /// Stripping comments FIRST is load-bearing, not tidiness. <c>AdminBanner.xaml</c>'s own comment explains
+    /// that "IsElevated and RelaunchAsAdminCommand are bound from the ambient DataContext", so a search for
+    /// the command name lands in that prose, finds no <c>&lt;Button</c> before it, and reports the element as
+    /// unreadable — which is how the banner check failed the first time it ran. The other three views escape
+    /// it only because none of them happens to name its command in a comment, so the trap was latent there
+    /// too. Every guard that reads a control out of a view goes through here.
+    /// </remarks>
+    private static string XamlCode(string path) =>
+        Collapse(XmlComment().Replace(File.ReadAllText(path), string.Empty));
+
+    /// <summary>
+    /// Reads the <c>&lt;Button …&gt;</c> element that binds <paramref name="command"/> out of collapsed XAML.
+    /// Returns null on success, or the offender line to report.
+    /// </summary>
+    /// <remarks>
+    /// Back to the nearest <c>&lt;Button</c> and forward to its close. A fixed window around the command
+    /// reference would reach into the neighbouring control's attributes and report them as this button's.
+    /// <para>Shared so the two guards over <see cref="DestructiveControls"/> cannot disagree about which
+    /// span they are reading. One of them passing on a different element than the other checks would be
+    /// invisible: both would report a clean run over the same list.</para>
+    /// </remarks>
+    private static string? ReadButtonElement(string collapsedXaml, string view, string command, out string element)
+    {
+        element = "";
+        var at = collapsedXaml.IndexOf(command, StringComparison.Ordinal);
+        if (at < 0) return $"{view} — nothing binds {command} any more; update this guard or the view";
+
+        var open = collapsedXaml.LastIndexOf("<Button", at, StringComparison.Ordinal);
+        var close = collapsedXaml.IndexOf('>', at);
+        if (open < 0 || close < 0) return $"{view} — could not read the element around {command}";
+
+        element = collapsedXaml[open..close];
+        return null;
+    }
+
+    /// <summary>
+    /// Every immediately destructive button says what it will do, through
+    /// <c>AutomationProperties.HelpText</c>.
+    /// </summary>
+    /// <remarks>
+    /// A red button and a confirmation dialog are both sighted affordances. To someone using Narrator, the
+    /// red is not there and the dialog arrives only after the button has been activated — so the moment to
+    /// explain the consequence is while focus is on the control, and <c>HelpText</c> is the channel UIA
+    /// provides for exactly that. It is announced after the name, so the name stays short and the
+    /// consequence goes here.
+    /// <para><b>Not <c>ToolTip</c>.</b> The app reached for it twice on these very controls
+    /// (<c>ProcessManagerView</c>'s "Kill process", <c>DiskAnalyzerView</c>'s "Show in Explorer"), and a
+    /// tooltip is mouse-hover-only — it is not reliably surfaced to a screen reader, and a keyboard user
+    /// tabbing onto the button never triggers it at all.</para>
+    /// <para><b>Deliberately narrow.</b> HelpText makes navigation more verbose, so this covers the five
+    /// controls that do something the user cannot take back, not the ~461 buttons in the app. The list is
+    /// the same one <see cref="EveryImmediatelyDestructiveButton_WearsADestructiveStyle"/> uses, so a
+    /// control added there is required to explain itself here without anyone remembering to.</para>
+    /// <para>The text is required to be prose rather than merely present: an empty or one-word HelpText
+    /// satisfies "has the attribute" while telling a user nothing, and that is the shape this would rot
+    /// into. Markup extensions are stripped before the words are counted, so a HelpText that one day
+    /// interpolates a value the way these buttons' names already do still has to carry the sentence
+    /// explaining the consequence, rather than passing on the binding alone.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryImmediatelyDestructiveButton_ExplainsWhatItWillDo()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var offenders = new List<string>();
+        var checkedButtons = 0;
+
+        foreach (var (command, view, _) in DestructiveControls)
+        {
+            var path = Path.Combine(viewsDir, view);
+            Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
+
+            var xaml = XamlCode(path);
+            if (ReadButtonElement(xaml, view, command, out var element) is { } unreadable)
+            {
+                offenders.Add(unreadable);
+                continue;
+            }
+
+            checkedButtons++;
+
+            if (HelpTextProblem(element, $"{view} — {command}") is { } problem)
+                offenders.Add(problem);
+        }
+
+        // Vacuity floor, in two parts because one of them is not enough. Comparing against the list's own
+        // length catches an element read that stopped matching — but it moves WITH the list, so deleting a
+        // row would satisfy it while quietly dropping a control from both guards. The absolute count is what
+        // catches that. It is a measured population: raise it when a destructive control is added, and only
+        // lower it with a reason, never to make a red go away.
+        Assert.True(DestructiveControls.Length >= 5,
+            $"the shared destructive-control list is down to {DestructiveControls.Length} rows, from 5 "
+            + "measured. A control was removed from it rather than from the app, which silently narrows both "
+            + "guards over this list.");
+
+        Assert.True(checkedButtons == DestructiveControls.Length,
+            $"only {checkedButtons} of {DestructiveControls.Length} listed commands were read out of their "
+            + "views, so this guard checked less than it claims");
+
+        Assert.True(offenders.Count == 0,
+            "These controls do something the user cannot undo, and a screen reader has no way to learn that "
+            + "before activating them:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>How many words of literal text a HelpText needs before it can explain a consequence.</summary>
+    private const int MinimumHelpTextWords = 6;
+
+    /// <summary>
+    /// Checks one element's <c>AutomationProperties.HelpText</c>: present, and carrying enough literal words
+    /// to be an explanation. Returns null when it is fine, or the offender line to report.
+    /// </summary>
+    /// <remarks>
+    /// One definition of the rule, used by both the destructive buttons and the elevation banner, so the
+    /// standard cannot be stricter in one place than the other — which would be invisible, since each guard
+    /// would still report a clean run.
+    /// </remarks>
+    private static string? HelpTextProblem(string element, string what)
+    {
+        var help = HelpTextAttribute().Match(element);
+        if (!help.Success)
+            return $"{what} has no AutomationProperties.HelpText, so a screen reader announces its name and "
+                   + "nothing about what activating it does";
+
+        // Markup extensions do not count as the explanation: strip them, then count what is left.
+        var prose = BindingExpression().Replace(help.Groups["text"].Value, " ");
+        var words = prose.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return words.Length < MinimumHelpTextWords
+            ? $"{what}'s HelpText is {words.Length} words of literal text, which cannot explain a "
+              + $"consequence; at least {MinimumHelpTextWords} are expected"
+            : null;
+    }
+
+    /// <summary>An <c>AutomationProperties.HelpText</c> attribute and its value.</summary>
+    [GeneratedRegex(@"AutomationProperties\.HelpText=""(?<text>[^""]*)""", RegexOptions.Compiled)]
+    private static partial Regex HelpTextAttribute();
+
+    /// <summary>A <c>{Binding …}</c> markup extension, braces included.</summary>
+    [GeneratedRegex(@"\{[^}]*\}", RegexOptions.Compiled)]
+    private static partial Regex BindingExpression();
 
     /// <summary>
     /// Every view that lists a collection must have something to say when that collection is empty.
@@ -1980,6 +2129,18 @@ public partial class ArchitectureTests
             + "once rather than thirty times, and so the stripe's negative margin cannot drift away from the "
             + "padding it depends on:\n  " + string.Join("\n  ", handRolled));
 
+        // One control means one place to get the announcement right, so assert it IS right rather than
+        // trusting that having extracted it was enough. Its "Run as administrator" button is the elevation
+        // control on every privileged tab: without HelpText a screen-reader user is told the button's name on
+        // thirty pages and never that pressing it closes SysManager and opens it again elevated.
+        var banner = XamlCode(Path.Combine(viewsDir, "AdminBanner.xaml"));
+        var unreadable = ReadButtonElement(banner, "AdminBanner.xaml", "RelaunchAsAdminCommand", out var button);
+        Assert.True(unreadable is null, unreadable);
+
+        var bannerHelp = HelpTextProblem(button, "AdminBanner.xaml — the \"Run as administrator\" button");
+        Assert.True(bannerHelp is null,
+            bannerHelp + ". Every privileged tab renders this one control, so the gap is on all of them.");
+
         var hosts = Directory
             .EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly)
             .Where(f => Path.GetFileName(f) != "AdminBanner.xaml")
@@ -1988,10 +2149,11 @@ public partial class ArchitectureTests
             .Where(n => n.Length > 0)
             .ToList();
 
-        // Vacuity floor: 30 views host the banner. A collapse means the element match broke and the
-        // view-model assertion below is checking nothing.
+        // Vacuity floor: 31 views host the banner, re-measured today — it was 30 when this was written and a
+        // host has been added since, which is exactly why the number is stated rather than remembered. A
+        // collapse means the element match broke and the view-model assertion below is checking nothing.
         Assert.True(hosts.Count >= 28,
-            $"only {hosts.Count} views were found hosting <v:AdminBanner/>, out of 30 measured — the element "
+            $"only {hosts.Count} views were found hosting <v:AdminBanner/>, out of 31 measured — the element "
             + "match is out of date, so a pass proves nothing.");
 
         var missing = new List<string>();

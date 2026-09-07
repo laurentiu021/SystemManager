@@ -254,6 +254,7 @@
                                          destructive action the moment the pointer is on it. -->
                                     <Button Content="X" ToolTip="Kill process"
                                             AutomationProperties.Name="{Binding Name, StringFormat='Kill {0}'}"
+                                            AutomationProperties.HelpText="Ends this program straight away, losing anything it has not saved. SysManager asks you to confirm first."
                                             Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             Style="{StaticResource DangerGhostButton}" Padding="6,2" FontSize="12"/>

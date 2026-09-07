@@ -186,6 +186,19 @@ one colour disappears against at least one of those. With two, one line always c
 underneath. Measured across all 12 themes, the outline stays at 4.5:1 or better against every surface
 it is drawn on — above the 3:1 WCAG asks of a non-text indicator.
 
+### Screen readers
+The six controls that do something you cannot take back explain themselves, not just their label. Landing on
+Shred All announces the button and then "Overwrites every item in the list so it cannot be recovered, then
+deletes it. This cannot be undone, not even from the Recycle Bin." The same goes for Uninstall selected, Kill
+process, Delete preset, Delete selected shortcuts, and the Run as administrator button that appears on the 31
+pages needing elevation.
+
+Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
+who cannot see the screen — the dialog arrives after the button has already been pressed. The explanation is
+not a tooltip for the same reason: a tooltip needs a mouse hovering over the control, so it never reaches
+someone who tabbed to it, and it is not reliably handed to assistive software. It is kept to those six
+deliberately. An explanation on every button in the app would make it slower to navigate, not clearer.
+
 ### Context Menu Manager
 Manage Windows Explorer right-click entries — toggle them on or off without
 deleting anything (uses the standard `LegacyDisable` registry mechanism):

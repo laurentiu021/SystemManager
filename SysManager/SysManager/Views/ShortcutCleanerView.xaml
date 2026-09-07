@@ -43,6 +43,7 @@
                      tells the user which one is the dangerous one before they read the label. -->
                 <Button Content="Delete Selected" Command="{Binding DeleteSelectedCommand}"
                         AutomationProperties.Name="Delete selected shortcuts"
+                        AutomationProperties.HelpText="Deletes the ticked broken shortcuts — the ones whose target is already missing. They go to the Recycle Bin unless you turn that option off."
                         Style="{StaticResource DangerButton}" Margin="0,0,8,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}"
                         AutomationProperties.Name="Cancel scan"

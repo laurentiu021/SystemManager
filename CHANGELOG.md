@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.18] - 2026-09-07
+
+The drive list in System Health now tells you how much room is left on each drive. It already knew — it just
+never said, and free space is the thing that decides whether a disk check can run at all.
+
+### Fixed
+- **The disk-check picker shows free space.** Each drive row listed its total size, file system and drive
+  type, but not how much of it was still free, so choosing a drive to check meant guessing or going to look
+  it up elsewhere. The number was already being read from the drive and carried all the way to the row;
+  nothing displayed it. It now sits between the size and the file system, in the same muted style as the rest
+  of the line: `476 GB · 163 GB free · NTFS · SSD NVMe`.
+
 ## [1.76.17] - 2026-09-07
 
 Some perfectly healthy apps were being listed as "Not responding" in Processes — Films & TV and Settings did

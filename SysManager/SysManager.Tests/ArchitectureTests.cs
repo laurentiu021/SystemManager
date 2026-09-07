@@ -1545,6 +1545,97 @@ public partial class ArchitectureTests
     private static partial Regex SearchableFieldSpan();
 
     /// <summary>
+    /// Every field the chkdsk picker fills in per drive must be shown by the row that lists that drive.
+    /// </summary>
+    /// <remarks>
+    /// <c>FreeGB</c> was queried from the drive, rounded, carried through <c>FixedDriveService</c> and
+    /// assigned onto every <c>DriveTarget</c> — and read by nothing. It is the number that decides whether a
+    /// disk check can run at all, so its absence was a missing capability rather than dead weight, and
+    /// neither the compiler nor the view-model tests could see it: a test reads the property exactly the way
+    /// the missing binding would have.
+    /// <para>Read from the initialiser rather than restated here, so a tenth field added to the row is
+    /// covered without touching this guard. Scope is deliberately what the code POPULATES per drive: a
+    /// computed convenience with no consumer is the same defect family but a different judgement call —
+    /// delete or bind — and does not belong to an automatic rule.</para>
+    /// <para>What it checks is that the view BINDS the field, not that the field is rendered as text. A
+    /// field bound only to a <c>Visibility</c> still passes, and deliberately: driving whether something
+    /// appears is a real use of the value, and demanding a text binding would fail a field whose whole job
+    /// is to gate a section. The defect this pins is the field nothing reads at all.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryFieldTheChkdskPickerFillsIn_IsShownInItsRow()
+    {
+        var appDir = FindAppProjectDir();
+        var source = File.ReadAllText(Path.Combine(appDir, "ViewModels", "SystemHealthViewModel.cs"));
+        var xaml = ChkdskRowTemplate(File.ReadAllText(Path.Combine(appDir, "Views", "SystemHealthView.xaml")));
+
+        var initialiser = DriveTargetInitialiser().Match(source);
+        Assert.True(initialiser.Success,
+            "could not find the DriveTarget initialiser in SystemHealthViewModel — if the picker was "
+            + "rewritten, update this guard rather than deleting it");
+
+        // Matched per assignment rather than split on commas: one initialiser value is
+        // string.Equals(d.Letter, "C:", StringComparison.OrdinalIgnoreCase), whose own argument commas
+        // split into fragments, and "StringComparison.OrdinalIgnoreCase)" starts with a capital, so a
+        // name-shaped filter accepts it as a field and the guard reports a property that does not exist.
+        var assigned = InitialiserAssignment().Matches(initialiser.Groups[1].Value)
+            .Select(m => m.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(assigned.Count >= 7,
+            $"parsed only {assigned.Count} assigned fields from the DriveTarget initialiser — the regex is "
+            + "matching something narrower than the whole block");
+
+        var unshown = assigned
+            .Where(name => !xaml.Contains($"Binding {name}", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(unshown.Count == 0,
+            "the chkdsk picker fills these in for every drive and its row shows none of them, so the work "
+            + "is done and thrown away:\n  " + string.Join("\n  ", unshown));
+    }
+
+    /// <summary>The <c>new DriveTarget { … }</c> initialiser, capturing its assignments.</summary>
+    [GeneratedRegex(@"new DriveTarget\s*\{([^}]+)\}", RegexOptions.Compiled)]
+    private static partial Regex DriveTargetInitialiser();
+
+    /// <summary>One <c>Property =</c> assignment at the start of a line inside an object initialiser.</summary>
+    [GeneratedRegex(@"^\s*(\w+)\s*=", RegexOptions.Compiled | RegexOptions.Multiline)]
+    private static partial Regex InitialiserAssignment();
+
+    /// <summary>
+    /// Just the chkdsk picker's row template, from its <c>ItemsSource</c> to its closing tag.
+    /// </summary>
+    /// <remarks>
+    /// Searching the whole view is what a file-wide <c>Contains</c> does, and it is not the same question.
+    /// <c>MediaType</c> is bound three times in this view: once in the picker row, and twice in the
+    /// unrelated SMART sections above it — so removing the picker's binding left the guard green, satisfied
+    /// by a part of the screen the drive rows have nothing to do with. Scoping to the template is what makes
+    /// the answer be about the row.
+    /// </remarks>
+    private static string ChkdskRowTemplate(string xaml)
+    {
+        const string opens = "ItemsSource=\"{Binding ChkdskDrives}\"";
+        const string closes = "</ItemsControl>";
+
+        var start = xaml.IndexOf(opens, StringComparison.Ordinal);
+        Assert.True(start >= 0,
+            "could not find the chkdsk picker's ItemsControl in SystemHealthView — if the picker was "
+            + "rewritten, update this guard rather than deleting it");
+
+        var end = xaml.IndexOf(closes, start, StringComparison.Ordinal);
+        Assert.True(end > start, "the chkdsk ItemsControl is never closed — the view does not parse");
+
+        var slice = xaml[start..end];
+        // A slice that shrank to almost nothing would make every field look unbound, which reads as a real
+        // finding rather than as a broken marker.
+        Assert.True(slice.Length > 400,
+            $"the chkdsk row template sliced to {slice.Length} characters — too short to be the row");
+        return slice;
+    }
+
+    /// <summary>
     /// Every commit prefix the release workflow treats as releasing must be offered by the PR template,
     /// and every prefix the template offers must be one the project actually recognises.
     /// <para>The template's "Type of change" list omitted <c>test:</c> and <c>refactor:</c> — 41 and 15

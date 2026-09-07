@@ -366,6 +366,10 @@
                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                     <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                                                     <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                    <!-- Free space decides whether a check can run at all, and it was the one
+                                                         thing the picker computed and never showed. -->
+                                                    <TextBlock Text="{Binding FreeGB, StringFormat={}{0:F0} GB free}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                                                     <TextBlock Text="{Binding FileSystem}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                                                     <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" FontSize="12"
                                                                Visibility="{Binding MediaType, Converter={StaticResource FlexVis}}"/>

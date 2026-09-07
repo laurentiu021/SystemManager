@@ -36,6 +36,17 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     [ObservableProperty] private IReadOnlyList<ReleaseNote> _releaseHistory = [];
 
+    /// <summary>
+    /// True when the release-notes fetch finished without producing anything, so the section can say why
+    /// instead of promising live notes and rendering nothing.
+    /// </summary>
+    /// <remarks>
+    /// Not <c>ReleaseHistory.Count == 0</c>: that is also true before the first load, and the fetch is the
+    /// slowest thing on the tab. A count binding would greet the user with "could not reach GitHub" while
+    /// the request was still in flight.
+    /// </remarks>
+    [ObservableProperty] private bool _historyUnavailable;
+
     [ObservableProperty] private string _currentVersion = UpdateService.CurrentVersion.ToString(3);
     [ObservableProperty] private string _buildDate = BuildStamp();
 
@@ -306,9 +317,22 @@ public sealed partial class AboutViewModel : ViewModelBase
             }).ToList();
 
             ReleaseHistory = notes;
+            HistoryUnavailable = notes.Count == 0;
         }
-        catch (HttpRequestException ex) { Log.Debug("Release history load skipped (network): {Error}", ex.Message); }
-        catch (TaskCanceledException ex) { Log.Debug("Release history load timed out: {Error}", ex.Message); }
+        // Both failures leave ReleaseHistory as it was — empty, on a first load — so the flag is what
+        // separates "GitHub could not be reached" from "there is nothing to show". Without it the section
+        // promised release notes "pulled live from GitHub" and then rendered nothing at all, which reads as
+        // the feature being broken rather than the connection being down.
+        catch (HttpRequestException ex)
+        {
+            Log.Debug("Release history load skipped (network): {Error}", ex.Message);
+            HistoryUnavailable = true;
+        }
+        catch (TaskCanceledException ex)
+        {
+            Log.Debug("Release history load timed out: {Error}", ex.Message);
+            HistoryUnavailable = true;
+        }
     }
 
     [RelayCommand]

@@ -36,6 +36,53 @@ public class DashboardViewModelTests
             new MemoryTestService());
     }
 
+    // ---------- empty states on the cards ----------
+
+    /// <summary>
+    /// A temperature read that comes back with nothing sets the flag the card explains itself with.
+    /// </summary>
+    /// <remarks>
+    /// The harness already models the machine this is for: <c>TemperatureService(skipHardwareInit: true)</c>
+    /// returns an empty list, which is exactly what a PC with no readable sensors produces — common, not
+    /// exotic, since most machines expose nothing without administrator. Before the flag the card rendered
+    /// as an empty box, which reads as a broken feature rather than an unavailable one.
+    /// <para>This is also why the assignment sits OUTSIDE the dispatcher hop in
+    /// <c>RefreshTemperaturesAsync</c>: inside it, the whole update is skipped when
+    /// <c>Application.Current</c> is null — every unit test — and the state would be assertable nowhere.</para>
+    /// </remarks>
+    [Fact]
+    public async Task RefreshTemperatures_WithNoReadableSensors_SaysSo()
+    {
+        var vm = NewVm();
+        Assert.False(vm.TemperaturesUnavailable);   // nothing read yet
+
+        await vm.RefreshTemperaturesCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.Temperatures);
+        Assert.True(vm.TemperaturesUnavailable);
+    }
+
+    /// <summary>
+    /// Neither empty-state flag is set before anything has been read.
+    /// </summary>
+    /// <remarks>
+    /// The half a count binding gets wrong. Both cards would otherwise announce their empty state during
+    /// the first load — "no sensors could be read" while the read is in flight, "nothing needs attention"
+    /// before the scan has looked at anything.
+    /// <para>The health flag's behaviour is asserted in
+    /// <c>SysManager.IntegrationTests.DashboardHealthFlagTests</c> rather than here, because reaching it
+    /// means running the real health scan: <c>LoadHealthScoreAsync</c> is not a command, only the init path
+    /// calls it, and that path also starts the polling loops and hits WMI. This class's own summary says
+    /// where that belongs.</para>
+    /// </remarks>
+    [Fact]
+    public void Constructor_EmptyStateFlags_StartFalse()
+    {
+        var vm = NewVm();
+        Assert.False(vm.TemperaturesUnavailable);
+        Assert.False(vm.HealthHasNothingToImprove);
+    }
+
     // ---------- construction & defaults ----------
 
     [Fact]

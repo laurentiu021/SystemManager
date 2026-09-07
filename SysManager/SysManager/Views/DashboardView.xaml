@@ -251,6 +251,15 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <!-- Nothing to recommend, which is GOOD NEWS — so a statement, not an instruction,
+                             the same shape the Tune-up card above already uses. Gated on the flag because
+                             HealthResult is null until the scan finishes: a count binding would fail, and a
+                             failed binding leaves Visibility at its default, announcing "nothing needs
+                             attention" before anything had been checked. -->
+                        <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Text="Nothing needs attention right now."
+                                   Visibility="{Binding HealthHasNothingToImprove, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -403,6 +412,14 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <!-- Nothing readable. The lighter Subtle line rather than the EmptyState control: these
+                         cards sit in a tight grid and a centred glyph block would push the row. Gated on the
+                         view-model flag, not on Temperatures.Count, so it cannot flash while the first read
+                         is still in flight. -->
+                    <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,14,0,0"
+                               Text="No sensors could be read on this PC. Not every machine exposes them — running as administrator reaches more."
+                               Visibility="{Binding TemperaturesUnavailable, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
             </Border>
 

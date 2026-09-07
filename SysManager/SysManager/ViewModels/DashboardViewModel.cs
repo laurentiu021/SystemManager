@@ -63,6 +63,27 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private bool _hasHealthScore;
     [ObservableProperty] private bool _isHealthScoreLoading;
 
+    /// <summary>
+    /// True once the health scan has run and found nothing worth recommending — good news, and something
+    /// the card should say rather than leaving its heading over empty space.
+    /// </summary>
+    /// <remarks>
+    /// A flag rather than <c>HealthResult.Recommendations.Count</c>, because before the scan finishes
+    /// <c>HealthResult</c> is null: the count binding fails, and a failed binding leaves Visibility at its
+    /// default, so the card would announce "nothing needs attention" before anything had been checked.
+    /// </remarks>
+    [ObservableProperty] private bool _healthHasNothingToImprove;
+
+    /// <summary>
+    /// True once a temperature read has completed and returned no sensors at all.
+    /// </summary>
+    /// <remarks>
+    /// Common rather than exotic: most machines expose nothing readable without administrator, and some
+    /// expose nothing either way. The card previously rendered as an empty box, which reads as a broken
+    /// feature. Set after the read so it cannot flash while the first one is still in flight.
+    /// </remarks>
+    [ObservableProperty] private bool _temperaturesUnavailable;
+
     // ── Temperatures ─────────────────────────────────────────────────────
     public BulkObservableCollection<TemperatureReading> Temperatures { get; } = new();
 
@@ -368,6 +389,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private async Task RefreshTemperaturesAsync()
     {
         var readings = await _temps.ReadAllAsync();
+        // Set OUTSIDE the dispatcher hop, deliberately. A plain bool needs no UI thread — WPF marshals
+        // property-change notifications itself, and it is collection mutations that must be on it — while
+        // inside the hop it would be skipped entirely whenever Application.Current is null, which is every
+        // unit test. The state would then be assertable nowhere, which is how the elevation branches in
+        // #2102 ended up unpinned.
+        TemperaturesUnavailable = readings.Count == 0;
+
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             Temperatures.ReplaceWith(readings));
     }
@@ -704,6 +732,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             HealthResult = await _healthScore.ComputeAsync();
             HasHealthScore = true;
+            HealthHasNothingToImprove = HealthResult.Recommendations.Count == 0;
         }
         catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException)
         {

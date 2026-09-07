@@ -169,6 +169,17 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <!-- Every target removed. Reachable through the per-row remove button: the list starts from
+                     the shipped presets, so an empty one means the user emptied it, and the copy names both
+                     ways back — the Add target box below and the preset picker above. Bound to the count
+                     because presets load before the view is ever shown, so there is no loading window in
+                     which this could be wrong. -->
+                <v:EmptyState Glyph="&#xE968;"
+                              Title="No targets to watch"
+                              Message="Add a host below, or choose a preset above to load a set of them."
+                              Visibility="{Binding Shared.Targets.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                     <TextBox Text="{Binding Shared.NewTargetHost, UpdateSourceTrigger=PropertyChanged}" Width="240"
                              AutomationProperties.Name="New target host"/>

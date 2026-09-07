@@ -70,39 +70,9 @@
         </StackPanel>
 
         <!-- Admin banner (only Advanced tweaks need it) -->
-        <Border Grid.Row="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                BorderThickness="1" CornerRadius="12" Padding="12,8" Margin="28,12,28,0"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
-            <DockPanel>
-                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
-                        AutomationProperties.Name="Run as administrator"/>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
-                    <TextBlock Text="Essential tweaks apply as-is. Advanced (machine-wide) tweaks need administrator."
-                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <!-- Elevation banner: elevated (golden admin contract, matches AppBlockerView) -->
-        <Border Grid.Row="2" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
-                CornerRadius="12" Padding="12,8" Margin="28,12,28,0"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <Grid>
-                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
-                        Margin="-12,-8,0,-8"/>
-                <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width
-                     along its orientation, so this banner's TextWrapping was inert and clipped on a
-                     narrow window (#1807). The stripe Border above is untouched. -->
-                <DockPanel Margin="6,0,0,0">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Top" DockPanel.Dock="Left"/>
-                    <TextBlock Text="Running as administrator — both Essential and Advanced (machine-wide) tweaks can be applied."
-                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                </DockPanel>
-            </Grid>
-        </Border>
+        <v:AdminBanner Grid.Row="2" Margin="28,12,28,0"
+                       NotElevatedMessage="Essential tweaks apply as-is. Advanced (machine-wide) tweaks need administrator."
+                       ElevatedMessage="Running as administrator — both Essential and Advanced (machine-wide) tweaks can be applied."/>
 
         <!-- Tweaks: Essential + Advanced -->
         <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="28,16,28,0">

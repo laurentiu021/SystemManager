@@ -27,36 +27,9 @@
 
         <!-- Elevation banner: not elevated. OneDrive removal works without admin; the Edge
              portion writes machine policy + scheduled tasks, so it needs elevation. -->
-        <Border Grid.Row="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                BorderThickness="1" CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
-            <DockPanel>
-                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
-                        AutomationProperties.Name="Run as administrator"/>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
-                    <TextBlock Text="Disabling Edge needs administrator privileges. Removing OneDrive works without it."
-                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <!-- Elevation banner: elevated -->
-        <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
-                CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <Grid>
-                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
-                        Margin="-12,-8,0,-8"/>
-                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center"/>
-                    <TextBlock Text="Running as administrator — you can disable Edge and remove OneDrive."
-                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Grid>
-        </Border>
+        <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
+                       NotElevatedMessage="Disabling Edge needs administrator privileges. Removing OneDrive works without it."
+                       ElevatedMessage="Running as administrator — you can disable Edge and remove OneDrive."/>
 
         <!-- Content cards -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">

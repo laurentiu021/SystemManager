@@ -31,32 +31,9 @@
         </StackPanel>
 
         <!-- Elevation banner -->
-        <Border Grid.Row="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                BorderThickness="1" CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
-            <DockPanel>
-                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
-                        AutomationProperties.Name="Run as administrator"/>
-                <TextBlock Text="Purging the standby list requires administrator privileges."
-                           Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-            </DockPanel>
-        </Border>
-
-        <!-- Elevation banner: elevated (golden admin contract, matches AppBlockerView) -->
-        <Border Grid.Row="2" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
-                CornerRadius="12" Padding="12,8" Margin="0,0,0,12"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <Grid>
-                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
-                        Margin="-12,-8,0,-8"/>
-                <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center"/>
-                    <TextBlock Text="Running as administrator — you can purge the standby memory list."
-                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Grid>
-        </Border>
+        <v:AdminBanner Grid.Row="2" Margin="0,0,0,12"
+                       NotElevatedMessage="Purging the standby list requires administrator privileges."
+                       ElevatedMessage="Running as administrator — you can purge the standby memory list."/>
 
         <!-- Memory cards -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12">

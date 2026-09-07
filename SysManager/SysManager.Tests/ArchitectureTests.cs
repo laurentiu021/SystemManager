@@ -735,7 +735,11 @@ public partial class ArchitectureTests
         }
 
         // Guards the guard: with no banners parsed, "all geometries agree" is true of an empty set.
-        Assert.True(seen.Count >= 50,
+        // RE-MEASURED from 50 to 4 when the banner moved into AdminBanner.xaml. Four is the whole population
+        // now: the control's own pair, plus Uninstaller's hand-rolled pair, which stays hand-rolled because
+        // elevation REMOVES capability on that tab. The floor moved because the population did, not to make a
+        // failing assertion pass — it fired at 4 and that was correct.
+        Assert.True(seen.Count >= 4,
             $"only {seen.Count} elevation banners parsed out of Views/ — the markup this reads has changed "
             + "shape, so the check is passing on an empty set.");
 
@@ -836,10 +840,19 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// Messages inside a Border that is (a) shown WHEN elevated and (b) painted with the gold
-    /// WarningBgSubtle. Parsed rather than grepped: the not-elevated banner sits in the same
-    /// <c>Grid.Row</c> in every one of these views, so a file-wide text search would read the wrong one.
+    /// What each tab's gold, you-are-elevated banner says.
     /// </summary>
+    /// <remarks>
+    /// Read from the <c>ElevatedMessage</c> attribute of <c>&lt;v:AdminBanner/&gt;</c>. It used to walk into a
+    /// <c>Border</c> shown when elevated and painted <c>WarningBgSubtle</c>, because each of 30 views held its
+    /// own copy of that Border. Extracting the banner into one control emptied that parse — the guard fired
+    /// its own vacuity floor at 0, which is the floor doing its job — so it follows the copy to where the copy
+    /// now lives. The message is still per-tab; only its container moved.
+    /// <para>Uninstaller still hand-rolls its pair and is still read the old way: elevation REMOVES capability
+    /// there, so its banner is deliberately not the shared control and its wording is deliberately not
+    /// "Running as administrator — …". It is painted neutral rather than gold, so it does not enter this parse
+    /// at all.</para>
+    /// </remarks>
     private static List<string> GoldElevatedBannerMessages(string xamlText)
     {
         var found = new List<string>();
@@ -847,6 +860,14 @@ public partial class ArchitectureTests
         try { doc = System.Xml.Linq.XDocument.Parse(xamlText); }
         catch (System.Xml.XmlException) { return found; }
 
+        foreach (var banner in doc.Descendants().Where(e => e.Name.LocalName == "AdminBanner"))
+        {
+            var message = (string?)banner.Attribute("ElevatedMessage") ?? "";
+            if (message.Length == 0 || message.StartsWith('{')) continue;
+            found.Add(WhitespaceRun().Replace(message, " ").Trim());
+        }
+
+        // A view that still paints its own gold banner is read too, so hand-rolling one cannot dodge the rule.
         foreach (var border in doc.Descendants().Where(e => e.Name.LocalName == "Border"))
         {
             var visibility = (string?)border.Attribute("Visibility") ?? "";
@@ -1909,6 +1930,84 @@ public partial class ArchitectureTests
             else if (source[i] == '}' && --depth == 0) return source[open..(i + 1)];
         }
         return "";
+    }
+
+    /// <summary>
+    /// The elevation banner lives in one control. No view may hand-roll it, and every view that hosts it
+    /// must expose what the control binds.
+    /// </summary>
+    /// <remarks>
+    /// 30 views each carried TWO near-identical <c>Border</c> blocks — 60 in all — for one component: a grey
+    /// "not elevated" banner with the relaunch button, and a golden elevated one with a stripe whose
+    /// <c>Margin="-12,-8,0,-8"</c> is tied to the parent's <c>Padding="12,8"</c>. Extracted into
+    /// <c>Views/AdminBanner.xaml</c>. The project rule that a privileged page must explain WHY admin is
+    /// needed and WHAT unlocks was enforced by 30 hand-copies, so nothing stopped copy 31 from drifting.
+    /// <para><b>Two halves, because the control binds ambiently.</b> <c>IsElevated</c> and
+    /// <c>RelaunchAsAdminCommand</c> come from the host's DataContext rather than from properties — the
+    /// command name is identical at every call site, and passing one uniform value 30 times is the
+    /// duplication being removed. The cost is that a host whose view model lacks either member renders a
+    /// banner stuck in one state, or a button that does nothing, with no compiler error and no visible clue.
+    /// The second assertion is what makes that cost safe.</para>
+    /// </remarks>
+    [Fact]
+    public void TheElevationBanner_LivesInOneControl_AndItsHostsExposeWhatItBinds()
+    {
+        var appDir = FindAppProjectDir();
+        var viewsDir = Path.Combine(appDir, "Views");
+        var viewModelsDir = Path.Combine(appDir, "ViewModels");
+
+        var handRolled = Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .Where(f => File.ReadAllText(f).Contains("StaticResource AdminButton", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .Where(f => f != "AdminBanner.xaml")
+            .ToList();
+
+        Assert.True(handRolled.Count == 0,
+            "these views reference the AdminButton style directly instead of using <v:AdminBanner/>. The "
+            + "elevation banner is one control so that a contrast, glyph, focus or screen-reader fix lands "
+            + "once rather than thirty times, and so the stripe's negative margin cannot drift away from the "
+            + "padding it depends on:\n  " + string.Join("\n  ", handRolled));
+
+        var hosts = Directory
+            .EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly)
+            .Where(f => Path.GetFileName(f) != "AdminBanner.xaml")
+            .Where(f => File.ReadAllText(f).Contains("<v:AdminBanner", StringComparison.Ordinal))
+            .Select(f => Path.GetFileNameWithoutExtension(f) ?? "")
+            .Where(n => n.Length > 0)
+            .ToList();
+
+        // Vacuity floor: 30 views host the banner. A collapse means the element match broke and the
+        // view-model assertion below is checking nothing.
+        Assert.True(hosts.Count >= 28,
+            $"only {hosts.Count} views were found hosting <v:AdminBanner/>, out of 30 measured — the element "
+            + "match is out of date, so a pass proves nothing.");
+
+        var missing = new List<string>();
+        foreach (var host in hosts)
+        {
+            // ServicesView -> ServicesViewModel. A host whose name does not map is itself a finding.
+            var viewModel = Path.Combine(viewModelsDir,
+                host.EndsWith("View", StringComparison.Ordinal) ? host + "Model.cs" : host + "ViewModel.cs");
+            if (!File.Exists(viewModel))
+            {
+                missing.Add($"{host} — no matching view model at {Path.GetFileName(viewModel)}");
+                continue;
+            }
+
+            var source = File.ReadAllText(viewModel);
+            if (!source.Contains("IsElevated", StringComparison.Ordinal))
+                missing.Add($"{host} — its view model exposes no IsElevated, so the banner cannot switch state");
+            if (!source.Contains("RelaunchAsAdmin", StringComparison.Ordinal))
+                missing.Add($"{host} — its view model exposes no RelaunchAsAdminCommand, so the button does nothing");
+        }
+
+        Assert.True(missing.Count == 0,
+            "AdminBanner binds IsElevated and RelaunchAsAdminCommand from its host's DataContext, so a host "
+            + "missing either gets a banner stuck in one state or a dead button. Add the member, or do not "
+            + "host the banner:\n  " + string.Join("\n  ", missing));
     }
 
     /// <summary>A <c>DataGrid</c> or <c>ItemsControl</c> bound to a collection.</summary>
@@ -3424,10 +3523,14 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floor: the views carry hundreds of Fluent glyphs, so if the scan read nothing the
+        // Vacuity floor: the views carry many Fluent glyphs, so if the scan read nothing the
         // character-reference pattern is broken rather than the code being clean.
+        // RE-MEASURED from 100 to 80 after the elevation banner was extracted: 60 hand-copied banner blocks
+        // each carried a shield glyph, and one control now carries two. The population fell to 85 and the old
+        // floor fired — correctly. It is set below the new count for the same reason it was before, not to
+        // accommodate a failure.
         var glyphs = files.Sum(f => FluentGlyphReference().Matches(File.ReadAllText(f)).Count);
-        Assert.True(glyphs >= 100,
+        Assert.True(glyphs >= 80,
             $"Only {glyphs} icon glyphs were seen across the views — the guard is not reading them. "
             + "Fix this test rather than trusting its pass.");
 

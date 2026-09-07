@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.26] - 2026-09-07
+
+The "Run as administrator" bar at the top of thirty tabs was thirty separate copies of the same thing, and
+copies drift. It is now one component, so anything that improves it improves every tab at once. Two tabs get
+a visible fix out of that on their own.
+
+### Fixed
+- **The Purge Standby Memory tab's admin bar was missing its shield icon.** Every other tab had it. Now that
+  the bar is one component rather than thirty copies, it cannot be missing from one of them.
+- **A long explanation in the admin bar no longer gets cut off.** The text is laid out so it wraps onto a
+  second line instead of running past the edge of the bar, which matters most on the tabs with the longest
+  explanation and on narrower windows.
+
+### Changed
+- **The admin bar is one component instead of thirty copies.** Sixty blocks of near-identical markup for a
+  single element. The colours, corners, spacing and icon were already identical in all of them — but nothing
+  stopped the thirty-first from being different, and three already were. Each tab now supplies only its own
+  two sentences: why administrator rights are needed, and what becomes possible once granted.
+  The App Uninstaller keeps its own bar deliberately: it is the one tab where running as administrator takes
+  a capability *away*, so its wording and colour say the opposite of everywhere else.
+
+### Added
+- **A check that no tab can go back to hand-writing its own admin bar**, and a second one that a tab hosting
+  the bar actually provides what the bar needs — otherwise it could render stuck in one state, or show a
+  button that does nothing, with no error anywhere.
+
 ## [1.76.25] - 2026-09-07
 
 Six tabs told you a list was empty with one small grey sentence floating in a large blank card, while thirty

@@ -5742,6 +5742,15 @@ public partial class ArchitectureTests
     /// call site, because the durable waits are deliberately short. Literals carrying markup, path, or
     /// format-hole characters are ids, xpaths and templates, not copy. Matching is whitespace-normalised
     /// and case-insensitive because XAML wraps attribute values across lines.</para>
+    /// <para><b>Negative assertions too, and the accessible-name helpers with them.</b> The rule reads the
+    /// same in both directions, which is why one check covers both: a quoted string the app ships nowhere
+    /// makes <c>Assert.True(HasText(x))</c> permanently RED and <c>Assert.False(HasButtonWithName(x))</c>
+    /// permanently GREEN. The second is the worse of the two — a line that cannot fail, sitting in the suite
+    /// looking like coverage. <c>UninstallerUiTests</c> had one: it asserted the absence of "Relaunch as
+    /// administrator", a defence against an elevation-button naming drift that has since been fixed, so the
+    /// spelling existed nowhere and the assertion could never fire again. An accessible name is copy, so
+    /// <c>HasButtonWithName</c>, <c>FindButtonByAccessibleName</c> and
+    /// <c>FindButtonByAccessibleNamePrefix</c> are read exactly like the text helpers.</para>
     /// </remarks>
     [Fact]
     public void EveryUiTextAssertion_QuotesCopyTheAppActuallyShips()
@@ -5766,8 +5775,29 @@ public partial class ArchitectureTests
         Assert.True(rendered.Length >= 100,
             $"only {rendered.Length} app source files read — the guard is not seeing the app it thinks it is");
 
+        // Every accessible name or visible label the app exposes, as a whole value. Bindings are skipped —
+        // a name computed at runtime cannot be compared against a literal.
+        var views = Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .Select(f => Collapse(File.ReadAllText(f)))
+            .ToArray();
+
+        var exposedNames = views
+            .SelectMany(v => ExposedNameAttribute().Matches(v).Cast<Match>()
+                .Concat(StringFormatLiteral().Matches(v).Cast<Match>()))
+            .Select(m => Collapse(m.Groups["value"].Value))
+            .Where(v => v.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.True(exposedNames.Count >= 200,
+            $"only {exposedNames.Count} exposed names were read from the views — the attribute pattern is out "
+            + "of date, so the name assertions below would all report as missing.");
+
         var offenders = new List<string>();
         var assertionsChecked = 0;
+        var namesChecked = 0;
 
         foreach (var file in Directory.GetFiles(uiTestsDir, "*.cs"))
         {
@@ -5804,23 +5834,60 @@ public partial class ArchitectureTests
                     if (!rendered.Any(body => body.Contains(needle, StringComparison.OrdinalIgnoreCase)))
                         offenders.Add($"{Path.GetFileName(file)}:{i + 1}  \"{literal}\"");
                 }
+
+            }
+
+            // Accessible names are checked against WHOLE exposed values, not as substrings, and over the
+            // file ONCE rather than inside the statement loop above.
+            //
+            // Substring matching was the first attempt, copying the text half, and it passed on a name that
+            // ships nowhere: the words "relaunch as administrator" happen to sit inside an Environment
+            // Variables status message ("Some changes affect System variables — relaunch as administrator
+            // first."), which no control is ever NAMED. A name is an attribute value in full or it is not
+            // that name.
+            //
+            // Per-file rather than per-statement because the statement assembler re-reads the same lines from
+            // each starting offset, which counted 3 real call sites as 8 and would have set a floor on a
+            // number that means nothing.
+            var code = string.Join("\n", lines.Where(IsCode));
+            foreach (var call in ButtonNameCall().Matches(code).Cast<Match>())
+            {
+                var wanted = Collapse(call.Groups["name"].Value);
+                if (wanted.Length == 0) continue;
+                namesChecked++;
+
+                var matched = call.Value.Contains("Prefix(", StringComparison.Ordinal)
+                    ? exposedNames.Any(n => n.StartsWith(wanted, StringComparison.OrdinalIgnoreCase))
+                    : exposedNames.Contains(wanted);
+                if (!matched)
+                    offenders.Add($"{Path.GetFileName(file)}  accessible name \"{wanted}\" is exposed by no "
+                        + "control");
             }
         }
 
         // Vacuity floor: if the shape detection breaks, the loop above checks nothing and reports
         // success — the exact failure mode that let a permanently-red UI assertion survive weeks of
-        // green-looking runs. The floor is the ENUMERATED population at the time of writing (8 phrase
-        // literals across the UI tests, including both Uninstaller branches), not a number picked to make
-        // the assertion pass: it was set after listing them, and it caught the first two attempts at this
+        // green-looking runs. The floor is the ENUMERATED population, not a number picked to make the
+        // assertion pass: it was set after listing them, and it caught the first two attempts at this
         // guard, whose narrower shape detection saw only 3 and then 8-minus-the-ternary.
         Assert.True(assertionsChecked >= 7,
             $"only {assertionsChecked} UI text assertions parsed — the guard is measuring nothing, fix it "
             + "rather than trusting its pass");
 
+        // The same floor, for the accessible-name half — measured separately because its shape detection can
+        // break on its own. Three literal call sites exist (FunctionalUiTests, NetworkTabUiTests,
+        // UninstallerUiTests), counted by grep rather than trusted from the guard's own first number, which
+        // said 8 because the statement assembler re-read the same lines.
+        Assert.True(namesChecked >= 3,
+            $"only {namesChecked} accessible-name assertions parsed, out of 3 measured — the name-helper "
+            + "pattern is out of date, so a pass proves nothing about them.");
+
         Assert.True(offenders.Count == 0,
-            "these UI tests wait for wording the app does not ship anywhere, so they can never pass — "
-            + "the copy was almost certainly reworded without updating the assertion. Quote a stable "
-            + "FRAGMENT of the current text instead of a whole sentence:\n  "
+            "these UI tests reference wording or names the app does not ship, so they cannot do their job. A "
+            + "text wait that quotes reworded copy is permanently RED; an Assert.False on a name no control "
+            + "exposes is permanently GREEN, which is worse — a line that cannot fail, sitting in the suite "
+            + "looking like coverage. Quote a stable FRAGMENT of the current text, or the exact name a "
+            + "control actually exposes:\n  "
             + string.Join("\n  ", offenders));
     }
 
@@ -5880,16 +5947,45 @@ public partial class ArchitectureTests
     [GeneratedRegex("\"(?<text>[^\"]*)\"", RegexOptions.Compiled)]
     private static partial Regex QuotedLiteral();
 
-    /// <summary>A literal passed directly to one of the fixture's text-waiting helpers.</summary>
+    /// <summary>A literal passed directly to one of the fixture's text- or accessible-name helpers.</summary>
+    /// <remarks>
+    /// A text wait is deliberately a FRAGMENT of a sentence, so it is matched as a substring. Accessible
+    /// names are a different shape and get their own check — see <c>ButtonNameCall</c>.
+    /// </remarks>
     [GeneratedRegex(@"(?:HasText|HasTextInCurrentTab|WaitForText|WaitForTextInCurrentTab)\(\s*""(?<text>[^""]*)""",
                     RegexOptions.Compiled)]
     private static partial Regex TextWaitCall();
+
+    /// <summary>A literal accessible name passed to one of the fixture's button-by-name helpers.</summary>
+    [GeneratedRegex(@"(?:HasButtonWithName|FindButtonByAccessibleName|FindButtonByAccessibleNamePrefix)"
+                    + @"\(\s*""(?<name>[^""]*)""", RegexOptions.Compiled)]
+    private static partial Regex ButtonNameCall();
+
+    /// <summary>An accessible name or visible label the app exposes, as a WHOLE attribute value.</summary>
+    /// <remarks>
+    /// Values beginning with <c>{</c> are bindings — computed at runtime, so not comparable to a literal.
+    /// The literal copy inside a binding's <c>StringFormat</c> is collected separately by
+    /// <see cref="StringFormatLiteral"/>, because that IS the name a user hears.
+    /// </remarks>
+    [GeneratedRegex(@"(?:AutomationProperties\.Name|Content)=""(?<value>[^""{][^""]*)""", RegexOptions.Compiled)]
+    private static partial Regex ExposedNameAttribute();
+
+    /// <summary>
+    /// The literal template inside a bound name, e.g. <c>StringFormat='Mark or unmark this service: {0}'</c>.
+    /// </summary>
+    /// <remarks>
+    /// Missing this is what made the guard's first run report a false positive on a name the app genuinely
+    /// exposes: the Services row's flag button is named by a bound StringFormat, and the UI test matches its
+    /// PREFIX. Skipping every binding threw the template away with the runtime value.
+    /// </remarks>
+    [GeneratedRegex(@"StringFormat='(?<value>[^']+)'", RegexOptions.Compiled)]
+    private static partial Regex StringFormatLiteral();
 
     /// <summary>A local being assigned — its name is checked against the ones that reach a text wait.</summary>
     [GeneratedRegex(@"\bvar\s+(?<name>\w+)\s*=", RegexOptions.Compiled)]
     private static partial Regex CopyLocalAssignment();
 
-    /// <summary>A local (not a literal) handed to a text-waiting helper — that is what makes it copy.</summary>
+    /// <summary>A local (not a literal) handed to a text or name helper — that is what makes it copy.</summary>
     [GeneratedRegex(@"(?:HasText|HasTextInCurrentTab|WaitForText|WaitForTextInCurrentTab)\(\s*(?<name>[A-Za-z_]\w*)\s*[,)]",
                     RegexOptions.Compiled)]
     private static partial Regex TextWaitOnLocal();

@@ -30,8 +30,15 @@ public class UninstallerUiTests
         _fixture.GoToTab("nav-uninstaller");
 
         Assert.NotNull(_fixture.FindButtonById("btn-uninstaller-uninstall-selected"));
+
+        // One spelling, because there is now only one. This asserted "Relaunch as administrator" too, a
+        // defence against the naming drift that used to spread the elevation button's accessible name across
+        // five spellings. That drift is fixed and pinned by
+        // UiAutomationContractTests.EveryElevationButton_IsAnnouncedWithTheWordsPrintedOnIt, so the second
+        // assertion had become one that could never fail — a passing line proving nothing. The remaining one
+        // uses the name every elevation button in the app now carries, so it fails loudly if this tab ever
+        // grows one.
         Assert.False(_fixture.HasButtonWithName("Run as administrator"));
-        Assert.False(_fixture.HasButtonWithName("Relaunch as administrator"));
 
         var elevated = Helpers.AdminHelper.IsElevated();
         var expectedGuidance = elevated

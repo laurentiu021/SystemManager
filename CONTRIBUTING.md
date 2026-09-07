@@ -94,7 +94,7 @@ SysManager/
 │   ├── Helpers/               # small utilities, converters
 │   └── Resources/             # icons, generated assets
 ├── SysManager.Tests/          # xUnit unit tests
-├── SysManager.IntegrationTests/ # integration tests (local only, not CI)
+├── SysManager.IntegrationTests/ # integration tests (CI, non-blocking)
 └── SysManager.UITests/        # FlaUI UI-automation tests
 ```
 
@@ -169,10 +169,13 @@ dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.c
 dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
-The integration tests touch the live system, so CI only compile-checks them —
-run them locally, not over SSH/Remote PowerShell. CI runs the unit tests as the
-merge gate and the UI-automation tests as a separate, non-blocking job (they need
-the interactive desktop a `windows-latest` runner provides).
+The integration tests touch the live system, so run them locally rather than over
+SSH/Remote PowerShell. CI runs the unit tests as the merge gate, and both the
+integration and UI-automation suites as separate **non-blocking** jobs — a failure
+there raises a warning annotation and uploads its results, but does not block a
+merge, because a runner difference should not. Put a test that needs the live
+system in the integration project; put anything pure in `SysManager.Tests`, where
+it gates merges.
 
 Filter to one class while iterating (pass the project the class lives in —
 `PingMonitorServiceTests` is an integration test):

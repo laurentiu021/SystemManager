@@ -140,20 +140,40 @@ public class WingetServiceTests
         Assert.Single(result);
     }
 
+    /// <summary>
+    /// A line the runner emits reaches whoever subscribed through <see cref="WingetService"/>, and stops
+    /// reaching them once they unsubscribe.
+    /// </summary>
+    /// <remarks>
+    /// <c>WingetService.LineReceived</c> is a pass-through: its <c>add</c>/<c>remove</c> accessors forward
+    /// straight to the runner's event, holding no list of their own. That is the whole behaviour worth
+    /// pinning, because getting it wrong is silent — a service that swallowed the subscription would leave
+    /// the App Updates console permanently blank while every other assertion stayed green.
+    /// <para>This test asserted nothing at all before. It built a real <c>PowerShellRunner</c>, called
+    /// <c>GetField</c> and discarded the result, then ended with <c>_ = gotLine;</c> under a comment saying
+    /// the path "requires a running session". So it passed on every machine no matter what the service did.
+    /// With the runner behind a seam there is no session to need: raise the far end and watch the near
+    /// end.</para>
+    /// </remarks>
     [Fact]
-    public void WingetService_EventForwardingWorks()
+    public void WingetService_ForwardsRunnerLines_ToItsOwnSubscribers()
     {
-        var runner = new PowerShellRunner();
+        var runner = new RecordingRunner();
         var winget = new WingetService(runner);
-        var gotLine = false;
-        winget.LineReceived += _ => gotLine = true;
 
-        // Manually trigger via runner
-        runner.GetType().GetField("LineReceived", BindingFlags.NonPublic | BindingFlags.Instance);
-        // Use reflection-safe call: just invoke whether subscribers are wired
-        // by raising on runner through its own event chain via PowerShellLine.
-        // Simplest: invoke via a fake append through the PowerShell runner.
-        // (We accept that this path requires a running session; skip if not possible.)
-        _ = gotLine;
+        var received = new List<string>();
+        void Sink(PowerShellLine line) => received.Add(line.Text);
+        winget.LineReceived += Sink;
+
+        runner.RaiseLine(PowerShellLine.Output("Git.Git  2.47.0  2.48.0  winget"));
+
+        Assert.Equal(["Git.Git  2.47.0  2.48.0  winget"], received);
+
+        // Removing must reach the runner too — a remove accessor that forgot to forward would leak every
+        // subscriber for the life of the process.
+        winget.LineReceived -= Sink;
+        runner.RaiseLine(PowerShellLine.Output("this line has no subscriber left"));
+
+        Assert.Single(received);
     }
 }

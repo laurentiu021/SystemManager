@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -15,6 +16,8 @@ namespace SysManager.Tests;
 /// factories are injected so no live network stack or ETW session is touched; a fake source returns
 /// deterministic snapshots.
 /// </summary>
+// Serialized: the three PreciseRequested tests replace AdminHelper's elevation probe.
+[Collection("ProcessWideStatics")]
 public class BandwidthMonitorViewModelTests : IDisposable
 {
     private readonly string _dir;
@@ -145,32 +148,71 @@ public class BandwidthMonitorViewModelTests : IDisposable
         Assert.False(vm.HasAlert);
     }
 
+    /// <summary>
+    /// Not elevated, requesting precise mode is refused even though the ETW source reports available.
+    /// </summary>
+    /// <remarks>
+    /// The body used to sit inside <c>if (!vm.IsElevated)</c> with the comment "on the test agent
+    /// AdminHelper.IsElevated() is almost always false" — so on the elevated CI runner it asserted nothing.
+    /// The scope wraps <c>NewVm</c> because the view-model reads elevation once, in its constructor.
+    /// <para>Two guards stand between the request and an ETW session: the property-changed handler refuses
+    /// and returns, and <c>StartSource</c> checks again in case precise mode was already requested when the
+    /// source is rebuilt for another reason. The status message is what distinguishes them — reaching the
+    /// second guard would leave <c>PreciseMode</c> false but say nothing to the user, so asserting the
+    /// message pins the first one specifically.</para>
+    /// </remarks>
     [Fact]
     public void PreciseRequested_WhenNotElevated_DoesNotEnterPreciseMode()
     {
-        // The ETW factory would report available, but a non-elevated process must not use it.
-        // On the test agent AdminHelper.IsElevated() is almost always false; assert the guard holds
-        // by checking we stayed in connection mode after requesting precise.
+        using var notElevated = AdminHelper.ForceElevation(false);
         var vm = NewVm(etwFactory: () => new FakeSource(BandwidthMode.PreciseEtw, available: true));
-
-        if (!vm.IsElevated)
-        {
-            vm.PreciseRequested = true;
-            Assert.False(vm.PreciseMode); // guard kept us on the safe source
-        }
-    }
-
-    [Fact]
-    public void PreciseRequested_FallsBackToConnections_WhenEtwCannotStart()
-    {
-        // Model an elevated-but-ETW-unavailable host: the ETW source's Start() returns false, so the
-        // VM must fall back to the connection source rather than showing precise mode.
-        var vm = NewVm(etwFactory: () => new FakeSource(BandwidthMode.PreciseEtw, available: false));
+        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
 
         vm.PreciseRequested = true;
 
-        // Regardless of elevation, an unavailable ETW source can never flip PreciseMode on.
+        Assert.False(vm.PreciseMode);   // the guard kept us on the safe source
+        Assert.Contains("needs administrator", vm.ModeDescription, StringComparison.Ordinal);
+        Assert.Contains("Run as administrator", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Elevated but with an ETW session that will not start, the view-model falls back to connections.
+    /// </summary>
+    /// <remarks>
+    /// Pinning elevation is what makes this test its own name. Without it, a developer box refuses at the
+    /// elevation gate and never reaches the availability check, so the assertion passes for the wrong
+    /// reason and the fallback path is covered nowhere.
+    /// </remarks>
+    [Fact]
+    public void PreciseRequested_FallsBackToConnections_WhenEtwCannotStart()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var vm = NewVm(etwFactory: () => new FakeSource(BandwidthMode.PreciseEtw, available: false));
+        Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
+
+        vm.PreciseRequested = true;
+
         Assert.False(vm.PreciseMode);
+        Assert.Contains("needs administrator", vm.ModeDescription, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Elevated with a working ETW session, precise mode is what the user gets.
+    /// </summary>
+    /// <remarks>
+    /// The positive case had no test: both of the two above assert <c>PreciseMode</c> is false, so a
+    /// view-model that never entered precise mode at all would have satisfied the pair.
+    /// </remarks>
+    [Fact]
+    public void PreciseRequested_WhenElevatedAndEtwStarts_EntersPreciseMode()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var vm = NewVm(etwFactory: () => new FakeSource(BandwidthMode.PreciseEtw, available: true));
+
+        vm.PreciseRequested = true;
+
+        Assert.True(vm.PreciseMode);
+        Assert.Contains("live kernel trace", vm.ModeDescription, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -11,6 +11,8 @@ namespace SysManager.Tests;
 /// Tests for <see cref="AdminHelper"/>. These are safe to run on CI
 /// (non-admin) and on dev boxes (admin or not).
 /// </summary>
+// Serialized: the ForceElevation tests replace AdminHelper's elevation probe.
+[Collection("ProcessWideStatics")]
 public class AdminHelperTests
 {
     [Fact]
@@ -23,6 +25,66 @@ public class AdminHelperTests
         var a = AdminHelper.IsElevated();
         var b = AdminHelper.IsElevated();
         Assert.Equal(a, b);
+    }
+
+    /// <summary>
+    /// A forced scope decides what <see cref="AdminHelper.IsElevated"/> answers, and disposing it puts the
+    /// real probe back.
+    /// </summary>
+    /// <remarks>
+    /// This is the contract every other elevation test leans on, and nothing else can observe it. A leaked
+    /// override is invisible to the tests that use one, because each forces its own value first, and
+    /// invisible to the tests that compare a view-model against <c>IsElevated()</c>, because both sides read
+    /// the same leaked probe and therefore still agree. So the restore has to be asserted here or nowhere:
+    /// making <c>ElevationScope.Dispose</c> a no-op left the whole suite green until this test existed.
+    /// </remarks>
+    [Fact]
+    public void ForceElevation_DecidesTheAnswer_AndRestoresTheRealProbeOnDispose()
+    {
+        var real = AdminHelper.IsElevated();
+
+        using (AdminHelper.ForceElevation(true))
+            Assert.True(AdminHelper.IsElevated());
+
+        Assert.Equal(real, AdminHelper.IsElevated());
+
+        using (AdminHelper.ForceElevation(false))
+            Assert.False(AdminHelper.IsElevated());
+
+        Assert.Equal(real, AdminHelper.IsElevated());
+    }
+
+    /// <summary>
+    /// Nested scopes restore the ENCLOSING value, not the real probe.
+    /// </summary>
+    /// <remarks>
+    /// Restoring the default instead of the previous probe would look correct in every single-scope test and
+    /// break only where one forced test calls a helper that forces again — the case that is hardest to
+    /// debug, because the outer scope silently stops applying halfway through its own body.
+    /// <para>Both directions, and that is not symmetry for its own sake. With only the true-outside-false
+    /// nesting, a <c>Dispose</c> that restored the real probe would still satisfy the outer assertion on an
+    /// elevated host, so the test would pin the contract on a developer's box and pass vacuously on CI.
+    /// Running the mirror too means one of the two outer assertions contradicts the real probe whichever
+    /// way the host happens to be.</para>
+    /// </remarks>
+    [Fact]
+    public void ForceElevation_Nested_RestoresTheEnclosingScope_NotTheRealProbe()
+    {
+        using (AdminHelper.ForceElevation(true))
+        {
+            using (AdminHelper.ForceElevation(false))
+                Assert.False(AdminHelper.IsElevated());
+
+            Assert.True(AdminHelper.IsElevated());
+        }
+
+        using (AdminHelper.ForceElevation(false))
+        {
+            using (AdminHelper.ForceElevation(true))
+                Assert.True(AdminHelper.IsElevated());
+
+            Assert.False(AdminHelper.IsElevated());
+        }
     }
 
     [Fact]

@@ -18,6 +18,8 @@ namespace SysManager.Tests;
 /// real elevated session, the latter lives in <c>BandwidthFormat</c> and is tested in
 /// <see cref="BandwidthFormatTests"/>.</para>
 /// </summary>
+// Serialized: Start_WithoutAdministrator_RefusesCleanly replaces AdminHelper's elevation probe.
+[Collection("ProcessWideStatics")]
 public class EtwBandwidthSourceTests
 {
     /// <summary>
@@ -202,15 +204,23 @@ public class EtwBandwidthSourceTests
         Assert.Equal(7_000, row.TotalDownBytes);
     }
 
+    /// <summary>
+    /// Not elevated, <c>Start</c> refuses cleanly instead of throwing.
+    /// </summary>
+    /// <remarks>
+    /// The whole fallback story depends on it: the view-model reads <c>IsAvailable</c> and silently uses the
+    /// no-admin source instead.
+    /// <para>Used to open with <c>if (AdminHelper.IsElevated()) return;</c> and the comment "elevated CI
+    /// runner: the negative path is moot" — which was the clearest statement anywhere that this assertion ran
+    /// on no machine at all. <c>Start</c> asks <c>AdminHelper.IsElevated()</c> before it touches TraceEvent,
+    /// so forcing the probe is enough to reach the branch on any host.</para>
+    /// </remarks>
     [Fact]
     public void Start_WithoutAdministrator_RefusesCleanly()
     {
-        // The whole fallback story depends on this returning false rather than throwing: the ViewModel
-        // reads IsAvailable and silently uses the no-admin source instead.
+        using var notElevated = Helpers.AdminHelper.ForceElevation(false);
         var clock = new TestClock();
         using var src = new EtwBandwidthSource(clock);
-
-        if (Helpers.AdminHelper.IsElevated()) return;   // elevated CI runner: the negative path is moot
 
         Assert.False(src.Start());
         Assert.False(src.IsAvailable);

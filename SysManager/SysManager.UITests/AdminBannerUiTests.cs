@@ -5,12 +5,13 @@
 namespace SysManager.UITests;
 
 /// <summary>
-/// Regression net for the elevation-banner uniformity work: every tab that
-/// performs admin-gated actions must surface the shared "requires administrator"
-/// banner when the app is NOT elevated. The UI test host runs the app
-/// non-elevated, so the not-elevated banner variant is the one in view. If a
-/// future refactor drops the banner from one of these tabs (as had happened to
-/// six of them), the corresponding case fails by name.
+/// Regression net for the elevation-banner uniformity work: every tab that performs admin-gated actions
+/// must surface an elevation banner, and the variant shown must match the session. If a future refactor
+/// drops the banner from one of these tabs (as had happened to six of them), the corresponding case fails
+/// by name.
+/// <para>Which variant is in view depends on the host: the CI runner is elevated, a developer's box
+/// usually is not, and the app inherits the test process's integrity level because <c>AppFixture</c>
+/// launches it with <c>UseShellExecute = false</c>.</para>
 /// </summary>
 [Collection("App")]
 public class AdminBannerUiTests
@@ -34,20 +35,30 @@ public class AdminBannerUiTests
         new object[] { "nav-gaming-profile" },
     };
 
+    /// <summary>
+    /// Each privileged tab shows the elevation banner that matches the session it is running in.
+    /// </summary>
+    /// <remarks>
+    /// This used to open with <c>if (Helpers.AdminHelper.IsElevated()) return;</c> — a silent skip so an
+    /// elevated session would not report a false failure. On the CI runner, which IS elevated, that meant
+    /// all nine cases returned before reaching the tab: nine green rows asserting nothing. Every tab has
+    /// both banner variants, so there is nothing to skip; asserting the one that belongs to the current
+    /// integrity level covers both hosts, and it is the shape
+    /// <c>UninstallerUiTests.CurrentSession_ShowsMatchingGuidanceWithoutAdminRelaunchButton</c> already uses.
+    /// <para>The elevated variant carries "Running as administrator" in all nine views; only the clause
+    /// after it differs per tab, so the shared prefix is what to wait for.</para>
+    /// </remarks>
     [Theory]
     [MemberData(nameof(PrivilegedTabs))]
-    public void PrivilegedTab_ShowsAdminBanner_WhenNotElevated(string navId)
+    public void PrivilegedTab_ShowsTheElevationBannerForTheCurrentSession(string navId)
     {
-        // Guard: this assertion is only meaningful when the test host is NOT
-        // elevated (the banner's not-elevated variant is what carries the
-        // "requires administrator" phrase). If the suite is ever run elevated,
-        // skip rather than report a false failure.
-        if (Helpers.AdminHelper.IsElevated())
-            return;
-
         _fx.GoToTab(navId);
+
+        var elevated = Helpers.AdminHelper.IsElevated();
+        var expected = elevated ? "Running as administrator" : "requires administrator";
         Assert.True(
-            _fx.HasAdminBanner(),
-            $"Privileged tab '{navId}' did not show the 'requires administrator' banner when not elevated.");
+            _fx.HasText(expected),
+            $"Privileged tab '{navId}' showed no elevation banner for the current integrity level "
+            + $"(elevated: {elevated}). Expected to find: \"{expected}\".");
     }
 }

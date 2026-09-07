@@ -183,6 +183,11 @@ public partial class ArchitectureTests
     /// reading the source also catches a class that touches the static inside a helper, and the same
     /// approach is already used for the destructive-op logging guard in ActivityLogServiceTests.
     /// </para>
+    /// <para>
+    /// <c>AdminHelper.ForceElevation</c> was added as a row the same day the seam itself was: it replaces
+    /// the elevation probe for the whole process, so a class that forgets the attribute would answer
+    /// "not elevated" to a test in the parallel group that is asserting the elevated branch.
+    /// </para>
     /// </remarks>
     [Fact]
     public void ProcessWideStaticUsers_AreInTheSerializedCollection()
@@ -194,6 +199,7 @@ public partial class ArchitectureTests
             ("DialogService.Instance =", "DialogService.Instance"),
             ("new DialogAnswer(", "DialogService.Instance (via the DialogAnswer helper)"),
             ("OperationLockService.Instance", "OperationLockService.Instance"),
+            ("AdminHelper.ForceElevation(", "AdminHelper.ElevationProbe"),
         ];
 
         var testDir = FindTestSourceDirectory();
@@ -520,6 +526,72 @@ public partial class ArchitectureTests
             + "A bounded Task.WhenAny(work, Task.Delay(...)) timeout is fine and is not matched here:\n  "
             + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// No test may skip itself because the session happens to be elevated.
+    /// </summary>
+    /// <remarks>
+    /// Sixteen cases across all three test projects opened with a variant of
+    /// <c>if (AdminHelper.IsElevated()) return;</c>, added so an elevated host would not report a false
+    /// failure. The CI runner IS elevated and the main workstation cannot run the suite at all, so the
+    /// elevation gate on SFC, DISM, Windows Update, precise bandwidth mode and the nine privileged tabs
+    /// asserted nothing anywhere. <c>EtwBandwidthSourceTests</c> even said so in a comment: "elevated CI
+    /// runner: the negative path is moot".
+    /// <para>The replacement is <c>AdminHelper.ForceElevation(bool)</c>, which pins the answer for the
+    /// scope's lifetime and restores it on dispose, so the negative branch is reachable on any host. A test
+    /// that genuinely has both behaviours to describe asserts BOTH, the way
+    /// <c>UninstallerUiTests.CurrentSession_ShowsMatchingGuidanceWithoutAdminRelaunchButton</c> picks the
+    /// expected copy from the current integrity level instead of returning early.</para>
+    /// <para>Comment lines are stripped first, because two of the rewritten tests quote the forbidden line
+    /// in their own remarks to explain what they replaced — matching those would fail the guard on the files
+    /// that got it right. Whitespace is collapsed because the original offender spread the <c>if</c> and its
+    /// <c>return</c> across two lines, which a per-line scan cannot see. A positive control asserts the
+    /// pattern still matches a known-bad string, so a regex that silently stops matching cannot read as
+    /// health.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTestSkipsItselfBecauseTheSessionIsElevated()
+    {
+        // The needle must not appear literally in this file, which is one of the files scanned.
+        var skip = ElevationSelfSkip();
+        Assert.Matches(skip, "if (Helpers.AdminHelper." + "IsElevated()) return;");
+        Assert.Matches(skip, "if (!vm." + "IsElevated) return;");
+        Assert.DoesNotMatch(skip, "var elevated = AdminHelper." + "IsElevated();");
+
+        var root = FindRepoRoot();
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var dir = Path.Combine(root, "SysManager", project);
+            Assert.True(Directory.Exists(dir), $"{dir} not found — this guard would pass vacuously");
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                if (Path.GetFileName(file) == "ArchitectureTests.cs") continue;   // this file, prose and all
+
+                scanned++;
+                var code = string.Join(" ", File.ReadAllLines(file).Where(IsCode).Select(l => l.Trim()));
+                foreach (var hit in skip.Matches(Collapse(code)).Cast<Match>())
+                    offenders.Add($"{Path.GetFileName(file)}  {hit.Value}");
+            }
+        }
+
+        Assert.True(scanned >= 200,
+            $"only {scanned} test source files were scanned across the three projects — the lookup is wrong "
+            + "and this guard is reading almost nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These tests return early when the session is elevated, so on an elevated host — which the CI "
+            + "runner is — they assert nothing. Pin the value instead: "
+            + "using var notElevated = AdminHelper.ForceElevation(false); and build the view-model INSIDE "
+            + "the scope, because view-models read elevation once in their constructor. If the test has two "
+            + "real behaviours, assert both rather than skipping one:\n  " + string.Join("\n  ", offenders));
+    }
+
+    [GeneratedRegex(@"if \(!?[A-Za-z0-9_.]*IsElevated(\(\))?\) ?return ?;", RegexOptions.Compiled)]
+    private static partial Regex ElevationSelfSkip();
 
     /// <summary>
     /// An audio route SysManager cannot read must be shown as unknown, not as the system default.

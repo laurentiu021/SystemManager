@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -10,6 +11,26 @@ namespace SysManager.IntegrationTests;
 
 public class WindowsUpdateViewModelTests
 {
+    /// <summary>A dialog that counts prompts instead of showing them, and always answers no.</summary>
+    private sealed class RecordingDialog : IDialogService
+    {
+        public int Prompts { get; private set; }
+
+        public bool Confirm(string message, string title)
+        {
+            Prompts++;
+            return false;
+        }
+
+        public CloseChoice AskCloseOrMinimize(string message, string title)
+        {
+            Prompts++;
+            return CloseChoice.Cancel;
+        }
+
+        public void Inform(string message, string title) => Prompts++;
+    }
+
     private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
 
     // ---------- construction ----------
@@ -89,26 +110,60 @@ public class WindowsUpdateViewModelTests
 
     // ---------- elevation gates ----------
 
+    /// <summary>
+    /// Elevated, installing the module is REFUSED and the reason is stated.
+    /// </summary>
+    /// <remarks>
+    /// The gate here runs the other way round from the rest of the tab: PSWindowsUpdate belongs in the
+    /// per-user module path, so an elevated session must not install it.
+    /// <para>This test was called <c>InstallModule_WhenNotElevated_SetsStatusMessage</c> and skipped itself
+    /// when elevated, which means it only ever ran the branch that PROCEEDS — calling a real
+    /// <c>PowerShellRunner</c> to install a PowerShell module on whoever ran it. It then asserted
+    /// <c>ex == null || ex is NullReferenceException</c>, which no behaviour can fail. The runner is a
+    /// substitute now, and the assertion is that nothing was run.</para>
+    /// </remarks>
     [Fact]
-    public async Task InstallModule_WhenNotElevated_SetsStatusMessage()
+    public async Task InstallModule_WhenElevated_RefusesAndSaysWhy()
     {
-        var vm = NewVm();
-        if (vm.IsElevated) return;
+        using var elevated = AdminHelper.ForceElevation(true);
+        var runner = new RecordingRunner();
+        var vm = new WindowsUpdateViewModel(runner, new WindowsUpdateService(), new WindowsUpdatePolicyService());
 
-        var ex = await Record.ExceptionAsync(() => vm.InstallModuleCommand.ExecuteAsync(null));
-        // May throw NRE if RelaunchAsAdmin succeeds but Application.Current is null in test.
-        // Either way, StatusMessage should have been set before the throw.
-        Assert.True(ex == null || ex is NullReferenceException);
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        Assert.Contains("non-administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.False(vm.IsBusy);
+        Assert.Equal(0, runner.Calls);
     }
 
+    /// <summary>
+    /// With nothing selected, installing updates stops before it asks anything.
+    /// </summary>
+    /// <remarks>
+    /// The old version of this asserted the same "null or NRE" as the one above. The first thing
+    /// <c>InstallUpdatesAsync</c> does is count the selected rows, so with an empty list the honest assertion
+    /// is that it says so and never reaches the confirmation dialog — which also means the test cannot
+    /// accidentally start an install.
+    /// </remarks>
     [Fact]
-    public async Task InstallUpdates_WhenNotElevated_SetsStatusMessage()
+    public async Task InstallUpdates_WithNothingSelected_StopsBeforeConfirming()
     {
-        var vm = NewVm();
-        if (vm.IsElevated) return;
+        var runner = new RecordingRunner();
+        var vm = new WindowsUpdateViewModel(runner, new WindowsUpdateService(), new WindowsUpdatePolicyService());
+        Assert.Empty(vm.Updates);
 
-        var ex = await Record.ExceptionAsync(() => vm.InstallUpdatesCommand.ExecuteAsync(null));
-        Assert.True(ex == null || ex is NullReferenceException);
+        var previous = DialogService.Instance;
+        var dialog = new RecordingDialog();
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.InstallUpdatesCommand.ExecuteAsync(null);
+
+            Assert.Equal("No updates selected.", vm.StatusMessage);
+            Assert.Equal(0, dialog.Prompts);
+            Assert.Equal(0, runner.Calls);
+        }
+        finally { DialogService.Instance = previous; }
     }
 
     // ---------- runner plumbing ----------

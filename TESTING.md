@@ -101,11 +101,11 @@ collection definitions (all defined in `TestCollections.cs`, each with
 `DisableParallelization = true`):
 
 - `[Collection("ProcessWideStatics")]` — tests that touch **any** process-wide static: swapping
-  `DialogService.Instance`, or acquiring `OperationLockService.Instance`. This was once two
-  collections, `"DialogService"` and `"OperationLock"`, and the split was itself the defect: two
-  *different* serialized collections still run in parallel **with each other**, so a test swapping
-  the dialog could race a test holding the lock. xUnit allows one collection per class, so the fix
-  was to merge them. This is the collection most of the suite uses.
+  `DialogService.Instance`, acquiring `OperationLockService.Instance`, or pinning elevation with
+  `AdminHelper.ForceElevation`. This was once two collections, `"DialogService"` and `"OperationLock"`,
+  and the split was itself the defect: two *different* serialized collections still run in parallel
+  **with each other**, so a test swapping the dialog could race a test holding the lock. xUnit allows
+  one collection per class, so the fix was to merge them. This is the collection most of the suite uses.
 - `[Collection("ProcessEnvironment")]` — tests that mutate the process's environment variables.
 - `[Collection("IconCache")]` — tests touching the shared icon cache.
 - `[Collection("Network")]` — tests using ICMP sockets. Defined here, but currently used only by
@@ -119,9 +119,31 @@ collection definitions (all defined in `TestCollections.cs`, each with
   *not* shown — asserting the side effect alone cannot distinguish "the user said yes" from
   "no gate ran at all". Requires `[Collection("ProcessWideStatics")]` on the test class — a fitness
   function in `ArchitectureTests` fails the build if a class swaps a process-wide static without it.
+- `AdminHelper.ForceElevation(bool)` — pins what `AdminHelper.IsElevated()` answers for the scope's
+  lifetime and restores the previous probe on dispose: `using var notElevated =
+  AdminHelper.ForceElevation(false);`. **Construct the view-model inside the scope** — view-models read
+  elevation once, in their constructor, so a scope opened afterwards changes nothing they will look at.
+  Requires `[Collection("ProcessWideStatics")]`.
 - `SyncProgress<T>` — a synchronous `IProgress<T>` that records reports on the calling thread, so
   progress assertions need no `Task.Delay`.
 - `StaHelper` — runs a delegate on an STA thread for WPF-dependent types.
+
+### Testing an admin-gated path
+
+Never skip the assertion on an elevated host. Sixteen cases used to open with a variant of
+`if (AdminHelper.IsElevated()) return;`, added so an elevated machine would not report a false failure —
+but the CI runner *is* elevated and the primary workstation cannot run the suite at all, so the elevation
+gate on SFC, DISM, Windows Update, precise bandwidth mode and the nine privileged tabs asserted nothing
+anywhere. Pin the value with `ForceElevation` instead, and assert both sides: the negative test alone
+cannot tell a working gate from a command that refuses unconditionally.
+
+Where a screen genuinely has two behaviours rather than one gate — a UI test, say, where the app inherits
+the test process's integrity level — pick the expected copy from the current level rather than returning
+early. `UninstallerUiTests.CurrentSession_ShowsMatchingGuidanceWithoutAdminRelaunchButton` and
+`AdminBannerUiTests.PrivilegedTab_ShowsTheElevationBannerForTheCurrentSession` both do this.
+
+`ArchitectureTests.NoTestSkipsItselfBecauseTheSessionIsElevated` fails the build if the skip comes back,
+across all three test projects.
 
 ### Dependency-graph validation
 

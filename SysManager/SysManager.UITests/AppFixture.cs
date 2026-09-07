@@ -241,14 +241,6 @@ public sealed class AppFixture : IDisposable
         => WaitForTextInCurrentTab(text, timeoutSeconds) is not null;
 
     /// <summary>
-    /// True when the current tab shows the shared "requires administrator"
-    /// elevation banner (the not-elevated variant carries that phrase). Used to
-    /// assert that privileged tabs surface the banner when the app is not elevated.
-    /// </summary>
-    public bool HasAdminBanner(int timeoutSeconds = 5)
-        => WaitForText("requires administrator", timeoutSeconds) is not null;
-
-    /// <summary>
     /// Count Button controls currently realized anywhere in the window. A crude
     /// but useful smoke signal that a tab rendered its action surface rather than
     /// an empty/crashed view.

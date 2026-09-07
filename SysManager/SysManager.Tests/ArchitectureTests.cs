@@ -2141,6 +2141,72 @@ public partial class ArchitectureTests
         return end.Success ? rest[..end.Index] : rest;
     }
 
+    /// <summary>
+    /// Every corner radius is either a token or one of the scale's own numbers. Nothing in between.
+    /// </summary>
+    /// <remarks>
+    /// The radius tokens exist because the radii had already drifted once — the commit that added them says
+    /// the scale killed "per-style radius drift (was 5/6/8/10/999 scattered)". App.xaml adopted them; the
+    /// views and the shell did not, so the drift could come back there unnoticed, and it had:
+    /// <list type="bullet">
+    ///   <item><c>10</c> three times — the update banner and the success card in the shell, where every
+    ///   neighbouring surface is 12, and the Tune-Up verdict badge on the Landing tab;</item>
+    ///   <item><c>9</c>, <c>11</c>, <c>14</c> and <c>45</c> — each of them half of its element's own size,
+    ///   which is a pill or a circle written as a number. They now say <c>RadiusPill</c>, which WPF clamps to
+    ///   exactly the same pixels, so the intent is stated and the arithmetic cannot go stale if the element is
+    ///   resized.</item>
+    /// </list>
+    /// <para>This guard deliberately does NOT require a token. Asking for one across 175 call sites is a
+    /// separate, purely mechanical migration; asking for an on-scale VALUE is the part that prevents a
+    /// regression, and it is checkable without touching a single view. <c>2</c> is on the list because it is
+    /// the accent stripe on the elevation and preview banners — a deliberate hairline, not a surface radius.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EveryCornerRadius_IsOnTheScale()
+    {
+        // The scale from App.xaml (RadiusSm/Md/Lg/Xl/Pill) plus the stripe hairline.
+        var allowed = new HashSet<string>(StringComparer.Ordinal) { "2", "4", "8", "12", "16", "999" };
+
+        var appDir = FindAppProjectDir();
+        var offenders = new List<string>();
+        var literals = 0;
+
+        foreach (var file in Directory
+                     .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)))
+        {
+            var text = File.ReadAllText(file);
+            foreach (var hit in NumericCornerRadius().Matches(text).Cast<Match>())
+            {
+                literals++;
+                var value = hit.Groups["value"].Value;
+                if (allowed.Contains(value)) continue;
+                offenders.Add($"{Path.GetFileName(file)}: CornerRadius=\"{value}\"");
+            }
+        }
+
+        // Vacuity floor. RE-MEASURED at 90 on the same day it was written: 177 was the count before the
+        // elevation banner was extracted into one control, and that removed 60 banner Borders plus 27 of the
+        // stripe hairlines. The floor fired on the rebase, which is the floor working — a population is a
+        // measurement, and another change moved it. Current spread: 8 x39, 2 x20, 12 x19, 4 x9, 999 x2, 16 x1.
+        Assert.True(literals >= 80,
+            $"only {literals} numeric CornerRadius values were read, out of 90 measured — the pattern is out "
+            + "of date, so a pass proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these corner radii are not on the scale. The tokens exist because the radii drifted once already "
+            + "(5/6/8/10/999 scattered), and a number that is half of its element's own size is a pill or a "
+            + "circle — say so with {StaticResource RadiusPill}, which clamps to the same pixels and cannot go "
+            + "stale if the element is resized. Otherwise pick the nearest scale step (4, 8, 12, 16):\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A <c>CornerRadius</c> written as a plain number rather than a token.</summary>
+    [GeneratedRegex(@"CornerRadius=""(?<value>\d+)""", RegexOptions.Compiled)]
+    private static partial Regex NumericCornerRadius();
+
     /// <summary>A <c>DataGrid</c> or <c>ItemsControl</c> bound to a collection.</summary>
     [GeneratedRegex(@"<(?:DataGrid|ItemsControl)\b[^>]*ItemsSource=""\{Binding", RegexOptions.Compiled)]
     private static partial Regex CollectionItemsSource();

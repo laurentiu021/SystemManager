@@ -461,7 +461,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Update banner — only when a newer release is available. -->
-                <Border Grid.Row="0" Margin="24,16,24,0" Padding="14,10" CornerRadius="10"
+                <Border Grid.Row="0" Margin="24,16,24,0" Padding="14,10" CornerRadius="{StaticResource RadiusLg}"
                         Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Accent}" BorderThickness="1"
                         Visibility="{Binding About.UpdateAvailable, Converter={StaticResource FlexVis}}">
                     <Grid>
@@ -504,7 +504,7 @@
                  7.66:1 on midnight-indigo where it was chosen. ThemeService already seeds Success per mode
                  (#22C55E dark, #166534 light) for exactly this reason; its own comment beside those values
                  calls the failure "one crisp card beside two washed-out ones". -->
-            <Border Background="{DynamicResource Surface2}" CornerRadius="10"
+            <Border Background="{DynamicResource Surface2}" CornerRadius="{StaticResource RadiusLg}"
                     BorderBrush="{DynamicResource SuccessBorder}" BorderThickness="1"
                     Padding="14,12,18,12">
                 <Border.Effect>
@@ -516,7 +516,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
+                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="{StaticResource RadiusPill}"
                             Background="{DynamicResource SuccessBgSubtle}" Margin="0,0,10,0">
                         <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                    FontSize="14" Foreground="{DynamicResource Success}"

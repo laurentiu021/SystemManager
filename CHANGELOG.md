@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.21] - 2026-09-07
+
+On any of the six light themes, the coloured category tags in Windows Update lost their colour. The text was
+right — red for Security, green for Defender, indigo for Driver — but the tinted pill behind it kept a shade
+mixed for the dark themes, which is invisible against a near-white card. The Category column is meant to be
+scannable at a glance, and on light themes it was not.
+
+### Fixed
+- **Windows Update category tags now get their colour on light themes too.** Ten tag colours were written
+  directly into the screen instead of coming from the theme, so they were correct on dark themes and washed
+  out on every light one. They now come from the same place as the text on them, and are mixed per theme —
+  the same treatment the text itself already had. Dark themes look the same as before.
+
 ## [1.76.20] - 2026-09-07
 
 Deleting a saved volume preset in Audio Mixer wipes it off the disk straight away, and the Delete button was

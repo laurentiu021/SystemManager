@@ -81,6 +81,73 @@ public class ThemeStatusBrushTests
         }
     }
 
+    /// <summary>
+    /// The dark and light arrays define exactly the same keys.
+    /// </summary>
+    /// <remarks>
+    /// The failure mode is silent, which is why it needs a test rather than care. A key added to one array
+    /// only is not an error anywhere: <c>ApplyStatusBrushes</c> iterates whichever array the current mode
+    /// selects, so the brush simply never gets created in the other mode and every
+    /// <c>{DynamicResource}</c> naming it resolves to nothing — the element keeps whatever it inherited and
+    /// looks *plausible*. The whole point of this palette is that light presets get their own value, so a
+    /// key present in dark and missing in light produces exactly the bug the palette exists to prevent, on
+    /// the themes least likely to be the one a developer had open.
+    /// <para>Whole key set rather than a list of names, so it covers the next family added without being
+    /// edited — this is the same reasoning as the four-key test above, which it now supersedes for
+    /// completeness while that one keeps naming the load-bearing four explicitly.</para>
+    /// </remarks>
+    [Fact]
+    public void Palette_DefinesTheSameKeys_InBothModes()
+    {
+        var dark = ThemeService.StatusPalette(isDark: true).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+        var light = ThemeService.StatusPalette(isDark: false).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+
+        // Vacuity floor: an empty set on both sides would satisfy set equality while pinning nothing.
+        Assert.True(dark.Count >= 30, $"only {dark.Count} dark keys — the palette lookup is wrong");
+
+        var darkOnly = dark.Except(light, StringComparer.Ordinal).Order().ToList();
+        var lightOnly = light.Except(dark, StringComparer.Ordinal).Order().ToList();
+
+        Assert.True(darkOnly.Count == 0,
+            "these keys exist in the DARK palette only, so on every light preset they resolve to nothing "
+            + "and the elements naming them silently keep an inherited colour:\n  "
+            + string.Join("\n  ", darkOnly));
+
+        Assert.True(lightOnly.Count == 0,
+            "these keys exist in the LIGHT palette only, so on dark themes they resolve to nothing:\n  "
+            + string.Join("\n  ", lightOnly));
+    }
+
+    /// <summary>
+    /// Every subtle badge fill is more opaque on light than on dark.
+    /// </summary>
+    /// <remarks>
+    /// The convention the existing entries already follow, and the reason these could not simply be one
+    /// shared value: an 8%-alpha tint that reads clearly over a dark surface is essentially invisible over a
+    /// near-white one. Light <c>SuccessBgSubtle</c> is <c>#2622C55E</c> against dark's <c>#1A22C55E</c> —
+    /// same green, more of it. Asserted on alpha rather than on contrast because these are decorative fills
+    /// behind text that is already AA by its own <c>…Text</c> brush; the failure being pinned is a fill
+    /// nobody can see, not unreadable text.
+    /// </remarks>
+    [Theory]
+    [InlineData("BadgeIndigoBgSubtle")]
+    [InlineData("BadgePurpleBgSubtle")]
+    [InlineData("BadgePinkBgSubtle")]
+    [InlineData("BadgeNeutralBgSubtle")]
+    [InlineData("SuccessBgSubtle")]
+    [InlineData("DangerBgSubtle")]
+    [InlineData("InfoBgSubtle")]
+    [InlineData("WarningBgSubtle")]
+    public void SubtleFill_IsMoreOpaqueOnLightThanOnDark(string key)
+    {
+        var dark = Lookup(ThemeService.StatusPalette(true), key);
+        var light = Lookup(ThemeService.StatusPalette(false), key);
+
+        Assert.True(light.A > dark.A,
+            $"{key} is alpha {light.A} on light and {dark.A} on dark — a tint calibrated for a dark surface "
+            + "disappears over a near-white one, which is the whole reason this palette is per-mode");
+    }
+
     // Base semantic brushes (Info/Success/Warning/Danger) are used directly as small-text Foreground
     // across the app (e.g. Cleanup's TEMP-folders stat). They were static App.xaml resources that never
     // recomputed per mode, so their light-cyan/green/amber/red washed out on near-white light surfaces.

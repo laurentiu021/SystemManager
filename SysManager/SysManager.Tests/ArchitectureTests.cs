@@ -5870,8 +5870,20 @@ public partial class ArchitectureTests
             + string.Join("\n  ", offenders));
     }
 
-    /// <summary>A colour-bearing attribute given a literal hex value.</summary>
-    [GeneratedRegex(@"(?:Foreground|Background|Fill|Stroke|BorderBrush)=""#[0-9A-Fa-f]{6,8}""")]
+    /// <summary>
+    /// A colour-bearing attribute given a literal hex value, set directly OR through a
+    /// <c>&lt;Setter&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// The <c>Setter</c> alternative is not defensive completeness — it is where the largest instance of
+    /// this defect actually lived. Windows Update's category badge set its fill in a Style, so the colour
+    /// arrived as <c>&lt;Setter Property="Background" Value="#14EF4444"/&gt;</c>: the attribute carrying the
+    /// literal is <c>Value</c>, which the direct-attribute pattern cannot match. Twenty literals sat in
+    /// that one file while this guard reported the whole view layer clean, and the badge kept a
+    /// dark-calibrated tint on all six light presets — the one part of the theme system that never
+    /// recomputed per preset.
+    /// </remarks>
+    [GeneratedRegex(@"(?:(?:Foreground|Background|Fill|Stroke|BorderBrush)=""#[0-9A-Fa-f]{6,8}""|<Setter\s+Property=""(?:Foreground|Background|Fill|Stroke|BorderBrush)""\s+Value=""#[0-9A-Fa-f]{6,8}"")")]
     private static partial Regex LiteralColourAttribute();
 
     /// <summary>

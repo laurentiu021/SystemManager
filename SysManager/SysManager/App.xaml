@@ -1115,6 +1115,37 @@
                 <Setter Property="FontSize" Value="12"/>
             </Style>
 
+            <!-- ============================================================ -->
+            <!-- Status lines: the same look, announced.
+
+                 52 tabs report what a long operation is doing through one TextBlock bound to
+                 StatusMessage, and a screen reader said nothing about any of them. WCAG 4.1.3 asks
+                 that a status change which never receives focus still be announced, and
+                 AutomationProperties.LiveSetting is the channel for it. Setting it in the style
+                 rather than on 52 elements means the decision is made once.
+
+                 Polite, never Assertive: a status line that ticks through "Scanning C:\…" would
+                 interrupt whatever the user is reading. Assertive is right for the toast overlay in
+                 MainWindow.xaml, which auto-dismisses and so has one chance to be heard, and that is
+                 the only place using it.
+
+                 A PAIR, because the two visual bases genuinely differ and neither look changes here:
+                 49 of the status lines are Caption, two are Subtle. Both carry the same LiveSetting,
+                 and ArchitectureTests fails if one of them stops — a fix applied to one and forgotten
+                 on the other is otherwise invisible.
+
+                 Deliberately NOT applied to the fast-moving readouts beside these lines: Deep
+                 Cleanup's percentage and current-folder path, and the SFC/DISM ETAs. Marking those
+                 live would produce continuous speech instead of information. -->
+            <!-- ============================================================ -->
+            <Style x:Key="StatusLine" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                <Setter Property="AutomationProperties.LiveSetting" Value="Polite"/>
+            </Style>
+
+            <Style x:Key="SubtleStatusLine" TargetType="TextBlock" BasedOn="{StaticResource Subtle}">
+                <Setter Property="AutomationProperties.LiveSetting" Value="Polite"/>
+            </Style>
+
             <Style x:Key="Metric" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="22"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>

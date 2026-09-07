@@ -167,7 +167,7 @@
                         AutomationProperties.Name="Cancel the task scan"
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0" Padding="10,2"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
             </DockPanel>
             <Button Grid.Column="1" Content="Enable / Disable" Command="{Binding ToggleEnabledCommand}"
                     Style="{StaticResource PrimaryButton}" Padding="16,8"

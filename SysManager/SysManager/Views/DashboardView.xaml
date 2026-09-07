@@ -608,7 +608,7 @@
             </Grid>
 
             <!-- ═══ ROW 9: Status bar ═══ -->
-            <TextBlock Grid.Row="9" Text="{Binding StatusMessage}" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+            <TextBlock Grid.Row="9" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" Margin="0,4,0,0"/>
         </Grid>
     </ScrollViewer>
 </UserControl>

@@ -66,7 +66,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="3" Margin="0,8,0,0">
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" VerticalAlignment="Center"/>
         </DockPanel>
     </Grid>
 </UserControl>

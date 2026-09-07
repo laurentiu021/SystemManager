@@ -74,7 +74,7 @@
         </Border>
 
         <!-- Status -->
-        <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+        <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"
                    Margin="0,12,0,0" TextWrapping="Wrap"/>
     </Grid>
 </UserControl>

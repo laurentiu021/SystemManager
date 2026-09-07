@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.77.1] - 2026-09-07
+
+If you use a screen reader, every tab has been silent about what it was doing. Start a system repair or a
+drive scan and there was no progress, no result, and no way to know it had finished — the app said all of it
+on screen and none of it out loud. Fifty-two tabs now report themselves as they work.
+
+### Fixed
+- **Every tab's status line is now read out as it changes.** The one line that says what is happening —
+  "Scanning…", "Removed 1,204 files", "Scan complete." — reached only people who could see it. All 52 of them
+  now announce themselves politely, so they wait their turn instead of talking over what you are reading.
+- **The SFC and DISM results are announced when a repair finishes.** Those run for many minutes with the
+  window in the background, and the sentence saying how it ended was the one thing you needed and could not
+  hear.
+- **Deep Cleanup announces what it is scanning and what it cleaned.** The percentage and the folder name
+  beside them stay silent on purpose: they change several times a second, and reading those aloud would talk
+  continuously instead of telling you anything.
+
+### Added
+- **A check that every status line stays announced, and that the fast-moving numbers stay quiet.** Both halves
+  matter. A well-meant change that announced everything would look like an improvement and would make the app
+  unusable with a screen reader, so the quiet ones are named and pinned too.
+
 ## [1.77.0] - 2026-09-07
 
 Six buttons that do something you cannot take back now explain themselves out loud. Until now a screen reader
@@ -31,6 +53,7 @@ dialog you had already committed to opening. Nothing changes on screen for anyon
 ### Changed
 - **Shred All now sets its accessible name explicitly, like its siblings.** It was relying on its label being
   read instead, which works but was the one button of its kind not saying so for itself.
+
 
 ## [1.76.28] - 2026-09-07
 

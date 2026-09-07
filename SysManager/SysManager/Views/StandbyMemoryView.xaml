@@ -104,7 +104,7 @@
                 <ProgressBar AutomationProperties.Name="Standby memory progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                              IsIndeterminate="{Binding IsProgressIndeterminate}"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
             </DockPanel>
             <Button Grid.Column="1" Content="Purge standby list" Command="{Binding PurgeCommand}"
                     Style="{StaticResource PrimaryButton}" Padding="16,8" IsEnabled="{Binding IsElevated}"

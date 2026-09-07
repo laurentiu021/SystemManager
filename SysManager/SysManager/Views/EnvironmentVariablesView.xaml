@@ -231,7 +231,7 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
         </DockPanel>
     </Grid>
 </UserControl>

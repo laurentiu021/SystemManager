@@ -67,7 +67,7 @@
                 <TextBlock Text="{Binding SelectedPreset.Description}" Style="{StaticResource Subtle}"
                            Margin="0,0,0,4"
                            Visibility="{Binding SelectedPreset, Converter={StaticResource FlexVis}}"/>
-                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource SubtleStatusLine}" Margin="0,4,0,0"
                            Visibility="{Binding StatusMessage, Converter={StaticResource FlexVis}}"/>
             </StackPanel>
         </Border>

@@ -115,7 +115,7 @@
                              IsIndeterminate="{Binding IsProgressIndeterminate}"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
-                           Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                           Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Start game mode" Command="{Binding StartCommand}" Style="{StaticResource PrimaryButton}"
                             Margin="0,0,8,0" Padding="16,8" AutomationProperties.Name="Start game mode"/>

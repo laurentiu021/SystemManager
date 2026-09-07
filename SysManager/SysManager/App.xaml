@@ -564,13 +564,13 @@
                                      Surface4 stays a neutral grey in both modes, keeping OFF clearly distinct. -->
                                 <!-- BorderThickness reserved at 1.5 (transparent) so the IsKeyboardFocused
                                      trigger can light the Accent ring without shifting the thumb/track layout. -->
-                                <Border x:Name="Track" CornerRadius="11" Background="{DynamicResource Surface4}"
+                                <Border x:Name="Track" CornerRadius="{StaticResource RadiusPill}" Background="{DynamicResource Surface4}"
                                         BorderThickness="1.5" BorderBrush="Transparent"/>
                                 <!-- OFF thumb: derived from the track it sits on, not White. Surface4 is
                                      near-white on the light presets, where a white thumb measured 1.33-1.67:1
                                      and the switch had no readable state. The ON thumb is set in the IsChecked
                                      trigger instead, because the track becomes Accent there. -->
-                                <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9"
+                                <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="{StaticResource RadiusPill}"
                                         Background="{DynamicResource ToggleThumb}" HorizontalAlignment="Left" Margin="2,2,0,2"
                                         VerticalAlignment="Center">
                                     <Border.Effect>

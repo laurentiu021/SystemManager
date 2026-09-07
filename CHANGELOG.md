@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.28] - 2026-09-07
+
+Three rounded corners were slightly the wrong roundness, which is the kind of thing nobody notices one at a
+time and everybody notices in aggregate: a panel that looks almost, but not quite, like the panel above it.
+
+### Fixed
+- **The update notice and the "all clear" card now have the same corners as every other panel.** Both were
+  2px squarer than their neighbours. Same for the small verdict badge on the Landing tab after a Tune-Up.
+
+### Changed
+- **Four circles and pills now say they are circles and pills.** Their roundness was written as a number that
+  happened to be half the element's size — correct today, quietly wrong the moment the element is resized.
+  No visible change: the app rounds them to exactly the same pixels.
+
+### Added
+- **A check that a corner radius has to be one of the app's own five sizes.** These sizes exist because the
+  corners drifted once before; the check covers the places that were left out of that fix, so they cannot
+  drift again.
+
 ## [1.76.27] - 2026-09-07
 
 Four result messages were being cut off at the edge of their box instead of continuing onto a second line.

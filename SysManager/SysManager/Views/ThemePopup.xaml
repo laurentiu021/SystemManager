@@ -75,6 +75,14 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Accent" Foreground="{DynamicResource TextSecondary}"
                                            FontSize="12" VerticalAlignment="Center"/>
+                                <!-- The four colour swatches are deliberately NOT tab stops. Their only
+                                     action is to focus and select the hex box immediately beside them, and
+                                     that box is already the next tab stop with its own accessible name — so a
+                                     tab stop here would focus the thing you are about to Tab to anyway, which
+                                     is a keystroke that does nothing. A Border is non-focusable by default,
+                                     so this is the default being correct rather than a setting.
+                                     EveryMouseClickableElement_IsAlsoKeyboardOperable lists them with this
+                                     reason, so the exemption is visible rather than assumed. -->
                                 <Border Grid.Column="1" x:Name="CustomAccentPreview"
                                         Width="24" Height="24" CornerRadius="8" Background="#6366F1"
                                         Margin="0,0,10,0" Cursor="Hand"

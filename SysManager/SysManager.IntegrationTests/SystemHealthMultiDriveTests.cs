@@ -96,20 +96,9 @@ public class SystemHealthMultiDriveTests
         Assert.False(d.IsSelected);
     }
 
-    [Fact]
-    public void DriveTarget_Display_IncludesSize()
-    {
-        var d = new DriveTarget { Letter = "D:", Label = "Data", SizeGB = 500, FileSystem = "NTFS" };
-        Assert.Contains("500", d.Display);
-        Assert.Contains("NTFS", d.Display);
-    }
-
-    [Fact]
-    public void DriveTarget_Display_WhenLabelEqualsLetter_Simpler()
-    {
-        var d = new DriveTarget { Letter = "C:", Label = "C:", SizeGB = 500, FileSystem = "NTFS" };
-        Assert.DoesNotContain("  C:  ", d.Display); // no duplicated label
-    }
+    // DriveTarget_Display_IncludesSize / _WhenLabelEqualsLetter_Simpler were removed with DriveTarget.Display
+    // (#2100). No view bound it — the chkdsk row composes that line from the individual properties — so these
+    // two, plus three more in the unit suite, were what made an unreachable property look covered.
 
     [Fact]
     public void DriveTarget_Mutable_Status()

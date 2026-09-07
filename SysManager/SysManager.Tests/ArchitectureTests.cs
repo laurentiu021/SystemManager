@@ -2388,6 +2388,227 @@ public partial class ArchitectureTests
             + "empty value to the user. Populate them or remove them:\n  " + string.Join("\n  ", dead));
     }
 
+    /// <summary>
+    /// Every view-model property is shown by a view or read by code — not merely maintained.
+    /// </summary>
+    /// <remarks>
+    /// This repo's dominant recurring defect: surface that is implemented, assigned at several sites, and
+    /// unit-tested, and that no XAML binds and no code reads. The compiler cannot see it, and a view-model
+    /// test cannot either, because the test reads the property exactly the way the missing binding would have.
+    /// <para><b>Not a widening of <see cref="EveryModelProperty_IsEitherWrittenOrShown"/>, and #2100's
+    /// assumption that it was a one-line scope change is where this went wrong.</b> That guard's criterion is
+    /// "written OR shown", and every instance of THIS defect is written — being written is what makes it a
+    /// defect. Pointing it at <c>ViewModels/</c> would have passed all of them. The criterion here is
+    /// therefore "shown in XAML, or READ from C# somewhere other than its own assignment".</para>
+    /// <para>Validated against the state before the fix rather than trusted on a pass: with the two new
+    /// bindings reverted it names <c>AboutViewModel.LatestNotes</c> and
+    /// <c>ContextMenuViewModel.ActivePresetId</c> and nothing else, out of 446 inspected.</para>
+    /// <para>Scope is <c>[ObservableProperty]</c> fields. A plain property is the same defect —
+    /// <c>ReleaseNote.Url</c> was one, and <c>DriveTarget.Display</c> another — but has no generated-name
+    /// convention to key on, so those stay a review judgement.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryViewModelProperty_IsShownOrRead()
+    {
+        var appDir = FindAppProjectDir();
+        var viewModelsDir = Path.Combine(appDir, "ViewModels");
+
+        var xaml = string.Join('\n', Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Select(File.ReadAllText));
+
+        var sources = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToDictionary(f => f, File.ReadAllText);
+
+        var unreachable = new List<string>();
+        var inspected = 0;
+
+        foreach (var (path, source) in sources.Where(kv => kv.Key.StartsWith(viewModelsDir, StringComparison.Ordinal)))
+        {
+            foreach (var m in ObservablePropertyField().Matches(source).Cast<Match>())
+            {
+                var field = m.Groups[1].Value;
+                var property = char.ToUpperInvariant(field[0]) + field[1..];
+                inspected++;
+
+                if (xaml.Contains(property, StringComparison.Ordinal)) continue;
+                if (sources.Values.Any(text => IsReadSomewhere(text, property))) continue;
+
+                unreachable.Add($"{Path.GetFileNameWithoutExtension(path)}.{property}");
+            }
+        }
+
+        // Measured: 446. Set close to it because the failure being guarded against is a pattern that still
+        // matches MOST declarations — the same trap EveryModelProperty_IsEitherWrittenOrShown fell into with
+        // a floor of 40 against 187.
+        Assert.True(inspected >= 400,
+            $"only {inspected} view-model properties were inspected, out of 446 measured — the detection is "
+            + "no longer matching every [ObservableProperty] declaration, so a pass proves nothing.");
+
+        Assert.True(unreachable.Count == 0,
+            "these view-model properties are maintained and nothing reads them: no XAML binds them and no "
+            + "code outside their own assignment consults them, so the work happens on every interaction "
+            + "and the user never sees the result. Bind them, or delete them — a test that reads one is not "
+            + "coverage, it is the reason the defect survives:\n  " + string.Join("\n  ", unreachable));
+    }
+
+    /// <summary>
+    /// True when <paramref name="property"/> is consulted in <paramref name="text"/> — any occurrence that is
+    /// not an assignment target and not the generated-name plumbing.
+    /// </summary>
+    /// <remarks>
+    /// The assignment exclusion is the whole point: <c>ActivePresetId = "custom"</c> is what the defect looks
+    /// like, four times over, and a plain name search calls that a use. <c>nameof</c>,
+    /// <c>NotifyPropertyChangedFor</c> and the generated <c>OnXChanged</c> hook are excluded for the same
+    /// reason — they are the toolkit wiring the property up, not anything reading its value.
+    /// </remarks>
+    private static bool IsReadSomewhere(string text, string property)
+    {
+        foreach (var hit in Regex.Matches(text, $@"\b{Regex.Escape(property)}\b").Cast<Match>())
+        {
+            var tail = text[(hit.Index + hit.Length)..];
+            if (AssignmentTail().IsMatch(tail)) continue;
+            if (PartialChangedHook().IsMatch(tail)) continue;
+
+            var head = text[Math.Max(0, hit.Index - 30)..hit.Index];
+            if (head.Contains("nameof(", StringComparison.Ordinal)
+                || head.Contains("NotifyPropertyChangedFor", StringComparison.Ordinal)
+                || head.Contains($"On{property}", StringComparison.Ordinal)) continue;
+
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// An element must not set a property as an attribute when a trigger on the style it uses also sets it:
+    /// WPF ranks a local value above a style trigger, so the trigger silently loses.
+    /// </summary>
+    /// <remarks>
+    /// Written because the fix for the Menu Style buttons walked straight into it. The three per-preset styles
+    /// carried a <c>DataTrigger</c> setting <c>Content</c> (to prepend a tick) and
+    /// <c>AutomationProperties.Name</c> (so a screen reader hears the state), while the buttons still set both
+    /// as attributes. The fill and border changed, so the tab looked fixed; the tick never appeared and the
+    /// accessible name never changed. The same defect class the change set was closing, one layer down and
+    /// invisible to every other check here — the property is bound, the trigger is present, the build is
+    /// clean.
+    /// <para>Deliberately narrow, and the first attempt was not: attributing every setter reachable under a
+    /// trigger to the outer style, and treating keyless styles as app-wide, reported 2133 conflicts against a
+    /// real count of 2. A trigger can hold an entire <c>ControlTemplate</c>, whose setters belong to the
+    /// template and not to the style; and a keyless <c>Style</c> inside a template's <c>Resources</c> is not
+    /// implicit app-wide, which the tree alone cannot distinguish. So this looks at DIRECT setters under a
+    /// trigger, on KEYED styles only, following <c>BasedOn</c>. Measured on that basis: 10 elements use a
+    /// trigger-bearing keyed style, 0 conflict; reintroducing the two attributes on one button reports
+    /// exactly 2.</para>
+    /// </remarks>
+    [Fact]
+    public void NoLocalValueOutranksAStyleTriggerThatSetsIt()
+    {
+        var appDir = FindAppProjectDir();
+        var views = Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToArray();
+
+        var xamlNs = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+        var roots = new List<(string File, XElement Root)>();
+        foreach (var view in views)
+        {
+            XDocument document;
+            try { document = XDocument.Load(view); }
+            catch (System.Xml.XmlException) { continue; }
+            if (document.Root is not null) roots.Add((view, document.Root));
+        }
+
+        // key -> (properties its own triggers set directly, the key it is BasedOn)
+        var styles = new Dictionary<string, (HashSet<string> Triggered, string? BasedOn)>(StringComparer.Ordinal);
+        foreach (var (_, root) in roots)
+        {
+            foreach (var style in root.DescendantsAndSelf().Where(e => e.Name.LocalName == "Style"))
+            {
+                var key = (string?)style.Attribute(xamlNs + "Key");
+                if (key is null) continue;
+
+                var triggered = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var triggerList in style.Elements().Where(e => e.Name.LocalName == "Style.Triggers"))
+                {
+                    foreach (var setter in triggerList.Elements().SelectMany(t => t.Elements()))
+                    {
+                        if (setter.Name.LocalName != "Setter") continue;
+                        var property = (string?)setter.Attribute("Property");
+                        if (property is not null) triggered.Add(property);
+                    }
+                }
+
+                var basedOn = StaticResourceReference().Match((string?)style.Attribute("BasedOn") ?? "");
+                styles[key] = (triggered, basedOn.Success ? basedOn.Groups[1].Value : null);
+            }
+        }
+
+        HashSet<string> Resolve(string key)
+        {
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var next = key;
+            while (next is not null && seen.Add(next) && styles.TryGetValue(next, out var entry))
+            {
+                result.UnionWith(entry.Triggered);
+                next = entry.BasedOn!;
+            }
+            return result;
+        }
+
+        var conflicts = new List<string>();
+        var elementsChecked = 0;
+
+        foreach (var (file, root) in roots)
+        {
+            foreach (var element in root.DescendantsAndSelf())
+            {
+                var reference = StaticResourceReference().Match((string?)element.Attribute("Style") ?? "");
+                if (!reference.Success) continue;
+
+                var triggered = Resolve(reference.Groups[1].Value);
+                if (triggered.Count == 0) continue;
+                elementsChecked++;
+
+                foreach (var attribute in element.Attributes())
+                {
+                    if (!triggered.Contains(attribute.Name.LocalName)) continue;
+                    conflicts.Add($"{Path.GetFileName(file)}: <{element.Name.LocalName} "
+                        + $"Style=\"{{StaticResource {reference.Groups[1].Value}}}\"> sets "
+                        + $"{attribute.Name.LocalName} as an attribute");
+                }
+            }
+        }
+
+        Assert.True(elementsChecked >= 8,
+            $"only {elementsChecked} elements using a trigger-bearing keyed style were found, out of 10 "
+            + "measured — either the style map or the Style attribute match stopped working, so a pass "
+            + "proves nothing.");
+
+        Assert.True(conflicts.Count == 0,
+            "these elements set a property locally that a trigger on their own style also sets. WPF ranks a "
+            + "local value above a style trigger, so the trigger never takes effect and the state it was "
+            + "meant to show is invisible. Move the attribute into the style as a plain Setter, which the "
+            + "trigger CAN override:\n  " + string.Join("\n  ", conflicts));
+    }
+
+    /// <summary>A <c>{StaticResource Key}</c> reference, capturing the key.</summary>
+    [GeneratedRegex(@"StaticResource\s+([\w.]+)", RegexOptions.Compiled)]
+    private static partial Regex StaticResourceReference();
+
+    /// <summary>An <c>=</c> that is an assignment rather than a comparison.</summary>
+    [GeneratedRegex(@"^\s*=(?!=)", RegexOptions.Compiled)]
+    private static partial Regex AssignmentTail();
+
+    /// <summary>The tail of the toolkit's generated <c>OnXChanged</c> partial hook.</summary>
+    [GeneratedRegex(@"^\s*Changed\b", RegexOptions.Compiled)]
+    private static partial Regex PartialChangedHook();
+
     /// <summary>A class or record declaration, capturing the type name.</summary>
     [GeneratedRegex(@"(?:class|record)\s+(\w+)", RegexOptions.Compiled)]
     private static partial Regex TypeDeclaration();

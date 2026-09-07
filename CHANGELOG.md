@@ -10,6 +10,42 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.23] - 2026-09-07
+
+Three things the app already knew and never told you. The Context menu tab worked out which menu style was
+applied and then drew all three buttons identically, so there was no way to see which one you were on. "What's
+new" downloaded the release notes for the newest version and displayed none of them. And the ten release cards
+under it each held a link to their release on GitHub that nothing let you click.
+
+### Fixed
+- **The Context menu tab shows which menu style is applied.** It reads the current style on every scan and
+  compares it against the three presets, but the buttons were all drawn the same, so the answer was invisible
+  and the only way to be sure was to apply a preset and watch the entries change. The matching button now
+  carries a tick, the accent colour and its own accessible name.
+- **"What's new" shows the release notes it fetched.** The update check downloads the full notes for the
+  newest version, and the section presented only the version number and date — the notes themselves were
+  fetched on every check and thrown away. They now appear under the version, scrollable when long.
+- **Each release card links to its release.** Every entry in the release history carried the GitHub URL it
+  came from and offered no way to open it, so reading a note was a dead end. Each card now has a "View on
+  GitHub" link, greyed out for the rare entry whose URL came back empty.
+
+### Changed
+- **An unused second way to describe a drive was removed.** The chkdsk drive picker built a one-line summary
+  of each drive that no part of the interface asked for; the row composes what it shows from the individual
+  fields. Five tests kept it alive by reading it exactly the way the missing binding would have.
+
+### Added
+- **A check that a view-model property nothing displays cannot ship.** The three fixes above are one defect
+  repeated: a property maintained by the code, verified by tests, and bound by no view. The existing sweep
+  for this asked whether a property was *written or* shown, which every instance of the defect satisfies. The
+  new one asks whether it is shown in XAML or read somewhere other than its own assignment, and it names the
+  offenders rather than reporting a count.
+- **A check that a style trigger cannot be silently outranked.** The first cut of the Context menu fix put the
+  tick and the accessible name in a trigger while the buttons still set both as plain attributes — and WPF
+  ranks an attribute above a style trigger, so the colours changed and the tick never appeared. Nothing else
+  could see it: the property was bound, the trigger was there, the build was clean. Caught while reviewing the
+  change and now pinned.
+
 ## [1.76.22] - 2026-09-07
 
 Four more places that went blank without saying why. The temperature card on the Landing tab looked broken on

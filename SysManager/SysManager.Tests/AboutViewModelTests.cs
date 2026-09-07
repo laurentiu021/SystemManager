@@ -246,6 +246,22 @@ public class AboutViewModelTests
         Assert.Equal(string.Empty, vm.LatestNotes);
     }
 
+    /// <summary>
+    /// A history card whose release had no <c>html_url</c> must not offer a link that goes nowhere. The
+    /// emptiness decision lives in <c>CanExecute</c> so it is observable here: <c>OpenUrl</c> returns early
+    /// when there is no WPF <c>Application</c>, so a guard inside the command body would assert nothing.
+    /// </summary>
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("https://github.com/laurentiu021/SystemManager/releases/tag/v1.0.0", true)]
+    public void OpenReleaseCommand_IsOfferedOnlyForAnEntryThatHasAUrl(string? url, bool expected)
+    {
+        var vm = NewVmNoAutoCheck();
+        Assert.Equal(expected, vm.OpenReleaseCommand.CanExecute(url));
+    }
+
     [Fact]
     public void DownloadStatus_DefaultsEmpty()
     {

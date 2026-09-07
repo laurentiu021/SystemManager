@@ -1,7 +1,8 @@
 <!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
 <UserControl x:Class="SysManager.Views.DeepCleanupView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views">
 
     <Grid Background="{DynamicResource Surface0}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -196,6 +197,10 @@
                             <TextBlock Text="{Binding LargeCurrentFolder}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
 
+                        <!-- Grid wrapper so the empty state overlays the table rather than stacking under it:
+                             the parent is a StackPanel, where a sibling would appear BELOW the header row
+                             instead of in place of the missing rows. -->
+                        <Grid>
                         <DataGrid AutomationProperties.Name="Large files" ItemsSource="{Binding LargeFiles}"
                                   AutoGenerateColumns="False" HeadersVisibility="Column"
                                   GridLinesVisibility="None" IsReadOnly="True"
@@ -229,6 +234,11 @@
                                 </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
+                        <v:EmptyState Glyph="&#xE838;"
+                                      Title="No large files listed yet"
+                                      Message="Pick a location above and press Scan drive to list the biggest files it holds."
+                                      Visibility="{Binding LargeFiles.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </StackPanel>

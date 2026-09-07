@@ -101,6 +101,12 @@
                             <DataGridTextColumn Header="ms" Binding="{Binding LatencyMs, StringFormat={}{0:F0}}" Width="60" MinWidth="40"/>
                         </DataGrid.Columns>
                     </DataGrid>
+                    <!-- Before the first trace the grid is a header row over nothing, with no hint of what to
+                         press. Same slot as the grid so it sits where the rows will appear. -->
+                    <v:EmptyState Grid.Row="2" Glyph="&#xE774;"
+                                  Title="No route traced yet"
+                                  Message="Type an address above and press Trace now to see every step between your PC and it."
+                                  Visibility="{Binding Shared.TracerouteHops.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
             </Border>
         </Grid>

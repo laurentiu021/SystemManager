@@ -321,6 +321,21 @@ public class QaAuditTests
         Assert.DoesNotContain("'Evil'Provider'", xpath);
     }
 
+    /// <summary>
+    /// The clauses the OS can bound cheaply combine; severity is not one of them.
+    /// </summary>
+    /// <remarks>
+    /// This asserted <c>Level=2</c> until the severity filter moved into managed code. A <c>Level</c> clause
+    /// is evaluated by the Event Log service itself, so one <c>ReadEvent()</c> walked records internally until
+    /// it found a match and returned only then — a blocking native call no <c>CancellationToken</c> can
+    /// interrupt, measured at 4 m 43 s against a 10-second token. The filter now runs in
+    /// <c>EventLogService.Matches</c>, where the loop can be cancelled between records.
+    /// <para>Asserting the clause is ABSENT rather than deleting the row: the only thing stopping it being
+    /// reinstated later as an obvious-looking optimisation is a test that fails when it comes back. Three
+    /// sibling assertions in <c>SysManager.Tests</c> were migrated the same way; this copy was missed because
+    /// it reaches <c>BuildXPath</c> by reflection from a different project, so grepping the method name in the
+    /// unit tests did not find it — the integration job did.</para>
+    /// </remarks>
     [Fact]
     public void EventLogService_BuildXPath_CombinesAllFilters()
     {
@@ -335,10 +350,11 @@ public class QaAuditTests
             "BuildXPath", BindingFlags.NonPublic | BindingFlags.Static)!;
         var xpath = (string)m.Invoke(null, new object[] { opt })!;
 
-        Assert.Contains("Level=2", xpath);
         Assert.Contains("TimeCreated", xpath);
         Assert.Contains("Provider[@Name='X']", xpath);
         Assert.Contains("EventID=42", xpath);
+        Assert.Contains(" and ", xpath);
+        Assert.DoesNotContain("Level", xpath);
     }
 
     [Fact]

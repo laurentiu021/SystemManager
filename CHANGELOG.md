@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.77.2] - 2026-09-07
+
+Cancel now works in System Logs. Filtering the log to Errors and Criticals over a long period could leave the
+tab stuck for minutes with Cancel doing nothing at all — four and a half minutes on one slower machine, against
+a stop asked for after ten seconds.
+
+### Fixed
+- **Pressing Cancel while System Logs is reading now stops it.** The filtering was being done by Windows
+  itself, inside a single call SysManager had no way to interrupt: it searched the whole period for a matching
+  event before handing anything back, and until it did, Cancel and Refresh could do nothing. SysManager now
+  reads the events and applies the severity filter itself, so it can stop between one event and the next. An
+  unfiltered read — what the tab does by default — behaves exactly as before.
+
+### Added
+- **A test that a cancelled filtered read comes back quickly.** It asks for a severity the log almost never
+  contains, which is the case that used to hang: there is nothing to find, so the search ran to the end.
+
 ## [1.77.1] - 2026-09-07
 
 If you use a screen reader, every tab has been silent about what it was doing. Start a system repair or a
@@ -31,6 +48,7 @@ on screen and none of it out loud. Fifty-two tabs now report themselves as they 
 - **A check that every status line stays announced, and that the fast-moving numbers stay quiet.** Both halves
   matter. A well-meant change that announced everything would look like an improvement and would make the app
   unusable with a screen reader, so the quiet ones are named and pinned too.
+
 
 ## [1.77.0] - 2026-09-07
 

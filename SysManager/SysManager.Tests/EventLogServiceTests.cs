@@ -30,29 +30,12 @@ public class EventLogServiceTests
         Assert.Equal("*", result);
     }
 
-    [Fact]
-    public void BuildXPath_WithSeverity_IncludesLevel()
-    {
-        var opt = new EventLogQueryOptions
-        {
-            Severities = [EventSeverity.Error]
-        };
-        var result = InvokeBuildXPath(opt);
-        Assert.Contains("Level=2", result);
-    }
-
-    [Fact]
-    public void BuildXPath_MultipleSeverities_IncludesOr()
-    {
-        var opt = new EventLogQueryOptions
-        {
-            Severities = new List<EventSeverity> { EventSeverity.Error, EventSeverity.Warning }
-        };
-        var result = InvokeBuildXPath(opt);
-        Assert.Contains("Level=2", result);
-        Assert.Contains("Level=3", result);
-        Assert.Contains(" or ", result);
-    }
+    // BuildXPath_WithSeverity_IncludesLevel and BuildXPath_MultipleSeverities_IncludesOr used to sit here,
+    // asserting the query carried a Level clause. That clause is gone — it made a single ReadEvent() block
+    // uninterruptibly while the OS searched for a match — so both assertions are now inverted, and
+    // BuildXPath_NeverFiltersSeverityInTheQuery below asserts the absence in their place. What they were
+    // really about, that one or several requested severities are honoured, is covered by the Matches tests
+    // against the code that now does the filtering.
 
     [Fact]
     public void BuildXPath_WithSince_IncludesTimeCreated()
@@ -123,9 +106,11 @@ public class EventLogServiceTests
         };
         var result = InvokeBuildXPath(opt);
         Assert.Contains(" and ", result);
-        Assert.Contains("Level=1", result);
         Assert.Contains("Provider[@Name='disk']", result);
         Assert.Contains("EventID=11", result);
+        // Severities is set above and contributes nothing, which is the point: the clauses the OS can bound
+        // cheaply still combine, and severity is not one of them.
+        Assert.DoesNotContain("Level", result, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -176,60 +161,111 @@ public class EventLogServiceTests
     public void MapLevel_UnknownValue_ReturnsInfo()
         => Assert.Equal(EventSeverity.Info, InvokeMapLevel((byte)99));
 
-    // ---------- SeverityToLevels (the live inverse of MapLevel) ----------
+    // ---------- Matches: the severity filter, now applied in managed code ----------
 
+    /// <summary>
+    /// A requested severity admits every raw Level that <c>MapLevel</c> folds into it.
+    /// </summary>
+    /// <remarks>
+    /// This is the invariant <c>SeverityToLevels</c> used to carry. That method existed only to build the
+    /// query's <c>Level</c> clause, and the clause is gone: it made a single <c>ReadEvent()</c> block
+    /// uninterruptibly for minutes while the OS searched for a match, which is the cancellation defect this
+    /// change fixes. The method went with it rather than staying alive on the strength of its own test.
+    /// <para>Info is the case that matters and the reason its predecessor was once wrong. <c>MapLevel</c>
+    /// folds Level 0 (LogAlways) into Info, so an Info filter must admit BOTH 0 and 4 or every LogAlways
+    /// event silently disappears from an Info-filtered view. A dead twin once encoded <c>Info => 4</c> and a
+    /// reflection test certified it.</para>
+    /// </remarks>
     [Theory]
-    [InlineData(EventSeverity.Critical, new[] { 1 })]
-    [InlineData(EventSeverity.Error, new[] { 2 })]
-    [InlineData(EventSeverity.Warning, new[] { 3 })]
-    [InlineData(EventSeverity.Verbose, new[] { 5 })]
-    // Info is the case that matters and the reason the old test was wrong. MapLevel folds Level 0
-    // (LogAlways) into Info, so the XPath must ask for BOTH 0 and 4 or every LogAlways event silently
-    // disappears from an Info-filtered view. A dead twin of this method encoded `Info => 4` and a reflection
-    // test certified it; both are gone.
-    [InlineData(EventSeverity.Info, new[] { 0, 4 })]
-    public void SeverityToLevels_IsTheExactInverseOfMapLevel(EventSeverity severity, int[] expected)
-        => Assert.Equal(expected, EventLogService.SeverityToLevels(severity));
+    [InlineData(EventSeverity.Critical, (byte)1)]
+    [InlineData(EventSeverity.Error, (byte)2)]
+    [InlineData(EventSeverity.Warning, (byte)3)]
+    [InlineData(EventSeverity.Verbose, (byte)5)]
+    [InlineData(EventSeverity.Info, (byte)4)]
+    [InlineData(EventSeverity.Info, (byte)0)]
+    public void Matches_AdmitsEveryLevelThatMapsIntoTheRequestedSeverity(EventSeverity severity, byte level)
+        => Assert.True(EventLogService.Matches([severity], level));
 
-
-    // ---------- P2 #32 regression: Info filter must include Level 0 (LogAlways) ----------
+    /// <summary>A severity that was not asked for is rejected, including the LogAlways edge.</summary>
+    /// <remarks>
+    /// The negative half of the pair above. Without it, a filter that admitted everything would satisfy
+    /// every row of that theory — <c>Level 0</c> against a Critical-only filter is the specific case the old
+    /// <c>BuildXPath_CriticalOnly_DoesNotIncludeLevel0</c> guarded.
+    /// </remarks>
+    [Theory]
+    [InlineData(EventSeverity.Critical, (byte)0)]
+    [InlineData(EventSeverity.Critical, (byte)2)]
+    [InlineData(EventSeverity.Error, (byte)3)]
+    [InlineData(EventSeverity.Info, (byte)1)]
+    public void Matches_RejectsALevelThatWasNotAskedFor(EventSeverity severity, byte level)
+        => Assert.False(EventLogService.Matches([severity], level));
 
     [Fact]
-    public void BuildXPath_InfoSeverity_IncludesLevel0AndLevel4()
+    public void Matches_MultipleSeverities_AdmitsEachOfThem()
     {
-        var opt = new EventLogQueryOptions
-        {
-            Severities = [EventSeverity.Info]
-        };
-        var result = InvokeBuildXPath(opt);
-        Assert.Contains("Level=0", result);
-        Assert.Contains("Level=4", result);
-        Assert.Contains(" or ", result);
+        List<EventSeverity> both = [EventSeverity.Info, EventSeverity.Error];
+
+        Assert.True(EventLogService.Matches(both, 0));
+        Assert.True(EventLogService.Matches(both, 4));
+        Assert.True(EventLogService.Matches(both, 2));
+        Assert.False(EventLogService.Matches(both, 3));
     }
 
-    [Fact]
-    public void BuildXPath_InfoAndError_IncludesLevel0_Level4_Level2()
+    /// <summary>No filter admits everything, including a record with no Level at all.</summary>
+    /// <remarks>
+    /// The Logs tab's default is an unfiltered read, so this is the path most users take. A null Level folds
+    /// to Info the same way Level 0 does, and must not be dropped by an absent filter.
+    /// </remarks>
+    [Theory]
+    [InlineData((byte)1)]
+    [InlineData((byte)5)]
+    [InlineData(null)]
+    public void Matches_NoFilter_AdmitsEverything(byte? level)
     {
-        var opt = new EventLogQueryOptions
-        {
-            Severities = [EventSeverity.Info, EventSeverity.Error]
-        };
-        var result = InvokeBuildXPath(opt);
-        Assert.Contains("Level=0", result);
-        Assert.Contains("Level=4", result);
-        Assert.Contains("Level=2", result);
+        Assert.True(EventLogService.Matches(null, level));
+        Assert.True(EventLogService.Matches([], level));
     }
 
+    /// <summary>
+    /// The query carries no <c>Level</c> clause, whatever severities were asked for.
+    /// </summary>
+    /// <remarks>
+    /// The clause is what made one <c>ReadEvent()</c> block for 4 m 43 s against a 10-second token on a CI
+    /// runner: the Event Log service evaluates the query itself and returns only once it finds a match, and
+    /// that native call cannot be cancelled. Asserting its ABSENCE is the only thing that stops it being
+    /// reinstated later as an obvious-looking optimisation — the filter would still work, and only the
+    /// cancellation would quietly break again.
+    /// </remarks>
     [Fact]
-    public void BuildXPath_CriticalOnly_DoesNotIncludeLevel0()
+    public void BuildXPath_NeverFiltersSeverityInTheQuery()
     {
         var opt = new EventLogQueryOptions
         {
-            Severities = [EventSeverity.Critical]
+            Severities = [EventSeverity.Info, EventSeverity.Error, EventSeverity.Critical]
         };
+
         var result = InvokeBuildXPath(opt);
-        Assert.Contains("Level=1", result);
-        Assert.DoesNotContain("Level=0", result);
+
+        Assert.DoesNotContain("Level", result, StringComparison.Ordinal);
+        // Still "*" here, because severity was the only filter asked for — proving the clause was dropped
+        // rather than merely renamed.
+        Assert.Equal("*", result);
+    }
+
+    /// <summary>The other clauses are untouched by that removal.</summary>
+    [Fact]
+    public void BuildXPath_StillFiltersTheThingsTheOsCanBoundCheaply()
+    {
+        var opt = new EventLogQueryOptions
+        {
+            Severities = [EventSeverity.Error],
+            Since = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc)
+        };
+
+        var result = InvokeBuildXPath(opt);
+
+        Assert.Contains("TimeCreated", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("Level", result, StringComparison.Ordinal);
     }
 
     // ---------- EventLogQueryOptions defaults ----------

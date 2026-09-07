@@ -221,7 +221,7 @@
         </Border>
 
         <!-- Status -->
-        <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Style="{StaticResource Caption}"
+        <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"
                    Margin="28,12,28,24" TextWrapping="Wrap"/>
 
     </Grid>

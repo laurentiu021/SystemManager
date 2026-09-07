@@ -93,7 +93,7 @@
                          IsIndeterminate="{Binding IsProgressIndeterminate}"/>
             <TextBlock Grid.Column="1" Text="{Binding UpgradeEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
                        Visibility="{Binding UpgradeEtaText, Converter={StaticResource FlexVis}}"/>
-            <TextBlock Grid.Column="2" Margin="12,0,0,0" Text="{Binding StatusMessage}" Style="{StaticResource Subtle}"/>
+            <TextBlock Grid.Column="2" Margin="12,0,0,0" Text="{Binding StatusMessage}" Style="{StaticResource SubtleStatusLine}"/>
         </Grid>
     </Grid>
 </UserControl>

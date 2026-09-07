@@ -190,7 +190,10 @@
                        TextTrimming="CharacterEllipsis"
                        ToolTip="{Binding CurrentFile}">
                 <TextBlock.Style>
-                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                    <!-- BasedOn StatusLine, not Caption: this is the one status line in the app declared as
+                         an inline style rather than a style reference, because it adds a tooltip trigger.
+                         It still has to be announced like the other 51. -->
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource StatusLine}">
                         <!-- No tooltip outside a scan: an empty one renders as a stray blank box. -->
                         <Setter Property="ToolTipService.IsEnabled" Value="False"/>
                         <Style.Triggers>

@@ -203,7 +203,7 @@
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding ModeDescription}" Style="{StaticResource Caption}" DockPanel.Dock="Right"
                        HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
         </DockPanel>
     </Grid>
 </UserControl>

@@ -133,7 +133,7 @@
                     AutomationProperties.Name="Cancel reading boot history"
                     Style="{StaticResource GhostButton}" Margin="0,0,12,0" Padding="10,2"
                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Caption}"/>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
         </DockPanel>
     </Grid>
 </UserControl>

@@ -1,7 +1,8 @@
 <!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
 <UserControl x:Class="SysManager.Views.SpeedTestView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:SysManager.Views">
 
     <UserControl.Resources>
         <!-- The verdict callout, defined once and used by both engine cards. Two hand-written copies of
@@ -174,9 +175,10 @@
                                 <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>
-                        <TextBlock Text="No history yet — run a test to start tracking."
-                                   Style="{StaticResource Subtle}" Margin="0,8,0,0"
-                                   Visibility="{Binding OoklaHistory.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                        <v:EmptyState Glyph="&#xE9D9;"
+                                      Title="No history yet"
+                                      Message="Run a test to start tracking how this connection changes over time."
+                                      Visibility="{Binding OoklaHistory.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </StackPanel>
                 </Border>
 
@@ -205,9 +207,10 @@
                                 <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>
-                        <TextBlock Text="No history yet — run a test to start tracking."
-                                   Style="{StaticResource Subtle}" Margin="0,8,0,0"
-                                   Visibility="{Binding HttpHistory.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                        <v:EmptyState Glyph="&#xE9D9;"
+                                      Title="No history yet"
+                                      Message="Run a test to start tracking how this connection changes over time."
+                                      Visibility="{Binding HttpHistory.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </StackPanel>
                 </Border>
             </Grid>

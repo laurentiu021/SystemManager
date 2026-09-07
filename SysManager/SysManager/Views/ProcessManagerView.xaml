@@ -3,6 +3,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:v="clr-namespace:SysManager.Views"
              d:DataContext="{d:DesignInstance vm:ProcessManagerViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -291,10 +292,10 @@
             </DataGrid>
 
             <!-- Empty state -->
-            <TextBlock Text="No processes to show."
-                       Style="{StaticResource Subtle}" TextWrapping="Wrap" MaxWidth="360"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Visibility="{Binding FilteredProcesses.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            <v:EmptyState Glyph="&#xE946;"
+                          Title="No processes to show"
+                          Message="Nothing matches the current search. Clear it to see every running process."
+                          Visibility="{Binding FilteredProcesses.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>
 

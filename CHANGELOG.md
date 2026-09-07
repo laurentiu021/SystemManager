@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.25] - 2026-09-07
+
+Six tabs told you a list was empty with one small grey sentence floating in a large blank card, while thirty
+others gave you an icon, a headline and a plain-English next step. They now all look the same, and three of
+them explain the thing that actually confuses people: the list is empty because a search or filter is hiding
+everything, not because the feature is broken.
+
+### Fixed
+- **Services, Startup, Task Manager, Windows Features, DNS & Hosts and Speed Test use the same empty state as
+  every other tab.** These six drew their own one-line message instead of the shared control, so they had no
+  icon and no headline — and two of them were not even centred, reading as a stray caption rather than an
+  empty state. Seven places in total; the shared control is now used everywhere.
+- **Three of them now say *why* the list is empty.** "No processes to show" on its own is alarming. Where the
+  list is empty because a search term or a filter matches nothing, it now says so and tells you to clear it —
+  Task Manager, Windows Features and Services.
+- **DNS & Hosts explains what an empty hosts file means** instead of just noting there is nothing to show.
+
+### Added
+- **A check that no tab can hand-roll its own empty state again.** The six were not an oversight of taste:
+  none of them declared the namespace the shared control lives in, so it was simply unreachable when they
+  were written. The check now catches that, and it is scoped so the "No battery detected" and "No NVIDIA GPU
+  detected" notices — which are facts about your hardware inside a working card, not empty lists — are
+  correctly left alone.
+
 ## [1.76.24] - 2026-09-07
 
 The Landing tab used to ask Windows the same two questions 3.3 times a second, the expensive way, for three

@@ -490,3 +490,84 @@ jobs:
           name: ui-test-results
           path: TestResults/**
           retention-days: 14
+
+  # The integration suite was compile-checked and never EXECUTED anywhere in the pipeline, and the
+  # primary workstation cannot run `dotnet test` at all. So a stale expectation in it stayed invisible
+  # indefinitely: nine assertions sat red through a whole rename because compiling them still worked,
+  # and one asserted a sidebar tab that had stopped being last. Both were found by reading the file,
+  # which is not a process.
+  #
+  # Non-blocking, deliberately, and shaped exactly like ui-tests above: these tests touch the live
+  # system (WMI, the filesystem, real processes), so a runner difference must not gate a merge. What
+  # they must do is SPEAK — the warning annotation below is the whole point of the job, and the
+  # session-start health check reads recent runs, so a red surfaces without anyone remembering to look.
+  #
+  # It spoke immediately. The first run found five failures and a hang, none of which anything in the
+  # pipeline could have reported before, because the suite was compile-checked and never executed:
+  #   WindowsUpdateAutoCheckTests.CommandExists(propName: "ListFeatureUpdatesCommand")
+  #   EventLogServiceTests.Read_SeverityFilter_ReturnsOnlyRequested
+  #   EventLogServiceTests.Read_System_ReturnsSomeEntries_Within_ShortWindow
+  #   EventLogServiceTests.Read_EntriesEnrichedWithExplanation
+  #   DeepCleanupViewUiTests.View_BindsToDeepCleanupViewModel  (Cannot find resource named 'Display')
+  # then silence from 00:07:41 to the 30-minute ceiling. So this job starts red on purpose: the failures
+  # are real and are being fixed, and a job that hid them would be the thing worth deleting.
+  #
+  # This is the broader of the two answers the issue proposed. Moving the project's pure assertions
+  # into the blocking unit suite is still worth doing and does not conflict; it just cannot cover the
+  # tests that genuinely need a live system, which this does.
+  integration-tests:
+    name: Integration tests (non-blocking)
+    runs-on: windows-latest
+    needs: build-and-test
+    timeout-minutes: 30
+    # Fork PRs have no secrets and no reason to run a live-system suite.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: |
+          dotnet restore SysManager/SysManager/SysManager.csproj
+          dotnet restore SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj
+
+      - name: Build integration tests
+        run: dotnet build SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release --no-restore
+
+      # --blame-hang is not optional here, it is the whole reason this job is usable. The first run of this
+      # job proved the suite HANGS on a clean runner: it reported five failures in the first eight minutes and
+      # then produced no output at all for twenty-one, until the job's own 30-minute ceiling cancelled it. A
+      # cancelled job reports `cancelled`, which `gh pr checks` renders as `fail` — indistinguishable from a
+      # broken pipeline, and permanently red, which is how a non-blocking job teaches everyone to ignore it.
+      #
+      # With a hang timeout, the run stops at five minutes of silence, NAMES the test that stopped responding,
+      # and writes a dump next to the results. A hang becomes a finding instead of a timeout.
+      - name: Run integration tests
+        id: integration-tests
+        run: >
+          dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj
+          -c Release --no-build
+          --blame-hang --blame-hang-timeout 5m
+          --logger "trx;LogFileName=integration-results.trx"
+          --results-directory TestResults
+        continue-on-error: true
+
+      # `outcome`, NOT `conclusion`: continue-on-error forces the step's conclusion to 'success', so a
+      # conclusion check never fires and the failure is masked completely. Same trap as ui-tests.
+      - name: Annotate integration test failures
+        if: steps.integration-tests.outcome == 'failure'
+        run: echo "::warning::Integration tests failed — review the integration-test-results artifact. This job is non-blocking, so the merge is not gated; the failure is still real."
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: integration-test-results
+          path: TestResults/**
+          retention-days: 14

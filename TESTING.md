@@ -7,7 +7,7 @@ SysManager has three test projects, each with a distinct scope and runner.
 | Project | What it tests | Runs on CI |
 |---|---|---|
 | `SysManager.Tests` | Unit tests — mostly pure logic, but some tests touch lightweight OS APIs (registry reads, process enumeration, Task Scheduler queries) and a few exercise STA/UI-thread code via `Xunit.StaFact` (`[StaFact]`). No WMI, no network I/O, no admin required. | ✅ Every push / PR |
-| `SysManager.IntegrationTests` | Integration tests — real Windows APIs (Event Log, WMI, PowerShell, ICMP, WPF dispatcher) | ❌ Local only |
+| `SysManager.IntegrationTests` | Integration tests — real Windows APIs (Event Log, WMI, PowerShell, ICMP, WPF dispatcher) | ⚠️ CI (non-blocking) |
 | `SysManager.UITests` | End-to-end UI automation via FlaUI — needs an interactive desktop session; runs in CI on a desktop-enabled runner, non-blocking (`continue-on-error`) and skipped on fork PRs | ⚠️ CI (non-blocking) |
 
 ## Running unit tests (CI-equivalent)
@@ -18,14 +18,18 @@ dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
 
 ## Running integration tests locally
 
-Requires a real Windows machine (not a headless CI runner).
-
 ```powershell
 dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
 ```
 
 Some integration tests require admin rights (WMI storage queries, ICMP sockets).
 Run from an elevated PowerShell prompt if you see access-denied failures.
+
+CI also runs this suite as a **non-blocking** job, so a stale expectation surfaces as a
+warning annotation instead of sitting invisible. It is not a merge gate: these tests touch
+the live system, so a runner difference must not block a merge. A red here is still real —
+read the `integration-test-results` artifact. Anything that fails only on a runner belongs
+in this suite; anything pure belongs in `SysManager.Tests`, where it gates merges.
 
 ## Running UI automation tests locally
 

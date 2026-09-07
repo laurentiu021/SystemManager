@@ -154,8 +154,15 @@ public partial class UiAutomationContractTests
     /// "Restart SysManager as administrator", 4 "Relaunch as administrator", 1 "Restart as administrator",
     /// and 5 carried no accessible name at all. A screen-reader user heard a different verb than the one on
     /// screen, and a voice-control user saying what they could read could not activate the app's most
-    /// consequential control. WCAG 2.5.3 (Label in Name) is the rule; 30 copies of one control is the
-    /// reason it has to be mechanical rather than remembered.</para>
+    /// consequential control. WCAG 2.5.3 (Label in Name) is the rule; 30 copies of one control was the
+    /// reason it had to be mechanical rather than remembered.</para>
+    /// <para><b>There is now ONE copy.</b> The banner moved into <c>Views/AdminBanner.xaml</c>, so the 30
+    /// buttons became one and agreement is structural rather than checked. The floor drops from 20 to 1 for
+    /// that reason and no other — deliberately, not to make a failing assertion pass. What still needs
+    /// asserting is that the one button's accessible name matches the words printed on it, which is what this
+    /// guard does. What stops the copies coming back is
+    /// <c>ArchitectureTests.TheElevationBanner_LivesInOneControl_AndItsHostsExposeWhatItBinds</c>; without
+    /// that, a floor of 1 here would pass just as happily on a tree that had drifted back to 30.</para>
     /// </summary>
     [Fact]
     public void EveryElevationButton_IsAnnouncedWithTheWordsPrintedOnIt()
@@ -182,8 +189,10 @@ public partial class UiAutomationContractTests
             }
         }
 
-        // Vacuity floor: if the elevation button were renamed, this would inspect nothing and pass.
-        Assert.True(checkedButtons >= 20,
+        // Vacuity floor: if the elevation button were renamed, this would inspect nothing and pass. One,
+        // because the banner is one control now — see the remarks. The sibling guard in ArchitectureTests is
+        // what keeps that true; this one only asserts the label and the name agree.
+        Assert.True(checkedButtons >= 1,
             $"only {checkedButtons} elevation buttons were found — if the label changed, update this guard "
             + "rather than letting it inspect nothing.");
 

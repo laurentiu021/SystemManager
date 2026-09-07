@@ -49,40 +49,10 @@
             </StackPanel>
         </DockPanel>
 
-        <!-- Elevation banner: not elevated (restoring HKLM-backed settings needs admin) -->
-        <Border Grid.Row="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                BorderThickness="1" CornerRadius="12" Padding="12,8" Margin="28,12,28,0"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
-            <DockPanel>
-                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
-                        AutomationProperties.Name="Run as administrator"/>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
-                    <TextBlock Text="Some watched settings are machine-wide and need administrator to restore."
-                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <!-- Elevation banner: elevated (golden admin contract, matches AppBlockerView) -->
-        <Border Grid.Row="2" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1"
-                CornerRadius="12" Padding="12,8" Margin="28,12,28,0"
-                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <Grid>
-                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
-                        Margin="-12,-8,0,-8"/>
-                <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width
-                     along its orientation, so this banner's TextWrapping was inert and clipped on a
-                     narrow window (#1807). The stripe Border above is untouched. -->
-                <DockPanel Margin="6,0,0,0">
-                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Top" DockPanel.Dock="Left"/>
-                    <TextBlock Text="Running as administrator — machine-wide watched settings can be restored, not just per-user ones."
-                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                </DockPanel>
-            </Grid>
-        </Border>
+        <!-- Elevation banner (restoring HKLM-backed settings needs admin) -->
+        <v:AdminBanner Grid.Row="2" Margin="28,12,28,0"
+                       NotElevatedMessage="Some watched settings are machine-wide and need administrator to restore."
+                       ElevatedMessage="Running as administrator — machine-wide watched settings can be restored, not just per-user ones."/>
 
         <!-- Baseline status banner -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"

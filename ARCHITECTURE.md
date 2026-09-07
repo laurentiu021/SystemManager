@@ -17,7 +17,10 @@ SysManager/
 │   ├── Models/                 # POCOs (snapshots, samples, reports, cleanup categories)
 │   ├── Services/               # Windows / PowerShell / CLI wrappers
 │   ├── ViewModels/             # one VM per tab + MainWindowViewModel
-│   ├── Views/                  # XAML views + code-behind
+│   ├── Views/                  # XAML views + code-behind, plus three shared controls:
+│   │                           #   AdminBanner (the elevation banner, 30 tabs)
+│   │                           #   EmptyState  (icon + title + message for an empty list)
+│   │                           #   DevelopmentBanner (the PREVIEW notice)
 │   ├── Helpers/                # AdminHelper, converters, collections, parsers
 │   ├── Resources/              # icons and assets
 │   ├── App.xaml(.cs)

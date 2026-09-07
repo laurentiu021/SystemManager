@@ -1,0 +1,70 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.AdminBanner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+
+    <!-- The golden admin-control contract, in one place. Every privileged tab must explain WHY
+         administrator rights are needed and WHAT unlocks once elevated, at the top of the page —
+         and that was enforced by 30 hand-copies of two Borders, 60 blocks in all.
+
+         Drop it where the pair used to be, keeping the caller's Grid.Row and Margin so both layout
+         strategies still work:
+           <v:AdminBanner Grid.Row="1" Margin="28,12,28,0"
+                          NotElevatedMessage="Running SFC and DISM system repairs requires administrator privileges."
+                          ElevatedMessage="Running as administrator — you can run system file checks and repairs."/>
+
+         IsElevated and RelaunchAsAdminCommand are bound from the ambient DataContext rather than
+         exposed as properties. #1618 proposed an ICommand property, but the command name is
+         RelaunchAsAdminCommand at all 31 existing call sites — passing one uniform value 30 times is
+         the duplication being removed, and IsElevated was already bound ambiently.
+         ArchitectureTests.EveryAdminBannerHost_ExposesWhatTheBannerBinds keeps that safe: a view model
+         missing either member fails there rather than silently rendering a banner whose button does
+         nothing. -->
+    <Grid>
+        <!-- Not elevated: say what is locked, and offer the one button that unlocks it. -->
+        <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="12" Padding="12,8"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+            <!-- DockPanel, not a horizontal StackPanel: the message is the last child, so it fills the
+                 remaining width and TextWrapping actually wraps. Inside a horizontal StackPanel the child
+                 is measured with infinite width, so the attribute is inert and long copy is clipped —
+                 NoTextWrapping_IsInertInsideAHorizontalStackPanel exists for that exact mistake, and two
+                 views already used this DockPanel shape before the extraction. -->
+            <DockPanel>
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        AutomationProperties.Name="Run as administrator"/>
+                <TextBlock Text="&#xE83D;" DockPanel.Dock="Left"
+                           FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock Text="{Binding NotElevatedMessage, ElementName=Root}"
+                           Foreground="{DynamicResource TextSecondary}" FontSize="13"
+                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Elevated: golden, and it says what is now possible. The stripe's negative margin bleeds it
+             through the parent's 12,8 padding to the border edge; it is tied to that padding, which is
+             one more reason both live here rather than in 30 copies. -->
+        <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+                BorderThickness="1" CornerRadius="12" Padding="12,8"
+                Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left"
+                        CornerRadius="2" Margin="-12,-8,0,-8"/>
+                <!-- DockPanel for the same reason as above. Three views already used it here. -->
+                <DockPanel Margin="6,0,0,0">
+                    <TextBlock Text="&#xE83D;" DockPanel.Dock="Left"
+                               FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="13" VerticalAlignment="Center"
+                               Foreground="{DynamicResource WarningText}"/>
+                    <TextBlock Text="{Binding ElevatedMessage, ElementName=Root}"
+                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold"
+                               Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </DockPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

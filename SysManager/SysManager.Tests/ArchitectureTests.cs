@@ -2010,6 +2010,128 @@ public partial class ArchitectureTests
             + "host the banner:\n  " + string.Join("\n  ", missing));
     }
 
+    /// <summary>
+    /// Anything clickable by mouse that is not a <c>Button</c> must also be operable by keyboard — focusable,
+    /// a tab stop, and activated by BOTH Enter and Space.
+    /// </summary>
+    /// <remarks>
+    /// A <c>Border</c> with a <c>MouseLeftButtonUp</c> handler is a button to a mouse and furniture to a
+    /// keyboard: it gets no focus, no tab stop and no Enter/Space for free. Two such controls exist and both
+    /// were given all of it by hand — the theme chip in the shell, and each preset card in the Appearance
+    /// popup. That hand-written support is the fragile kind: three attributes and an event handler that a
+    /// template edit removes without a compiler noticing, and nothing pinned it.
+    /// <para><b>Enter AND Space, checked in the handler body.</b> "Has a KeyDown handler" is not the contract —
+    /// a handler testing only <c>Key.Enter</c> would satisfy it while leaving Space dead, and Space is what
+    /// most keyboard users press on something that looks like a button. Both handlers are read for both keys.
+    /// </para>
+    /// <para><b>Why the four colour swatches are exempt rather than fixed.</b> Their handler is
+    /// <c>FocusHex</c>: it focuses and selects the hex box immediately beside them, and that box is already
+    /// the next tab stop with its own accessible name. A tab stop on the swatch would focus the control you
+    /// are about to Tab to anyway — a keystroke that does nothing — so adding one would make the keyboard path
+    /// worse, not better. Listed with the reason so the exemption is a decision rather than an oversight, the
+    /// same shape the empty-state guard uses.</para>
+    /// <para>This is the source-readable half of #1552. The other half — driving real Tab presses through
+    /// FlaUI — cannot be authored here: it needs the application running to validate, and an unvalidated test
+    /// in the non-blocking UI job reports "pass" whether or not it asserts anything. This half runs in the
+    /// BLOCKING suite and catches the deletion the issue is actually worried about.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryMouseClickableElement_IsAlsoKeyboardOperable()
+    {
+        // handler name -> why keyboard support would add nothing.
+        var mouseOnlyByDesign = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["CustomAccent_Click"] = "focuses the adjacent Accent hex box, already the next tab stop",
+            ["CustomBg_Click"] = "focuses the adjacent Background hex box, already the next tab stop",
+            ["CustomSurface_Click"] = "focuses the adjacent Surface hex box, already the next tab stop",
+            ["CustomText_Click"] = "focuses the adjacent Text hex box, already the next tab stop",
+        };
+
+        var appDir = FindAppProjectDir();
+        var xamlNs = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+        var offenders = new List<string>();
+        var clickables = 0;
+
+        foreach (var file in Directory
+                     .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)))
+        {
+            XDocument document;
+            try { document = XDocument.Load(file); }
+            catch (System.Xml.XmlException) { continue; }
+
+            foreach (var element in document.Descendants())
+            {
+                var handler = (string?)element.Attribute("MouseLeftButtonUp")
+                              ?? (string?)element.Attribute("MouseLeftButtonDown");
+                if (handler is null) continue;
+                clickables++;
+                if (mouseOnlyByDesign.ContainsKey(handler)) continue;
+
+                var name = (string?)element.Attribute(xamlNs + "Name") ?? handler;
+                var where = $"{Path.GetFileName(file)}: <{element.Name.LocalName} {name}>";
+
+                if ((string?)element.Attribute("Focusable") != "True")
+                    offenders.Add($"{where} is clickable by mouse but not Focusable");
+                if ((string?)element.Attribute("KeyboardNavigation.IsTabStop") != "True")
+                    offenders.Add($"{where} is clickable by mouse but not a tab stop");
+                if (element.Attribute("KeyDown") is null)
+                    offenders.Add($"{where} is clickable by mouse but has no KeyDown handler");
+            }
+        }
+
+        // Vacuity floor: five mouse-clickable elements in XAML, plus one attached in code-behind. A collapse
+        // means the attribute match broke and every absence below is an absence of scanning.
+        Assert.True(clickables >= 5,
+            $"only {clickables} mouse-clickable elements were found, out of 5 in XAML — the attribute match is "
+            + "out of date, so a pass proves nothing.");
+
+        // The handlers themselves: both keys, not just Enter.
+        foreach (var (source, handler) in new[]
+                 {
+                     (Path.Combine(appDir, "MainWindow.xaml.cs"), "ThemeBtn_KeyDown"),
+                     (Path.Combine(appDir, "Views", "ThemePopup.xaml.cs"), "Preset_KeyDown"),
+                 })
+        {
+            Assert.True(File.Exists(source),
+                $"{Path.GetFileName(source)} is gone — this guard cannot read {handler}, so it would pass "
+                + "without checking it.");
+
+            var body = KeyHandlerBody(File.ReadAllText(source), handler);
+            Assert.True(body.Length > 0,
+                $"{handler} was not found in {Path.GetFileName(source)}. It is the only thing that makes that "
+                + "Border activatable from the keyboard; if it was renamed, update this guard rather than "
+                + "letting it check nothing.");
+
+            foreach (var key in new[] { "Key.Enter", "Key.Space" })
+            {
+                Assert.True(body.Contains(key, StringComparison.Ordinal),
+                    $"{handler} does not handle {key}. A keyboard user pressing it on something that looks "
+                    + "like a button gets nothing, and \"has a KeyDown handler\" would still be satisfied — "
+                    + "which is why both keys are checked in the body rather than on the attribute.");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "these elements are buttons to a mouse and furniture to a keyboard. A Border gets no focus, no "
+            + "tab stop and no Enter/Space for free, so each has to be given all three — or listed in this "
+            + "test with a reason why keyboard support would add nothing:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The body of a key handler, sliced from its declaration to the next member. Empty when not found, so
+    /// the caller can tell "renamed" apart from "present but wrong".
+    /// </summary>
+    private static string KeyHandlerBody(string source, string methodName)
+    {
+        var declaration = Regex.Match(source, $@"\b{Regex.Escape(methodName)}\s*\([^)]*\)\s*\r?\n?\s*\{{");
+        if (!declaration.Success) return "";
+        var rest = source[declaration.Index..];
+        var end = NextMemberDeclaration().Match(rest, 1);
+        return end.Success ? rest[..end.Index] : rest;
+    }
+
     /// <summary>A <c>DataGrid</c> or <c>ItemsControl</c> bound to a collection.</summary>
     [GeneratedRegex(@"<(?:DataGrid|ItemsControl)\b[^>]*ItemsSource=""\{Binding", RegexOptions.Compiled)]
     private static partial Regex CollectionItemsSource();

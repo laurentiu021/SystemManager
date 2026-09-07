@@ -38,6 +38,17 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     public BulkObservableCollection<EnvVariable> Variables { get; } = new();
     public BulkObservableCollection<EnvVariable> FilteredVariables { get; } = new();
 
+    /// <summary>
+    /// True when variables were read but the search and scope filters hid every one of them.
+    /// </summary>
+    /// <remarks>
+    /// Both halves matter. Without "were read", a scope the machine has nothing in — or a read that came
+    /// back empty — would be described to the user as a search that matched nothing, sending them to edit a
+    /// search box that is not the problem. Same shape as <c>LogsViewModel.HasNoResults</c>, which keeps
+    /// "the filters hid everything" apart from "the log could not be read".
+    /// </remarks>
+    [ObservableProperty] private bool _hasNoMatches;
+
     /// <summary>Directories of the selected PATH-like variable, with missing/duplicate flags.</summary>
     public BulkObservableCollection<PathEntry> PathEntries { get; } = new();
 
@@ -136,6 +147,7 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         }
 
         FilteredVariables.ReplaceWith(source);
+        HasNoMatches = Variables.Count > 0 && FilteredVariables.Count == 0;
     }
 
     private void OnVariablePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

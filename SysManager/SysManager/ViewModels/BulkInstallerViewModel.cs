@@ -69,6 +69,19 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     public BulkObservableCollection<InstallableApp> SearchResults { get; } = new();
 
     /// <summary>
+    /// True when a search finished and matched nothing, so the view can say so.
+    /// </summary>
+    /// <remarks>
+    /// A flag rather than <c>SearchResults.Count == 0</c>, because that is also true before the first
+    /// search — the view would greet the user with "No packages found" for a query they had not typed. Same
+    /// shape as <c>LogsViewModel.HasNoResults</c>, which distinguishes "the filters hid everything" from
+    /// "nothing was loaded". Deliberately NOT set on the two failure paths: those already put their own
+    /// reason in <see cref="StatusMessage"/>, and "no packages found" would contradict "winget is
+    /// unavailable".
+    /// </remarks>
+    [ObservableProperty] private bool _searchFoundNothing;
+
+    /// <summary>
     /// True when "Select &lt;category&gt;" is worth offering: only once a real category is chosen.
     /// While the filter is "All" that button would tick exactly what Select All already does, and two
     /// controls doing the same thing under different names is its own small confusion.
@@ -327,6 +340,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(SearchQuery) || SearchQuery.Length < 2) return;
         IsSearching = true;
+        SearchFoundNothing = false;
         SearchResults.Clear();
         try
         {
@@ -335,6 +349,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             // is sanitized against argument injection before it reaches the command line.
             var lines = await _service.SearchAsync(SearchQuery).ConfigureAwait(true);
             SearchResults.ReplaceWith(ParseSearchResults(string.Join("\n", lines)));
+            SearchFoundNothing = SearchResults.Count == 0;
         }
         // Missing winget is the one search failure with a specific, actionable answer, so it is named
         // rather than folded into "ensure winget is available" — which tells the user to check the very

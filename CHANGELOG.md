@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.19] - 2026-09-07
+
+Three lists used to go blank without saying why. Search winget for something that does not exist and the
+results area simply vanished; pick a category with nothing in it and the app list emptied; search the
+environment variables for a word that matches nothing and you were left with column headers over empty space.
+All three now tell you what happened and which control to reach for.
+
+### Fixed
+- **A winget search that finds nothing says so.** The results area hid itself when the list came back empty,
+  and nothing replaced it, so a misspelt name produced no results and no explanation — indistinguishable from
+  the search not having run. It now says "No packages found" with a hint that search matches package names
+  and IDs. Only after a search: an empty list before you have searched is just the starting state.
+- **An app filter that matches nothing says so.** Easiest to hit without typing anything at all — the
+  category dropdown offers "Custom", and none of the 46 built-in apps are in that category, so choosing it
+  emptied the list silently. It now points you at "All" in the category list or the filter box.
+- **An environment-variable search that matches nothing says so.** The grid kept its column headers over
+  empty space, which reads as "this machine has no environment variables" rather than "none of them match
+  what you typed". The message distinguishes the two: it only appears when variables were actually read, so a
+  scope with nothing in it is never blamed on the search box.
+
 ## [1.76.18] - 2026-09-07
 
 The drive list in System Health now tells you how much room is left on each drive. It already knew — it just

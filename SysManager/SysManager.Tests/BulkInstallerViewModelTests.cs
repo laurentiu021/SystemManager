@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -102,6 +103,118 @@ public class BulkInstallerViewModelTests
         Assert.Contains("All", vm.Categories);
         Assert.Contains("Custom", vm.Categories);
         Assert.Equal(13, vm.Categories.Count);
+    }
+
+    // ── no-results state for the winget search ──
+
+    /// <summary>
+    /// A view-model whose winget search reaches a substituted runner, so no process is started.
+    /// </summary>
+    /// <remarks>
+    /// <c>NewVm</c> builds a real <c>PowerShellRunner</c>, which for the search path means launching an
+    /// actual <c>winget search</c> — a live process, a network round-trip, and an answer that depends on the
+    /// machine. The seam is one level down from the view-model: the service collects <c>LineReceived</c>
+    /// around <c>RunProcessAsync</c>, so a substituted runner that emits nothing is a search that matched
+    /// nothing.
+    /// </remarks>
+    private static BulkInstallerViewModel VmWithSubstitutedRunner(IPowerShellRunner runner) =>
+        new(new BulkInstallerService(runner),
+            new AppIconService(null, Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))));
+
+    /// <summary>
+    /// A search that matches nothing says so — and only once the search has actually run.
+    /// </summary>
+    /// <remarks>
+    /// Before this, the results <c>ItemsControl</c> hid itself on an empty <c>Count</c> and nothing replaced
+    /// it, so a query with no matches produced no results and no explanation. The flag is what keeps the
+    /// message out of sight beforehand: an empty list before the first search is the starting state, not a
+    /// failed search.
+    /// </remarks>
+    [Fact]
+    public async Task SearchWinget_WhenNothingMatches_SaysSo_ButNotBeforeTheSearch()
+    {
+        var vm = VmWithSubstitutedRunner(Substitute.For<IPowerShellRunner>());
+        Assert.False(vm.SearchFoundNothing);   // nothing searched yet
+
+        vm.SearchQuery = "qwertyasdfzxcv";
+        await vm.SearchWingetCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.SearchResults);
+        Assert.True(vm.SearchFoundNothing);
+    }
+
+    /// <summary>
+    /// A query too short to search leaves the state alone rather than claiming nothing was found.
+    /// </summary>
+    /// <remarks>
+    /// <c>SearchWingetAsync</c> returns before doing anything under two characters. Setting the flag there
+    /// would tell the user their one-letter query matched nothing, when it was never sent.
+    /// </remarks>
+    [Fact]
+    public async Task SearchWinget_WithTooShortAQuery_DoesNotClaimNothingWasFound()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = VmWithSubstitutedRunner(runner);
+
+        vm.SearchQuery = "q";
+        await vm.SearchWingetCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SearchFoundNothing);
+
+        // Not DidNotReceiveWithAnyArgs: the constructor legitimately runs `winget list` to learn which
+        // apps are already installed, so the assertion has to name the SEARCH rather than any winget call.
+        await runner.DidNotReceive().RunProcessAsync(
+            "winget",
+            Arg.Is<string>(args => args.StartsWith("search", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<System.Text.Encoding?>());
+    }
+
+    /// <summary>
+    /// When winget itself is missing, the tab says THAT — not "no packages found".
+    /// </summary>
+    /// <remarks>
+    /// The two answers point somewhere different: one is "try another word", the other is "winget is not on
+    /// this machine". Showing the no-results state on a failure would send the user to reword a query that
+    /// was never able to run.
+    /// </remarks>
+    [Fact]
+    public async Task SearchWinget_WhenWingetIsMissing_DoesNotClaimNoPackagesWereFound()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns<Task<int>>(_ => throw new System.ComponentModel.Win32Exception(2));
+        var vm = VmWithSubstitutedRunner(runner);
+
+        vm.SearchQuery = "firefox";
+        await vm.SearchWingetCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SearchFoundNothing);
+        Assert.Equal(WingetFailure.WingetUnavailable, vm.StatusMessage);
+    }
+
+    // ── no-results state for the curated list ──
+
+    /// <summary>
+    /// The category dropdown offers "Custom", and no curated app is in it — so the list empties with no
+    /// text typed at all. That is the state the view now explains.
+    /// </summary>
+    /// <remarks>
+    /// Asserted because the copy tells the user to pick "All" in the category list, and that instruction is
+    /// only right if a category really can empty the list. <c>Categories</c> is hardcoded while the app
+    /// catalogue is not, so the two can disagree — and they do.
+    /// </remarks>
+    [Fact]
+    public void SelectingACategoryWithNoCuratedApp_EmptiesTheList()
+    {
+        var vm = NewVm();
+        Assert.NotEmpty(vm.FilteredApps);
+
+        vm.SelectedCategory = "Custom";
+
+        Assert.Empty(vm.FilteredApps);
+        Assert.DoesNotContain(vm.Apps, a => a.Category == "Custom");
     }
 
     // ── re-entrancy guard (regression: shared CTS disposed mid-install) ──

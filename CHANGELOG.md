@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.20] - 2026-09-07
+
+Deleting a saved volume preset in Audio Mixer wipes it off the disk straight away, and the Delete button was
+the quietest control in its row — quieter than Apply next to it. It is now red, like every other button in
+SysManager that destroys something. The kill button in Processes is marked more clearly too.
+
+### Fixed
+- **Deleting a volume preset now looks like deleting.** The button rewrote the presets file immediately with
+  no way back, while wearing the same understated style as Cancel or Refresh. The confirmation prompt was
+  already there; what was missing was the warning *before* the click. It now uses the same red as Shortcut
+  Cleaner, Debloater, Uninstaller, File Shredder and the rest.
+- **The kill button in Processes is marked the way the rest of the app marks danger.** It was red text on a
+  transparent button — the only place in SysManager that signalled danger that way, so it was easy to read as
+  ordinary. It now has a red outline that fills solid red the moment you point at it, matching every other
+  destructive button while it is pointed at, and staying calm in a list that can run to several hundred rows.
+
 ## [1.76.19] - 2026-09-07
 
 Three lists used to go blank without saying why. Search winget for something that does not exist and the

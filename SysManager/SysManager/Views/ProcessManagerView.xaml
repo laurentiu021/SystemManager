@@ -271,12 +271,18 @@
                                             IsEnabled="{Binding CanOpenFileLocation}"
                                             Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
                                             Margin="0,0,4,0"/>
+                                    <!-- DangerGhostButton, not GhostButton + an inline Danger foreground:
+                                         the old form was the only place in the app marking danger that way,
+                                         so one meaning had two mechanisms. Not DangerButton either — this
+                                         repeats once per row, and ~470 filled red buttons in one grid read
+                                         as "this screen is dangerous" instead of "this button is". The
+                                         style fills solid red on hover, so it matches every other
+                                         destructive action the moment the pointer is on it. -->
                                     <Button Content="X" ToolTip="Kill process"
                                             AutomationProperties.Name="{Binding Name, StringFormat='Kill {0}'}"
                                             Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
-                                            Style="{StaticResource GhostButton}" Padding="6,2" FontSize="12"
-                                            Foreground="{DynamicResource Danger}"/>
+                                            Style="{StaticResource DangerGhostButton}" Padding="6,2" FontSize="12"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

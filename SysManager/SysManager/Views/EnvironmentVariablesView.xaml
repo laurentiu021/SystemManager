@@ -155,6 +155,13 @@
                         <DataGridTemplateColumn Header="" Width="Auto">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
+                                    <!-- GhostButton is correct here and a sweep must not "fix" it to
+                                         DangerButton. DeleteVariable deletes nothing at click time: it
+                                         removes the row from the in-memory list and says so — "removed
+                                         locally now, deleted for real when you press Apply" — with Discard
+                                         still able to undo it. Painting a staged edit red spends the app's
+                                         strongest signal on something reversible, which is what makes it
+                                         stop meaning anything where it counts. -->
                                     <Button Content="Delete" Command="{Binding DataContext.DeleteVariableCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
                                             AutomationProperties.Name="{Binding Name, StringFormat='Delete variable {0}'}"

@@ -794,10 +794,19 @@ public partial class ArchitectureTests
                 if (!InsideHorizontalStackPanel(tb)) continue;
 
                 var text = WhitespaceRun().Replace((string?)tb.Attribute("Text") ?? "", " ").Trim();
-                // Bound values and short glyphs cannot meaningfully clip; only real prose does.
-                if (text.Length < 40 || text.StartsWith('{')) continue;
 
-                offenders.Add($"{Path.GetFileName(file)}: \"{(text.Length > 60 ? text[..60] + "…" : text)}\"");
+                // A short LITERAL cannot meaningfully clip, so it stays out of scope. A BINDING does not:
+                // its length is unknown at build time, and treating unknown as short is how four real
+                // instances survived — SfcVerdict and DismVerdict on Cleanup, MemoryHealthVerdict on System
+                // Health, ModuleStatus on Windows Update, every one of them a full sentence produced at
+                // runtime. The exclusion was written when banner messages were literals; centralising the
+                // elevation banner turned them into bindings and left the rule looking at nothing.
+                var bound = text.StartsWith('{');
+                if (!bound && text.Length < 40) continue;
+                if (text.Length == 0) continue;
+
+                offenders.Add($"{Path.GetFileName(file)}: \"{(text.Length > 60 ? text[..60] + "…" : text)}\""
+                    + (bound ? " (bound — length unknown at build time, so assumed to be prose)" : ""));
             }
         }
 

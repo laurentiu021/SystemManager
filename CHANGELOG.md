@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.27] - 2026-09-07
+
+Four result messages were being cut off at the edge of their box instead of continuing onto a second line.
+They are the messages that explain what a repair or a check actually found, so the part that got cut was
+usually the part worth reading.
+
+### Fixed
+- **The SFC and DISM result lines on the Cleanup tab now wrap.** Both report a full sentence, and a long one
+  ran off the edge of its box. Same for **the memory health verdict** on the System Health tab and **the
+  module status** on the Windows Update tab.
+
+### Added
+- **The check that catches this now looks at messages filled in while the app runs.** It only examined text
+  written directly into the layout, and every one of these four is filled in at runtime — so the check was
+  looking straight past all of them. It now treats a message whose length it cannot know as if it were long,
+  which is the safe assumption and the reason all four were found at once.
+
 ## [1.76.26] - 2026-09-07
 
 The "Run as administrator" bar at the top of thirty tabs was thirty separate copies of the same thing, and

@@ -26,7 +26,7 @@ public class AboutViewUiTests
     {
         StaHelper.Run(() =>
         {
-            EnsureAppResources();
+            AppResources.Ensure();
             var view = new AboutView();
             Assert.NotNull(view);
         });
@@ -37,7 +37,7 @@ public class AboutViewUiTests
     {
         StaHelper.Run(() =>
         {
-            EnsureAppResources();
+            AppResources.Ensure();
             var view = new AboutView { DataContext = new AboutViewModel(AboutConfigDir()) };
             view.ApplyTemplate();
             Assert.IsType<AboutViewModel>(view.DataContext);
@@ -49,7 +49,7 @@ public class AboutViewUiTests
     {
         StaHelper.Run(() =>
         {
-            EnsureAppResources();
+            AppResources.Ensure();
             var mainVm = new MainWindowViewModel();
             // Reach the About VM through the real nav graph — the per-tab accessor was removed
             // when tab VMs became lazily built (the "eager-VM startup herd" fix).
@@ -65,7 +65,7 @@ public class AboutViewUiTests
     {
         StaHelper.Run(() =>
         {
-            EnsureAppResources();
+            AppResources.Ensure();
             var vm = new AboutViewModel(AboutConfigDir());
             var view = new AboutView { DataContext = vm };
             Assert.NotNull(vm.CurrentVersion);
@@ -77,7 +77,7 @@ public class AboutViewUiTests
     {
         StaHelper.Run(() =>
         {
-            EnsureAppResources();
+            AppResources.Ensure();
             var vm = new AboutViewModel(AboutConfigDir());
             Assert.NotNull(vm.CheckForUpdatesCommand);
             Assert.NotNull(vm.LoadHistoryCommand);
@@ -90,25 +90,4 @@ public class AboutViewUiTests
         });
     }
 
-    private static void EnsureAppResources()
-    {
-        if (System.Windows.Application.Current == null)
-        {
-            try
-            {
-                var _ = new System.Windows.Application
-                {
-                    ShutdownMode = ShutdownMode.OnExplicitShutdown
-                };
-                // Merge App resources so styles defined at app scope are available.
-                var uri = new Uri("pack://application:,,,/SysManager;component/App.xaml", UriKind.Absolute);
-                var dict = (ResourceDictionary)Application.LoadComponent(uri);
-                System.Windows.Application.Current?.Resources.MergedDictionaries.Add(dict);
-            }
-            catch
-            {
-                // App may already exist on this STA thread — best effort.
-            }
-        }
-    }
 }

@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.0] - 2026-09-07
+
+The health score now counts how much room is left on your Windows drive, and that will change the number you
+see. A PC with a nearly-full drive could score "Excellent" before — the worst thing a health score can do,
+because a full drive is the commonest reason a computer feels slow and it is what stops Windows installing its
+own updates.
+
+### Fixed
+- **A PC that is out of room can no longer score "Excellent", or even "Good".** As long as the drive's SMART
+  status was fine, memory was under 60% and it had been restarted recently, the score said everything was well
+  while the actual problem sat there unmentioned.
+
+### Added
+- **The score says how many GB are left, and where to get more.** "Only 4 GB free on C: — Deep Cleanup can
+  reclaim space" now appears first among the recommendations, because it is the only one of them you can act on
+  today, in this app. A worn battery and an ageing disk are real and SysManager cannot fix either.
+- **Big drives are not scolded for being big.** 400 GB free on a 4 TB disk is only 10% and nothing whatever is
+  wrong, so a comfortable amount of space in gigabytes outweighs an unimpressive percentage. It works the other
+  way too: 9 GB free on a small laptop drive is 22% and still not enough for Windows to update itself, so the
+  percentage does not get to call that healthy.
+- **Only the Windows drive counts.** A deliberately packed archive drive does not slow your PC down, and being
+  told your machine is unhealthy for a disk you filled on purpose is noise.
+- **`--health --json` reports the free-space component**, so a script can see why a score is low.
+
+### Changed
+- **Your score may read lower than before with nothing changed on your PC.** That is the new component being
+  counted, not a fault appearing. If it dropped, the recommendation on the Dashboard says why.
+
 ## [1.77.2] - 2026-09-07
 
 Cancel now works in System Logs. Filtering the log to Errors and Criticals over a long period could leave the
@@ -26,6 +54,7 @@ a stop asked for after ten seconds.
 ### Added
 - **A test that a cancelled filtered read comes back quickly.** It asks for a severity the log almost never
   contains, which is the case that used to hang: there is nothing to find, so the search ran to the end.
+
 
 ## [1.77.1] - 2026-09-07
 

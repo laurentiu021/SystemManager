@@ -39,6 +39,14 @@ public sealed record HealthScoreResult
 
     /// <summary>Individual component scores for breakdown display.</summary>
     public int DiskScore { get; init; } = 100;
+
+    /// <summary>How much room the system drive has left. 100 is comfortable, 10 is nearly full.</summary>
+    /// <remarks>
+    /// Added because the overall score could read "Excellent" on a machine that was out of space — SMART
+    /// healthy, RAM under 60% and a recent reboot were enough, and a full system drive is the commonest real
+    /// cause of "it got slow" as well as what breaks Windows Update and app installs.
+    /// </remarks>
+    public int FreeSpaceScore { get; init; } = 100;
     public int RamScore { get; init; } = 100;
     public int UptimeScore { get; init; } = 100;
     public int BatteryScore { get; init; } = 100;

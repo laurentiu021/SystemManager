@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.77.0] - 2026-09-07
+
+Six buttons that do something you cannot take back now explain themselves out loud. Until now a screen reader
+announced only the label — "Shred All button" — and the warning about what that meant arrived afterwards, in a
+dialog you had already committed to opening. Nothing changes on screen for anyone else.
+
+### Added
+- **The app's irreversible buttons now say what they will do.** Shred All, Uninstall selected, Kill process,
+  Delete preset and Delete selected shortcuts each carry a plain sentence that a screen reader reads out when
+  you land on the button: what happens, and whether you can get it back. The red colour and the confirmation
+  dialog were the only warnings before, and neither reaches someone who cannot see the screen.
+- **"Run as administrator" now mentions that the window closes and reopens.** That is the part which is
+  startling if you cannot watch it happen. It is one shared control, so the explanation appears on all 31
+  pages that ask for administrator rights.
+- **A check that each of those buttons keeps its explanation, and that the explanation is a real sentence.**
+  An empty or one-word text would satisfy "the attribute is there" while telling nobody anything, so the check
+  counts words rather than presence.
+
+### Changed
+- **Shred All now sets its accessible name explicitly, like its siblings.** It was relying on its label being
+  read instead, which works but was the one button of its kind not saying so for itself.
+
 ## [1.76.28] - 2026-09-07
 
 Three rounded corners were slightly the wrong roundness, which is the kind of thing nobody notices one at a

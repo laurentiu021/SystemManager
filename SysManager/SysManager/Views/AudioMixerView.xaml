@@ -40,7 +40,8 @@
                      already there; what was missing is the signal BEFORE the click. -->
                 <Button Content="Delete" Command="{Binding DeletePresetCommand}"
                         Style="{StaticResource DangerButton}" Margin="0,0,16,0"
-                        AutomationProperties.Name="Delete selected preset"/>
+                        AutomationProperties.Name="Delete selected preset"
+                        AutomationProperties.HelpText="Deletes the saved volume levels for this preset. It cannot be brought back, and the volumes you are using right now do not change."/>
 
                 <TextBox Text="{Binding NewPresetName, UpdateSourceTrigger=PropertyChanged}"
                          Width="160" Margin="0,0,8,0" VerticalContentAlignment="Center"

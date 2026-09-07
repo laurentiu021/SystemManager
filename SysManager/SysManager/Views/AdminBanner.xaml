@@ -32,9 +32,16 @@
                  NoTextWrapping_IsInertInsideAHorizontalStackPanel exists for that exact mistake, and two
                  views already used this DockPanel shape before the extraction. -->
             <DockPanel>
+                <!-- HelpText, not a longer Name: Narrator reads the name first and the help text after, so
+                     the consequence of pressing this belongs in the second one. "Run as administrator" says
+                     what the control is; it does not say that the window you are looking at will close and
+                     reopen, which is the part that surprises someone who cannot see it happen. Generic on
+                     purpose — this one control serves all 30 privileged tabs, and NotElevatedMessage is
+                     already where the per-tab "why" lives. -->
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
-                        AutomationProperties.Name="Run as administrator"/>
+                        AutomationProperties.Name="Run as administrator"
+                        AutomationProperties.HelpText="Closes SysManager and opens it again with administrator rights. Windows will ask you to allow it first."/>
                 <TextBlock Text="&#xE83D;" DockPanel.Dock="Left"
                            FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                            FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"

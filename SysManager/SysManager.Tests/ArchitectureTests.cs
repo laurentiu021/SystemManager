@@ -1729,6 +1729,96 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A view that has something to say when a list is empty must say it through the shared
+    /// <c>EmptyState</c> control, not a hand-rolled <c>TextBlock</c>.
+    /// </summary>
+    /// <remarks>
+    /// A DIFFERENT question from the guard above, which is why it is a second test and not a tightening of
+    /// that one. That guard asks whether a view says anything at all, and deliberately accepts three forms
+    /// that are not the control — a domain flag and a zero-count <c>DataTrigger</c> — because three views got
+    /// it right that way. Requiring the control there would have failed them. This asks the narrower
+    /// question: when the affordance IS a plain TextBlock gated on a list's emptiness, it is the control's job.
+    /// <para>Seven blocks across six views bypassed it, all five identical lines with a different string, and
+    /// none of the six even declared the <c>xmlns:v</c> namespace — the control was unreachable when they were
+    /// written. Against the control they rendered differently three ways: no glyph, one flat 12px
+    /// <c>Subtle</c> line instead of a 14px SemiBold title over a 12px message, and <c>MaxWidth</c> 360
+    /// against the control's 420.</para>
+    /// <para><b>Why the rule ties the path to an ItemsSource.</b> "Any emptiness-Inverse TextBlock" was the
+    /// first draft, and across all views it also matched three notices that are correctly plain text: "No
+    /// battery detected" (<c>Battery.HasBattery</c>), "No NVIDIA GPU detected" (<c>HasNvidiaGpu</c>) and the
+    /// Tune-up card's good-news line (<c>TuneUpResult.WarningCount</c>) — inline facts inside populated cards,
+    /// not list empty states. Two of the three are screened out anyway by the <c>listed.Count == 0</c> skip,
+    /// since Battery Health and Performance bind no <c>ItemsSource</c> at all; it is the ItemsSource-PATH tie
+    /// that screens the third, in a view that does list six collections. Measured: 7 offenders before the fix,
+    /// 0 after, and no notice caught either way — with no exception list to rot, because a hardware flag is
+    /// not the Count of a list.</para>
+    /// </remarks>
+    [Fact]
+    public void NoViewHandRollsAnEmptyStateTheSharedControlAlreadyProvides()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var files = Directory.GetFiles(viewsDir, "*.xaml");
+
+        var offenders = new List<string>();
+        var listing = 0;
+
+        foreach (var file in files)
+        {
+            var xaml = File.ReadAllText(file);
+
+            var listed = ItemsSourceBinding().Matches(xaml)
+                .Select(m => m.Groups["path"].Value)
+                .ToHashSet(StringComparer.Ordinal);
+            if (listed.Count == 0) continue;
+            listing++;
+
+            foreach (var block in SelfClosingTextBlock().Matches(xaml).Cast<Match>())
+            {
+                var gate = CountInverseVisibility().Match(block.Value);
+                if (!gate.Success || !listed.Contains(gate.Groups["path"].Value)) continue;
+
+                var label = TextAttribute().Match(block.Value);
+                offenders.Add($"{Path.GetFileName(file)} — TextBlock gated on {gate.Groups["path"].Value}"
+                    + $".Count: \"{(label.Success ? label.Groups[1].Value : "<bound>")}\"");
+            }
+        }
+
+        // Vacuity floor: 44 views bind an ItemsSource. A collapse means the binding pattern stopped matching
+        // and every absence below is an absence of scanning.
+        Assert.True(listing >= 40,
+            $"only {listing} views were found binding an ItemsSource — the pattern is out of date, so a pass "
+            + "proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These views hand-roll an empty state as a plain TextBlock for a list they display, instead of the "
+            + "shared <v:EmptyState/> whose own comment calls it the single source of truth for the "
+            + "icon-title-message idiom. The hand-rolled form has no glyph and no title/message hierarchy, so "
+            + "a future contrast, spacing or screen-reader fix to empty states will miss these. Add "
+            + "xmlns:v=\"clr-namespace:SysManager.Views\" and use the control, keeping the binding path "
+            + "verbatim:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A self-closing <c>TextBlock</c> element, however many lines it spans.</summary>
+    [GeneratedRegex(@"<TextBlock\b[^>]*?/>", RegexOptions.Singleline | RegexOptions.Compiled)]
+    private static partial Regex SelfClosingTextBlock();
+
+    /// <summary>An <c>ItemsSource</c> bound to a path, capturing the path.</summary>
+    [GeneratedRegex(@"ItemsSource=""\{Binding\s+(?<path>[\w.]+)\s*[},]", RegexOptions.Compiled)]
+    private static partial Regex ItemsSourceBinding();
+
+    /// <summary>
+    /// An <c>Inverse</c> visibility binding on some path's <c>.Count</c>, capturing the path without it.
+    /// </summary>
+    /// <remarks>
+    /// <c>[^"]*</c> rather than <c>[^}]*</c>: the binding nests <c>Converter={StaticResource FlexVis}</c>, so
+    /// a run that cannot cross a brace stops before <c>ConverterParameter</c> and the whole guard matches
+    /// nothing. That exact mistake made the first measurement report 0 offenders where there were 7.
+    /// </remarks>
+    [GeneratedRegex(@"Visibility=""\{Binding\s+(?<path>[\w.]+)\.Count[^""]*ConverterParameter=Inverse",
+                    RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex CountInverseVisibility();
+
+    /// <summary>
     /// Every empty-state flag is set where the data it describes arrives, on all of that method's paths.
     /// </summary>
     /// <remarks>

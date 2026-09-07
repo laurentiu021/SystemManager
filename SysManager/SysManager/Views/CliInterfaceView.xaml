@@ -43,7 +43,11 @@
             </DockPanel>
         </Border>
 
-        <!-- Command reference -->
+        <!-- Command reference.
+             Deliberately no v:EmptyState: Commands is filled from CliRunner.Commands, a static list compiled
+             into the app, so the grid cannot be empty and an empty state here could never render. Said out
+             loud because a uniformity sweep otherwise adds one that no user will ever see — this grid was
+             flagged as a candidate for exactly that reason. -->
         <Border Grid.Row="3" Style="{StaticResource Card}">
             <DataGrid ItemsSource="{Binding Commands}" AutoGenerateColumns="False" IsReadOnly="True"
                       HeadersVisibility="Column" GridLinesVisibility="None" Background="Transparent"

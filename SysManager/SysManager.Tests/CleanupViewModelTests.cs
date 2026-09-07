@@ -195,14 +195,18 @@ public class CleanupViewModelTests
 
     // ---------- elevation gate on SFC / DISM ----------
 
+    // Both of these used to open with `if (vm.IsElevated) return;` — a skip so an elevated host would not
+    // report a false failure. The CI runner IS elevated, and this workstation cannot run the suite, so the
+    // skip meant the elevation gate on SFC and DISM was asserted nowhere at all. AdminHelper.ForceElevation
+    // states the condition instead, and the view-model is built INSIDE the scope because it caches
+    // IsElevated in its constructor.
+
     [Fact]
     public async Task RunSfc_WhenNotElevated_SetsRequiresAdminMessageAndClearsRunning()
     {
+        using var notElevated = AdminHelper.ForceElevation(false);
         var vm = NewVm();
-        // Only meaningful when the test host is non-admin, which is the
-        // normal developer / CI case. If someone runs the test elevated,
-        // we skip the branch we care about.
-        if (vm.IsElevated) return;
+        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
 
         await vm.RunSfcCommand.ExecuteAsync(null);
 
@@ -214,14 +218,38 @@ public class CleanupViewModelTests
     [Fact]
     public async Task RunDism_WhenNotElevated_SetsRequiresAdminMessageAndClearsRunning()
     {
+        using var notElevated = AdminHelper.ForceElevation(false);
         var vm = NewVm();
-        if (vm.IsElevated) return;
+        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
 
         await vm.RunDismCommand.ExecuteAsync(null);
 
         Assert.Contains("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
         Assert.False(vm.IsDismRunning);
         Assert.False(vm.IsAnyRunning);
+    }
+
+    /// <summary>
+    /// And the mirror image: elevated, the guard must let the command through to the runner.
+    /// </summary>
+    /// <remarks>
+    /// The negative test alone cannot tell a working gate from a command that refuses unconditionally. With
+    /// elevation forced on, SFC must get past the gate and launch <c>sfc.exe /scannow</c> through the runner
+    /// — asserted on the substitute, so nothing actually runs.
+    /// </remarks>
+    [Fact]
+    public async Task RunSfc_WhenElevated_ReachesTheRunner()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = new CleanupViewModel(runner, Substitute.For<ICleanupPreScanService>());
+        Assert.True(vm.IsElevated);
+
+        await vm.RunSfcCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        await runner.Received(1).RunProcessAsync(
+            "sfc.exe", "/scannow", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
     [Fact]

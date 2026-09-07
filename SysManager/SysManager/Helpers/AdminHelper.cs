@@ -13,7 +13,51 @@ namespace SysManager.Helpers;
 /// </summary>
 public static class AdminHelper
 {
-    public static bool IsElevated()
+    /// <summary>
+    /// How elevation is decided. Production never replaces it; a test does, so the not-elevated branch can
+    /// be asserted on any host.
+    /// </summary>
+    /// <remarks>
+    /// A seam here rather than 65 constructor parameters: <c>IsElevated()</c> has that many call sites, and
+    /// they are not all in view-models — <c>ServiceRegistration</c>, <c>EtwBandwidthSource</c> and
+    /// <c>TemperatureService</c> ask too. Threading a provider through all of them would be a large diff for
+    /// a value that is fixed for the life of the process.
+    /// <para>The reason it is needed: sixteen test cases opened with <c>if (IsElevated) return;</c> so they
+    /// would not report a false failure on an elevated host — and the CI runner IS elevated, which
+    /// <c>EtwBandwidthSourceTests</c> states in a comment. The result was that the elevation gate on SFC,
+    /// DISM, Windows Update and nine privileged tabs asserted nothing anywhere: not on CI, and not on a
+    /// workstation that cannot run the suite.</para>
+    /// <para>Process-wide mutable state, so a test that replaces it belongs in the
+    /// <c>ProcessWideStatics</c> collection and must restore it — <see cref="ForceElevation"/> does both.
+    /// Same shape as <c>DialogService.Instance</c>, which tests already swap this way.</para>
+    /// </remarks>
+    internal static Func<bool> ElevationProbe { get; set; } = QueryElevation;
+
+    public static bool IsElevated() => ElevationProbe();
+
+    /// <summary>
+    /// Pins <see cref="IsElevated"/> to <paramref name="elevated"/> until the returned scope is disposed.
+    /// </summary>
+    /// <remarks>
+    /// Restores the previous probe rather than the default one, so nesting cannot leave a stale override
+    /// behind — and restoring is what makes the override safe to use beside tests that read real elevation.
+    /// </remarks>
+    internal static IDisposable ForceElevation(bool elevated) => new ElevationScope(elevated);
+
+    private sealed class ElevationScope : IDisposable
+    {
+        private readonly Func<bool> _previous;
+
+        internal ElevationScope(bool elevated)
+        {
+            _previous = ElevationProbe;
+            ElevationProbe = () => elevated;
+        }
+
+        public void Dispose() => ElevationProbe = _previous;
+    }
+
+    private static bool QueryElevation()
     {
         using var identity = WindowsIdentity.GetCurrent();
         var principal = new WindowsPrincipal(identity);

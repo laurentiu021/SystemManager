@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.1] - 2026-09-07
+
+A tab that uses Windows PowerShell can no longer sit "working…" forever. If the PowerShell host on your PC
+cannot start — wedged, blocked by policy, or simply out of room to run another one — SysManager now gives up
+after a minute and tells you, instead of waiting for something that is never going to answer.
+
+### Fixed
+- **A stuck PowerShell host no longer freezes the tab that needed it.** Windows Update, System Health and
+  System Fixes all start a PowerShell session when you run them as administrator. Starting one had no time
+  limit, so if it never finished starting, the tab stayed busy — and because Cancel and Refresh are only
+  enabled when a tab is *not* busy, there was nothing left to press. It now fails the same way it already did
+  when PowerShell is missing entirely, which is a message rather than a spinner.
+
+### Added
+- **A test that a PowerShell session which never starts is abandoned rather than waited on.** It uses a
+  stand-in that deliberately never finishes, so the check is instant and cannot become flaky.
+
 ## [1.78.0] - 2026-09-07
 
 The health score now counts how much room is left on your Windows drive, and that will change the number you

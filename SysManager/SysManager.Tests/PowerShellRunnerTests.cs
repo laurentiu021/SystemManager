@@ -224,6 +224,87 @@ public class PowerShellRunnerTests
         Assert.Equal(["process instance", "process"], order);
     }
 
+    /// <summary>
+    /// An open that never completes fails, rather than waiting forever.
+    /// </summary>
+    /// <remarks>
+    /// <c>Runspace.Open()</c> takes neither a token nor a timeout, so nothing inside it can be asked to stop.
+    /// Before this, a host that could not complete a handshake produced no exception and no return — a hang
+    /// dump from the integration job showed 275 threads parked in <c>RemoteRunspace.Open</c> (#2149). The
+    /// surrounding code is carefully fail-closed and maps transport, Win32 and file-not-found failures onto a
+    /// "PowerShell host unavailable" state, but that mapping only fires on a THROW; a wait that never signals
+    /// slips past all of it, and the user gets a tab that stays busy with Cancel gated on not-busy.
+    /// <para>Deterministic, and no sleeping: the stub returns a task that is never completed, and the timeout
+    /// is injected at 50 ms. Against the unbounded code this test does not fail — it never finishes, which is
+    /// the defect stated as precisely as a test can state it.</para>
+    /// <para><see cref="RuntimeException"/> on purpose, matching its neighbours: callers already map that type
+    /// onto their unavailable/failed states, so a timeout arrives as "PowerShell is not available" rather than
+    /// as an unhandled fault of a novel type.</para>
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_OpenThatNeverCompletes_TimesOutInsteadOfHanging()
+    {
+        var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());
+        var neverCompletes = new TaskCompletionSource();
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: _ => neverCompletes.Task,
+            createRunspace: () => (runspace, null, null),
+            openRunspaceTimeout: TimeSpan.FromMilliseconds(50));
+
+        var ex = await Assert.ThrowsAsync<RuntimeException>(
+            () => runner.RunAsync("'never-runs'"));
+
+        Assert.Contains("did not become ready", ex.Message, StringComparison.Ordinal);
+        Assert.IsType<TimeoutException>(ex.InnerException);
+    }
+
+    /// <summary>
+    /// The timeout applies whether or not the session is elevated.
+    /// </summary>
+    /// <remarks>
+    /// The exception MAPPING beside it is gated on <c>_isElevated</c>, because only the elevated path uses an
+    /// out-of-process host whose failures need translating. The timeout is not, and this asserts that: the
+    /// out-of-process path is where a hang has been observed, but an unbounded wait is the wrong behaviour on
+    /// either path, and gating it would leave the in-process one with no answer at all.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_OpenTimeout_AppliesRegardlessOfElevation(bool isElevated)
+    {
+        var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());
+        var neverCompletes = new TaskCompletionSource();
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: () => isElevated,
+            trustedPowerShellModulePath:
+                @"C:\Program Files\WindowsPowerShell\Modules;" +
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+            openRunspace: _ => neverCompletes.Task,
+            createRunspace: () => (runspace, null, null),
+            openRunspaceTimeout: TimeSpan.FromMilliseconds(50));
+
+        var ex = await Assert.ThrowsAsync<RuntimeException>(
+            () => runner.RunAsync("'never-runs'"));
+
+        Assert.IsType<TimeoutException>(ex.InnerException);
+    }
+
+    /// <summary>The shipped timeout is generous enough not to fire on a slow cold start.</summary>
+    /// <remarks>
+    /// The value is the whole risk in this change: too tight and it breaks a working feature on a slow machine,
+    /// which is worse than the hang it replaces. Asserted as a floor rather than an exact number so it can be
+    /// raised without editing a test, and never lowered past the point where a cold <c>powershell.exe</c> start
+    /// plus a handshake could plausibly still be in progress.
+    /// </remarks>
+    [Fact]
+    public void DefaultOpenRunspaceTimeout_IsGenerousEnoughForAColdStart()
+        => Assert.True(PowerShellRunner.DefaultOpenRunspaceTimeout >= TimeSpan.FromSeconds(30),
+            $"the open timeout is {PowerShellRunner.DefaultOpenRunspaceTimeout.TotalSeconds:0}s; a cold "
+            + "powershell.exe start and handshake on a slow machine can take longer than that, and a timeout "
+            + "that fires on a working host is worse than the hang it replaces");
+
     [Fact]
     public void DisposeRunspaceResources_DisposesInDependencyOrder()
     {

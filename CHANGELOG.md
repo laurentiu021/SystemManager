@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.22] - 2026-09-07
+
+Four more places that went blank without saying why. The temperature card on the Landing tab looked broken on
+any PC whose sensors are not readable — which is most of them without administrator. "What's new" promised
+release notes pulled live from GitHub and then showed nothing when offline. The health score showed a number
+with an empty space under it. And removing every target in Ping left an empty panel.
+
+### Fixed
+- **The temperature card says when there is nothing to read.** Most machines expose no readable sensors
+  without administrator, and some expose none either way, so the card rendered as an empty box — which reads
+  as a broken feature rather than an unavailable one. It now says so, and mentions that running as
+  administrator reaches more.
+- **"What's new" says when it cannot reach GitHub.** The release-notes fetch failed silently when offline,
+  leaving a section that had just promised notes "pulled live from GitHub" completely empty. It now names the
+  reason and points at Refresh.
+- **The health score says when there is nothing to improve.** An empty recommendation list left the heading
+  over blank space. Since empty here is good news, it now says so plainly — the same way the Tune-up card
+  beside it already did.
+- **Ping says when you have removed every target.** The list starts from the shipped presets, so an empty one
+  means you emptied it; the message points at both ways back.
+
 ## [1.76.21] - 2026-09-07
 
 On any of the six light themes, the coloured category tags in Windows Update lost their colour. The text was

@@ -151,4 +151,33 @@ public class TweaksHubViewModelTests
         Assert.Single(vm.Essential);
         Assert.Single(vm.Advanced);
     }
+
+    /// <summary>
+    /// The REAL tweak catalogue fills both tiers, which is what makes this tab's empty state unreachable.
+    /// </summary>
+    /// <remarks>
+    /// This is the verification behind an exemption rather than a behaviour test.
+    /// <c>ArchitectureTests.EveryViewThatListsACollection_HasSomethingToSayWhenItIsEmpty</c> excuses
+    /// <c>TweaksHubView</c> from needing empty-state copy, on the grounds that
+    /// <c>LoadTweaks()</c> is the static privacy toggles partitioned by <c>ClassifyTier</c> and both sides
+    /// are non-empty by construction. An exemption nobody checked is a false claim sitting in the test
+    /// suite, so it is checked here — against the real definitions, not a substitute, because a substitute
+    /// would be asserting the fixture.
+    /// <para>Straight through <c>PrivacyService</c> and <c>TweakItem.ClassifyTier</c> rather than through the
+    /// view-model: the claim is about the DATA, and building the view-model would drag in a registry read
+    /// per toggle for no extra coverage.</para>
+    /// </remarks>
+    [Fact]
+    public void TheRealTweakCatalogue_FillsBothTiers()
+    {
+        var toggles = new PrivacyService().LoadToggles();
+        Assert.True(toggles.Count >= 10,
+            $"only {toggles.Count} toggle definitions — the catalogue lookup is wrong and this would pass "
+            + "vacuously");
+
+        var tiers = toggles.Select(t => TweakItem.ClassifyTier(t.RegistryPath)).ToList();
+
+        Assert.Contains(TweakTier.Essential, tiers);
+        Assert.Contains(TweakTier.Advanced, tiers);
+    }
 }

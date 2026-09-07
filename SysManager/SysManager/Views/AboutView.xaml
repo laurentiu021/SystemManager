@@ -2,7 +2,8 @@
 <UserControl x:Class="SysManager.Views.AboutView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:helpers="clr-namespace:SysManager.Helpers">
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
+             xmlns:v="clr-namespace:SysManager.Views">
 
     <Grid Background="{DynamicResource Surface0}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -252,6 +253,16 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <!-- The fetch finished with nothing. Worse here than elsewhere because the line
+                             directly above promises notes "pulled live from GitHub" and then renders
+                             nothing at all, which reads as the feature being broken rather than the
+                             connection being down. Gated on the flag so it cannot appear while the request
+                             — the slowest thing on this tab — is still in flight. -->
+                        <v:EmptyState Glyph="&#xE704;"
+                                      Title="Could not reach GitHub"
+                                      Message="Release notes need a connection. Check yours and press Refresh."
+                                      Visibility="{Binding HistoryUnavailable, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                 </Border>
 

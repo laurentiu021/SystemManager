@@ -1639,6 +1639,210 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every view that lists a collection must have something to say when that collection is empty.
+    /// </summary>
+    /// <remarks>
+    /// The repo-wide sweep #2121 asks for, landed only after all its views were resolved — an exception list
+    /// carrying reasons nobody has checked is a false claim sitting in the test suite, which is worse than
+    /// no guard.
+    /// <para><b>Four accepted forms, and the count is the point.</b> An earlier draft looked for two — the
+    /// shared <c>EmptyState</c> control, or a <c>.Count</c>-bound <c>Inverse</c> visibility — and on that
+    /// criterion eight views "had neither affordance". Three of the eight already said something, in forms
+    /// the criterion could not see: Profile Export/Import and the Tune-up card gate a message on a DOMAIN
+    /// FLAG (<c>HasSections</c>, <c>TuneUpResult.WarningCount</c>), and Recent Activity uses a
+    /// <c>DataTrigger</c> on <c>.Count</c> with <c>Value="0"</c> instead of a converter. A guard that
+    /// rejected those would have failed on the views that got it right.</para>
+    /// <para><b>But not any <c>Inverse</c>.</b> That was the opposite mistake, and it made an earlier version
+    /// blind to exactly the defect it was written for: deleting Traceroute's and System Health's new empty
+    /// states both left it green, satisfied by a <c>Shared.IsAutoTraceRunning</c> button binding and an
+    /// <c>IsElevated</c> admin banner. The bar is an <c>Inverse</c> on a path that READS as emptiness —
+    /// <c>Has…</c>, <c>No…</c>, <c>…Count</c>, <c>…Unavailable</c>, <c>…FoundNothing</c>, <c>…IsEmpty</c> —
+    /// so an elevation flag still does not qualify.</para>
+    /// <para>Exceptions carry a reason and every one was verified against how the collection is filled, not
+    /// assumed from its name.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryViewThatListsACollection_HasSomethingToSayWhenItIsEmpty()
+    {
+        // view -> why its collections cannot reach an empty state a user would see.
+        var cannotBeEmpty = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["TweaksHubView.xaml"] =
+                "Essential and Advanced are LoadTweaks() — the static privacy toggles — partitioned by "
+                + "TweakItem.ClassifyTier, so both sides are non-empty by construction. Pinned by "
+                + "TweaksHubViewModelTests.BothTiers_AreNonEmpty rather than left as an assertion here",
+            ["PrivacyView.xaml"] =
+                "FilteredToggles is filtered only by category, and Categories is built FROM the toggles "
+                + "(['All'] + Toggles.Select(t => t.Category).Distinct()), so every selectable category has "
+                + "at least one row and Toggles itself is static",
+            ["CliInterfaceView.xaml"] =
+                "Commands is CliRunner.Commands, a static collection-expression list of flag/description "
+                + "tuples compiled into the binary — it is the CLI's own help text, not data read at runtime",
+            ["LegacyPanelsView.xaml"] =
+                "Panels is LegacyPanelService.Panels, the fixed catalog of classic Windows applets, also a "
+                + "static list",
+            ["CpuAffinityView.xaml"] =
+                "Cores comes from GetCores(), which falls back to a flat list of LogicalProcessorCount "
+                + "entries when the topology API fails or returns nothing — so it yields at least one core "
+                + "on any machine that can run the app. (Its Processes ComboBox is a different question and "
+                + "outside this guard, which asks about DataGrid and ItemsControl.)",
+        };
+
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var files = Directory.GetFiles(viewsDir, "*.xaml");
+        Assert.True(files.Length >= 25,
+            $"only {files.Length} views enumerated — this guard is reading the wrong folder");
+
+        var offenders = new List<string>();
+        var listing = 0;
+
+        foreach (var file in files)
+        {
+            var name = Path.GetFileName(file);
+            var xaml = File.ReadAllText(file);
+
+            if (!CollectionItemsSource().IsMatch(xaml)) continue;
+            listing++;
+
+            if (cannotBeEmpty.ContainsKey(name)) continue;
+
+            var hasControl = xaml.Contains("<v:EmptyState", StringComparison.Ordinal);
+            var hasEmptinessInverse = EmptinessInverseBinding().IsMatch(xaml);
+            var hasZeroCountTrigger = ZeroCountDataTrigger().IsMatch(xaml);
+
+            if (!hasControl && !hasEmptinessInverse && !hasZeroCountTrigger)
+                offenders.Add(name);
+        }
+
+        // Vacuity floor: 44 views matched when this was measured. A collapse to a handful means the
+        // ItemsSource pattern stopped matching and the guard is inspecting almost nothing.
+        Assert.True(listing >= 40,
+            $"only {listing} views were found listing a collection — the ItemsSource pattern is out of date");
+
+        Assert.True(offenders.Count == 0,
+            "These views list a collection and say nothing when it is empty, so the user gets a column "
+            + "header over blank space or a panel that simply vanishes — indistinguishable from a broken "
+            + "feature. Add the shared <v:EmptyState/>, or a message gated on an emptiness flag or a "
+            + "zero-count trigger. If the collection genuinely cannot be empty, name the view in the "
+            + "exception list in this test WITH the reason, verified against how it is filled:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Every empty-state flag is set where the data it describes arrives, on all of that method's paths.
+    /// </summary>
+    /// <remarks>
+    /// A flag exists precisely because a count cannot tell "empty" from "not loaded yet", so it is only
+    /// worth anything if it is assigned at the moment the load resolves — including the failure paths, which
+    /// are exactly the ones a later edit forgets. <c>AboutViewModel.LoadHistoryAsync</c> has two catch
+    /// blocks and both must set it; either one missed leaves the section promising notes "pulled live from
+    /// GitHub" and rendering nothing.
+    /// <para>Source-shape rather than behavioural, deliberately, for the two that cannot be reached from a
+    /// unit test: <c>AboutViewModel</c> takes the concrete <c>UpdateService</c> so the catch blocks need a
+    /// network failure, and <c>LoadHealthScoreAsync</c> is private with only the init path calling it. Their
+    /// behaviour is covered where it can be — <c>DashboardHealthFlagTests</c> in the integration project —
+    /// but that project is compile-only in CI (#2101), so the wiring itself is pinned here, in the blocking
+    /// suite, where deleting it fails a merge.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryEmptyStateFlag_IsSetWhereItsDataArrives()
+    {
+        // (file, method, flag, how many assignments the method must contain, why that number)
+        (string File, string Method, string Flag, int Assignments, string Why)[] wiring =
+        [
+            ("ViewModels/AboutViewModel.cs", "LoadHistoryAsync", "HistoryUnavailable", 3,
+             "the success path plus BOTH catch blocks — a missed catch leaves the section silent on the "
+             + "failure it exists to explain"),
+            ("ViewModels/DashboardViewModel.cs", "LoadHealthScoreAsync", "HealthHasNothingToImprove", 1,
+             "set beside HasHealthScore, so the good-news line and the score appear together"),
+            ("ViewModels/DashboardViewModel.cs", "RefreshTemperaturesAsync", "TemperaturesUnavailable", 1,
+             "set once per read, and OUTSIDE the dispatcher hop — inside it the assignment is skipped "
+             + "whenever Application.Current is null, which is every unit test"),
+        ];
+
+        var appDir = FindAppProjectDir();
+        var offenders = new List<string>();
+
+        foreach (var (file, method, flag, expected, why) in wiring)
+        {
+            var path = Path.Combine(appDir, file.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
+
+            var body = MethodBody(File.ReadAllText(path), method);
+            if (body.Length == 0)
+            {
+                offenders.Add($"{file} — {method} not found; update this guard or the view-model");
+                continue;
+            }
+
+            var found = body.Split($"{flag} =").Length - 1;
+            if (found != expected)
+                offenders.Add($"{file}:{method} assigns {flag} {found} time(s), expected {expected} — {why}");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "An empty-state flag that is not set where its load resolves is worse than no flag: the view "
+            + "shows nothing AND says nothing, and the count binding it replaced would at least have said "
+            + "something.\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The text of a method from its signature to its closing brace, by brace matching.
+    /// </summary>
+    /// <remarks>
+    /// Brace-matched rather than sliced to the next member declaration: an <c>if</c>/<c>try</c> body indents
+    /// its own statements, and a "next member at four spaces" heuristic stops early on a method whose braces
+    /// nest — which is every method with a try/catch, i.e. exactly the ones this guard is counting inside.
+    /// <para>Anchored on the DECLARATION, not on the name. Matching <c>" Name("</c> found
+    /// <c>await LoadHistoryAsync();</c> instead — both flags this guard watches are called from an init path
+    /// that appears hundreds of lines ABOVE their own declaration, so the brace match started from a call
+    /// site and counted zero assignments in a block that was not the method. It reported the wiring missing
+    /// while the wiring was there.</para>
+    /// </remarks>
+    private static string MethodBody(string source, string method)
+    {
+        var declaration = new Regex(
+            @"^\s*(?:\[[^\]]*\]\s*)*(?:private|internal|public|protected)[^\n(]*\b"
+            + Regex.Escape(method) + @"\s*\(",
+            RegexOptions.Multiline);
+
+        var match = declaration.Match(source);
+        if (!match.Success) return "";
+
+        var open = source.IndexOf('{', match.Index + match.Length);
+        if (open < 0) return "";
+
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}' && --depth == 0) return source[open..(i + 1)];
+        }
+        return "";
+    }
+
+    /// <summary>A <c>DataGrid</c> or <c>ItemsControl</c> bound to a collection.</summary>
+    [GeneratedRegex(@"<(?:DataGrid|ItemsControl)\b[^>]*ItemsSource=""\{Binding", RegexOptions.Compiled)]
+    private static partial Regex CollectionItemsSource();
+
+    /// <summary>
+    /// An inverted visibility binding on a path that reads as emptiness rather than as any old flag.
+    /// </summary>
+    /// <remarks>
+    /// <c>[^"]*</c> for the span between path and parameter, not <c>[^}]*</c>: the converter sits between
+    /// them as <c>Converter={StaticResource FlexVis}</c>, and a class excluding <c>}</c> cannot reach across
+    /// it — that version matched nothing and flagged fourteen views, several verified by hand minutes
+    /// earlier. The attribute's own closing quote is the correct bound.
+    /// </remarks>
+    [GeneratedRegex(@"Binding\s+[\w.]*(?:Count|Has\w+|No\w+|\w*Unavailable|\w*FoundNothing|\w*IsEmpty|\w*NoResults|\w*NoMatches)[^""]*ConverterParameter=Inverse",
+                    RegexOptions.Compiled)]
+    private static partial Regex EmptinessInverseBinding();
+
+    /// <summary>A <c>DataTrigger</c> firing on a collection count of zero.</summary>
+    [GeneratedRegex(@"DataTrigger\s+Binding=""\{Binding\s+[\w.]*Count\}""\s+Value=""0""", RegexOptions.Compiled)]
+    private static partial Regex ZeroCountDataTrigger();
+
+    /// <summary>
     /// Each list that can filter itself down to nothing must have something to say when it does.
     /// </summary>
     /// <remarks>

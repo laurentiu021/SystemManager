@@ -38,6 +38,10 @@ public class AllTabsSmokeUiTests
         new object[] { "nav-restore-points", "Restore Points" },
         new object[] { "nav-task-scheduler", "Task Scheduler" },
         new object[] { "nav-boot-analyzer", "Boot Analyzer" },
+        // Tweaks Hub was the one nav id in the sidebar with no row here — 57 of 58 tabs covered, and the
+        // missing one is flagged inDevelopment, so it is the tab most likely to regress. Nothing detected the
+        // gap either; ArchitectureTests.EverySidebarTab_HasASmokeRow does now.
+        new object[] { "nav-tweaks-hub", "Tweaks Hub" },
         new object[] { "nav-system-fixes", "System Fixes" },
         // ── Gaming & Profiles ──
         new object[] { "nav-gaming-profile", "Gaming Profile" },

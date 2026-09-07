@@ -284,44 +284,44 @@
                                         BorderThickness="1">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#14475569"/>
-                                            <Setter Property="BorderBrush" Value="#28475569"/>
+                                            <Setter Property="Background" Value="{DynamicResource BadgeNeutralBgSubtle}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource BadgeNeutralBorder}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Category}" Value="Security">
-                                                    <Setter Property="Background" Value="#14EF4444"/>
-                                                    <Setter Property="BorderBrush" Value="#28EF4444"/>
+                                                    <Setter Property="Background" Value="{DynamicResource DangerBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Category}" Value="Cumulative">
-                                                    <Setter Property="Background" Value="#14F59E0B"/>
-                                                    <Setter Property="BorderBrush" Value="#28F59E0B"/>
+                                                    <Setter Property="Background" Value="{DynamicResource WarningBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource WarningBorder}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Category}" Value="Defender">
-                                                    <Setter Property="Background" Value="#1422C55E"/>
-                                                    <Setter Property="BorderBrush" Value="#2822C55E"/>
+                                                    <Setter Property="Background" Value="{DynamicResource SuccessBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorder}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Category}" Value="Driver">
-                                                    <Setter Property="Background" Value="#146366F1"/>
-                                                    <Setter Property="BorderBrush" Value="#286366F1"/>
+                                                    <Setter Property="Background" Value="{DynamicResource BadgeIndigoBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource BadgeIndigoBorder}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Category}" Value="Servicing">
-                                                    <Setter Property="Background" Value="#1438BDF8"/>
-                                                    <Setter Property="BorderBrush" Value="#2838BDF8"/>
+                                                    <Setter Property="Background" Value="{DynamicResource InfoBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource InfoBorder}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Category}" Value=".NET">
-                                                    <Setter Property="Background" Value="#14A855F7"/>
-                                                    <Setter Property="BorderBrush" Value="#28A855F7"/>
+                                                    <Setter Property="Background" Value="{DynamicResource BadgePurpleBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource BadgePurpleBorder}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Category}" Value="Feature upgrade">
-                                                    <Setter Property="Background" Value="#14EC4899"/>
-                                                    <Setter Property="BorderBrush" Value="#28EC4899"/>
+                                                    <Setter Property="Background" Value="{DynamicResource BadgePinkBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource BadgePinkBorder}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Category}" Value="Hidden">
-                                                    <Setter Property="Background" Value="#1494A3B8"/>
-                                                    <Setter Property="BorderBrush" Value="#2894A3B8"/>
+                                                    <Setter Property="Background" Value="{DynamicResource BadgeNeutralBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource BadgeNeutralBorder}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Category}" Value="History">
-                                                    <Setter Property="Background" Value="#1494A3B8"/>
-                                                    <Setter Property="BorderBrush" Value="#2894A3B8"/>
+                                                    <Setter Property="Background" Value="{DynamicResource BadgeNeutralBgSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource BadgeNeutralBorder}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

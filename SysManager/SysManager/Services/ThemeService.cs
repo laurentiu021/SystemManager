@@ -427,6 +427,10 @@ public sealed class ThemeService
         [
             ("WarningText", C("#FCD34D")), ("WarningBgSubtle", C("#1AFBBF24")),
             ("WarningBg", C("#40FBBF24")), ("WarningStripe", C("#FBBF24")),
+            // WarningBorder completes the family: Success, Info and Danger each had a Border and Warning
+            // did not, so the one badge tinted amber had to keep a literal where its three neighbours
+            // could use a brush.
+            ("WarningBorder", C("#33FBBF24")),
             ("SuccessText", C("#4ADE80")), ("SuccessBgSubtle", C("#1A22C55E")), ("SuccessBorder", C("#3322C55E")),
             ("InfoText", C("#7DD3FC")), ("InfoBgSubtle", C("#1A38BDF8")), ("InfoBorder", C("#3338BDF8")),
             ("DangerText", C("#F87171")), ("DangerBgSubtle", C("#1AEF4444")), ("DangerBorder", C("#33EF4444")),
@@ -439,6 +443,17 @@ public sealed class ThemeService
             // so they get their own per-preset brushes (Security/Defender/Servicing reuse Danger/Success/
             // Info text). Dark = the previous hardcoded Tailwind-300 tints; light darkened for AA.
             ("BadgeIndigoText", C("#A5B4FC")), ("BadgePurpleText", C("#D8B4FE")), ("BadgePinkText", C("#F9A8D4")),
+            // …and the fills behind that text, which stayed hardcoded when the text was migrated. The
+            // badge kept an 8%-alpha dark-calibrated tint on every light preset, so on light themes the
+            // text correctly darkened to indigo-700/purple-700/pink-800 while its background did not
+            // follow — the Category column lost the colour-coding that makes it scannable.
+            // One NEUTRAL family covers three rows that used two different slates (#475569 for "no
+            // category matched", #94A3B8 for Hidden and History). At 8% alpha over the same surface the
+            // two are indistinguishable, so keeping them apart bought a distinction nobody can see.
+            ("BadgeIndigoBgSubtle", C("#1A6366F1")), ("BadgeIndigoBorder", C("#336366F1")),
+            ("BadgePurpleBgSubtle", C("#1AA855F7")), ("BadgePurpleBorder", C("#33A855F7")),
+            ("BadgePinkBgSubtle", C("#1AEC4899")), ("BadgePinkBorder", C("#33EC4899")),
+            ("BadgeNeutralBgSubtle", C("#1A94A3B8")), ("BadgeNeutralBorder", C("#3394A3B8")),
 
             // Base semantic brushes (used directly as small-text Foreground / dot Fill across the app,
             // e.g. Cleanup's TEMP-folders stat). These were static App.xaml resources that never
@@ -463,6 +478,7 @@ public sealed class ThemeService
         [
             ("WarningText", C("#92400E")), ("WarningBgSubtle", C("#26FBBF24")),   // amber-800 text — AA on white
             ("WarningBg", C("#40FBBF24")), ("WarningStripe", C("#D97706")),
+            ("WarningBorder", C("#55FBBF24")),
             ("SuccessText", C("#15803D")), ("SuccessBgSubtle", C("#2622C55E")), ("SuccessBorder", C("#5522C55E")),
             ("InfoText", C("#0369A1")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
             ("DangerText", C("#B91C1C")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
@@ -473,6 +489,14 @@ public sealed class ThemeService
             // Category badges darkened for AA on light presets (indigo-700 / purple-700 / pink-800).
             // pink-800 #9D174D (not pink-700) clears 4.5:1 on the most-tinted light surface #FBCFE8.
             ("BadgeIndigoText", C("#4338CA")), ("BadgePurpleText", C("#7E22CE")), ("BadgePinkText", C("#9D174D")),
+            // Badge fills on light: the same hue at higher alpha, which is the convention the existing
+            // light entries already follow (light SuccessBgSubtle is #2622C55E against dark's #1A22C55E —
+            // same green, more of it). An 8%-alpha tint over a near-white surface is essentially
+            // invisible, which is exactly why these could not simply be shared with the dark array.
+            ("BadgeIndigoBgSubtle", C("#266366F1")), ("BadgeIndigoBorder", C("#556366F1")),
+            ("BadgePurpleBgSubtle", C("#26A855F7")), ("BadgePurpleBorder", C("#55A855F7")),
+            ("BadgePinkBgSubtle", C("#26EC4899")), ("BadgePinkBorder", C("#55EC4899")),
+            ("BadgeNeutralBgSubtle", C("#2694A3B8")), ("BadgeNeutralBorder", C("#5594A3B8")),
 
             // Light: darker, saturated tones that meet WCAG AA as SMALL text — not just on pure white,
             // but on the most-tinted light preset card surface (soft-blossom Surface2 #FBCFE8 is the

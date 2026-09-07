@@ -29,6 +29,7 @@ public sealed class PowerShellRunner : IPowerShellRunner
     private readonly Func<System.Diagnostics.Process, CancellationToken, Task> _waitForProcessExit;
     private readonly Action<System.Diagnostics.Process> _terminateProcessTree;
     private readonly Func<Runspace, Task> _openRunspace;
+    private readonly TimeSpan _openRunspaceTimeout;
     private readonly Func<(Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process)> _createRunspace;
     private readonly bool _isElevated;
     private readonly string _trustedPowerShellModulePath;
@@ -45,7 +46,8 @@ public sealed class PowerShellRunner : IPowerShellRunner
         Func<bool>? isElevated = null,
         string? trustedPowerShellModulePath = null,
         Func<Runspace, Task>? openRunspace = null,
-        Func<(Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process)>? createRunspace = null)
+        Func<(Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process)>? createRunspace = null,
+        TimeSpan? openRunspaceTimeout = null)
     {
         _scheduleProcessStart = scheduleProcessStart
             ?? throw new ArgumentNullException(nameof(scheduleProcessStart));
@@ -55,6 +57,7 @@ public sealed class PowerShellRunner : IPowerShellRunner
             ?? (static process => process.Kill(entireProcessTree: true));
         _openRunspace = openRunspace
             ?? (static runspace => Task.Run(() => runspace.Open()));
+        _openRunspaceTimeout = openRunspaceTimeout ?? DefaultOpenRunspaceTimeout;
 
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         _isElevated = (isElevated ?? Helpers.AdminHelper.IsElevated)();
@@ -573,11 +576,43 @@ public sealed class PowerShellRunner : IPowerShellRunner
         }
     }
 
+    /// <summary>
+    /// How long to wait for a runspace to become ready before giving up on it.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately generous rather than tight. Opening the elevated runspace starts a <c>powershell.exe</c>
+    /// 5.1 child and completes a handshake with it, and a cold start on a slow or busy machine is legitimately
+    /// slow — a timeout that fired on that would turn a working feature into a broken one, which is worse than
+    /// the defect it fixes. What it has to beat is not "slow", it is "never".
+    /// <para>A hang dump from the integration job showed <b>275 threads</b> parked in
+    /// <c>RemoteRunspace.Open</c> on a host saturated with leaked runspaces (#2149), and <c>Open()</c> takes no
+    /// timeout of its own. Sixty seconds turns a permanently busy tab into an error the existing
+    /// unavailable-host handling already knows how to show.</para>
+    /// </remarks>
+    internal static readonly TimeSpan DefaultOpenRunspaceTimeout = TimeSpan.FromSeconds(60);
+
     private async Task OpenRunspaceAsync(Runspace runspace)
     {
         try
         {
-            await _openRunspace(runspace).ConfigureAwait(false);
+            // WaitAsync rather than a token passed inward: Open() offers neither cancellation nor a timeout
+            // of its own, so there is nothing to hand it. This bounds the WAIT, not the work — the open may
+            // still be in flight when we give up, and the caller's `using` disposes the runspace either way.
+            await _openRunspace(runspace).WaitAsync(_openRunspaceTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            // NOT gated on _isElevated, unlike the mapping below. The out-of-process path is elevated-only, so
+            // that is where a hang has actually been observed — but an unbounded wait is the wrong behaviour
+            // either way, and gating this would leave the in-process path with no answer at all.
+            //
+            // Thrown as RuntimeException like its neighbour, because callers already map that onto their
+            // established unavailable/failed states. A timeout that surfaced as a novel exception type would
+            // reach them as an unhandled fault instead of as "PowerShell is not available".
+            throw new RuntimeException(
+                $"Windows PowerShell did not become ready within {_openRunspaceTimeout.TotalSeconds:0} "
+                + "seconds and the request was abandoned.",
+                ex);
         }
         catch (Exception ex) when (_isElevated && IsPowerShellHostUnavailable(ex))
         {

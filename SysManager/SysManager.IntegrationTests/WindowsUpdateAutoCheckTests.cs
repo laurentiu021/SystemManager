@@ -33,11 +33,22 @@ public class WindowsUpdateAutoCheckTests
         Assert.IsType<bool>(vm.IsElevated);
     }
 
+    /// <summary>
+    /// Every command the Windows Update tab is expected to expose.
+    /// </summary>
+    /// <remarks>
+    /// <c>ListFeatureUpdatesCommand</c> was a row here for a long time and had to go: PR #609 ("Windows Update
+    /// install never applied updates (fake success)") deleted <c>ListFeatureUpdatesAsync</c> from the view
+    /// model and left this row behind, so the assertion has been failing ever since — invisibly, because this
+    /// project was compile-checked in CI and never executed. The feature-updates command that DOES exist is
+    /// <c>DeferFeatureUpdatesCommand</c>, and it is asserted below on its own merits rather than as a rename
+    /// of the deleted one.
+    /// </remarks>
     [Theory]
     [InlineData("CheckModuleCommand")]
     [InlineData("InstallModuleCommand")]
     [InlineData("ListUpdatesCommand")]
-    [InlineData("ListFeatureUpdatesCommand")]
+    [InlineData("DeferFeatureUpdatesCommand")]
     [InlineData("ShowHistoryCommand")]
     [InlineData("CheckPendingRebootCommand")]
     [InlineData("InstallUpdatesCommand")]

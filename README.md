@@ -981,9 +981,13 @@ offers, "rate us" prompts:
   a summary card with freed space, warnings, and links to relevant tabs.
   Non-destructive, no admin required.
 - **Health Score** — overall system health gauge (0–100) combining disk
-  SMART, RAM usage, uptime, and battery wear. Color-coded ring (green /
-  amber / red) with up to 3 actionable recommendations. Auto-computes on
-  load and refreshes with "Scan system".
+  SMART, free space on the system drive, RAM usage, uptime, and battery
+  wear. Free space counts for a quarter of it, because a full drive is the
+  commonest reason a PC feels slow and the one thing on that list you can
+  fix today — so a machine that is out of room cannot score green, and the
+  recommendation says how many GB are left and points at Deep Cleanup.
+  Color-coded ring (green / amber / red) with up to 3 actionable
+  recommendations. Auto-computes on load and refreshes with "Scan system".
 - **System Tray** — background health monitoring (60s polling), CPU/RAM tooltip,
   Windows notifications when RAM > 90%, uptime > 14 days, or disk health degrades.
   Context menu: Show SysManager / Volume mixer / Exit.

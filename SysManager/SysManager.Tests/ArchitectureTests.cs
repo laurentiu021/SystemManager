@@ -1545,6 +1545,53 @@ public partial class ArchitectureTests
     private static partial Regex SearchableFieldSpan();
 
     /// <summary>
+    /// Each list that can filter itself down to nothing must have something to say when it does.
+    /// </summary>
+    /// <remarks>
+    /// Not the whole-repo sweep #2121 plans — that one needs all eight of its views resolved first, because
+    /// an exception list carrying reasons nobody has checked is a false claim sitting in the test suite.
+    /// This is the three that ARE resolved, pinned by the state they were given, so deleting one is a
+    /// failure rather than a silent regression to a blank panel.
+    /// <para>Each row names the flag or count the view binds. The flags exist because a bare
+    /// <c>Count == 0</c> cannot tell "the filter matched nothing" from "nothing was loaded yet" — Bulk
+    /// Installer's search would greet the user with "No packages found" before they typed, and Environment
+    /// Variables would blame a search box for a read that came back empty. Where the source collection is
+    /// static, the count IS unambiguous, and Bulk Installer's curated list says so.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryResolvedNoResultsState_IsStillWiredToItsView()
+    {
+        (string View, string Binding, string Copy)[] expected =
+        [
+            ("BulkInstallerView.xaml", "Binding SearchFoundNothing", "No packages found"),
+            ("BulkInstallerView.xaml", "Binding FilteredApps.Count", "No apps match this filter"),
+            ("EnvironmentVariablesView.xaml", "Binding HasNoMatches", "No variables match your search"),
+        ];
+
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var offenders = new List<string>();
+
+        foreach (var (view, binding, copy) in expected)
+        {
+            var path = Path.Combine(viewsDir, view);
+            Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
+
+            var xaml = File.ReadAllText(path);
+            if (!xaml.Contains("<v:EmptyState", StringComparison.Ordinal))
+                offenders.Add($"{view} — no EmptyState control at all");
+            if (!xaml.Contains(binding, StringComparison.Ordinal))
+                offenders.Add($"{view} — nothing binds {binding}");
+            if (!xaml.Contains(copy, StringComparison.Ordinal))
+                offenders.Add($"{view} — the copy \"{copy}\" is gone");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These lists can filter themselves down to nothing and no longer explain it, so the user is "
+            + "left looking at an empty panel — column headers over empty space, or a search area that "
+            + "simply vanishes:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// Every field the chkdsk picker fills in per drive must be shown by the row that lists that drive.
     /// </summary>
     /// <remarks>

@@ -2206,6 +2206,57 @@ public partial class ArchitectureTests
     /// <summary>A <c>CornerRadius</c> written as a plain number rather than a token.</summary>
     [GeneratedRegex(@"CornerRadius=""(?<value>\d+)""", RegexOptions.Compiled)]
     private static partial Regex NumericCornerRadius();
+    /// <summary>Every tab in the sidebar has a row in the navigation smoke table.</summary>
+    /// <remarks>
+    /// The smoke test drives each tab by its nav id and asserts its header renders — the cheapest possible
+    /// proof that a tab is not simply broken. It listed 57 of the 58 tabs. The missing one was Tweaks Hub,
+    /// which is flagged <c>inDevelopment</c>, so the single tab with no coverage at all was the one most
+    /// likely to regress.
+    /// <para>Nothing detected that. The table is a hand-maintained list of literals in a different project
+    /// from the sidebar it mirrors, so tab 59 would ship uncovered the same way. This compares the two
+    /// directly: both are source text, so it runs in the BLOCKING suite even though the test it guards runs in
+    /// the non-blocking UI job — a gap in coverage should not be reported by the job that has the gap.</para>
+    /// <para>One-directional on purpose. A nav id must have a row; a row for an id that no longer exists is a
+    /// different defect, and <c>EveryUiTextAssertion_QuotesCopyTheAppActuallyShips</c> already fails on a
+    /// header the app does not render.</para>
+    /// </remarks>
+    [Fact]
+    public void EverySidebarTab_HasASmokeRow()
+    {
+        var shell = Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs");
+        var smoke = Path.Combine(FindRepoRoot(), "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs");
+
+        Assert.True(File.Exists(shell), $"{shell} not found — this guard would compare nothing.");
+        Assert.True(File.Exists(smoke), $"{smoke} not found — this guard would compare nothing.");
+
+        var declared = NavIdLiteral().Matches(File.ReadAllText(shell))
+            .Select(m => m.Groups["id"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        var covered = NavIdLiteral().Matches(File.ReadAllText(smoke))
+            .Select(m => m.Groups["id"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Vacuity floor: 58 tabs. If the literal pattern stops matching in either file, the set difference is
+        // empty and the guard passes on nothing.
+        Assert.True(declared.Count >= 50,
+            $"only {declared.Count} nav ids were read from MainWindowViewModel, out of 58 — the literal "
+            + "pattern is out of date, so a pass proves nothing.");
+        Assert.True(covered.Count >= 50,
+            $"only {covered.Count} nav ids were read from the smoke table, out of 58 — same problem.");
+
+        var uncovered = declared.Except(covered, StringComparer.Ordinal)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(uncovered.Count == 0,
+            "these tabs are reachable in the sidebar but have no row in the navigation smoke table, so nothing "
+            + "checks that they open and render their header at all. Add a row with the tab's nav id and a "
+            + "substring of its page header:\n  " + string.Join("\n  ", uncovered));
+    }
+
+    /// <summary>A <c>"nav-…"</c> identifier literal.</summary>
+    [GeneratedRegex(@"""(?<id>nav-[a-z0-9-]+)""", RegexOptions.Compiled)]
+    private static partial Regex NavIdLiteral();
 
     /// <summary>A <c>DataGrid</c> or <c>ItemsControl</c> bound to a collection.</summary>
     [GeneratedRegex(@"<(?:DataGrid|ItemsControl)\b[^>]*ItemsSource=""\{Binding", RegexOptions.Compiled)]

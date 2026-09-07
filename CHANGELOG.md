@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.17] - 2026-09-07
+
+Some perfectly healthy apps were being listed as "Not responding" in Processes — Films & TV and Settings did
+it on this machine every single refresh. They are fine; the check SysManager used to ask them was the wrong
+one. The list also refreshes faster now, and no longer freezes for five seconds when an app really has
+frozen.
+
+### Fixed
+- **"Not responding" now means it.** SysManager asked each app whether it was alive by sending it a message
+  and waiting up to five seconds for a reply. Some apps from the Microsoft Store never reply to that message
+  even when they are perfectly responsive — measured over four passes, Films & TV and Settings answered
+  "no reply" instantly, every time — so they were labelled frozen on every refresh. The check is now the same
+  one Windows itself uses to decide whether to grey out a window and add "(Not responding)" to its title, so
+  the column agrees with Task Manager.
+- **The Processes list no longer stalls on a frozen app.** The old check waited up to five seconds *per*
+  frozen window before it could finish the refresh, so the one case the column exists for was also the one
+  that made the whole list hang. Confirmed against a deliberately frozen window: the old check blocked the
+  refresh for 5,013 ms; the new one answered in under a millisecond and still reported the freeze.
+- **Refreshing the list does about a third less work.** Finding each app's window was being done twice for
+  every process, once for the responsiveness check and once for the "has a window" flag, and neither reused
+  the other's answer. It is now done once per refresh for all of them. On a machine with 478 processes a
+  refresh went from 202 ms to 138 ms, and the part that is not the deliberate CPU-sampling pause dropped
+  from 102 ms to 38 ms.
+
 ## [1.76.16] - 2026-09-07
 
 Four screens showed an empty table with no explanation until you pressed the right button — and did not say

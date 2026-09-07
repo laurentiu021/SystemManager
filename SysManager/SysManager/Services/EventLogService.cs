@@ -141,11 +141,22 @@ public sealed partial class EventLogService
             if (rec is null) yield break;
 
             FriendlyEventEntry? entry = null;
-            try { entry = Project(rec, opt.LogName); }
+            try
+            {
+                // Severity is filtered HERE rather than in the query — see BuildXPath for why, because it
+                // is the fix for a cancellation defect rather than a preference. Before Project on purpose:
+                // Project formats the record's message, which is the expensive part, and a filtered read
+                // discards most of what it reads.
+                if (Matches(opt.Severities, rec.Level))
+                    entry = Project(rec, opt.LogName);
+            }
             catch (EventLogException) { /* skip malformed record */ }
             catch (InvalidOperationException) { /* skip malformed record */ }
             finally { rec.Dispose(); }
 
+            // Null here means one of three things — filtered out, malformed, or unreadable — and all three
+            // are "move on to the next record". Deliberately does NOT increment emitted, so MaxResults
+            // still counts what the caller receives.
             if (entry is null) continue;
             EventExplainer.Enrich(entry);
 
@@ -250,6 +261,18 @@ public sealed partial class EventLogService
         return (i < 0 ? s : s[..i]).Trim();
     }
 
+    /// <summary>
+    /// True when a record's raw <c>Level</c> satisfies the requested severities. An absent or empty filter
+    /// accepts everything.
+    /// </summary>
+    /// <remarks>
+    /// Uses the same <see cref="MapLevel"/> the projection uses, so a record cannot be admitted here and
+    /// then labelled with a different severity in the list. Internal so the mapping is testable without a
+    /// real <c>EventRecord</c>, which cannot be constructed.
+    /// </remarks>
+    internal static bool Matches(List<EventSeverity>? severities, byte? level) =>
+        severities is not { Count: > 0 } || severities.Contains(MapLevel(level));
+
     private static EventSeverity MapLevel(byte? level) => level switch
     {
         1 => EventSeverity.Critical,
@@ -268,12 +291,20 @@ public sealed partial class EventLogService
     {
         List<string> clauses = [];
 
-        if (opt.Severities is { Count: > 0 })
-        {
-            var levels = opt.Severities.SelectMany(SeverityToLevels).Distinct().ToList();
-            clauses.Add("(" + string.Join(" or ", levels.Select(l => $"Level={l}")) + ")");
-        }
-
+        // Severity is deliberately NOT a clause here, and putting it back would reintroduce a defect rather
+        // than an optimisation. The Event Log service evaluates this query itself: a single ReadEvent() walks
+        // records internally until one satisfies it, and returns only then. That call is a blocking native
+        // call and no CancellationToken can interrupt it, so with a Level clause over a window that contains
+        // few matches, one read blocked for 4 m 43 s on a CI runner against a 10-second token — Cancel did
+        // nothing, the tab stayed busy, and Refresh stayed disabled because it is gated on not-busy.
+        //
+        // Without it, each ReadEvent() returns the next record in the window immediately and the loop's own
+        // ct.IsCancellationRequested check between records becomes the cancellation point. See Matches(),
+        // which applies the filter in managed code using the same MapLevel the projection uses.
+        //
+        // The trade is examining more records, not doing more total work: the OS was already walking them,
+        // and it did so uninterruptibly. An unfiltered read — the Logs tab's default — is byte-for-byte
+        // unchanged, because every record it reads is emitted either way.
         if (opt.Since.HasValue)
         {
             // InvariantCulture is REQUIRED: the ':' in the format string is replaced by the
@@ -304,19 +335,4 @@ public sealed partial class EventLogService
         return "*[System[" + string.Join(" and ", clauses) + "]]";
     }
 
-    /// <summary>
-    /// Maps a severity back to ALL event levels that <see cref="MapLevel"/> folds into it.
-    /// Used by <see cref="BuildXPath"/> so the XPath Level clause is the exact inverse of
-    /// the read-side classification. In particular, Level 0 (LogAlways) is classified as
-    /// Info by MapLevel, so Info must query BOTH Level=0 and Level=4.
-    /// </summary>
-    internal static IEnumerable<int> SeverityToLevels(EventSeverity s) => s switch
-    {
-        EventSeverity.Critical => [1],
-        EventSeverity.Error => [2],
-        EventSeverity.Warning => [3],
-        EventSeverity.Info => [0, 4],
-        EventSeverity.Verbose => [5],
-        _ => [0, 4]
-    };
 }

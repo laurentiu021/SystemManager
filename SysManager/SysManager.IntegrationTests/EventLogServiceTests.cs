@@ -114,6 +114,59 @@ public class EventLogServiceTests
     }
 
     /// <summary>
+    /// Cancelling a SEVERITY-FILTERED read stops it, which is the case that used to hang.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Read_Cancellation_StopsFast"/> above covers an unfiltered read and always passed. The
+    /// filtered one did not: the severity filter used to be a <c>Level</c> clause in the XPath, which the
+    /// Event Log service evaluates itself, so a single <c>ReadEvent()</c> walked records internally until it
+    /// found a match and returned only then. That native call cannot be interrupted by a token, so on a
+    /// machine with few Error or Critical events in the window the read blocked for minutes with Cancel doing
+    /// nothing — measured at 4 m 43 s against a 10-second budget on a CI runner.
+    /// <para>The window is wide, the cap unreachable, and the severity deliberately SCARCE, because the
+    /// defect only appears when the filter cannot be satisfied quickly. Filtering on Error would pass either
+    /// way on a machine with plenty of errors — the cap fills in milliseconds and nothing ever blocks — which
+    /// would make this green against the very code it exists to catch. Verbose (Level 5) is essentially
+    /// absent from the System log, so an OS-evaluated query for it has to walk the whole window.</para>
+    /// <para><b>It still only fails where the scan is slow, and that is worth being exact about.</b> Restoring
+    /// the old <c>Level</c> clause and running this on a developer machine leaves it GREEN: a System log of
+    /// 28,997 records answers the same unsatisfiable query in 333 ms, comfortably inside the budget. The 4 m
+    /// 43 s came from a CI runner, so that is where this test can go red, and the integration job is where it
+    /// runs. A test that can only fail on some machines is a weak test; it is kept because the alternative is
+    /// no regression test at all for a defect that was measured, and because a machine fast enough to pass it
+    /// is a machine where the bug does not bite.</para>
+    /// <para>Asserts the elapsed time rather than a count: the point is that control comes back, not what was
+    /// collected. Five seconds is the same budget its unfiltered sibling uses.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Read_Cancellation_WithASeverityFilter_StopsFast()
+    {
+        var svc = new EventLogService();
+        var opt = new EventLogQueryOptions
+        {
+            LogName = "System",
+            Since = DateTime.Now.AddYears(-10),
+            MaxResults = 100000,
+            Severities = new() { EventSeverity.Verbose }
+        };
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(150);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var count = 0;
+        try
+        {
+            await foreach (var _ in svc.ReadAsync(opt, cts.Token)) count++;
+        }
+        catch (OperationCanceledException) { /* the expected end of a cancelled read */ }
+        sw.Stop();
+
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
+            $"a cancelled severity-filtered read took {sw.Elapsed} after {count} entries; the filter is "
+            + "being evaluated somewhere the token cannot reach");
+    }
+
+    /// <summary>
     /// Every entry that comes back carries an explanation and a recommendation.
     /// </summary>
     /// <remarks>

@@ -282,6 +282,13 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <!-- Stacked rather than overlaid: the parent is a StackPanel and an ItemsControl with
+                             no items takes no space, so there is no header row to sit on top of — the card
+                             was simply its own title and explanation above blank space. -->
+                        <v:EmptyState Glyph="&#xEDA2;"
+                                      Title="No drive health read yet"
+                                      Message="Press Run SMART check to ask your drives how they are doing."
+                                      Visibility="{Binding DiskHealth.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </StackPanel>
                 </Border>
 

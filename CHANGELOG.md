@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.16] - 2026-09-07
+
+Four screens showed an empty table with no explanation until you pressed the right button — and did not say
+which button. Traceroute, Windows Update, Deep Cleanup's large-file list and the drive-health panel in System
+Health now tell you what they are waiting for.
+
+### Fixed
+- **The four screens that opened blank now say what they need.** Each of them starts with nothing to show,
+  which is normal — but a column header over empty space looks like something went wrong rather than like
+  something has not been asked for yet. Each now shows a short line naming the button that fills it: Trace now,
+  List updates, Scan drive, Run SMART check. Same look as the thirty-odd screens that already did this.
+
 ## [1.76.15] - 2026-09-04
 
 On any of the six light colour themes, the green tick on the little "finished" pop-up was almost invisible

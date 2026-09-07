@@ -6464,9 +6464,11 @@ public partial class ArchitectureTests
     /// </summary>
     /// <remarks>
     /// <c>SystemInfoService.Capture</c> takes <c>_cacheLock</c> to serialise four <c>??=</c> caches, each of
-    /// which runs its WMI query once per process. <c>QueryCpuLoad</c> ran inside that block too, so every
-    /// concurrent <c>CaptureAsync</c> queued behind a WMI round-trip it had no interest in — and the Dashboard
-    /// polls this at 300 ms, so the queue was rarely empty.
+    /// which runs its WMI query once per process. The dynamic CPU-load query ran inside that block too, so
+    /// every concurrent <c>CaptureAsync</c> queued behind a WMI round-trip it had no interest in — and the
+    /// Dashboard polls this at 300 ms, so the queue was rarely empty. That query is now a syscall
+    /// (<c>NoWmiRunsOnTheSnapshotPollPath</c> keeps it one), but the rule still holds for whatever is added
+    /// next.
     /// <para>The rule is expressed as a shape rather than as two method names: inside the block, a
     /// <c>Query…</c> call must sit on a line that also caches its result with <c>??=</c>. That catches a
     /// third dynamic query added later, which a name list could not.</para>
@@ -6492,13 +6494,57 @@ public partial class ArchitectureTests
 
         Assert.True(offenders.Count == 0,
             "these queries run while holding _cacheLock, so every other CaptureAsync caller waits for them. "
-            + "The lock exists for the ??= caches; a per-poll query belongs after the block, beside "
-            + "QueryDynamicOs:\n  " + string.Join("\n  ", offenders));
+            + "The lock exists for the ??= caches; a per-poll query belongs after the block, beside the "
+            + "Sample* calls:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>A call to one of the service's own Query* methods.</summary>
     [GeneratedRegex(@"\bQuery[A-Z]\w*\(")]
     private static partial Regex QueryCallInLock();
+
+    /// <summary>
+    /// The three values the 300 ms snapshot poll refreshes must come from syscalls, never from WMI.
+    /// </summary>
+    /// <remarks>
+    /// CPU load, physical memory and uptime were two WMI round-trips per pass — 3.3 of them a second for as
+    /// long as the Landing tab is open — for numbers <c>GetSystemTimes</c>, <c>GlobalMemoryStatusEx</c> and
+    /// <c>Environment.TickCount64</c> hand over directly. Pinned by the WMI COLUMN names rather than by method
+    /// names, because the regression is "someone adds the query back", and a method-name list would not see a
+    /// new method. <c>LastBootUpTime</c> is included: it was still selected in the CACHED static query, where
+    /// the parsed uptime was frozen at first-query time and overwritten on every snapshot regardless.
+    /// <para>The positive half matters as much: without it, deleting the whole dynamic path would pass.</para>
+    /// </remarks>
+    [Fact]
+    public void NoWmiRunsOnTheSnapshotPollPath()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "SystemInfoService.cs")));
+
+        // Vacuity floor: the STATIC queries must still be here. An empty or mis-read file would satisfy every
+        // absence below while proving nothing.
+        foreach (var stillExpected in new[] { "Win32_OperatingSystem", "Win32_Processor", "Caption", "NumberOfCores" })
+        {
+            Assert.True(source.Contains(stillExpected, StringComparison.Ordinal),
+                $"'{stillExpected}' is missing from SystemInfoService.cs, so the file was not read as expected "
+                + "and the absence assertions below prove nothing.");
+        }
+
+        var dynamicColumns = new[] { "LoadPercentage", "TotalVisibleMemorySize", "FreePhysicalMemory", "LastBootUpTime" }
+            .Where(column => source.Contains(column, StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(dynamicColumns.Count == 0,
+            "these WMI columns are back in SystemInfoService. All three dynamic snapshot values have cheap "
+            + "syscall equivalents, and the Landing tab polls the snapshot every 300 ms, so a WMI round-trip "
+            + "here costs 3.3 of them a second: " + string.Join(", ", dynamicColumns));
+
+        foreach (var seam in new[] { "SampleCpuLoad()", "SampleMemory(", "_millisecondsSinceBoot()" })
+        {
+            Assert.True(source.Contains(seam, StringComparison.Ordinal),
+                $"'{seam}' is gone from SystemInfoService, so the dynamic value it produced is no longer "
+                + "being refreshed at all — which would satisfy the no-WMI rule for the wrong reason.");
+        }
+    }
 
     /// <summary>
     /// Every call into a temp-tree walker must pass the own-extraction exclusion.

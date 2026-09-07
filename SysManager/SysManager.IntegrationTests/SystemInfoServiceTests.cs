@@ -93,6 +93,46 @@ public class SystemInfoServiceTests
         Assert.Equal(a.Memory.TotalGB, b.Memory.TotalGB, 3); // total RAM is stable within a session
     }
 
+    /// <summary>
+    /// Uptime comes from the monotonic clock, not from a WMI timestamp. This is the assertion that would have
+    /// caught the value being read from the CACHED static query, where it was frozen at first-query time: a
+    /// frozen uptime drifts from <c>TickCount64</c> the longer the process runs, so a tight window catches it.
+    /// </summary>
+    [Fact]
+    public async Task CaptureAsync_UptimeTracksTheMonotonicClock()
+    {
+        var before = Environment.TickCount64;
+        var snap = await new SystemInfoService().CaptureAsync();
+        var after = Environment.TickCount64;
+
+        Assert.InRange(snap.Os.Uptime.TotalMilliseconds, before - 1000, after + 1000);
+    }
+
+    /// <summary>
+    /// The real <c>GetSystemTimes</c> path, end to end. The unit tests pin the arithmetic against fed
+    /// readings; this proves the syscall actually returns usable counters on a real machine, so a marshalling
+    /// mistake cannot hide behind green unit tests.
+    /// </summary>
+    [Fact]
+    public async Task CaptureAsync_CpuLoadIsAUsablePercentage()
+    {
+        var snap = await new SystemInfoService().CaptureAsync();
+
+        Assert.False(double.IsNaN(snap.Cpu.LoadPercent));
+        Assert.InRange(snap.Cpu.LoadPercent, 0, 100);
+    }
+
+    /// <summary>The real <c>GlobalMemoryStatusEx</c> path: available cannot exceed total, and used is the gap.</summary>
+    [Fact]
+    public async Task CaptureAsync_MemoryTotalsAreInternallyConsistent()
+    {
+        var snap = await new SystemInfoService().CaptureAsync();
+
+        Assert.True(snap.Memory.TotalGB > 0);
+        Assert.InRange(snap.Memory.AvailableGB, 0, snap.Memory.TotalGB);
+        Assert.Equal(snap.Memory.TotalGB - snap.Memory.AvailableGB, snap.Memory.UsedGB, 6);
+    }
+
     [Fact]
     public async Task CaptureAsync_RespectsCancellation()
     {

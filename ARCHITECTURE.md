@@ -202,7 +202,12 @@ Key services:
   run on the same engine. Pure and static like `HealthAnalyzer`, so the
   judgement is unit-testable without a network; deliberately never emits the
   failure colour, because a slow plan is not a fault.
-- `SystemInfoService` — OS / CPU / RAM / uptime snapshot.
+- `SystemInfoService` — OS / CPU / RAM / uptime snapshot. Static hardware (OS caption,
+  CPU model, disk models, DIMM inventory) is queried once via WMI and cached; the three
+  DYNAMIC values are syscalls, because the Landing tab polls this every 300 ms —
+  `GetSystemTimes` deltas for CPU load, `GlobalMemoryStatusEx` for memory,
+  `Environment.TickCount64` for uptime. The syscalls are constructor-injected, so the
+  delta arithmetic is unit-testable without a real machine.
 - `BiosService` — read-only BIOS/firmware + motherboard info (Win32_BIOS,
   Win32_BaseBoard, UEFI/Secure-Boot registry) plus a pure manufacturer
   support-URL resolver for BIOS updates; never flashes firmware. Consumed by

@@ -10,6 +10,33 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.76.24] - 2026-09-07
+
+The Landing tab used to ask Windows the same two questions 3.3 times a second, the expensive way, for three
+numbers Windows hands over instantly. CPU load, memory and uptime now cost a few microseconds each instead of
+two WMI round-trips, and the CPU figure is genuinely live rather than a one-second average being redrawn three
+times.
+
+### Changed
+- **The Landing tab's live numbers cost syscalls instead of WMI queries.** The vitals poll runs every 300 ms
+  for as long as the tab is open, and each pass made two WMI round-trips: one for CPU load, one for memory and
+  uptime. All three now come from the kernel directly — `GetSystemTimes`, `GlobalMemoryStatusEx` and the
+  monotonic tick count.
+- **The CPU percentage is now a real measurement of the interval just elapsed.** The old source was a
+  WMI-throttled one-second average, so at a 300 ms poll the chart spent two passes out of three redrawing a
+  number that had not changed. It is now the busy share of the ticks that actually passed since the previous
+  reading.
+- **Uptime no longer jumps when the clock changes.** It was computed as "now minus the boot timestamp", so
+  changing the system clock or a DST shift moved it. It now comes from a counter that only ever goes forward.
+  On a machine where the reading is unavailable the tab holds the last known figure rather than showing a zero
+  that reads as "idle".
+
+### Added
+- **A check that the 300 ms path cannot go back to WMI.** Pinned by the WMI column names rather than by method
+  names, because the regression to guard against is someone adding the query back in a new method. It also
+  asserts the syscall path is still *called* — without that half, deleting the live values entirely would have
+  satisfied the rule.
+
 ## [1.76.23] - 2026-09-07
 
 Three things the app already knew and never told you. The Context menu tab worked out which menu style was

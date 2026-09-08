@@ -12,9 +12,19 @@ namespace SysManager.IntegrationTests;
 public class PowerShellRunnerTests
 {
     /// <summary>
-    /// A run's teardown STOPS the child process the runspace was built with, rather than only dropping its
-    /// handle.
+    /// Disposing the runner STOPS the child process its runspace was built with, rather than only dropping
+    /// the handle.
     /// </summary>
+    /// <remarks>
+    /// <para><b>Was "a run's teardown", and that changed.</b> An elevated runner now REUSES its runspace
+    /// across calls rather than building one per call (#2149), so the end of a run is no longer when the
+    /// child is released — the release points are eviction after
+    /// <see cref="PowerShellRunner.IdleRunspaceLifetime"/> and disposal of the runner. This asserts the
+    /// deterministic one.</para>
+    /// <para>Elevation is forced rather than inherited so the test exercises the reuse path on any machine.
+    /// The runspace itself is in-process, so nothing here needs administrator rights; the injected child
+    /// stands in for the <c>powershell.exe</c> that the real elevated path would have started.</para>
+    /// </remarks>
     /// <remarks>
     /// #2149(a), end to end through <c>RunAsync</c>. Disposing a <see cref="System.Diagnostics.Process"/>
     /// releases the HANDLE and does not stop the process. When <c>powershell.exe</c> outlived its runspace, its
@@ -41,7 +51,7 @@ public class PowerShellRunnerTests
     /// polled, so there is no sleeping and nothing to go flaky.</para>
     /// </remarks>
     [Fact]
-    public async Task RunspaceTeardown_StopsTheChildTheRunspaceWasBuiltWith()
+    public async Task DisposingTheRunner_StopsTheChildItsRunspaceWasBuiltWith()
     {
         var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
             "cmd.exe", "/c ping -n 60 127.0.0.1 > nul")
@@ -60,16 +70,24 @@ public class PowerShellRunnerTests
                 System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2());
             var runner = new PowerShellRunner(
                 action => Task.Run(action),
+                isElevated: static () => true,
                 createRunspace: () => (runspace, null, child));
 
             var result = await runner.RunAsync("2 + 2");
-            Assert.Equal(4, (int)result[0].BaseObject);   // the run really happened, so teardown really ran
+            Assert.Equal(4, (int)result[0].BaseObject);   // the run really happened
+
+            // Still alive, because the runspace is now cached for reuse rather than torn down per call.
+            Assert.False(observer.HasExited,
+                "the child was released at the end of the run — reuse is not taking effect, so every "
+                + "elevated call still spawns and hands-shakes its own powershell.exe");
+
+            runner.Dispose();
 
             using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             await observer.WaitForExitAsync(bounded.Token);
 
             Assert.True(observer.HasExited,
-                "the child process outlived the run; its pipes stay open and the remoting transport's "
+                "the child process outlived the runner; its pipes stay open and the remoting transport's "
                 + "reader threads stay blocked on them forever");
         }
         finally
@@ -77,6 +95,190 @@ public class PowerShellRunnerTests
             try { if (!observer.HasExited) observer.Kill(entireProcessTree: true); }
             catch (InvalidOperationException) { /* already gone, which is the expected outcome */ }
         }
+    }
+
+    /// <summary>
+    /// An elevated runner builds ONE runspace for several calls, not one per call.
+    /// </summary>
+    /// <remarks>
+    /// The point of #2149's second half. Every elevated call used to spawn a <c>powershell.exe</c> 5.1 child
+    /// and complete a remoting handshake with it, then throw both away — and the services that use this make
+    /// their calls in bursts: <c>DnsService</c> six, <c>EdgeOneDriveService</c> four, three others three each.
+    /// <para>Counted through the <c>createRunspace</c> seam rather than by timing, so the assertion is
+    /// exact and cannot go flaky on a slow machine. The runspaces are in-process, so nothing here needs
+    /// administrator rights.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ElevatedRunner_ReusesOneRunspaceAcrossCalls()
+    {
+        var built = 0;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => true,
+            createRunspace: () =>
+            {
+                built++;
+                return (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                            System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
+                        null, null);
+            });
+
+        for (var call = 0; call < 4; call++)
+            Assert.Equal(4, (int)(await runner.RunAsync("2 + 2"))[0].BaseObject);
+
+        Assert.Equal(1, built);
+    }
+
+    /// <summary>
+    /// The unelevated path is untouched: it still builds a runspace per call.
+    /// </summary>
+    /// <remarks>
+    /// Scope, asserted rather than described. The in-process runspace starts no child and opens in a
+    /// fraction of the time, so caching it would add a lifetime to reason about for almost no gain — and
+    /// #2149 is about the out-of-process branch only. Without this, narrowing or widening the elevation
+    /// check would go unnoticed.
+    /// </remarks>
+    [Fact]
+    public async Task UnelevatedRunner_StillBuildsARunspacePerCall()
+    {
+        var built = 0;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => false,
+            createRunspace: () =>
+            {
+                built++;
+                return (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                            System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
+                        null, null);
+            });
+
+        for (var call = 0; call < 3; call++)
+            await runner.RunAsync("2 + 2");
+
+        Assert.Equal(3, built);
+    }
+
+    /// <summary>
+    /// A reused runspace is released once it has been idle, not held for the session.
+    /// </summary>
+    /// <remarks>
+    /// The half of the design that keeps reuse from becoming a memory trade. Nothing disposes most of these
+    /// runners — nine are built directly in <c>MainWindowViewModel</c>'s designer graph and live as long as
+    /// the window — so without eviction a dozen <c>powershell.exe</c> processes would be resident for the
+    /// whole run, in an app whose pitch is making a PC feel faster.
+    /// <para>Driven with a 200&#160;ms lifetime through the constructor seam. The wait is bounded and
+    /// polls for the state change rather than sleeping a fixed interval and hoping.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ElevatedRunner_ReleasesTheRunspaceOnceIdle()
+    {
+        var built = 0;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => true,
+            idleRunspaceLifetime: TimeSpan.FromMilliseconds(200),
+            createRunspace: () =>
+            {
+                built++;
+                return (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                            System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
+                        null, null);
+            });
+
+        await runner.RunAsync("2 + 2");
+        Assert.Equal(1, built);
+
+        // Longer than the lifetime, and doubling if a slow machine needs more. Waiting LESS than the
+        // lifetime cannot work: every run re-arms the countdown, so polling faster than it keeps it alive
+        // forever — which is what the first version of this test did.
+        using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var wait = TimeSpan.FromMilliseconds(400);
+        while (built == 1)
+        {
+            await Task.Delay(wait, bounded.Token);
+            await runner.RunAsync("2 + 2");   // rebuilds once the idle one has been evicted
+            wait *= 2;
+        }
+
+        Assert.Equal(2, built);
+    }
+
+    /// <summary>
+    /// A cached runspace that is no longer open is discarded and rebuilt.
+    /// </summary>
+    /// <remarks>
+    /// The recovery path, and the reason the state is re-checked on every lease rather than assumed. Things
+    /// outside this class can break a cached runspace — the child killed by the user or by cleanup, the
+    /// remoting channel dropped — and a runspace that is not <c>Opened</c> cannot run a pipeline at all.
+    /// Without the re-check, one broken child would make every later call on that consumer fail for the rest
+    /// of the session, which is a far worse failure than the per-call cost reuse removes.
+    /// <para><c>Close()</c> stands in for all of those: it is the state they leave behind, reached
+    /// deterministically instead of by killing something and hoping.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ElevatedRunner_RebuildsARunspaceThatIsNoLongerOpen()
+    {
+        var built = 0;
+        System.Management.Automation.Runspaces.Runspace? last = null;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => true,
+            createRunspace: () =>
+            {
+                built++;
+                last = System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                    System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2());
+                return (last, null, null);
+            });
+
+        await runner.RunAsync("2 + 2");
+        Assert.Equal(1, built);
+
+        last!.Close();
+
+        Assert.Equal(4, (int)(await runner.RunAsync("2 + 2"))[0].BaseObject);
+        Assert.Equal(2, built);
+    }
+
+    /// <summary>
+    /// Two calls that overlap on an ALREADY-CACHED runspace both complete.
+    /// </summary>
+    /// <remarks>
+    /// The hazard reuse introduces. A runspace runs one pipeline at a time, so where a runspace per call made
+    /// concurrent calls independent, a shared one makes them a conflict — <c>BeginInvoke</c> against a busy
+    /// runspace throws. They are serialised behind a gate instead, and this is what says so.
+    /// <para><b>The warm-up call is the whole test.</b> Without it, two calls started back to back do not
+    /// conflict and this passes with the gate removed: the first has not cached anything by the time the
+    /// second leases, so each builds its own runspace and nothing is shared. Measured — the first version of
+    /// this test stayed GREEN under a mutation that deleted the gate entirely. Establishing the cache first is
+    /// what makes both callers actually reach for the same runspace.</para>
+    /// <para>The sleep exists to hold the first pipeline open while the second arrives. It creates the
+    /// overlap rather than being asserted on, so there is no timing in the assertions.</para>
+    /// <para>Cheap in practice: the type is registered Transient so each consumer has its own runner, and the
+    /// consumers that make several calls already serialise them. The gate is the guarantee rather than a
+    /// dependency on that staying true.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ElevatedRunner_OverlappingCallsOnACachedRunspace_BothComplete()
+    {
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => true,
+            createRunspace: () =>
+                (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                     System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
+                 null, null));
+
+        await runner.RunAsync("2 + 2");   // establishes the cache — see the remarks
+
+        var slow = runner.RunAsync("Start-Sleep -Milliseconds 300; 2 + 2");
+        var quick = runner.RunAsync("3 + 3");
+
+        var results = await Task.WhenAll(slow, quick);
+
+        Assert.Equal(4, (int)results[0][0].BaseObject);
+        Assert.Equal(6, (int)results[1][0].BaseObject);
     }
 
     [Fact]

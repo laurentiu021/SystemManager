@@ -9237,4 +9237,109 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\[(?:Fact|Theory|StaFact|StaTheory)\b", RegexOptions.CultureInvariant)]
     private static partial Regex TestMethodAttribute();
 
+    /// <summary>
+    /// A test may not record <c>PropertyChanged</c> into a collection that cannot take a concurrent write,
+    /// because whether that is safe depends on the source rather than on anything visible at the call site.
+    /// </summary>
+    /// <remarks>
+    /// <c>PropertyChanged += (_, e) =&gt; list.Add(e.PropertyName!)</c> was written sixty-one times, and each
+    /// one was safe or not depending on whether that particular source had a second, off-thread writer. A
+    /// view model whose constructor starts <c>InitializeAsync</c> does, because <c>ViewModelBase</c> awaits
+    /// it with <c>ConfigureAwait(false)</c> and the continuation resumes on the thread pool — #2169, an
+    /// <c>InvalidOperationException: Collection was modified; enumeration operation may not execute</c>
+    /// raised from inside an <c>Assert.Contains</c> on CI after roughly five thousand tests.
+    /// <para><b>Why a guard and not a sweep.</b> Identifying the exposed subset by pattern produced two
+    /// confidently wrong answers while #2169 was being fixed: keying the view model off
+    /// <c>new (\w+ViewModel)\(</c> missed every factory using target-typed <c>return new(...)</c>, including
+    /// the file that had actually failed, and deciding "does the factory wait for init" by looking for
+    /// <c>InitializationComplete</c> matched the phrase inside <c>NewVm</c>'s explanatory COMMENT. The
+    /// property this checks instead needs no per-file judgement: a recorder that survives a concurrent
+    /// writer is safe everywhere, and costs nothing where there is no concurrent writer.</para>
+    /// <para><b>The floor is on ADOPTION, not on the population this guard scans.</b> Counting raw
+    /// <c>PropertyChanged +=</c> sites would be a floor that every further conversion pushes DOWN, so
+    /// finishing the job would eventually read as a broken regex. The number that only grows is how many
+    /// call sites use the shared recorder — seventy when measured, counted with the same regex the guard
+    /// uses rather than a number arrived at some other way — so that is what has to stay above a floor for
+    /// a clean result to mean anything.</para>
+    /// <para>Twelve sites are legitimately left: they set a <c>bool</c> rather than appending, so there is
+    /// no collection to enumerate. <c>OperationLockServiceEdgeCaseTests</c> keeps a named handler because
+    /// its source is a process-wide singleton it must unsubscribe from, and uses a
+    /// <c>ConcurrentQueue</c> — which this guard accepts, deliberately. The helper is the easy path, not
+    /// the only legal one.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTest_AppendsPropertyChangesToANonConcurrentCollection()
+    {
+        var root = Directory.GetParent(FindAppProjectDir())!.FullName;
+        var offenders = new List<string>();
+        var adoption = 0;
+        var filesRead = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var directory = Path.Combine(root, project);
+            Assert.True(Directory.Exists(directory), $"{project} was not found under {root}.");
+
+            foreach (var path in Directory.GetFiles(directory, "*.cs")
+                         .OrderBy(p => p, StringComparer.Ordinal))
+            {
+                var file = Path.GetFileName(path);
+                filesRead++;
+                var source = WithoutComments(File.ReadAllText(path));
+                adoption += SharedRecorderCall().Matches(source).Count;
+
+                // The helper's own file is the one place the banned shape is the implementation.
+                if (file == "PropertyChangeRecorder.cs") continue;
+
+                var lines = source.Replace("\r\n", "\n").Split('\n');
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    if (!PropertyChangedSubscription().IsMatch(lines[i])) continue;
+
+                    // The declaration usually sits just above the subscription and the append just below,
+                    // so the window spans both. A handler longer than this is not the shape being guarded.
+                    var window = string.Join('\n', lines[Math.Max(0, i - 3)..Math.Min(lines.Length, i + 5)]);
+                    if (NonConcurrentCollection().IsMatch(window) && CollectionAppend().IsMatch(window))
+                        offenders.Add($"{project}/{file}:{i + 1}  {lines[i].Trim()}");
+                }
+            }
+        }
+
+        Assert.True(filesRead >= 250,
+            $"only {filesRead} test files were read — this guard is looking at the wrong folders.");
+
+        // Seventy when measured, with this regex. Adoption only rises as more sites convert, so unlike a
+        // count of the remaining raw subscriptions this floor cannot be lowered by doing the right thing.
+        Assert.True(adoption >= 45,
+            $"only {adoption} call sites use the shared PropertyChangeRecorder, down from 70 — if it was "
+            + "replaced, this guard is now protecting a pattern nothing follows and must be revisited.");
+
+        Assert.True(offenders.Count == 0,
+            "These tests record PropertyChanged into a collection that throws if the source raises a "
+            + "notification while the assertion is enumerating it — which a view model does whenever its "
+            + "constructor started InitializeAsync, because that continuation resumes on the thread pool. "
+            + "Use source.RecordPropertyChanges() (or RecordChangesOf for a value), or a concurrent "
+            + "collection if the subscription has to be removed by hand:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({adoption} call sites already use the shared recorder)");
+    }
+
+    /// <summary>A call to either of the shared recorder's entry points.</summary>
+    [GeneratedRegex(@"\.Record(?:PropertyChanges\(\)|ChangesOf\()", RegexOptions.CultureInvariant)]
+    private static partial Regex SharedRecorderCall();
+
+    /// <summary>A subscription to a <c>PropertyChanged</c> event.</summary>
+    [GeneratedRegex(@"PropertyChanged\s*\+=", RegexOptions.CultureInvariant)]
+    private static partial Regex PropertyChangedSubscription();
+
+    /// <summary>Construction of a collection with no concurrent-write guarantee.</summary>
+    [GeneratedRegex(@"new\s+(?:List|HashSet|Dictionary|SortedSet|SortedDictionary|Queue|Stack|Collection"
+                    + @"|ObservableCollection|BulkObservableCollection)\s*<",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex NonConcurrentCollection();
+
+    /// <summary>An append onto a collection, in any of the spellings those types use.</summary>
+    [GeneratedRegex(@"\.(?:Add|Push|Enqueue)\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex CollectionAppend();
+
 }

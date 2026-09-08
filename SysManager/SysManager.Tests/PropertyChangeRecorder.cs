@@ -13,7 +13,7 @@ namespace SysManager.Tests;
 /// </summary>
 /// <remarks>
 /// The shape this replaces — <c>PropertyChanged += (_, e) =&gt; list.Add(e.PropertyName!)</c> — was
-/// written about thirty times across the test projects, and whether each one was safe depended on
+/// written sixty-one times across the two test projects, and whether each one was safe depended on
 /// something no reader checked: whether that particular source had a second, off-thread writer. Most did
 /// not. A view model whose constructor starts <c>InitializeAsync</c> does, because
 /// <c>ViewModelBase</c> awaits it with <c>ConfigureAwait(false)</c> and the continuation resumes on the

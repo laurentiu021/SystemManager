@@ -9,38 +9,52 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// One real scan of this machine, shared by every test that only READS the result.
+/// One scan of a temp tree, shared by every test that only READS the catalogue.
 /// </summary>
 /// <remarks>
-/// <c>DeepCleanupService.ScanAsync</c> walks the machine: <c>LocalApplicationData</c>,
-/// <c>CommonApplicationData</c>, the Windows directory, both Program Files trees, and every drive root
-/// looking for Steam, Riot and shader caches. It reaches the filesystem through
-/// <c>Environment.GetFolderPath</c> and <c>Directory.EnumerateFiles</c> directly, so there is no seam to
-/// substitute and a test can only scan the real disk.
-/// <para>27 tests here assert properties of one scan's output — names are non-empty, sizes are
-/// non-negative, the list contains Recycle Bin — and each used to perform its own. The class carries no
-/// <c>[Collection]</c>, so it is its own collection and its tests run SEQUENTIALLY: 27 serial disk walks.
-/// On a fresh CI runner each is near-instant and the whole unit suite takes about 78 seconds. On a
-/// machine with real caches, 16 of these tests were measured at 31 to 52 seconds EACH, and the class
-/// alone did not finish inside a 20-minute budget while every other class in the suite had completed
-/// (#2167). The blocking suite's runtime was a function of how much junk was on the machine running it.
-/// </para>
-/// <para>Four tests still call <c>ScanAsync</c> themselves, and only two of those are a full walk. The
-/// two cancellation tests must drive it directly, because cancellation is the thing under test, and both
-/// stop almost immediately. <c>CleanAsync_NoneSelected_DoesNothing</c> MUTATES <c>IsSelected</c> on what
-/// it is given, and <c>CleanAsync_CancelledToken_ReturnsImmediately</c> hands its list to
-/// <c>CleanAsync</c>; neither may be given the shared instance, so each keeps its own scan. 27 walks
-/// down to 3.</para>
+/// <b>This used to scan the real machine, and it no longer does.</b> #2167 cut 27 serial disk walks to one
+/// — on a machine with real caches, 16 of these tests were measured at 31 to 52 seconds EACH, and the class
+/// alone did not finish inside a 20-minute budget while every other class had completed. That fixed the
+/// cost and left the non-determinism: 27 tests depending on one scan of one machine, so the blocking
+/// suite's result was still a function of what was on the disk running it.
+/// <para>#2176 added <c>ICleanupRoots</c>, and pointing the fixture at a temp tree turns out to cost these
+/// tests nothing, because almost all of them are CATALOGUE assertions — <c>ScanAsync_IncludesSteam</c>,
+/// unique names, the <c>&gt;= 10</c> floor — and a category is in the definitions whether or not its folder
+/// exists on this machine. The scan drops from about 180 seconds here to milliseconds and stops depending
+/// on the host at all.</para>
+/// <para>What that made redundant went with it. <c>ScanAsync_ReturnsNonNull</c> asserted a method returns
+/// something; <c>ScanAsync_WindowsOldNeverSelectedByDefault</c> opened with <c>if (wo != null)</c>, so on
+/// any machine without a previous Windows install — most of them, including CI — it asserted nothing at
+/// all; <c>ScanAsync_EmptyCategoriesAreNotSelected</c> could only check whatever happened to be empty.
+/// <c>DeepCleanupScanLogicTests</c> now asserts all three properly, over folders it creates.</para>
+/// <para>Three tests still scan for themselves, and none of them is a machine walk any more.
+/// The two cancellation tests must drive <c>ScanAsync</c> directly, because cancellation is the thing under
+/// test. <c>CleanAsync_NoneSelected_DoesNothing</c> MUTATES <c>IsSelected</c> on what it is given and
+/// <c>CleanAsync_CancelledToken_ReturnsImmediately</c> hands its list to <c>CleanAsync</c>, so neither may
+/// be given the shared instance.</para>
+/// <para>The tree is planted with a <c>Windows.old</c> folder, because that category is the one definition
+/// added conditionally — without it the catalogue this fixture describes would be one category short of
+/// what the app can show.</para>
 /// </remarks>
 public sealed class DeepCleanupScanFixture : IAsyncLifetime
 {
+    private readonly TempCleanupRoots _roots = new();
+
     /// <summary>The one scan's categories. Treat as read-only — every consumer shares this instance.</summary>
     public IReadOnlyList<CleanupCategory> Categories { get; private set; } = [];
 
     public async ValueTask InitializeAsync()
-        => Categories = await new DeepCleanupService().ScanAsync();
+    {
+        // Windows.old is the one conditional definition, so the catalogue is short one category without it.
+        TempCleanupRoots.WriteFile(Path.Combine(_roots.SystemDrive, "Windows.old", "leftover.bin"), 16);
+        Categories = await new DeepCleanupService(_roots).ScanAsync();
+    }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        _roots.Dispose();
+        return ValueTask.CompletedTask;
+    }
 }
 
 public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixture<DeepCleanupScanFixture>
@@ -53,12 +67,6 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     {
         var s = new DeepCleanupService();
         Assert.NotNull(s);
-    }
-
-    [Fact]
-    public void ScanAsync_ReturnsNonNull()
-    {
-        Assert.NotNull(_scanned);
     }
 
     [Fact]
@@ -114,7 +122,8 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
         // OperationCanceledException instead. Deterministic (no wall-clock): the progress
         // callback fires synchronously inside the scan loop, so cancelling on the first
         // report cancels mid-scan reliably.
-        var s = new DeepCleanupService();
+        using var roots = new TempCleanupRoots();
+        var s = new DeepCleanupService(roots);
         using var cts = new CancellationTokenSource();
         var progress = new CancelOnFirstReport(cts);
 
@@ -252,26 +261,6 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     }
 
     [Fact]
-    public void ScanAsync_WindowsOldNeverSelectedByDefault()
-    {
-        var wo = _scanned.FirstOrDefault(c => c.Name.Contains("Windows.old", StringComparison.OrdinalIgnoreCase));
-        if (wo != null)
-        {
-            Assert.False(wo.IsSelected, "Windows.old must never auto-select");
-            Assert.True(wo.IsDestructiveHint);
-        }
-    }
-
-    [Fact]
-    public void ScanAsync_EmptyCategoriesAreNotSelected()
-    {
-        Assert.All(_scanned, c =>
-        {
-            if (c.TotalSizeBytes == 0) Assert.False(c.IsSelected);
-        });
-    }
-
-    [Fact]
     public async Task CleanAsync_EmptyList_ReturnsZero()
     {
         var s = new DeepCleanupService();
@@ -285,8 +274,11 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     public async Task CleanAsync_NoneSelected_DoesNothing()
     {
         // Its own scan, not the class fixture's: this test clears IsSelected on every category it is
-        // given, and the fixture's list is shared with 27 read-only tests in the same collection.
-        var s = new DeepCleanupService();
+        // given, and the fixture's list is shared with every read-only test in the same collection.
+        // Its own ROOTS too — this was one of the two remaining real machine walks in the class, and on a
+        // workstation with real caches it alone accounted for most of the runtime.
+        using var roots = new TempCleanupRoots();
+        var s = new DeepCleanupService(roots);
         var cats = await s.ScanAsync();
         foreach (var c in cats) c.IsSelected = false;
         var r = await s.CleanAsync(cats);
@@ -299,8 +291,9 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     {
         // Its own scan for the same reason: the list is handed to CleanAsync, and a shared instance must
         // not be passed to something whose job is to act on it — even when a cancelled token means it
-        // will not.
-        var s = new DeepCleanupService();
+        // will not. Temp roots for the same reason as the test above.
+        using var roots = new TempCleanupRoots();
+        var s = new DeepCleanupService(roots);
         var cats = await s.ScanAsync();
         using var cts = new CancellationTokenSource();
         cts.Cancel();

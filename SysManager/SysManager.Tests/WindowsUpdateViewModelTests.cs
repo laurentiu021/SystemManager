@@ -760,7 +760,8 @@ public class WindowsUpdateViewModelTests
     {
         runner = Substitute.For<IPowerShellRunner>();
         return new WindowsUpdateViewModel(runner, new WindowsUpdateService(),
-                                         new WindowsUpdatePolicyService(), () => elevated);
+                                         new WindowsUpdatePolicyService(),
+                                         isElevated: () => elevated);
     }
 
     private static void ExecutePolicy(WindowsUpdateViewModel vm, string which)
@@ -886,10 +887,16 @@ public class WindowsUpdateViewModelTests
     /// what makes the relaunch worth doing. <c>RelaunchAsAdmin</c> returns false when
     /// <c>Application.Current</c> is null, which it is under the test runner, so nothing is spawned.</para>
     /// </remarks>
+    /// <remarks>
+    /// This used to open with <c>AdminHelper.ForceElevation(false)</c>, because the gate read
+    /// <c>AdminHelper.IsElevated()</c> at call time and the injected value could not reach it — one test
+    /// pinning elevation a different way from its eight neighbours, and a reason for the whole class to
+    /// swap a process-wide static. #2181 routed that gate through the same seam, so this now says what it
+    /// means with the constructor argument.
+    /// </remarks>
     [Fact]
     public async Task InstallUpdates_WhenNotElevated_OffersToRelaunchAndInstallsNothing()
     {
-        using var notElevated = AdminHelper.ForceElevation(false);
         var vm = NewVm(elevated: false, out var runner);
         vm.Updates.Add(new UpdateEntry { Title = "KB0000001", IsSelected = true });
 
@@ -911,6 +918,53 @@ public class WindowsUpdateViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    /// <summary>
+    /// The install gate ASKS the injected probe, rather than reading the process behind its back.
+    /// </summary>
+    /// <remarks>
+    /// A mutation cannot prove this by outcome. On a non-elevated host the injected value and
+    /// <c>AdminHelper.IsElevated()</c> both answer false, so reverting the gate to the static call leaves
+    /// every assertion above green — and the elevated direction is not open to a test, because past the
+    /// gate the command hands real updates to a real <c>WindowsUpdateService</c>.
+    /// <para>Counting the calls decides it instead. The constructor reads the probe once to seed
+    /// <see cref="WindowsUpdateViewModel.IsElevated"/>; the gate reading it too makes two. One means the
+    /// gate went around the seam, which is the state #2181 describes.</para>
+    /// </remarks>
+    [Fact]
+    public async Task InstallUpdates_AsksTheInjectedProbeRatherThanTheProcess()
+    {
+        var asked = 0;
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = new WindowsUpdateViewModel(runner, new WindowsUpdateService(),
+                                            new WindowsUpdatePolicyService(),
+                                            isElevated: () => { asked++; return false; });
+        Assert.Equal(1, asked);   // the constructor's read, seeding the property
+
+        vm.Updates.Add(new UpdateEntry { Title = "KB0000001", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.InstallUpdatesCommand.ExecuteAsync(null);
+
+            Assert.Equal(2, asked);
+            Assert.Contains("Admin required", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void Constructor_WithoutAnElevationProbe_Throws()
+        => Assert.Throws<ArgumentNullException>(() => new WindowsUpdateViewModel(
+            Substitute.For<IPowerShellRunner>(), new WindowsUpdateService(),
+            new WindowsUpdatePolicyService(), isElevated: null!));
 
 }
 

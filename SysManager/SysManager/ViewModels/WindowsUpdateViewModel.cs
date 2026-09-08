@@ -101,6 +101,22 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     {
     }
 
+    /// <summary>
+    /// The elevation probe every gate on this tab answers to, kept rather than only cached into
+    /// <see cref="IsElevated"/>. Named for what it IS rather than <c>_isElevated</c>, which is the
+    /// toolkit's backing field for the property.
+    /// </summary>
+    /// <remarks>
+    /// The property still exists and the view still binds it; what changed is that
+    /// <c>InstallUpdatesAsync</c> no longer reaches past this seam to <c>AdminHelper.IsElevated()</c>.
+    /// Three of the tab's four gates read the injected value and the fourth read the process directly, so
+    /// a test could decide elevation for three of them and had to swap the process-wide probe for the
+    /// fourth — two mechanisms for one question, in one file, which is how the next person picks the wrong
+    /// one (#2181). Behaviour is unchanged: a Windows process is elevated or not for its whole lifetime,
+    /// so the cached answer and a call-time read could never disagree.
+    /// </remarks>
+    private readonly Func<bool> _isElevatedProbe;
+
     internal WindowsUpdateViewModel(
         IPowerShellRunner runner,
         WindowsUpdateService wu,
@@ -117,7 +133,8 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         // long-running commands' CanExecute (disabling them while one runs prevents
         // a second command disposing the shared CTS the first is still awaiting).
         PropertyChanged += OnVmPropertyChanged;
-        IsElevated = (isElevated ?? throw new ArgumentNullException(nameof(isElevated)))();
+        _isElevatedProbe = isElevated ?? throw new ArgumentNullException(nameof(isElevated));
+        IsElevated = _isElevatedProbe();
         // PSWindowsUpdate is only needed for the History view, so we don't
         // probe for it at startup — the History command checks itself if
         // the module is missing. This keeps the constructor side-effect-free
@@ -511,7 +528,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 "Confirm Windows Update"))
             return;
 
-        if (!AdminHelper.IsElevated())
+        if (!_isElevatedProbe())
         {
             StatusMessage = "Admin required. Relaunching elevated...";
             if (AdminHelper.RelaunchAsAdmin()) App.RequestShutdown();

@@ -5,6 +5,7 @@
 using System.IO;
 using System.Reflection;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -822,6 +823,89 @@ public class ServicesViewModelTests
         }
         throw new DirectoryNotFoundException("Could not locate the test project directory.");
     }
+
+    // ── Elevation gate on Start / Stop / Disable / Enable ────────────────────
+    //
+    // Four commands here refuse without administrator rights, and none of them was asserted (#2171).
+    // These tests state the condition with AdminHelper.ForceElevation instead of inheriting whatever the
+    // host happens to be: CI's runner IS elevated, this workstation is not, and a test that reads the
+    // real answer therefore exercises a different branch depending on where it runs — while looking
+    // identical either way.
+    //
+    // The elevated counterparts DECLINE the confirmation on purpose. Past the dialog these commands call
+    // ServiceManagerService against a real Windows service through a real PowerShellRunner, so a test
+    // that confirmed would start or stop a service on the machine running the suite. Declining proves
+    // the gate let the command through — which is the half the refusal test cannot show — and stops there.
+
+    /// <summary>A dialog that would say yes, installed so it can be asserted it was never asked.</summary>
+    private sealed class DialogScope : IDisposable
+    {
+        private readonly IDialogService _previous;
+
+        internal DialogScope(bool answer)
+        {
+            _previous = DialogService.Instance;
+            Dialog = Substitute.For<IDialogService>();
+            Dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(answer);
+            DialogService.Instance = Dialog;
+        }
+
+        internal IDialogService Dialog { get; }
+
+        public void Dispose() => DialogService.Instance = _previous;
+    }
+
+    private static ServiceEntry SafeEntry() => new()
+    {
+        Name = "XboxGipSvc",
+        DisplayName = "Xbox Accessory Management",
+        Status = "Stopped",
+        StartType = "Manual",
+        SafetyLevel = Models.SafetyLevel.Safe,
+    };
+
+    [Theory]
+    [InlineData("Start")]
+    [InlineData("Stop")]
+    [InlineData("Disable")]
+    [InlineData("Enable")]
+    public async Task ServiceCommand_WhenNotElevated_SaysSoAndNeverPromptsConfirm(string verb)
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = await CreateWithDataAsync();
+        using var dialog = new DialogScope(answer: true); // would say yes if it were asked
+
+        await ExecuteAsync(vm, verb, SafeEntry());
+
+        Assert.Contains("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        dialog.Dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Theory]
+    [InlineData("Start")]
+    [InlineData("Stop")]
+    [InlineData("Disable")]
+    [InlineData("Enable")]
+    public async Task ServiceCommand_WhenElevated_AsksBeforeDoingAnything(string verb)
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var vm = await CreateWithDataAsync();
+        using var dialog = new DialogScope(answer: false); // decline, so nothing runs on this machine
+
+        await ExecuteAsync(vm, verb, SafeEntry());
+
+        dialog.Dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+        Assert.DoesNotContain("requires admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Task ExecuteAsync(ServicesViewModel vm, string verb, ServiceEntry entry) => verb switch
+    {
+        "Start" => vm.StartServiceCommand.ExecuteAsync(entry),
+        "Stop" => vm.StopServiceCommand.ExecuteAsync(entry),
+        "Disable" => vm.DisableServiceCommand.ExecuteAsync(entry),
+        "Enable" => vm.EnableServiceCommand.ExecuteAsync(entry),
+        _ => throw new ArgumentOutOfRangeException(nameof(verb), verb, "unknown service verb"),
+    };
 
     /// <summary>A throwaway ledger directory, so the developer's real %LOCALAPPDATA% file is untouched.</summary>
     private sealed class TempLedgerDir : IDisposable

@@ -4,18 +4,19 @@
 
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Threading;
 
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Pins what <see cref="StaHelper"/> guarantees: one STA thread for the whole suite, pumping, with the
-/// action's exception reaching the caller.
+/// Pins what <see cref="StaHelper"/> guarantees: one STA thread for the whole suite, and the action's
+/// exception reaching the caller.
 /// </summary>
 /// <remarks>
 /// Each of these was a property the previous thread-per-call version either lacked or provided by
 /// accident, and the first is the one that produced five failures the moment the suite ran to completion
 /// (#2156).
+/// <para>Nothing here asserts that a dispatcher runs, on purpose. The thread deliberately does not pump —
+/// see <see cref="StaHelper"/> for the three attempts that did and what each of them broke.</para>
 /// </remarks>
 [Collection("Network")] // shares the process-wide Application with the other Windows-level tests
 public class StaHelperTests
@@ -63,35 +64,22 @@ public class StaHelperTests
     }
 
     /// <summary>
-    /// The STA thread pumps, so work posted to its dispatcher actually runs.
+    /// The shared thread is an STA thread, which is the reason it exists.
     /// </summary>
     /// <remarks>
-    /// A thread that merely HAS a dispatcher is not a UI thread. Without <see cref="Dispatcher.Run"/>
-    /// anything posted with <c>InvokeAsync</c> or <c>BeginInvoke</c> sits in a queue nobody drains, which
-    /// is the condition that hid #2152 — and would now hide it again, since the application posts rather
-    /// than blocks.
-    /// <para>The ceiling is a bound on a wait, not a timing assumption: correct behaviour completes in
-    /// microseconds, and the only thing ten seconds distinguishes is "ran" from "never will".</para>
+    /// WPF refuses to construct a visual on an MTA thread, so a shared thread that lost its apartment
+    /// state would fail every view test with a different and far less obvious error than the one this
+    /// change is about. One line to assert, and it pins the one property of the thread that no other test
+    /// here would notice going missing.
     /// </remarks>
     [Fact]
-    public async Task Run_TheThreadPumps_SoPostedWorkRuns()
+    public void Run_RunsOnAnStaThread()
     {
-        var posted = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var invoker = 0;
+        var state = ApartmentState.Unknown;
 
-        StaHelper.Run(() =>
-        {
-            invoker = Environment.CurrentManagedThreadId;
-            Dispatcher.CurrentDispatcher.InvokeAsync(
-                () => posted.SetResult(Environment.CurrentManagedThreadId));
-        });
+        StaHelper.Run(() => state = Thread.CurrentThread.GetApartmentState());
 
-        var settled = await Task.WhenAny(posted.Task, Task.Delay(TimeSpan.FromSeconds(10)));
-        Assert.True(ReferenceEquals(settled, posted.Task),
-            "work posted to the STA dispatcher never ran — the thread is not pumping");
-
-        // And it ran on that same thread, not somewhere the dispatcher happened to hand it to.
-        Assert.Equal(invoker, await posted.Task);
+        Assert.Equal(ApartmentState.STA, state);
     }
 
     /// <summary>

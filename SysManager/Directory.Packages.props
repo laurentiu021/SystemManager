@@ -34,15 +34,22 @@
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
   </ItemGroup>
 
-  <!-- Test dependencies -->
+  <!--
+    Test dependencies.
+
+    These target Microsoft.Testing.Platform, not VSTest. The .NET 10 SDK refuses to run an MTP test
+    project through the VSTest target at all ("Testing with VSTest target is no longer supported by
+    Microsoft.Testing.Platform on .NET 10 SDK and later"), so global.json opts `dotnet test` into the
+    MTP-based command and the VSTest packages are gone rather than dormant: no Microsoft.NET.Test.Sdk,
+    no xunit.runner.visualstudio, no coverlet.collector, no JunitXml.TestLogger. Their jobs are done by
+    xunit.v3's own reports (TRX, JUnit, and four more) plus the two MTP extensions below.
+  -->
   <ItemGroup>
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
-    <PackageVersion Include="JunitXml.TestLogger" Version="8.0.0" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.HangDump" Version="2.4.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="Xunit.StaFact" Version="4.0.23" />
     <PackageVersion Include="FlaUI.Core" Version="5.0.0" />
     <PackageVersion Include="FlaUI.UIA3" Version="5.0.0" />

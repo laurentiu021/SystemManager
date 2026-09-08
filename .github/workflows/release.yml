@@ -117,12 +117,16 @@ jobs:
       - name: Restore
         run: dotnet restore SysManager/SysManager/SysManager.csproj
 
+      # Microsoft.Testing.Platform arguments; see the same step in ci.yml for why. The floor is here too
+      # rather than only there, because a release can be dispatched manually without passing through a PR
+      # — a gate that lets a run of nothing through is not a gate.
       - name: Run unit tests (must pass)
         run: >
-          dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj
+          dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj
           -c Release
-          --logger "trx;LogFileName=unit-results.trx"
           --results-directory TestResults
+          --minimum-expected-tests 5000
+          --report-xunit-trx --report-xunit-trx-filename unit-results.trx
 
       - name: Publish single-file exe
         shell: pwsh

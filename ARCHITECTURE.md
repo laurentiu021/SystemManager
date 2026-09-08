@@ -154,9 +154,10 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Fourteen are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Fifteen are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
-`IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `ICpuAffinityService`,
+`IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `IContextMenuService`,
+`ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, `IGamingProfileService`, and
 `ISessionRestorePoint` (the last two via a factory).

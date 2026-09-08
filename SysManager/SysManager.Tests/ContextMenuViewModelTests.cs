@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -14,6 +16,10 @@ namespace SysManager.Tests;
 /// registry on construction; <see cref="NewVm"/> awaits <see cref="ViewModelBase.InitializationComplete"/>
 /// so assertions observe a settled state deterministically (no race with the scan).
 /// </summary>
+// Serialized: the toggle-failure tests pin elevation with AdminHelper.ForceElevation and swap
+// DialogService.Instance, both process-wide. Required by
+// ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
+[Collection("ProcessWideStatics")]
 public class ContextMenuViewModelTests
 {
     private static ContextMenuViewModel NewVm()
@@ -115,5 +121,114 @@ public class ContextMenuViewModelTests
         Assert.True(vm.ScanCommand.CanExecute(null));
         Assert.True(vm.RefreshCommand.CanExecute(null));
         Assert.True(vm.ApplyPresetCommand.CanExecute(null));
+    }
+
+    // ── Toggling an entry ────────────────────────────────────────────────────
+    //
+    // None of this was assertable until IContextMenuService existed (#2180): a test could neither make a
+    // toggle fail on purpose nor let it succeed, because a real toggle writes a shell key on the machine
+    // running the suite — and on an elevated CI runner that write goes through. The substitute decides the
+    // outcome, so nothing here reaches the registry.
+    //
+    // The tests above deliberately keep the REAL service: they assert state derived from an actual scan,
+    // which a substitute returning nothing would make vacuous.
+
+    /// <summary>A view model whose toggles answer <paramref name="toggleSucceeds"/> and touch nothing.</summary>
+    private static ContextMenuViewModel NewVm(bool toggleSucceeds, out IContextMenuService service)
+    {
+        service = Substitute.For<IContextMenuService>();
+        service.ScanEntries().Returns([]);
+        service.EnableEntry(Arg.Any<ContextMenuEntry>()).Returns(toggleSucceeds);
+        service.DisableEntry(Arg.Any<ContextMenuEntry>()).Returns(toggleSucceeds);
+
+        var vm = new ContextMenuViewModel(service);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
+    private static ContextMenuEntry NewEntry(bool enabled) => new()
+    {
+        Name = "Open with Example",
+        Command = @"C:\Program Files\Example\app.exe",
+        RegistryPath = @"HKCR\*\shell\Example",
+        Location = "Files",
+        IsEnabled = enabled,
+    };
+
+    /// <summary>
+    /// A failed toggle WITHOUT admin rights offers to restart elevated, and says why.
+    /// </summary>
+    [Fact]
+    public async Task ToggleEntry_WhenItFailsAndNotElevated_OffersToRestartAsAdministrator()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = NewVm(toggleSucceeds: false, out _);
+        var entry = NewEntry(enabled: false);   // the user just clicked it off
+
+        using var dialog = new DialogAnswer(false);   // declined, so nothing relaunches
+        await vm.ToggleEntryCommand.ExecuteAsync(entry);
+
+        Assert.Equal(1, dialog.Calls);
+        Assert.Contains(dialog.Messages, m => m.Contains("administrator", StringComparison.OrdinalIgnoreCase));
+        Assert.True(entry.IsEnabled, "a failed toggle must put the switch back where it was");
+    }
+
+    /// <summary>
+    /// A failed toggle WITH admin rights says the entry is Windows-owned, and does not offer a restart.
+    /// </summary>
+    /// <remarks>
+    /// This is the branch worth having. Elevating again cannot help against a TrustedInstaller-owned key,
+    /// so offering it would send the user round a loop that ends where it started — and getting the two
+    /// messages the wrong way round would do exactly that for every user, with nothing failing.
+    /// </remarks>
+    [Fact]
+    public async Task ToggleEntry_WhenItFailsWhileElevated_SaysWindowsOwnsItAndOffersNoRestart()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var vm = NewVm(toggleSucceeds: false, out _);
+        var entry = NewEntry(enabled: false);
+
+        using var dialog = new DialogAnswer(true);   // would say yes if it were ever asked
+        await vm.ToggleEntryCommand.ExecuteAsync(entry);
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Contains("TrustedInstaller", vm.StatusMessage);
+        Assert.True(entry.IsEnabled, "a failed toggle must put the switch back where it was");
+    }
+
+    [Theory]
+    [InlineData(true, "enabled")]
+    [InlineData(false, "disabled")]
+    public async Task ToggleEntry_WhenItSucceeds_ReportsItAndDropsThePresetToCustom(
+        bool desiredState, string expectedWord)
+    {
+        var vm = NewVm(toggleSucceeds: true, out var service);
+        var entry = NewEntry(enabled: desiredState);
+
+        using var dialog = new DialogAnswer(false);
+        await vm.ToggleEntryCommand.ExecuteAsync(entry);
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Equal("custom", vm.ActivePresetId);
+        Assert.Contains(expectedWord, vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal(desiredState, entry.IsEnabled);
+
+        // The direction matters: the command reads the switch's NEW position and asks the service to
+        // match it, so an inverted call would disable what the user just turned on.
+        if (desiredState) service.Received(1).EnableEntry(entry);
+        else service.Received(1).DisableEntry(entry);
+    }
+
+    [Fact]
+    public async Task ToggleEntry_WithSomethingThatIsNotAnEntry_DoesNothing()
+    {
+        var vm = NewVm(toggleSucceeds: false, out var service);
+
+        using var dialog = new DialogAnswer(true);
+        await vm.ToggleEntryCommand.ExecuteAsync("not an entry");
+
+        Assert.Equal(0, dialog.Calls);
+        service.DidNotReceive().EnableEntry(Arg.Any<ContextMenuEntry>());
+        service.DidNotReceive().DisableEntry(Arg.Any<ContextMenuEntry>());
     }
 }

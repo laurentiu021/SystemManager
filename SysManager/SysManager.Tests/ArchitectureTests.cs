@@ -8962,15 +8962,13 @@ public partial class ArchitectureTests
     public void EveryViewModelThatBranchesOnElevation_HasATestThatPinsIt()
     {
         // view model -> why no test pins its elevation branch yet, verified rather than deferred.
-        var cannotBePinnedYet = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["ContextMenuViewModel"] =
-                "takes a concrete ContextMenuService with no interface, so its toggle path cannot be "
-                + "driven at all: a test can neither make the registry write fail on purpose nor let it "
-                + "succeed, because a real toggle would change a shell key on the machine running the "
-                + "suite. Blocked on the seam in #2180, which is where its two failure messages get "
-                + "asserted",
-        };
+        // EMPTY, and that is the point. It held one entry — ContextMenuViewModel, whose concrete
+        // ContextMenuService could not be substituted, so a test could neither fail a toggle on purpose
+        // nor let it succeed without writing a real shell key. #2180 extracted IContextMenuService and
+        // both of its failure messages are now asserted, so the sweep #2171 asked for is complete.
+        // Anything added back needs a reason that has been VERIFIED, not deferred: an excuse nobody
+        // checked is a false claim sitting in the test suite.
+        var cannotBePinnedYet = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
         var testsDir = Path.Combine(

@@ -20,7 +20,7 @@ namespace SysManager.Services;
 /// Windows Explorer respects this value to hide the menu entry without
 /// removing the registration — safe and fully reversible.
 /// </summary>
-public sealed partial class ContextMenuService
+public sealed partial class ContextMenuService : IContextMenuService
 {
     // Registry locations that define context menu entries
     private static readonly (string SubKey, string Location)[] ShellLocations =

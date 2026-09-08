@@ -8913,6 +8913,133 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every view model that behaves differently when elevated must have a test that DECIDES the answer,
+    /// rather than inheriting whatever the machine running the suite happens to be.
+    /// </summary>
+    /// <remarks>
+    /// CI's runner is elevated and a developer's shell is not, so a test that reads the real answer
+    /// exercises a different branch depending on where it runs — while looking identical either way. Ten
+    /// view models have an elevation branch and six of them were in exactly that state (#2171): App
+    /// Blocker's six confirmation tests failed on a developer machine and a seventh passed there for the
+    /// wrong reason, and Standby Memory's test asserted one contract on an elevated host and a different
+    /// one otherwise, inside an <c>if (vm.IsElevated)</c>.
+    /// <para><c>AdminHelper</c>'s own documentation says this has happened before: sixteen test cases once
+    /// opened with <c>if (IsElevated) return;</c> so they would not report a false failure on an elevated
+    /// host, and the result was that "the elevation gate on SFC, DISM, Windows Update and nine privileged
+    /// tabs asserted nothing anywhere". The seam was added; the sweep it was added for stopped at
+    /// <c>CleanupViewModel</c>. This is what keeps it swept.</para>
+    /// <para><b>Two pinning mechanisms count, and missing one is how the first measurement of this went
+    /// wrong.</b> <c>AdminHelper.ForceElevation</c> replaces the process-wide probe and reaches both an
+    /// <c>if (!AdminHelper.IsElevated())</c> read and a cached one. Assigning <c>vm.IsElevated</c> pins it
+    /// per instance and is equally valid — <c>DnsHostsViewModelTests</c> and <c>WindowsFeaturesTests</c> do
+    /// that — but only for a view model that caches the answer in the property; it cannot reach a call-time
+    /// read. Counting only the first mechanism reported the two files that already did it right as the
+    /// biggest gaps.</para>
+    /// <para>Test files are matched to a view model by NAMING it, not by filename and not by
+    /// constructing it. Filename matching made <c>WindowsFeaturesTests.cs</c> invisible, because its name
+    /// carries no "ViewModel". Construction matching then missed <c>StandbyMemoryTests</c> and
+    /// <c>SystemHealthViewModelTests</c>, whose factories use target-typed <c>new(...)</c> and never write
+    /// the type name after <c>new</c> — this guard reported both as uncovered on its first run while both
+    /// pin elevation correctly. Comments are stripped first, so a mention is a mention in code.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryViewModelThatBranchesOnElevation_HasATestThatPinsIt()
+    {
+        // view model -> why no test pins its elevation branch yet, verified rather than deferred.
+        var cannotBePinnedYet = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ContextMenuViewModel"] =
+                "takes a concrete ContextMenuService with no interface, so its toggle path cannot be "
+                + "driven at all: a test can neither make the registry write fail on purpose nor let it "
+                + "succeed, because a real toggle would change a shell key on the machine running the "
+                + "suite. Blocked on the seam in #2180, which is where its two failure messages get "
+                + "asserted",
+        };
+
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var testsDir = Path.Combine(
+            Directory.GetParent(FindAppProjectDir())!.FullName, "SysManager.Tests");
+
+        var testSources = Directory.GetFiles(testsDir, "*.cs")
+            .ToDictionary(p => Path.GetFileName(p)!, p => WithoutComments(File.ReadAllText(p)),
+                          StringComparer.Ordinal);
+        Assert.True(testSources.Count >= 100,
+            $"only {testSources.Count} test files were read — this guard is looking at the wrong folder");
+
+        var branching = 0;
+        var offenders = new List<string>();
+
+        foreach (var path in Directory.GetFiles(vmDir, "*ViewModel.cs")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+            var source = WithoutComments(File.ReadAllText(path));
+
+            var cached = CachedElevationBranch().Matches(source).Count;
+            var callTime = CallTimeElevationBranch().Matches(source).Count;
+            if (cached + callTime == 0) continue;
+            branching++;
+
+            if (cannotBePinnedYet.ContainsKey(name)) continue;
+
+            // Files that NAME this view model, not files that write `new <Name>(`. Matching the
+            // construction misses every factory using target-typed `new(...)`, which is how both
+            // StandbyMemoryTests and SystemHealthViewModelTests build theirs — and this guard reported
+            // exactly those two as uncovered on its first run, while both do pin elevation. Comments are
+            // already stripped, so a mention here is a mention in code.
+            var covering = testSources
+                .Where(kv => kv.Value.Contains(name, StringComparison.Ordinal))
+                .ToList();
+
+            var pinned = covering.Any(kv =>
+                kv.Value.Contains("ForceElevation", StringComparison.Ordinal)
+                || (callTime == 0 && ElevationAssignment().IsMatch(kv.Value)));
+
+            if (!pinned)
+            {
+                var where = covering.Count == 0
+                    ? "no test file mentions it"
+                    : string.Join(", ", covering.Select(kv => kv.Key));
+                offenders.Add($"{name} ({cached} cached + {callTime} call-time branch(es)) — {where}");
+            }
+        }
+
+        // Ten when measured. A collapse means the branch patterns stopped matching and a clean result
+        // would prove nothing at all.
+        Assert.True(branching >= 8,
+            $"only {branching} view models were seen to branch on elevation — the patterns are out of "
+            + "date, so this guard is checking almost nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These view models behave differently when elevated and no test decides which branch runs, so "
+            + "each one asserts whatever the host happens to be: the elevated path on CI, the other one on "
+            + "a developer machine, and neither verified on both. Pin it with "
+            + "AdminHelper.ForceElevation(bool) — or, for a cached IsElevated, by assigning the property — "
+            + "or name the view model in the exception list in this test WITH the reason it cannot be "
+            + "pinned yet:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({branching} view models branch on elevation)");
+
+        // The exception list must not outlive what it excuses.
+        var stale = cannotBePinnedYet.Keys
+            .Where(n => !File.Exists(Path.Combine(vmDir, n + ".cs")))
+            .OrderBy(n => n, StringComparer.Ordinal);
+        Assert.Empty(stale);
+    }
+
+    /// <summary>A branch on the cached <c>IsElevated</c> property, in either polarity.</summary>
+    [GeneratedRegex(@"if\s*\(\s*!?\s*IsElevated\s*\)", RegexOptions.CultureInvariant)]
+    private static partial Regex CachedElevationBranch();
+
+    /// <summary>A branch on <c>AdminHelper.IsElevated()</c>, read at call time, in either polarity.</summary>
+    [GeneratedRegex(@"if\s*\(\s*!?\s*AdminHelper\.IsElevated\(\)\s*\)", RegexOptions.CultureInvariant)]
+    private static partial Regex CallTimeElevationBranch();
+
+    /// <summary>A test pinning a cached answer per instance, as <c>vm.IsElevated = false</c> or in an initializer.</summary>
+    [GeneratedRegex(@"\bIsElevated\s*=\s*(?:true|false)\b", RegexOptions.CultureInvariant)]
+    private static partial Regex ElevationAssignment();
+
+    /// <summary>
     /// The one shared Deep Cleanup scan must stay read-only: no test may iterate it with a view to
     /// changing an item, and it must never be handed to <c>CleanAsync</c>.
     /// </summary>

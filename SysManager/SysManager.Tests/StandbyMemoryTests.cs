@@ -2,11 +2,14 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
 
+// Serialized: the purge gate tests replace AdminHelper.ElevationProbe, which is process-wide state.
+[Collection("ProcessWideStatics")]
 public class StandbyMemoryTests
 {
     [Theory]
@@ -89,11 +92,26 @@ public class StandbyMemoryTests
     private static StandbyMemoryViewModel NewVm(string configDir) =>
         new(new Services.StandbyMemoryService(), new Services.StandbyPreferenceService(configDir));
 
+    /// <summary>
+    /// Elevated, the manual purge raises the busy flag and clears it, so the bar can appear.
+    /// </summary>
+    /// <remarks>
+    /// This was one test with an <c>if (vm.IsElevated)</c> inside it, asserting one contract on an
+    /// elevated host and a different one otherwise (#2171). It always passed and never verified either
+    /// branch on both, which is the pattern <c>AdminHelper.ForceElevation</c> exists to replace — its own
+    /// documentation names it as the reason the seam was added.
+    /// <para>Forcing elevation ON is safe here whatever the host actually is. Past the gate the purge
+    /// calls <c>NtSetSystemInformation</c>, which drops a cache and destroys nothing; on a host that is
+    /// not really elevated the call simply fails, and either way the flag goes up and comes back down,
+    /// which is what this asserts.</para>
+    /// </remarks>
     [Fact]
-    public async Task ManualPurge_RaisesIsBusyThenClearsIt()
+    public async Task ManualPurge_WhenElevated_RaisesIsBusyThenClearsIt()
     {
+        using var elevated = AdminHelper.ForceElevation(true);
         using var temp = new TempConfigDir();
         var vm = NewVm(temp.Path);
+        Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
 
         var seen = new List<bool>();
         vm.PropertyChanged += (_, e) =>
@@ -103,18 +121,35 @@ public class StandbyMemoryTests
 
         await vm.PurgeCommand.ExecuteAsync(null);
 
-        if (vm.IsElevated)
+        Assert.Equal([true, false], seen);
+        Assert.False(vm.IsBusy);
+    }
+
+    /// <summary>
+    /// Without administrator rights the purge refuses, says why, and never shows the bar.
+    /// </summary>
+    /// <remarks>
+    /// Flashing a progress bar for an operation that was refused would be its own bug, so the absence of
+    /// any <c>IsBusy</c> notification is as much the point as the message.
+    /// </remarks>
+    [Fact]
+    public async Task ManualPurge_WhenNotElevated_SaysSoAndNeverShowsTheBar()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        using var temp = new TempConfigDir();
+        var vm = NewVm(temp.Path);
+        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
+
+        var seen = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
         {
-            // Elevated: the purge ran, so the flag went up and came back down.
-            Assert.Equal([true, false], seen);
-        }
-        else
-        {
-            // Not elevated: the command short-circuits before any work, so the bar must never appear
-            // — flashing it for an operation that was refused would be its own bug.
-            Assert.Empty(seen);
-            Assert.Contains("administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
-        }
+            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
+        };
+
+        await vm.PurgeCommand.ExecuteAsync(null);
+
+        Assert.Empty(seen);
+        Assert.Contains("administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
         Assert.False(vm.IsBusy);
     }
 
@@ -122,6 +157,10 @@ public class StandbyMemoryTests
     public async Task ManualPurge_LeavesTheBarIndeterminateThenClear()
     {
         // There is no percentage to report for a native purge call, so the bar must be marquee.
+        // Elevation forced ON so the command actually enters the body: on a non-elevated host it
+        // returns at the gate, and the assertion below would then hold without the purge ever setting
+        // the flag it is about.
+        using var elevated = AdminHelper.ForceElevation(true);
         using var temp = new TempConfigDir();
         var vm = NewVm(temp.Path);
 

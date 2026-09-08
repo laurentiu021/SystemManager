@@ -3,6 +3,7 @@
 // License: MIT
 
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -108,11 +109,20 @@ public class AppBlockerViewModelTests
 
     // ── Confirmation-gate tests (destructive ops must route through Confirm) ──
 
+    // Every test below forces elevation ON, and the view-model is built INSIDE the scope because it caches
+    // IsElevated in its constructor. Without that, these tests asserted nothing about blocking: BlockApp
+    // returns at `if (!IsElevated)` before it ever reaches Confirm, so on a non-elevated host all six failed
+    // with "Blocking requires administrator privileges." while on CI — whose runner IS elevated — all six
+    // passed. Neither run said whether a safety refusal is reported as a safety refusal (#2168). The same
+    // trap AdminHelper.ForceElevation was added for one class over, in CleanupViewModelTests.
+
     [Fact]
     public void BlockApp_WhenUserDeclinesConfirm_DoesNotBlock()
     {
+        using var elevated = AdminHelper.ForceElevation(true);
         var blocker = Substitute.For<IAppBlockerService>();
         var vm = NewVm(blocker);
+        Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
         vm.NewExeName = "game.exe";
 
         var prevDialog = DialogService.Instance;
@@ -138,11 +148,13 @@ public class AppBlockerViewModelTests
     [Fact]
     public void BlockApp_WhenUserConfirms_BlocksApp()
     {
+        using var elevated = AdminHelper.ForceElevation(true);
         var blocker = Substitute.For<IAppBlockerService>();
         // The view model calls TryBlockApp now, so it can tell a safety refusal from a
         // permissions problem instead of reporting every failure as "check admin privileges".
         blocker.TryBlockApp(Arg.Any<string>()).Returns(AppBlockerService.BlockResult.Success);
         var vm = NewVm(blocker);
+        Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
         vm.NewExeName = "game.exe";
 
         var prevDialog = DialogService.Instance;
@@ -173,9 +185,11 @@ public class AppBlockerViewModelTests
     {
         // Each of these is SysManager deliberately declining. Reporting them as a permissions
         // problem sent the user to relaunch elevated, where the same guard refuses again.
+        using var elevated = AdminHelper.ForceElevation(true);
         var blocker = Substitute.For<IAppBlockerService>();
         blocker.TryBlockApp(Arg.Any<string>()).Returns(refusal);
         var vm = NewVm(blocker);
+        Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
         vm.NewExeName = "something.exe";
 
         var prevDialog = DialogService.Instance;
@@ -195,12 +209,25 @@ public class AppBlockerViewModelTests
         }
     }
 
+    /// <summary>
+    /// <c>AccessDenied</c> from the service is the one refusal that SHOULD talk about administrator
+    /// rights — and it must get there through the service, not through the view-model's own gate.
+    /// </summary>
+    /// <remarks>
+    /// This was the worst of the seven (#2168), because it PASSED on a non-elevated host for the wrong
+    /// reason: the elevation gate's own message also contains "administrator", so the assertion was
+    /// satisfied by a code path that never called <c>TryBlockApp</c> at all. A false pass hides better than
+    /// a false failure. Forcing elevation on and asserting the service was actually reached is what makes
+    /// the assertion mean what its name says.
+    /// </remarks>
     [Fact]
     public void BlockApp_AccessDenied_IsTheOnlyCaseThatMentionsAdminRights()
     {
+        using var elevated = AdminHelper.ForceElevation(true);
         var blocker = Substitute.For<IAppBlockerService>();
         blocker.TryBlockApp(Arg.Any<string>()).Returns(AppBlockerService.BlockResult.AccessDenied);
         var vm = NewVm(blocker);
+        Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
         vm.NewExeName = "something.exe";
 
         var prevDialog = DialogService.Instance;
@@ -211,7 +238,52 @@ public class AppBlockerViewModelTests
         {
             vm.BlockAppCommand.Execute(null);
 
+            blocker.Received(1).TryBlockApp("something.exe");
             Assert.Contains("administrator", vm.BlockStatus, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    /// <summary>
+    /// Without elevation, Block refuses before it touches anything: it says why, it does not ask the user
+    /// to confirm something it cannot do, and it never reaches the service.
+    /// </summary>
+    /// <remarks>
+    /// The branch a user without admin rights actually sees, and it was asserted nowhere for any of the ten
+    /// view models that have one (#2168, swept in #2171). Every existing test here drove the ELEVATED path,
+    /// so the gate could have been deleted, moved below the Confirm, or given a misleading message without
+    /// a single failure — on CI, whose runner is elevated, or on a developer machine, where the six tests
+    /// that did notice failed for a reason that looked like a broken parser.
+    /// <para>Asserting the absence matters as much as the message: <c>Confirm</c> must NOT be reached. A gate
+    /// that runs after the confirmation dialog would still produce the right status text while asking the
+    /// user to approve an operation that then refuses itself — which is the shape of the Unblock path's own
+    /// problem, filed separately.</para>
+    /// </remarks>
+    [Fact]
+    public void BlockApp_WhenNotElevated_SaysWhyAndNeverReachesTheService()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var blocker = Substitute.For<IAppBlockerService>();
+        var vm = NewVm(blocker);
+        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
+        vm.NewExeName = "game.exe";
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // would say yes if asked
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.BlockAppCommand.Execute(null);
+
+            Assert.Contains("administrator", vm.BlockStatus, StringComparison.OrdinalIgnoreCase);
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+            blocker.DidNotReceive().TryBlockApp(Arg.Any<string>());
+            blocker.DidNotReceive().BlockApp(Arg.Any<string>());
+            Assert.Equal("game.exe", vm.NewExeName); // the typed name survives, so a relaunch can use it
         }
         finally
         {

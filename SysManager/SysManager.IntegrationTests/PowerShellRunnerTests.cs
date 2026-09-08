@@ -11,6 +11,74 @@ namespace SysManager.IntegrationTests;
 [Collection("Network")]
 public class PowerShellRunnerTests
 {
+    /// <summary>
+    /// A run's teardown STOPS the child process the runspace was built with, rather than only dropping its
+    /// handle.
+    /// </summary>
+    /// <remarks>
+    /// #2149(a), end to end through <c>RunAsync</c>. Disposing a <see cref="System.Diagnostics.Process"/>
+    /// releases the HANDLE and does not stop the process. When <c>powershell.exe</c> outlived its runspace, its
+    /// stdout and stderr pipes stayed open and the remoting transport's reader threads stayed blocked in
+    /// <c>ReadFile</c> forever — a hang dump from the integration job showed 1,112 such threads, about four per
+    /// runspace, so roughly 276 children still alive in a single test host.
+    /// <para><b>Through RunAsync, not by invoking the release directly.</b> An earlier version called the
+    /// private method by reflection, which proved what the method does and nothing about whether the production
+    /// path uses it — a mutation that handed teardown a bare <c>Dispose</c> instead left it green. Injecting the
+    /// child through the <c>createRunspace</c> seam and letting <c>RunAsync</c> tear it down is what closes
+    /// that: it covers the wiring and the behaviour in one assertion.</para>
+    /// <para>An in-process runspace is used, so the run itself needs no elevation; the child injected beside it
+    /// stands in for the <c>powershell.exe</c> the elevated path would have started.</para>
+    /// <para><b>Nothing is redirected, and that is load-bearing.</b> The first stand-in was <c>cmd /c pause</c>
+    /// with redirected stdin, and it made the test undiscriminating: disposing the <c>Process</c> closes its
+    /// redirected handles, <c>pause</c> saw EOF, and the child exited on its own — so a mutation that removed
+    /// the termination entirely still left this GREEN. With no redirected handles, disposing the object cannot
+    /// touch the process and only an actual kill ends it. A loopback ping is the delay: ~59 seconds against a
+    /// 10-second wait, almost no CPU, and no traffic leaves the machine. It also runs as <c>cmd</c> → <c>ping</c>,
+    /// so the tree kill is exercised rather than a single process.</para>
+    /// <para>Observed through a SECOND handle to the same process: teardown disposes the one it is given, and
+    /// querying that afterwards throws "No process is associated with this object", which says nothing about
+    /// whether the process died. The independent handle lets <c>WaitForExitAsync</c> be awaited rather than
+    /// polled, so there is no sleeping and nothing to go flaky.</para>
+    /// </remarks>
+    [Fact]
+    public async Task RunspaceTeardown_StopsTheChildTheRunspaceWasBuiltWith()
+    {
+        var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", "/c ping -n 60 127.0.0.1 > nul")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        })!;
+
+        using var observer = System.Diagnostics.Process.GetProcessById(child.Id);
+
+        try
+        {
+            Assert.False(observer.HasExited);   // the premise, not an assumption
+
+            var runspace = System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2());
+            var runner = new PowerShellRunner(
+                action => Task.Run(action),
+                createRunspace: () => (runspace, null, child));
+
+            var result = await runner.RunAsync("2 + 2");
+            Assert.Equal(4, (int)result[0].BaseObject);   // the run really happened, so teardown really ran
+
+            using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await observer.WaitForExitAsync(bounded.Token);
+
+            Assert.True(observer.HasExited,
+                "the child process outlived the run; its pipes stay open and the remoting transport's "
+                + "reader threads stay blocked on them forever");
+        }
+        finally
+        {
+            try { if (!observer.HasExited) observer.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { /* already gone, which is the expected outcome */ }
+        }
+    }
+
     [Fact]
     public async Task RunAsync_SimpleExpression_ReturnsResult()
     {

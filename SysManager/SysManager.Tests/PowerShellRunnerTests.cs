@@ -305,6 +305,42 @@ public class PowerShellRunnerTests
             + "powershell.exe start and handshake on a slow machine can take longer than that, and a timeout "
             + "that fires on a working host is worse than the hang it replaces");
 
+    /// <summary>
+    /// The release action runs after the runspace and the process instance, not before them.
+    /// </summary>
+    /// <remarks>
+    /// Ordering only. An earlier version of this test claimed to prove the WIRING — that the production path
+    /// hands teardown <c>ReleaseProcess</c> rather than a bare <c>Dispose</c> — and it did not: it called
+    /// <c>DisposeRunspaceResources</c> directly with its own lambda, so mutating what <c>RunspaceResources</c>
+    /// passes left it green. It was asserting that the method honours its own argument, which is trivially
+    /// true. Renamed to what it actually covers.
+    /// <para>The wiring is proven end to end by
+    /// <c>PowerShellRunnerTests.RunspaceTeardown_StopsTheChildTheRunspaceWasBuiltWith</c> in
+    /// <c>SysManager.IntegrationTests</c>, which injects a real live child and asserts <c>RunAsync</c>'s
+    /// teardown killed it. That needs a real process, because the decision is
+    /// <c>is Process &amp;&amp; !HasExited</c> and no double satisfies it.</para>
+    /// </remarks>
+    [Fact]
+    public void DisposeRunspaceResources_ReleasesTheChildLast()
+    {
+        var order = new List<string>();
+        var runspace = new RecordingDisposable("runspace", order);
+        var processInstance = new RecordingDisposable("process instance", order);
+        var process = new RecordingDisposable("process", order);
+
+        PowerShellRunner.DisposeRunspaceResources(
+            runspace,
+            processInstance,
+            process,
+            releaseProcess: p =>
+            {
+                order.Add("released");
+                p?.Dispose();
+            });
+
+        Assert.Equal(["runspace", "process instance", "released", "process"], order);
+    }
+
     [Fact]
     public void DisposeRunspaceResources_DisposesInDependencyOrder()
     {

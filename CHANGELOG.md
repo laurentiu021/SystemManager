@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.2] - 2026-09-08
+
+Running SysManager as administrator left a hidden `powershell.exe` behind every time a feature used one. They
+were invisible, they never went away on their own, and each one held a few threads open inside SysManager. A
+long session with a lot of Windows Update or disk-health checks accumulated them.
+
+### Fixed
+- **The helper SysManager starts for administrator tasks is now actually stopped when the task ends.** It was
+  being let go of rather than closed — the difference being that letting go of something does not end it. Each
+  leftover kept its output pipes open, which kept threads inside SysManager waiting on them for nothing. In a
+  test run that used PowerShell hundreds of times, this left roughly 276 of them alive at once and over a
+  thousand stuck threads, until the run could no longer make progress.
+
+### Added
+- **A test that starts a real background process and proves the cleanup stops it.** Written the awkward way on
+  purpose: the first two versions passed against code that did no cleanup at all, once because the stand-in
+  process was dying for an unrelated reason and once because the test never went through the real code path.
+
 ## [1.78.1] - 2026-09-07
 
 A tab that uses Windows PowerShell can no longer sit "working…" forever. If the PowerShell host on your PC

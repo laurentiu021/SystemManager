@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -558,8 +559,10 @@ public sealed class PowerShellRunner : IPowerShellRunner
         }
         finally
         {
+            // The runspace was never created, so the child started above has nothing to serve. Stop it rather
+            // than only dropping the handle — an orphan here keeps its pipes open exactly like a leaked one.
             if (runspace is null)
-                DisposeRunspaceResources(null, processInstance, process);
+                DisposeRunspaceResources(null, processInstance, process, ReleaseProcess);
         }
     }
 
@@ -568,7 +571,7 @@ public sealed class PowerShellRunner : IPowerShellRunner
         try
         {
             var (runspace, processInstance, process) = _createRunspace();
-            return new RunspaceResources(runspace, processInstance, process);
+            return new RunspaceResources(runspace, processInstance, process, ReleaseProcess);
         }
         catch (Exception ex) when (_isElevated && IsPowerShellHostUnavailable(ex))
         {
@@ -640,10 +643,29 @@ public sealed class PowerShellRunner : IPowerShellRunner
             "Windows PowerShell 5.1 is unavailable or blocked by system policy.",
             innerException);
 
+    /// <summary>
+    /// Tears down a runspace and the child process behind it, in dependency order.
+    /// </summary>
+    /// <param name="releaseProcess">
+    /// How to release the child. Defaults to disposing the handle, which is all this used to do; the elevated
+    /// path passes <see cref="ReleaseProcess"/>, which also stops a child that is still running.
+    /// </param>
+    /// <remarks>
+    /// Disposing a <see cref="System.Diagnostics.Process"/> releases the HANDLE and does not stop the process.
+    /// That is the whole of the leak in #2149: when <c>powershell.exe</c> outlived the runspace, its stdout and
+    /// stderr pipes stayed open, and the remoting transport's reader threads stayed blocked in <c>ReadFile</c>
+    /// forever. A hang dump from the integration job showed 1,112 such threads — about four per runspace, so
+    /// roughly 276 children still alive in one process.
+    /// <para>Closing the runspace before disposing it is deliberately NOT done here. It is the obvious next
+    /// idea and it carries a real risk: 275 of those runspaces were parked inside <c>Open()</c>, and
+    /// <c>Close()</c> on a runspace that never finished opening can block on the same handshake. Stopping the
+    /// child is what actually frees the threads, and it cannot block on the runspace's state.</para>
+    /// </remarks>
     internal static void DisposeRunspaceResources(
         IDisposable? runspace,
         IDisposable? processInstance,
-        IDisposable? process)
+        IDisposable? process,
+        Action<IDisposable?>? releaseProcess = null)
     {
         try
         {
@@ -657,8 +679,44 @@ public sealed class PowerShellRunner : IPowerShellRunner
             }
             finally
             {
-                process?.Dispose();
+                (releaseProcess ?? (static p => p?.Dispose()))(process);
             }
+        }
+    }
+
+    /// <summary>
+    /// Stops the child process behind an out-of-process runspace if it is still running, then disposes the
+    /// handle. Never throws: teardown runs in a <c>finally</c>.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="TryTerminateForCancellationAsync"/>'s handling of the same races — the process can
+    /// exit between the <c>HasExited</c> check and the kill, and a tree termination can fail outright — because
+    /// they are the same races, not because the shape is tidy. The difference is that this one has nothing to
+    /// report to: a failure to stop the child leaks what was already leaking, and throwing out of a
+    /// <c>finally</c> would replace that with losing the runspace's disposal too.
+    /// </remarks>
+    private void ReleaseProcess(IDisposable? process)
+    {
+        try
+        {
+            if (process is System.Diagnostics.Process child && !child.HasExited)
+                _terminateProcessTree(child);
+        }
+        catch (InvalidOperationException)
+        {
+            // Already gone, or the handle no longer refers to a live process. Either way there is nothing
+            // left to stop.
+        }
+        catch (Exception ex) when (
+            ex is System.ComponentModel.Win32Exception or
+            AggregateException or
+            NotSupportedException)
+        {
+            Log.Debug(ex, "PowerShell: could not stop the runspace's child process during teardown");
+        }
+        finally
+        {
+            process?.Dispose();
         }
     }
 
@@ -666,21 +724,24 @@ public sealed class PowerShellRunner : IPowerShellRunner
     {
         private readonly IDisposable? _processInstance;
         private readonly IDisposable? _process;
+        private readonly Action<IDisposable?> _releaseProcess;
 
         public RunspaceResources(
             Runspace runspace,
             IDisposable? processInstance,
-            IDisposable? process)
+            IDisposable? process,
+            Action<IDisposable?> releaseProcess)
         {
             Runspace = runspace ?? throw new ArgumentNullException(nameof(runspace));
             _processInstance = processInstance;
             _process = process;
+            _releaseProcess = releaseProcess ?? throw new ArgumentNullException(nameof(releaseProcess));
         }
 
         public Runspace Runspace { get; }
 
         public void Dispose()
-            => DisposeRunspaceResources(Runspace, _processInstance, _process);
+            => DisposeRunspaceResources(Runspace, _processInstance, _process, _releaseProcess);
     }
 
     internal static void ApplyTrustedPowerShellModulePath(

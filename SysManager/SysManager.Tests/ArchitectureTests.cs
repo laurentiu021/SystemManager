@@ -8831,4 +8831,97 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"<(summary|inheritdoc)\b", RegexOptions.CultureInvariant)]
     private static partial Regex CarriesASummary();
 
+    /// <summary>
+    /// Every verb <c>CliRunner.Parse</c> accepts must be findable in <c>Commands</c>, the catalog
+    /// <c>--help</c> and the CLI Interface tab are both built from — or be named here as deliberately
+    /// undocumented, with the reason.
+    /// </summary>
+    /// <remarks>
+    /// The other half of <c>CliRunnerTests.EveryFlagInTheHelpCatalog_Parses</c>. That one catches a flag
+    /// the help advertises and the parser rejects, which is the direction a user hits. This catches the
+    /// reverse: a verb that works and is documented nowhere, so the only way to discover it is to read the
+    /// source.
+    /// <para>Both exist because of #2159. <c>CliRunner</c> carried a third list, <c>CliVerbs</c>, that
+    /// named every verb and was never consulted — <c>IsCliToken</c>'s second clause already accepted
+    /// anything starting with <c>-</c> or <c>/</c>, which every entry did. It was found by a mutation that
+    /// deleted a verb from it expecting a red test and got a green one. Deleting the set removes the
+    /// misleading list; these two guards supply the checking it looked like it was doing.</para>
+    /// <para>Read from source text rather than by reflection because the mapping IS a switch: there is no
+    /// runtime collection of case labels to enumerate, and rewriting <c>Parse</c> around a dictionary to
+    /// make one would trade a readable switch for a table purely to satisfy a test. The exceptions are the
+    /// Windows-convention aliases and the one compatibility alias, and each is undocumented on purpose.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryVerbParseAccepts_IsDocumentedOrDeliberatelyNot()
+    {
+        // verb -> why it is absent from the help catalog on purpose.
+        var undocumented = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["-?"] = "Windows-convention alias for --help. Listing every alias of every verb would make "
+                     + "the help table wider than it is useful; the two long forms are what the table shows",
+            ["/?"] = "same, with the slash spelling a cmd.exe user reaches for first",
+            ["/silent"] = "slash spelling of --silent, kept for scripts written in cmd.exe style",
+            ["--trim-ram"] = "RETAINED ALIAS for --purge-standby, not a verb of its own (#1524). Named in "
+                             + "the --purge-standby DESCRIPTION rather than as a flag, so the help does not "
+                             + "advertise a spelling that only exists for schedules registered before the "
+                             + "rename. Pinned by CliRunnerTests.Parse_StillAcceptsTheFormerTrimRamSpelling",
+        };
+
+        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "CliRunner.cs"));
+
+        // Only Parse's body. The file also contains the help catalog and the ExecuteAsync switch, and a
+        // whole-file scan would read the catalog's own strings as case labels and pass vacuously.
+        var start = source.IndexOf("public static CliRequest Parse(", StringComparison.Ordinal);
+        Assert.True(start > 0, "Parse's declaration was not found — this guard is reading the wrong shape.");
+        var end = source.IndexOf("private static CliCommand Pick(", start, StringComparison.Ordinal);
+        Assert.True(end > start, "the end of Parse was not found — this guard is reading the wrong shape.");
+        var body = source[start..end];
+
+        var verbs = CaseLabelLiteral().Matches(body)
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Vacuity floor: 15 labels when measured (4 help + 2 version + list + health + cleanup +
+        // purge-standby + trim-ram + json + 3 silent spellings). A collapse means the slice or the
+        // pattern stopped matching and a clean result would prove nothing.
+        Assert.True(verbs.Count >= 12,
+            $"only {verbs.Count} case labels were read out of Parse — the slice or the pattern is out of "
+            + "date, so this guard is checking almost nothing.");
+
+        var catalog = string.Join(" | ", CliRunner.Commands.Select(c => $"{c.Flags} {c.Description}"));
+        Assert.True(catalog.Length > 200,
+            $"the help catalog rendered to only {catalog.Length} characters — Commands changed shape.");
+
+        var offenders = verbs
+            .Where(v => !undocumented.ContainsKey(v))
+            .Where(v => !catalog.Contains(v, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(v => v, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "Parse accepts these verbs and nothing in the help catalog mentions them, so the only way a "
+            + "user could find them is by reading the source. Add a row to CliRunner.Commands, mention the "
+            + "alias in a neighbouring description, or name it in the exception list in this test WITH the "
+            + "reason it stays hidden:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({verbs.Count} case labels read from Parse)");
+
+        // The exception list must not outlive what it excuses. A verb removed from Parse and left here
+        // reads as a documented decision about code that no longer exists.
+        var stale = undocumented.Keys.Where(v => !verbs.Contains(v)).OrderBy(v => v, StringComparer.Ordinal);
+        Assert.Empty(stale);
+    }
+
+    /// <summary>
+    /// A string literal in a <c>case</c> label, including each alternative of an <c>or</c> pattern —
+    /// <c>case "--a" or "-b":</c> yields both.
+    /// </summary>
+    /// <remarks>
+    /// Matches the literal after <c>case</c> or after <c>or</c> rather than splitting a whole label, so a
+    /// label's alternatives are found without assuming how many there are. Anchoring on the keyword is what
+    /// keeps it from matching the help catalog's flag strings, which are ordinary string literals.
+    /// </remarks>
+    [GeneratedRegex(@"\b(?:case|or)\s+""([^""]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex CaseLabelLiteral();
+
 }

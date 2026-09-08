@@ -97,6 +97,21 @@ public class CliRunnerTests
         // error (exit 2), NOT silently fall through and open the GUI window.
         => Assert.True(CliRunner.IsCliInvocation(["--bogus"]));
 
+    /// <summary>
+    /// The slash spelling reaches CLI mode too, so <c>SysManager.exe /?</c> prints help instead of
+    /// opening the window.
+    /// </summary>
+    /// <remarks>
+    /// Written while removing the dead <c>CliVerbs</c> set (#2159). Nothing asserted this: the parse
+    /// tests cover <c>/?</c> mapping to Help, but no test checked that a slash argument makes the app
+    /// headless in the first place, and it is the LEADING-SLASH clause of <c>IsCliToken</c> that decides
+    /// that. Dropping the clause left every test green, which is the same hole the deleted set created —
+    /// so the fix for it comes with the check that would have caught it.
+    /// </remarks>
+    [Fact]
+    public void IsCliInvocation_TrueForSlashSpelledHelp()
+        => Assert.True(CliRunner.IsCliInvocation(["/?"]));
+
     [Fact]
     public void IsCliInvocation_FalseForBareTokens()
         // Non-flag tokens (no leading - or /) never trigger CLI mode.
@@ -209,6 +224,42 @@ public class CliRunnerTests
             Assert.False(string.IsNullOrWhiteSpace(c.Flags));
             Assert.False(string.IsNullOrWhiteSpace(c.Description));
         });
+    }
+
+    /// <summary>
+    /// Every flag the help text advertises must actually parse. A documented verb that returns
+    /// <see cref="CliCommand.Unknown"/> is worse than an undocumented one: the user reads it in
+    /// <c>--help</c>, types it, and gets "Unknown option" back from the same program.
+    /// </summary>
+    /// <remarks>
+    /// <c>Commands</c> and <c>Parse</c>'s switch are two independent lists of the same flags, and
+    /// nothing compared them. That is the shape of defect the deleted <c>CliVerbs</c> set had (#2159):
+    /// a list that looks authoritative, is never consulted, and drifts silently. This closes the
+    /// direction that hurts a user; <c>ArchitectureTests</c> closes the other one.
+    /// <para>Modifiers are included deliberately. <c>--json</c> on its own leaves the command at
+    /// <see cref="CliCommand.None"/> rather than naming one, so the assertion is "not a usage error"
+    /// rather than "is a command" — but it still catches a modifier being renamed in one place only.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryFlagInTheHelpCatalog_Parses()
+    {
+        var flags = CliRunner.Commands
+            .SelectMany(c => c.Flags.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            .ToList();
+
+        // A floor, because the whole check passes over an empty catalog: Commands is a static list
+        // and a change to its shape (a rename, a different separator) would empty this silently.
+        Assert.True(flags.Count >= 8,
+            $"only {flags.Count} flags were read out of the help catalog — its shape changed and this "
+            + "guard is no longer reading it.");
+
+        foreach (var flag in flags)
+        {
+            var parsed = CliRunner.Parse([flag]);
+            Assert.False(parsed.Command is CliCommand.Unknown,
+                $"'{flag}' is advertised by --help but Parse rejects it as an unknown option. Add an arm "
+                + "for it in Parse, or stop documenting it.");
+        }
     }
 
     [Fact]

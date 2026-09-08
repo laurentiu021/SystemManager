@@ -28,24 +28,17 @@ public sealed class CliRunner
     // const here had already gone stale by two minor releases.
     private static readonly string Version = UpdateService.CurrentVersion.ToString(3);
 
-    // CLI verbs that put startup into headless mode. The elevation sentinel
-    // (--relaunched-elevated) and the update-applier arg are deliberately absent, so they
-    // route to their own startup branches and never get treated as a CLI command.
-    private static readonly HashSet<string> CliVerbs = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "--help", "-h", "-?", "/?", "--version", "-v", "--list", "--health", "--cleanup",
-        // --trim-ram is a RETAINED ALIAS, not a second verb: a maintenance schedule registered before the
-        // rename has "--trim-ram --silent" baked into a Windows scheduled task's argument string on the
-        // user's machine (#1524). The arm in Parse is what keeps it working; this list does not, because
-        // IsCliToken below also accepts anything starting with - or /, which every entry here does. So
-        // the set decides nothing it is asked and reads as an allowlist it is not — worth removing on its
-        // own rather than inside a rename. Do not add a verb here and assume that made it work.
-        "--purge-standby", "--trim-ram",
-    };
-
     // Internal startup sentinels that LOOK like CLI flags but are handled by their own
     // OnStartup branches (elevation relaunch, in-process update applier). They must NEVER
     // be treated as a CLI invocation, so an unknown-flag dispatch can't hijack them.
+    //
+    // This is the ONLY list that decides anything here. There used to be a second one, a
+    // CliVerbs set naming every recognized verb, which read like the allowlist for headless
+    // mode and was not one: every entry began with - or /, so IsCliToken's second clause
+    // already accepted all of them and the set never changed an answer. It was found by a
+    // mutation that removed a verb from it expecting a red test and got a green one. The real
+    // allowlist is Parse's switch, and CliRunnerTests + ArchitectureTests now hold Parse and
+    // Commands to each other so neither can document a verb it cannot parse.
     private static readonly HashSet<string> NonCliSentinels = new(StringComparer.OrdinalIgnoreCase)
     {
         Helpers.AdminHelper.RelaunchedElevatedArg, UpdateApplier.ApplyUpdateArg,
@@ -62,9 +55,11 @@ public sealed class CliRunner
         return args.Any(a => IsCliToken(a.Trim()));
     }
 
-    // A recognized verb, or any unrecognized option flag (leading - or /). Bare tokens aren't.
+    // Any option flag, recognized or not (leading - or /). Bare tokens aren't. Deliberately does
+    // not consult a list of known verbs: a typo must reach Parse and come back as a usage error
+    // rather than opening the window, which is what IsCliInvocation promises above.
     private static bool IsCliToken(string arg)
-        => CliVerbs.Contains(arg) || arg.StartsWith('-') || arg.StartsWith('/');
+        => arg.StartsWith('-') || arg.StartsWith('/');
 
     /// <summary>
     /// Parses the argument list into a <see cref="CliRequest"/>. The first recognized verb

@@ -19,12 +19,32 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class DeepCleanupService
 {
+    private readonly ICleanupRoots _roots;
+
+    /// <summary>
+    /// Builds a service that scans the real machine.
+    /// </summary>
+    public DeepCleanupService() : this(new SystemCleanupRoots())
+    {
+    }
+
+    /// <summary>
+    /// Builds a service that scans <paramref name="roots"/>, so a test can supply a tree it owns.
+    /// </summary>
+    /// <remarks>
+    /// The parameterless overload above is what production uses, and it passes the same roots the service
+    /// read inline before this seam existed — so the default behaviour is unchanged by construction
+    /// rather than by inspection (#2176).
+    /// </remarks>
+    public DeepCleanupService(ICleanupRoots roots)
+        => _roots = roots ?? throw new ArgumentNullException(nameof(roots));
+
     public sealed record ScanProgress(int Current, int Total, string CategoryName);
 
     public Task<IReadOnlyList<CleanupCategory>> ScanAsync(
         IProgress<ScanProgress>? progress = null,
         CancellationToken ct = default)
-        => Task.Run(() => Scan(progress, ct), ct);
+        => Task.Run(() => Scan(_roots, progress, ct), ct);
 
     public Task<CleanupResult> CleanAsync(
         IReadOnlyList<CleanupCategory> categories,
@@ -42,15 +62,15 @@ public sealed class DeepCleanupService
         bool IsDestructiveHint = false,
         bool IsRecycleBin = false);
 
-    private static List<Def> BuildDefinitions()
+    private static List<Def> BuildDefinitions(ICleanupRoots roots)
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        var systemDrive = Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\";
-        var windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var tempUser = Path.GetTempPath();
-        var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var localAppData = roots.LocalAppData;
+        var programData = roots.ProgramData;
+        var systemDrive = roots.SystemDrive;
+        var windowsDir = roots.WindowsDirectory;
+        var tempUser = roots.UserTemp;
+        var pfx86 = roots.ProgramFilesX86;
+        var pf = roots.ProgramFiles;
 
         var defs = new List<Def>
         {
@@ -116,16 +136,16 @@ public sealed class DeepCleanupService
 
             new("Recycle Bin (all drives)",
                 "Emptying the recycle bin on every fixed drive.",
-                RecycleBinHelper.CurrentUserBinPaths(),
+                [.. roots.RecycleBinPaths],
                 IsRecycleBin: true),
 
             new("Steam — browser & depot cache",
                 "Steam web browser cache, HTML cache, app cache and depot lookup cache. Doesn't touch game files, downloads or logins.",
-                SteamCacheDirs(pfx86, pf, localAppData)),
+                SteamCacheDirs(roots)),
 
             new("Steam — shader cache",
                 "Per-game shader cache under steamapps\\shadercache. Rebuilt on next launch — clearing can fix stutter or shader corruption.",
-                SteamShaderCacheDirs(pfx86, pf)),
+                SteamShaderCacheDirs(roots)),
 
             new("Epic Games Launcher — webcache & logs",
                 "Epic Launcher browser webcache and log files. Doesn't affect your Epic login or installed games.",
@@ -147,7 +167,7 @@ public sealed class DeepCleanupService
 
             new("Riot Client / League of Legends — logs",
                 "Riot Client and League client logs only. No game files or credentials.",
-                RiotLogDirs(localAppData, pfx86, pf)),
+                RiotLogDirs(roots)),
 
             new("GOG Galaxy — cache",
                 "GOG Galaxy launcher webcache and redists installer cache.",
@@ -182,9 +202,10 @@ public sealed class DeepCleanupService
 
     // ---------- scanning ----------
 
-    private static IReadOnlyList<CleanupCategory> Scan(IProgress<ScanProgress>? progress, CancellationToken ct)
+    private static IReadOnlyList<CleanupCategory> Scan(
+        ICleanupRoots roots, IProgress<ScanProgress>? progress, CancellationToken ct)
     {
-        var defs = BuildDefinitions();
+        var defs = BuildDefinitions(roots);
         var results = new List<CleanupCategory>(defs.Count);
         var total = defs.Count;
 
@@ -253,43 +274,43 @@ public sealed class DeepCleanupService
 
     // ---------- launcher roots ----------
 
-    private static string[] SteamRoots(string pfx86, string pf)
+    private static string[] SteamRoots(ICleanupRoots roots)
     {
-        List<string> roots =
+        List<string> found =
         [
-            Path.Combine(pfx86, "Steam"),
-            Path.Combine(pf, "Steam"),
+            Path.Combine(roots.ProgramFilesX86, "Steam"),
+            Path.Combine(roots.ProgramFiles, "Steam"),
         ];
-        foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
+        foreach (var driveRoot in roots.FixedDriveRoots)
         {
-            var candidate = Path.Combine(drive.RootDirectory.FullName, "Steam");
-            if (Directory.Exists(candidate)) roots.Add(candidate);
+            var candidate = Path.Combine(driveRoot, "Steam");
+            if (Directory.Exists(candidate)) found.Add(candidate);
         }
-        return roots.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return found.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private static string[] SteamCacheDirs(string pfx86, string pf, string localAppData)
+    private static string[] SteamCacheDirs(ICleanupRoots roots)
     {
         List<string> result = [];
-        foreach (var root in SteamRoots(pfx86, pf))
+        foreach (var root in SteamRoots(roots))
         {
             result.Add(Path.Combine(root, "appcache"));
             result.Add(Path.Combine(root, "htmlcache"));
             result.Add(Path.Combine(root, "depotcache"));
             result.Add(Path.Combine(root, "logs"));
         }
-        result.Add(Path.Combine(localAppData, "Steam", "htmlcache"));
+        result.Add(Path.Combine(roots.LocalAppData, "Steam", "htmlcache"));
         return result.ToArray();
     }
 
-    private static string[] SteamShaderCacheDirs(string pfx86, string pf)
+    private static string[] SteamShaderCacheDirs(ICleanupRoots roots)
     {
         List<string> result = [];
-        foreach (var root in SteamRoots(pfx86, pf))
+        foreach (var root in SteamRoots(roots))
             result.Add(Path.Combine(root, "steamapps", "shadercache"));
-        foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
+        foreach (var driveRoot in roots.FixedDriveRoots)
         {
-            var candidate = Path.Combine(drive.RootDirectory.FullName, "SteamLibrary", "steamapps", "shadercache");
+            var candidate = Path.Combine(driveRoot, "SteamLibrary", "steamapps", "shadercache");
             if (Directory.Exists(candidate)) result.Add(candidate);
         }
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -299,17 +320,17 @@ public sealed class DeepCleanupService
     /// Riot Client logs are in %LOCALAPPDATA%, but League of Legends can be
     /// installed on any drive. Scan all fixed drives for Riot Games folders.
     /// </summary>
-    private static string[] RiotLogDirs(string localAppData, string pfx86, string pf)
+    private static string[] RiotLogDirs(ICleanupRoots roots)
     {
         var result = new List<string>
         {
-            Path.Join(localAppData, "Riot Games", "Riot Client", "Logs"),
-            Path.Join(pfx86, "Riot Games", "League of Legends", "Logs"),
-            Path.Join(pf, "Riot Games", "League of Legends", "Logs"),
+            Path.Join(roots.LocalAppData, "Riot Games", "Riot Client", "Logs"),
+            Path.Join(roots.ProgramFilesX86, "Riot Games", "League of Legends", "Logs"),
+            Path.Join(roots.ProgramFiles, "Riot Games", "League of Legends", "Logs"),
         };
-        foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
+        foreach (var driveRoot in roots.FixedDriveRoots)
         {
-            var candidate = Path.Join(drive.RootDirectory.FullName, "Riot Games", "League of Legends", "Logs");
+            var candidate = Path.Join(driveRoot, "Riot Games", "League of Legends", "Logs");
             result.Add(candidate);
         }
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();

@@ -9340,4 +9340,60 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\.(?:Add|Push|Enqueue)\s*\(", RegexOptions.CultureInvariant)]
     private static partial Regex CollectionAppend();
 
+    /// <summary>
+    /// Deep Cleanup's scan must take its roots from <c>ICleanupRoots</c> rather than asking the machine,
+    /// or its logic stops being assertable again.
+    /// </summary>
+    /// <remarks>
+    /// <c>ScanAsync</c> used to read <c>Environment.GetFolderPath</c> for five special folders and
+    /// <c>DriveInfo.GetDrives()</c> in three launcher probes, with no way to redirect any of it — so a test
+    /// could only check shapes that hold on any machine, and those pass for reasons nobody chose (#2176).
+    /// A single re-added call would quietly restore that, on one category, and every existing test would
+    /// stay green because none of them can see where the scan looked.
+    /// <para><b>This is the check that would have caught the gap the first attempt left.</b> The seam
+    /// covered the special folders and the drive probes but not <c>RecycleBinHelper.CurrentUserBinPaths()</c>,
+    /// which is also inside the definitions — so the eleven "deterministic" scan tests still walked the real
+    /// Recycle Bin on every drive and took 48 seconds instead of 0.2. Nothing failed; only the clock said
+    /// so.</para>
+    /// <para>Flat greps over the whole comment-stripped file rather than a slice of the scan methods,
+    /// because a guard that slices source between markers passes vacuously the moment a marker moves.
+    /// <c>RecycleBinHelper.EmptyAllDrives</c> is deliberately NOT banned: it is the shell call that empties
+    /// the bin, it lives on the clean side, and <c>CleanAsync</c> is already testable because it is handed
+    /// the paths it acts on.</para>
+    /// </remarks>
+    [Fact]
+    public void DeepCleanupsScan_TakesItsRootsFromTheSeam()
+    {
+        var path = Path.Combine(FindAppProjectDir(), "Services", "DeepCleanupService.cs");
+        Assert.True(File.Exists(path), $"DeepCleanupService.cs was not found at {path}");
+        var source = WithoutComments(File.ReadAllText(path));
+
+        // Floor: the file must still be the scanner this guard was written about. A rewrite that moved the
+        // definitions elsewhere would otherwise pass here while checking nothing.
+        Assert.True(source.Contains("ICleanupRoots", StringComparison.Ordinal),
+            "DeepCleanupService no longer mentions ICleanupRoots — if the seam was removed or renamed, "
+            + "this guard is checking nothing and must be updated with it.");
+
+        var banned = new (string Call, string Instead)[]
+        {
+            ("Environment.GetFolderPath", "one of ICleanupRoots' folder properties"),
+            ("Environment.SystemDirectory", "ICleanupRoots.SystemDrive"),
+            ("DriveInfo.GetDrives", "ICleanupRoots.FixedDriveRoots"),
+            ("RecycleBinHelper.CurrentUserBinPaths", "ICleanupRoots.RecycleBinPaths"),
+            ("Path.GetTempPath", "ICleanupRoots.UserTemp"),
+        };
+
+        var offenders = banned
+            .Where(b => source.Contains(b.Call, StringComparison.Ordinal))
+            .Select(b => $"{b.Call} — use {b.Instead}")
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "DeepCleanupService's scan reads the machine directly again. Every one of these has a property "
+            + "on ICleanupRoots, and using the property is what lets a test point the scan at a tree it "
+            + "built — without it the scan's file counts, byte totals and age cutoff can only be asserted "
+            + "as \"non-negative\":\n  "
+            + string.Join("\n  ", offenders));
+    }
+
 }

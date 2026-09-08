@@ -162,7 +162,7 @@ constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (
 `ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, `IGamingProfileService`, and
 `ISessionRestorePoint` (the last two via a factory).
 
-Two further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
+Three further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
 finds nothing:
 
 - `IDialogService` — consumed through the static `DialogService.Instance`, which tests swap for a
@@ -171,6 +171,13 @@ finds nothing:
 - `IBandwidthMonitorService` — the one seam with two shipping implementations
   (`ConnectionBandwidthSource` and `EtwBandwidthSource`), injected as factories so the Bandwidth
   Monitor can switch source at runtime. See the sources note further down.
+- `ICleanupRoots` — the directories Deep Cleanup's scan is built from, taken by
+  `DeepCleanupService`'s second constructor with `SystemCleanupRoots` as the parameterless default, so
+  `AddSingleton<DeepCleanupService>()` needs no change. It exists because the scan read
+  `Environment.GetFolderPath` and `DriveInfo.GetDrives()` inline, which left its logic assertable only
+  as "the size is non-negative"; with the roots injected a test points it at a tree it built and asserts
+  exact counts, the 30-day cutoff and which categories arrive pre-selected. A fitness function keeps the
+  machine reads out of the service.
 
 Key services:
 - `PingMonitorService` / `TracerouteService` / `TracerouteMonitorService` —

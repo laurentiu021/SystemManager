@@ -738,7 +738,9 @@ a confirmation before it runs:
   from launching
 - Fully reversible — unblock restores normal execution
 - Shows list of currently blocked apps with select/deselect and batch unblock
-- Requires admin privileges for registry modifications
+- Requires admin privileges for registry modifications, in **both** directions —
+  blocking and unblocking write the same protected setting, and each says so
+  before asking you to confirm anything
 
 ### Debloater & Ads
 Remove preinstalled Windows Store apps you don't use:

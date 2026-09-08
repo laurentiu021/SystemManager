@@ -142,6 +142,17 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
             return;
         }
 
+        // Before the confirmation, exactly like BlockApp. Unblocking writes the same HKLM key that
+        // blocking does, so without administrator rights every write fails — and asking the user to
+        // approve "they will be allowed to run again" and then reporting "Unblocked 0 applications"
+        // told them nothing about why. Placing the check after the dialog would still produce the
+        // right words while having asked permission for something that cannot happen.
+        if (!IsElevated)
+        {
+            BlockStatus = "Unblocking requires administrator privileges.";
+            return;
+        }
+
         if (!DialogService.Instance.Confirm(
             $"Unblock {selected.Count} application{(selected.Count == 1 ? "" : "s")}?\n\nThey will be allowed to run again.",
             "Unblock Applications — Confirm")) return;
@@ -154,8 +165,14 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
         }
 
         RefreshList();
-        BlockStatus = $"Unblocked {unblocked} application{(unblocked == 1 ? "" : "s")}.";
-        Log.Information("User unblocked {Count} applications", unblocked);
+        // Say so when some of them did not work. Elevated, a single write can still fail — the key
+        // changed underneath, or the file is locked — and "Unblocked 2 applications" after selecting
+        // three reads as complete success.
+        BlockStatus = unblocked == selected.Count
+            ? $"Unblocked {unblocked} application{(unblocked == 1 ? "" : "s")}."
+            : $"Unblocked {unblocked} of {selected.Count}. "
+              + $"{selected.Count - unblocked} could not be changed — try again, or restart and retry.";
+        Log.Information("User unblocked {Count} of {Selected} applications", unblocked, selected.Count);
     }
 
     [RelayCommand]

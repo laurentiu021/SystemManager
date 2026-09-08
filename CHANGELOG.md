@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.8] - 2026-09-08
+
+App Blocker's Unblock button asked you to confirm even when it could not do the job. Without
+administrator rights it would show the confirmation, quietly fail every change, and report "Unblocked 0
+applications" without saying why — while the Block button on the same tab had always refused up front and
+explained itself. Unblock now does the same. It also says how many it could not change, instead of
+reporting the number that worked as if it were all of them.
+
+### Fixed
+
+- **App Blocker — Unblock now refuses without administrator rights instead of failing silently.**
+  Unblocking writes the same protected Windows setting that blocking does, so without admin every change
+  fails. The command checked nothing: it showed a confirmation promising the applications "will be allowed
+  to run again", tried anyway, and reported a count of zero with nothing connecting it to permissions. It
+  now checks before the confirmation, so it never asks permission for something it cannot do, and says
+  "Unblocking requires administrator privileges." The check sits ahead of the dialog on purpose — behind
+  it, the wording would have been right while the user had still been asked.
+
+### Changed
+
+- **App Blocker — a partly successful unblock says so.** Even with administrator rights an individual
+  change can fail, and "Unblocked 2 applications" after selecting three read as complete success. It now
+  reports "Unblocked 2 of 3" and how many could not be changed.
+
 ## [1.78.7] - 2026-09-08
 
 Running SysManager as administrator made several tabs feel slower than they needed to. Every single thing

@@ -294,8 +294,10 @@ public class AppBlockerViewModelTests
     [Fact]
     public void UnblockSelected_WhenUserDeclinesConfirm_DoesNotUnblock()
     {
+        using var elevated = AdminHelper.ForceElevation(true);
         var blocker = Substitute.For<IAppBlockerService>();
         var vm = NewVm(blocker);
+        Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
         vm.BlockedApps.Add(new BlockedApp { ExecutableName = "game.exe", IsSelected = true });
 
         var prevDialog = DialogService.Instance;
@@ -318,9 +320,11 @@ public class AppBlockerViewModelTests
     [Fact]
     public void UnblockSelected_WhenUserConfirms_UnblocksSelected()
     {
+        using var elevated = AdminHelper.ForceElevation(true);
         var blocker = Substitute.For<IAppBlockerService>();
         blocker.UnblockApp(Arg.Any<string>()).Returns(true);
         var vm = NewVm(blocker);
+        Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
         vm.BlockedApps.Add(new BlockedApp { ExecutableName = "game.exe", IsSelected = true });
 
         var prevDialog = DialogService.Instance;
@@ -333,6 +337,84 @@ public class AppBlockerViewModelTests
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
             blocker.Received(1).UnblockApp("game.exe");
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    /// <summary>
+    /// Without administrator rights, Unblock refuses the same way Block does: it says why, it does not
+    /// ask the user to approve something that cannot happen, and it never reaches the service.
+    /// </summary>
+    /// <remarks>
+    /// Unblock had no elevation check at all, though <c>UnblockApp</c> writes the same HKLM IFEO key that
+    /// blocking does and its own catch logs "admin required" (#2173). So a user without admin got a
+    /// confirmation dialog promising "they will be allowed to run again", clicked Yes, and read
+    /// "Unblocked 0 applications" — a number with nothing connecting it to permissions.
+    /// <para>The <c>Confirm</c> assertion is the load-bearing one. A gate below the dialog would produce
+    /// the same status text while still having asked, which is the defect rather than the fix.</para>
+    /// </remarks>
+    [Fact]
+    public void UnblockSelected_WhenNotElevated_SaysWhyAndNeverReachesTheService()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var blocker = Substitute.For<IAppBlockerService>();
+        var vm = NewVm(blocker);
+        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
+        vm.BlockedApps.Add(new BlockedApp { ExecutableName = "game.exe", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // would say yes if asked
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.UnblockSelectedCommand.Execute(null);
+
+            Assert.Contains("administrator", vm.BlockStatus, StringComparison.OrdinalIgnoreCase);
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+            blocker.DidNotReceive().UnblockApp(Arg.Any<string>());
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    /// <summary>
+    /// When only some of the selected applications could be unblocked, the status says so rather than
+    /// reporting the number that worked as if it were all of them.
+    /// </summary>
+    /// <remarks>
+    /// Elevated, a single write can still fail — the key changed underneath, the hive is locked — and
+    /// "Unblocked 2 applications" after selecting three reads as complete success. Three selected, the
+    /// middle one refused by the service.
+    /// </remarks>
+    [Fact]
+    public void UnblockSelected_WhenSomeFail_ReportsHowManyDidNot()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.UnblockApp("a.exe").Returns(true);
+        blocker.UnblockApp("b.exe").Returns(false);
+        blocker.UnblockApp("c.exe").Returns(true);
+        var vm = NewVm(blocker);
+        vm.BlockedApps.Add(new BlockedApp { ExecutableName = "a.exe", IsSelected = true });
+        vm.BlockedApps.Add(new BlockedApp { ExecutableName = "b.exe", IsSelected = true });
+        vm.BlockedApps.Add(new BlockedApp { ExecutableName = "c.exe", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.UnblockSelectedCommand.Execute(null);
+
+            Assert.Contains("2 of 3", vm.BlockStatus);
+            Assert.Contains("could not be changed", vm.BlockStatus);
         }
         finally
         {

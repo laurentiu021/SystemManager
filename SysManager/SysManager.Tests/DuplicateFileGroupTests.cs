@@ -45,8 +45,7 @@ public class DuplicateFileGroupTests
     {
         var group = new DuplicateFileGroup();
         group.Count = 3;
-        var changed = new List<string>();
-        group.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = group.RecordPropertyChanges();
 
         group.FileSize = 2048;
 
@@ -58,8 +57,7 @@ public class DuplicateFileGroupTests
     {
         var group = new DuplicateFileGroup();
         group.FileSize = 1024;
-        var changed = new List<string>();
-        group.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = group.RecordPropertyChanges();
 
         group.Count = 5;
 
@@ -70,8 +68,7 @@ public class DuplicateFileGroupTests
     public void Hash_PropertyNotifies()
     {
         var group = new DuplicateFileGroup();
-        var changed = new List<string>();
-        group.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = group.RecordPropertyChanges();
 
         group.Hash = "abc123";
 
@@ -92,8 +89,7 @@ public class DuplicateFileGroupTests
     public void DuplicateFileEntry_Properties_Notify()
     {
         var entry = new DuplicateFileEntry();
-        var changed = new List<string>();
-        entry.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = entry.RecordPropertyChanges();
 
         entry.Path = @"C:\test\file.txt";
         entry.Name = "file.txt";
@@ -271,8 +267,7 @@ public class DuplicateFileGroupTests
     public void KeepLabel_NotifiesWhenTheMarkMoves()
     {
         var entry = new DuplicateFileEntry();
-        var changed = new List<string>();
-        entry.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = entry.RecordPropertyChanges();
 
         entry.IsSelected = true;
 

@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ComponentModel;
 using SysManager.Models;
 
 namespace SysManager.IntegrationTests;
@@ -37,8 +36,7 @@ public class PingTargetTests
     public void IsEnabled_RaisesPropertyChanged()
     {
         var t = new PingTarget("x", "1.1.1.1", "#000000");
-        var raised = new List<string?>();
-        ((INotifyPropertyChanged)t).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        var raised = t.RecordPropertyChanges();
         t.IsEnabled = false;
         Assert.Contains(nameof(PingTarget.IsEnabled), raised);
     }

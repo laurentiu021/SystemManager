@@ -1157,11 +1157,7 @@ public class AudioMixerViewModelTests
         // flag would flash the bar on and off every second for as long as the tab is open.
         var vm = NewVm(ServiceWith(Session("s1")));
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsBusy), () => vm.IsBusy);
 
         await vm.ReconcileAsync();
 

@@ -37,8 +37,7 @@ public class BatteryHealthViewModelTests
     public void Battery_CanBeReplaced()
     {
         var vm = new BatteryHealthViewModel(new Services.BatteryService());
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
 
         vm.Battery = new Models.BatteryInfo { Name = "Test" };
         Assert.Contains("Battery", changed);
@@ -53,8 +52,7 @@ public class BatteryHealthViewModelTests
         // bound label silently freezing is the only regression this property realistically has.
         // Battery_CanBeReplaced two tests above already uses this pattern.
         var vm = new BatteryHealthViewModel(new Services.BatteryService());
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
 
         vm.Summary = "Custom summary";
 

@@ -138,8 +138,7 @@ public class BatteryServiceTests
     public void BatteryInfo_PropertyChange_Notifies()
     {
         var info = new BatteryInfo();
-        var changed = new List<string>();
-        info.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = info.RecordPropertyChanges();
 
         info.HasBattery = true;
         info.Name = "Test Battery";

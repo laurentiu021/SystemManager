@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.ViewModels;
 
@@ -26,8 +25,7 @@ public class ViewModelBaseTests
     public void IsBusy_RaisesPropertyChanged()
     {
         var vm = new Concrete();
-        var raised = new List<string?>();
-        ((INotifyPropertyChanged)vm).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        var raised = vm.RecordPropertyChanges();
         vm.IsBusy = true;
         Assert.Contains(nameof(ViewModelBase.IsBusy), raised);
     }
@@ -36,8 +34,7 @@ public class ViewModelBaseTests
     public void StatusMessage_RaisesPropertyChanged()
     {
         var vm = new Concrete();
-        var raised = new List<string?>();
-        ((INotifyPropertyChanged)vm).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        var raised = vm.RecordPropertyChanges();
         vm.StatusMessage = "hello";
         Assert.Contains(nameof(ViewModelBase.StatusMessage), raised);
     }

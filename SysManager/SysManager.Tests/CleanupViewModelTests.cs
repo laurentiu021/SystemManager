@@ -108,12 +108,7 @@ public class CleanupViewModelTests
     public void IsAnyRunning_FiresPropertyChangedOnEveryFlag()
     {
         var vm = NewVm();
-        var seen = new HashSet<string>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsAnyRunning) && e.PropertyName != null)
-                seen.Add("IsAnyRunning");
-        };
+        var seen = vm.RecordPropertyChanges();
 
         vm.IsTempRunning = true;
         vm.IsBinRunning = true;

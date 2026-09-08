@@ -270,11 +270,7 @@ public class NotificationBlockerViewModelTests
     {
         var vm = NewVm(NewService(App("a"), App("b")));
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsBusy), () => vm.IsBusy);
 
         await vm.RefreshCommand.ExecuteAsync(null);
 
@@ -291,11 +287,7 @@ public class NotificationBlockerViewModelTests
         // at 0 would read as "stalled".
         var vm = NewVm(NewService(App("a")));
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsProgressIndeterminate)) seen.Add(vm.IsProgressIndeterminate);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsProgressIndeterminate), () => vm.IsProgressIndeterminate);
 
         await vm.RefreshCommand.ExecuteAsync(null);
 

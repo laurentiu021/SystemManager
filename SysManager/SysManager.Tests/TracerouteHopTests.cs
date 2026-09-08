@@ -44,8 +44,7 @@ public class TracerouteHopTests
     public void PropertyChanged_FiresOnLatencyChange()
     {
         var h = new TracerouteHop();
-        var changed = new List<string>();
-        h.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = h.RecordPropertyChanges();
         h.LatencyMs = 10.0;
         Assert.Contains("LatencyMs", changed);
     }
@@ -54,8 +53,7 @@ public class TracerouteHopTests
     public void PropertyChanged_FiresOnHostNameChange()
     {
         var h = new TracerouteHop();
-        var changed = new List<string>();
-        h.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = h.RecordPropertyChanges();
         h.HostName = "resolved.host.com";
         Assert.Contains("HostName", changed);
     }

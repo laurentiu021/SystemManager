@@ -100,8 +100,7 @@ public class ServiceManagerServiceTests
     public void ServiceEntry_ObservableProperties()
     {
         var entry = new ServiceEntry { Name = "Test" };
-        var changed = new List<string>();
-        entry.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = entry.RecordPropertyChanges();
         entry.Status = "Running";
         entry.StartType = "Automatic";
         Assert.Contains("Status", changed);

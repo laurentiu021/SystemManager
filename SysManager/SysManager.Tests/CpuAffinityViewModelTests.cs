@@ -249,11 +249,7 @@ public class CpuAffinityViewModelTests
         var service = FourCoreServiceWith(pid, 0b0001);
         var vm = NewVm(service);
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsBusy), () => vm.IsBusy);
 
         await vm.RefreshProcessesCommand.ExecuteAsync(null);
 
@@ -271,11 +267,7 @@ public class CpuAffinityViewModelTests
         const int pid = 4242;
         var vm = NewVm(FourCoreServiceWith(pid, 0b0001));
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsProgressIndeterminate)) seen.Add(vm.IsProgressIndeterminate);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsProgressIndeterminate), () => vm.IsProgressIndeterminate);
 
         await vm.RefreshProcessesCommand.ExecuteAsync(null);
 

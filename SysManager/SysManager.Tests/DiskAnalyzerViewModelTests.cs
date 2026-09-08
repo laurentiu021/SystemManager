@@ -170,8 +170,7 @@ public class DiskAnalyzerViewModelTests
         // The [NotifyPropertyChangedFor] attributes are what actually refresh the overlay; without
         // them the computed strings would change but the bound EmptyState would keep the old text.
         var vm = NewVm();
-        var raised = new List<string>();
-        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+        var raised = vm.RecordPropertyChanges();
 
         vm.HasScanned = true;
 

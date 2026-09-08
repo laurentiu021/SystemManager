@@ -43,8 +43,7 @@ public class PingTargetTests
     public void PropertyChanged_FiresOnNameChange()
     {
         var t = new PingTarget();
-        var changed = new List<string>();
-        t.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = t.RecordPropertyChanges();
         t.Name = "Test";
         Assert.Contains("Name", changed);
     }
@@ -53,8 +52,7 @@ public class PingTargetTests
     public void PropertyChanged_FiresOnLatencyChange()
     {
         var t = new PingTarget();
-        var changed = new List<string>();
-        t.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = t.RecordPropertyChanges();
         t.LastLatencyMs = 15.5;
         Assert.Contains("LastLatencyMs", changed);
     }
@@ -63,8 +61,7 @@ public class PingTargetTests
     public void PropertyChanged_FiresOnStatusChange()
     {
         var t = new PingTarget();
-        var changed = new List<string>();
-        t.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = t.RecordPropertyChanges();
         t.Status = "OK";
         Assert.Contains("Status", changed);
     }

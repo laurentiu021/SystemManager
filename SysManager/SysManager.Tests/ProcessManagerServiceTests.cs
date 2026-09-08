@@ -223,8 +223,7 @@ public class ProcessManagerServiceTests
     public void ProcessEntry_PropertyChange_Notifies()
     {
         var entry = new ProcessEntry();
-        var changed = new List<string>();
-        entry.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = entry.RecordPropertyChanges();
 
         entry.Pid = 1234;
         entry.Name = "test";

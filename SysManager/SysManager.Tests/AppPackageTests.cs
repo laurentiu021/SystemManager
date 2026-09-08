@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ComponentModel;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -26,8 +25,7 @@ public class AppPackageTests
     public void IsSelected_RaisesPropertyChanged()
     {
         var p = new AppPackage();
-        var raised = new List<string?>();
-        ((INotifyPropertyChanged)p).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        var raised = p.RecordPropertyChanges();
         p.IsSelected = false;
         Assert.Contains(nameof(AppPackage.IsSelected), raised);
     }
@@ -56,8 +54,7 @@ public class AppPackageTests
     public void NamePropertyChange_RaisesEvent()
     {
         var p = new AppPackage();
-        var raised = new List<string?>();
-        ((INotifyPropertyChanged)p).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        var raised = p.RecordPropertyChanges();
         p.Name = "Git";
         p.Id = "Git.Git";
         p.CurrentVersion = "2.47.0";

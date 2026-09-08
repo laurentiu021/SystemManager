@@ -122,8 +122,7 @@ public class NavGroupTests
     public void NavItem_IsSelected_UpdatesAutomationStatusAndRaisesChanges()
     {
         var item = CreateNavItem();
-        var changed = new List<string?>();
-        item.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        var changed = item.RecordPropertyChanges();
 
         item.IsSelected = true;
 

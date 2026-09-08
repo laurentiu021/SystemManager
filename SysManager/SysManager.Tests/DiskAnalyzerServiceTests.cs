@@ -247,8 +247,7 @@ public class DiskAnalyzerServiceTests : IDisposable
     public void DiskUsageEntry_PropertyChange_Notifies()
     {
         var entry = new DiskUsageEntry();
-        var changed = new List<string>();
-        entry.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = entry.RecordPropertyChanges();
 
         entry.Name = "test";
         entry.FullPath = @"C:\test";

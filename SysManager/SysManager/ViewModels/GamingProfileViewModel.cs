@@ -220,14 +220,11 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
     {
         // The bound game exited and the service auto-reverted. Reflect it in the UI (marshalled
         // to the UI thread — the event fires from a Process.Exited callback on a pool thread).
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        void Update()
+        UiThread.Post(() =>
         {
             IsSessionActive = _service.IsActive;
             StatusMessage = "The game exited — game mode ended and original settings were restored.";
-        }
-        if (dispatcher is null || dispatcher.CheckAccess()) Update();
-        else dispatcher.Invoke(Update);
+        });
     }
 
     /// <summary>Builds an honest, plain-language summary of an apply batch (pure, testable).</summary>

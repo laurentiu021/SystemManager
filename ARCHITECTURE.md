@@ -617,6 +617,16 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   prevent because nothing holds those files open yet.
 - `RecycleBinHelper` — empties the Recycle Bin via the shell API; shared by Deep
   Cleanup and the One-Click Tune-Up so the interop has one source of truth.
+- `UiThread` — the one way background work updates the UI. Runs the action inline
+  when already on the UI thread and posts it otherwise, so the caller never waits
+  for the dispatcher. It replaced ten hand-written synchronous marshals, each
+  guarded on whether an `Application` existed — which is not the question, because
+  an `Application` can exist while nothing pumps its dispatcher and a blocking
+  `Invoke` then waits on a queue no one drains. The two callers that need the
+  update to have landed before their next statement await
+  `Dispatcher.InvokeAsync` instead: an un-resumed continuation costs nothing, a
+  blocked thread costs a thread. A fitness function asserts nothing marshals
+  synchronously, including via a short local holding the dispatcher.
 - `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.
 - Value converters: `EqualityConverter`, `IntGreaterThanZeroConverter`,
   `ValueConverters` (boolean/visibility/inverse helpers).

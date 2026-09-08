@@ -155,7 +155,9 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
             var installedIds = ParseInstalledIds(string.Join("\n", lines));
 
-            App.Current?.Dispatcher.Invoke(() =>
+            // Posted, for the reason the comment in LoadIconsAsync above already gives: nothing here
+            // reads the flags back, so waiting on UI availability buys nothing (#2152).
+            UiThread.Post(() =>
             {
                 foreach (var app in Apps)
                 {

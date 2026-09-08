@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.4] - 2026-09-08
+
+Ten places in SysManager updated the screen by handing the work to the window and then standing still until
+the window had done it. Nothing you would have noticed, because the window is normally listening — but it is
+the shape of freeze that only happens when something else has gone wrong, which is the worst time for a
+second problem. They now hand the work over and carry on.
+
+### Fixed
+- **Background work no longer waits on the window to catch up.** Ten spots did, including the notification
+  popup, which is reached at the end of most scans. A scan that has finished has nothing to gain from waiting
+  for its "done" message to appear, and if the window were ever waiting on that scan, both would have waited
+  forever. Two of the ten legitimately need the screen updated before they continue, and those now wait in a
+  way that cannot freeze anything.
+
+### Added
+- **A check that stops the pattern coming back.** It recognises the roundabout way of writing it too — the
+  form this codebase actually used, where the window is stored under a short name first — because the version
+  that only caught the obvious spelling let a test case straight through.
+
 ## [1.78.3] - 2026-09-08
 
 On File Shredder and Shortcut Cleaner the line at the bottom of the page sat closer to the window edge than

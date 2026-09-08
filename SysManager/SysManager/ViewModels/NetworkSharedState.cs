@@ -579,11 +579,14 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         foreach (var b in Buffers.Values) TrimBuffer(b);
     }
 
-    internal void InvokeOnUi(Action action)
-    {
-        if (Dispatcher is null || Dispatcher.CheckAccess()) action();
-        else Dispatcher.BeginInvoke(DispatcherPriority.Background, action);
-    }
+    /// <remarks>
+    /// This was the shape <see cref="Helpers.UiThread"/> was extracted from, so it now calls it rather
+    /// than keeping a second copy that could drift. <see cref="DispatcherPriority.Background"/> is kept
+    /// and passed explicitly: chart and buffer updates should yield to input rather than compete with
+    /// it, which is the opposite of what a status line wants, so it stays a per-caller decision.
+    /// </remarks>
+    internal void InvokeOnUi(Action action) =>
+        Helpers.UiThread.Post(Dispatcher, action, DispatcherPriority.Background);
 
     // ── Chart theming ──
 

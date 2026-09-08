@@ -23,6 +23,13 @@ concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
+# See the same block in ci.yml: xUnit v3 test projects are Microsoft.Testing.Platform
+# applications and that platform auto-registers a telemetry extension. The unit gate below
+# runs them, so the opt-out belongs here too.
+env:
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
 jobs:
   guard:
     name: Skip if release already exists (tag move / re-push)

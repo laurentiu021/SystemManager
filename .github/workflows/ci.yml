@@ -13,6 +13,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The app sends nothing anywhere, and neither should the tools that build it. xUnit v3 test
+# projects are Microsoft.Testing.Platform applications, and that platform ships a telemetry
+# extension that is registered automatically and reads both of these; the SDK reads the second
+# one. Set here rather than per-job so a new job cannot be added without them.
+env:
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
 jobs:
   build-and-test:
     name: Build & unit tests
@@ -483,6 +491,30 @@ jobs:
         if: steps.ui-tests.outcome == 'failure'
         run: echo "::warning::UI automation tests failed — review the ui-test-results artifact for details."
 
+      # A test that FAILS is a warning here, on purpose. A test that is never RUN is an error, and the
+      # two are not the same finding: a failure means the job worked and found something, while a
+      # collapsed count means this job's green says nothing at all. Nothing distinguished them until
+      # now, so a runner or package change that stopped finding tests would have looked like a clean
+      # pass. The floor sits between the 64 test METHODS in the project and the 136 cases they expand
+      # to, so it catches theory rows silently stopping being enumerated as well as an outright
+      # truncation, while leaving room for tests to be legitimately deleted.
+      - name: Verify the UI suite actually ran
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          report=TestResults/ui-results.trx
+          if [ ! -s "$report" ]; then
+            echo "::error::$report is missing or empty, so no UI test result was recorded at all. Written instead:"
+            ls -la TestResults || true
+            exit 1
+          fi
+          cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l)
+          echo "TRX report: $(wc -c < "$report") bytes, $cases test results."
+          if [ "$cases" -lt 100 ]; then
+            echo "::error::the UI suite recorded only $cases results, under the floor of 100. Tests stopped being discovered rather than failing, so this job's result is meaningless."
+            exit 1
+          fi
+
       - name: Upload UI test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -563,6 +595,26 @@ jobs:
       - name: Annotate integration test failures
         if: steps.integration-tests.outcome == 'failure'
         run: echo "::warning::Integration tests failed — review the integration-test-results artifact. This job is non-blocking, so the merge is not gated; the failure is still real."
+
+      # Same reasoning as "Verify the UI suite actually ran" above: a failure is a warning, an empty or
+      # collapsed run is an error. The floor sits between the 497 test METHODS in the project and the
+      # 623 cases they expand to.
+      - name: Verify the integration suite actually ran
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          report=TestResults/integration-results.trx
+          if [ ! -s "$report" ]; then
+            echo "::error::$report is missing or empty, so no integration test result was recorded at all. Written instead:"
+            ls -la TestResults || true
+            exit 1
+          fi
+          cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l)
+          echo "TRX report: $(wc -c < "$report") bytes, $cases test results."
+          if [ "$cases" -lt 550 ]; then
+            echo "::error::the integration suite recorded only $cases results, under the floor of 550. Tests stopped being discovered rather than failing, so this job's result is meaningless."
+            exit 1
+          fi
 
       - name: Upload integration test results
         if: always()

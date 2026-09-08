@@ -67,6 +67,25 @@ dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.c
 dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
+## Running one class or one test
+
+Under xUnit v3 each test project builds an executable, so a single class can run without
+starting the whole suite:
+
+```powershell
+dotnet build SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
+./SysManager/SysManager.Tests/bin/Release/net10.0-windows/SysManager.Tests.exe `
+    -class SysManager.Tests.ArchitectureTests
+```
+
+`-method <name>` narrows to one test, and `-list methods` prints every test the runner
+discovered without running any of it. `-list` is the check to reach for after touching the
+project file or a package version: it answers "is everything still being found" separately
+from "does everything still pass", and those fail in different ways.
+
+Use `-?` for the full option list. This is the same runner `dotnet test` drives, so a result
+here and a result on CI mean the same thing.
+
 ## Coverage
 
 Coverage is collected automatically on CI via `coverlet` and uploaded to
@@ -86,7 +105,7 @@ happily as a readable one and Codecov never reports the rejection back.
 
 | Package | Purpose |
 |---|---|
-| xUnit 2.9 | Test framework |
+| xUnit v3 4.0 | Test framework |
 | NSubstitute 6.2 | Mocking/substitution for interface-based testing |
 | NetArchTest.Rules 1.3 | Architecture fitness functions — MVVM dependency direction, and guards that pin recurring defect classes |
 | coverlet | Code coverage collection |

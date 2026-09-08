@@ -123,3 +123,12 @@ dotnet_diagnostic.CS8600.severity = warning
 dotnet_diagnostic.CS8602.severity = warning
 dotnet_diagnostic.CS8603.severity = warning
 dotnet_diagnostic.CS8625.severity = warning
+
+# xUnit1051 — "pass TestContext.Current.CancellationToken to methods that accept one".
+# Kept visible in the editor and out of the build. The rule arrived with xunit.analyzers 2.x
+# and fires at 450 call sites, and it is not a uniform sweep: some of those sites are
+# NSubstitute argument matchers, where substituting a real token would change what the
+# assertion matches. Threading the ambient token is a behaviour change to the suite (tests
+# become cancellable mid-await) and belongs in its own change, not in the runner migration
+# that surfaced it.
+dotnet_diagnostic.xUnit1051.severity = suggestion

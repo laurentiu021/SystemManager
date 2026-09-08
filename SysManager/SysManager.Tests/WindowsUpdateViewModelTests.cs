@@ -4,6 +4,7 @@
 
 using System.Reflection;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -740,6 +741,177 @@ public class WindowsUpdateViewModelTests
         => typeof(WindowsUpdateViewModel)
             .GetMethod("OnRunnerProgressChanged", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(vm, [percent]);
+
+    // ── Elevation gates ──────────────────────────────────────────────────────
+    //
+    // Four gated paths in three shapes, and none was asserted (#2171). Elevation was read from whatever
+    // host ran the suite: CI's runner IS elevated, a developer's shell is not, so each of these exercised
+    // a different branch depending on where it ran while looking identical either way.
+    //
+    // Three of them use the view model's OWN seam — the internal constructor takes a Func<bool>, so the
+    // answer is decided per instance with no process-wide state and no serialized collection needed. The
+    // fourth, InstallUpdates, reads AdminHelper.IsElevated() directly and bypasses that seam, so its test
+    // is the only one here that has to replace the static probe. That inconsistency is filed separately.
+    //
+    // The runner is substituted throughout: past these gates the real one installs a PowerShell module or
+    // Windows updates, and a test must not be one gate away from doing that.
+
+    private static WindowsUpdateViewModel NewVm(bool elevated, out IPowerShellRunner runner)
+    {
+        runner = Substitute.For<IPowerShellRunner>();
+        return new WindowsUpdateViewModel(runner, new WindowsUpdateService(),
+                                         new WindowsUpdatePolicyService(), () => elevated);
+    }
+
+    private static void ExecutePolicy(WindowsUpdateViewModel vm, string which)
+    {
+        switch (which)
+        {
+            case "Defer": vm.DeferFeatureUpdatesCommand.Execute(null); break;
+            case "Pause": vm.PauseUpdatesCommand.Execute(null); break;
+            case "Restore": vm.RestoreUpdatePolicyCommand.Execute(null); break;
+            default: throw new ArgumentOutOfRangeException(nameof(which), which, "unknown policy command");
+        }
+    }
+
+    [Theory]
+    [InlineData("Defer")]
+    [InlineData("Pause")]
+    [InlineData("Restore")]
+    public void PolicyCommand_WhenNotElevated_SaysSoAndNeverPromptsConfirm(string which)
+    {
+        var vm = NewVm(elevated: false, out _);
+        Assert.False(vm.IsElevated, "the injected answer must reach the view model");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // would say yes if asked
+        DialogService.Instance = dialog;
+        try
+        {
+            ExecutePolicy(vm, which);
+
+            Assert.Contains("administrator", vm.PolicySummary, StringComparison.OrdinalIgnoreCase);
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    /// <summary>
+    /// Elevated, the policy commands get as far as asking — the half a refusal test cannot show. They
+    /// decline, because past the dialog these write real Windows Update policy keys.
+    /// </summary>
+    [Theory]
+    [InlineData("Defer")]
+    [InlineData("Pause")]
+    [InlineData("Restore")]
+    public void PolicyCommand_WhenElevated_AsksBeforeChangingPolicy(string which)
+    {
+        var vm = NewVm(elevated: true, out _);
+        Assert.True(vm.IsElevated, "the injected answer must reach the view model");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // decline, so nothing is written
+        DialogService.Instance = dialog;
+        try
+        {
+            ExecutePolicy(vm, which);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.DoesNotContain("Changing update policy requires", vm.PolicySummary);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    /// <summary>
+    /// Installing PSWindowsUpdate is refused when SysManager IS elevated — the one gate in the app whose
+    /// refusal is on the ELEVATED side.
+    /// </summary>
+    /// <remarks>
+    /// The module installs per user, so an elevated session would put it under the administrator's profile
+    /// where the user's normal session cannot see it. Hence the inverted check, and hence a test that
+    /// decides elevation is ON rather than off.
+    /// </remarks>
+    [Fact]
+    public async Task InstallModule_WhenElevated_RefusesBecauseTheModuleIsPerUser()
+    {
+        var vm = NewVm(elevated: true, out var runner);
+
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        Assert.Contains("non-administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.False(vm.IsBusy, "the refusal must not leave the tab looking busy");
+        await runner.DidNotReceiveWithAnyArgs().RunScriptViaPwshAsync(default!);
+    }
+
+    /// <summary>
+    /// Not elevated, installing PSWindowsUpdate is allowed and the install script reaches the runner —
+    /// the branch the inverted gate exists to permit.
+    /// </summary>
+    /// <remarks>
+    /// Asserted on the script rather than on a call count. A count of one was the first attempt and it
+    /// failed at TWO: the command installs the module and then probes for it, so the runner is used twice.
+    /// Naming the install script says what has to happen and does not break when the probe changes.
+    /// </remarks>
+    [Fact]
+    public async Task InstallModule_WhenNotElevated_ReachesTheRunner()
+    {
+        var vm = NewVm(elevated: false, out var runner);
+
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("non-administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        await runner.Received(1).RunScriptViaPwshAsync(
+            Arg.Is<string>(s => s.Contains("Install-Module -Name PSWindowsUpdate", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Installing updates without elevation offers to relaunch rather than failing, and installs nothing.
+    /// </summary>
+    /// <remarks>
+    /// The only test here that has to replace the process-wide probe, because <c>InstallUpdatesAsync</c>
+    /// calls <c>AdminHelper.IsElevated()</c> directly instead of reading the injected answer its three
+    /// siblings use. Filed as an inconsistency rather than changed inside a test-only change.
+    /// <para>This gate also sits AFTER the confirmation, unlike the refusals elsewhere in the app, and
+    /// that is coherent rather than an oversight: the non-elevated path is not a refusal but a
+    /// continuation — it relaunches elevated and carries the user's intent across — so asking first is
+    /// what makes the relaunch worth doing. <c>RelaunchAsAdmin</c> returns false when
+    /// <c>Application.Current</c> is null, which it is under the test runner, so nothing is spawned.</para>
+    /// </remarks>
+    [Fact]
+    public async Task InstallUpdates_WhenNotElevated_OffersToRelaunchAndInstallsNothing()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = NewVm(elevated: false, out var runner);
+        vm.Updates.Add(new UpdateEntry { Title = "KB0000001", IsSelected = true });
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // the user agrees to install
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.InstallUpdatesCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.Contains("Admin required", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.False(vm.IsBusy, "the install never started, so the tab must not look busy");
+            Assert.Equal("", vm.Updates[0].Status);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
 }
 
 // ---------- UpdateEntry model ----------

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.IO;
 using System.Reflection;
 using NSubstitute;
@@ -195,12 +196,38 @@ public class PerformanceViewModelTests
         Assert.False(vm.HasNvidiaGpu);
     }
 
+    /// <summary>
+    /// Records every property name this view model raises, safely enough to read while it is still
+    /// raising them.
+    /// </summary>
+    /// <remarks>
+    /// A plain <c>List&lt;string&gt;</c> here is a data race, and it fired on CI as
+    /// <c>InvalidOperationException: Collection was modified; enumeration operation may not execute</c>
+    /// from inside <c>Assert.Contains</c> (#2169). The second writer is the view model's own
+    /// initialization: the constructor calls <c>InitializeAsync</c>, whose continuations resume on the
+    /// thread pool because <c>ViewModelBase</c> awaits with <c>ConfigureAwait(false)</c>, and
+    /// <see cref="NewVm"/> deliberately does NOT wait for it — its <c>RunProcessAsync</c> returns a task
+    /// that never completes, which is what keeps these constructor-state tests independent of the host.
+    /// So the writer cannot be removed; the recorder has to tolerate it.
+    /// <para><c>ConcurrentQueue</c> rather than a snapshot: <c>changed.ToList()</c> would enumerate too,
+    /// and throw in exactly the same place. Its enumerator is a moment-in-time snapshot, so a concurrent
+    /// <c>Enqueue</c> cannot invalidate a read in progress.</para>
+    /// <para>It took ~5,000 concurrent tests to surface once and passes six for six in isolation, which
+    /// is precisely why it is worth fixing rather than watching: the next occurrence would read as a
+    /// one-off flake on an unrelated pull request.</para>
+    /// </remarks>
+    private static ConcurrentQueue<string> RecordPropertyChanges(PerformanceViewModel vm)
+    {
+        var changed = new ConcurrentQueue<string>();
+        vm.PropertyChanged += (_, e) => changed.Enqueue(e.PropertyName!);
+        return changed;
+    }
+
     [Fact]
     public void SelectedPlan_NotifiesPropertyChanged()
     {
         var vm = NewVm();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = RecordPropertyChanges(vm);
         vm.SelectedPlan = "high";
         Assert.Contains("SelectedPlan", changed);
     }
@@ -227,8 +254,7 @@ public class PerformanceViewModelTests
     public void IsProcessorStateLocked_NotifiesEditable()
     {
         var vm = NewVm();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = RecordPropertyChanges(vm);
         vm.IsProcessorStateLocked = true;
         Assert.Contains("IsProcessorStateLocked", changed);
         Assert.Contains("IsProcessorStateEditable", changed);

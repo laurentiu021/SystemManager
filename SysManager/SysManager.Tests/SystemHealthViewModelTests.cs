@@ -3,11 +3,15 @@
 // License: MIT
 
 using System.Reflection;
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
 
+// Serialized: the chkdsk gate tests replace AdminHelper.ElevationProbe, which is process-wide state.
+// Required by ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection, which caught this.
+[Collection("ProcessWideStatics")]
 public class SystemHealthViewModelTests
 {
     private static SystemHealthViewModel NewVm() => new(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
@@ -255,5 +259,59 @@ public class SystemHealthViewModelTests
     {
         string[] lines = [];
         Assert.Equal("Exit 3", SystemHealthViewModel.ParseChkdskVerdict(lines, 3));
+    }
+
+    // ── Elevation gate on chkdsk ─────────────────────────────────────────────
+    //
+    // Both chkdsk entry points refuse without administrator rights, and neither refusal was asserted
+    // (#2171). Only the refusal is covered, deliberately: unlike the other gated commands in the app
+    // these have NO confirmation dialog to decline, so past the gate they start a real chkdsk scan on a
+    // real volume. There is nothing to substitute and nothing to stop it, so the elevated branch is not
+    // something a unit test may enter.
+    //
+    // The per-drive status is part of the assertion. Marking each selected drive "Needs admin" is what
+    // tells the user WHICH drives were skipped.
+
+    /// <summary>
+    /// The batch command refuses before it starts, so the tab never claims a scan finished.
+    /// </summary>
+    /// <remarks>
+    /// <c>ChkdskStatus</c> is the assertion that matters here, and the first draft did not have it. There
+    /// are TWO gates on this path — one in <c>RunChkdskOnSelectedAsync</c> and one in the per-drive
+    /// <c>RunChkdskCoreAsync</c> it calls — so asserting only the message and the drive's status passed
+    /// with the outer gate DELETED: the inner one set both. The mutation proving that is what found it.
+    /// <para>What the outer gate actually prevents is the report. Without it the command sets
+    /// <c>IsChkdskRunning</c>, walks the selection, has every drive refused one by one, and then writes
+    /// "All scans finished." — telling the user their disks were checked when nothing was read. The inner
+    /// gate cannot prevent that, because by then the loop is already running.</para>
+    /// </remarks>
+    [StaFact]
+    public async Task RunChkdskOnSelected_WhenNotElevated_RefusesWithoutClaimingAScanRan()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = NewVm();
+        var drive = new DriveTarget { Letter = "C:", Label = "Windows", IsSelected = true };
+        vm.ChkdskDrives.Add(drive);
+
+        await vm.RunChkdskOnSelectedCommand.ExecuteAsync(null);
+
+        Assert.Contains("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Needs admin", drive.Status);
+        Assert.False(vm.IsChkdskRunning, "the refusal must not leave the tab looking busy");
+        Assert.Equal("", vm.ChkdskStatus);
+        Assert.DoesNotContain("finished", vm.ChkdskStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [StaFact]
+    public async Task RunChkdsk_SingleDrive_WhenNotElevated_SaysSo()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = NewVm();
+
+        await vm.RunChkdskCommand.ExecuteAsync("D:");
+
+        Assert.Contains("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("D:", vm.StatusMessage);
+        Assert.False(vm.IsChkdskRunning);
     }
 }

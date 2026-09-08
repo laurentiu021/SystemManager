@@ -3,6 +3,7 @@
 // License: MIT
 
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -78,4 +79,72 @@ public class NetworkRepairViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ── Elevation gate on Winsock / TCP-IP reset ─────────────────────────────
+    //
+    // Both resets refuse without administrator rights and neither refusal was asserted (#2171). Flush DNS
+    // deliberately has no gate — it needs no elevation — which is why only these two are covered here.
+    //
+    // The elevated counterpart DECLINES the confirmation. Past the dialog these commands run netsh
+    // against the machine's real network stack and require a reboot, so a test that confirmed would
+    // reset Winsock on whatever ran the suite. Declining proves the gate let it through and stops there.
+
+    [Theory]
+    [InlineData("Winsock")]
+    [InlineData("TcpIp")]
+    public async Task Reset_WhenNotElevated_SaysSoAndNeverPromptsConfirm(string which)
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = new NetworkRepairViewModel(NewShared());
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // would say yes if asked
+        DialogService.Instance = dialog;
+        try
+        {
+            await ExecuteResetAsync(vm, which);
+
+            Assert.Contains("administrator", vm.RepairStatus, StringComparison.OrdinalIgnoreCase);
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.False(vm.IsRepairing);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Theory]
+    [InlineData("Winsock")]
+    [InlineData("TcpIp")]
+    public async Task Reset_WhenElevated_AsksBeforeTouchingTheNetworkStack(string which)
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var vm = new NetworkRepairViewModel(NewShared());
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false); // decline, so nothing runs
+        DialogService.Instance = dialog;
+        try
+        {
+            await ExecuteResetAsync(vm, which);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.Equal("", vm.RepairStatus);
+            Assert.False(vm.IsRepairing);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    private static Task ExecuteResetAsync(NetworkRepairViewModel vm, string which) => which switch
+    {
+        "Winsock" => vm.ResetWinsockCommand.ExecuteAsync(null),
+        "TcpIp" => vm.ResetTcpIpCommand.ExecuteAsync(null),
+        _ => throw new ArgumentOutOfRangeException(nameof(which), which, "unknown reset"),
+    };
 }

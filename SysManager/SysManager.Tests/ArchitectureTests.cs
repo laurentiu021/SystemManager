@@ -1286,7 +1286,7 @@ public partial class ArchitectureTests
         var excluded = typeof(ProfileServiceTests)
             .GetMethod(nameof(ProfileServiceTests.AvailableSections_NeverCarriesMachineSpecificState))!
             .GetCustomAttributes<Xunit.InlineDataAttribute>()
-            .Select(a => (string)a.GetData(null!).First()[0]!)
+            .Select(a => (string)a.Data[0]!)
             .ToHashSet(StringComparer.Ordinal);
 
         // Both sources must yield SOMETHING, and deliberately not a population-sized floor. A floor of

@@ -187,7 +187,7 @@ dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.c
 Generate a coverage report:
 
 ```powershell
-dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release --collect:"XPlat Code Coverage"
+dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release --coverage --coverage-output-format cobertura
 ```
 
 **Every non-trivial PR should include at least one test.** If you're

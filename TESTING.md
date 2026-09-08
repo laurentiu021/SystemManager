@@ -67,18 +67,38 @@ dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.c
 dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
+## Running one class or one test
+
+Under xUnit v3 each test project builds an executable, so a single class can run without
+starting the whole suite:
+
+```powershell
+dotnet build SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
+./SysManager/SysManager.Tests/bin/Release/net10.0-windows/SysManager.Tests.exe `
+    -class SysManager.Tests.ArchitectureTests
+```
+
+`-method <name>` narrows to one test, and `-list methods` prints every test the runner
+discovered without running any of it. `-list` is the check to reach for after touching the
+project file or a package version: it answers "is everything still being found" separately
+from "does everything still pass", and those fail in different ways.
+
+Use `-?` for the full option list. This is the same runner `dotnet test` drives, so a result
+here and a result on CI mean the same thing.
+
 ## Coverage
 
-Coverage is collected automatically on CI via `coverlet` and uploaded to
+Coverage is collected automatically on CI by `Microsoft.Testing.Extensions.CodeCoverage`
+(`--coverage --coverage-output-format cobertura`) and uploaded to
 [Codecov](https://codecov.io/gh/laurentiu021/SystemManager). The badge in
 `README.md` reflects the latest `main` branch result.
 
 The same CI job uploads test results to Codecov's test analytics, which reads JUnit XML
-and no other format. `dotnet test` therefore runs two loggers: `trx` for the CI artifact
-and the `Passed! - Failed: N` diagnostic line, and `junit` for the upload. A guard step
-checks the JUnit report exists, has a `<testsuites>` root, and holds at least 4000 test
-cases before the upload runs, because the CLI uploads an unreadable report just as
-happily as a readable one and Codecov never reports the rejection back.
+and no other format. The run therefore emits two reports: TRX for the CI artifact, and
+JUnit for the upload. A guard step checks the JUnit report exists, has a `<testsuites>`
+root, and holds at least 4000 test cases before the upload runs, because the CLI uploads
+an unreadable report just as happily as a readable one and Codecov never reports the
+rejection back.
 
 ## Test infrastructure
 
@@ -86,16 +106,34 @@ happily as a readable one and Codecov never reports the rejection back.
 
 | Package | Purpose |
 |---|---|
-| xUnit 2.9 | Test framework |
+| xUnit v3 4.0 | Test framework |
 | NSubstitute 6.2 | Mocking/substitution for interface-based testing |
 | NetArchTest.Rules 1.3 | Architecture fitness functions — MVVM dependency direction, and guards that pin recurring defect classes |
-| coverlet | Code coverage collection |
-| JunitXml.TestLogger | JUnit XML test report — the only format Codecov's test analytics parses |
+| Microsoft.Testing.Extensions.CodeCoverage | Code coverage collection (unit project only) |
+| Microsoft.Testing.Extensions.HangDump | Dump on hang (integration project only) |
 | Xunit.StaFact | STA thread support for WPF-dependent tests |
 
 Package versions are managed centrally in `SysManager/Directory.Packages.props`
 (`ManagePackageVersionsCentrally`), so a `PackageReference` in a `.csproj` carries no
 `Version` attribute — adding one fails the restore.
+
+There is no VSTest in that list, deliberately. xUnit v3 test projects are
+[Microsoft.Testing.Platform](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-intro)
+applications, and the .NET 10 SDK refuses to run one through the VSTest target at all, so
+`global.json` opts `dotnet test` into the MTP-based command:
+
+```json
+"test": {
+  "runner": "Microsoft.Testing.Platform"
+}
+```
+
+Two consequences worth knowing before editing a workflow. The command line is MTP's, not
+VSTest's — `--report-xunit-trx` rather than `--logger trx`, `--coverage` rather than
+`--collect`, `--hangdump` rather than `--blame-hang` — and every report format comes from
+xUnit itself, so there is no logger package to add for TRX, JUnit, NUnit, HTML, CTRF or
+xUnit XML. `dotnet test --project <csproj> --help` prints the full option list for a given
+project, including the extension options its packages contribute.
 
 ### Parallelism
 
@@ -176,9 +214,10 @@ registration is covered.
 To generate a local coverage report:
 
 ```powershell
-dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj `
-  --collect:"XPlat Code Coverage" `
-  --results-directory TestResults
+dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj `
+  --results-directory TestResults `
+  --coverage --coverage-output-format cobertura `
+  --coverage-output coverage.cobertura.xml
 
 # Install reportgenerator once:
 dotnet tool install -g dotnet-reportgenerator-globaltool

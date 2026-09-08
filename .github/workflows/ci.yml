@@ -13,6 +13,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The app sends nothing anywhere, and neither should the tools that build it. xUnit v3 test
+# projects are Microsoft.Testing.Platform applications, and that platform ships a telemetry
+# extension that is registered automatically and reads both of these; the SDK reads the second
+# one. Set here rather than per-job so a new job cannot be added without them.
+env:
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
 jobs:
   build-and-test:
     name: Build & unit tests
@@ -311,19 +319,31 @@ jobs:
       - name: Build integration tests (compile check)
         run: dotnet build SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release --no-restore
 
-      # DIAGNOSING A RED CHECK HERE: read the "Passed! - Failed: N" line in this step's log first.
-      # If it says Failed: 0, the tests passed and the JOB was killed — either by the timeout above
-      # or by a transient GitHub failure ("Failed to resolve action download info"). A killed job's
-      # conclusion is `cancelled`, which `gh pr checks` displays as `fail`, so it looks identical to
-      # a broken test. The fix in that case is `gh run rerun <id> --failed`, not a code change.
+      # DIAGNOSING A RED CHECK HERE: read the failure summary at the end of this step's log first.
+      # If it reports zero failures, the tests passed and the JOB was killed — either by the timeout
+      # above or by a transient GitHub failure ("Failed to resolve action download info"). A killed
+      # job's conclusion is `cancelled`, which `gh pr checks` displays as `fail`, so it looks identical
+      # to a broken test. The fix in that case is `gh run rerun <id> --failed`, not a code change.
+      #
+      # Microsoft.Testing.Platform arguments, not VSTest ones — the test projects are MTP applications
+      # and the .NET 10 SDK refuses to run those through VSTest at all, so global.json opts `dotnet
+      # test` into the MTP command. The reports are xunit.v3's own, which is why there is no separate
+      # TRX/JUnit logger package any more.
+      #
+      # --minimum-expected-tests is the floor that used to have no equivalent: the runner itself fails
+      # the run when fewer tests execute than that, so a change that stops DISCOVERING tests can no
+      # longer pass as a green run of nothing. 5000 against a real count of ~5160 leaves room to delete
+      # a class without editing CI, while still catching any collapse.
       - name: Run unit tests
         run: >
-          dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj
+          dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj
           -c Release --no-build
-          --logger "trx;LogFileName=unit-results.trx"
-          --logger "junit;LogFileName=unit-results.junit.xml"
-          --collect:"XPlat Code Coverage"
           --results-directory TestResults
+          --minimum-expected-tests 5000
+          --report-xunit-trx --report-xunit-trx-filename unit-results.trx
+          --report-xunit-junit --report-xunit-junit-filename unit-results.junit.xml
+          --coverage --coverage-output-format cobertura
+          --coverage-output unit-coverage.cobertura.xml
 
       # Skip Codecov on fork PRs: forked pull requests have no access to repository
       # secrets, so CODECOV_TOKEN is empty there and the upload would fail noisily for
@@ -335,6 +355,26 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unittests
           fail_ci_if_error: false
+
+      # The same argument as the JUnit guard below, applied to the other artifact. The upload step
+      # above discovers the coverage report by searching, and it is configured not to fail the build
+      # when it finds nothing, so a run that stopped producing coverage would look exactly like a run
+      # that produced it — the badge would simply stop moving. Checked after the upload for the same
+      # reason that one is: a failing step skips what follows, and a coverage problem is no reason to
+      # lose the test-results upload too.
+      - name: Verify a coverage report was produced
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mapfile -t reports < <(find TestResults -name "*.cobertura.xml" -size +1k 2>/dev/null)
+          if [ "${#reports[@]}" -eq 0 ]; then
+            echo "::error::no *.cobertura.xml over 1 KB under TestResults, so nothing was uploaded to Codecov and the coverage number is stale. Written instead:"
+            find TestResults -type f 2>/dev/null || ls -la
+            exit 1
+          fi
+          for report in "${reports[@]}"; do
+            echo "coverage report: $report ($(wc -c < "$report") bytes)"
+          done
 
       # Codecov's test-analytics parser reads JUnit XML and nothing else. A TRX is accepted by the CLI,
       # uploaded, and discarded server-side without a word, which is how the upload step below stayed
@@ -468,10 +508,10 @@ jobs:
       - name: Run UI tests
         id: ui-tests
         run: >
-          dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj
+          dotnet test --project SysManager/SysManager.UITests/SysManager.UITests.csproj
           -c Release --no-build
-          --logger "trx;LogFileName=ui-results.trx"
           --results-directory TestResults
+          --report-xunit-trx --report-xunit-trx-filename ui-results.trx
         continue-on-error: true
 
       # Surface UI test failures as a visible warning annotation. Use `outcome`,
@@ -482,6 +522,36 @@ jobs:
       - name: Annotate UI test failures
         if: steps.ui-tests.outcome == 'failure'
         run: echo "::warning::UI automation tests failed — review the ui-test-results artifact for details."
+
+      # A test that FAILS is a warning here, on purpose. A test that is never RUN is an error, and the
+      # two are not the same finding: a failure means the job worked and found something, while a
+      # collapsed count means this job's green says nothing at all. Nothing distinguished them until
+      # now, so a runner or package change that stopped finding tests would have looked like a clean
+      # pass. The floor sits between the 64 test METHODS in the project and the 136 cases they expand
+      # to, so it catches theory rows silently stopping being enumerated as well as an outright
+      # truncation, while leaving room for tests to be legitimately deleted.
+      #
+      # Counted from the report rather than with the runner's own --minimum-expected-tests, which is
+      # what the blocking unit job uses: the step above is deliberately continue-on-error, so the
+      # runner's exit code is discarded there and a floor enforced by it would arrive as a warning
+      # alongside the ordinary failures it is supposed to be distinguished from. The floor has to live
+      # in a step that can fail.
+      - name: Verify the UI suite actually ran
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          report=TestResults/ui-results.trx
+          if [ ! -s "$report" ]; then
+            echo "::error::$report is missing or empty, so no UI test result was recorded at all. Written instead:"
+            ls -la TestResults || true
+            exit 1
+          fi
+          cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l)
+          echo "TRX report: $(wc -c < "$report") bytes, $cases test results."
+          if [ "$cases" -lt 100 ]; then
+            echo "::error::the UI suite recorded only $cases results, under the floor of 100. Tests stopped being discovered rather than failing, so this job's result is meaningless."
+            exit 1
+          fi
 
       - name: Upload UI test results
         if: always()
@@ -540,7 +610,7 @@ jobs:
       - name: Build integration tests
         run: dotnet build SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release --no-restore
 
-      # --blame-hang is not optional here, it is the whole reason this job is usable. The first run of this
+      # Hang detection is not optional here, it is the whole reason this job is usable. The first run of this
       # job proved the suite HANGS on a clean runner: it reported five failures in the first eight minutes and
       # then produced no output at all for twenty-one, until the job's own 30-minute ceiling cancelled it. A
       # cancelled job reports `cancelled`, which `gh pr checks` renders as `fail` — indistinguishable from a
@@ -548,14 +618,20 @@ jobs:
       #
       # With a hang timeout, the run stops at five minutes of silence, NAMES the test that stopped responding,
       # and writes a dump next to the results. A hang becomes a finding instead of a timeout.
+      # --hangdump replaces VSTest's --blame-hang, and --xunit-diagnostics is what makes the NAMING
+      # half work: the dump alone says a hang happened, while xunit.runner.json's
+      # longRunningTestSeconds reports WHICH test stopped responding, and those are diagnostic
+      # messages that are hidden unless diagnostics are on. The threshold sits below the dump timeout
+      # on purpose, so the name is already in the log by the time the dump lands.
       - name: Run integration tests
         id: integration-tests
         run: >
-          dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj
+          dotnet test --project SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj
           -c Release --no-build
-          --blame-hang --blame-hang-timeout 5m
-          --logger "trx;LogFileName=integration-results.trx"
           --results-directory TestResults
+          --hangdump --hangdump-timeout 5m
+          --xunit-diagnostics on
+          --report-xunit-trx --report-xunit-trx-filename integration-results.trx
         continue-on-error: true
 
       # `outcome`, NOT `conclusion`: continue-on-error forces the step's conclusion to 'success', so a
@@ -563,6 +639,27 @@ jobs:
       - name: Annotate integration test failures
         if: steps.integration-tests.outcome == 'failure'
         run: echo "::warning::Integration tests failed — review the integration-test-results artifact. This job is non-blocking, so the merge is not gated; the failure is still real."
+
+      # Same reasoning as "Verify the UI suite actually ran" above, including why the floor is counted
+      # here rather than passed to the runner: a failure is a warning, an empty or collapsed run is an
+      # error. The floor sits between the 497 test METHODS in the project and the 623 cases they expand
+      # to.
+      - name: Verify the integration suite actually ran
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          report=TestResults/integration-results.trx
+          if [ ! -s "$report" ]; then
+            echo "::error::$report is missing or empty, so no integration test result was recorded at all. Written instead:"
+            ls -la TestResults || true
+            exit 1
+          fi
+          cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l)
+          echo "TRX report: $(wc -c < "$report") bytes, $cases test results."
+          if [ "$cases" -lt 550 ]; then
+            echo "::error::the integration suite recorded only $cases results, under the floor of 550. Tests stopped being discovered rather than failing, so this job's result is meaningless."
+            exit 1
+          fi
 
       - name: Upload integration test results
         if: always()

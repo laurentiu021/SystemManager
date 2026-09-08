@@ -125,12 +125,13 @@ Ordered by how often they come up, not by effort.
 
 Not user-visible, and the reason the rest can move at all.
 
-- **Migrating the test suite to xUnit v3**, which `Xunit.StaFact` now requires
-  ([#2028](https://github.com/laurentiu021/SystemManager/issues/2028))
-- **One PowerShell runspace per elevated session** instead of one per call
-  ([#2149](https://github.com/laurentiu021/SystemManager/issues/2149))
-- **Replacing the blocking dispatcher marshals**
-  ([#2152](https://github.com/laurentiu021/SystemManager/issues/2152))
+- **Spacing, radius and type scales that the views actually use.** Three token sets exist
+  and the views mostly bypass them with raw numbers, so a change to the scale changes
+  nothing ([#1633](https://github.com/laurentiu021/SystemManager/issues/1633),
+  [#1634](https://github.com/laurentiu021/SystemManager/issues/1634))
+- **Command-line parsing that rejects what it does not recognise.** Today an unknown
+  `-something` is accepted and ignored
+  ([#2159](https://github.com/laurentiu021/SystemManager/issues/2159))
 
 ## How this list changes
 

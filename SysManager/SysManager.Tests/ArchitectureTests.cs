@@ -2268,6 +2268,78 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A picker bound to a list of enum values renders a label, not the enum's <c>ToString()</c>.
+    /// </summary>
+    /// <remarks>
+    /// The Scheduled Maintenance action picker did not. It bound <c>ItemsSource="{Binding Actions}"</c>,
+    /// a list of <c>MaintenanceAction</c> values, with no <c>ItemTemplate</c> and no
+    /// <c>DisplayMemberPath</c> — so WPF fell back to <c>ToString()</c> and the dropdown offered
+    /// "Cleanup" and "TrimRam". The model had a perfectly good <c>ActionLabel</c> the whole time; it was
+    /// used by the confirmation dialog, the activity log and the status line, and not by the one control
+    /// where the user chooses. So the user picked "TrimRam" and was then asked to confirm "Purge standby
+    /// memory" (#1524).
+    /// <para>That is the unreachable-surface shape: a property implemented, tested, and bound by nothing.
+    /// The compiler cannot see it and a view-model test cannot either — only the XAML can.</para>
+    /// <para><b>Scoped to enum-backed pickers by name.</b> Checking every ComboBox would flag the ones
+    /// bound to objects with a sensible <c>ToString()</c> or an explicit <c>DisplayMemberPath</c>, which
+    /// are correct. The list here is the enum-valued ones, each with the resource key that must appear
+    /// inside it — so adding a third enum picker means adding a row, which is the point.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryEnumBackedPicker_ShowsALabelRatherThanTheEnumName()
+    {
+        // view -> (the ItemsSource binding that carries enum values, the converter key it must render with)
+        var pickers = new[]
+        {
+            ("ScheduledMaintenanceView.xaml", "{Binding Actions}", "MaintenanceActionText"),
+        };
+
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var app = XamlCode(Path.Combine(FindAppProjectDir(), "App.xaml"));
+        var offenders = new List<string>();
+
+        foreach (var (view, itemsSource, converterKey) in pickers)
+        {
+            var xaml = XamlCode(Path.Combine(viewsDir, view));
+
+            var at = xaml.IndexOf($@"ItemsSource=""{itemsSource}""", StringComparison.Ordinal);
+            if (at < 0)
+            {
+                offenders.Add($"{view} — nothing binds ItemsSource=\"{itemsSource}\" any more; "
+                            + "update this guard or the view");
+                continue;
+            }
+
+            // The element, from its opening angle bracket to its close — not a fixed window, which would
+            // reach into the next control and report its ItemTemplate as this one's.
+            var open = xaml.LastIndexOf('<', at);
+            var close = xaml.IndexOf("</ComboBox>", at, StringComparison.Ordinal);
+            if (open < 0 || close < 0)
+            {
+                offenders.Add($"{view} — the picker has no closing </ComboBox>, so it cannot carry an "
+                            + "ItemTemplate: it renders each enum value's ToString()");
+                continue;
+            }
+
+            var element = xaml[open..close];
+            if (!element.Contains(converterKey, StringComparison.Ordinal))
+                offenders.Add($"{view} — the picker does not render through {converterKey}, so the "
+                            + "dropdown shows raw enum names");
+
+            // A StaticResource inside a DataTemplate resolves at RUNTIME, so deleting the converter from
+            // App.xaml still compiles and still passes the check above. Assert the definition exists.
+            if (!app.Contains($@"x:Key=""{converterKey}""", StringComparison.Ordinal))
+                offenders.Add($"App.xaml no longer defines {converterKey}, which {view} resolves at "
+                            + "runtime — the picker will throw when it is opened");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "An enum-backed picker with no ItemTemplate shows the developer's name for each value. The "
+            + "label belongs in the model and reaches the screen through a converter, so the picker and "
+            + "the confirmation dialog cannot disagree:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// Anything clickable by mouse that is not a <c>Button</c> must also be operable by keyboard — focusable,
     /// a tab stop, and activated by BOTH Enter and Space.
     /// </summary>

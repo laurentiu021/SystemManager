@@ -14,7 +14,17 @@ public enum CliCommand
     List,
     Health,
     Cleanup,
-    TrimRam,
+    /// <summary>
+    /// Purge the standby memory list (<c>--purge-standby</c>, or the retained <c>--trim-ram</c> alias).
+    /// </summary>
+    /// <remarks>
+    /// Was <c>TrimRam</c>, which named a DIFFERENT operation. Performance Mode's "Trim RAM" calls
+    /// <c>EmptyWorkingSet</c> per process and needs no elevation; this calls
+    /// <c>NtSetSystemInformation(MemoryPurgeStandbyList)</c> and needs administrator. They are
+    /// complementary ends of the same subject, not duplicates — so a user who scheduled "TrimRam" got a
+    /// different operation with a different elevation requirement from the button of that name (#1524).
+    /// </remarks>
+    PurgeStandby,
     /// <summary>A <c>--flag</c> that isn't a recognized verb — usage error.</summary>
     Unknown,
 }

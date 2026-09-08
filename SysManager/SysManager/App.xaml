@@ -33,6 +33,7 @@
             <h:ProcessSafetyToTooltipConverter x:Key="ProcSafetyTip"/>
             <h:IntGreaterThanZeroConverter x:Key="GreaterThanZero"/>
             <h:EqualityConverter x:Key="IsEqual"/>
+            <h:MaintenanceActionToTextConverter x:Key="MaintenanceActionText"/>
 
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="TrueValue">True</sys:Boolean>
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="FalseValue">False</sys:Boolean>

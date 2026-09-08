@@ -22,7 +22,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
 {
     private readonly MaintenanceSchedulerService _service;
 
-    public IReadOnlyList<MaintenanceAction> Actions { get; } = [MaintenanceAction.Cleanup, MaintenanceAction.TrimRam];
+    public IReadOnlyList<MaintenanceAction> Actions { get; } = [MaintenanceAction.Cleanup, MaintenanceAction.PurgeStandby];
     public IReadOnlyList<MaintenanceFrequency> Frequencies { get; } = [MaintenanceFrequency.Daily, MaintenanceFrequency.Weekly];
     public IReadOnlyList<DayOfWeek> Days { get; } = Enum.GetValues<DayOfWeek>();
     public IReadOnlyList<int> Hours { get; } = [.. Enumerable.Range(0, 24)];

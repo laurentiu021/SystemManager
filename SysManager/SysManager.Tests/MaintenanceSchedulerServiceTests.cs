@@ -67,10 +67,10 @@ public class MaintenanceSchedulerServiceTests
     public async Task RegisterAsync_DailySchedule_SetsDailyTrue()
     {
         var (svc, ps) = NewService(StateRow("Ready"));
-        var schedule = new MaintenanceSchedule(MaintenanceAction.TrimRam, MaintenanceFrequency.Daily, 9, 0);
+        var schedule = new MaintenanceSchedule(MaintenanceAction.PurgeStandby, MaintenanceFrequency.Daily, 9, 0);
         await svc.RegisterAsync(schedule, exePath: @"C:\x.exe");
         await ps.Received(1).RunAsync(Arg.Any<string>(),
-            Arg.Is<IDictionary<string, object?>?>(p => (bool)p!["Daily"]! && (string)p["Args"]! == "--trim-ram --silent"),
+            Arg.Is<IDictionary<string, object?>?>(p => (bool)p!["Daily"]! && (string)p["Args"]! == "--purge-standby --silent"),
             Arg.Any<CancellationToken>());
     }
 

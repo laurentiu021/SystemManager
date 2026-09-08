@@ -16,8 +16,18 @@ public enum MaintenanceAction
 {
     /// <summary>Delete temporary files (CLI <c>--cleanup</c>).</summary>
     Cleanup,
-    /// <summary>Purge the standby memory list (CLI <c>--trim-ram</c>).</summary>
-    TrimRam,
+    /// <summary>Purge the standby memory list (CLI <c>--purge-standby</c>).</summary>
+    /// <remarks>
+    /// Was <c>TrimRam</c>, which pointed at the wrong tab. Performance Mode's "Trim RAM" is
+    /// <c>EmptyWorkingSet</c> per process and needs no elevation; this is
+    /// <c>NtSetSystemInformation(MemoryPurgeStandbyList)</c> and needs administrator. Someone scheduling
+    /// "TrimRam" reasonably expected the button of that name and got the other operation, with a
+    /// different elevation requirement — so the name also misled about whether the task would work
+    /// unelevated (#1524). Renaming this value is safe because a schedule is never persisted by name: it
+    /// is built fresh from the view model and turned into a Windows scheduled task. The CLI verb is the
+    /// part that crosses a persistence boundary, which is why <c>--trim-ram</c> is still accepted.
+    /// </remarks>
+    PurgeStandby,
 }
 
 /// <summary>
@@ -38,16 +48,27 @@ public sealed record MaintenanceSchedule(
     public string CliArguments => Action switch
     {
         MaintenanceAction.Cleanup => "--cleanup --silent",
-        MaintenanceAction.TrimRam => "--trim-ram --silent",
+        MaintenanceAction.PurgeStandby => "--purge-standby --silent",
         _ => "--help",
     };
 
-    public string ActionLabel => Action switch
+    /// <summary>
+    /// The plain-language name of an action, for anything that shows one to the user.
+    /// </summary>
+    /// <remarks>
+    /// Static because the action picker needs a label for an enum value it has no schedule for. It used
+    /// to exist only as an instance property, so the picker fell back to the enum's own
+    /// <c>ToString()</c> — the dropdown offered "Cleanup" and "TrimRam" while the confirmation dialog
+    /// that followed said "Purge standby memory", two names for one thing in consecutive steps (#1524).
+    /// </remarks>
+    public static string LabelFor(MaintenanceAction action) => action switch
     {
         MaintenanceAction.Cleanup => "Clean temporary files",
-        MaintenanceAction.TrimRam => "Purge standby memory",
+        MaintenanceAction.PurgeStandby => "Purge standby memory",
         _ => "Unknown",
     };
+
+    public string ActionLabel => LabelFor(Action);
 
     /// <summary>A plain-language summary of when this runs (e.g. "Every Sunday at 03:00").</summary>
     public string Summary => Frequency == MaintenanceFrequency.Daily

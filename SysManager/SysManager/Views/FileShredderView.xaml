@@ -118,7 +118,7 @@
                       Visibility="{Binding Items.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
 
         <!-- Footer -->
-        <Border Grid.Row="3" Margin="28,8,28,16" Padding="8">
+        <Border Grid.Row="3" Margin="28,12,28,24" Padding="8">
             <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives its children infinite
                  width, so TextWrapping never engages and a long message — such as one naming
                  several files that could not be queued — is clipped off the right edge. -->

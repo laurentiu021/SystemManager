@@ -1813,6 +1813,12 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"AutomationProperties\.HelpText=""(?<text>[^""]*)""", RegexOptions.Compiled)]
     private static partial Regex HelpTextAttribute();
 
+    /// <summary>
+    /// A <c>Margin</c> carrying the 28px horizontal page gutter, whatever its vertical values.
+    /// </summary>
+    [GeneratedRegex(@"Margin=""28,(?<top>\d+),28,(?<bottom>\d+)""", RegexOptions.Compiled)]
+    private static partial Regex SideGutter();
+
     /// <summary>A <c>{Binding …}</c> markup extension, braces included.</summary>
     [GeneratedRegex(@"\{[^}]*\}", RegexOptions.Compiled)]
     private static partial Regex BindingExpression();
@@ -2179,6 +2185,86 @@ public partial class ArchitectureTests
             "AdminBanner binds IsElevated and RelaunchAsAdminCommand from its host's DataContext, so a host "
             + "missing either gets a banner stuck in one state or a dead button. Add the member, or do not "
             + "host the banner:\n  " + string.Join("\n  ", missing));
+    }
+
+    /// <summary>
+    /// A per-section view's LAST horizontal-28 gutter must carry a documented bottom gutter, so no tab ends
+    /// with its content jammed against the bottom of the window.
+    /// </summary>
+    /// <remarks>
+    /// The per-section layout strategy gives each section its own 28px side gutter, and the bottom of the last
+    /// one is the only thing standing between the content and the window edge — the shell wraps a view in a
+    /// bare <c>&lt;Border Background="{DynamicResource Surface0}"&gt;</c> with no padding of its own, so a
+    /// zero there really is flush.
+    /// <para><b>Two values, because two shapes legitimately end a page.</b> A view with a bottom status row
+    /// ends on <c>28,12,28,24</c>: the row is its own section and owns the gap. A view whose last section is
+    /// the content card itself has no such row, so the card carries the gap and ends on
+    /// <c>28,16,28,28</c> — the documented content-card top of 16 with a bottom of its own instead of the 0
+    /// a card gets when something follows it. Three views are that second shape (DnsHosts, NetworkRepair,
+    /// SpeedTest) and the remaining fifteen are the first.</para>
+    /// <para><b>Measured.</b> Two views ended on <c>28,8,28,16</c> — FileShredder and ShortcutCleaner, both a
+    /// row commented <c>&lt;!-- Footer --&gt;</c>, i.e. exactly the shape the documented value covers, 4px
+    /// tight at the top and 8px at the bottom. Both fixed to <c>28,12,28,24</c>; 18 of 18 pass now.</para>
+    /// <para><b>Comment-stripped, which changes the population.</b> <c>AdminBanner.xaml</c>'s doc comment
+    /// contains a usage snippet reading <c>Margin="28,12,28,0"</c> and the control has no real gutter of its
+    /// own, so over raw text it counts as a 59th gutter-carrying file on the strength of an example. It is not
+    /// an offender either way — the header check excludes it, since nothing in it says
+    /// <c>28,24,28,0</c> — but a floor measured against prose is a floor that moves when a comment is
+    /// reworded. Reading through <see cref="XamlCode"/> is what makes 58 mean 58 files of markup.</para>
+    /// <para>Part (a) of #1616. The original report also named Ping and Traceroute as flush to the edge;
+    /// re-derived from current source both now end on the documented footer, so that half was already fixed
+    /// and this guard is what stops it recurring.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryPerSectionView_EndsOnADocumentedBottomGutter()
+    {
+        // The documented last-gutter for each of the two shapes that can end a per-section page.
+        var documented = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [@"Margin=""28,12,28,24"""] = "a bottom status row, which owns the gap itself",
+            [@"Margin=""28,16,28,28"""] = "a final content card, which carries the gap in place of a status row",
+        };
+
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var perSection = new List<string>();
+        var offenders = new List<string>();
+        var gutterViews = 0;
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            var xaml = XamlCode(file);
+            var gutters = SideGutter().Matches(xaml);
+            if (gutters.Count == 0) continue;
+            gutterViews++;
+
+            // The per-section header. Its absence means Strategy 1 (one root gutter) or the scrolling
+            // variant, neither of which stacks sections, so neither has a last section to end.
+            if (!xaml.Contains(@"Margin=""28,24,28,0""", StringComparison.Ordinal)) continue;
+
+            var name = Path.GetFileName(file);
+            perSection.Add(name);
+
+            var last = gutters[^1].Value;
+            if (!documented.ContainsKey(last))
+                offenders.Add($"{name} ends on {last}");
+        }
+
+        // Vacuity floors, both measured today: 58 views carry a 28 gutter and 18 of them are per-section.
+        // A collapse in either means the Margin or header match stopped matching real markup, and a pass
+        // would then prove nothing about any view.
+        Assert.True(gutterViews >= 50,
+            $"only {gutterViews} views were found with a 28 side gutter, out of 58 measured — the Margin "
+            + "pattern is out of date, so this guard is reading almost nothing.");
+        Assert.True(perSection.Count >= 15,
+            $"only {perSection.Count} per-section views were found, out of 18 measured — the header match is "
+            + "out of date.");
+
+        Assert.True(offenders.Count == 0,
+            "A per-section view's last 28-gutter is the only bottom gutter the page has: the shell adds no "
+            + "padding, so an undersized one reads as content crowding the window edge and a zero is flush "
+            + "against it. End on one of:\n  "
+            + string.Join("\n  ", documented.Select(d => $"{d.Key} — {d.Value}"))
+            + "\nOffenders:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>

@@ -27,55 +27,12 @@ namespace SysManager.Tests;
 /// with "no category named X" rather than silently asserting over an empty list, which is the failure mode
 /// the shared-scan tests have by construction.</para>
 /// </remarks>
-public sealed class DeepCleanupScanLogicTests : IDisposable
+public sealed class DeepCleanupScanLogicTests
 {
-    private readonly string _root =
-        Path.Combine(Path.GetTempPath(), "SysManagerScanRoots", Guid.NewGuid().ToString("N"));
+    /// <summary>Fresh roots per test: an exact byte total cannot survive a tree another test planted in.</summary>
+    private static TempCleanupRoots Roots() => new();
 
-    public DeepCleanupScanLogicTests() => Directory.CreateDirectory(_root);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_root, recursive: true); }
-        catch (IOException) { /* a leftover temp tree under %TEMP% is harmless */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
-
-    /// <summary>
-    /// Every root pointed inside one temp tree, in its own subfolder so a category cannot pick up files
-    /// planted for another.
-    /// </summary>
-    private sealed class TempRoots(string root) : ICleanupRoots
-    {
-        public string LocalAppData { get; } = Sub(root, "LocalAppData");
-        public string ProgramData { get; } = Sub(root, "ProgramData");
-        public string SystemDrive { get; } = Sub(root, "SystemDrive");
-        public string WindowsDirectory { get; } = Sub(root, "Windows");
-        public string UserTemp { get; } = Sub(root, "Temp");
-        public string ProgramFilesX86 { get; } = Sub(root, "ProgramFilesX86");
-        public string ProgramFiles { get; } = Sub(root, "ProgramFiles");
-
-        /// <summary>Empty: a real drive root here would put the launcher probes back on the machine.</summary>
-        public IReadOnlyList<string> FixedDriveRoots { get; } = [];
-
-        /// <summary>Empty: the real bins are what made these tests take 48 seconds instead of one.</summary>
-        public IReadOnlyList<string> RecycleBinPaths { get; } = [];
-
-        private static string Sub(string root, string name)
-        {
-            var path = Path.Combine(root, name);
-            Directory.CreateDirectory(path);
-            return path;
-        }
-    }
-
-    private TempRoots Roots() => new(_root);
-
-    private static void WriteFile(string path, int bytes)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, new byte[bytes]);
-    }
+    private static void WriteFile(string path, int bytes) => TempCleanupRoots.WriteFile(path, bytes);
 
     private static CleanupCategory Named(IReadOnlyList<CleanupCategory> categories, string name)
     {
@@ -89,7 +46,7 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_ReportsTheExactFileCountAndByteTotal()
     {
-        var roots = Roots();
+        using var roots = Roots();
         var amd = Path.Combine(roots.SystemDrive, "AMD");
         WriteFile(Path.Combine(amd, "a.bin"), 10);
         WriteFile(Path.Combine(amd, "b.bin"), 10);
@@ -106,7 +63,7 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_WithContent_PreSelectsTheCategory()
     {
-        var roots = Roots();
+        using var roots = Roots();
         WriteFile(Path.Combine(roots.SystemDrive, "AMD", "a.bin"), 1);
 
         var categories = await new DeepCleanupService(roots).ScanAsync();
@@ -121,7 +78,7 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_WithAnEmptyFolder_ReportsZeroAndDoesNotSelectIt()
     {
-        var roots = Roots();
+        using var roots = Roots();
         Directory.CreateDirectory(Path.Combine(roots.SystemDrive, "Intel"));
 
         var categories = await new DeepCleanupService(roots).ScanAsync();
@@ -135,7 +92,8 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_WithNoFolderAtAll_ReportsNoPaths()
     {
-        var categories = await new DeepCleanupService(Roots()).ScanAsync();
+        using var roots = Roots();
+        var categories = await new DeepCleanupService(roots).ScanAsync();
 
         Assert.Empty(Named(categories, "Intel driver extracts").Paths);
     }
@@ -156,7 +114,7 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_WithAnAgeCutoff_CountsOnlyWhatIsOlderThanIt()
     {
-        var roots = Roots();
+        using var roots = Roots();
         var cbs = Path.Combine(roots.WindowsDirectory, "Logs", "CBS");
         var old = Path.Combine(cbs, "old.log");
         var young = Path.Combine(cbs, "young.log");
@@ -183,7 +141,7 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_WithWindowsOld_OffersItButNeverPreSelectsIt()
     {
-        var roots = Roots();
+        using var roots = Roots();
         WriteFile(Path.Combine(roots.SystemDrive, "Windows.old", "big.bin"), 5000);
 
         var categories = await new DeepCleanupService(roots).ScanAsync();
@@ -197,7 +155,8 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_WithoutWindowsOld_DoesNotOfferIt()
     {
-        var categories = await new DeepCleanupService(Roots()).ScanAsync();
+        using var roots = Roots();
+        var categories = await new DeepCleanupService(roots).ScanAsync();
 
         Assert.DoesNotContain(categories, c => c.Name.Contains("Windows.old", StringComparison.Ordinal));
     }
@@ -207,7 +166,7 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_ReportsProgressForEveryCategoryAndFinishesOnDone()
     {
-        var roots = Roots();
+        using var roots = Roots();
         var progress = new SyncProgress<DeepCleanupService.ScanProgress>();
 
         var categories = await new DeepCleanupService(roots).ScanAsync(progress);
@@ -230,11 +189,12 @@ public sealed class DeepCleanupScanLogicTests : IDisposable
     [Fact]
     public async Task Scan_WhenCancelledBeforeItStarts_Throws()
     {
+        using var roots = Roots();
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => new DeepCleanupService(Roots()).ScanAsync(ct: cts.Token));
+            () => new DeepCleanupService(roots).ScanAsync(ct: cts.Token));
     }
 
     // ── Guarding the seam itself ─────────────────────────────────────────────

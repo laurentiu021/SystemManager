@@ -8754,17 +8754,19 @@ public partial class ArchitectureTests
                 documented++;
                 if (hasSummary) continue;
 
-                offenders.Add($"{Path.GetFileName(path)}:{start + 1} documents parameters or a return "
-                              + "value but has no <summary>");
+                offenders.Add($"{Path.GetFileName(path)}:{start + 1} carries documentation but no "
+                              + "<summary>");
             }
         }
 
         // Two vacuity floors, because two separate patterns have to keep working for a clean result to
-        // mean anything. Measured at the time of writing: 35 blocks document a member, and all 2078 carry
-        // a summary. Either detector going quiet would report success while inspecting nothing.
-        Assert.True(documented >= 25,
-            $"Only {documented} documentation blocks were seen to document a parameter, return value or "
-            + "exception — the detection is broken, not the code. Fix this guard rather than trusting it.");
+        // mean anything. Either detector going quiet would report success while inspecting nothing.
+        // Re-measured when <remarks> was added to the detected set: 335 blocks document a member, up from
+        // 35, and 2334 carry a summary, up from 2078. The first number moved by an order of magnitude
+        // because <remarks> is common in this codebase — which is also why the gap mattered.
+        Assert.True(documented >= 250,
+            $"Only {documented} documentation blocks were seen to document a member — the detection is "
+            + "broken, not the code. Fix this guard rather than trusting it.");
         Assert.True(summarised >= 1600,
             $"Only {summarised} documentation blocks were seen to carry a summary — the detection is "
             + "broken, not the code. Fix this guard rather than trusting it.");
@@ -8788,10 +8790,19 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// A documentation tag describing a piece of a member rather than the member itself. The word
-    /// boundary keeps <c>&lt;paramref/&gt;</c> from reading as <c>&lt;param&gt;</c>.
+    /// A documentation tag that says something about a member without saying what the member is for. The
+    /// word boundary keeps <c>&lt;paramref/&gt;</c> from reading as <c>&lt;param&gt;</c>.
     /// </summary>
-    [GeneratedRegex(@"<(param|returns|exception|typeparam)\b", RegexOptions.CultureInvariant)]
+    /// <remarks>
+    /// <c>remarks</c> was added after this guard passed a member that had one and no summary:
+    /// <c>ToastService.Show</c> gained a <c>&lt;remarks&gt;</c> explaining why it posts, and CodeQL raised
+    /// <c>cs/xmldoc/missing-summary</c> against main. The original list was the tags that describe a
+    /// member's PIECES, and <c>remarks</c> does not describe a piece — but it has the same failure shape,
+    /// which is what the rule is about: a reader arrives at a paragraph of rationale with nothing above it
+    /// saying what the thing does. A member with no documentation at all is still fine here; this asks
+    /// that documentation which exists starts with the summary.
+    /// </remarks>
+    [GeneratedRegex(@"<(param|returns|exception|typeparam|remarks)\b", RegexOptions.CultureInvariant)]
     private static partial Regex DocumentsAMember();
 
     /// <summary>

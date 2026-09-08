@@ -18,6 +18,10 @@ public sealed class ToastService
 
     private DispatcherTimer? _autoDismiss;
 
+    /// <summary>
+    /// Raises a toast with <paramref name="title"/> and <paramref name="detail"/>, dismissed automatically
+    /// after <paramref name="autoHideMs"/> milliseconds unless that is zero or less.
+    /// </summary>
     /// <remarks>
     /// Posted rather than marshalled synchronously. This is reached from 39 call sites, most of them
     /// the last line of an async scan on a background thread, and a caller has nothing to gain by

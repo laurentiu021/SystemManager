@@ -229,6 +229,82 @@ public class AtomicFileTests : IDisposable
         Assert.False(File.Exists(temp), "the temp must not be left behind once it has been swapped in");
     }
 
+    /// <summary>
+    /// A lock that clears while the swap is retrying costs the user nothing.
+    /// </summary>
+    /// <remarks>
+    /// <c>File.Replace</c> has to delete the destination, so anything holding that file open refuses it —
+    /// an antivirus scanner mid-read, a backup agent, an indexer. Before the retry, a lock that would be
+    /// gone in 50&#160;ms lost the save, and silently: this helper is how every service persists user data
+    /// and callers log a failed save at Debug.
+    /// <para>Not hypothetical. It failed the <c>Release</c> workflow's unit gate for v1.78.5 with
+    /// <c>IOException: Unable to remove the file to be replaced</c>, on two sequential writes to the same
+    /// path, on a CI runner with the usual background services — leaving the tag with no release behind it
+    /// until the gate was re-run and passed with no code change (#2160).</para>
+    /// <para><b>No sleeping and no timing.</b> The pause is a parameter, and this test's pause is what
+    /// releases the lock — so the callback IS the synchronisation point. The alternative, holding the file
+    /// for a wall-clock interval and hoping the retry lands inside it, is the flake this is written to
+    /// avoid.</para>
+    /// </remarks>
+    [Fact]
+    public void Swap_WhenTheLockClearsWhileRetrying_TheSaveSucceeds()
+    {
+        var path = Path_("scanned.json");
+        File.WriteAllText(path, "the previous save");
+        var temp = AtomicFile.UniqueTempPath(path);
+        File.WriteAllText(temp, "the new save");
+
+        var held = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+        var waits = new List<TimeSpan>();
+        try
+        {
+            AtomicFile.Swap(temp, path, delay =>
+            {
+                waits.Add(delay);
+                held?.Dispose();      // the scanner finishes reading, on the first retry
+                held = null;
+            });
+        }
+        finally
+        {
+            held?.Dispose();
+        }
+
+        Assert.Equal("the new save", File.ReadAllText(path));
+        Assert.Single(waits);         // one refusal, one wait, then it went through
+    }
+
+    /// <summary>
+    /// A lock that never clears still fails, still without touching the previous file.
+    /// </summary>
+    /// <remarks>
+    /// The retry must not soften the promise of the class: after the budget the exception propagates
+    /// exactly as it did before, and the destination is byte-for-byte what it was. It also pins the budget
+    /// as finite — an unbounded retry on a permanently locked file would hang a save forever, which is a
+    /// worse failure than losing it.
+    /// <para>The delays are asserted as a rising sequence rather than as literal values. Restating the
+    /// production numbers here would make this test pass whatever they became, which is the mistake of
+    /// asserting a constant against itself.</para>
+    /// </remarks>
+    [Fact]
+    public void Swap_WhenTheLockNeverClears_GivesUpAndLeavesThePreviousSave()
+    {
+        var path = Path_("held-open.json");
+        const string previous = "{\"presets\":[\"the user's data\"]}";
+        File.WriteAllText(path, previous);
+        var temp = AtomicFile.UniqueTempPath(path);
+        File.WriteAllText(temp, "the save that cannot land");
+
+        var waits = new List<TimeSpan>();
+        using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.ThrowsAny<IOException>(() => AtomicFile.Swap(temp, path, waits.Add));
+
+        Assert.Equal(previous, File.ReadAllText(path));
+        Assert.True(waits.Count is > 1 and < 10,
+            $"the retry budget is {waits.Count} waits — more than one, and finite");
+        Assert.Equal(waits.OrderBy(w => w), waits);   // each wait is at least as long as the last
+    }
+
     [Fact]
     public void MoveIntoPlace_TempIsMissing_StillFails()
     {

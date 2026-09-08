@@ -226,12 +226,74 @@ internal static class AtomicFile
         Swap(temp, path);
     }
 
-    private static void Swap(string temp, string path)
+    /// <summary>
+    /// How long to wait before each retry of a refused swap. Three attempts in all.
+    /// </summary>
+    /// <remarks>
+    /// Sized for an antivirus or indexer read window, which is tens of milliseconds — long enough to
+    /// outlast one, short enough that a genuinely blocked save still fails inside 155&#160;ms rather than
+    /// hanging. The values rise so a slower scanner gets a longer second chance without making the common
+    /// case slow.
+    /// </remarks>
+    private static readonly TimeSpan[] SwapRetryDelays =
+    [
+        TimeSpan.FromMilliseconds(15),
+        TimeSpan.FromMilliseconds(40),
+        TimeSpan.FromMilliseconds(100),
+    ];
+
+    private static void Swap(string temp, string path) => Swap(temp, path, Thread.Sleep);
+
+    /// <summary>
+    /// Turns <paramref name="temp"/> into <paramref name="path"/>, retrying a refused swap a few times
+    /// before giving up. <paramref name="wait"/> is the pause between attempts.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a retry.</b> <see cref="File.Replace(string, string, string?)"/> has to delete the
+    /// destination, so anything holding that file open refuses it — an antivirus scanner mid-read, a
+    /// backup agent, a search indexer. Without a retry a lock that would be gone in 50&#160;ms costs the
+    /// user their save, and silently: <see cref="AtomicFile"/> is how every service persists user data and
+    /// callers log a failed save at Debug.</para>
+    /// <para>Not hypothetical. It failed the <c>Release</c> workflow's unit gate for v1.78.5 —
+    /// <c>IOException: Unable to remove the file to be replaced</c>, on two sequential writes to the same
+    /// path, on a CI runner with the usual background services. The tag existed with no release behind it
+    /// until the gate was re-run, which passed with no code change (#2160).</para>
+    /// <para><b>What is NOT retried.</b> Only <see cref="IOException"/>. An
+    /// <see cref="UnauthorizedAccessException"/> is a permission problem and will not improve on the
+    /// second attempt; retrying it would only delay the failure. The caller's write of the temp is not
+    /// retried either — it has already succeeded and been flushed, and re-running it would change what is
+    /// being swapped in.</para>
+    /// <para><b>The branch is re-evaluated every attempt</b>, not decided once. A destination that is
+    /// deleted between attempts would otherwise leave <c>File.Replace</c> throwing
+    /// <see cref="FileNotFoundException"/> — an <c>IOException</c> — for the rest of the budget, when the
+    /// move branch would have succeeded immediately.</para>
+    /// <para><b>Failing safely is unchanged.</b> After the last attempt the exception propagates exactly as
+    /// before, and the previous file is still there byte-for-byte. That is the promise of the class and a
+    /// retry does not soften it — it only stops a transient refusal from being treated as a permanent one.
+    /// </para>
+    /// <para>The pause is a parameter so a test can drive the retry without sleeping: passing a callback
+    /// that releases the lock on the first wait makes the whole thing deterministic, with the callback
+    /// itself as the synchronisation point.</para>
+    /// </remarks>
+    internal static void Swap(string temp, string path, Action<TimeSpan> wait)
     {
-        if (File.Exists(path))
-            File.Replace(temp, path, destinationBackupFileName: null);
-        else
-            MoveIntoPlace(temp, path);
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    File.Replace(temp, path, destinationBackupFileName: null);
+                else
+                    MoveIntoPlace(temp, path);
+                return;
+            }
+            catch (IOException ex) when (attempt < SwapRetryDelays.Length)
+            {
+                Log.Debug(ex, "Swap of {Temp} into {Path} was refused; retrying in {Delay}",
+                          temp, path, SwapRetryDelays[attempt]);
+                wait(SwapRetryDelays[attempt]);
+            }
+        }
     }
 
     /// <summary>

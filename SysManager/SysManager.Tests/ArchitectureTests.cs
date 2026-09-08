@@ -8234,7 +8234,7 @@ public partial class ArchitectureTests
     private static partial Regex DirectShutdown();
 
     [Fact]
-    public void AtomicFile_FlushesTheTempOntoTheDevice_BeforeEverySwap()
+    public void AtomicFile_FlushesBeforeEverySwap_AndTheProductionPathRetriesARefusedOne()
     {
         // Closing a handle hands the bytes to the OS write-back cache; it does not ask the drive to persist
         // them. The swap that follows is a metadata change NTFS journals, so the rename can become durable
@@ -8265,6 +8265,26 @@ public partial class ArchitectureTests
             "SwapIntoPlace must flush the temp onto the device before the swap, or a power cut can leave "
             + "the destination durable under its final name while its contents are still in the operating "
             + "system's write-back cache");
+
+        // The swap SwapIntoPlace reaches has to be the retrying one. The retry lives on a three-argument
+        // overload so a test can drive it without sleeping, and the two-argument form the line above
+        // matched is a one-line delegation to it. Nothing stops that delegation being replaced by a bare
+        // File.Replace again, which would compile, pass every AtomicFile test that calls the overload
+        // directly, and quietly restore the defect on the production path — the same shape as #2149, where
+        // a test invoked a method the production code did not use.
+        var twoArgSwap = code.IndexOf("private static void Swap(string temp, string path)",
+                                      StringComparison.Ordinal);
+        Assert.True(twoArgSwap > 0,
+            "AtomicFile's two-argument Swap was not found — this guard would otherwise pass vacuously");
+        var delegation = code[twoArgSwap..code.IndexOf('\n', twoArgSwap)];
+        Assert.Contains("Swap(temp, path,", delegation, StringComparison.Ordinal);
+
+        var retrying = code.IndexOf("internal static void Swap(string temp, string path, Action<TimeSpan>",
+                                    StringComparison.Ordinal);
+        Assert.True(retrying > 0, "the retrying Swap overload is gone — a refused swap loses the save");
+        var retryBody = code[retrying..];
+        Assert.Contains("catch (IOException", retryBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("catch (UnauthorizedAccessException", retryBody[..600]);
 
         // And neither writer may bypass it and swap on its own.
         string[] writers = ["private static void Write(", "private static async Task WriteAsync("];

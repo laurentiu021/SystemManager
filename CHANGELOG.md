@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.3] - 2026-09-08
+
+On File Shredder and Shortcut Cleaner the line at the bottom of the page sat closer to the window edge than
+the same line does on every other tab. A few pixels, but it is the kind of unevenness you notice without
+being able to say what is wrong.
+
+### Fixed
+- **The bottom line on File Shredder and Shortcut Cleaner now sits where it does on the other sixteen tabs.**
+  Both were 4px tight above and 8px tight below, which read as the page ending a little abruptly.
+
+### Added
+- **A check that a page cannot end flush against the bottom of the window.** The app's shell adds no padding
+  of its own, so the last section's bottom margin is the only gap there is. Two page shapes end a tab
+  legitimately and the check knows both, so a new tab is told which one it should match rather than being
+  guessed at.
+
 ## [1.78.2] - 2026-09-08
 
 Running SysManager as administrator left a hidden `powershell.exe` behind every time a feature used one. They

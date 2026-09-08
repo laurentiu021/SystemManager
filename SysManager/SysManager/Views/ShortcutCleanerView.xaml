@@ -116,7 +116,7 @@
                       Visibility="{Binding BrokenShortcuts.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
 
         <!-- Footer -->
-        <Border Grid.Row="4" Margin="28,8,28,16" Padding="8">
+        <Border Grid.Row="4" Margin="28,12,28,24" Padding="8">
             <TextBlock Style="{StaticResource Subtle}">
                 <Run Text="{Binding BrokenCount, Mode=OneWay}"/>
                 <Run Text=" broken · "/>

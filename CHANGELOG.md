@@ -29,6 +29,8 @@ second problem. They now hand the work over and carry on.
   form this codebase actually used, where the window is stored under a short name first — because the version
   that only caught the obvious spelling let a test case straight through.
 
+## [1.78.3] - 2026-09-08
+
 On File Shredder and Shortcut Cleaner the line at the bottom of the page sat closer to the window edge than
 the same line does on every other tab. A few pixels, but it is the kind of unevenness you notice without
 being able to say what is wrong.

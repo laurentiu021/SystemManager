@@ -165,8 +165,12 @@ collection definitions (all defined in `TestCollections.cs`, each with
   the previous instance on dispose, so a confirmation gate can be driven without a UI:
   `using var _ = new DialogAnswer(false);`. Its `Calls` counter lets a test assert a dialog was
   *not* shown — asserting the side effect alone cannot distinguish "the user said yes" from
-  "no gate ran at all". Requires `[Collection("ProcessWideStatics")]` on the test class — a fitness
-  function in `ArchitectureTests` fails the build if a class swaps a process-wide static without it.
+  "no gate ran at all". Its `Messages` collection carries the wording shown, for the gates where the
+  wording IS the behaviour: Context Menu explains a failed toggle one way without admin rights and
+  another way with them, and swapping those two would send every user down a path that cannot help
+  while a call count stayed green (#2180). Requires `[Collection("ProcessWideStatics")]` on the test
+  class — a fitness function in `ArchitectureTests` fails the build if a class swaps a process-wide
+  static without it.
 - `AdminHelper.ForceElevation(bool)` — pins what `AdminHelper.IsElevated()` answers for the scope's
   lifetime and restores the previous probe on dispose: `using var notElevated =
   AdminHelper.ForceElevation(false);`. **Construct the view-model inside the scope** — view-models read

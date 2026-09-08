@@ -21,7 +21,7 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ContextMenuViewModel : ViewModelBase
 {
-    private readonly ContextMenuService _service;
+    private readonly IContextMenuService _service;
     private List<ContextMenuEntry> _allEntries = [];
 
     public BulkObservableCollection<ContextMenuEntry> Entries { get; } = new();
@@ -43,7 +43,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         "All", "Files", "Folders", "Directory Background", "Desktop"
     };
 
-    public ContextMenuViewModel(ContextMenuService service)
+    public ContextMenuViewModel(IContextMenuService service)
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();

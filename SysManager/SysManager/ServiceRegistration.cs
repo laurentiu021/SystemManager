@@ -62,7 +62,7 @@ public static class ServiceRegistration
         services.AddSingleton<PrivacyService>();
         services.AddSingleton<DnsService>();
         services.AddSingleton<HostsFileService>();
-        services.AddSingleton<ContextMenuService>();
+        services.AddSingleton<IContextMenuService, ContextMenuService>();
         services.AddSingleton<EnvironmentVariableService>();
         services.AddSingleton<RestorePointService>();
         // Singleton on purpose: "one restore point per session" has to mean the whole app, or two

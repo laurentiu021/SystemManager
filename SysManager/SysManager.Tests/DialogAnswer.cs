@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using NSubstitute;
 using SysManager.Services;
 
@@ -19,10 +20,18 @@ namespace SysManager.Tests;
 /// <see cref="Calls"/> exists so a test can prove a dialog was NOT shown — asserting on the
 /// side effect alone cannot tell "the user said yes" apart from "no gate ran at all".
 /// </para>
+/// <para>
+/// <see cref="Messages"/> exists because for some gates the WORDING is the behaviour. Context Menu
+/// explains a failed toggle two different ways depending on elevation, and the elevated one is the
+/// valuable half — it says the entry is owned by TrustedInstaller and elevating will not help, which is
+/// what stops a user restarting as administrator for nothing (#2180). Swapped, every user would take the
+/// useless path and a test that counted calls would still pass.
+/// </para>
 /// </summary>
 public sealed class DialogAnswer : IDisposable
 {
     private readonly IDialogService _previous;
+    private readonly ConcurrentQueue<string> _messages = new();
 
     /// <summary>
     /// Swaps in a substitute dialog service that always answers <paramref name="confirm"/>, keeping the
@@ -33,12 +42,28 @@ public sealed class DialogAnswer : IDisposable
     {
         _previous = DialogService.Instance;
         var fake = Substitute.For<IDialogService>();
-        fake.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(_ => { Calls++; return confirm; });
+        fake.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(call =>
+        {
+            Calls++;
+            _messages.Enqueue($"{call.ArgAt<string>(1)}\n{call.ArgAt<string>(0)}");
+            return confirm;
+        });
         DialogService.Instance = fake;
     }
 
     /// <summary>How many times a confirmation was actually requested.</summary>
     public int Calls { get; private set; }
+
+    /// <summary>
+    /// Every confirmation shown, as <c>"title\nmessage"</c>, in the order they were requested.
+    /// </summary>
+    /// <remarks>
+    /// Title and body joined rather than kept apart, because a caller asserting on wording wants to know
+    /// the text reached the user and does not care which half carried it. A
+    /// <see cref="ConcurrentQueue{T}"/> because a gate reached from an <c>await</c> continuation raises
+    /// this on a thread-pool thread, not the test's.
+    /// </remarks>
+    public IReadOnlyCollection<string> Messages => _messages;
 
     public void Dispose() => DialogService.Instance = _previous;
 }

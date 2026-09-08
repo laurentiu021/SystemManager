@@ -37,17 +37,22 @@ public class AppResourcesTests
     }
 
     /// <summary>
-    /// A second <c>Ensure()</c>, on a second STA thread, still leaves the styles resolvable.
+    /// A second <c>Ensure()</c> still leaves the styles resolvable.
     /// </summary>
     /// <remarks>
-    /// This is the shape the suite actually runs: each view test spawns its own STA thread and calls
-    /// <c>Ensure()</c>, so all but the first take the "an Application already exists" path. The old copies
-    /// treated that as proof the resources were loaded and returned without checking, which is how a failed
-    /// load in the first caller became a <c>XamlParseException</c> in the fourth. Order-independent — it
-    /// establishes its own first call rather than relying on another test having run.
+    /// This is the shape the suite actually runs: every view test calls <c>Ensure()</c>, so all but the
+    /// first take the "an Application already exists" path. The old copies treated that as proof the
+    /// resources were loaded and returned without checking, which is how a failed load in the first caller
+    /// became a <c>XamlParseException</c> in the fourth. Order-independent — it establishes its own first
+    /// call rather than relying on another test having run.
+    /// <para>Was named <c>…FromAnotherStaThread</c>, which stopped being true when the suite moved to one
+    /// shared STA thread (#2156). It also never covered the failure that rename exposed: resolving a Style
+    /// does not touch a thread-affine member, so this passed while four view tests threw. What does cover
+    /// it is <c>StaHelperTests.Run_AStyledElementBuildsInTwoSeparateCalls</c>, which applies the style.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void Ensure_StillResolvesStyles_OnASecondCallFromAnotherStaThread()
+    public void Ensure_StillResolvesStylesOnASecondCall()
     {
         StaHelper.Run(AppResources.Ensure);
 

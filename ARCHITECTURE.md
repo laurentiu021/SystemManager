@@ -184,6 +184,20 @@ Key services:
   use an in-process runspace and retain per-user modules. Elevated sessions use
   an isolated Windows PowerShell 5.1 child with module discovery limited to canonical
   machine-owned roots, avoiding process-global environment mutation.
+  An elevated runner REUSES its runspace across calls, because starting that child
+  and completing a remoting handshake with it is the slow part and the services
+  that use it call in bursts (`DnsService` six times, `EdgeOneDriveService` four).
+  Three properties make reuse safe: the runspace state is re-checked on every
+  lease, so a child killed from outside is discarded and rebuilt rather than
+  failing every later call; pipelines are serialised behind a gate, because a
+  runspace runs one at a time and a shared one turns concurrent calls into a
+  conflict; and the runspace is evicted after ~20 s idle, which matters because
+  nine runners are constructed directly in `MainWindowViewModel`'s designer graph
+  and nothing ever disposes them — without eviction a dozen `powershell.exe`
+  processes would be resident for the whole run. `Dispose` releases it
+  deterministically where a consumer is disposed. The unelevated path is
+  unchanged and still builds per call: it starts no child, so caching would add a
+  lifetime to reason about for almost no gain.
 - `WingetService` — shells out to `winget` and parses its table output.
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting; backs `WindowsUpdateViewModel`.

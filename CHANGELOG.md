@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.7] - 2026-09-08
+
+Running SysManager as administrator made several tabs feel slower than they needed to. Every single thing
+they asked Windows to do started a fresh hidden helper first and waited for it to be ready — DNS &
+Hosts does that six times, Edge/OneDrive Remover four. Those tabs now start one helper and use it for the
+whole batch, and let it go once you have moved on.
+
+### Changed
+- **Administrator tasks reuse their helper instead of starting a new one every time.** The wait to start
+  one is the slow part, so a tab doing several things in a row is now noticeably quicker on the second
+  action onward. It is let go about twenty seconds after you stop, so nothing is left sitting in memory
+  while you use the rest of the app — and if it ever stops responding, the next action quietly starts a
+  fresh one rather than failing.
+
 ## [1.78.6] - 2026-09-08
 
 If your antivirus happened to be reading one of SysManager's own settings files at the exact moment

@@ -24,8 +24,25 @@ namespace SysManager.Services;
 /// Violation of this contract creates a code injection vulnerability. The Bypass policy
 /// is safe ONLY because the script content is fully controlled by SysManager's source code.</para>
 /// </summary>
-public sealed class PowerShellRunner : IPowerShellRunner
+public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
 {
+    /// <summary>
+    /// Serialises pipelines on this runner, because a reused runspace can only run one at a time.
+    /// </summary>
+    /// <remarks>
+    /// A runspace per call needed no gate — each pipeline had its own. Reuse makes concurrent calls on one
+    /// runner a conflict, so they queue. Low cost in practice: this type is registered Transient precisely
+    /// so each consumer gets its own instance, and the consumers that make several calls already serialise
+    /// them (<c>DnsService</c> has its own gate). The gate is here as the guarantee rather than as a
+    /// dependency on that continuing to be true.
+    /// </remarks>
+    private readonly SemaphoreSlim _pipeline = new(1, 1);
+
+    private readonly TimeSpan _idleRunspaceLifetime;
+    private RunspaceResources? _cached;
+    private Timer? _idleEviction;
+    private bool _disposed;
+
     private readonly Func<Action, Task> _scheduleProcessStart;
     private readonly Func<System.Diagnostics.Process, CancellationToken, Task> _waitForProcessExit;
     private readonly Action<System.Diagnostics.Process> _terminateProcessTree;
@@ -48,8 +65,10 @@ public sealed class PowerShellRunner : IPowerShellRunner
         string? trustedPowerShellModulePath = null,
         Func<Runspace, Task>? openRunspace = null,
         Func<(Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process)>? createRunspace = null,
-        TimeSpan? openRunspaceTimeout = null)
+        TimeSpan? openRunspaceTimeout = null,
+        TimeSpan? idleRunspaceLifetime = null)
     {
+        _idleRunspaceLifetime = idleRunspaceLifetime ?? IdleRunspaceLifetime;
         _scheduleProcessStart = scheduleProcessStart
             ?? throw new ArgumentNullException(nameof(scheduleProcessStart));
         _waitForProcessExit = waitForProcessExit
@@ -113,11 +132,29 @@ public sealed class PowerShellRunner : IPowerShellRunner
         IDictionary<string, object?>? parameters = null,
         CancellationToken cancellationToken = default)
     {
-        using var resources = CreateRunspaceResources();
-        var runspace = resources.Runspace;
+        await _pipeline.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await RunOnLeasedRunspaceAsync(script, parameters, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            ArmIdleEviction();
+            _pipeline.Release();
+        }
+    }
+
+    private async Task<Collection<PSObject>> RunOnLeasedRunspaceAsync(
+        string script,
+        IDictionary<string, object?>? parameters,
+        CancellationToken cancellationToken)
+    {
         // Open the runspace on a thread-pool thread — this can take
         // several hundred milliseconds and must not block the UI.
-        await OpenRunspaceAsync(runspace).ConfigureAwait(false);
+        var lease = await LeaseRunspaceAsync().ConfigureAwait(false);
+        using var perCall = lease.Reusable ? null : lease.Resources;
+        var runspace = lease.Resources.Runspace;
 
         using var ps = PowerShell.Create();
         ps.Runspace = runspace;
@@ -577,6 +614,147 @@ public sealed class PowerShellRunner : IPowerShellRunner
         {
             throw CreatePowerShellHostUnavailableException(ex);
         }
+    }
+
+    /// <summary>
+    /// How long a reusable runspace may sit unused before it and its child process are released.
+    /// </summary>
+    /// <remarks>
+    /// The benefit of reuse is in BURSTS, not over a session: <c>DnsService</c> makes six elevated calls,
+    /// <c>EdgeOneDriveService</c> four, three services three each, and those arrive together. Twenty seconds
+    /// covers a burst with room for a slow one in the middle.
+    /// <para>Keeping it for the session instead would be the obvious reading of "one runspace per session"
+    /// and it is the wrong one. Nothing disposes most of these runners — nine are constructed directly in
+    /// <c>MainWindowViewModel</c>'s designer graph and live as long as the window — so a session-long cache
+    /// would mean a dozen <c>powershell.exe</c> processes resident for the whole run, tens of MB each, in an
+    /// app whose entire pitch is making a PC feel faster. Eviction is what makes reuse a latency win rather
+    /// than a memory trade.</para>
+    /// </remarks>
+    internal static readonly TimeSpan IdleRunspaceLifetime = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// A runspace ready to run a pipeline, and whether it belongs to the cache or to this call alone.
+    /// </summary>
+    private readonly record struct RunspaceLease(RunspaceResources Resources, bool Reusable);
+
+    /// <summary>
+    /// Returns an open runspace: the cached one when it is still usable, otherwise a fresh one.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Elevated only.</b> The in-process runspace the unelevated path uses starts no child process
+    /// and opens in a fraction of the time, so caching it would add a lifetime to reason about and buy
+    /// almost nothing. The out-of-process branch is the one that spawns <c>powershell.exe</c> 5.1 and
+    /// completes a remoting handshake, and it is the only branch #2149 is about.</para>
+    /// <para><b>State is re-checked every time, not assumed.</b> A cached runspace can be broken by things
+    /// outside this class — the child killed by a user or by cleanup, the remoting channel dropped — and a
+    /// runspace that is not <c>Opened</c> cannot run a pipeline. Anything other than <c>Opened</c> means
+    /// discard and rebuild, which also covers the state this code cannot enumerate in advance.</para>
+    /// <para><b>A failed open leaves nothing cached.</b> The fresh resources are disposed and the exception
+    /// propagates, so the next call starts clean rather than retrying against a half-opened runspace.</para>
+    /// </remarks>
+    private async Task<RunspaceLease> LeaseRunspaceAsync()
+    {
+        if (!_isElevated)
+        {
+            var single = CreateRunspaceResources();
+            try
+            {
+                await OpenRunspaceAsync(single.Runspace).ConfigureAwait(false);
+            }
+            catch
+            {
+                single.Dispose();
+                throw;
+            }
+
+            return new RunspaceLease(single, Reusable: false);
+        }
+
+        if (_cached is { } cached)
+        {
+            if (cached.Runspace.RunspaceStateInfo.State == RunspaceState.Opened)
+                return new RunspaceLease(cached, Reusable: true);
+
+            Log.Debug("PowerShell: cached runspace is {State}; rebuilding it",
+                      cached.Runspace.RunspaceStateInfo.State);
+            _cached = null;
+            cached.Dispose();
+        }
+
+        var fresh = CreateRunspaceResources();
+        try
+        {
+            await OpenRunspaceAsync(fresh.Runspace).ConfigureAwait(false);
+        }
+        catch
+        {
+            fresh.Dispose();
+            throw;
+        }
+
+        _cached = fresh;
+        return new RunspaceLease(fresh, Reusable: true);
+    }
+
+    /// <summary>
+    /// Restarts the idle countdown after a run, creating the timer on first use.
+    /// </summary>
+    /// <remarks>
+    /// Called from the <c>finally</c> of every run, inside the pipeline gate, so it cannot race the lease.
+    /// Nothing is armed when there is no cache to evict — the unelevated path never creates a timer at all.
+    /// </remarks>
+    private void ArmIdleEviction()
+    {
+        if (_cached is null || _disposed) return;
+
+        _idleEviction ??= new Timer(_ => EvictIdleRunspace(), null, Timeout.Infinite, Timeout.Infinite);
+        _idleEviction.Change(_idleRunspaceLifetime, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>
+    /// Releases the cached runspace and its child process once it has been idle.
+    /// </summary>
+    /// <remarks>
+    /// Takes the pipeline gate with a zero wait rather than blocking on it. A run that started between the
+    /// timer firing and this callback holds the gate, and tearing its runspace down underneath it would turn
+    /// a working call into a broken one; re-arming instead costs one more idle period and cannot.
+    /// </remarks>
+    private void EvictIdleRunspace()
+    {
+        if (!_pipeline.Wait(0)) { ArmIdleEviction(); return; }
+
+        try
+        {
+            var idle = _cached;
+            _cached = null;
+            idle?.Dispose();
+        }
+        finally
+        {
+            _pipeline.Release();
+        }
+    }
+
+    /// <summary>
+    /// Releases the cached runspace, its child process and the idle timer.
+    /// </summary>
+    /// <remarks>
+    /// Deterministic release for the consumers that are disposed. It is NOT the only release path and must
+    /// not be: nine runners are constructed directly in <c>MainWindowViewModel</c>'s designer graph and
+    /// nothing ever disposes them, which is exactly why eviction is on a timer rather than on Dispose.
+    /// </remarks>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _idleEviction?.Dispose();
+
+        var cached = _cached;
+        _cached = null;
+        cached?.Dispose();
+
+        _pipeline.Dispose();
     }
 
     /// <summary>

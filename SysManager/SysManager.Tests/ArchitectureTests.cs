@@ -8944,13 +8944,21 @@ public partial class ArchitectureTests
     /// host, and the result was that "the elevation gate on SFC, DISM, Windows Update and nine privileged
     /// tabs asserted nothing anywhere". The seam was added; the sweep it was added for stopped at
     /// <c>CleanupViewModel</c>. This is what keeps it swept.</para>
-    /// <para><b>Two pinning mechanisms count, and missing one is how the first measurement of this went
-    /// wrong.</b> <c>AdminHelper.ForceElevation</c> replaces the process-wide probe and reaches both an
-    /// <c>if (!AdminHelper.IsElevated())</c> read and a cached one. Assigning <c>vm.IsElevated</c> pins it
-    /// per instance and is equally valid — <c>DnsHostsViewModelTests</c> and <c>WindowsFeaturesTests</c> do
-    /// that — but only for a view model that caches the answer in the property; it cannot reach a call-time
-    /// read. Counting only the first mechanism reported the two files that already did it right as the
-    /// biggest gaps.</para>
+    /// <para><b>Three pinning mechanisms count, and missing one is how the first measurement of this went
+    /// wrong — twice.</b> <c>AdminHelper.ForceElevation</c> replaces the process-wide probe and reaches
+    /// both an <c>if (!AdminHelper.IsElevated())</c> read and a cached one. Assigning <c>vm.IsElevated</c>
+    /// pins it per instance and is equally valid — <c>DnsHostsViewModelTests</c> and
+    /// <c>WindowsFeaturesTests</c> do that — but only for a view model that caches the answer in the
+    /// property; it cannot reach a call-time read. Counting only the first mechanism reported the two files
+    /// that already did it right as the biggest gaps.</para>
+    /// <para>The third is an INJECTED probe: a view model taking <c>Func&lt;bool&gt; isElevated</c> is
+    /// pinned by a test that supplies it, and that is strictly better than the other two because it needs
+    /// no process-wide state at all. <c>WindowsUpdateViewModel</c> is the one that has it, and it went from
+    /// pinned to unpinned in this guard's eyes the moment #2181 routed its fourth gate through that seam
+    /// instead of <c>AdminHelper.IsElevated()</c> — the change that made it MORE testable read here as
+    /// less. The marker is the named argument <c>isElevated:</c>, which mirrors the parameter's own name, so
+    /// renaming the parameter breaks the test and this guard together rather than silently loosening it.
+    /// Comments are stripped first, so a passing mention of <c>isElevated:</c> in prose does not count.</para>
     /// <para>Test files are matched to a view model by NAMING it, not by filename and not by
     /// constructing it. Filename matching made <c>WindowsFeaturesTests.cs</c> invisible, because its name
     /// carries no "ViewModel". Construction matching then missed <c>StandbyMemoryTests</c> and
@@ -9007,6 +9015,7 @@ public partial class ArchitectureTests
 
             var pinned = covering.Any(kv =>
                 kv.Value.Contains("ForceElevation", StringComparison.Ordinal)
+                || kv.Value.Contains("isElevated:", StringComparison.Ordinal)
                 || (callTime == 0 && ElevationAssignment().IsMatch(kv.Value)));
 
             if (!pinned)

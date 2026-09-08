@@ -8,8 +8,46 @@ using SysManager.Services;
 
 namespace SysManager.Tests;
 
-public class DeepCleanupServiceTests
+/// <summary>
+/// One real scan of this machine, shared by every test that only READS the result.
+/// </summary>
+/// <remarks>
+/// <c>DeepCleanupService.ScanAsync</c> walks the machine: <c>LocalApplicationData</c>,
+/// <c>CommonApplicationData</c>, the Windows directory, both Program Files trees, and every drive root
+/// looking for Steam, Riot and shader caches. It reaches the filesystem through
+/// <c>Environment.GetFolderPath</c> and <c>Directory.EnumerateFiles</c> directly, so there is no seam to
+/// substitute and a test can only scan the real disk.
+/// <para>27 tests here assert properties of one scan's output — names are non-empty, sizes are
+/// non-negative, the list contains Recycle Bin — and each used to perform its own. The class carries no
+/// <c>[Collection]</c>, so it is its own collection and its tests run SEQUENTIALLY: 27 serial disk walks.
+/// On a fresh CI runner each is near-instant and the whole unit suite takes about 78 seconds. On a
+/// machine with real caches, 16 of these tests were measured at 31 to 52 seconds EACH, and the class
+/// alone did not finish inside a 20-minute budget while every other class in the suite had completed
+/// (#2167). The blocking suite's runtime was a function of how much junk was on the machine running it.
+/// </para>
+/// <para>Four tests still call <c>ScanAsync</c> themselves, and only two of those are a full walk. The
+/// two cancellation tests must drive it directly, because cancellation is the thing under test, and both
+/// stop almost immediately. <c>CleanAsync_NoneSelected_DoesNothing</c> MUTATES <c>IsSelected</c> on what
+/// it is given, and <c>CleanAsync_CancelledToken_ReturnsImmediately</c> hands its list to
+/// <c>CleanAsync</c>; neither may be given the shared instance, so each keeps its own scan. 27 walks
+/// down to 3.</para>
+/// </remarks>
+public sealed class DeepCleanupScanFixture : IAsyncLifetime
 {
+    /// <summary>The one scan's categories. Treat as read-only — every consumer shares this instance.</summary>
+    public IReadOnlyList<CleanupCategory> Categories { get; private set; } = [];
+
+    public async ValueTask InitializeAsync()
+        => Categories = await new DeepCleanupService().ScanAsync();
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixture<DeepCleanupScanFixture>
+{
+    // The shared scan. Read only: a test that needs to change a category scans for itself.
+    private readonly IReadOnlyList<CleanupCategory> _scanned = scan.Categories;
+
     [Fact]
     public void Constructs()
     {
@@ -18,52 +56,41 @@ public class DeepCleanupServiceTests
     }
 
     [Fact]
-    public async Task ScanAsync_ReturnsNonNull()
+    public void ScanAsync_ReturnsNonNull()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.NotNull(r);
+        Assert.NotNull(_scanned);
     }
 
     [Fact]
-    public async Task ScanAsync_ReturnsSeveralCategories()
+    public void ScanAsync_ReturnsSeveralCategories()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        // System + gaming categories should always be scanned even if empty.
-        Assert.True(r.Count >= 10, $"Expected >=10 categories, got {r.Count}");
+        // System + gaming categories should always be scanned even if empty. Also the floor that keeps
+        // every other test in this class from passing over an empty shared scan.
+        Assert.True(_scanned.Count >= 10, $"Expected >=10 categories, got {_scanned.Count}");
     }
 
     [Fact]
-    public async Task ScanAsync_AllCategoriesHaveName()
+    public void ScanAsync_AllCategoriesHaveName()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.All(r, c => Assert.False(string.IsNullOrWhiteSpace(c.Name)));
+        Assert.All(_scanned, c => Assert.False(string.IsNullOrWhiteSpace(c.Name)));
     }
 
     [Fact]
-    public async Task ScanAsync_AllCategoriesHaveDescription()
+    public void ScanAsync_AllCategoriesHaveDescription()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.All(r, c => Assert.False(string.IsNullOrWhiteSpace(c.Description)));
+        Assert.All(_scanned, c => Assert.False(string.IsNullOrWhiteSpace(c.Description)));
     }
 
     [Fact]
-    public async Task ScanAsync_AllSizesNonNegative()
+    public void ScanAsync_AllSizesNonNegative()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.All(r, c => Assert.True(c.TotalSizeBytes >= 0));
+        Assert.All(_scanned, c => Assert.True(c.TotalSizeBytes >= 0));
     }
 
     [Fact]
-    public async Task ScanAsync_AllCountsNonNegative()
+    public void ScanAsync_AllCountsNonNegative()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.All(r, c => Assert.True(c.FileCount >= 0));
+        Assert.All(_scanned, c => Assert.True(c.FileCount >= 0));
     }
 
     [Fact]
@@ -101,173 +128,133 @@ public class DeepCleanupServiceTests
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesNvidiaCategory()
+    public void ScanAsync_IncludesNvidiaCategory()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesAmdCategory()
+    public void ScanAsync_IncludesAmdCategory()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("AMD", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("AMD", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesIntelCategory()
+    public void ScanAsync_IncludesIntelCategory()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Intel", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Intel", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesWindowsUpdateCache()
+    public void ScanAsync_IncludesWindowsUpdateCache()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Windows Update", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Windows Update", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesTempFiles()
+    public void ScanAsync_IncludesTempFiles()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Temporary", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Temporary", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesPrefetch()
+    public void ScanAsync_IncludesPrefetch()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Prefetch", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Prefetch", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesRecycleBin()
+    public void ScanAsync_IncludesRecycleBin()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Recycle", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Recycle", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_RecycleBinCategory_IsFlaggedForShellApi()
+    public void ScanAsync_RecycleBinCategory_IsFlaggedForShellApi()
     {
         // The Recycle Bin must be emptied through the shell API (SHEmptyRecycleBin),
         // not the generic file-delete path which corrupts the per-SID bin metadata.
         // CleanAsync routes on IsRecycleBin, so a regression that drops the flag would
         // silently send the bin back to raw delete. Pin the flag here.
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        var bin = r.FirstOrDefault(c => c.Name.Contains("Recycle", StringComparison.OrdinalIgnoreCase));
+        var bin = _scanned.FirstOrDefault(c => c.Name.Contains("Recycle", StringComparison.OrdinalIgnoreCase));
         Assert.NotNull(bin);
         Assert.True(bin!.IsRecycleBin, "Recycle Bin category must be flagged IsRecycleBin so cleanup uses the shell API");
         // And no other category should carry the flag.
-        Assert.All(r.Where(c => !c.Name.Contains("Recycle", StringComparison.OrdinalIgnoreCase)),
+        Assert.All(_scanned.Where(c => !c.Name.Contains("Recycle", StringComparison.OrdinalIgnoreCase)),
             c => Assert.False(c.IsRecycleBin));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesSteam()
+    public void ScanAsync_IncludesSteam()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.StartsWith("Steam", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.StartsWith("Steam", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesEpic()
+    public void ScanAsync_IncludesEpic()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Epic", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Epic", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesBattleNet()
+    public void ScanAsync_IncludesBattleNet()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Battle", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Battle", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesRiot()
+    public void ScanAsync_IncludesRiot()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Riot", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Riot", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesGog()
+    public void ScanAsync_IncludesGog()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("GOG", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("GOG", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesEaApp()
+    public void ScanAsync_IncludesEaApp()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("EA ", StringComparison.OrdinalIgnoreCase) || c.Name.Contains("Origin", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("EA ", StringComparison.OrdinalIgnoreCase) || c.Name.Contains("Origin", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesDirectXShaderCache()
+    public void ScanAsync_IncludesDirectXShaderCache()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("DirectX", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("DirectX", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesCrashDumps()
+    public void ScanAsync_IncludesCrashDumps()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Crash", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Crash", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesPatchCache()
+    public void ScanAsync_IncludesPatchCache()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Installer patch", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Installer patch", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_IncludesDeliveryOptimization()
+    public void ScanAsync_IncludesDeliveryOptimization()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.Contains(r, c => c.Name.Contains("Delivery", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(_scanned, c => c.Name.Contains("Delivery", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task ScanAsync_CategoriesHaveUniqueNames()
+    public void ScanAsync_CategoriesHaveUniqueNames()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        var names = r.Select(c => c.Name).ToList();
+        var names = _scanned.Select(c => c.Name).ToList();
         Assert.Equal(names.Count, names.Distinct().Count());
     }
 
     [Fact]
-    public async Task ScanAsync_WindowsOldNeverSelectedByDefault()
+    public void ScanAsync_WindowsOldNeverSelectedByDefault()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        var wo = r.FirstOrDefault(c => c.Name.Contains("Windows.old", StringComparison.OrdinalIgnoreCase));
+        var wo = _scanned.FirstOrDefault(c => c.Name.Contains("Windows.old", StringComparison.OrdinalIgnoreCase));
         if (wo != null)
         {
             Assert.False(wo.IsSelected, "Windows.old must never auto-select");
@@ -276,11 +263,9 @@ public class DeepCleanupServiceTests
     }
 
     [Fact]
-    public async Task ScanAsync_EmptyCategoriesAreNotSelected()
+    public void ScanAsync_EmptyCategoriesAreNotSelected()
     {
-        var s = new DeepCleanupService();
-        var r = await s.ScanAsync();
-        Assert.All(r, c =>
+        Assert.All(_scanned, c =>
         {
             if (c.TotalSizeBytes == 0) Assert.False(c.IsSelected);
         });
@@ -299,6 +284,8 @@ public class DeepCleanupServiceTests
     [Fact]
     public async Task CleanAsync_NoneSelected_DoesNothing()
     {
+        // Its own scan, not the class fixture's: this test clears IsSelected on every category it is
+        // given, and the fixture's list is shared with 27 read-only tests in the same collection.
         var s = new DeepCleanupService();
         var cats = await s.ScanAsync();
         foreach (var c in cats) c.IsSelected = false;
@@ -310,6 +297,9 @@ public class DeepCleanupServiceTests
     [Fact]
     public async Task CleanAsync_CancelledToken_ReturnsImmediately()
     {
+        // Its own scan for the same reason: the list is handed to CleanAsync, and a shared instance must
+        // not be passed to something whose job is to act on it — even when a cancelled token means it
+        // will not.
         var s = new DeepCleanupService();
         var cats = await s.ScanAsync();
         using var cts = new CancellationTokenSource();

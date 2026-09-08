@@ -8913,6 +8913,72 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The one shared Deep Cleanup scan must stay read-only: no test may iterate it with a view to
+    /// changing an item, and it must never be handed to <c>CleanAsync</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>DeepCleanupServiceTests</c> shares a single real disk scan across 27 read-only tests, because
+    /// performing one per test made the class take 23 minutes on a machine with real caches against 2.4
+    /// with the fixture (#2167). Sharing is only safe while nothing mutates it, and
+    /// <c>CleanupCategory.IsSelected</c> is a settable property, so "read-only" is a convention rather
+    /// than something the type enforces.
+    /// <para>Nothing would have caught a breach. The two tests that DO change a category —
+    /// <c>CleanAsync_NoneSelected_DoesNothing</c> clears <c>IsSelected</c> on everything it is given, and
+    /// <c>CleanAsync_CancelledToken_ReturnsImmediately</c> hands its list to <c>CleanAsync</c> — keep their
+    /// own scans for that reason, and switching either to the shared list would have left every test in
+    /// the class green: the remaining assertions are "empty categories are not selected" and "Windows.old
+    /// is not selected", both of which stay true after everything is deselected. So the comment saying
+    /// "do not share this" was the only thing standing between a plausible edit and 27 tests quietly
+    /// asserting against a list something else had emptied.</para>
+    /// <para>Two rules, both narrow on purpose. <c>foreach</c> over the shared field is banned outright
+    /// because no read-only assertion here needs it — they all use <c>Assert.All</c>, <c>Assert.Contains</c>
+    /// or LINQ — so its appearance means someone is walking the list to change it. And the field may not be
+    /// passed to <c>CleanAsync</c>, which is the only method in reach that acts on a category list.</para>
+    /// </remarks>
+    [Fact]
+    public void TheSharedDeepCleanupScan_IsNeverMutatedOrCleaned()
+    {
+        var testsDir = Path.Combine(
+            Directory.GetParent(FindAppProjectDir())!.FullName, "SysManager.Tests");
+        var source = File.ReadAllText(Path.Combine(testsDir, "DeepCleanupServiceTests.cs"));
+
+        // The field name is read from the declaration rather than hardcoded, so a rename breaks this
+        // guard loudly instead of turning it into a check on a name that no longer exists.
+        var declaration = SharedScanField().Match(source);
+        Assert.True(declaration.Success,
+            "the shared-scan field was not found in DeepCleanupServiceTests. If the class-fixture "
+            + "arrangement was removed on purpose, remove this guard with it; if it was renamed, this "
+            + "guard is now checking nothing and must be updated.");
+        var field = declaration.Groups[1].Value;
+
+        // Floor: the whole point is that MANY tests read this field. A couple of uses means the fixture
+        // arrangement has been unwound and a clean result here would prove nothing.
+        var uses = Regex.Matches(source, @"\b" + Regex.Escape(field) + @"\b").Count;
+        Assert.True(uses >= 20,
+            $"'{field}' is used only {uses} times, so the shared scan is barely shared and this guard is "
+            + "no longer watching what it was written for.");
+
+        var offenders = new List<string>();
+        if (Regex.IsMatch(source, @"foreach\s*\([^)]*\bin\s+" + Regex.Escape(field) + @"\b"))
+            offenders.Add($"a foreach over {field} — walk a private scan if an item has to change");
+        if (Regex.IsMatch(source, @"CleanAsync\(\s*" + Regex.Escape(field) + @"\b"))
+            offenders.Add($"{field} passed to CleanAsync — give it a scan of its own");
+
+        Assert.True(offenders.Count == 0,
+            $"'{field}' is one real disk scan shared by every read-only test in the class. Mutating it "
+            + "would make later tests assert against a list an earlier test had changed, and none of the "
+            + "current assertions would fail:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The declaration of the field holding the shared Deep Cleanup scan, capturing its name.
+    /// </summary>
+    [GeneratedRegex(@"private\s+readonly\s+IReadOnlyList<CleanupCategory>\s+(\w+)\s*=\s*scan\.",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex SharedScanField();
+
+    /// <summary>
     /// A string literal in a <c>case</c> label, including each alternative of an <c>or</c> pattern —
     /// <c>case "--a" or "-b":</c> yields both.
     /// </summary>

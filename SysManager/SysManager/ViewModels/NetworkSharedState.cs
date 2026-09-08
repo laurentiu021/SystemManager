@@ -579,6 +579,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         foreach (var b in Buffers.Values) TrimBuffer(b);
     }
 
+    /// <summary>
+    /// Runs <paramref name="action"/> on this state's UI thread at background priority, without waiting.
+    /// </summary>
     /// <remarks>
     /// This was the shape <see cref="Helpers.UiThread"/> was extracted from, so it now calls it rather
     /// than keeping a second copy that could drift. <see cref="DispatcherPriority.Background"/> is kept
